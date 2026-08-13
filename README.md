@@ -19,7 +19,7 @@ plugins/
     latest.js
 ```
 
-RisuAI/PocketRisu의 `//@update-url`은 각 플러그인의 `latest.js` raw HTTPS 주소를 가리킵니다. 버전이 올라가도 파일 경로는 바꾸지 않고, JS 내부의 `//@version`만 갱신합니다.
+ `//@update-url`은 각 플러그인의 `latest.js` raw HTTPS 주소를 가리킵니다. 버전이 올라가도 파일 경로는 바꾸지 않고, JS 내부의 `//@version`만 갱신합니다.
 
 SimCore update URL:
 

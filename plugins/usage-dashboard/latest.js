@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.6
+//@version 3.0.0-alpha.3.7
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.6';
+  const VERSION = '3.0.0-alpha.3.7';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -15,7 +15,7 @@
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
-    staleAfterMs: 300000,
+    staleAfterMs: 0, stalePolicyV37Migrated: false,
     widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
@@ -169,7 +169,7 @@
       `Reason: ${state.lastRefreshReason || '—'}`,
       `Success count: ${Number(state.refreshCount || 0)}`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
-      `Stale after: ${Math.round((Number(state.staleAfterMs)||0)/1000)}s`,
+      `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
       `Failures: ${Number(state.consecutiveFailures || 0)}`,
       `Retry delay: ${Number(state.retryDelayMs || 0)}ms`,
       `Next retry: ${state.nextRetryAt ? new Date(Number(state.nextRetryAt)).toISOString() : '—'}`,
@@ -207,7 +207,7 @@
         <label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
         <label><span>Bridge Token</span><textarea id="bridge-token" placeholder="저장된 값은 다시 표시하지 않음"></textarea></label>
         <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
-        <label><span>STALE 기준</span><select id="stale-ms">${[[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분'],[0,'사용 안 함']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><span>STALE 기준</span><select id="stale-ms">${[[0,'사용 안 함 · Local JSON 기본'],[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
         <label><span>미니 위젯</span><select id="widget-mode"><option value="compact" ${state.widgetMode!=='detailed'?'selected':''}>간편 · 오늘 사용량</option><option value="detailed" ${state.widgetMode==='detailed'?'selected':''}>상세 · 남은 양 + 오늘 사용량</option></select></label>
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
@@ -226,6 +226,7 @@
         state.bridgeBase = normalizeBridgeBase(q('#bridge-base')?.value || DEFAULT_BRIDGE);
         state.refreshMs = Number(q('#refresh-ms')?.value ?? state.refreshMs);
         state.staleAfterMs = Math.max(0, Number(q('#stale-ms')?.value ?? state.staleAfterMs));
+        state.stalePolicyV37Migrated = true;
         state.widgetMode = q('#widget-mode')?.value === 'detailed' ? 'detailed' : 'compact';
         const entered = String(q('#bridge-token')?.value || '').trim();
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
@@ -243,7 +244,7 @@
       await refresh('manual-retry');
     };
     if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };
-    if (q('#stale-ms')) q('#stale-ms').onchange = async e => { state.staleAfterMs = Math.max(0, Number(e.target.value)||0); await persist(); await renderWidget(); renderSettings(); };
+    if (q('#stale-ms')) q('#stale-ms').onchange = async e => { state.staleAfterMs = Math.max(0, Number(e.target.value)||0); state.stalePolicyV37Migrated = true; await persist(); await renderWidget(); renderSettings(); };
     if (q('#widget-mode')) q('#widget-mode').onchange = async e => { state.widgetMode = e.target.value === 'detailed' ? 'detailed' : 'compact'; await persist(); await renderWidget(); };
     if (q('#copy-diag')) q('#copy-diag').onclick = async e => { const b=e.currentTarget, old=b.textContent; b.textContent=(await copyDiag())?'복사됨 ✓':'복사 실패'; setTimeout(()=>b.textContent=old,1200); };
   }
@@ -346,6 +347,11 @@
   try {
     store=await Risuai.getLocalPluginStorage();
     state={...DEFAULTS,...((await store.getItem(STATE_KEY))||{})};
+    if (state.stalePolicyV37Migrated !== true) {
+      if (Number(state.staleAfterMs) === 300000) state.staleAfterMs = 0;
+      state.stalePolicyV37Migrated = true;
+      await store.setItem(STATE_KEY,state);
+    }
     try{state.bridgeBase=normalizeBridgeBase(state.bridgeBase);}catch(_){state.bridgeBase=DEFAULT_BRIDGE;state.bridgeEnabled=false;}
     token=String((await store.getItem(TOKEN_KEY))||'').trim();
     uiParts.push(await Risuai.registerSetting('Local Usage Dashboard',openSettings,'◴','html','local-usage-dashboard-settings-v3'));

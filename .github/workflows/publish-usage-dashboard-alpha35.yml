@@ -1,0 +1,163 @@
+name: Publish usage dashboard alpha.3.5
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-usage-dashboard-alpha35.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch latest.js to alpha.3.5
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/usage-dashboard/latest.js')
+          text = p.read_text(encoding='utf-8')
+
+          def rep(old, new, n=1):
+              global text
+              if old not in text:
+                  raise SystemExit('missing marker: ' + old[:80])
+              text = text.replace(old, new, n)
+
+          rep('//@version 3.0.0-alpha.3.4', '//@version 3.0.0-alpha.3.5')
+          rep("const VERSION = '3.0.0-alpha.3.4';", "const VERSION = '3.0.0-alpha.3.5';")
+
+          rep("""    refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
+    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
+    lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
+    data: null
+""", """    refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
+    staleAfterMs: 300000,
+    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
+    lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
+    consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
+    data: null
+""")
+
+          rep("""  function connectionBadge() {
+    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
+    if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
+    return {label:'WAIT', color:'#ffd27d'};
+  }
+""", """  function sourceAgeMs() {
+    const ts = Number(state.data?.fetchedAt);
+    return Number.isFinite(ts) && ts > 0 ? Math.max(0, Date.now() - ts) : null;
+  }
+
+  function dataIsStale() {
+    const a = sourceAgeMs();
+    const limit = Math.max(0, Number(state.staleAfterMs) || 0);
+    return state.bridgeStatus === 'connected' && a !== null && limit > 0 && a >= limit;
+  }
+
+  function retryDelayFor(failures) {
+    const base = Math.max(15000, Number(state.refreshMs) || 15000);
+    return Math.min(120000, base * Math.pow(2, Math.max(0, Number(failures || 1) - 1)));
+  }
+
+  function connectionBadge() {
+    if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
+    if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
+    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
+    return {label:'WAIT', color:'#ffd27d'};
+  }
+""")
+
+          rep("""        state.lastRefreshReason = reason;
+        state.refreshCount = Number(state.refreshCount || 0) + 1;
+        await persist();
+""", """        state.lastRefreshReason = reason;
+        state.refreshCount = Number(state.refreshCount || 0) + 1;
+        state.consecutiveFailures = 0;
+        state.retryDelayMs = 0;
+        state.nextRetryAt = null;
+        await persist();
+""")
+
+          rep("""        state.bridgeStatus = 'error';
+        state.bridgeError = e?.message || String(e);
+        state.lastRefreshReason = reason;
+        await persist();
+""", """        state.bridgeStatus = 'error';
+        state.bridgeError = e?.message || String(e);
+        state.lastRefreshReason = reason;
+        state.consecutiveFailures = Number(state.consecutiveFailures || 0) + 1;
+        state.retryDelayMs = retryDelayFor(state.consecutiveFailures);
+        state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
+        await persist();
+""")
+
+          rep("""      `Success count: ${Number(state.refreshCount || 0)}`,
+      `Error: ${state.bridgeError || 'none'}`,
+      `Updater: ${UPDATE_URL}`
+""", """      `Success count: ${Number(state.refreshCount || 0)}`,
+      `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
+      `Stale after: ${Math.round((Number(state.staleAfterMs)||0)/1000)}s`,
+      `Failures: ${Number(state.consecutiveFailures || 0)}`,
+      `Retry delay: ${Number(state.retryDelayMs || 0)}ms`,
+      `Next retry: ${state.nextRetryAt ? new Date(Number(state.nextRetryAt)).toISOString() : '—'}`,
+      `Error: ${state.bridgeError || 'none'}`,
+      `Updater: ${UPDATE_URL}`
+""")
+
+          rep("""        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':'자동 갱신'}</span>
+        <span>${age(state.lastSyncAt)} · ${VERSION}</span>
+""", """        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
+        <span>${age(state.lastSyncAt)} · ${VERSION}</span>
+""")
+
+          rep("""  function scheduleRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
+    const ms=Math.max(0,Number(state.refreshMs)||0);
+    if (!ms||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
+  }
+""", """  function scheduleRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
+    const baseMs=Math.max(0,Number(state.refreshMs)||0);
+    if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
+      ? Math.max(baseMs, Number(state.retryDelayMs)||baseMs)
+      : baseMs;
+    if (state.bridgeStatus === 'error') state.nextRetryAt = Date.now() + ms;
+    refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
+  }
+""")
+
+          rep("""        await renderWidget();
+        if (document.body?.dataset?.panelOpen === '1') renderSettings();
+      } catch (e) {""", """        await renderWidget();
+        scheduleRefresh();
+        if (document.body?.dataset?.panelOpen === '1') renderSettings();
+      } catch (e) {""")
+
+          rep("""        await renderWidget();
+        if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);""", """        await renderWidget();
+        scheduleRefresh();
+        if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);""")
+
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify exact blob
+        shell: bash
+        run: |
+          test "$(git hash-object plugins/usage-dashboard/latest.js)" = "ff4dc56041aaa5836920d9038ddc09545150a950"
+
+      - name: Commit updater
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/usage-dashboard/latest.js
+          git commit -m "feat: publish usage dashboard alpha.3.5"
+          git push

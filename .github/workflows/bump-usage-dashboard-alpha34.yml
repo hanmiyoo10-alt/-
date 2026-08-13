@@ -1,0 +1,45 @@
+name: Publish usage dashboard alpha.3.4
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bump-usage-dashboard-alpha34.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply alpha.3.4 hotfix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/usage-dashboard/latest.js')
+          s = p.read_text()
+          s = s.replace('//@version 3.0.0-alpha.3.3', '//@version 3.0.0-alpha.3.4', 1)
+          s = s.replace("const VERSION = '3.0.0-alpha.3.3';", "const VERSION = '3.0.0-alpha.3.4';", 1)
+          old = """        await persist();\n        if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);\n        if (document.body?.dataset?.panelOpen === '1') renderSettings();\n"""
+          new = """        await persist();\n        // Keep the last good values, but immediately repaint the widget so\n        // LIVE changes to OFFLINE as soon as a refresh fails.\n        await renderWidget();\n        if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);\n        if (document.body?.dataset?.panelOpen === '1') renderSettings();\n"""
+          if old not in s:
+              raise SystemExit('refresh catch marker not found')
+          s = s.replace(old, new, 1)
+          old2 = """      } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); renderSettings(); }\n"""
+          new2 = """      } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }\n"""
+          if old2 not in s:
+              raise SystemExit('connect catch marker not found')
+          s = s.replace(old2, new2, 1)
+          p.write_text(s)
+          PY
+          node --check plugins/usage-dashboard/latest.js
+      - name: Commit updater release
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'chore: publish usage dashboard 3.0.0-alpha.3.4'
+          git push

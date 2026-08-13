@@ -1,0 +1,157 @@
+name: Release SimCore v0.62.26 Community Parent-Shift Probe
+
+on:
+  push:
+    paths:
+      - plugins/simcore/parent-shift-probe-release.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve v0.62.25 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-v0.62.25.js
+
+      - name: Build parent-shift probe plugin
+        run: python3 plugins/simcore/patch_simcore_06226.py
+
+      - name: Verify syntax and identical install channel
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+
+      - name: Verify prompt and storage invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          old = Path('/tmp/simcore-v0.62.25.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          start = 'function renderRuntimePrompt(state) {'
+          end = '\n}\n\nfunction finalizePreparedOutput'
+          def block(s):
+              a = s.index(start)
+              b = s.index(end, a) + 2
+              return s[a:b]
+          assert block(old) == block(new), 'runtime prompt changed in diagnostics-only release'
+          api = re.compile(r'Risuai\.pluginStorage\.(?:getItem|setItem|removeItem|keys)')
+          assert api.findall(old) == api.findall(new), 'pluginStorage API call sites changed'
+          assert 'communitySourceHandoffParentShift' in new
+          assert 'Community parent-shift probe (runtime)' in new
+          assert 'same-root-new-parent' in new
+          assert '//@version 0.62.26' in new
+          assert 'SimCore v0.62.26 Community Parent-Shift Probe' in new
+          print('prompt/storage invariants OK')
+          PY
+
+      - name: Test parent-shift state behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          boot_a = s.index('const SimCore = (() => {')
+          boot_b = s.index('SimCore.define("store"', boot_a)
+          mod_a = s.index('SimCore.define("handoff"')
+          mod_b = s.index('\n\nSimCore.define("kernel"', mod_a)
+          test = r'''
+          const h = SimCore.require('handoff');
+          function ok(v, m) { if (!v) throw new Error(m); }
+          ok(h.COMMUNITY_SOURCE_HANDOFF_VERSION === 2, 'handoff version');
+          const req = '[커뮤니티] 라이브 반응';
+          const state = { communitySourceRegistry: [], communitySourceHandoffVersion: 1 };
+          const first = h.observe(state, req, 'C', {
+            rootMode:'A', rootIndex:10, parentMode:'A', parentIndex:10, depth:1, sourceKind:'CHAIN'
+          }, { eligible:false });
+          ok(first.eligible && !first.seen && !first.newSource && !first.parentShift, 'first');
+          const shifted = h.observe(state, req, 'C', {
+            rootMode:'A', rootIndex:10, parentMode:'C', parentIndex:12, depth:2, sourceKind:'CHAIN'
+          }, { eligible:false });
+          ok(shifted.seen && !shifted.newSource && shifted.parentComparable && shifted.parentShift, 'same root new parent');
+          ok(shifted.reason === 'same-root-new-parent', 'parent shift reason');
+          const same = h.observe(state, req, 'C', {
+            rootMode:'A', rootIndex:10, parentMode:'C', parentIndex:12, depth:2, sourceKind:'CHAIN'
+          }, { eligible:false });
+          ok(same.seen && !same.newSource && same.parentComparable && !same.parentShift, 'same parent');
+          ok(same.reason === 'same-source-same-parent', 'same parent reason');
+          const newRoot = h.observe(state, req, 'C', {
+            rootMode:'B', rootIndex:20, parentMode:'B', parentIndex:20, depth:1, sourceKind:'CHAIN'
+          }, { eligible:false });
+          ok(newRoot.newSource && !newRoot.parentShift, 'new root remains v0.62.25 behavior');
+
+          const norm = h.normalizeShortRequest(req, 'C');
+          const hash = h.hashRequest(norm);
+          const migrated = { communitySourceRegistry:[{hash, rootMode:'A', rootIndex:30}], communitySourceHandoffVersion:1 };
+          const baseline = h.observe(migrated, req, 'C', {
+            rootMode:'A', rootIndex:30, parentMode:'C', parentIndex:32, depth:2, sourceKind:'CHAIN'
+          }, { eligible:false });
+          ok(baseline.seen && !baseline.newSource && !baseline.parentComparable && !baseline.parentShift, 'v1 baseline');
+          ok(baseline.reason === 'same-root-parent-baseline', 'v1 baseline reason');
+          const afterBaseline = h.observe(migrated, req, 'C', {
+            rootMode:'A', rootIndex:30, parentMode:'C', parentIndex:34, depth:3, sourceKind:'CHAIN'
+          }, { eligible:false });
+          ok(afterBaseline.parentComparable && afterBaseline.parentShift, 'post-baseline parent shift');
+
+          const unseeded = h.observe({communitySourceRegistry:[]}, req, 'C', {
+            rootMode:null, rootIndex:-1, parentMode:'C', parentIndex:1, depth:1, sourceKind:'UNSEEDED'
+          }, { eligible:false });
+          ok(!unseeded.eligible && unseeded.reason === 'unseeded-source', 'unseeded stays conservative');
+
+          const longOwned = h.observe({communitySourceRegistry:[]}, '[커뮤니티] 매우 긴 상세 요청이지만 여기서는 recurrence가 소유한다고 가정', 'C', {
+            rootMode:'A', rootIndex:1, parentMode:'A', parentIndex:1, depth:1, sourceKind:'CHAIN'
+          }, { eligible:true });
+          ok(!longOwned.eligible && longOwned.reason === 'template-recurrence-owned', 'recurrence ownership');
+          console.log('parent-shift tests OK');
+          '''
+          Path('/tmp/test-parent-shift.js').write_text(s[boot_a:boot_b] + s[mod_a:mod_b] + '\n' + test, encoding='utf-8')
+          PY
+          node /tmp/test-parent-shift.js
+
+      - name: Verify no parent-shift generation guidance
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          a = s.index('function renderRuntimePrompt(state) {')
+          b = s.index('\n}\n\nfunction finalizePreparedOutput', a)
+          prompt = s[a:b]
+          assert 'ParentShift' not in prompt
+          assert 'parent_shift' not in prompt.lower()
+          assert "short_community_request_reused_with_new_source" in prompt, 'v0.62.25 new-source guard lost'
+          print('diagnostics-only prompt contract OK')
+          PY
+
+      - name: Build backup before publish
+        run: |
+          rm -rf /tmp/simcore-backup
+          mkdir -p /tmp/simcore-backup/plugins/simcore
+          cp plugins/simcore/latest.js /tmp/simcore-backup/plugins/simcore/latest.js
+          cp plugins/simcore/install.js /tmp/simcore-backup/plugins/simcore/install.js
+          cd /tmp/simcore-backup
+          zip -qr "$GITHUB_WORKSPACE/simcore.plugin.v0.62.26.zip" plugins
+          cd "$GITHUB_WORKSPACE"
+          sha256sum plugins/simcore/latest.js simcore.plugin.v0.62.26.zip
+
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-v0.62.26-backup
+          path: simcore.plugin.v0.62.26.zip
+          retention-days: 90
+
+      - name: Publish plugin files
+        run: |
+          git config user.name "hanmiyoo10-alt"
+          git config user.email "hanmiyoo10@gmail.com"
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --quiet && { echo 'No plugin changes'; exit 1; }
+          git commit -m "Release SimCore v0.62.26 Community Parent-Shift Probe"
+          git push

@@ -1,6 +1,6 @@
 # 냥냥냥 Update Channel
 
-RisuAI/PocketRisu 플러그인 자동 업데이트용 공개 배포 저장소입니다.
+ 플러그인 자동 업데이트용 공개 배포 저장소입니다.
 
 이 저장소에는 **배포에 필요한 완성된 플러그인 JS만** 둡니다. 개발 소스, Termux/Bridge 도구, 개인 설정, API Key, 세션/쿠키, Bridge Token, 개인 조직·프로젝트 ID는 올리지 않습니다.
 

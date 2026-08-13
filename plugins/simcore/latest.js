@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.20
-//@display-name SimCore v0.62.20 Narrative Clock Diagnostics
+//@version 0.62.21
+//@display-name SimCore v0.62.21 Template Recurrence Guard
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,13 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.21 Template Recurrence Guard:
+// - Detects recurring detailed [커뮤니티] request templates without auxiliary-model calls
+// - One-time migration bootstrap scans pre-update user history only; current input is excluded
+// - Repeated templates keep the requested fields/format but prompt the model to reevaluate current-event delta, emphasis, reactions, and wording
+// - Existing outputs are never rewritten; recurrence guidance affects only new generations
+// - Registry is compact, bounded, snapshot-aware, and rewind-safe; no new storage API calls
 //
 // v0.62.20 Narrative Clock Diagnostics:
 // - Runtime diagnostics only; Narrative Clock Guard behavior from v0.62.19 is unchanged
@@ -342,11 +349,174 @@ module.exports = {
 };
 });
 
+SimCore.define("recurrence", function (require, module, exports) {
+const TEMPLATE_RECURRENCE_VERSION = 1;
+const TEMPLATE_REGISTRY_LIMIT = 384;
+const COMMUNITY_MARKER = '[커뮤니티]';
+const TEMPLATE_MAX_CHARS = 4096;
+const TEMPLATE_MIN_CHARS = 32;
+
+function normalizeRegistry(raw) {
+  const src = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const value of src) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) continue;
+    const h = n >>> 0;
+    if (seen.has(h)) continue;
+    seen.add(h);
+    out.push(h);
+  }
+  return out.slice(-TEMPLATE_REGISTRY_LIMIT);
+}
+
+function communityDirective(userText) {
+  const text = String(userText || '');
+  const idx = text.indexOf(COMMUNITY_MARKER);
+  if (idx < 0) return '';
+  return text.slice(idx + COMMUNITY_MARKER.length, idx + COMMUNITY_MARKER.length + TEMPLATE_MAX_CHARS);
+}
+
+function normalizeTemplate(userText) {
+  let directive = communityDirective(userText);
+  if (!directive) return '';
+  try { directive = directive.normalize('NFKC'); } catch { /* older JS runtime */ }
+
+  // When a long parenthetical checklist exists, it is the reusable request schema; the event/title
+  // before it is current-turn content and should not prevent recurrence detection across years/events.
+  const open = directive.indexOf('(');
+  const close = directive.lastIndexOf(')');
+  if (open >= 0 && close > open && (close - open) >= TEMPLATE_MIN_CHARS) directive = directive.slice(open);
+
+  return directive
+    .replace(/https?:\/\/\S+/gi, '<url>')
+    .replace(/\d+(?:[.,]\d+)*/g, '#')
+    .replace(/[“”‘’`]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function hashTemplate(normalized) {
+  const text = String(normalized || '');
+  if (text.length < TEMPLATE_MIN_CHARS) return null;
+  let h = 2166136261 >>> 0;
+  const seed = `${text.length}:`;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function templateFingerprint(userText) {
+  const normalized = normalizeTemplate(userText);
+  const hash = hashTemplate(normalized);
+  return {
+    eligible: hash != null,
+    hash,
+    normalizedChars: normalized.length,
+  };
+}
+
+function touchRegistry(registry, hash) {
+  const list = normalizeRegistry(registry);
+  const h = Number(hash) >>> 0;
+  const idx = list.indexOf(h);
+  const repeated = idx >= 0;
+  if (idx >= 0) list.splice(idx, 1);
+  list.push(h);
+  if (list.length > TEMPLATE_REGISTRY_LIMIT) list.splice(0, list.length - TEMPLATE_REGISTRY_LIMIT);
+  return { list, repeated };
+}
+
+function observe(state, userText) {
+  const fp = templateFingerprint(userText);
+  state.templateRegistry = normalizeRegistry(state.templateRegistry);
+  state.templateRecurrenceVersion = TEMPLATE_RECURRENCE_VERSION;
+  if (!fp.eligible) {
+    return { ...fp, repeated: false, registrySize: state.templateRegistry.length };
+  }
+  const touched = touchRegistry(state.templateRegistry, fp.hash);
+  state.templateRegistry = touched.list;
+  return { ...fp, repeated: touched.repeated, registrySize: state.templateRegistry.length };
+}
+
+function needsBootstrap(state) {
+  return Math.max(0, Number(state?.templateRecurrenceVersion || 0)) < TEMPLATE_RECURRENCE_VERSION;
+}
+
+function bootstrapState(state, messages, stopExclusive, getText) {
+  const rows = Array.isArray(messages) ? messages : [];
+  const stop = Number.isInteger(Number(stopExclusive))
+    ? Math.max(0, Math.min(Number(stopExclusive), rows.length))
+    : rows.length;
+  let registry = normalizeRegistry(state.templateRegistry);
+  let visited = 0;
+  let userMessages = 0;
+  let communityInputs = 0;
+  let eligibleTemplates = 0;
+  let repeatedTemplates = 0;
+  let normalizedChars = 0;
+
+  for (let i = 0; i < stop; i++) {
+    visited += 1;
+    const row = rows[i] || {};
+    if (row.role !== 'user') continue;
+    userMessages += 1;
+    const text = typeof getText === 'function'
+      ? getText(row)
+      : String(row.data ?? row.content ?? row.text ?? '');
+    if (!String(text || '').includes(COMMUNITY_MARKER)) continue;
+    communityInputs += 1;
+    const fp = templateFingerprint(text);
+    normalizedChars += fp.normalizedChars || 0;
+    if (!fp.eligible) continue;
+    eligibleTemplates += 1;
+    const touched = touchRegistry(registry, fp.hash);
+    registry = touched.list;
+    if (touched.repeated) repeatedTemplates += 1;
+  }
+
+  state.templateRegistry = registry;
+  state.templateRecurrenceVersion = TEMPLATE_RECURRENCE_VERSION;
+  const stats = {
+    version: TEMPLATE_RECURRENCE_VERSION,
+    scannedThroughExclusive: stop,
+    visited,
+    userMessages,
+    communityInputs,
+    eligibleTemplates,
+    repeatedTemplates,
+    registrySize: registry.length,
+    normalizedChars,
+  };
+  return { state, stats };
+}
+
+module.exports = {
+  TEMPLATE_RECURRENCE_VERSION,
+  TEMPLATE_REGISTRY_LIMIT,
+  normalizeRegistry,
+  normalizeTemplate,
+  templateFingerprint,
+  observe,
+  needsBootstrap,
+  bootstrapState,
+};
+});
+
 SimCore.define("kernel", function (require, module, exports) {
 const { normalizePlatformMaxMap } = require('./community');
+const recurrence = require('./recurrence');
 
 const STATE_VERSION = 5;
-const CORE_STATE_VERSION = 9;
+const CORE_STATE_VERSION = 10;
 const HANDSHAKE_RE = /<SIMCORE_CORE_SWITCH>\s*1\s*<\/SIMCORE_CORE_SWITCH>/i;
 const CONTROL_TAG_RE = /\[방송\s*(?:시작|중|종료)\]/g;
 const KNOWLEDGE_RE = /<Knowledge>[\s\S]*?<\/Knowledge>/gi;
@@ -373,6 +543,8 @@ function initialState() {
     historyBootstrapped: false,
     historyBootstrappedAt: -1,
     historyBootstrapStats: null,
+    templateRecurrenceVersion: 0,
+    templateRegistry: [],
     broadcastLocked: false,
     broadcastAirtime: null,
     broadcastAirtimeStart: null,
@@ -392,12 +564,15 @@ function reconcileState(raw) {
   const source = raw && typeof raw === 'object' ? raw : initialState();
   const s = source;
   const legacyYear = s.worldYear ?? s.narrativeYear;
+  const hadTemplateRecurrenceVersion = Object.prototype.hasOwnProperty.call(s, 'templateRecurrenceVersion');
 
   s.stateVersion = STATE_VERSION;
   s.coreStateVersion = CORE_STATE_VERSION;
   s.historyBootstrapped = !!s.historyBootstrapped;
   s.historyBootstrappedAt = Number.isInteger(Number(s.historyBootstrappedAt)) ? Number(s.historyBootstrappedAt) : -1;
   s.historyBootstrapStats = s.historyBootstrapStats && typeof s.historyBootstrapStats === 'object' ? s.historyBootstrapStats : null;
+  s.templateRecurrenceVersion = hadTemplateRecurrenceVersion ? Math.max(0, Math.round(Number(s.templateRecurrenceVersion) || 0)) : 0;
+  s.templateRegistry = recurrence.normalizeRegistry(s.templateRegistry);
   s.broadcastLocked = !!s.broadcastLocked;
   s.broadcastAirtime = typeof s.broadcastAirtime === 'string' && s.broadcastAirtime.trim() ? s.broadcastAirtime.trim() : null;
   s.broadcastAirtimeStart = typeof s.broadcastAirtimeStart === 'string' && s.broadcastAirtimeStart.trim() ? s.broadcastAirtimeStart.trim() : null;
@@ -738,6 +913,7 @@ module.exports = {
 SimCore.define("lifecycle", function (require, module, exports) {
 const kernel = require('./kernel');
 const time = require('./time');
+const recurrence = require('./recurrence');
 
 function classifyMode(state, input) {
   const text = String(input || '');
@@ -790,6 +966,9 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const narrativeProgression = /^B_/.test(c.mode) ? { active: false, reason: 'broadcast' } : time.narrativeProgressionHint(input);
   const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
   const narrativeClockGuard = !!(narrativeProgression.active && narrativeTimestampPrevious);
+  const templateRecurrence = c.mode === 'C'
+    ? recurrence.observe(state, input)
+    : { eligible: false, repeated: false, hash: null, normalizedChars: 0, registrySize: Array.isArray(state.templateRegistry) ? state.templateRegistry.length : 0 };
 
   // Explicit user dates can advance world year before generation in every mode.
   time.applyWorldYear(state, time.explicitWorldYear(input));
@@ -815,6 +994,11 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     narrativeProgressionReason: narrativeProgression.reason || 'none',
     narrativeTimestampPrevious,
     narrativeClockGuard,
+    templateRecurrenceEligible: !!templateRecurrence.eligible,
+    templateRecurrenceRepeated: !!templateRecurrence.repeated,
+    templateRecurrenceHash: templateRecurrence.hash == null ? null : Number(templateRecurrence.hash),
+    templateRecurrenceChars: Number(templateRecurrence.normalizedChars || 0),
+    templateRegistrySize: Number(templateRecurrence.registrySize || 0),
   };
   return state;
 }
@@ -1480,6 +1664,7 @@ const community = require('./community');
 const reaction = require('./reaction');
 const structure = require('./structure');
 const recovery = require('./recovery');
+const recurrence = require('./recurrence');
 
 function sessionNow() {
   return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
@@ -1525,6 +1710,13 @@ function renderRuntimePrompt(state) {
     if (elapsed != null && elapsed >= 0) lines.push(`broadcast_airtime_elapsed_program_minutes=${elapsed}`);
   }
   if (communityExpected > 0) {
+    if (p.mode === 'C' && p.templateRecurrenceRepeated) {
+      lines.push('request_template_recurs_from_prior_history=1');
+      lines.push('prior_answer_is_not_a_content_template=1');
+      lines.push('preserve_requested_fields_and_output_contract=1');
+      lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');
+      lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');
+    }
     lines.push('platform_groups_required=3_distinct');
     lines.push('platform_group_reuse_forbidden=1');
     if (/^B_/.test(p.mode)) lines.push('community_placement=after_broadcast_prose');
@@ -1655,6 +1847,7 @@ class CoreRulesetSession {
     this.deferredPruneIndex = -1;
     this.deferredPruneRunning = false;
     this.communityAliasRepairStats = null;
+    this.templateRecurrenceBootstrapStats = null;
   }
 
   async init(latestOutIndex = -1, mirrorRaw = null, latestOutputFingerprint = null) {
@@ -1834,7 +2027,7 @@ class CoreRulesetSession {
     };
   }
 
-  async onSend(sendIndex, userText, promptProbe, perfDetail = null) {
+  async onSend(sendIndex, userText, promptProbe, perfDetail = null, historyMessages = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
       detail.preLoadMs = 0;
@@ -1846,6 +2039,11 @@ class CoreRulesetSession {
       detail.existingPre = false;
       detail.previousOutputIndex = this.currentOutputIndex;
       detail.restoreReason = 'forward';
+      detail.templateBootstrapMs = 0;
+      detail.templateBootstrap = null;
+      detail.templateRecurrenceEligible = false;
+      detail.templateRecurrenceRepeated = false;
+      detail.templateRegistrySize = 0;
     }
 
     const previousOutputIndex = this.currentOutputIndex;
@@ -1863,9 +2061,24 @@ class CoreRulesetSession {
     const base = existingPre || this.current || kernel.initialState();
     if (detail) detail.previousMode = base?.lastMode || null;
 
+    if (promptProbe?.active && recurrence.needsBootstrap(base)) {
+      t = sessionNow();
+      const boot = recurrence.bootstrapState(base, historyMessages, sendIndex, kernel.textOfMessage);
+      this.templateRecurrenceBootstrapStats = boot.stats;
+      if (detail) {
+        detail.templateBootstrapMs = sessionElapsed(t);
+        detail.templateBootstrap = boot.stats;
+      }
+    }
+
     t = sessionNow();
     const state = lifecycle.prepareTurn(base, userText, promptProbe, sendIndex);
-    if (detail) detail.lifecycleMs = sessionElapsed(t);
+    if (detail) {
+      detail.lifecycleMs = sessionElapsed(t);
+      detail.templateRecurrenceEligible = !!state.pending?.templateRecurrenceEligible;
+      detail.templateRecurrenceRepeated = !!state.pending?.templateRecurrenceRepeated;
+      detail.templateRegistrySize = Number(state.pending?.templateRegistrySize || 0);
+    }
 
     const turnMetric = {};
     await this.store.saveTurn(sendIndex, existingPre || base, state, { prune: false, metric: turnMetric });
@@ -2263,6 +2476,7 @@ class CoreRulesetSession {
 
   storageDiagnostics() { return this.store.keyScanStats(); }
   communityAliasDiagnostics() { return this.communityAliasRepairStats; }
+  templateRecurrenceDiagnostics() { return this.templateRecurrenceBootstrapStats; }
   portableState() { return JSON.stringify(kernel.reconcileState(kernel.clone(this.current || kernel.initialState()))); }
 }
 
@@ -2304,6 +2518,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastOutputPerf = null;
   let lastHistoryRestore = null;
   let lastNarrativeClockProbe = null;
+  let lastTemplateRecurrenceProbe = null;
 
   const { perfNow, perfMs } = ops;
 
@@ -2394,7 +2609,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.20] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.21] state mirror failed:', e.message);
     }
   }
 
@@ -2409,7 +2624,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.20] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.21] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2464,7 +2679,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     t = perfNow();
     const userText = coreRules.latestUserText(chat);
     const snapshotDetail = perf ? {} : null;
-    const result = await cs.onSend(sendIndex, userText, promptProbe, snapshotDetail);
+    const result = await cs.onSend(sendIndex, userText, promptProbe, snapshotDetail, chat?.message || []);
     if (perf) {
       perf.onSendMs = perfMs(t);
       perf.snapshotDetail = snapshotDetail;
@@ -2497,6 +2712,19 @@ module.exports = { perfNow, perfMs, normalizationIssues };
           at: Date.now(),
         };
       }
+      if (pendingProbe?.mode === 'C') {
+        lastTemplateRecurrenceProbe = {
+          sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+          eligible: !!pendingProbe.templateRecurrenceEligible,
+          repeated: !!pendingProbe.templateRecurrenceRepeated,
+          normalizedChars: Number(pendingProbe.templateRecurrenceChars || 0),
+          registrySize: Number(pendingProbe.templateRegistrySize || 0),
+          bootstrap: snapshotDetail?.templateBootstrap || null,
+          at: Date.now(),
+        };
+      } else {
+        lastTemplateRecurrenceProbe = null;
+      }
       lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
     } else {
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
@@ -2524,8 +2752,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.20] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.20] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.21] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.21] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2537,7 +2765,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.20] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.21] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -2582,7 +2810,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.20] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.21] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2608,7 +2836,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.20] output error:', e.message);
+      console.log('[simcore/v0.62.21] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2628,6 +2856,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const s = coreSession?.current;
       const storageDiag = coreSession?.storageDiagnostics?.() || null;
       const aliasDiag = coreSession?.communityAliasDiagnostics?.() || null;
+      const recurrenceDiag = coreSession?.templateRecurrenceDiagnostics?.() || null;
       const maxima = Object.entries(s?.community?.platformMax || {})
         .map(([k, v]) => [k, Math.max(0, Math.round(Number(v) || 0))])
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
@@ -2653,6 +2882,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         ? `${narrativeProbe.previousMode || '?'} → ${narrativeProbe.mode || '?'}`
         : 'n/a';
       const narrativeGuardLabel = narrativeProbe ? (narrativeProbe.guardActive ? 'ON' : 'OFF') : 'n/a';
+      const recurrenceLabel = lastTemplateRecurrenceProbe
+        ? (lastTemplateRecurrenceProbe.eligible ? (lastTemplateRecurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE')
+        : 'n/a';
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
@@ -2663,7 +2895,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.20 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.21 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2682,11 +2914,14 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Current snapshot path</div><div class="v">${currentSnapshotPath}</div></div>
 <div class="metric"><div class="k">Narrative guard</div><div class="v">${narrativeGuardLabel}</div></div>
 <div class="metric"><div class="k">Mode transition</div><div class="v">${escapeHtml(narrativeTransition)}</div></div>
+<div class="metric"><div class="k">Template recurrence</div><div class="v">${recurrenceLabel}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
+${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
+${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Template history bootstrap</div><div>DONE · ${Number(recurrenceDiag.registrySize || 0)} templates retained</div><div class="muted" style="margin-top:5px">${Number(recurrenceDiag.userMessages || 0)} user msgs · ${Number(recurrenceDiag.communityInputs || 0)} community inputs · ${Number(recurrenceDiag.repeatedTemplates || 0)} historical repeats</div></div>` : ''}
 ${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · output ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
 ${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock guard</div><div>REJECTED BACKWARD · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">previous ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
 ${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
@@ -2712,6 +2947,7 @@ ${lastPerf.editDetail ? `<tr><td>&nbsp;&nbsp;Fingerprint</td><td>${Number(lastPe
 <tr><td>&nbsp;&nbsp;Edit snapshot prune</td><td>${Number(lastPerf.editDetail.outPruneMs || 0).toFixed(1)} ms${lastPerf.editDetail.didSave ? '' : ' (no save)'}</td></tr>` : ''}
 <tr><td>Snapshot/onSend</td><td>${lastPerf.onSendMs.toFixed(1)} ms</td></tr>
 ${lastPerf.snapshotDetail ? `<tr><td>&nbsp;&nbsp;Pre restore/load</td><td>${Number(lastPerf.snapshotDetail.preLoadMs || 0).toFixed(1)} ms${lastPerf.snapshotDetail.mustRestorePre ? ` (${lastPerf.snapshotDetail.existingPre ? `restored:${escapeHtml(lastPerf.snapshotDetail.restoreReason || 'restore')}` : `miss:${escapeHtml(lastPerf.snapshotDetail.restoreReason || 'restore')}`})` : ' (forward skip)'}</td></tr>
+<tr><td>&nbsp;&nbsp;Template bootstrap</td><td>${Number(lastPerf.snapshotDetail.templateBootstrapMs || 0).toFixed(1)} ms${lastPerf.snapshotDetail.templateBootstrap ? ` (${Number(lastPerf.snapshotDetail.templateBootstrap.userMessages || 0)} user, ${Number(lastPerf.snapshotDetail.templateBootstrap.communityInputs || 0)} community, ${Number(lastPerf.snapshotDetail.templateBootstrap.registrySize || 0)} retained)` : ' (skip)'}</td></tr>
 <tr><td>&nbsp;&nbsp;Lifecycle prepare</td><td>${Number(lastPerf.snapshotDetail.lifecycleMs || 0).toFixed(1)} ms</td></tr>
 <tr><td>&nbsp;&nbsp;Turn serialize</td><td>${Number(lastPerf.snapshotDetail.turnSerializeMs || 0).toFixed(1)} ms</td></tr>
 <tr><td>&nbsp;&nbsp;Turn storage set</td><td>${Number(lastPerf.snapshotDetail.turnSetMs || 0).toFixed(1)} ms</td></tr>
@@ -2755,7 +2991,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.20] panel error:', e.message);
+      console.log('[simcore/v0.62.21] panel error:', e.message);
     }
   }
 
@@ -2763,7 +2999,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.20] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.21] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -2771,5 +3007,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.20] initialized');
+  console.log('[simcore/v0.62.21] initialized');
 })();

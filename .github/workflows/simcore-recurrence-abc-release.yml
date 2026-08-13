@@ -75,8 +75,8 @@ jobs:
           const legacy = { templateRecurrenceVersion: 1, templateRegistry: [123456] };
           const hist = [
             { role: 'user', data: a1 }, { role: 'assistant', data: 'x' },
-            { role: 'user', data: b1 }, { role: 'assistant', data: 'x' },
             { role: 'user', data: c1 }, { role: 'assistant', data: 'x' },
+            { role: 'user', data: b1 }, { role: 'assistant', data: 'x' },
           ];
           const boot = r.bootstrapState(legacy, hist, hist.length, x => x.data || '');
           if (boot.stats.version !== 2) throw new Error('bootstrap version');

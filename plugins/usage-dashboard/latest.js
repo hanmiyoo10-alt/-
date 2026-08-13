@@ -1,18 +1,20 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.23
+//@version 3.0.0-alpha.3.24
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.23';
+  const VERSION = '3.0.0-alpha.3.24';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
   const LEGACY_DEVPASS_STATE_KEY = 'llmgateway-devpass-direct-v1';
   const KST_TIME_ZONE = 'Asia/Seoul';
+  const UI_STALL_PROBE_INTERVAL_MS = 100;
+  const UI_STALL_THRESHOLD_MS = 50;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
@@ -28,8 +30,9 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let uiStallProbeTimer = null;
   let widget = null, rootBody = null, drag = null;
-  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null};
+  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,uiStallProbeActive:false};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -103,6 +106,68 @@
     if (state.performanceGuard === false || state.adaptiveRefresh === false) return base;
     const multiplier = Math.max(1, Number(performanceRuntime.adaptiveMultiplier) || 1);
     return Math.min(5 * 60_000, Math.max(base, Math.round(base * multiplier)));
+  }
+
+  function pushPerformanceSample(key, value, limit = 12) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return;
+    const list = Array.isArray(performanceRuntime[key]) ? performanceRuntime[key] : [];
+    list.push(Math.round(n * 10) / 10);
+    while (list.length > limit) list.shift();
+    performanceRuntime[key] = list;
+  }
+
+  function roundPerfMs(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n * 10) / 10) : null;
+  }
+
+  function refreshOverlapsPerfWindow(startPerf, endPerf) {
+    const start = Number(startPerf);
+    const end = Number(endPerf);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return false;
+    const activeStart = Number(performanceRuntime.activeRefreshStartedPerf || 0);
+    if (refreshInFlight && activeStart > 0 && activeStart <= end) return true;
+    const lastStart = Number(performanceRuntime.lastRefreshStartedPerf || 0);
+    const lastEnd = Number(performanceRuntime.lastRefreshEndedPerf || 0);
+    return lastStart > 0 && lastEnd >= start && lastStart <= end;
+  }
+
+  function stopUiStallProbe() {
+    if (uiStallProbeTimer) clearTimeout(uiStallProbeTimer);
+    uiStallProbeTimer = null;
+    performanceRuntime.uiStallProbeActive = false;
+  }
+
+  function startUiStallProbe() {
+    stopUiStallProbe();
+    if (typeof performance?.now !== 'function') return;
+    if (state?.backgroundPause !== false && document.visibilityState === 'hidden') return;
+    performanceRuntime.uiStallProbeActive = true;
+    let expected = performance.now() + UI_STALL_PROBE_INTERVAL_MS;
+    const tick = () => {
+      uiStallProbeTimer = null;
+      if (state?.backgroundPause !== false && document.visibilityState === 'hidden') {
+        performanceRuntime.uiStallProbeActive = false;
+        return;
+      }
+      const nowPerf = performance.now();
+      const lag = Math.max(0, nowPerf - expected);
+      if (lag >= UI_STALL_THRESHOLD_MS) {
+        const rounded = roundPerfMs(lag);
+        performanceRuntime.uiStallCount50 += 1;
+        if (lag >= 100) performanceRuntime.uiStallCount100 += 1;
+        if (lag >= 200) performanceRuntime.uiStallCount200 += 1;
+        performanceRuntime.uiStallMaxMs = Math.max(Number(performanceRuntime.uiStallMaxMs || 0), rounded || 0);
+        performanceRuntime.lastUiStallMs = rounded;
+        performanceRuntime.lastUiStallAt = Date.now();
+        performanceRuntime.lastUiStallRefreshOverlap = refreshOverlapsPerfWindow(expected, nowPerf);
+        pushPerformanceSample('uiStallSamples', lag);
+      }
+      expected = nowPerf + UI_STALL_PROBE_INTERVAL_MS;
+      uiStallProbeTimer = setTimeout(tick, UI_STALL_PROBE_INTERVAL_MS);
+    };
+    uiStallProbeTimer = setTimeout(tick, UI_STALL_PROBE_INTERVAL_MS);
   }
 
   function sourceAgeMs() {
@@ -455,6 +520,8 @@ async function importLegacyTodayBaselines() {
     if (refreshInFlight) return refreshInFlight;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
     const started = Date.now();
+    const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
+    performanceRuntime.activeRefreshStartedPerf = startedPerf;
     refreshInFlight = (async () => {
       try {
         state.data = applyObservedToday(await fetchSnapshot());
@@ -489,7 +556,15 @@ async function importLegacyTodayBaselines() {
         if (document.body?.dataset?.panelOpen === '1') renderSettings();
       }
     })();
-    try { await refreshInFlight; } finally { refreshInFlight = null; }
+    try { await refreshInFlight; } finally {
+      const endedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
+      if (startedPerf > 0 && endedPerf >= startedPerf) {
+        performanceRuntime.lastRefreshStartedPerf = startedPerf;
+        performanceRuntime.lastRefreshEndedPerf = endedPerf;
+      }
+      performanceRuntime.activeRefreshStartedPerf = 0;
+      refreshInFlight = null;
+    }
   }
 
   function diagText() {
@@ -507,6 +582,8 @@ async function importLegacyTodayBaselines() {
       `Success count: ${Number(state.refreshCount || 0)}`,
       `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)} · timer-only`,
       `Guard samples: timer ${Number(performanceRuntime.timerSamples || 0)} · ignored ${Number(performanceRuntime.ignoredSamples || 0)} · slow streak ${Number(performanceRuntime.slowRefreshes || 0)}`,
+      `UI stall probe: ${performanceRuntime.uiStallProbeActive ? 'active' : 'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50 || 0)} · ≥100ms ${Number(performanceRuntime.uiStallCount100 || 0)} · ≥200ms ${Number(performanceRuntime.uiStallCount200 || 0)} · max ${roundPerfMs(performanceRuntime.uiStallMaxMs) || 0}ms`,
+      `Last UI stall: ${num(performanceRuntime.lastUiStallMs) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · ${age(performanceRuntime.lastUiStallAt)}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
@@ -708,7 +785,7 @@ function todayOverviewMetrics(d) {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 
@@ -962,8 +1039,18 @@ function scheduleResetSync() {
   }
 
   function installLifecycle() {
-    const vis=()=>{if(document.visibilityState==='visible'){scheduleRefresh();if(state.syncOnFocus&&state.bridgeEnabled)refresh('visibility',true);}else if(state.backgroundPause!==false&&refreshTimer){clearTimeout(refreshTimer);refreshTimer=null;}};
+    const vis=()=>{
+      if(document.visibilityState==='visible'){
+        startUiStallProbe();
+        scheduleRefresh();
+        if(state.syncOnFocus&&state.bridgeEnabled)refresh('visibility',true);
+      }else if(state.backgroundPause!==false){
+        stopUiStallProbe();
+        if(refreshTimer){clearTimeout(refreshTimer);refreshTimer=null;}
+      }
+    };
     document.addEventListener('visibilitychange',vis); domListeners.push([document,'visibilitychange',vis]);
+    startUiStallProbe();
   }
 
   try {
@@ -983,6 +1070,7 @@ function scheduleResetSync() {
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
+      stopUiStallProbe();
       for(const [t,ty,id] of remoteListeners.splice(0)){try{await t.removeEventListener(ty,id);}catch(_){}}
       for(const [t,ty,fn] of domListeners.splice(0)){try{t.removeEventListener(ty,fn);}catch(_){}}
       if(widget){try{await widget.remove();}catch(_){}}

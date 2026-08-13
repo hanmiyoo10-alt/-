@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.15
+//@version 3.0.0-alpha.3.16
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.15';
+  const VERSION = '3.0.0-alpha.3.16';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -388,7 +388,7 @@ async function importLegacyTodayBaselines() {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><div class="actions"><button id="copy-diag">진단 복사</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 
@@ -437,6 +437,34 @@ async function importLegacyTodayBaselines() {
     if (q('#stale-ms')) q('#stale-ms').onchange = async e => { state.staleAfterMs = Math.max(0, Number(e.target.value)||0); state.stalePolicyV37Migrated = true; await persist(); await renderWidget(); renderSettings(); };
     if (q('#widget-mode')) q('#widget-mode').onchange = async e => { state.widgetMode = e.target.value === 'detailed' ? 'detailed' : 'compact'; await persist(); await renderWidget(); };
     if (q('#copy-diag')) q('#copy-diag').onclick = async e => { const b=e.currentTarget, old=b.textContent; b.textContent=(await copyDiag())?'복사됨 ✓':'복사 실패'; setTimeout(()=>b.textContent=old,1200); };
+    if (q('#export-json')) q('#export-json').onclick = () => {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        plugin: {name:'Local Usage Dashboard', version:VERSION},
+        usage: state.data || null,
+        dailyUsage: state.dailyUsage || null,
+        creditDailyUsage: state.creditDailyUsage || null,
+        sync: {
+          bridgeBase: state.bridgeBase || DEFAULT_BRIDGE,
+          bridgeEnabled: state.bridgeEnabled === true,
+          bridgeStatus: state.bridgeStatus || 'off',
+          refreshMs: Number(state.refreshMs || 0),
+          lastSyncAt: state.lastSyncAt || null,
+          lastSyncDurationMs: state.lastSyncDurationMs ?? null,
+          lastRefreshReason: state.lastRefreshReason || '',
+          refreshCount: Number(state.refreshCount || 0),
+          failures: Number(state.consecutiveFailures || 0),
+          error: state.bridgeError || ''
+        }
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `local-usage-dashboard-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
   }
 
   async function openSettings() { document.body.dataset.panelOpen='1'; renderSettings(); await Risuai.showContainer('fullscreen'); }

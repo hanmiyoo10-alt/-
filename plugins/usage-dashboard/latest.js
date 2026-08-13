@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.3
+//@version 3.0.0-alpha.3.4
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.3';
+  const VERSION = '3.0.0-alpha.3.4';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -118,6 +118,9 @@
         state.bridgeError = e?.message || String(e);
         state.lastRefreshReason = reason;
         await persist();
+        // Keep the last good values, but immediately repaint the widget so
+        // LIVE changes to OFFLINE as soon as a refresh fails.
+        await renderWidget();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
         if (document.body?.dataset?.panelOpen === '1') renderSettings();
       }
@@ -194,7 +197,7 @@
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
         state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; await persist(); scheduleRefresh(); await refresh('connect');
-      } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); renderSettings(); }
+      } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
     };
     if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
     if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };

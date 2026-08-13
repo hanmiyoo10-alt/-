@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.20
+//@version 3.0.0-alpha.3.21
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.20';
+  const VERSION = '3.0.0-alpha.3.21';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -493,7 +493,7 @@ function remainingTimeForDashboard(value) {
   const days=Math.floor(totalMinutes/1440);
   const hours=Math.floor((totalMinutes%1440)/60);
   const minutes=totalMinutes%60;
-  if (days>0) return days+'일 '+hours+'시간';
+  if (days>0) return days+'일 '+hours+'시간 '+minutes+'분';
   if (hours>0) return hours+'시간 '+minutes+'분';
   return minutes+'분';
 }
@@ -755,7 +755,7 @@ function todayOverviewMetrics(d) {
       const days = Math.floor(totalMinutes / 1440);
       const hours = Math.floor((totalMinutes % 1440) / 60);
       const minutes = totalMinutes % 60;
-      if (days > 0) return `${days}일 ${hours}시간`;
+      if (days > 0) return `${days}일 ${hours}시간 ${minutes}분`;
       if (hours > 0) return `${hours}시간 ${minutes}분`;
       return `${minutes}분`;
     };

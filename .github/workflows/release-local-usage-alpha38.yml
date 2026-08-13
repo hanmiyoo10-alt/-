@@ -78,7 +78,7 @@ jobs:
             }, delay);
           }
 
-`;
+          `;
 
           replaceOnce(
             'reset scheduler 삽입',

@@ -1,4 +1,4 @@
-name: SimCore 0.62.35 Module Boundary Freeze
+name: Release Local Usage Dashboard alpha.3.23
 
 on:
   push:
@@ -18,177 +18,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Preserve baseline and patch
+      - name: Patch alpha.3.22 to alpha.3.23
         shell: bash
         run: |
           set -euo pipefail
-          cp plugins/simcore/latest.js /tmp/simcore-06234.js
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('plugins/simcore/latest.js')
-          s = p.read_text()
-          if '//@version 0.62.34' not in s:
-              raise SystemExit('expected 0.62.34 baseline')
-
-          s = s.replace('//@version 0.62.34', '//@version 0.62.35', 1)
-          s = s.replace('[simcore/v0.62.34]', '[simcore/v0.62.35]')
-          s = s.replace('⚙️ SimCore v0.62.34', '⚙️ SimCore v0.62.35')
-
-          old_modules = '''// Internal modules (single installable plugin):
-// - Kernel: current state schema + shared primitives
-// - Store: snapshot persistence/retention only
-// - Lifecycle: mode/broadcast/episode contract
-// - Time: current world-year + Korean-age synchronization only
-// - Community: COMMUNITY parsing/platform-family/group rules
-// - Reaction: reaction parser, per-family historical maxima, normalization
-// - Structure: validation/integrity/state-commit safety (judge; does not repair)
-// - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
-// - Session: thin orchestrator for one-pass request/output pipelines
-// - OPS: performance helpers/diagnostic formatting
-//
-'''
-          new_modules = '''// Internal modules (single installable plugin; ownership frozen by Contracts v1):
-// - Contracts: module responsibility/non-goal registry only; no runtime policy
-// - Kernel: state schema + shared primitives/normalization glue
-// - Store: snapshot persistence/retention only
-// - Lifecycle: mode/broadcast/episode request preparation
-// - Time: timestamp syntax + narrative/broadcast clock primitives + world-year/age synchronization
-// - Recurrence: repeated request-template detection/state only
-// - Lineage: request root/parent/depth tracking only
-// - Handoff: short-C source/parent-shift detection/state only
-// - Community: COMMUNITY parsing/platform-family/group taxonomy only
-// - Reaction: reaction parser, per-family historical maxima, normalization
-// - Structure: validation/integrity/state-commit safety (judge; does not repair)
-// - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
-// - Prompt: runtime prompt serialization only; does not own semantic state
-// - Session: thin orchestrator; delegates prompt serialization to Prompt
-// - OPS: performance helpers/diagnostic formatting only
-//
-'''
-          if old_modules not in s:
-              raise SystemExit('module list anchor missing')
-          s = s.replace(old_modules, new_modules, 1)
-
-          changelog_anchor = '// v0.62.32 Stable Menu Label:\n'
-          changelog = '''// v0.62.35 Module Boundary Freeze:
-// - Freezes explicit responsibility/non-goal contracts for every internal module before the v0.63 prompt-compiler work
-// - Extracts renderRuntimePrompt from Session into a dedicated Prompt module; Session remains orchestration-only for prompt assembly
-// - Keeps one installable JS artifact; this is internal modularization, not a multi-file runtime dependency
-// - Runtime prompt output is byte-identical to v0.62.34 across A/B/C/B_END/recurrence/handoff/age/narrative cases
-// - No state schema, storage key, snapshot, time, lineage, reaction, output-repair, lore access, or generation guidance change
-//
-'''
-          if changelog_anchor not in s:
-              raise SystemExit('changelog anchor missing')
-          s = s.replace(changelog_anchor, changelog + changelog_anchor, 1)
-
-          simcore_end = '''  return { define, require: requireFn };
-})();
-
-'''
-          contracts = r'''SimCore.define("contracts", function (require, module, exports) {
-const MODULE_CONTRACT_VERSION = 1;
-const MODULE_CONTRACTS = Object.freeze({
-  contracts: Object.freeze({ owns: 'module responsibility metadata', excludes: 'runtime policy or state mutation' }),
-  kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
-  store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
-  lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
-  time: Object.freeze({ owns: 'timestamp syntax, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
-  recurrence: Object.freeze({ owns: 'request-template recurrence detection and bounded registry', excludes: 'source meaning or response composition' }),
-  lineage: Object.freeze({ owns: 'request root/parent/depth tracking', excludes: 'source importance or response content' }),
-  handoff: Object.freeze({ owns: 'short-C source/parent-shift detection and bounded registry', excludes: 'semantic source selection or reaction content' }),
-  community: Object.freeze({ owns: 'COMMUNITY parsing and platform taxonomy', excludes: 'reaction-number mutation or prose generation' }),
-  reaction: Object.freeze({ owns: 'reaction parsing, per-family floors and deterministic normalization', excludes: 'community prose or platform selection' }),
-  structure: Object.freeze({ owns: 'output validation and integrity judgement', excludes: 'repair or semantic rewriting' }),
-  recovery: Object.freeze({ owns: 'cold-path deterministic repair/bootstrap/legacy recovery', excludes: 'normal hot-path policy ownership' }),
-  prompt: Object.freeze({ owns: 'runtime prompt serialization', excludes: 'persistent semantic state ownership, host/storage I/O, creative decisions' }),
-  session: Object.freeze({ owns: 'pipeline orchestration and commit sequencing', excludes: 'prompt wording ownership or creative/semantic decisions' }),
-  ops: Object.freeze({ owns: 'performance and diagnostic formatting', excludes: 'generation/state policy' }),
-});
-module.exports = { MODULE_CONTRACT_VERSION, MODULE_CONTRACTS };
-});
-
-'''
-          if simcore_end not in s:
-              raise SystemExit('SimCore bootstrap anchor missing')
-          s = s.replace(simcore_end, simcore_end + contracts, 1)
-
-          session_marker = 'SimCore.define("session", function (require, module, exports) {'
-          session_pos = s.find(session_marker)
-          if session_pos < 0:
-              raise SystemExit('session module anchor missing')
-          fn_start = s.find('function renderRuntimePrompt(state) {', session_pos)
-          fn_end_marker = '\n\nfunction finalizePreparedOutput'
-          fn_end = s.find(fn_end_marker, fn_start)
-          if fn_start < 0 or fn_end < 0:
-              raise SystemExit('renderRuntimePrompt block missing')
-          fn_text = s[fn_start:fn_end]
-          prompt_module = '''SimCore.define("prompt", function (require, module, exports) {\nconst kernel = require('./kernel');\nconst lifecycle = require('./lifecycle');\nconst time = require('./time');\nconst recurrence = require('./recurrence');\n\n''' + fn_text + '''\n\nmodule.exports = { renderRuntimePrompt };\n});\n\n'''
-          s = s[:session_pos] + prompt_module + s[session_pos:]
-
-          session_pos = s.find(session_marker)
-          fn_start = s.find('function renderRuntimePrompt(state) {', session_pos)
-          fn_end = s.find(fn_end_marker, fn_start)
-          if fn_start < 0 or fn_end < 0:
-              raise SystemExit('session renderRuntimePrompt block not found after prompt insertion')
-          s = s[:fn_start] + 'const renderRuntimePrompt = prompt.renderRuntimePrompt;' + s[fn_end:]
-
-          session_requires = "const recurrence = require('./recurrence');\n"
-          replacement = session_requires + "const prompt = require('./prompt');\n"
-          session_pos = s.find(session_marker)
-          req_pos = s.find(session_requires, session_pos)
-          if req_pos < 0:
-              raise SystemExit('session recurrence require anchor missing')
-          s = s[:req_pos] + s[req_pos:].replace(session_requires, replacement, 1)
-
-          p.write_text(s)
-          Path('plugins/simcore/install.js').write_text(s)
-          PY
-
-      - name: Validate syntax, behavior parity, and boundaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check plugins/simcore/latest.js
-          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
-          node <<'NODE'
-          const fs = require('fs');
-          const vm = require('vm');
-          function load(path) {
-            const src = fs.readFileSync(path, 'utf8');
-            const cut = src.indexOf('\n(async () => {');
-            if (cut < 0) throw new Error('bootstrap boundary missing: ' + path);
-            const ctx = vm.createContext({ console, Date, JSON, Math, Number, Object, String, RegExp, Set, Map, Array, Boolean, performance: { now: () => 0 } });
-            vm.runInContext(src.slice(0, cut) + '\n;globalThis.__SimCore=SimCore;', ctx, { filename: path });
-            return { sim: ctx.__SimCore, src };
-          }
-          function state(mode, patch={}) {
-            const b=/^B_/.test(mode);
-            return {stateVersion:5,coreStateVersion:10,historyBootstrapped:true,historyBootstrappedAt:90,historyBootstrapStats:null,templateRecurrenceVersion:2,templateRegistry:[],requestLineageVersion:1,requestLineage:{version:1,rootMode:'A',rootIndex:98,parentMode:'A',parentIndex:98,depth:0,inlineSource:false,sourceKind:'ROOT',lastRequestMode:'A',lastRequestIndex:100,transitionFrom:'A',recentSources:[{mode:'A',index:98}]},communitySourceHandoffVersion:2,communitySourceRegistry:[],broadcastLocked:b,broadcastAirtime:b?'⏱️[2028-02-09 (Wed) 10:30 AM]':null,broadcastAirtimeStart:b?'⏱️[2028-02-09 (Wed) 09:30 AM]':null,episodeNo:27,community:{activationCount:614,platformMax:{X:5655450,'더쿠':4855450,'유튜브':1655450},lastNormalization:[],classifierVersion:2},worldYear:2028,koreanAgeOffset:16,narrativeTimestamp:'⏱️[2028-02-09 (Wed) 10:30 AM]',narrativeClockVersion:2,clockRepairVersion:2,lastMode:mode,pending:{active:true,sendIndex:100,mode,userText:'test',wasLocked:b,hasContinue:mode==='B_CONTINUE',hasEnd:mode==='B_END',hasStart:mode==='B_START',broadcastAirtimeIsNew:mode==='B_START',broadcastAirtimePrevious:b?'⏱️[2028-02-09 (Wed) 10:30 AM]':null,broadcastAirtimeStart:b?'⏱️[2028-02-09 (Wed) 09:30 AM]':null,secondaryConfigured:false,secondaryActive:false,secondaryName:'',secondaryKeyword:'',narrativeProgressionActive:false,narrativeProgressionReason:'none',narrativeTimestampPrevious:b?null:'⏱️[2028-02-09 (Wed) 10:30 AM]',narrativeClockGuard:false,templateRecurrenceEligible:false,templateRecurrenceRepeated:false,templateRecurrenceHash:null,templateRecurrenceModeFamily:b?'B':mode,templateRecurrenceChars:0,templateRegistrySize:0,requestLineageSourceKind:'ROOT',requestLineageRootMode:'A',requestLineageRootIndex:98,requestLineageParentMode:'A',requestLineageParentIndex:98,requestLineageDepth:0,requestLineageInlineSource:false,communitySourceHandoffEligible:false,communitySourceHandoffSeen:false,communitySourceHandoffNewSource:false,communitySourceHandoffParentComparable:false,communitySourceHandoffParentShift:false,communitySourceHandoffHash:null,communitySourceHandoffChars:0,communitySourceHandoffRootMode:null,communitySourceHandoffRootIndex:-1,communitySourceHandoffParentMode:null,communitySourceHandoffParentIndex:-1,communitySourceHandoffDepth:-1,communitySourceHandoffPriorRootMode:null,communitySourceHandoffPriorRootIndex:-1,communitySourceHandoffPriorParentMode:null,communitySourceHandoffPriorParentIndex:-1,communitySourceHandoffPriorDepth:-1,communitySourceHandoffRegistrySize:0,communitySourceHandoffReason:'ineligible',...patch}};
-          }
-          const a=load('/tmp/simcore-06234.js'), b=load('plugins/simcore/latest.js');
-          const ar=a.sim.require('session').renderRuntimePrompt, br=b.sim.require('session').renderRuntimePrompt;
-          const cases=[state('A'),state('A',{narrativeProgressionActive:true,narrativeProgressionReason:'calendar-transition',narrativeClockGuard:true}),state('C',{communitySourceHandoffEligible:true,communitySourceHandoffRootMode:'A',communitySourceHandoffRootIndex:98}),state('C',{communitySourceHandoffEligible:true,communitySourceHandoffSeen:true,communitySourceHandoffNewSource:true,communitySourceHandoffRootMode:'B',communitySourceHandoffRootIndex:97}),state('C',{templateRecurrenceEligible:true,templateRecurrenceRepeated:true,templateRecurrenceModeFamily:'C'}),state('B_START'),state('B_CONTINUE'),state('B_END')];
-          cases.forEach((x,i)=>{const x1=JSON.parse(JSON.stringify(x)),x2=JSON.parse(JSON.stringify(x));if(ar(x1)!==br(x2))throw new Error('runtime prompt parity failed case '+i)});
-          if(JSON.stringify(a.sim.require('kernel').initialState())!==JSON.stringify(b.sim.require('kernel').initialState()))throw new Error('initialState changed');
-          const c=b.sim.require('contracts');
-          if(c.MODULE_CONTRACT_VERSION!==1)throw new Error('contracts version');
-          ['contracts','kernel','store','lifecycle','time','recurrence','lineage','handoff','community','reaction','structure','recovery','prompt','session','ops'].forEach(n=>{if(!c.MODULE_CONTRACTS[n])throw new Error('missing contract '+n)});
-          const ps=b.src.indexOf('SimCore.define("prompt"'), ss=b.src.indexOf('SimCore.define("session"'), os=b.src.indexOf('SimCore.define("ops"');
-          const pb=b.src.slice(ps,ss), sb=b.src.slice(ss,os);
-          if(!pb.includes('function renderRuntimePrompt(state)'))throw new Error('prompt does not own renderer');
-          if(/\bRisuai\b|pluginStorage/.test(pb))throw new Error('prompt touches host/storage API');
-          if(sb.includes('function renderRuntimePrompt(state)'))throw new Error('session still owns renderer');
-          if(!sb.includes("const prompt = require('./prompt');"))throw new Error('session prompt dependency missing');
-          console.log('0.62.35 boundary/parity checks passed');
-          NODE
+          python3 plugins/usage-dashboard/tools/release_alpha323_patch.py
+          node --check plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.23$' plugins/usage-dashboard/latest.js
+          grep -q "function noteRefreshPerformance(durationMs, reason = '')" plugins/usage-dashboard/latest.js
+          grep -q "sampleReason !== 'timer'" plugins/usage-dashboard/latest.js
+          grep -q 'noteRefreshPerformance(state.lastSyncDurationMs, reason)' plugins/usage-dashboard/latest.js
+          grep -q 'timer-only' plugins/usage-dashboard/latest.js
+          grep -q 'Guard samples:' plugins/usage-dashboard/latest.js
+          grep -q 'Analytics · 24h / 7d / 30d' plugins/usage-dashboard/latest.js
+          grep -q '24h Usage Scope' plugins/usage-dashboard/latest.js
 
       - name: Commit release
         shell: bash
         run: |
           set -euo pipefail
+          if git diff --quiet -- plugins/usage-dashboard/latest.js; then
+            echo 'latest.js already matches alpha.3.23'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add plugins/simcore/latest.js plugins/simcore/install.js
-          git commit -m 'release(simcore): v0.62.35 module boundary freeze'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.23 tuned performance guard'
           git push

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3
+//@version 3.0.0-alpha.3.1
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3';
+  const VERSION = '3.0.0-alpha.3.1';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -202,7 +202,7 @@
     const main = b => detailed ? money(b?.remaining) : money(b?.todayUsed,4);
     const row = (label,value,color) => `<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:${color}">${esc(label)}</span><b>${value}</b></div>`;
     return `<div style="font:12px/1.35 system-ui,-apple-system,'Segoe UI',sans-serif;color:#f5f7fa">
-      <div style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>
+      <div data-drag-handle="1" style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>
       ${row(m?.label||'월간',main(m),'#aeb5c0')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(m?.todayUsed,4)}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${m?pct(100-Number(m.percent||0)):0}%;background:#c5f277"></i></div>
       ${row(w?.label||'주간',main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(w?.todayUsed,4)}</div>`:''}
@@ -223,14 +223,21 @@
     const down = async e => {
       if (!num(e.clientX)||!num(e.clientY)) return;
       const r=await widget.getBoundingClientRect();
-      drag={ox:Number(e.clientX)-r.left,oy:Number(e.clientY)-r.top,maxX:Math.max(8,(await rootBody.clientWidth())-r.width-8),maxY:Math.max(8,(await rootBody.clientHeight())-r.height-8)};
+      const localY = Number(e.clientY) - r.top;
+      if (localY < 0 || localY > 18) { drag = null; return; }
+      drag={pointerId:e.pointerId ?? null,ox:Number(e.clientX)-r.left,oy:Number(e.clientY)-r.top,maxX:Math.max(8,(await rootBody.clientWidth())-r.width-8),maxY:Math.max(8,(await rootBody.clientHeight())-r.height-8)};
     };
     const move = async e => {
       if (!drag||!num(e.clientX)||!num(e.clientY)) return;
+      if (drag.pointerId !== null && e.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
       state.widgetX=Math.max(8,Math.min(drag.maxX,Number(e.clientX)-drag.ox)); state.widgetY=Math.max(8,Math.min(drag.maxY,Number(e.clientY)-drag.oy));
       await widget.setStyle('left',`${state.widgetX}px`); await widget.setStyle('top',`${state.widgetY}px`); await widget.setStyle('right','auto'); await widget.setStyle('bottom','auto');
     };
-    const up = async () => { if (!drag) return; drag=null; await persist(); };
+    const up = async e => {
+      if (!drag) return;
+      if (drag.pointerId !== null && e?.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
+      drag=null; await persist();
+    };
     remoteListeners.push([widget,'pointerdown',await widget.addEventListener('pointerdown',down)],[root,'pointermove',await root.addEventListener('pointermove',move)],[root,'pointerup',await root.addEventListener('pointerup',up)],[root,'pointercancel',await root.addEventListener('pointercancel',up)]);
   }
 

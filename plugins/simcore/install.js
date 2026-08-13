@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.23
-//@display-name SimCore v0.62.23 Request Lineage Probe
+//@version 0.62.24
+//@display-name SimCore v0.62.24 Narrative Current-Time Floor
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,14 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.24 Narrative Current-Time Floor:
+// - Non-broadcast current narrative timestamps are monotonic even when a short A/C follow-up causes the model to emit an older source-event time
+// - If the first/current response timestamp is earlier than the prior narrative anchor, only that timestamp is clamped to the prior anchor; embedded/source-event times remain untouched
+// - State commit and manual-edit sync also refuse backward narrative-anchor movement as defense in depth
+// - One-time v1 -> v2 migration checks only the immediately preceding turn snapshot to recover an anchor already regressed by v0.62.23; no history rescan
+// - Mode B Broadcast Airtime Guard is unchanged; Request Lineage/Community/Reaction/Recurrence semantics are unchanged
+// - No auxiliary model, no new runtime-prompt tokens, and no new pluginStorage API call sites
 //
 // v0.62.23 Request Lineage Probe:
 // - Diagnostics/state only: observes A/B/C request lineage without changing generation guidance
@@ -776,7 +784,7 @@ function initialState() {
     worldYear: null,
     koreanAgeOffset: 0,
     narrativeTimestamp: null,
-    narrativeClockVersion: 1,
+    narrativeClockVersion: 2,
     clockRepairVersion: 0,
     lastMode: 'A',
     pending: null,
@@ -984,6 +992,7 @@ module.exports = {
 
 SimCore.define("time", function (require, module, exports) {
 const CLOCK_REPAIR_VERSION = 2;
+const NARRATIVE_CLOCK_VERSION = 2;
 
 function explicitWorldYear(userText) {
   const s = String(userText || '');
@@ -1094,13 +1103,33 @@ function narrativeProgressionHint(userText) {
   return { active: false, reason: 'none' };
 }
 
+function enforceNarrativeCurrentTimeFloor(content, previous) {
+  const text = String(content || '');
+  const parsed = parseTimestamp(text);
+  if (!parsed) return { content: text, changed: false, reason: 'missing-or-invalid', observed: null, floor: previous || null };
+  if (!previous) return { content: text, changed: false, reason: 'no-floor', observed: parsed.raw, floor: null };
+  const cmp = compareTimestamps(parsed.raw, previous);
+  if (cmp == null || cmp >= 0) {
+    return { content: text, changed: false, reason: cmp === 0 ? 'same' : 'forward', observed: parsed.raw, floor: previous };
+  }
+  // The first canonical timestamp is current narrative time. Clamp only that token;
+  // later embedded/source-event timestamps are intentionally left untouched.
+  return {
+    content: text.replace(parsed.raw, previous),
+    changed: true,
+    reason: 'clamped-backward',
+    observed: parsed.raw,
+    floor: previous,
+  };
+}
+
 function commitNarrativeTimestamp(state, pending, content) {
   if (/^B_/.test(String(pending?.mode || ''))) return { changed: false, reason: 'broadcast', timestamp: null };
   const parsed = parseTimestamp(content);
   if (!parsed) return { changed: false, reason: 'missing-or-invalid', timestamp: null };
   const current = parsed.raw;
   const previous = pending?.narrativeTimestampPrevious || state.narrativeTimestamp || null;
-  if (pending?.narrativeClockGuard && previous) {
+  if (previous) {
     const cmp = compareTimestamps(current, previous);
     if (cmp != null && cmp < 0) return { changed: false, reason: 'backward', timestamp: current, previous };
   }
@@ -1113,6 +1142,11 @@ function syncNarrativeTimestamp(state, content, mode) {
   if (/^B_/.test(String(mode || ''))) return false;
   const parsed = parseTimestamp(content);
   if (!parsed) return false;
+  const previous = state.narrativeTimestamp || null;
+  if (previous) {
+    const cmp = compareTimestamps(parsed.raw, previous);
+    if (cmp != null && cmp < 0) return false;
+  }
   const changed = state.narrativeTimestamp !== parsed.raw;
   state.narrativeTimestamp = parsed.raw;
   return changed;
@@ -1120,6 +1154,7 @@ function syncNarrativeTimestamp(state, content, mode) {
 
 module.exports = {
   CLOCK_REPAIR_VERSION,
+  NARRATIVE_CLOCK_VERSION,
   BROADCAST_TIMESTAMP_RE,
   explicitWorldYear,
   parseTimestamp,
@@ -1129,6 +1164,7 @@ module.exports = {
   resetBroadcastAirtime,
   commitBroadcastAirtime,
   narrativeProgressionHint,
+  enforceNarrativeCurrentTimeFloor,
   commitNarrativeTimestamp,
   syncNarrativeTimestamp,
   applyWorldYear,
@@ -2000,6 +2036,14 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
     };
   }
 
+  let narrativeFloor = null;
+  if (!/^B_/.test(String(p.mode || ''))) {
+    narrativeFloor = time.enforceNarrativeCurrentTimeFloor(
+      finalText,
+      p.narrativeTimestampPrevious || state.narrativeTimestamp || null,
+    );
+    finalText = narrativeFloor.content;
+  }
   time.applyWorldYear(state, time.timestampYear(finalText));
   let narrativeClockProbe = null;
   if (!/^B_/.test(String(p.mode || ''))) {
@@ -2009,7 +2053,8 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
       ? time.compareTimestamps(narrativeCommit.timestamp, previousNarrative)
       : null;
     let narrativeCommitStatus = 'UNKNOWN';
-    if (narrativeCommit.reason === 'backward') narrativeCommitStatus = 'REJECTED BACKWARD';
+    if (narrativeFloor?.changed) narrativeCommitStatus = 'FLOOR CLAMPED';
+    else if (narrativeCommit.reason === 'backward') narrativeCommitStatus = 'REJECTED BACKWARD';
     else if (narrativeCommit.reason === 'missing-or-invalid') narrativeCommitStatus = 'MISSING TIMESTAMP';
     else if (narrativeCommit.reason === 'committed' && !previousNarrative) narrativeCommitStatus = 'SEEDED';
     else if (narrativeCommit.reason === 'committed' && narrativeCmp != null && narrativeCmp < 0) narrativeCommitStatus = 'BACKWARD OBSERVED';
@@ -2023,17 +2068,29 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
       guardActive: !!p.narrativeClockGuard,
       trigger: p.narrativeProgressionReason || 'none',
       previousAnchor: previousNarrative,
+      observedTimestamp: narrativeFloor?.observed || narrativeCommit.timestamp || null,
       outputTimestamp: narrativeCommit.timestamp || null,
+      floorApplied: !!narrativeFloor?.changed,
+      floorTimestamp: narrativeFloor?.floor || null,
       commitStatus: narrativeCommitStatus,
-      commitReason: narrativeCommit.reason || 'unknown',
+      commitReason: narrativeFloor?.changed ? 'clamped-backward' : (narrativeCommit.reason || 'unknown'),
       at: Date.now(),
     };
-    if (narrativeCommit.reason === 'backward') {
+    if (narrativeFloor?.changed) {
+      state.lastNarrativeClockWarning = {
+        previous: narrativeFloor.floor || previousNarrative || null,
+        rejected: narrativeFloor.observed || null,
+        outIndex: Number.isInteger(Number(outIndex)) ? Number(outIndex) : -1,
+        reason: 'current-time-floor',
+        action: 'clamped',
+      };
+    } else if (narrativeCommit.reason === 'backward') {
       state.lastNarrativeClockWarning = {
         previous: narrativeCommit.previous || null,
         rejected: narrativeCommit.timestamp || null,
         outIndex: Number.isInteger(Number(outIndex)) ? Number(outIndex) : -1,
         reason: p.narrativeProgressionReason || 'forward',
+        action: 'rejected',
       };
     } else {
       delete state.lastNarrativeClockWarning;
@@ -2082,6 +2139,58 @@ class CoreRulesetSession {
     this.deferredPruneRunning = false;
     this.communityAliasRepairStats = null;
     this.templateRecurrenceBootstrapStats = null;
+    this.narrativeClockMigrationStats = null;
+  }
+
+  async migrateNarrativeCurrentTimeFloorIfNeeded(latestOutIndex = -1) {
+    const state = kernel.reconcileState(this.current || kernel.initialState());
+    const fromVersion = Math.max(1, Number(state.narrativeClockVersion || 1));
+    if (fromVersion >= time.NARRATIVE_CLOCK_VERSION) {
+      this.current = state;
+      return { changed: false, skipped: true, fromVersion, toVersion: fromVersion };
+    }
+
+    const before = state.narrativeTimestamp || null;
+    let candidate = null;
+    let source = 'none';
+    const sendIndex = Number.isInteger(Number(latestOutIndex)) && Number(latestOutIndex) > 0
+      ? Number(latestOutIndex) - 1
+      : -1;
+    if (sendIndex >= 0) {
+      const turn = await this.store.loadTurn(sendIndex);
+      const choices = [
+        ['send', turn?.send?.narrativeTimestamp || null],
+        ['pre', turn?.pre?.narrativeTimestamp || null],
+      ];
+      for (const [label, ts] of choices) {
+        if (!time.parseTimestamp(ts)) continue;
+        if (!candidate) { candidate = ts; source = label; continue; }
+        const cmp = time.compareTimestamps(ts, candidate);
+        if (cmp != null && cmp > 0) { candidate = ts; source = label; }
+      }
+    }
+
+    let changed = false;
+    if (candidate) {
+      const cmp = before ? time.compareTimestamps(candidate, before) : 1;
+      if (!before || (cmp != null && cmp > 0)) {
+        state.narrativeTimestamp = candidate;
+        changed = true;
+      }
+    }
+    state.narrativeClockVersion = time.NARRATIVE_CLOCK_VERSION;
+    this.current = state;
+    this.narrativeClockMigrationStats = {
+      changed,
+      fromVersion,
+      toVersion: time.NARRATIVE_CLOCK_VERSION,
+      sendIndex,
+      before,
+      candidate,
+      after: state.narrativeTimestamp || null,
+      source,
+    };
+    return this.narrativeClockMigrationStats;
   }
 
   async init(latestOutIndex = -1, mirrorRaw = null, latestOutputFingerprint = null) {
@@ -2113,6 +2222,7 @@ class CoreRulesetSession {
       this.currentOutputIndex = latestOutIndex;
       this.trustedOutputFingerprint = mirrorFingerprint;
       this.trustedHostOutputFingerprint = mirrorHostFingerprint;
+      await this.migrateNarrativeCurrentTimeFloorIfNeeded(latestOutIndex);
       return this.current;
     }
 
@@ -2138,6 +2248,7 @@ class CoreRulesetSession {
         this.trustedHostOutputFingerprint = (!this.loadedFromLegacySnapshot
           && Number(this.current.clockRepairVersion || 0) >= time.CLOCK_REPAIR_VERSION)
           ? (this.current.hostOutputFingerprint || null) : null;
+        await this.migrateNarrativeCurrentTimeFloorIfNeeded(found.index);
         return this.current;
       }
     }
@@ -2158,6 +2269,7 @@ class CoreRulesetSession {
         this.trustedHostOutputFingerprint = (!this.loadedFromLegacySnapshot
           && Number(this.current.clockRepairVersion || 0) >= time.CLOCK_REPAIR_VERSION)
           ? (this.current.hostOutputFingerprint || null) : null;
+        await this.migrateNarrativeCurrentTimeFloorIfNeeded(latestOutIndex);
         return this.current;
       } catch { /* broken mirror -> fresh */ }
     }
@@ -2844,7 +2956,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.23] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.24] state mirror failed:', e.message);
     }
   }
 
@@ -2859,7 +2971,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.23] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.24] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3008,8 +3120,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.23] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.23] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.24] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.24] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -3021,7 +3133,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.23] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.24] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3066,7 +3178,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.23] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.24] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3092,7 +3204,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.23] output error:', e.message);
+      console.log('[simcore/v0.62.24] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3158,7 +3270,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.23 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.24 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3176,6 +3288,7 @@ ${broadcastClockRows}
 <div class="card compact">
 <div class="metric"><div class="k">Current snapshot path</div><div class="v">${currentSnapshotPath}</div></div>
 <div class="metric"><div class="k">Narrative guard</div><div class="v">${narrativeGuardLabel}</div></div>
+<div class="metric"><div class="k">Current-time floor</div><div class="v">${narrativeProbe?.floorApplied ? 'CLAMPED' : 'ON'}</div></div>
 <div class="metric"><div class="k">Mode transition</div><div class="v">${escapeHtml(narrativeTransition)}</div></div>
 <div class="metric"><div class="k">Template recurrence</div><div class="v">${recurrenceLabel}</div></div>
 <div class="metric"><div class="k">Request lineage</div><div class="v">${escapeHtml(lineageLabel)}</div></div>
@@ -3187,8 +3300,8 @@ ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style=
 ${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · mode ${escapeHtml(lastTemplateRecurrenceProbe.modeFamily || '?')} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
 ${lastRequestLineageProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Request lineage probe (runtime)</div><div>${escapeHtml(lineageLabel)}</div><div class="muted" style="margin-top:5px">root ${escapeHtml(lastRequestLineageProbe.rootMode || 'none')}@${Number(lastRequestLineageProbe.rootIndex)} · parent ${escapeHtml(lastRequestLineageProbe.parentMode || 'none')}@${Number(lastRequestLineageProbe.parentIndex)} · transition ${escapeHtml(lastRequestLineageProbe.transitionFrom || '?')} → ${escapeHtml(String(lastRequestLineageProbe.currentMode || '?').replace(/^B_.*/, 'B'))}</div><div class="muted" style="margin-top:5px">recent A/B ${escapeHtml((lastRequestLineageProbe.recentSources || []).map((x) => `${x.mode}@${x.index}`).join(' · ') || 'none')} · diagnostics only · prompt +0</div></div>` : ''}
 ${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Template history bootstrap</div><div>DONE · ${Number(recurrenceDiag.registrySize || 0)} templates retained</div><div class="muted" style="margin-top:5px">${Number(recurrenceDiag.userMessages || 0)} user msgs · eligible A/B/C ${Number(recurrenceDiag.modeEligible?.A || 0)}/${Number(recurrenceDiag.modeEligible?.B || 0)}/${Number(recurrenceDiag.modeEligible?.C || 0)} · ${Number(recurrenceDiag.repeatedTemplates || 0)} historical repeats</div></div>` : ''}
-${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · output ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
-${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock guard</div><div>REJECTED BACKWARD · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">previous ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
+${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · observed ${escapeHtml(narrativeProbe.observedTimestamp || 'pending')} · committed ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
+${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative current-time floor</div><div>${s.lastNarrativeClockWarning.action === 'clamped' ? 'FLOOR CLAMPED' : 'REJECTED BACKWARD'} · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">floor ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
 ${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
 ${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>
 <tr><td>Total</td><td>${lastPerf.totalMs.toFixed(1)} ms</td></tr>
@@ -3251,12 +3364,12 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">v0.62.20 Narrative Clock Diagnostics · runtime probe only · behavior unchanged</div>
+<div class="card muted">v0.62.24 Narrative Current-Time Floor · A/C current timestamp monotonic · B airtime unchanged</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.23] panel error:', e.message);
+      console.log('[simcore/v0.62.24] panel error:', e.message);
     }
   }
 
@@ -3264,7 +3377,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.23] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.24] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3272,5 +3385,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.23] initialized');
+  console.log('[simcore/v0.62.24] initialized');
 })();

@@ -1,4 +1,4 @@
-name: Release Local Usage Dashboard alpha.3.15
+name: Release Local Usage Dashboard alpha.3.16
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.14 to alpha.3.15
+      - name: Patch alpha.3.15 to alpha.3.16
         shell: bash
         run: |
           set -euo pipefail
@@ -27,8 +27,8 @@ jobs:
           const path = 'plugins/usage-dashboard/latest.js';
           let src = fs.readFileSync(path, 'utf8');
 
-          if (!src.includes('//@version 3.0.0-alpha.3.14') || !src.includes("const VERSION = '3.0.0-alpha.3.14';")) {
-            throw new Error('latest.js가 정확한 alpha.3.14가 아니야.');
+          if (!src.includes('//@version 3.0.0-alpha.3.15') || !src.includes("const VERSION = '3.0.0-alpha.3.15';")) {
+            throw new Error('latest.js가 정확한 alpha.3.15가 아니야.');
           }
 
           function replaceOnce(label, find, replacement) {
@@ -37,41 +37,45 @@ jobs:
             if (src === before) throw new Error(`${label} 패치 지점을 찾지 못했어.`);
           }
 
-          replaceOnce('메타 버전', '//@version 3.0.0-alpha.3.14', '//@version 3.0.0-alpha.3.15');
-          replaceOnce('런타임 버전', "const VERSION = '3.0.0-alpha.3.14';", "const VERSION = '3.0.0-alpha.3.15';");
+          replaceOnce('메타 버전', '//@version 3.0.0-alpha.3.15', '//@version 3.0.0-alpha.3.16');
+          replaceOnce('런타임 버전', "const VERSION = '3.0.0-alpha.3.15';", "const VERSION = '3.0.0-alpha.3.16';");
 
           replaceOnce(
-            '위치 초기화 버튼',
-            '<button id="toggle">${state.widgetVisible===false?\'위젯 보이기\':\'위젯 숨기기\'}</button></div>',
-            '<button id="toggle">${state.widgetVisible===false?\'위젯 보이기\':\'위젯 숨기기\'}</button><button id="reset-position">위치 초기화</button></div>'
+            'JSON 내보내기 버튼',
+            '<div class="actions"><button id="copy-diag">진단 복사</button></div></section>',
+            '<div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>'
           );
 
           replaceOnce(
-            '위치 초기화 핸들러',
-            "    if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };\n",
-            "    if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };\n    if (q('#reset-position')) q('#reset-position').onclick = async () => {\n      state.widgetX = null;\n      state.widgetY = null;\n      drag = null;\n      await persist();\n      if (widget) {\n        await widget.setStyle('left','auto');\n        await widget.setStyle('top','auto');\n        await widget.setStyle('right','12px');\n        await widget.setStyle('bottom','74px');\n      }\n      await renderWidget();\n      renderSettings();\n    };\n"
+            'JSON 내보내기 핸들러',
+            "    if (q('#copy-diag')) q('#copy-diag').onclick = async e => { const b=e.currentTarget, old=b.textContent; b.textContent=(await copyDiag())?'복사됨 ✓':'복사 실패'; setTimeout(()=>b.textContent=old,1200); };\n",
+            "    if (q('#copy-diag')) q('#copy-diag').onclick = async e => { const b=e.currentTarget, old=b.textContent; b.textContent=(await copyDiag())?'복사됨 ✓':'복사 실패'; setTimeout(()=>b.textContent=old,1200); };\n    if (q('#export-json')) q('#export-json').onclick = () => {\n      const payload = {\n        exportedAt: new Date().toISOString(),\n        plugin: {name:'Local Usage Dashboard', version:VERSION},\n        usage: state.data || null,\n        dailyUsage: state.dailyUsage || null,\n        creditDailyUsage: state.creditDailyUsage || null,\n        sync: {\n          bridgeBase: state.bridgeBase || DEFAULT_BRIDGE,\n          bridgeEnabled: state.bridgeEnabled === true,\n          bridgeStatus: state.bridgeStatus || 'off',\n          refreshMs: Number(state.refreshMs || 0),\n          lastSyncAt: state.lastSyncAt || null,\n          lastSyncDurationMs: state.lastSyncDurationMs ?? null,\n          lastRefreshReason: state.lastRefreshReason || '',\n          refreshCount: Number(state.refreshCount || 0),\n          failures: Number(state.consecutiveFailures || 0),\n          error: state.bridgeError || ''\n        }\n      };\n      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});\n      const a = document.createElement('a');\n      const url = URL.createObjectURL(blob);\n      a.href = url;\n      a.download = `local-usage-dashboard-${new Date().toISOString().slice(0,10)}.json`;\n      a.click();\n      setTimeout(() => URL.revokeObjectURL(url), 0);\n    };\n"
           );
 
           fs.writeFileSync(path, src);
           NODE
 
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.15$' plugins/usage-dashboard/latest.js
-          grep -q 'id="reset-position">위치 초기화' plugins/usage-dashboard/latest.js
-          grep -q "q('#reset-position')" plugins/usage-dashboard/latest.js
-          grep -q "setStyle('right','12px')" plugins/usage-dashboard/latest.js
-          grep -q "setStyle('bottom','74px')" plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.16$' plugins/usage-dashboard/latest.js
+          grep -q 'id="export-json">JSON 내보내기' plugins/usage-dashboard/latest.js
+          grep -q "q('#export-json')" plugins/usage-dashboard/latest.js
+          grep -q 'local-usage-dashboard-' plugins/usage-dashboard/latest.js
+          grep -q 'creditDailyUsage: state.creditDailyUsage' plugins/usage-dashboard/latest.js
+          if grep -A35 "q('#export-json')" plugins/usage-dashboard/latest.js | grep -q 'TOKEN_KEY\|token[[:space:]]*:'; then
+            echo '민감한 token 필드가 export 블록에 들어갔어.' >&2
+            exit 1
+          fi
 
       - name: Commit release
         shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.15'
+            echo 'latest.js already matches alpha.3.16'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.15 widget position reset'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.16 JSON export'
           git push

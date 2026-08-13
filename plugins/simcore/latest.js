@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.17
-//@display-name SimCore v0.62.17 Rewind Restore Diagnostic
+//@version 0.62.18
+//@display-name SimCore v0.62.18 Compact Diagnostics Panel
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -20,10 +20,11 @@
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
 //
-// v0.62.17 Rewind Restore Diagnostic:
+// v0.62.18 Compact Diagnostics Panel:
 // - Runtime/state/storage/output behavior remains unchanged
-// - Adds runtime-only visibility for successful pre-snapshot restores after rewind/retry
-// - Records restore index/reason/previous output index in memory for the panel only
+// - Adds a compact operational summary with current snapshot path and top-level request/output timing
+// - Detailed beforeRequest/output timing and reaction_max tables are collapsed by default
+// - Renames Last history restore to Last snapshot restore for rewind/repeat-send accuracy
 // - No snapshot format/state schema/Core prompt/lifecycle/community/reaction changes, no new storage I/O
 //
 // v0.62 optimization rules:
@@ -2252,7 +2253,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.17] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.18] state mirror failed:', e.message);
     }
   }
 
@@ -2267,7 +2268,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.17] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.18] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2365,8 +2366,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.17] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.17] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.18] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.18] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2378,7 +2379,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.17] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.18] reaction normalization:', normalizationIssues.join(' / '));
     const quarantineIssues = result.stateCommit?.communitySafe === false ? [result.stateCommit.reason] : [];
     lastCore = {
       active: true,
@@ -2413,7 +2414,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.17] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.18] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2439,7 +2440,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.17] output error:', e.message);
+      console.log('[simcore/v0.62.18] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2471,6 +2472,14 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : (s?.broadcastAirtime
           ? `<div><div class="k">Last broadcast airtime</div><div class="v">${escapeHtml(s.broadcastAirtime)}</div></div>`
           : '');
+      const snap = lastPerf?.snapshotDetail || null;
+      const currentSnapshotPath = !snap
+        ? 'NO REQUEST DATA'
+        : (!snap.mustRestorePre
+          ? 'FORWARD · no restore'
+          : (snap.existingPre
+            ? `RESTORED · ${escapeHtml(snap.restoreReason || 'restore')}`
+            : `MISS · ${escapeHtml(snap.restoreReason || 'restore')}`));
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
@@ -2478,8 +2487,10 @@ h1{font-size:18px;margin:0 0 14px}.card{background:#121a2d;border:1px solid #293
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.k{color:#9fb3d7;font-size:12px}.v{font-weight:700;margin-top:3px}
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px;border-bottom:1px solid #26324a}th{color:#9fb3d7}.muted{color:#8291ad}
 button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}
+.compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
+details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.17 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.18 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2493,10 +2504,15 @@ ${broadcastClockRows}
 <div><div class="k">Warnings</div><div class="v">${lastCore.issues.length}</div></div>
 <div><div class="k">Compatibility diagnostics</div><div class="v">${(lastCore.diagnostics || []).length}</div></div>
 </div>
+<div class="card compact">
+<div class="metric"><div class="k">Current snapshot path</div><div class="v">${currentSnapshotPath}</div></div>
+<div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
+<div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
+</div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
-${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last history restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
-${lastPerf ? `<div class="card"><div class="k" style="margin-bottom:8px">beforeRequest performance (latest)</div><table>
+${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
+${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>
 <tr><td>Total</td><td>${lastPerf.totalMs.toFixed(1)} ms</td></tr>
 <tr><td>Indices</td><td>${lastPerf.indicesMs.toFixed(1)} ms</td></tr>
 <tr><td>Chat load</td><td>${lastPerf.chatLoadMs.toFixed(1)} ms</td></tr>
@@ -2522,8 +2538,8 @@ ${lastPerf.snapshotDetail ? `<tr><td>&nbsp;&nbsp;Pre restore/load</td><td>${Numb
 <tr><td>&nbsp;&nbsp;Turn serialize</td><td>${Number(lastPerf.snapshotDetail.turnSerializeMs || 0).toFixed(1)} ms</td></tr>
 <tr><td>&nbsp;&nbsp;Turn storage set</td><td>${Number(lastPerf.snapshotDetail.turnSetMs || 0).toFixed(1)} ms</td></tr>
 <tr><td>&nbsp;&nbsp;Runtime render</td><td>${Number(lastPerf.snapshotDetail.runtimeRenderMs || 0).toFixed(1)} ms</td></tr>` : ''}
-</table></div>` : ''}
-${lastOutputPerf ? `<div class="card"><div class="k" style="margin-bottom:8px">output performance (latest)</div><table>
+</table></div></details>` : ''}
+${lastOutputPerf ? `<details class="card"><summary>output performance · ${lastOutputPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>
 <tr><td>Total</td><td>${lastOutputPerf.totalMs.toFixed(1)} ms</td></tr>
 <tr><td>Indices</td><td>${lastOutputPerf.indicesMs.toFixed(1)} ms</td></tr>
 <tr><td>Chat load</td><td>${lastOutputPerf.chatLoadMs.toFixed(1)} ms</td></tr>
@@ -2542,7 +2558,7 @@ ${lastOutputPerf.mirrorDetail ? `<tr><td>&nbsp;&nbsp;Mirror chat load</td><td>${
 <tr><td>&nbsp;&nbsp;Mirror prepare</td><td>${Number(lastOutputPerf.mirrorDetail.prepareMs || 0).toFixed(1)} ms</td></tr>
 <tr><td>&nbsp;&nbsp;setChatToIndex</td><td>${Number(lastOutputPerf.mirrorDetail.setChatMs || 0).toFixed(1)} ms</td></tr>` : ''}
 <tr><td>Post diagnostics</td><td>${lastOutputPerf.diagnosticsMs.toFixed(1)} ms</td></tr>
-</table></div>` : ''}
+</table></div></details>` : ''}
 ${storageDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">storage key scan (latest existing scan)</div><table>
 <tr><td>Operation</td><td>${escapeHtml(storageDiag.op || 'unknown')}</td></tr>
 <tr><td>Key scan</td><td>${Number(storageDiag.ms || 0).toFixed(1)} ms</td></tr>
@@ -2555,21 +2571,21 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Alias sections found</td><td>${Number(aliasDiag.aliasSections || 0)}</td></tr>
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
-<div class="card"><div class="k" style="margin-bottom:8px">Platform-family reaction_max</div><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div>
-<div class="card muted">v0.62.17 Rewind Restore Diagnostic · runtime-only restore visibility · core behavior unchanged</div>
+<details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
+<div class="card muted">v0.62.18 Compact Diagnostics Panel · details collapsed by default · core behavior unchanged</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.17] panel error:', e.message);
+      console.log('[simcore/v0.62.18] panel error:', e.message);
     }
   }
 
   try {
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
-    await Risuai.registerSetting('SimCore v0.62.17', openPanel, '⚙️', 'html');
+    await Risuai.registerSetting('SimCore v0.62.18', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.17] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.18] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -2577,5 +2593,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.17] initialized');
+  console.log('[simcore/v0.62.18] initialized');
 })();

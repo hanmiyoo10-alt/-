@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.19
-//@display-name SimCore v0.62.19 Narrative Clock Guard Phase 1
+//@version 0.62.20
+//@display-name SimCore v0.62.20 Narrative Clock Diagnostics
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,13 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.20 Narrative Clock Diagnostics:
+// - Runtime diagnostics only; Narrative Clock Guard behavior from v0.62.19 is unchanged
+// - Records guard ON/OFF, trigger, previous anchor, output timestamp, and commit direction
+// - Records non-broadcast mode transitions so C -> A / A -> C clock continuity can be observed
+// - Backward movement with the guard OFF is reported as BACKWARD OBSERVED but is not blocked
+// - No new prompt tokens, persistent state fields, storage I/O, or Broadcast/Community/Reaction changes
 //
 // v0.62.19 Narrative Clock Guard Phase 1:
 // - Adds a conservative current-narrative timestamp anchor for non-broadcast modes
@@ -1568,8 +1575,33 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   }
 
   time.applyWorldYear(state, time.timestampYear(finalText));
+  let narrativeClockProbe = null;
   if (!/^B_/.test(String(p.mode || ''))) {
     const narrativeCommit = time.commitNarrativeTimestamp(state, p, finalText);
+    const previousNarrative = narrativeCommit.previous || p.narrativeTimestampPrevious || null;
+    const narrativeCmp = narrativeCommit.timestamp && previousNarrative
+      ? time.compareTimestamps(narrativeCommit.timestamp, previousNarrative)
+      : null;
+    let narrativeCommitStatus = 'UNKNOWN';
+    if (narrativeCommit.reason === 'backward') narrativeCommitStatus = 'REJECTED BACKWARD';
+    else if (narrativeCommit.reason === 'missing-or-invalid') narrativeCommitStatus = 'MISSING TIMESTAMP';
+    else if (narrativeCommit.reason === 'committed' && !previousNarrative) narrativeCommitStatus = 'SEEDED';
+    else if (narrativeCommit.reason === 'committed' && narrativeCmp != null && narrativeCmp < 0) narrativeCommitStatus = 'BACKWARD OBSERVED';
+    else if (narrativeCommit.reason === 'committed' && narrativeCmp === 0) narrativeCommitStatus = 'SAME';
+    else if (narrativeCommit.reason === 'committed' && narrativeCmp != null && narrativeCmp > 0) narrativeCommitStatus = 'ADVANCED';
+    else if (narrativeCommit.reason === 'committed') narrativeCommitStatus = narrativeCommit.changed ? 'COMMITTED' : 'SAME';
+    narrativeClockProbe = {
+      sendIndex: Number.isInteger(Number(p.sendIndex)) ? Number(p.sendIndex) : -1,
+      outIndex: Number.isInteger(Number(outIndex)) ? Number(outIndex) : -1,
+      mode: p.mode || null,
+      guardActive: !!p.narrativeClockGuard,
+      trigger: p.narrativeProgressionReason || 'none',
+      previousAnchor: previousNarrative,
+      outputTimestamp: narrativeCommit.timestamp || null,
+      commitStatus: narrativeCommitStatus,
+      commitReason: narrativeCommit.reason || 'unknown',
+      at: Date.now(),
+    };
     if (narrativeCommit.reason === 'backward') {
       state.lastNarrativeClockWarning = {
         previous: narrativeCommit.previous || null,
@@ -1605,6 +1637,7 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
     envelopeDiagnostics: envelope.diagnostics || [],
     envelopeRepaired: !!envelope.repaired,
     stateCommit: commit,
+    narrativeClockProbe,
   };
 }
 
@@ -1828,6 +1861,7 @@ class CoreRulesetSession {
     const existingPre = mustRestorePre ? await this.store.load('pre', sendIndex) : null;
     if (detail) { detail.preLoadMs = sessionElapsed(t); detail.existingPre = !!existingPre; }
     const base = existingPre || this.current || kernel.initialState();
+    if (detail) detail.previousMode = base?.lastMode || null;
 
     t = sessionNow();
     const state = lifecycle.prepareTurn(base, userText, promptProbe, sendIndex);
@@ -2269,6 +2303,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastPerf = null;
   let lastOutputPerf = null;
   let lastHistoryRestore = null;
+  let lastNarrativeClockProbe = null;
 
   const { perfNow, perfMs } = ops;
 
@@ -2359,7 +2394,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.19] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.20] state mirror failed:', e.message);
     }
   }
 
@@ -2374,7 +2409,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.19] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.20] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2445,6 +2480,23 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     if (result.active && result.promptBlock) {
       messages.push({ role: 'system', content: result.promptBlock });
+      const pendingProbe = result.state.pending || null;
+      if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
+        lastNarrativeClockProbe = {
+          phase: 'pending',
+          sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+          outIndex: -1,
+          previousMode: snapshotDetail?.previousMode || null,
+          mode: pendingProbe.mode || null,
+          guardActive: !!pendingProbe.narrativeClockGuard,
+          trigger: pendingProbe.narrativeProgressionReason || 'none',
+          previousAnchor: pendingProbe.narrativeTimestampPrevious || null,
+          outputTimestamp: null,
+          commitStatus: 'PENDING',
+          commitReason: 'pending',
+          at: Date.now(),
+        };
+      }
       lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
     } else {
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
@@ -2472,8 +2524,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.19] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.19] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.20] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.20] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2485,7 +2537,17 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.19] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.20] reaction normalization:', normalizationIssues.join(' / '));
+    if (result.narrativeClockProbe) {
+      const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
+        ? lastNarrativeClockProbe
+        : null;
+      lastNarrativeClockProbe = {
+        ...result.narrativeClockProbe,
+        phase: 'output',
+        previousMode: priorProbe?.previousMode || null,
+      };
+    }
     const quarantineIssues = result.stateCommit?.communitySafe === false ? [result.stateCommit.reason] : [];
     lastCore = {
       active: true,
@@ -2520,7 +2582,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.19] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.20] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2546,7 +2608,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.19] output error:', e.message);
+      console.log('[simcore/v0.62.20] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2586,6 +2648,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
           : (snap.existingPre
             ? `RESTORED · ${escapeHtml(snap.restoreReason || 'restore')}`
             : `MISS · ${escapeHtml(snap.restoreReason || 'restore')}`));
+      const narrativeProbe = lastNarrativeClockProbe;
+      const narrativeTransition = narrativeProbe
+        ? `${narrativeProbe.previousMode || '?'} → ${narrativeProbe.mode || '?'}`
+        : 'n/a';
+      const narrativeGuardLabel = narrativeProbe ? (narrativeProbe.guardActive ? 'ON' : 'OFF') : 'n/a';
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
@@ -2596,7 +2663,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.19 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.20 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2613,11 +2680,14 @@ ${broadcastClockRows}
 </div>
 <div class="card compact">
 <div class="metric"><div class="k">Current snapshot path</div><div class="v">${currentSnapshotPath}</div></div>
+<div class="metric"><div class="k">Narrative guard</div><div class="v">${narrativeGuardLabel}</div></div>
+<div class="metric"><div class="k">Mode transition</div><div class="v">${escapeHtml(narrativeTransition)}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
+${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · output ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
 ${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock guard</div><div>REJECTED BACKWARD · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">previous ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
 ${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
 ${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>
@@ -2680,20 +2750,20 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">v0.62.19 Narrative Clock Guard Phase 1 · relational forward guard · no calendar guessing</div>
+<div class="card muted">v0.62.20 Narrative Clock Diagnostics · runtime probe only · behavior unchanged</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.19] panel error:', e.message);
+      console.log('[simcore/v0.62.20] panel error:', e.message);
     }
   }
 
   try {
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
-    await Risuai.registerSetting('SimCore v0.62.19', openPanel, '⚙️', 'html');
+    await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.19] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.20] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -2701,5 +2771,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.19] initialized');
+  console.log('[simcore/v0.62.20] initialized');
 })();

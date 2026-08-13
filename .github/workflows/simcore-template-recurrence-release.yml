@@ -1,0 +1,31 @@
+name: Release SimCore v0.62.21
+
+on:
+  push:
+    paths:
+      - plugins/simcore/template-recurrence-release.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build verified plugin
+        run: |
+          python plugins/simcore/patch_simcore_06221.py
+          python plugins/simcore/patch_simcore_06221_fresh_bootstrap.py
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.62.21' plugins/simcore/latest.js
+          grep -q 'templateRecurrenceVersion: 0' plugins/simcore/latest.js
+      - name: Publish plugin files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Publish SimCore v0.62.21 template recurrence guard'
+          git push

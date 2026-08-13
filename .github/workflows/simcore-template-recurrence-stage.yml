@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply template recurrence patch
-        run: python plugins/simcore/patch_simcore_06221.py
+        run: |
+          python plugins/simcore/patch_simcore_06221.py
+          python plugins/simcore/patch_simcore_06221_fresh_bootstrap.py
       - name: Validate plugin
         run: |
           node --check plugins/simcore/latest.js
@@ -24,6 +26,7 @@ jobs:
           grep -q 'request_template_recurs_from_prior_history=1' plugins/simcore/latest.js
           grep -q 'TEMPLATE_RECURRENCE_VERSION = 1' plugins/simcore/latest.js
           grep -q 'TEMPLATE_REGISTRY_LIMIT = 384' plugins/simcore/latest.js
+          grep -q 'templateRecurrenceVersion: 0' plugins/simcore/latest.js
       - name: Static recurrence invariants
         run: |
           python - <<'PY'
@@ -35,6 +38,7 @@ jobs:
           assert "prior_answer_is_not_a_content_template=1" in s
           assert "do_not_mechanically_reuse_prior_answer_composition_or_wording=1" in s
           assert "existing outputs are never rewritten" in s.lower()
+          assert "templateRecurrenceVersion: 0" in s
           diff = subprocess.check_output(['git', 'diff', '--unified=0', '--', 'plugins/simcore/latest.js'], text=True)
           added = [line for line in diff.splitlines() if line.startswith('+') and not line.startswith('+++')]
           assert not any('pluginStorage.' in line for line in added), 'new pluginStorage API call added'
@@ -51,7 +55,7 @@ jobs:
       - name: Upload staged backup
         uses: actions/upload-artifact@v4
         with:
-          name: simcore-v0.62.21-staged
+          name: simcore-v0.62.21-staged-final
           path: |
             artifact/simcore.plugin.v0.62.21.zip
             artifact/SHA256SUMS.txt

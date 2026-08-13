@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.22
+//@version 3.0.0-alpha.3.23
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.22';
+  const VERSION = '3.0.0-alpha.3.23';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -29,7 +29,7 @@
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let widget = null, rootBody = null, drag = null;
-  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal'};
+  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -46,8 +46,11 @@
     return m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 전`;
   }
 
-  function noteRefreshPerformance(durationMs) {
+  function noteRefreshPerformance(durationMs, reason = '') {
     const duration = Math.max(0, Number(durationMs) || 0);
+    const sampleReason = String(reason || '');
+    performanceRuntime.lastSampleReason = sampleReason;
+    performanceRuntime.lastSampleDurationMs = duration;
     if (state.performanceGuard === false || state.adaptiveRefresh === false) {
       performanceRuntime.adaptiveMultiplier = 1;
       performanceRuntime.mode = 'normal';
@@ -55,20 +58,40 @@
       performanceRuntime.fastRefreshes = 0;
       return;
     }
-    if (duration >= 3000) {
+
+    // Startup/focus/manual/reset work can be naturally slower. Only periodic timer
+    // samples are allowed to change the adaptive refresh interval.
+    if (sampleReason !== 'timer') {
+      performanceRuntime.ignoredSamples += 1;
+      return;
+    }
+
+    performanceRuntime.timerSamples += 1;
+    if (duration >= 1200) {
       performanceRuntime.slowRefreshes += 1;
       performanceRuntime.fastRefreshes = 0;
-      performanceRuntime.adaptiveMultiplier = Math.max(performanceRuntime.adaptiveMultiplier, 4);
-    } else if (duration >= 1200) {
-      performanceRuntime.slowRefreshes += 1;
-      performanceRuntime.fastRefreshes = 0;
-      performanceRuntime.adaptiveMultiplier = Math.max(performanceRuntime.adaptiveMultiplier, 2);
+
+      // A single slow sample never changes cadence. Two consecutive slow timer
+      // samples first move x1 -> x2. Reaching x4 requires continued severe
+      // (>=3s) timer slowness while already guarded.
+      if (performanceRuntime.slowRefreshes >= 2) {
+        if (performanceRuntime.adaptiveMultiplier <= 1) {
+          performanceRuntime.adaptiveMultiplier = 2;
+        } else if (duration >= 3000) {
+          performanceRuntime.adaptiveMultiplier = Math.min(4, performanceRuntime.adaptiveMultiplier * 2);
+        }
+        performanceRuntime.slowRefreshes = 0;
+      }
     } else {
+      performanceRuntime.slowRefreshes = 0;
       performanceRuntime.fastRefreshes += 1;
-      if (performanceRuntime.fastRefreshes >= 3) {
+
+      // Recover promptly: each healthy periodic sample removes one guard tier.
+      if (performanceRuntime.adaptiveMultiplier > 1) {
         performanceRuntime.adaptiveMultiplier = Math.max(1, performanceRuntime.adaptiveMultiplier / 2);
+      }
+      if (performanceRuntime.adaptiveMultiplier <= 1 && performanceRuntime.fastRefreshes >= 2) {
         performanceRuntime.fastRefreshes = 0;
-        if (performanceRuntime.adaptiveMultiplier <= 1) performanceRuntime.slowRefreshes = 0;
       }
     }
     performanceRuntime.mode = performanceRuntime.adaptiveMultiplier > 1 ? 'guard' : 'normal';
@@ -439,7 +462,7 @@ async function importLegacyTodayBaselines() {
         state.bridgeError = '';
         state.lastSyncAt = Date.now();
         state.lastSyncDurationMs = state.lastSyncAt - started;
-        noteRefreshPerformance(state.lastSyncDurationMs);
+        noteRefreshPerformance(state.lastSyncDurationMs, reason);
         state.lastRefreshReason = reason;
         state.refreshCount = Number(state.refreshCount || 0) + 1;
         state.consecutiveFailures = 0;
@@ -482,7 +505,8 @@ async function importLegacyTodayBaselines() {
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
       `Reason: ${state.lastRefreshReason || '—'}`,
       `Success count: ${Number(state.refreshCount || 0)}`,
-      `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)}`,
+      `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)} · timer-only`,
+      `Guard samples: timer ${Number(performanceRuntime.timerSamples || 0)} · ignored ${Number(performanceRuntime.ignoredSamples || 0)} · slow streak ${Number(performanceRuntime.slowRefreshes || 0)}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
@@ -684,7 +708,7 @@ function todayOverviewMetrics(d) {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)}</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 

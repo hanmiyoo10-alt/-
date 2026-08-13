@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.22
-//@display-name SimCore v0.62.22 Template Recurrence Guard ABC
+//@version 0.62.23
+//@display-name SimCore v0.62.23 Request Lineage Probe
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,13 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.23 Request Lineage Probe:
+// - Diagnostics/state only: observes A/B/C request lineage without changing generation guidance
+// - Tracks root source, direct parent, C-chain depth, inline current-input source, and a tiny recent A/B source window
+// - Mode B episode segments share one B root until a new B_START; Mode C can chain from A, B, C, or inline source
+// - No history rescan/bootstrap, no auxiliary model, no new pluginStorage API calls, and zero new runtime-prompt tokens
+// - Snapshot-aware and rewind-safe; existing Broadcast/Community/Reaction/Narrative/Recurrence semantics are unchanged
 //
 // v0.62.22 Template Recurrence Guard ABC:
 // - Extends recurrence detection and guidance to Mode A, Mode B, and Mode C as one shared feature set
@@ -588,9 +595,146 @@ module.exports = {
 };
 });
 
+SimCore.define("lineage", function (require, module, exports) {
+const LINEAGE_VERSION = 1;
+const COMMUNITY_MARKER = '[커뮤니티]';
+const RECENT_SOURCE_LIMIT = 4;
+
+function intIndex(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : -1;
+}
+
+function modeFamily(mode) {
+  const m = String(mode || 'A');
+  if (/^B_/.test(m)) return 'B';
+  if (m === 'C') return 'C';
+  return 'A';
+}
+
+function normalizeRecent(raw) {
+  const src = Array.isArray(raw) ? raw : [];
+  const out = [];
+  for (const row of src) {
+    const mode = row?.mode === 'B' ? 'B' : 'A';
+    const index = intIndex(row?.index);
+    if (index < 0) continue;
+    if (out.length && out[out.length - 1].mode === mode && out[out.length - 1].index === index) continue;
+    out.push({ mode, index });
+  }
+  return out.slice(-RECENT_SOURCE_LIMIT);
+}
+
+function normalizeLineage(raw) {
+  const x = raw && typeof raw === 'object' ? raw : {};
+  const rootMode = ['A', 'B', 'INLINE_C'].includes(x.rootMode) ? x.rootMode : null;
+  const rootIndex = intIndex(x.rootIndex);
+  const parentMode = ['A', 'B', 'C'].includes(x.parentMode) ? x.parentMode : null;
+  const parentIndex = intIndex(x.parentIndex);
+  const lastRequestMode = ['A', 'B', 'C'].includes(x.lastRequestMode) ? x.lastRequestMode : null;
+  const lastRequestIndex = intIndex(x.lastRequestIndex);
+  return {
+    version: LINEAGE_VERSION,
+    rootMode: rootMode && rootIndex >= 0 ? rootMode : null,
+    rootIndex: rootMode && rootIndex >= 0 ? rootIndex : -1,
+    parentMode: parentMode && parentIndex >= 0 ? parentMode : null,
+    parentIndex: parentMode && parentIndex >= 0 ? parentIndex : -1,
+    depth: Math.max(0, Math.round(Number(x.depth) || 0)),
+    inlineSource: !!x.inlineSource,
+    sourceKind: ['ROOT', 'CHAIN', 'INLINE', 'UNSEEDED'].includes(x.sourceKind) ? x.sourceKind : 'UNSEEDED',
+    lastRequestMode: lastRequestMode && lastRequestIndex >= 0 ? lastRequestMode : null,
+    lastRequestIndex: lastRequestMode && lastRequestIndex >= 0 ? lastRequestIndex : -1,
+    transitionFrom: ['A', 'B', 'C'].includes(x.transitionFrom) ? x.transitionFrom : null,
+    recentSources: normalizeRecent(x.recentSources),
+  };
+}
+
+function inlineSourceInfo(userText) {
+  const text = String(userText || '');
+  const marker = text.indexOf(COMMUNITY_MARKER);
+  if (marker < 0) return { active: false, prefixChars: 0 };
+  const prefix = text.slice(0, marker)
+    .replace(/\[방송\s*(?:시작|중|종료)\]/g, '')
+    .trim();
+  const compact = prefix.replace(/\s+/g, '');
+  return { active: compact.length >= 8, prefixChars: prefix.length };
+}
+
+function pushRecent(list, mode, index) {
+  const out = normalizeRecent(list);
+  const row = { mode, index };
+  if (!out.length || out[out.length - 1].mode !== mode || out[out.length - 1].index !== index) out.push(row);
+  return out.slice(-RECENT_SOURCE_LIMIT);
+}
+
+function observe(state, userText, mode, sendIndex) {
+  const prev = normalizeLineage(state?.requestLineage);
+  const family = modeFamily(mode);
+  const index = intIndex(sendIndex);
+  const next = { ...prev, transitionFrom: prev.lastRequestMode };
+  const inline = family === 'C' ? inlineSourceInfo(userText) : { active: false, prefixChars: 0 };
+
+  if (family === 'A') {
+    next.rootMode = 'A';
+    next.rootIndex = index;
+    next.parentMode = 'A';
+    next.parentIndex = index;
+    next.depth = 0;
+    next.inlineSource = false;
+    next.sourceKind = 'ROOT';
+    next.recentSources = pushRecent(prev.recentSources, 'A', index);
+  } else if (family === 'B') {
+    const sameEpisode = String(mode || '') !== 'B_START' && prev.rootMode === 'B' && prev.rootIndex >= 0;
+    next.rootMode = sameEpisode ? prev.rootMode : 'B';
+    next.rootIndex = sameEpisode ? prev.rootIndex : index;
+    next.parentMode = 'B';
+    next.parentIndex = index;
+    next.depth = 0;
+    next.inlineSource = false;
+    next.sourceKind = 'ROOT';
+    next.recentSources = sameEpisode ? prev.recentSources : pushRecent(prev.recentSources, 'B', index);
+  } else if (inline.active) {
+    next.rootMode = 'INLINE_C';
+    next.rootIndex = index;
+    next.parentMode = 'C';
+    next.parentIndex = index;
+    next.depth = 0;
+    next.inlineSource = true;
+    next.sourceKind = 'INLINE';
+  } else {
+    next.parentMode = prev.lastRequestMode;
+    next.parentIndex = prev.lastRequestIndex;
+    next.depth = prev.lastRequestMode === 'C' ? prev.depth + 1 : 1;
+    next.inlineSource = false;
+    next.sourceKind = prev.rootMode && prev.rootIndex >= 0 ? 'CHAIN' : 'UNSEEDED';
+  }
+
+  next.lastRequestMode = family;
+  next.lastRequestIndex = index;
+  next.version = LINEAGE_VERSION;
+  state.requestLineageVersion = LINEAGE_VERSION;
+  state.requestLineage = normalizeLineage(next);
+  return {
+    ...state.requestLineage,
+    currentMode: family,
+    inlinePrefixChars: inline.prefixChars || 0,
+  };
+}
+
+module.exports = {
+  LINEAGE_VERSION,
+  RECENT_SOURCE_LIMIT,
+  modeFamily,
+  normalizeLineage,
+  inlineSourceInfo,
+  observe,
+};
+});
+
 SimCore.define("kernel", function (require, module, exports) {
 const { normalizePlatformMaxMap } = require('./community');
 const recurrence = require('./recurrence');
+const lineage = require('./lineage');
 
 const STATE_VERSION = 5;
 const CORE_STATE_VERSION = 10;
@@ -622,6 +766,8 @@ function initialState() {
     historyBootstrapStats: null,
     templateRecurrenceVersion: 0,
     templateRegistry: [],
+    requestLineageVersion: 1,
+    requestLineage: lineage.normalizeLineage(null),
     broadcastLocked: false,
     broadcastAirtime: null,
     broadcastAirtimeStart: null,
@@ -650,6 +796,8 @@ function reconcileState(raw) {
   s.historyBootstrapStats = s.historyBootstrapStats && typeof s.historyBootstrapStats === 'object' ? s.historyBootstrapStats : null;
   s.templateRecurrenceVersion = hadTemplateRecurrenceVersion ? Math.max(0, Math.round(Number(s.templateRecurrenceVersion) || 0)) : 0;
   s.templateRegistry = recurrence.normalizeRegistry(s.templateRegistry);
+  s.requestLineageVersion = Math.max(1, Math.round(Number(s.requestLineageVersion) || 0));
+  s.requestLineage = lineage.normalizeLineage(s.requestLineage);
   s.broadcastLocked = !!s.broadcastLocked;
   s.broadcastAirtime = typeof s.broadcastAirtime === 'string' && s.broadcastAirtime.trim() ? s.broadcastAirtime.trim() : null;
   s.broadcastAirtimeStart = typeof s.broadcastAirtimeStart === 'string' && s.broadcastAirtimeStart.trim() ? s.broadcastAirtimeStart.trim() : null;
@@ -991,6 +1139,7 @@ SimCore.define("lifecycle", function (require, module, exports) {
 const kernel = require('./kernel');
 const time = require('./time');
 const recurrence = require('./recurrence');
+const lineage = require('./lineage');
 
 function classifyMode(state, input) {
   const text = String(input || '');
@@ -1044,6 +1193,7 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
   const narrativeClockGuard = !!(narrativeProgression.active && narrativeTimestampPrevious);
   const templateRecurrence = recurrence.observe(state, input, c.mode);
+  const requestLineage = lineage.observe(state, input, c.mode, sendIndex);
 
   // Explicit user dates can advance world year before generation in every mode.
   time.applyWorldYear(state, time.explicitWorldYear(input));
@@ -1075,6 +1225,13 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     templateRecurrenceModeFamily: templateRecurrence.modeFamily || recurrence.modeFamily(c.mode),
     templateRecurrenceChars: Number(templateRecurrence.normalizedChars || 0),
     templateRegistrySize: Number(templateRecurrence.registrySize || 0),
+    requestLineageSourceKind: requestLineage.sourceKind || 'UNSEEDED',
+    requestLineageRootMode: requestLineage.rootMode || null,
+    requestLineageRootIndex: Number(requestLineage.rootIndex ?? -1),
+    requestLineageParentMode: requestLineage.parentMode || null,
+    requestLineageParentIndex: Number(requestLineage.parentIndex ?? -1),
+    requestLineageDepth: Number(requestLineage.depth || 0),
+    requestLineageInlineSource: !!requestLineage.inlineSource,
   };
   return state;
 }
@@ -2596,6 +2753,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastHistoryRestore = null;
   let lastNarrativeClockProbe = null;
   let lastTemplateRecurrenceProbe = null;
+  let lastRequestLineageProbe = null;
 
   const { perfNow, perfMs } = ops;
 
@@ -2686,7 +2844,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.22] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.23] state mirror failed:', e.message);
     }
   }
 
@@ -2701,7 +2859,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.22] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.23] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2804,6 +2962,25 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       } else {
         lastTemplateRecurrenceProbe = null;
       }
+      if (pendingProbe) {
+        const l = result.state.requestLineage || {};
+        lastRequestLineageProbe = {
+          sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+          currentMode: pendingProbe.mode || null,
+          transitionFrom: l.transitionFrom || null,
+          sourceKind: l.sourceKind || 'UNSEEDED',
+          rootMode: l.rootMode || null,
+          rootIndex: Number(l.rootIndex ?? -1),
+          parentMode: l.parentMode || null,
+          parentIndex: Number(l.parentIndex ?? -1),
+          depth: Number(l.depth || 0),
+          inlineSource: !!l.inlineSource,
+          recentSources: Array.isArray(l.recentSources) ? l.recentSources.slice(-4) : [],
+          at: Date.now(),
+        };
+      } else {
+        lastRequestLineageProbe = null;
+      }
       lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
     } else {
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
@@ -2831,8 +3008,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.22] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.22] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.23] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.23] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2844,7 +3021,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.22] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.23] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -2889,7 +3066,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.22] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.23] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2915,7 +3092,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.22] output error:', e.message);
+      console.log('[simcore/v0.62.23] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2964,6 +3141,13 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const recurrenceLabel = lastTemplateRecurrenceProbe
         ? (lastTemplateRecurrenceProbe.eligible ? (lastTemplateRecurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE')
         : 'n/a';
+      const lineageLabel = lastRequestLineageProbe
+        ? (lastRequestLineageProbe.sourceKind === 'INLINE'
+          ? 'INLINE SOURCE'
+          : (lastRequestLineageProbe.sourceKind === 'UNSEEDED'
+            ? 'UNSEEDED'
+            : `${lastRequestLineageProbe.rootMode || '?'} → ${String(lastRequestLineageProbe.currentMode || '?').replace(/^B_.*/, 'B')} · depth ${Number(lastRequestLineageProbe.depth || 0)}`))
+        : 'n/a';
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
@@ -2974,7 +3158,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.22 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.23 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2994,12 +3178,14 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Narrative guard</div><div class="v">${narrativeGuardLabel}</div></div>
 <div class="metric"><div class="k">Mode transition</div><div class="v">${escapeHtml(narrativeTransition)}</div></div>
 <div class="metric"><div class="k">Template recurrence</div><div class="v">${recurrenceLabel}</div></div>
+<div class="metric"><div class="k">Request lineage</div><div class="v">${escapeHtml(lineageLabel)}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · mode ${escapeHtml(lastTemplateRecurrenceProbe.modeFamily || '?')} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
+${lastRequestLineageProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Request lineage probe (runtime)</div><div>${escapeHtml(lineageLabel)}</div><div class="muted" style="margin-top:5px">root ${escapeHtml(lastRequestLineageProbe.rootMode || 'none')}@${Number(lastRequestLineageProbe.rootIndex)} · parent ${escapeHtml(lastRequestLineageProbe.parentMode || 'none')}@${Number(lastRequestLineageProbe.parentIndex)} · transition ${escapeHtml(lastRequestLineageProbe.transitionFrom || '?')} → ${escapeHtml(String(lastRequestLineageProbe.currentMode || '?').replace(/^B_.*/, 'B'))}</div><div class="muted" style="margin-top:5px">recent A/B ${escapeHtml((lastRequestLineageProbe.recentSources || []).map((x) => `${x.mode}@${x.index}`).join(' · ') || 'none')} · diagnostics only · prompt +0</div></div>` : ''}
 ${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Template history bootstrap</div><div>DONE · ${Number(recurrenceDiag.registrySize || 0)} templates retained</div><div class="muted" style="margin-top:5px">${Number(recurrenceDiag.userMessages || 0)} user msgs · eligible A/B/C ${Number(recurrenceDiag.modeEligible?.A || 0)}/${Number(recurrenceDiag.modeEligible?.B || 0)}/${Number(recurrenceDiag.modeEligible?.C || 0)} · ${Number(recurrenceDiag.repeatedTemplates || 0)} historical repeats</div></div>` : ''}
 ${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · output ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
 ${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock guard</div><div>REJECTED BACKWARD · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">previous ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
@@ -3070,7 +3256,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.22] panel error:', e.message);
+      console.log('[simcore/v0.62.23] panel error:', e.message);
     }
   }
 
@@ -3078,7 +3264,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.22] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.23] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3086,5 +3272,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.22] initialized');
+  console.log('[simcore/v0.62.23] initialized');
 })();

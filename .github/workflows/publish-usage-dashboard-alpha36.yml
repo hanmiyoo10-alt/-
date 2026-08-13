@@ -15,57 +15,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Patch latest.js to alpha.3.6
+      - name: Patch latest.js
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('plugins/usage-dashboard/latest.js')
-          s = p.read_text()
-
-          reps = [
-            ("//@version 3.0.0-alpha.3.5", "//@version 3.0.0-alpha.3.6"),
-            ("const VERSION = '3.0.0-alpha.3.5';", "const VERSION = '3.0.0-alpha.3.6';"),
-            ('''        <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
-        <label><span>미니 위젯</span><select id="widget-mode"><option value="compact" ${state.widgetMode!=='detailed'?'selected':''}>간편 · 오늘 사용량</option><option value="detailed" ${state.widgetMode==='detailed'?'selected':''}>상세 · 남은 양 + 오늘 사용량</option></select></label>
-        <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button></div>
-''', '''        <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
-        <label><span>STALE 기준</span><select id="stale-ms">${[[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분'],[0,'사용 안 함']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
-        <label><span>미니 위젯</span><select id="widget-mode"><option value="compact" ${state.widgetMode!=='detailed'?'selected':''}>간편 · 오늘 사용량</option><option value="detailed" ${state.widgetMode==='detailed'?'selected':''}>상세 · 남은 양 + 오늘 사용량</option></select></label>
-        <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button></div>
-'''),
-            ('''        state.refreshMs = Number(q('#refresh-ms')?.value ?? state.refreshMs);
-        state.widgetMode = q('#widget-mode')?.value === 'detailed' ? 'detailed' : 'compact';
-''', '''        state.refreshMs = Number(q('#refresh-ms')?.value ?? state.refreshMs);
-        state.staleAfterMs = Math.max(0, Number(q('#stale-ms')?.value ?? state.staleAfterMs));
-        state.widgetMode = q('#widget-mode')?.value === 'detailed' ? 'detailed' : 'compact';
-'''),
-            ('''    if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
-    if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };
-''', '''    if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
-    if (q('#retry-now')) q('#retry-now').onclick = async () => {
-      state.consecutiveFailures = 0;
-      state.retryDelayMs = 0;
-      state.nextRetryAt = null;
-      await persist();
-      scheduleRefresh();
-      await refresh('manual-retry');
-    };
-    if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };
-'''),
-            ('''    if (q('#widget-mode')) q('#widget-mode').onchange = async e => { state.widgetMode = e.target.value === 'detailed' ? 'detailed' : 'compact'; await persist(); await renderWidget(); };
-''', '''    if (q('#stale-ms')) q('#stale-ms').onchange = async e => { state.staleAfterMs = Math.max(0, Number(e.target.value)||0); await persist(); await renderWidget(); renderSettings(); };
-    if (q('#widget-mode')) q('#widget-mode').onchange = async e => { state.widgetMode = e.target.value === 'detailed' ? 'detailed' : 'compact'; await persist(); await renderWidget(); };
-'''),
-          ]
-
-          for old, new in reps:
-            if old not in s:
-              raise SystemExit('patch marker not found:\n' + old[:140])
-            s = s.replace(old, new, 1)
-
-          p.write_text(s)
-          PY
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnA9UGF0aCgncGx1Z2lucy91c2FnZS1kYXNoYm9hcmQvbGF0ZXN0LmpzJykKcz1wLnJlYWRfdGV4dCgpCnJlcHM9WygnLy9AdmVyc2lvbiAzLjAuMC1hbHBoYS4zLjUnLCAnLy9AdmVyc2lvbiAzLjAuMC1hbHBoYS4zLjYnKSwgKCJjb25zdCBWRVJTSU9OID0gJzMuMC4wLWFscGhhLjMuNSc7IiwgImNvbnN0IFZFUlNJT04gPSAnMy4wLjAtYWxwaGEuMy42JzsiKSwgKCcgICAgICAgIDxsYWJlbD48c3Bhbj7qsLHsi6Ag7KO86riwPC9zcGFuPjxzZWxlY3QgaWQ9InJlZnJlc2gtbXMiPiR7W1sxNTAwMCxcJzE17LSIXCddLFszMDAwMCxcJzMw7LSIXCddLFs2MDAwMCxcJzHrtoRcJ10sWzMwMDAwMCxcJzXrtoRcJ10sWzAsXCfsiJjrj5lcJ11dLm1hcCgoW3YsbF0pPT5gPG9wdGlvbiB2YWx1ZT0iJHt2fSIgJHtOdW1iZXIoc3RhdGUucmVmcmVzaE1zKT09PXY/XCdzZWxlY3RlZFwnOlwnXCd9PiR7bH08L29wdGlvbj5gKS5qb2luKFwnXCcpfTwvc2VsZWN0PjwvbGFiZWw+XG4gICAgICAgIDxsYWJlbD48c3Bhbj7rr7jri4gg7JyE7KCvPC9zcGFuPjxzZWxlY3QgaWQ9IndpZGdldC1tb2RlIj48b3B0aW9uIHZhbHVlPSJjb21wYWN0IiAke3N0YXRlLndpZGdldE1vZGUhPT1cJ2RldGFpbGVkXCc/XCdzZWxlY3RlZFwnOlwnXCd9PuqwhO2OuCDCtyDsmKTripgg7IKs7Jqp65+JPC9vcHRpb24+PG9wdGlvbiB2YWx1ZT0iZGV0YWlsZWQiICR7c3RhdGUud2lkZ2V0TW9kZT09PVwnZGV0YWlsZWRcJz9cJ3NlbGVjdGVkXCc6XCdcJ30+7IOB7IS4IMK3IOuCqOydgCDslpEgKyDsmKTripgg7IKs7Jqp65+JPC9vcHRpb24+PC9zZWxlY3Q+PC9sYWJlbD5cbiAgICAgICAgPGRpdiBjbGFzcz0iYWN0aW9ucyI+PGJ1dHRvbiBjbGFzcz0icHJpbWFyeSIgaWQ9ImNvbm5lY3QiPuyggOyepe2VmOqzoCDsl7DqsrA8L2J1dHRvbj48YnV0dG9uIGlkPSJyZWZyZXNoIj7sp4DquIgg7IOI66Gc6rOg7LmoPC9idXR0b24+PGJ1dHRvbiBpZD0idG9nZ2xlIj4ke3N0YXRlLndpZGdldFZpc2libGU9PT1mYWxzZT9cJ+ychOygryDrs7TsnbTquLBcJzpcJ+ychOygryDsiKjquLDquLBcJ308L2J1dHRvbj48L2Rpdj5cbicsICcgICAgICAgIDxsYWJlbD48c3Bhbj7qsLHsi6Ag7KO86riwPC9zcGFuPjxzZWxlY3QgaWQ9InJlZnJlc2gtbXMiPiR7W1sxNTAwMCxcJzE17LSIXCddLFszMDAwMCxcJzMw7LSIXCddLFs2MDAwMCxcJzHrtoRcJ10sWzMwMDAwMCxcJzXrtoRcJ10sWzAsXCfsiJjrj5lcJ11dLm1hcCgoW3YsbF0pPT5gPG9wdGlvbiB2YWx1ZT0iJHt2fSIgJHtOdW1iZXIoc3RhdGUucmVmcmVzaE1zKT09PXY/XCdzZWxlY3RlZFwnOlwnXCd9PiR7bH08L29wdGlvbj5gKS5qb2luKFwnXCcpfTwvc2VsZWN0PjwvbGFiZWw+XG4gICAgICAgIDxsYWJlbD48c3Bhbj5TVEFMRSDquLDspIA8L3NwYW4+PHNlbGVjdCBpZD0ic3RhbGUtbXMiPiR7W1s2MDAwMCxcJzHrtoRcJ10sWzMwMDAwMCxcJzXrtoRcJ10sWzkwMDAwMCxcJzE167aEXCddLFsxODAwMDAwLFwnMzDrtoRcJ10sWzAsXCfsgqzsmqkg7JWIIO2VqFwnXV0ubWFwKChbdixsXSk9PmA8b3B0aW9uIHZhbHVlPSIke3Z9IiAke051bWJlcihzdGF0ZS5zdGFsZUFmdGVyTXMpPT09dj9cJ3NlbGVjdGVkXCc6XCdcJ30+JHtsfTwvb3B0aW9uPmApLmpvaW4oXCdcJyl9PC9zZWxlY3Q+PC9sYWJlbD5cbiAgICAgICAgPGxhYmVsPjxzcGFuPuuvuOuLiCDsnITsoK88L3NwYW4+PHNlbGVjdCBpZD0id2lkZ2V0LW1vZGUiPjxvcHRpb24gdmFsdWU9ImNvbXBhY3QiICR7c3RhdGUud2lkZ2V0TW9kZSE9PVwnZGV0YWlsZWRcJz9cJ3NlbGVjdGVkXCc6XCdcJ30+6rCE7Y64IMK3IOyYpOuKmCDsgqzsmqnrn4k8L29wdGlvbj48b3B0aW9uIHZhbHVlPSJkZXRhaWxlZCIgJHtzdGF0ZS53aWRnZXRNb2RlPT09XCdkZXRhaWxlZFwnP1wnc2VsZWN0ZWRcJzpcJ1wnfT7sg4HshLggwrcg64Ko7J2AIOyWkSArIOyYpOuKmCDsgqzsmqnrn4k8L29wdGlvbj48L3NlbGVjdD48L2xhYmVsPlxuICAgICAgICA8ZGl2IGNsYXNzPSJhY3Rpb25zIj48YnV0dG9uIGNsYXNzPSJwcmltYXJ5IiBpZD0iY29ubmVjdCI+7KCA7J6l7ZWY6rOgIOyXsOqysDwvYnV0dG9uPjxidXR0b24gaWQ9InJlZnJlc2giPuyngOq4iCDsg4jroZzqs6Dsuag8L2J1dHRvbj48YnV0dG9uIGlkPSJyZXRyeS1ub3ciPuuwseyYpO2UhCDstIjquLDtmZQgKyDsnqzsi5zrj4Q8L2J1dHRvbj48YnV0dG9uIGlkPSJ0b2dnbGUiPiR7c3RhdGUud2lkZ2V0VmlzaWJsZT09PWZhbHNlP1wn7JyE7KCvIOuztOydtOq4sFwnOlwn7JyE7KCvIOyIqOq4sOq4sFwnfTwvYnV0dG9uPjwvZGl2PlxuJyksICgiICAgICAgICBzdGF0ZS5yZWZyZXNoTXMgPSBOdW1iZXIocSgnI3JlZnJlc2gtbXMnKT8udmFsdWUgPz8gc3RhdGUucmVmcmVzaE1zKTtcbiAgICAgICAgc3RhdGUud2lkZ2V0TW9kZSA9IHEoJyN3aWRnZXQtbW9kZScpPy52YWx1ZSA9PT0gJ2RldGFpbGVkJyA/ICdkZXRhaWxlZCcgOiAnY29tcGFjdCc7XG4iLCAiICAgICAgICBzdGF0ZS5yZWZyZXNoTXMgPSBOdW1iZXIocSgnI3JlZnJlc2gtbXMnKT8udmFsdWUgPz8gc3RhdGUucmVmcmVzaE1zKTtcbiAgICAgICAgc3RhdGUuc3RhbGVBZnRlck1zID0gTWF0aC5tYXgoMCwgTnVtYmVyKHEoJyNzdGFsZS1tcycpPy52YWx1ZSA/PyBzdGF0ZS5zdGFsZUFmdGVyTXMpKTtcbiAgICAgICAgc3RhdGUud2lkZ2V0TW9kZSA9IHEoJyN3aWRnZXQtbW9kZScpPy52YWx1ZSA9PT0gJ2RldGFpbGVkJyA/ICdkZXRhaWxlZCcgOiAnY29tcGFjdCc7XG4iKSwgKCIgICAgaWYgKHEoJyNyZWZyZXNoJykpIHEoJyNyZWZyZXNoJykub25jbGljayA9ICgpID0+IHJlZnJlc2goJ21hbnVhbCcpO1xuICAgIGlmIChxKCcjdG9nZ2xlJykpIHEoJyN0b2dnbGUnKS5vbmNsaWNrID0gYXN5bmMgKCkgPT4geyBzdGF0ZS53aWRnZXRWaXNpYmxlID0gc3RhdGUud2lkZ2V0VmlzaWJsZSA9PT0gZmFsc2U7IGF3YWl0IHBlcnNpc3QoKTsgYXdhaXQgcmVuZGVyV2lkZ2V0KCk7IHJlbmRlclNldHRpbmdzKCk7IH07XG4iLCAiICAgIGlmIChxKCcjcmVmcmVzaCcpKSBxKCcjcmVmcmVzaCcpLm9uY2xpY2sgPSAoKSA9PiByZWZyZXNoKCdtYW51YWwnKTtcbiAgICBpZiAocSgnI3JldHJ5LW5vdycpKSBxKCcjcmV0cnktbm93Jykub25jbGljayA9IGFzeW5jICgpID0+IHtcbiAgICAgIHN0YXRlLmNvbnNlY3V0aXZlRmFpbHVyZXMgPSAwO1xuICAgICAgc3RhdGUucmV0cnlEZWxheU1zID0gMDtcbiAgICAgIHN0YXRlLm5leHRSZXRyeUF0ID0gbnVsbDtcbiAgICAgIGF3YWl0IHBlcnNpc3QoKTtcbiAgICAgIHNjaGVkdWxlUmVmcmVzaCgpO1xuICAgICAgYXdhaXQgcmVmcmVzaCgnbWFudWFsLXJldHJ5Jyk7XG4gICAgfTtcbiAgICBpZiAocSgnI3RvZ2dsZScpKSBxKCcjdG9nZ2xlJykub25jbGljayA9IGFzeW5jICgpID0+IHsgc3RhdGUud2lkZ2V0VmlzaWJsZSA9IHN0YXRlLndpZGdldFZpc2libGUgPT09IGZhbHNlOyBhd2FpdCBwZXJzaXN0KCk7IGF3YWl0IHJlbmRlcldpZGdldCgpOyByZW5kZXJTZXR0aW5ncygpOyB9O1xuIiksICgiICAgIGlmIChxKCcjd2lkZ2V0LW1vZGUnKSkgcSgnI3dpZGdldC1tb2RlJykub25jaGFuZ2UgPSBhc3luYyBlID0+IHsgc3RhdGUud2lkZ2V0TW9kZSA9IGUudGFyZ2V0LnZhbHVlID09PSAnZGV0YWlsZWQnID8gJ2RldGFpbGVkJyA6ICdjb21wYWN0JzsgYXdhaXQgcGVyc2lzdCgpOyBhd2FpdCByZW5kZXJXaWRnZXQoKTsgfTtcbiIsICIgICAgaWYgKHEoJyNzdGFsZS1tcycpKSBxKCcjc3RhbGUtbXMnKS5vbmNoYW5nZSA9IGFzeW5jIGUgPT4geyBzdGF0ZS5zdGFsZUFmdGVyTXMgPSBNYXRoLm1heCgwLCBOdW1iZXIoZS50YXJnZXQudmFsdWUpfHwwKTsgYXdhaXQgcGVyc2lzdCgpOyBhd2FpdCByZW5kZXJXaWRnZXQoKTsgcmVuZGVyU2V0dGluZ3MoKTsgfTtcbiAgICBpZiAocSgnI3dpZGdldC1tb2RlJykpIHEoJyN3aWRnZXQtbW9kZScpLm9uY2hhbmdlID0gYXN5bmMgZSA9PiB7IHN0YXRlLndpZGdldE1vZGUgPSBlLnRhcmdldC52YWx1ZSA9PT0gJ2RldGFpbGVkJyA/ICdkZXRhaWxlZCcgOiAnY29tcGFjdCc7IGF3YWl0IHBlcnNpc3QoKTsgYXdhaXQgcmVuZGVyV2lkZ2V0KCk7IH07XG4iKV0KZm9yIG9sZCxuZXcgaW4gcmVwczoKICAgIGlmIG9sZCBub3QgaW4gczogcmFpc2UgU3lzdGVtRXhpdCgnbWFya2VyIG5vdCBmb3VuZDogJytvbGRbOjEyMF0pCiAgICBzPXMucmVwbGFjZShvbGQsbmV3LDEpCnAud3JpdGVfdGV4dChzKQo=' | base64 -d > /tmp/patch.py
+          python3 /tmp/patch.py
           node --check plugins/usage-dashboard/latest.js
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

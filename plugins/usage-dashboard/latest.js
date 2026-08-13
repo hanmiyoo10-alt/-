@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.13
+//@version 3.0.0-alpha.3.14
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.13';
+  const VERSION = '3.0.0-alpha.3.14';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -467,18 +467,20 @@ async function importLegacyTodayBaselines() {
       <div style="display:flex;justify-content:flex-end;margin:-2px 0 4px">
         <span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:1px 5px">${badge.label}</span>
       </div>
-      ${row(m?.label||'월간',main(m),'#aeb5c0')}${detailed?`<div style="color:#7f8792;font-size:10px">${monthlySub}</div>`:''}
+      ${row(detailed?'월간 남음':(m?.label||'월간'),main(m),'#aeb5c0')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${monthlySub}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${m?pct(100-Number(m.percent||0)):0}%;background:#c5f277"></i></div>
-      ${row(w?.label||'주간',main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:10px">${premiumSub}</div>`:''}
+      ${row(detailed?'프리미엄 남음':(w?.label||'주간'),main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${premiumSub}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${w?pct(100-Number(w.percent||0)):0}%;background:#b9a6f8"></i></div>
-      ${row(c?.label||'Credits',detailed?money(c?.balance):(num(c?.todayUsed)?money(c.todayUsed,4):money(c?.balance)),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:10px">${creditsSub}</div>`:''}
-      ${detailed && a ? `<div style="color:#969da8;font-size:10px;border-top:1px solid rgba(255,255,255,.09);margin-top:7px;padding-top:6px">24h ${num(a.requests24h)?`${a.requests24h}회`:'—'} · ${money(a.cost24h,4)} · ${tokenText(a.totalTokens24h)} tok${state.lastSyncAt?` · LIVE ${age(state.lastSyncAt)} 동기화`:''}</div>`:''}
+      ${row(detailed?'크레딧':(c?.label||'Credits'),detailed?money(c?.balance):(num(c?.todayUsed)?money(c.todayUsed,4):money(c?.balance)),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${creditsSub}</div>`:''}
+      ${detailed && a ? `<div style="color:#8e96a2;font-size:10px;font-weight:650;line-height:1.35;border-top:1px solid rgba(255,255,255,.09);margin-top:7px;padding-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right">24h ${num(a.requests24h)?`${a.requests24h}회`:'—'} · ${money(a.cost24h,4)} · ${tokenText(a.totalTokens24h)} tok${state.lastSyncAt?` · LIVE ${age(state.lastSyncAt)} 동기화`:''}</div>`:''}
       <div style="display:flex;justify-content:space-between;gap:8px;color:#7f8792;font-size:10px;margin-top:5px">
         <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
         <span>${age(state.lastSyncAt)} · ${VERSION}</span>
       </div>
     </div>`;
   }
+
+  const widgetWidth = () => state.widgetMode === 'detailed' ? 'clamp(196px,52vw,220px)' : 'clamp(166px,44vw,184px)';
 
   async function ensureWidget() {
     if (widget) return;
@@ -487,7 +489,7 @@ async function importLegacyTodayBaselines() {
     rootBody = await root.querySelector('body');
     widget = await root.createElement('div');
     const pos = num(state.widgetX)&&num(state.widgetY)?`left:${state.widgetX}px;top:${state.widgetY}px;`:'right:12px;bottom:74px;';
-    await widget.setStyleAttribute(`position:fixed;${pos}width:184px;max-width:calc(100vw - 16px);z-index:2147483000;background:#191b20;color:#f5f7fa;border:1px solid rgba(255,255,255,.12);border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.24);padding:5px 10px 8px;box-sizing:border-box;user-select:none;touch-action:none;`);
+    await widget.setStyleAttribute(`position:fixed;${pos}width:${widgetWidth()};max-width:calc(100vw - 16px);z-index:2147483000;background:#191b20;color:#f5f7fa;border:1px solid rgba(255,255,255,.12);border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.24);padding:5px 10px 8px;box-sizing:border-box;user-select:none;touch-action:none;`);
     await rootBody.appendChild(widget);
     const down = async e => {
       if (!num(e.clientX)||!num(e.clientY)) return;
@@ -531,6 +533,7 @@ async function importLegacyTodayBaselines() {
 
   async function renderWidget() {
     await ensureWidget(); if (!widget) return;
+    await widget.setStyle('width',widgetWidth());
     await widget.setStyle('display',state.widgetVisible===false?'none':'block');
     if (state.widgetVisible!==false) await widget.setInnerHTML(widgetHtml());
   }

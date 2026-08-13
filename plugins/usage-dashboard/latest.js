@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.2
+//@version 3.0.0-alpha.3
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.2';
+  const VERSION = '3.0.0-alpha.3';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -125,6 +125,7 @@
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,
       `Source: ${d.source || '—'}`,
+      `Adapter: local-json-v1`,
       `Health: ${h.status || '—'}`,
       `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,

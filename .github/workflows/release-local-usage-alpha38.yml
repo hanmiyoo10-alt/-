@@ -1,4 +1,4 @@
-name: Release Local Usage Dashboard alpha.3.8
+name: Release Local Usage Dashboard alpha.3.10
 
 on:
   push:
@@ -18,30 +18,167 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build alpha.3.8 from alpha.3.7 baseline
+      - name: Patch alpha.3.9 to alpha.3.10
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/storage/downloads"
-          bash plugins/usage-dashboard/tools/build_alpha38_devpass_standalone.sh
-          OUT="$HOME/storage/downloads/local_usage_dashboard_v3.0.0-alpha.3.8.js"
-          test -s "$OUT"
-          grep -q '^//@name local_usage_dashboard_modular$' "$OUT"
-          grep -q '^//@version 3.0.0-alpha.3.8$' "$OUT"
-          grep -q 'X-DevPass-Bridge-Key' "$OUT"
-          node --check "$OUT"
-          cp "$OUT" plugins/usage-dashboard/latest.js
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'plugins/usage-dashboard/latest.js';
+          let src = fs.readFileSync(path, 'utf8');
+
+          if (!src.includes('//@version 3.0.0-alpha.3.9') || !src.includes("const VERSION = '3.0.0-alpha.3.9';")) {
+            throw new Error('latest.js가 정확한 alpha.3.9가 아니야.');
+          }
+
+          function replaceOnce(label, find, replacement) {
+            const before = src;
+            src = src.replace(find, replacement);
+            if (src === before) throw new Error(`${label} 패치 지점을 찾지 못했어.`);
+          }
+
+          replaceOnce('메타 버전', '//@version 3.0.0-alpha.3.9', '//@version 3.0.0-alpha.3.10');
+          replaceOnce('런타임 버전', "const VERSION = '3.0.0-alpha.3.9';", "const VERSION = '3.0.0-alpha.3.10';");
+
+          replaceOnce(
+            'KST/legacy 상수',
+            "  const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';\n",
+            "  const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';\n  const LEGACY_DEVPASS_STATE_KEY = 'llmgateway-devpass-direct-v1';\n  const KST_TIME_ZONE = 'Asia/Seoul';\n"
+          );
+
+          replaceOnce(
+            '오늘 관측 상태',
+            "    consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,\n    data: null\n",
+            "    consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,\n    dailyUsage: null, creditDailyUsage: null,\n    data: null\n"
+          );
+
+          const todayHelpers = `  function localDateKey(timestamp = Date.now()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: KST_TIME_ZONE,
+              year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(new Date(timestamp));
+            const value = type => parts.find(part => part.type === type)?.value;
+            return \`${'${value(\'year\')}-${value(\'month\')}-${value(\'day\')}'}\`;
+          }
+
+          function applyObservedToday(snapshot) {
+            if (!snapshot || typeof snapshot !== 'object') return snapshot;
+            const today = localDateKey();
+
+            const previous = state.dailyUsage?.date === today ? state.dailyUsage : null;
+            const monthlyUsed = num(snapshot.monthly?.used) ? Number(snapshot.monthly.used) : null;
+            const premiumUsed = num(snapshot.weekly?.used) ? Number(snapshot.weekly.used) : null;
+            let monthlyBaseline = num(previous?.monthlyBaseline) ? Number(previous.monthlyBaseline) : monthlyUsed;
+            let premiumBaseline = num(previous?.premiumBaseline) ? Number(previous.premiumBaseline) : premiumUsed;
+
+            if (num(monthlyUsed) && num(monthlyBaseline) && monthlyUsed < monthlyBaseline) monthlyBaseline = monthlyUsed;
+            if (num(premiumUsed) && num(premiumBaseline) && premiumUsed < premiumBaseline) premiumBaseline = premiumUsed;
+
+            const monthlyAmount = num(monthlyUsed) && num(monthlyBaseline)
+              ? Math.max(0, monthlyUsed - monthlyBaseline)
+              : null;
+            const premiumAmount = num(premiumUsed) && num(premiumBaseline)
+              ? Math.max(0, premiumUsed - premiumBaseline)
+              : null;
+
+            state.dailyUsage = {
+              date: today,
+              amount: monthlyAmount,
+              premiumAmount,
+              monthlyBudgetAmount: monthlyAmount,
+              premiumBudgetAmount: premiumAmount,
+              monthlyBaseline,
+              premiumBaseline,
+              observedFrom: previous?.observedFrom || Date.now(),
+              updatedAt: Date.now(),
+              source: 'key-status-local-delta'
+            };
+
+            if (snapshot.monthly) snapshot.monthly.todayUsed = monthlyAmount;
+            if (snapshot.weekly) snapshot.weekly.todayUsed = premiumAmount;
+
+            const creditPrevious = state.creditDailyUsage?.date === today ? state.creditDailyUsage : null;
+            const balance = num(snapshot.credits?.balance) ? Number(snapshot.credits.balance) : null;
+            let balanceBaseline = num(creditPrevious?.balanceBaseline)
+              ? Number(creditPrevious.balanceBaseline)
+              : balance;
+
+            if (num(balance) && num(balanceBaseline) && balance > balanceBaseline) balanceBaseline = balance;
+
+            const creditsAmount = num(balance) && num(balanceBaseline)
+              ? Math.max(0, balanceBaseline - balance)
+              : null;
+
+            state.creditDailyUsage = {
+              date: today,
+              amount: creditsAmount,
+              usedBaseline: null,
+              balanceBaseline,
+              observedFrom: creditPrevious?.observedFrom || Date.now(),
+              updatedAt: Date.now(),
+              source: 'credits-local-delta'
+            };
+
+            if (snapshot.credits) snapshot.credits.todayUsed = creditsAmount;
+            return snapshot;
+          }
+
+          async function importLegacyTodayBaselines() {
+            const today = localDateKey();
+            let imported = false;
+            try {
+              const legacy = await store.getItem(LEGACY_DEVPASS_STATE_KEY);
+              if (!legacy || typeof legacy !== 'object') return false;
+
+              if (state.dailyUsage?.date !== today && legacy.dailyUsage?.date === today) {
+                state.dailyUsage = {...legacy.dailyUsage, importedFrom: LEGACY_DEVPASS_STATE_KEY};
+                imported = true;
+              }
+              if (state.creditDailyUsage?.date !== today && legacy.creditDailyUsage?.date === today) {
+                state.creditDailyUsage = {...legacy.creditDailyUsage, importedFrom: LEGACY_DEVPASS_STATE_KEY};
+                imported = true;
+              }
+
+              if (imported) await store.setItem(STATE_KEY, {...state});
+            } catch (_) {}
+            return imported;
+          }
+
+`;
+
+          replaceOnce('오늘 관측 로직', '  function normalize(payload) {', todayHelpers + '  function normalize(payload) {');
+
+          replaceOnce(
+            '스냅샷 오늘값 적용',
+            '        state.data = await fetchSnapshot();',
+            '        state.data = applyObservedToday(await fetchSnapshot());'
+          );
+
+          replaceOnce(
+            '기존 DevPass baseline 승계',
+            "    state={...DEFAULTS,...((await store.getItem(STATE_KEY))||{})};\n",
+            "    state={...DEFAULTS,...((await store.getItem(STATE_KEY))||{})};\n    await importLegacyTodayBaselines();\n"
+          );
+
+          fs.writeFileSync(path, src);
+          NODE
+
+          node --check plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.10$' plugins/usage-dashboard/latest.js
+          grep -q "LEGACY_DEVPASS_STATE_KEY = 'llmgateway-devpass-direct-v1'" plugins/usage-dashboard/latest.js
+          grep -q 'applyObservedToday' plugins/usage-dashboard/latest.js
+          grep -q 'importLegacyTodayBaselines' plugins/usage-dashboard/latest.js
 
       - name: Commit release
         shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.8'
+            echo 'latest.js already matches alpha.3.10'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.8 DevPass bridge adapter'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.10 daily observation migration'
           git push

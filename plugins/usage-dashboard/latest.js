@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.10
+//@version 3.0.0-alpha.3.11
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.10';
+  const VERSION = '3.0.0-alpha.3.11';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -92,9 +92,18 @@
   return [value('year'), value('month'), value('day')].join('-');
 }
 
+function resetPeriodKey(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (num(value)) return String(Number(value));
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? String(parsed) : String(value);
+}
+
 function applyObservedToday(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return snapshot;
   const today = localDateKey();
+  const monthlyPeriod = resetPeriodKey(snapshot.monthly?.resetAt);
+  const premiumPeriod = resetPeriodKey(snapshot.weekly?.resetAt);
 
   const previous = state.dailyUsage?.date === today ? state.dailyUsage : null;
   const monthlyUsed = num(snapshot.monthly?.used) ? Number(snapshot.monthly.used) : null;
@@ -102,6 +111,12 @@ function applyObservedToday(snapshot) {
   let monthlyBaseline = num(previous?.monthlyBaseline) ? Number(previous.monthlyBaseline) : monthlyUsed;
   let premiumBaseline = num(previous?.premiumBaseline) ? Number(previous.premiumBaseline) : premiumUsed;
 
+  const monthlyPeriodChanged = Boolean(previous?.monthlyPeriod && monthlyPeriod && previous.monthlyPeriod !== monthlyPeriod);
+  const premiumPeriodChanged = Boolean(previous?.premiumPeriod && premiumPeriod && previous.premiumPeriod !== premiumPeriod);
+  if (monthlyPeriodChanged) monthlyBaseline = monthlyUsed;
+  if (premiumPeriodChanged) premiumBaseline = premiumUsed;
+
+  // Fallback for bridges that omit/reset resetAt: a counter drop still means a new period.
   if (num(monthlyUsed) && num(monthlyBaseline) && monthlyUsed < monthlyBaseline) monthlyBaseline = monthlyUsed;
   if (num(premiumUsed) && num(premiumBaseline) && premiumUsed < premiumBaseline) premiumBaseline = premiumUsed;
 
@@ -120,9 +135,11 @@ function applyObservedToday(snapshot) {
     premiumBudgetAmount: premiumAmount,
     monthlyBaseline,
     premiumBaseline,
-    observedFrom: previous?.observedFrom || Date.now(),
+    monthlyPeriod,
+    premiumPeriod,
+    observedFrom: (monthlyPeriodChanged || premiumPeriodChanged) ? Date.now() : (previous?.observedFrom || Date.now()),
     updatedAt: Date.now(),
-    source: 'key-status-local-delta'
+    source: 'key-status-local-delta-reset-aware'
   };
 
   if (snapshot.monthly) snapshot.monthly.todayUsed = monthlyAmount;

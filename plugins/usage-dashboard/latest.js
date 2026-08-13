@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.21
+//@version 3.0.0-alpha.3.22
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.21';
+  const VERSION = '3.0.0-alpha.3.22';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -16,7 +16,7 @@
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
-    refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
+    refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true,
     staleAfterMs: 0, stalePolicyV37Migrated: false,
     widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
     usageScopeView: 'all',
@@ -29,6 +29,7 @@
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let widget = null, rootBody = null, drag = null;
+  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal'};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -43,6 +44,42 @@
     if (s < 60) return `${s}초 전`;
     const m = Math.floor(s / 60);
     return m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 전`;
+  }
+
+  function noteRefreshPerformance(durationMs) {
+    const duration = Math.max(0, Number(durationMs) || 0);
+    if (state.performanceGuard === false || state.adaptiveRefresh === false) {
+      performanceRuntime.adaptiveMultiplier = 1;
+      performanceRuntime.mode = 'normal';
+      performanceRuntime.slowRefreshes = 0;
+      performanceRuntime.fastRefreshes = 0;
+      return;
+    }
+    if (duration >= 3000) {
+      performanceRuntime.slowRefreshes += 1;
+      performanceRuntime.fastRefreshes = 0;
+      performanceRuntime.adaptiveMultiplier = Math.max(performanceRuntime.adaptiveMultiplier, 4);
+    } else if (duration >= 1200) {
+      performanceRuntime.slowRefreshes += 1;
+      performanceRuntime.fastRefreshes = 0;
+      performanceRuntime.adaptiveMultiplier = Math.max(performanceRuntime.adaptiveMultiplier, 2);
+    } else {
+      performanceRuntime.fastRefreshes += 1;
+      if (performanceRuntime.fastRefreshes >= 3) {
+        performanceRuntime.adaptiveMultiplier = Math.max(1, performanceRuntime.adaptiveMultiplier / 2);
+        performanceRuntime.fastRefreshes = 0;
+        if (performanceRuntime.adaptiveMultiplier <= 1) performanceRuntime.slowRefreshes = 0;
+      }
+    }
+    performanceRuntime.mode = performanceRuntime.adaptiveMultiplier > 1 ? 'guard' : 'normal';
+  }
+
+  function effectiveRefreshMs() {
+    const base = Math.max(0, Number(state.refreshMs) || 0);
+    if (!base) return 0;
+    if (state.performanceGuard === false || state.adaptiveRefresh === false) return base;
+    const multiplier = Math.max(1, Number(performanceRuntime.adaptiveMultiplier) || 1);
+    return Math.min(5 * 60_000, Math.max(base, Math.round(base * multiplier)));
   }
 
   function sourceAgeMs() {
@@ -402,6 +439,7 @@ async function importLegacyTodayBaselines() {
         state.bridgeError = '';
         state.lastSyncAt = Date.now();
         state.lastSyncDurationMs = state.lastSyncAt - started;
+        noteRefreshPerformance(state.lastSyncDurationMs);
         state.lastRefreshReason = reason;
         state.refreshCount = Number(state.refreshCount || 0) + 1;
         state.consecutiveFailures = 0;
@@ -444,6 +482,8 @@ async function importLegacyTodayBaselines() {
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
       `Reason: ${state.lastRefreshReason || '—'}`,
       `Success count: ${Number(state.refreshCount || 0)}`,
+      `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)}`,
+      `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
       `Failures: ${Number(state.consecutiveFailures || 0)}`,
@@ -644,7 +684,7 @@ function todayOverviewMetrics(d) {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)}</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 
@@ -889,9 +929,10 @@ function scheduleResetSync() {
     scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);
     if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    const adaptiveMs=effectiveRefreshMs();
     const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
-      ? Math.max(baseMs, Number(state.retryDelayMs)||baseMs)
-      : baseMs;
+      ? Math.max(adaptiveMs, Number(state.retryDelayMs)||adaptiveMs)
+      : adaptiveMs;
     if (state.bridgeStatus === 'error') state.nextRetryAt = Date.now() + ms;
     refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
   }

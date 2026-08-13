@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.15
-//@display-name SimCore v0.62.15 Auto Update Test
+//@version 0.62.16
+//@display-name SimCore v0.62.16 Preamble Diagnostic Cleanup
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -20,12 +20,11 @@
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
 //
-// v0.62.15 Auto Update Detection Test:
-// - Runtime/state/storage behavior is unchanged from v0.62.12
-// - Preserves v0.62.11 Broadcast Airtime Guard and v0.62.12 Community Alias Guard unchanged
-// - Panel shows live Broadcast airtime + Airtime start only while Broadcast is LOCKED
-// - After broadcast end, the stale start field is hidden and the retained value is labeled Last broadcast airtime
-// - No Core prompt changes, no lifecycle changes, no state/storage reset, no new I/O
+// v0.62.16 Preamble Diagnostic Cleanup:
+// - Runtime/state/storage/output canonicalization behavior remains unchanged
+// - Safe recoverable <Thoughts> preambles are compatibility diagnostics, not structure warnings
+// - Unknown non-Thoughts preambles remain warnings
+// - No Core prompt/lifecycle/reaction/community changes, no state reset, no new storage I/O
 //
 // v0.62 optimization rules:
 // - Stable behavior is the golden baseline; no semantic contract changes
@@ -1127,8 +1126,9 @@ const community = require('./community');
 const reaction = require('./reaction');
 const structure = require('./structure');
 
-// Known host/model metadata compatibility. Only one complete standalone Thoughts wrapper
-// is silent; malformed/mixed preambles remain observable through the generic warning.
+// Known host/model metadata compatibility. A complete standalone Thoughts wrapper is silent.
+// A partial Thoughts-shaped prefix is downgraded to compatibility telemetry only when a safe
+// canonical # 응답 envelope is successfully selected; otherwise it stays a warning.
 function isKnownThoughtsPreamble(rawPrefix) {
   const trimmed = String(rawPrefix || '').trim();
   if (!trimmed) return false;
@@ -1140,19 +1140,30 @@ function isKnownThoughtsPreamble(rawPrefix) {
   return !/<\/?Thoughts>/i.test(body);
 }
 
+// PocketRisu/model gateways can expose a partial reasoning wrapper before the real # 응답
+// envelope. If the canonical envelope itself is safe, treat a Thoughts-shaped prefix as
+// host/model compatibility telemetry rather than a structural failure.
+function isThoughtsCompatibilityPreamble(rawPrefix) {
+  return /^<Thoughts\b[^>]*>/i.test(String(rawPrefix || '').trim());
+}
+
 function preambleIssue(action) {
   return `응답 envelope 앞 비정상 preamble ${action}`;
+}
+
+function preambleDiagnostic(action) {
+  return `Thoughts 호환 preamble ${action}`;
 }
 
 // Whole-response restart recovery. Structure judges candidate integrity; Recovery chooses/moves content.
 function canonicalizeResponseEnvelope(content, pending) {
   const raw = String(content || '');
-  if (!pending?.active) return { content: raw, repaired: false, issues: [], candidateCount: 0, selectedIndex: -1, resolved: true };
+  if (!pending?.active) return { content: raw, repaired: false, issues: [], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: true };
 
   const markerRe = /^[ \t]*#[ \t]+응답[^\r\n]*$/gmi;
   const matches = [...raw.matchAll(markerRe)];
   if (!matches.length) {
-    return { content: raw.trim(), repaired: false, issues: ['응답 envelope: # 응답 시작점 없음'], candidateCount: 0, selectedIndex: -1, resolved: false };
+    return { content: raw.trim(), repaired: false, issues: ['응답 envelope: # 응답 시작점 없음'], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: false };
   }
 
   const prefix = raw.slice(0, matches[0].index).trim();
@@ -1181,17 +1192,22 @@ function canonicalizeResponseEnvelope(content, pending) {
   const safe = candidates.filter((x) => x.integrity.safe).sort((a, b) => b.score - a.score || b.index - a.index);
   if (!safe.length) {
     const issues = [];
+    const diagnostics = [];
     if (matches.length > 1) issues.push(`응답 envelope 중복 ${matches.length}개 - 안전한 후보를 확정하지 못해 자동 병합하지 않음`);
     if (prefix && !knownThoughtsPrefix) issues.push(preambleIssue('감지'));
-    return { content: raw.trim(), repaired: false, issues, candidateCount: matches.length, selectedIndex: -1, resolved: matches.length === 1 && !prefix };
+    return { content: raw.trim(), repaired: false, issues, diagnostics, candidateCount: matches.length, selectedIndex: -1, resolved: matches.length === 1 && !prefix };
   }
 
   const selected = safe[0];
   const repaired = matches.length > 1 || !!prefix;
   const issues = [];
+  const diagnostics = [];
   if (matches.length > 1) issues.push(`응답 envelope 중복 ${matches.length}개 → 완전한 후보 ${selected.index + 1}번만 유지`);
-  if (prefix && !knownThoughtsPrefix) issues.push(preambleIssue('제거'));
-  return { content: selected.text, repaired, issues, candidateCount: matches.length, selectedIndex: selected.index, resolved: true };
+  if (prefix && !knownThoughtsPrefix) {
+    if (isThoughtsCompatibilityPreamble(prefix)) diagnostics.push(preambleDiagnostic('제거'));
+    else issues.push(preambleIssue('제거'));
+  }
+  return { content: selected.text, repaired, issues, diagnostics, candidateCount: matches.length, selectedIndex: selected.index, resolved: true };
 }
 
 // Deterministic opaque-block tail repair.
@@ -1459,7 +1475,7 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   }
 
   let finalText = String(prepared?.content || '');
-  const envelope = prepared?.envelope || { resolved: true, issues: [], repaired: false };
+  const envelope = prepared?.envelope || { resolved: true, issues: [], diagnostics: [], repaired: false };
   const commit = structure.stateCommitSafety(finalText, p, envelope.resolved);
   state.community.lastNormalization = [];
   if (commit.communitySafe) {
@@ -1497,6 +1513,7 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
     active: true,
     mode: p.mode,
     envelopeIssues: envelope.issues || [],
+    envelopeDiagnostics: envelope.diagnostics || [],
     envelopeRepaired: !!envelope.repaired,
     stateCommit: commit,
   };
@@ -1841,6 +1858,7 @@ class CoreRulesetSession {
     if (detail) detail.pruneDeferred = this.scheduleDeferredPrune(outIndex);
     else this.scheduleDeferredPrune(outIndex);
     result.issues = issues;
+    result.envelopeDiagnostics = prepared.envelope.diagnostics || [];
     return result;
   }
 
@@ -2131,7 +2149,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let coreSession = null;
   let coreKey = null;
   let coreLocationKey = null;
-  let lastCore = { active: false, mode: null, issues: [] };
+  let lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
   let lastPerf = null;
   let lastOutputPerf = null;
 
@@ -2224,7 +2242,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.15] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.16] state mirror failed:', e.message);
     }
   }
 
@@ -2239,7 +2257,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.15] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.16] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2302,9 +2320,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     if (result.active && result.promptBlock) {
       messages.push({ role: 'system', content: result.promptBlock });
-      lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [] };
+      lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
     } else {
-      lastCore = { active: false, mode: null, issues: [] };
+      lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
     }
     // v0.62: do not call setChatToIndex on the request-critical path. The authoritative
     // pre/send snapshots are already persisted; scriptstate mirror is refreshed after output.
@@ -2328,7 +2346,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     if (!result.active) return content;
 
     const issues = result.issues || [];
-    if (issues.length) console.log('[simcore/v0.62.15] structure warnings:', issues.join(' / '));
+    const diagnostics = result.envelopeDiagnostics || [];
+    if (issues.length) console.log('[simcore/v0.62.16] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.16] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2340,12 +2360,13 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.15] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.16] reaction normalization:', normalizationIssues.join(' / '));
     const quarantineIssues = result.stateCommit?.communitySafe === false ? [result.stateCommit.reason] : [];
     lastCore = {
       active: true,
       mode: result.mode || result.state?.lastMode || null,
       issues: [...issues, ...quarantineIssues, ...normalizationIssues],
+      diagnostics,
     };
     if (perf) perf.diagnosticsMs = perfMs(t);
     return result.content;
@@ -2374,7 +2395,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.15] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.16] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2400,7 +2421,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.15] output error:', e.message);
+      console.log('[simcore/v0.62.16] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2440,7 +2461,7 @@ h1{font-size:18px;margin:0 0 14px}.card{background:#121a2d;border:1px solid #293
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px;border-bottom:1px solid #26324a}th{color:#9fb3d7}.muted{color:#8291ad}
 button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.15 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.16 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2452,8 +2473,10 @@ ${broadcastClockRows}
 <div><div class="k">Korean age offset</div><div class="v">+${Number(s?.koreanAgeOffset || 0)}</div></div>
 <div><div class="k">World year</div><div class="v">${s?.worldYear ?? 'unknown'}</div></div>
 <div><div class="k">Warnings</div><div class="v">${lastCore.issues.length}</div></div>
+<div><div class="k">Compatibility diagnostics</div><div class="v">${(lastCore.diagnostics || []).length}</div></div>
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
+${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${lastPerf ? `<div class="card"><div class="k" style="margin-bottom:8px">beforeRequest performance (latest)</div><table>
 <tr><td>Total</td><td>${lastPerf.totalMs.toFixed(1)} ms</td></tr>
 <tr><td>Indices</td><td>${lastPerf.indicesMs.toFixed(1)} ms</td></tr>
@@ -2514,20 +2537,20 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <div class="card"><div class="k" style="margin-bottom:8px">Platform-family reaction_max</div><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div>
-<div class="card muted">v0.62.15 Auto Update Test · runtime unchanged · GitHub channel detection check</div>
+<div class="card muted">v0.62.16 Preamble Diagnostic Cleanup · Thoughts compatibility is informational · runtime unchanged</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.15] panel error:', e.message);
+      console.log('[simcore/v0.62.16] panel error:', e.message);
     }
   }
 
   try {
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
-    await Risuai.registerSetting('SimCore v0.62.15', openPanel, '⚙️', 'html');
+    await Risuai.registerSetting('SimCore v0.62.16', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.15] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.16] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -2535,5 +2558,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.15] initialized');
+  console.log('[simcore/v0.62.16] initialized');
 })();

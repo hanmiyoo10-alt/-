@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.34
+//@version 0.62.35
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -8,17 +8,29 @@
 // Optimization/architecture refactor built on the v0.62 golden behavior baseline.
 // Design goal: preserve every proven Core/Community contract while shortening the normal request/output path.
 //
-// Internal modules (single installable plugin):
-// - Kernel: current state schema + shared primitives
+// Internal modules (single installable plugin; ownership frozen by Contracts v1):
+// - Contracts: module responsibility/non-goal registry only; no runtime policy
+// - Kernel: state schema + shared primitives/normalization glue
 // - Store: snapshot persistence/retention only
-// - Lifecycle: mode/broadcast/episode contract
-// - Time: current world-year + Korean-age synchronization only
-// - Community: COMMUNITY parsing/platform-family/group rules
+// - Lifecycle: mode/broadcast/episode request preparation
+// - Time: timestamp syntax + narrative/broadcast clock primitives + world-year/age synchronization
+// - Recurrence: repeated request-template detection/state only
+// - Lineage: request root/parent/depth tracking only
+// - Handoff: short-C source/parent-shift detection/state only
+// - Community: COMMUNITY parsing/platform-family/group taxonomy only
 // - Reaction: reaction parser, per-family historical maxima, normalization
 // - Structure: validation/integrity/state-commit safety (judge; does not repair)
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
-// - Session: thin orchestrator for one-pass request/output pipelines
-// - OPS: performance helpers/diagnostic formatting
+// - Prompt: runtime prompt serialization only; does not own semantic state
+// - Session: thin orchestrator; delegates prompt serialization to Prompt
+// - OPS: performance helpers/diagnostic formatting only
+//
+// v0.62.35 Module Boundary Freeze:
+// - Freezes explicit responsibility/non-goal contracts for every internal module before the v0.63 prompt-compiler work
+// - Extracts renderRuntimePrompt from Session into a dedicated Prompt module; Session remains orchestration-only for prompt assembly
+// - Keeps one installable JS artifact; this is internal modularization, not a multi-file runtime dependency
+// - Runtime prompt output is byte-identical to v0.62.34 across A/B/C/B_END/recurrence/handoff/age/narrative cases
+// - No state schema, storage key, snapshot, time, lineage, reaction, output-repair, lore access, or generation guidance change
 //
 // v0.62.32 Stable Menu Label:
 // - UI/metadata only: changes //@display-name to a stable versionless "SimCore" label so future installs do not pin a stale version number in the PocketRisu sidebar
@@ -166,6 +178,28 @@ const SimCore = (() => {
   };
   return { define, require: requireFn };
 })();
+
+SimCore.define("contracts", function (require, module, exports) {
+const MODULE_CONTRACT_VERSION = 1;
+const MODULE_CONTRACTS = Object.freeze({
+  contracts: Object.freeze({ owns: 'module responsibility metadata', excludes: 'runtime policy or state mutation' }),
+  kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
+  store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
+  lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
+  time: Object.freeze({ owns: 'timestamp syntax, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
+  recurrence: Object.freeze({ owns: 'request-template recurrence detection and bounded registry', excludes: 'source meaning or response composition' }),
+  lineage: Object.freeze({ owns: 'request root/parent/depth tracking', excludes: 'source importance or response content' }),
+  handoff: Object.freeze({ owns: 'short-C source/parent-shift detection and bounded registry', excludes: 'semantic source selection or reaction content' }),
+  community: Object.freeze({ owns: 'COMMUNITY parsing and platform taxonomy', excludes: 'reaction-number mutation or prose generation' }),
+  reaction: Object.freeze({ owns: 'reaction parsing, per-family floors and deterministic normalization', excludes: 'community prose or platform selection' }),
+  structure: Object.freeze({ owns: 'output validation and integrity judgement', excludes: 'repair or semantic rewriting' }),
+  recovery: Object.freeze({ owns: 'cold-path deterministic repair/bootstrap/legacy recovery', excludes: 'normal hot-path policy ownership' }),
+  prompt: Object.freeze({ owns: 'runtime prompt serialization', excludes: 'persistent semantic state ownership, host/storage I/O, creative decisions' }),
+  session: Object.freeze({ owns: 'pipeline orchestration and commit sequencing', excludes: 'prompt wording ownership or creative/semantic decisions' }),
+  ops: Object.freeze({ owns: 'performance and diagnostic formatting', excludes: 'generation/state policy' }),
+});
+module.exports = { MODULE_CONTRACT_VERSION, MODULE_CONTRACTS };
+});
 
 SimCore.define("store", function (require, module, exports) {
 function storeNow() {
@@ -2236,21 +2270,11 @@ module.exports = {
 };
 });
 
-SimCore.define("session", function (require, module, exports) {
-const { SnapshotStore } = require('./store');
+SimCore.define("prompt", function (require, module, exports) {
 const kernel = require('./kernel');
 const lifecycle = require('./lifecycle');
 const time = require('./time');
-const community = require('./community');
-const reaction = require('./reaction');
-const structure = require('./structure');
-const recovery = require('./recovery');
 const recurrence = require('./recurrence');
-
-function sessionNow() {
-  return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
-}
-function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
 
 function renderRuntimePrompt(state) {
   const s = kernel.reconcileState(state);
@@ -2332,6 +2356,28 @@ function renderRuntimePrompt(state) {
   lines.push('[/SIMCORE CORE STATE]');
   return lines.join('\n');
 }
+
+module.exports = { renderRuntimePrompt };
+});
+
+SimCore.define("session", function (require, module, exports) {
+const { SnapshotStore } = require('./store');
+const kernel = require('./kernel');
+const lifecycle = require('./lifecycle');
+const time = require('./time');
+const community = require('./community');
+const reaction = require('./reaction');
+const structure = require('./structure');
+const recovery = require('./recovery');
+const recurrence = require('./recurrence');
+const prompt = require('./prompt');
+
+function sessionNow() {
+  return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+}
+function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
+
+const renderRuntimePrompt = prompt.renderRuntimePrompt;
 
 function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   const state = kernel.reconcileState(kernel.clone(baseState));
@@ -3284,7 +3330,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.34] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.35] state mirror failed:', e.message);
     }
   }
 
@@ -3299,7 +3345,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.34] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.35] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3495,8 +3541,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.34] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.34] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.35] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.35] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3509,7 +3555,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.34] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.35] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3554,7 +3600,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.34] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.35] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3580,7 +3626,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.34] output error:', e.message);
+      console.log('[simcore/v0.62.35] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3664,7 +3710,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.34 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.35 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3773,7 +3819,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.34] panel error:', e.message);
+      console.log('[simcore/v0.62.35] panel error:', e.message);
     }
   }
 
@@ -3781,7 +3827,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.34] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.35] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3789,5 +3835,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.34] initialized');
+  console.log('[simcore/v0.62.35] initialized');
 })();

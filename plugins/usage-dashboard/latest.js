@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.25
+//@version 3.0.0-alpha.3.26
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.25';
+  const VERSION = '3.0.0-alpha.3.26';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -15,6 +15,9 @@
   const KST_TIME_ZONE = 'Asia/Seoul';
   const UI_STALL_PROBE_INTERVAL_MS = 100;
   const UI_STALL_THRESHOLD_MS = 50;
+  const RESUME_GRACE_MS = 1200;
+  const RESUME_INTERACTION_QUIET_MS = 900;
+  const RESUME_MAX_DEFER_MS = 4500;
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
@@ -32,9 +35,9 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
-  let uiStallProbeTimer = null, resumeProbeTimer = null, resumeMeasureTimer = null, resumeLongTaskObserver = null;
+  let uiStallProbeTimer = null, resumeProbeTimer = null, resumeMeasureTimer = null, resumeRefreshTimer = null, resumeLongTaskObserver = null;
   let widget = null, rootBody = null, drag = null;
-  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,uiStallProbeActive:false,resumeEvents:0,resumeMeasurePending:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeMainThreadLagSamples:[],resumeLongTaskSamples:[]};
+  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeMainThreadLagSamples:[],resumeLongTaskSamples:[]};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -252,6 +255,43 @@
       try { resumeLongTaskObserver.disconnect(); } catch (_) {}
     }
     resumeLongTaskObserver = null;
+  }
+
+  function cancelResumeRefresh() {
+    if (resumeRefreshTimer) clearTimeout(resumeRefreshTimer);
+    resumeRefreshTimer = null;
+    performanceRuntime.resumePending = false;
+    performanceRuntime.resumeStartedAt = 0;
+    stopResumeMeasurement();
+  }
+
+  function runResumeRefreshWhenQuiet() {
+    resumeRefreshTimer = null;
+    if (!state?.syncOnFocus || !state?.bridgeEnabled || !token) { performanceRuntime.resumePending = false; return; }
+    if (state.backgroundPause !== false && document.visibilityState === 'hidden') { performanceRuntime.resumePending = false; return; }
+    const now = Date.now();
+    const startedAt = Number(performanceRuntime.resumeStartedAt || now);
+    const elapsed = Math.max(0, now - startedAt);
+    const quietFor = Math.max(0, now - Number(performanceRuntime.lastInteractionAt || 0));
+    if (state.performanceGuard !== false && quietFor < RESUME_INTERACTION_QUIET_MS && elapsed < RESUME_MAX_DEFER_MS) {
+      const wait = Math.max(120, RESUME_INTERACTION_QUIET_MS - quietFor);
+      performanceRuntime.resumeDeferred += 1;
+      resumeRefreshTimer = setTimeout(runResumeRefreshWhenQuiet, wait);
+      return;
+    }
+    performanceRuntime.resumePending = false;
+    performanceRuntime.lastResumeDelayMs = elapsed;
+    refresh('visibility', true);
+  }
+
+  function requestResumeRefresh(reason = 'visibility') {
+    if (!state?.syncOnFocus || !state?.bridgeEnabled || !token) return;
+    if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
+    performanceRuntime.lastResumeReason = String(reason || 'visibility');
+    if (resumeRefreshTimer || performanceRuntime.resumePending) { performanceRuntime.resumeCoalesced += 1; return; }
+    performanceRuntime.resumePending = true;
+    performanceRuntime.resumeStartedAt = Date.now();
+    resumeRefreshTimer = setTimeout(runResumeRefreshWhenQuiet, RESUME_GRACE_MS);
   }
 
   function sourceAgeMs() {
@@ -670,6 +710,7 @@ async function importLegacyTodayBaselines() {
       `Last UI stall: ${num(performanceRuntime.lastUiStallMs) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · ${age(performanceRuntime.lastUiStallAt)}` : 'none'}`,
       `Resume probe: events ${Number(performanceRuntime.resumeEvents || 0)} · reason ${performanceRuntime.lastResumeReason || '—'} · main-thread lag ${num(performanceRuntime.lastResumeMainThreadLagMs) ? `${roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)}ms` : '—'} · after ${num(performanceRuntime.lastResumeProbeAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeProbeAfterMs)}ms` : '—'} · refresh overlap ${performanceRuntime.lastResumeProbeDuringRefresh ? 'yes' : 'no'}`,
       `Resume long task: ${performanceRuntime.longTaskSupported ? 'supported' : 'unsupported'} · count ${Number(performanceRuntime.resumeLongTaskCount || 0)} · ${num(performanceRuntime.lastResumeLongTaskMs) ? `last ${roundPerfMs(performanceRuntime.lastResumeLongTaskMs)}ms @ +${roundPerfMs(performanceRuntime.lastResumeLongTaskStartedAfterMs)}ms · refresh overlap ${performanceRuntime.lastResumeLongTaskDuringRefresh ? 'yes' : 'no'}` : 'last none'}`,
+      `Resume grace: ${performanceRuntime.resumePending ? 'pending' : 'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs) ? `${Number(performanceRuntime.lastResumeDelayMs)}ms` : '—'} · deferred ${Number(performanceRuntime.resumeDeferred || 0)} · coalesced ${Number(performanceRuntime.resumeCoalesced || 0)} · quiet ${RESUME_INTERACTION_QUIET_MS}ms · max ${RESUME_MAX_DEFER_MS}ms`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
@@ -871,7 +912,7 @@ function todayOverviewMetrics(d) {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 
@@ -1131,14 +1172,19 @@ function scheduleResetSync() {
         beginResumeMeasurement('visibility');
         startUiStallProbe();
         scheduleRefresh();
-        if(state.syncOnFocus&&state.bridgeEnabled)refresh('visibility',true);
+        if(state.syncOnFocus&&state.bridgeEnabled)requestResumeRefresh('visibility');
       }else if(state.backgroundPause!==false){
-        stopResumeMeasurement();
+        cancelResumeRefresh();
         stopUiStallProbe();
         if(refreshTimer){clearTimeout(refreshTimer);refreshTimer=null;}
       }
     };
     document.addEventListener('visibilitychange',vis); domListeners.push([document,'visibilitychange',vis]);
+    for (const type of ['pointerdown','touchstart','wheel','keydown']) {
+      const interaction = () => { performanceRuntime.lastInteractionAt = Date.now(); };
+      document.addEventListener(type, interaction, {passive:true});
+      domListeners.push([document,type,interaction]);
+    }
     startUiStallProbe();
   }
 
@@ -1159,7 +1205,7 @@ function scheduleResetSync() {
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
-      stopResumeMeasurement();
+      cancelResumeRefresh();
       stopResumeLongTaskObserver();
       stopUiStallProbe();
       for(const [t,ty,id] of remoteListeners.splice(0)){try{await t.removeEventListener(ty,id);}catch(_){}}

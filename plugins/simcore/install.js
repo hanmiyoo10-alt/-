@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.26
-//@display-name SimCore v0.62.26 Community Parent-Shift Probe
+//@version 0.62.27
+//@display-name SimCore v0.62.27 Reference Attention Anchor
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,13 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.27 Reference Attention Anchor:
+// - Adds a tiny always-on reference pointer for every active A/B/C turn
+// - Character card and currently exposed lore, when present in the host request context, are marked as authoritative reference sources for character/world facts
+// - Does not fetch, copy, inject, summarize, select, or semantically rank lore content; it only points the main model back to context the host already exposed
+// - Exactly two fixed runtime-prompt lines are added on active turns; no auxiliary model, history rescan, state field, or new pluginStorage API call site
+// - Existing Broadcast/Community/Reaction/Narrative/Recurrence/Lineage/Handoff/Parent-Shift behavior is unchanged
 //
 // v0.62.26 Community Parent-Shift Probe:
 // - Diagnostics/state only: observes repeated short Community requests that stay on the same A/B/C lineage root while their direct parent/depth changes
@@ -2204,6 +2211,8 @@ function renderRuntimePrompt(state) {
     `world_year=${s.worldYear ?? 'unknown'}`,
     'required_frame=응답,볼륨,챕터,Chatindex,timestamp',
     'response_envelope=exactly_one_no_restart',
+    'reference_sources=character_card+currently_exposed_lore_if_present',
+    'character_world_facts_use_reference_sources=1',
     `community_blocks_expected=${communityExpected}`,
   ];
   if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
@@ -3209,7 +3218,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.26] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.27] state mirror failed:', e.message);
     }
   }
 
@@ -3224,7 +3233,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.26] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.27] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3399,8 +3408,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.26] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.26] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.27] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.27] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -3412,7 +3421,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.26] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.27] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3457,7 +3466,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.26] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.27] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3483,7 +3492,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.26] output error:', e.message);
+      console.log('[simcore/v0.62.27] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3567,7 +3576,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.26 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.27 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3591,6 +3600,7 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Request lineage</div><div class="v">${escapeHtml(lineageLabel)}</div></div>
 <div class="metric"><div class="k">Source handoff</div><div class="v">${escapeHtml(handoffLabel)}</div></div>
 <div class="metric"><div class="k">Parent shift</div><div class="v">${escapeHtml(parentShiftLabel)}</div></div>
+<div class="metric"><div class="k">Reference anchor</div><div class="v">ON · +2 lines</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 </div>
@@ -3665,12 +3675,12 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">v0.62.26 Parent-Shift Probe · diagnostics/state only · prompt +0 · v0.62.24 current-time floor retained</div>
+<div class="card muted">v0.62.27 Reference Attention Anchor · character card + currently exposed lore pointer · +2 fixed prompt lines</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.26] panel error:', e.message);
+      console.log('[simcore/v0.62.27] panel error:', e.message);
     }
   }
 
@@ -3678,7 +3688,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.26] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.27] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3686,5 +3696,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.26] initialized');
+  console.log('[simcore/v0.62.27] initialized');
 })();

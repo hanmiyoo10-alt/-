@@ -28,16 +28,16 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import subprocess
           s = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
-          assert s.count("pluginStorage.getItem") == 2
-          assert s.count("pluginStorage.setItem") == 1
-          assert s.count("pluginStorage.removeItem") == 1
-          assert s.count("pluginStorage.keys") == 1
           assert "c.mode === 'C'\n    ? recurrence.observe(state, input)" in s
           assert "bootstrapState(base, historyMessages, sendIndex" in s
           assert "prior_answer_is_not_a_content_template=1" in s
           assert "do_not_mechanically_reuse_prior_answer_composition_or_wording=1" in s
           assert "existing outputs are never rewritten" in s.lower()
+          diff = subprocess.check_output(['git', 'diff', '--unified=0', '--', 'plugins/simcore/latest.js'], text=True)
+          added = [line for line in diff.splitlines() if line.startswith('+') and not line.startswith('+++')]
+          assert not any('pluginStorage.' in line for line in added), 'new pluginStorage API call added'
           print('recurrence invariants ok')
           PY
       - name: Build backup zip

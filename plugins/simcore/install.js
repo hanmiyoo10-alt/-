@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.29
-//@display-name SimCore v0.62.29 Short Community Lineage Anchor
+//@version 0.62.30
+//@display-name SimCore v0.62.30 Current Age Anchor
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,13 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.30 Current Age Anchor:
+// - Fixes a repeated live age-drift failure where a past event/candidacy age was reused as the current narrative age after the story year had advanced
+// - Keeps the proven korean_age_offset state untouched and adds one compact current-age formula only when the offset is greater than zero
+// - Current age is resolved as character-reference age plus SimCore's deterministic Korean-age offset; past-event age mentions must not override the current value
+// - Applies uniformly to active A/B/C turns; no exact age is hardcoded and no character/lore content is fetched or copied
+// - No state schema change, history scan, auxiliary model, output rewrite, or new pluginStorage/API call site
 //
 // v0.62.29 Short Community Lineage Anchor:
 // - Fixes a live short-C gap observed when Request Lineage correctly knew the current source but Source Handoff was FIRST/SAME SOURCE and therefore injected no source guidance
@@ -2222,6 +2229,7 @@ function renderRuntimePrompt(state) {
     `secondary_configured=${p.secondaryConfigured ? 1 : 0}`,
     `secondary_active=${p.secondaryActive ? 1 : 0}`,
     `korean_age_offset=+${s.koreanAgeOffset}`,
+    ...(Number(s.koreanAgeOffset || 0) > 0 ? [`current_korean_age=character_reference_age+${s.koreanAgeOffset};past_event_age_not_current=1`] : []),
     `world_year=${s.worldYear ?? 'unknown'}`,
     'required_frame=응답,볼륨,챕터,Chatindex,timestamp',
     'response_envelope=exactly_one_no_restart',
@@ -3236,7 +3244,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.29] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.30] state mirror failed:', e.message);
     }
   }
 
@@ -3251,7 +3259,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.29] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.30] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3332,6 +3340,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         lines: runtimeBudgetLines.length,
         reactionMaxChars: runtimeBudgetReactionLine.length,
         referenceLines: runtimeBudgetLines.filter((line) => line === 'reference_sources=character_card+currently_exposed_lore_if_present' || line === 'character_world_facts_use_reference_sources=1').length,
+        ageAnchor: runtimeBudgetLines.some((line) => line.startsWith('current_korean_age=')),
         broadcast: /^B_/.test(String(runtimeBudgetMode || '')),
         community: runtimeBudgetLines.some((line) => line.startsWith('platform_groups_required=')),
         narrativeProgression: runtimeBudgetLines.some((line) => line === 'timestamp_semantics=current_narrative_time'),
@@ -3446,8 +3455,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.29] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.29] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.30] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.30] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -3459,7 +3468,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.29] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.30] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3504,7 +3513,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.29] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.30] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3530,7 +3539,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.29] output error:', e.message);
+      console.log('[simcore/v0.62.30] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3614,7 +3623,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.29 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.30 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3639,6 +3648,7 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Source handoff</div><div class="v">${escapeHtml(handoffLabel)}</div></div>
 <div class="metric"><div class="k">Parent shift</div><div class="v">${escapeHtml(parentShiftLabel)}</div></div>
 <div class="metric"><div class="k">Reference anchor</div><div class="v">ON · +2 lines</div></div>
+<div class="metric"><div class="k">Current age anchor</div><div class="v">${Number(s?.koreanAgeOffset || 0) > 0 ? `ON · +1 line · offset +${Number(s?.koreanAgeOffset || 0)}` : `STANDBY · offset +0`}</div></div>
 <div class="metric"><div class="k">Short-C lineage</div><div class="v">${lastRuntimePromptBudget?.lineageAnchor ? 'CURRENT LINEAGE' : 'OFF'}</div></div>
 <div class="metric"><div class="k">Runtime prompt</div><div class="v">${lastRuntimePromptBudget ? `${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines` : 'n/a'}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
@@ -3646,7 +3656,7 @@ ${broadcastClockRows}
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
-${lastRuntimePromptBudget ? `<div class="card"><div class="k" style="margin-bottom:8px">Runtime prompt budget (current request)</div><div>${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines · mode ${escapeHtml(lastRuntimePromptBudget.mode || '?')}</div><div class="muted" style="margin-top:5px">reaction_max line ${Number(lastRuntimePromptBudget.reactionMaxChars || 0).toLocaleString('en-US')} chars · reference ${Number(lastRuntimePromptBudget.referenceLines || 0)} lines</div><div class="muted" style="margin-top:5px">active flags: ${escapeHtml([lastRuntimePromptBudget.broadcast ? 'broadcast' : '', lastRuntimePromptBudget.community ? 'community' : '', lastRuntimePromptBudget.narrativeProgression ? 'narrative' : '', lastRuntimePromptBudget.recurrence ? 'recurrence' : '', lastRuntimePromptBudget.handoff ? 'handoff' : '', lastRuntimePromptBudget.lineageAnchor ? 'lineage-anchor' : ''].filter(Boolean).join(' · ') || 'base-only')} · diagnostics only · prompt unchanged</div></div>` : ''}
+${lastRuntimePromptBudget ? `<div class="card"><div class="k" style="margin-bottom:8px">Runtime prompt budget (current request)</div><div>${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines · mode ${escapeHtml(lastRuntimePromptBudget.mode || '?')}</div><div class="muted" style="margin-top:5px">reaction_max line ${Number(lastRuntimePromptBudget.reactionMaxChars || 0).toLocaleString('en-US')} chars · reference ${Number(lastRuntimePromptBudget.referenceLines || 0)} lines</div><div class="muted" style="margin-top:5px">active flags: ${escapeHtml([lastRuntimePromptBudget.broadcast ? 'broadcast' : '', lastRuntimePromptBudget.community ? 'community' : '', lastRuntimePromptBudget.narrativeProgression ? 'narrative' : '', lastRuntimePromptBudget.recurrence ? 'recurrence' : '', lastRuntimePromptBudget.handoff ? 'handoff' : '', lastRuntimePromptBudget.ageAnchor ? 'age-anchor' : '', lastRuntimePromptBudget.lineageAnchor ? 'lineage-anchor' : ''].filter(Boolean).join(' · ') || 'base-only')} · diagnostics only · prompt unchanged</div></div>` : ''}
 ${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · mode ${escapeHtml(lastTemplateRecurrenceProbe.modeFamily || '?')} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
 ${lastRequestLineageProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Request lineage probe (runtime)</div><div>${escapeHtml(lineageLabel)}</div><div class="muted" style="margin-top:5px">root ${escapeHtml(lastRequestLineageProbe.rootMode || 'none')}@${Number(lastRequestLineageProbe.rootIndex)} · parent ${escapeHtml(lastRequestLineageProbe.parentMode || 'none')}@${Number(lastRequestLineageProbe.parentIndex)} · transition ${escapeHtml(lastRequestLineageProbe.transitionFrom || '?')} → ${escapeHtml(String(lastRequestLineageProbe.currentMode || '?').replace(/^B_.*/, 'B'))}</div><div class="muted" style="margin-top:5px">recent A/B ${escapeHtml((lastRequestLineageProbe.recentSources || []).map((x) => `${x.mode}@${x.index}`).join(' · ') || 'none')} · diagnostics only · prompt +0</div></div>` : ''}
 ${lastCommunitySourceHandoffProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Community source handoff (runtime)</div><div>${escapeHtml(handoffLabel)} · registry ${Number(lastCommunitySourceHandoffProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">current ${escapeHtml(lastCommunitySourceHandoffProbe.rootMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.rootIndex)} · prior ${escapeHtml(lastCommunitySourceHandoffProbe.priorRootMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.priorRootIndex)} · request chars ${Number(lastCommunitySourceHandoffProbe.normalizedChars || 0)}</div><div class="muted" style="margin-top:5px">${lastCommunitySourceHandoffProbe.newSource ? '2-line current-source hint injected' : (lastRuntimePromptBudget?.lineageAnchor ? '1-line current-lineage hint injected' : 'prompt +0')} · ${escapeHtml(lastCommunitySourceHandoffProbe.reason || 'ineligible')}</div></div>` : ''}
@@ -3721,7 +3731,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.29] panel error:', e.message);
+      console.log('[simcore/v0.62.30] panel error:', e.message);
     }
   }
 
@@ -3729,7 +3739,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.29] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.30] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3737,5 +3747,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.29] initialized');
+  console.log('[simcore/v0.62.30] initialized');
 })();

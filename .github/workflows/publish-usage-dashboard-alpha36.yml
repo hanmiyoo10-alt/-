@@ -1,0 +1,74 @@
+name: Publish usage dashboard alpha.3.6
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-usage-dashboard-alpha36.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch latest.js to alpha.3.6
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/usage-dashboard/latest.js')
+          s = p.read_text()
+
+          reps = [
+            ("//@version 3.0.0-alpha.3.5", "//@version 3.0.0-alpha.3.6"),
+            ("const VERSION = '3.0.0-alpha.3.5';", "const VERSION = '3.0.0-alpha.3.6';"),
+            ('''        <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><span>미니 위젯</span><select id="widget-mode"><option value="compact" ${state.widgetMode!=='detailed'?'selected':''}>간편 · 오늘 사용량</option><option value="detailed" ${state.widgetMode==='detailed'?'selected':''}>상세 · 남은 양 + 오늘 사용량</option></select></label>
+        <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button></div>
+''', '''        <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><span>STALE 기준</span><select id="stale-ms">${[[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분'],[0,'사용 안 함']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><span>미니 위젯</span><select id="widget-mode"><option value="compact" ${state.widgetMode!=='detailed'?'selected':''}>간편 · 오늘 사용량</option><option value="detailed" ${state.widgetMode==='detailed'?'selected':''}>상세 · 남은 양 + 오늘 사용량</option></select></label>
+        <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button></div>
+'''),
+            ('''        state.refreshMs = Number(q('#refresh-ms')?.value ?? state.refreshMs);
+        state.widgetMode = q('#widget-mode')?.value === 'detailed' ? 'detailed' : 'compact';
+''', '''        state.refreshMs = Number(q('#refresh-ms')?.value ?? state.refreshMs);
+        state.staleAfterMs = Math.max(0, Number(q('#stale-ms')?.value ?? state.staleAfterMs));
+        state.widgetMode = q('#widget-mode')?.value === 'detailed' ? 'detailed' : 'compact';
+'''),
+            ('''    if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
+    if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };
+''', '''    if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
+    if (q('#retry-now')) q('#retry-now').onclick = async () => {
+      state.consecutiveFailures = 0;
+      state.retryDelayMs = 0;
+      state.nextRetryAt = null;
+      await persist();
+      scheduleRefresh();
+      await refresh('manual-retry');
+    };
+    if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };
+'''),
+            ('''    if (q('#widget-mode')) q('#widget-mode').onchange = async e => { state.widgetMode = e.target.value === 'detailed' ? 'detailed' : 'compact'; await persist(); await renderWidget(); };
+''', '''    if (q('#stale-ms')) q('#stale-ms').onchange = async e => { state.staleAfterMs = Math.max(0, Number(e.target.value)||0); await persist(); await renderWidget(); renderSettings(); };
+    if (q('#widget-mode')) q('#widget-mode').onchange = async e => { state.widgetMode = e.target.value === 'detailed' ? 'detailed' : 'compact'; await persist(); await renderWidget(); };
+'''),
+          ]
+
+          for old, new in reps:
+            if old not in s:
+              raise SystemExit('patch marker not found:\n' + old[:140])
+            s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+          node --check plugins/usage-dashboard/latest.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'feat: publish usage dashboard alpha.3.6'
+          git push

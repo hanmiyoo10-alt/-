@@ -1,0 +1,153 @@
+name: Release SimCore v0.62.31 Timestamp Canonicalization Guard
+
+on:
+  push:
+    paths:
+      - plugins/simcore/timestamp-canonicalization-release.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve v0.62.30 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-v0.62.30.js
+
+      - name: Build timestamp canonicalization plugin
+        run: python3 plugins/simcore/patch_simcore_06231.py
+
+      - name: Verify syntax and identical install channel
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.62.31$' plugins/simcore/latest.js
+          grep -q '^//@display-name SimCore v0.62.31 Timestamp Canonicalization Guard$' plugins/simcore/latest.js
+
+      - name: Verify runtime prompt byte identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(text):
+              start = text.index('function renderRuntimePrompt(state) {')
+              end = text.index('\n\nfunction finalizePreparedOutput', start)
+              return text[start:end]
+          old = Path('/tmp/simcore-v0.62.30.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          assert extract(old) == extract(new), 'renderRuntimePrompt changed'
+          print('renderRuntimePrompt byte-identical to v0.62.30; prompt +0')
+          PY
+
+      - name: Verify zero-hour canonicalization and floor path
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const marker = 'SimCore.define("time", function (require, module, exports) {';
+          const start = src.indexOf(marker);
+          const bodyStart = start + marker.length;
+          const end = src.indexOf('\n});\n\nSimCore.define("lifecycle"', bodyStart);
+          if (start < 0 || end < 0) throw new Error('time module extraction failed');
+          const body = src.slice(bodyStart, end);
+          const module = { exports: {} };
+          new Function('require', 'module', 'exports', body)(() => { throw new Error('unexpected require'); }, module, module.exports);
+          const time = module.exports;
+
+          const rawAM = '⏱️[2028-01-01 (Sat) 00:45 AM]';
+          const normAM = time.canonicalizeTimestampSyntax(rawAM);
+          if (!normAM.changed || normAM.count !== 1 || normAM.content !== '⏱️[2028-01-01 (Sat) 12:45 AM]') throw new Error('00 AM canonicalization failed');
+          if (!time.parseTimestamp(normAM.content)) throw new Error('canonical AM timestamp did not parse');
+
+          const rawPM = '⏱️[2028-01-01 (Sat) 00:15 PM]';
+          const normPM = time.canonicalizeTimestampSyntax(rawPM);
+          if (normPM.content !== '⏱️[2028-01-01 (Sat) 12:15 PM]') throw new Error('00 PM canonicalization failed');
+
+          const already = '⏱️[2028-02-06 (Sun) 12:45 AM]';
+          const unchanged = time.canonicalizeTimestampSyntax(already);
+          if (unchanged.changed || unchanged.content !== already) throw new Error('valid 12-hour timestamp was changed');
+
+          const invalid13 = '⏱️[2028-02-06 (Sun) 13:45 AM]';
+          const untouched13 = time.canonicalizeTimestampSyntax(invalid13);
+          if (untouched13.changed || time.parseTimestamp(untouched13.content)) throw new Error('ambiguous 13-hour token should remain invalid');
+
+          const floorTs = '⏱️[2028-02-06 (Sun) 04:30 PM]';
+          const floored = time.enforceNarrativeCurrentTimeFloor(normAM.content, floorTs);
+          if (!floored.changed || floored.reason !== 'clamped-backward' || floored.content !== floorTs) throw new Error('canonicalized regression did not reach narrative floor');
+
+          const bstate = { broadcastAirtime: floorTs, broadcastAirtimeStart: floorTs };
+          const bcommit = time.commitBroadcastAirtime(bstate, { mode: 'B_CONTINUE', broadcastAirtimePrevious: floorTs }, normAM.content);
+          if (bcommit.reason !== 'backward' || bstate.broadcastAirtime !== floorTs) throw new Error('canonicalized regression did not reach broadcast guard semantics');
+
+          console.log('zero-hour canonicalization + A/C floor + B guard parse path verified');
+          NODE
+
+      - name: Verify canonicalization precedes time semantics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          start = text.index('function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {')
+          end = text.index('\n\nclass CoreRulesetSession', start)
+          fn = text[start:end]
+          canon = fn.index('const timestampCanonicalization = time.canonicalizeTimestampSyntax(finalText);')
+          floor = fn.index('narrativeFloor = time.enforceNarrativeCurrentTimeFloor(')
+          broadcast = fn.index('const airtimeCommit = time.commitBroadcastAirtime(state, p, finalText);')
+          assert canon < floor, 'canonicalization must precede A/C narrative floor'
+          assert canon < broadcast, 'canonicalization must precede B broadcast commit semantics'
+          assert 'timestampCanonicalization,' in fn
+          print('shared syntax layer precedes existing mode-specific time semantics')
+          PY
+
+      - name: Verify state and I/O invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-v0.62.30.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          for token in [
+              'Risuai.pluginStorage.getItem',
+              'Risuai.pluginStorage.setItem',
+              'Risuai.pluginStorage.removeItem',
+              'Risuai.pluginStorage.keys',
+              'Risuai.getCharacter()',
+              'globalLore',
+              'const STATE_VERSION =',
+              'const CORE_STATE_VERSION =',
+          ]:
+              assert old.count(token) == new.count(token), f'call/state reference count changed: {token}'
+          assert new.count('canonicalizeTimestampSyntax') == 3
+          assert 'Timestamp syntax' in new
+          print('state/I/O invariants verified')
+          PY
+
+      - name: Build backup before publish
+        run: |
+          mkdir -p /tmp/simcore-v0.62.31-backup/plugins/simcore
+          cp plugins/simcore/latest.js /tmp/simcore-v0.62.31-backup/plugins/simcore/latest.js
+          cp plugins/simcore/install.js /tmp/simcore-v0.62.31-backup/plugins/simcore/install.js
+          sha256sum plugins/simcore/latest.js | awk '{print $1}' > /tmp/simcore-v0.62.31-backup/plugin-sha256.txt
+          printf '%s\n' 'SimCore v0.62.31 Timestamp Canonicalization Guard' '00:xx AM/PM is canonicalized to 12:xx AM/PM before existing A/B/C time semantics; runtime prompt unchanged.' > /tmp/simcore-v0.62.31-backup/release-info.txt
+          cd /tmp/simcore-v0.62.31-backup && zip -qr /tmp/simcore.plugin.v0.62.31.zip .
+          sha256sum /tmp/simcore.plugin.v0.62.31.zip
+
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-v0.62.31-backup
+          path: /tmp/simcore.plugin.v0.62.31.zip
+          if-no-files-found: error
+
+      - name: Publish plugin files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Release SimCore v0.62.31 Timestamp Canonicalization Guard'
+          git push

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.7
+//@version 3.0.0-beta.1
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.7';
+  const VERSION = '3.0.0-beta.1';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -16,7 +16,7 @@
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
     staleAfterMs: 0, stalePolicyV37Migrated: false,
-    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
+    widgetVisible: false, widgetMode: 'compact', widgetX: null, widgetY: null, iconQuickViewV1Migrated: false,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     data: null
@@ -251,6 +251,13 @@
 
   async function openSettings() { document.body.dataset.panelOpen='1'; renderSettings(); await Risuai.showContainer('fullscreen'); }
 
+  async function toggleUsageQuickView() {
+    state.widgetVisible = state.widgetVisible === false;
+    await persist();
+    await renderWidget();
+    if (state.widgetVisible && state.bridgeEnabled && token) await refresh('icon', true);
+  }
+
   function widgetHtml() {
     const d=state.data||{}, m=d.monthly, w=d.weekly, c=d.credits, detailed=state.widgetMode==='detailed';
     const badge=connectionBadge();
@@ -352,10 +359,15 @@
       state.stalePolicyV37Migrated = true;
       await store.setItem(STATE_KEY,state);
     }
+    if (state.iconQuickViewV1Migrated !== true) {
+      state.widgetVisible = false;
+      state.iconQuickViewV1Migrated = true;
+      await store.setItem(STATE_KEY,state);
+    }
     try{state.bridgeBase=normalizeBridgeBase(state.bridgeBase);}catch(_){state.bridgeBase=DEFAULT_BRIDGE;state.bridgeEnabled=false;}
     token=String((await store.getItem(TOKEN_KEY))||'').trim();
     uiParts.push(await Risuai.registerSetting('Local Usage Dashboard',openSettings,'◴','html','local-usage-dashboard-settings-v3'));
-    uiParts.push(await Risuai.registerButton({name:'Usage',icon:'$',iconType:'html',location:'hamburger',id:'local-usage-dashboard-button-v3'},openSettings));
+    uiParts.push(await Risuai.registerButton({name:'Usage',icon:'$',iconType:'html',location:'hamburger',id:'local-usage-dashboard-button-v3'},toggleUsageQuickView));
     await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)refresh('init',true);
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);

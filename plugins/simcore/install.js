@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.14
-//@display-name SimCore v0.62.14 Auto Update Channel
+//@version 0.62.15
+//@display-name SimCore v0.62.15 Auto Update Test
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -20,7 +20,7 @@
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
 //
-// v0.62.14 Auto Update Channel:
+// v0.62.15 Auto Update Detection Test:
 // - Runtime/state/storage behavior is unchanged from v0.62.12
 // - Preserves v0.62.11 Broadcast Airtime Guard and v0.62.12 Community Alias Guard unchanged
 // - Panel shows live Broadcast airtime + Airtime start only while Broadcast is LOCKED
@@ -2224,7 +2224,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.14] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.15] state mirror failed:', e.message);
     }
   }
 
@@ -2239,7 +2239,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.14] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.15] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2328,7 +2328,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     if (!result.active) return content;
 
     const issues = result.issues || [];
-    if (issues.length) console.log('[simcore/v0.62.14] structure warnings:', issues.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.15] structure warnings:', issues.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2340,7 +2340,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.14] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.15] reaction normalization:', normalizationIssues.join(' / '));
     const quarantineIssues = result.stateCommit?.communitySafe === false ? [result.stateCommit.reason] : [];
     lastCore = {
       active: true,
@@ -2374,7 +2374,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.14] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.15] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2400,7 +2400,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.14] output error:', e.message);
+      console.log('[simcore/v0.62.15] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2440,7 +2440,7 @@ h1{font-size:18px;margin:0 0 14px}.card{background:#121a2d;border:1px solid #293
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px;border-bottom:1px solid #26324a}th{color:#9fb3d7}.muted{color:#8291ad}
 button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.14 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.15 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2514,20 +2514,20 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <div class="card"><div class="k" style="margin-bottom:8px">Platform-family reaction_max</div><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div>
-<div class="card muted">v0.62.14 Auto Update Channel · v0.62.12 runtime preserved · broadcast panel semantics clarified</div>
+<div class="card muted">v0.62.15 Auto Update Test · runtime unchanged · GitHub channel detection check</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.14] panel error:', e.message);
+      console.log('[simcore/v0.62.15] panel error:', e.message);
     }
   }
 
   try {
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
-    await Risuai.registerSetting('SimCore v0.62.14', openPanel, '⚙️', 'html');
+    await Risuai.registerSetting('SimCore v0.62.15', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.14] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.15] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -2535,5 +2535,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.14] initialized');
+  console.log('[simcore/v0.62.15] initialized');
 })();

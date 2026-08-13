@@ -1,0 +1,133 @@
+name: Release SimCore v0.62.30 Current Age Anchor
+
+on:
+  push:
+    paths:
+      - plugins/simcore/current-age-anchor-release.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve v0.62.29 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-v0.62.29.js
+
+      - name: Build current age anchor plugin
+        run: python3 plugins/simcore/patch_simcore_06230.py
+
+      - name: Verify syntax and identical install channel
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.62.30$' plugins/simcore/latest.js
+          grep -q '^//@display-name SimCore v0.62.30 Current Age Anchor$' plugins/simcore/latest.js
+
+      - name: Verify exact runtime prompt delta
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(text):
+              start = text.index('function renderRuntimePrompt(state) {')
+              end = text.index('\n\nfunction finalizePreparedOutput', start)
+              return text[start:end]
+          old = extract(Path('/tmp/simcore-v0.62.29.js').read_text(encoding='utf-8'))
+          new = extract(Path('plugins/simcore/latest.js').read_text(encoding='utf-8'))
+          added = "    ...(Number(s.koreanAgeOffset || 0) > 0 ? [`current_korean_age=character_reference_age+${s.koreanAgeOffset};past_event_age_not_current=1`] : []),\n"
+          assert added in new, 'age anchor line missing'
+          assert new.replace(added, '', 1) == old, 'renderRuntimePrompt changed beyond one conditional line'
+          print('renderRuntimePrompt delta is exactly one conditional age-anchor line')
+          PY
+
+      - name: Verify A B C age-anchor behavior
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const start = src.indexOf('function renderRuntimePrompt(state) {');
+          const end = src.indexOf('\n\nfunction finalizePreparedOutput', start);
+          const fnSrc = src.slice(start, end);
+          const kernel = { reconcileState: (x) => x };
+          const lifecycle = { expectedCommunityBlocks: (m) => m === 'C' || /^B_/.test(m) ? (m === 'B_END' ? 2 : 1) : 0 };
+          const recurrence = { modeFamily: (m) => /^B_/.test(m) ? 'B' : (m === 'C' ? 'C' : 'A') };
+          const time = { elapsedMinutes: () => null };
+          eval(fnSrc);
+          function state(mode, offset) {
+            return {
+              broadcastLocked: /^B_/.test(mode), episodeNo: 27, koreanAgeOffset: offset, worldYear: 2028,
+              community: { platformMax: {} },
+              pending: {
+                active: true, mode, secondaryConfigured: false, secondaryActive: false,
+                narrativeProgressionActive: false, templateRecurrenceRepeated: false,
+                communitySourceHandoffNewSource: false, communitySourceHandoffEligible: false,
+                communitySourceHandoffSeen: false, communitySourceHandoffRootMode: 'A',
+                requestLineageSourceKind: 'ROOT', broadcastAirtimePrevious: null, broadcastAirtimeStart: null,
+              },
+            };
+          }
+          for (const mode of ['A', 'B_START', 'C']) {
+            const zero = renderRuntimePrompt(state(mode, 0));
+            const aged = renderRuntimePrompt(state(mode, 16));
+            if (zero.includes('current_korean_age=')) throw new Error(`${mode}: anchor should be standby at offset 0`);
+            const line = 'current_korean_age=character_reference_age+16;past_event_age_not_current=1';
+            if (!aged.includes(line)) throw new Error(`${mode}: age anchor missing`);
+            if (aged.split('\n').length !== zero.split('\n').length + 1) throw new Error(`${mode}: expected exactly +1 line`);
+          }
+          console.log('A/B/C current-age anchor behavior verified');
+          NODE
+
+      - name: Verify state and I/O invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-v0.62.29.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          for token in [
+              'Risuai.pluginStorage.getItem',
+              'Risuai.pluginStorage.setItem',
+              'Risuai.pluginStorage.removeItem',
+              'Risuai.pluginStorage.keys',
+              'Risuai.getCharacter()',
+              'globalLore',
+              'const STATE_VERSION =',
+              'const CORE_STATE_VERSION =',
+          ]:
+              assert old.count(token) == new.count(token), f'call/state reference count changed: {token}'
+          assert new.count('current_korean_age=character_reference_age+') == 1
+          assert 'past_event_age_not_current=1' in new
+          assert 'ageAnchor: runtimeBudgetLines.some' in new
+          print('state/I/O invariants verified')
+          PY
+
+      - name: Build backup before publish
+        run: |
+          mkdir -p /tmp/simcore-v0.62.30-backup/plugins/simcore
+          cp plugins/simcore/latest.js /tmp/simcore-v0.62.30-backup/plugins/simcore/latest.js
+          cp plugins/simcore/install.js /tmp/simcore-v0.62.30-backup/plugins/simcore/install.js
+          sha256sum plugins/simcore/latest.js | awk '{print $1}' > /tmp/simcore-v0.62.30-backup/plugin-sha256.txt
+          printf '%s\n' 'SimCore v0.62.30 Current Age Anchor' 'Conditional +1 runtime line when korean_age_offset > 0; no hardcoded exact age.' > /tmp/simcore-v0.62.30-backup/release-info.txt
+          cd /tmp/simcore-v0.62.30-backup && zip -qr /tmp/simcore.plugin.v0.62.30.zip .
+          sha256sum /tmp/simcore.plugin.v0.62.30.zip
+
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-v0.62.30-backup
+          path: /tmp/simcore.plugin.v0.62.30.zip
+          if-no-files-found: error
+
+      - name: Publish plugin files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Release SimCore v0.62.30 Current Age Anchor'
+          git push

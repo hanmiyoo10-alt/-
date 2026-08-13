@@ -1,0 +1,163 @@
+name: Release SimCore v0.62.27 Reference Attention Anchor
+
+on:
+  push:
+    paths:
+      - plugins/simcore/reference-attention-anchor-release.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve v0.62.26 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-v0.62.26.js
+
+      - name: Build reference attention anchor plugin
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          paths = [Path('plugins/simcore/latest.js'), Path('plugins/simcore/install.js')]
+          changelog = '''// v0.62.27 Reference Attention Anchor:\n// - Adds a tiny always-on reference pointer for every active A/B/C turn\n// - Character card and currently exposed lore, when present in the host request context, are marked as authoritative reference sources for character/world facts\n// - Does not fetch, copy, inject, summarize, select, or semantically rank lore content; it only points the main model back to context the host already exposed\n// - Exactly two fixed runtime-prompt lines are added on active turns; no auxiliary model, history rescan, state field, or new pluginStorage API call site\n// - Existing Broadcast/Community/Reaction/Narrative/Recurrence/Lineage/Handoff/Parent-Shift behavior is unchanged\n//\n'''
+          old_marker = '// v0.62.26 Community Parent-Shift Probe:\n'
+          old_prompt = "    'response_envelope=exactly_one_no_restart',\n    `community_blocks_expected=${communityExpected}`,\n"
+          new_prompt = "    'response_envelope=exactly_one_no_restart',\n    'reference_sources=character_card+currently_exposed_lore_if_present',\n    'character_world_facts_use_reference_sources=1',\n    `community_blocks_expected=${communityExpected}`,\n"
+          old_metric = '<div class="metric"><div class="k">Parent shift</div><div class="v">${escapeHtml(parentShiftLabel)}</div></div>\n'
+          new_metric = old_metric + '<div class="metric"><div class="k">Reference anchor</div><div class="v">ON · +2 lines</div></div>\n'
+          old_footer = '<div class="card muted">v0.62.26 Parent-Shift Probe · diagnostics/state only · prompt +0 · v0.62.24 current-time floor retained</div>'
+          new_footer = '<div class="card muted">v0.62.27 Reference Attention Anchor · character card + currently exposed lore pointer · +2 fixed prompt lines</div>'
+
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              if '//@version 0.62.26' not in text:
+                  raise SystemExit(f'{path}: expected v0.62.26 base')
+              if old_prompt not in text:
+                  raise SystemExit(f'{path}: runtime prompt anchor not found')
+              if old_metric not in text:
+                  raise SystemExit(f'{path}: panel metric anchor not found')
+              if old_footer not in text:
+                  raise SystemExit(f'{path}: panel footer anchor not found')
+
+              text = text.replace('//@version 0.62.26', '//@version 0.62.27', 1)
+              text = text.replace('//@display-name SimCore v0.62.26 Community Parent-Shift Probe', '//@display-name SimCore v0.62.27 Reference Attention Anchor', 1)
+              text = text.replace(old_marker, changelog + old_marker, 1)
+              text = text.replace(old_prompt, new_prompt, 1)
+              text = text.replace('[simcore/v0.62.26]', '[simcore/v0.62.27]')
+              text = text.replace('<h1>⚙️ SimCore v0.62.26 <button', '<h1>⚙️ SimCore v0.62.27 <button', 1)
+              text = text.replace(old_metric, new_metric, 1)
+              text = text.replace(old_footer, new_footer, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify syntax and identical install channel
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -Fq '//@version 0.62.27' plugins/simcore/latest.js
+          grep -Fq '//@display-name SimCore v0.62.27 Reference Attention Anchor' plugins/simcore/latest.js
+
+      - name: Verify exact A/B/C prompt delta
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const added = [
+            'reference_sources=character_card+currently_exposed_lore_if_present',
+            'character_world_facts_use_reference_sources=1',
+          ];
+
+          function load(path) {
+            let src = fs.readFileSync(path, 'utf8');
+            const cut = src.indexOf('\n(async () => {');
+            if (cut < 0) throw new Error(path + ': runtime bootstrap marker missing');
+            src = src.slice(0, cut) + '\n;globalThis.__SimCore = SimCore;';
+            const ctx = { console, Date, JSON, Math, RegExp, String, Number, Object, Array, Set, Map };
+            vm.createContext(ctx);
+            vm.runInContext(src, ctx, { filename: path });
+            return ctx.__SimCore.require('session');
+          }
+
+          function render(mod, family) {
+            const probe = { __simcorePromptProbe: true, active: true, config: { protagonist: '', secondaryName: '', secondaryKeyword: '' } };
+            const input = family === 'A' ? '장면 진행'
+              : family === 'B' ? '[방송시작] 방송 진행'
+              : '[커뮤니티] 반응';
+            const state = mod.prepareTurn(null, input, probe, 100);
+            return mod.renderRuntimePrompt(state);
+          }
+
+          const base = load('/tmp/simcore-v0.62.26.js');
+          const next = load('plugins/simcore/latest.js');
+          for (const family of ['A', 'B', 'C']) {
+            const before = render(base, family);
+            const after = render(next, family);
+            for (const line of added) {
+              const count = after.split('\n').filter((x) => x === line).length;
+              if (count !== 1) throw new Error(`${family}: ${line} count=${count}`);
+            }
+            const stripped = after.split('\n').filter((x) => !added.includes(x)).join('\n');
+            if (stripped !== before) throw new Error(`${family}: prompt changed beyond the two reference lines`);
+          }
+          console.log('A/B/C prompt delta: exactly +2 fixed reference lines');
+          NODE
+
+      - name: Verify no lore copy path or storage regression
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          base = Path('/tmp/simcore-v0.62.26.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          for token in [
+              'Risuai.pluginStorage.getItem',
+              'Risuai.pluginStorage.setItem',
+              'Risuai.pluginStorage.removeItem',
+              'Risuai.pluginStorage.keys',
+              'Risuai.getCharacter()',
+              'globalLore',
+          ]:
+              a, b = base.count(token), new.count(token)
+              if a != b:
+                  raise SystemExit(f'call/reference count changed for {token}: {a} -> {b}')
+          if new.count('reference_sources=character_card+currently_exposed_lore_if_present') != 1:
+              raise SystemExit('reference source line count mismatch')
+          if new.count('character_world_facts_use_reference_sources=1') != 1:
+              raise SystemExit('reference usage line count mismatch')
+          print('No lore fetch/copy path and no storage/API call-site increase')
+          PY
+
+      - name: Build backup before publish
+        run: |
+          mkdir -p /tmp/simcore-backup/plugins/simcore
+          cp plugins/simcore/install.js /tmp/simcore-backup/plugins/simcore/install.js
+          cp plugins/simcore/latest.js /tmp/simcore-backup/plugins/simcore/latest.js
+          cd /tmp/simcore-backup
+          zip -qr /tmp/simcore.plugin.v0.62.27.zip plugins
+          sha256sum /tmp/simcore.plugin.v0.62.27.zip
+          sha256sum plugins/simcore/latest.js
+
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-v0.62.27-backup
+          path: /tmp/simcore.plugin.v0.62.27.zip
+          if-no-files-found: error
+
+      - name: Publish plugin files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Release SimCore v0.62.27 Reference Attention Anchor'
+          git push

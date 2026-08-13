@@ -1,0 +1,43 @@
+name: SimCore auto-update test publish
+
+on:
+  push:
+    paths:
+      - 'plugins/simcore/update-test.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promote v0.62.14 to v0.62.15 metadata-only test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          for name in ['plugins/simcore/latest.js', 'plugins/simcore/install.js']:
+              p = Path(name)
+              s = p.read_text()
+              s = s.replace('0.62.14', '0.62.15')
+              s = s.replace('SimCore v0.62.15 Auto Update Channel', 'SimCore v0.62.15 Auto Update Test')
+              s = s.replace('v0.62.15 Auto Update Channel:', 'v0.62.15 Auto Update Detection Test:')
+              s = s.replace('v0.62.15 Auto Update Channel · v0.62.12 runtime preserved · broadcast panel semantics clarified', 'v0.62.15 Auto Update Test · runtime unchanged · GitHub channel detection check')
+              p.write_text(s)
+          PY
+          node --check plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -m1 '^//@version ' plugins/simcore/latest.js
+          grep -m1 '^//@update-url ' plugins/simcore/latest.js
+      - name: Commit update channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Publish SimCore v0.62.15 auto-update test'
+          git push

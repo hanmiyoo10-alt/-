@@ -1,0 +1,90 @@
+name: Publish SimCore v0.62.18 compact diagnostics panel
+
+on:
+  push:
+    paths:
+      - 'plugins/simcore/panel-cleanup.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply panel-only cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          for name in ['plugins/simcore/latest.js', 'plugins/simcore/install.js']:
+              p=Path(name)
+              s=p.read_text()
+              assert '//@version 0.62.17' in s, name
+              s=s.replace('0.62.17','0.62.18')
+              s=s.replace('//@display-name SimCore v0.62.18 Rewind Restore Diagnostic','//@display-name SimCore v0.62.18 Compact Diagnostics Panel')
+              old='''// v0.62.18 Rewind Restore Diagnostic:\n// - Runtime/state/storage/output behavior remains unchanged\n// - Adds runtime-only visibility for successful pre-snapshot restores after rewind/retry\n// - Records restore index/reason/previous output index in memory for the panel only\n// - No snapshot format/state schema/Core prompt/lifecycle/community/reaction changes, no new storage I/O'''
+              new='''// v0.62.18 Compact Diagnostics Panel:\n// - Runtime/state/storage/output behavior remains unchanged\n// - Adds a compact operational summary with current snapshot path and top-level request/output timing\n// - Detailed beforeRequest/output timing and reaction_max tables are collapsed by default\n// - Renames Last history restore to Last snapshot restore for rewind/repeat-send accuracy\n// - No snapshot format/state schema/Core prompt/lifecycle/community/reaction changes, no new storage I/O'''
+              assert old in s, name
+              s=s.replace(old,new)
+
+              needle="""      document.body.innerHTML = `\n<style>"""
+              insert="""      const snap = lastPerf?.snapshotDetail || null;\n      const currentSnapshotPath = !snap\n        ? 'NO REQUEST DATA'\n        : (!snap.mustRestorePre\n          ? 'FORWARD · no restore'\n          : (snap.existingPre\n            ? `RESTORED · ${escapeHtml(snap.restoreReason || 'restore')}`\n            : `MISS · ${escapeHtml(snap.restoreReason || 'restore')}`));\n      document.body.innerHTML = `\n<style>"""
+              assert needle in s, name
+              s=s.replace(needle,insert,1)
+
+              old_css="""button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}\n</style>"""
+              new_css="""button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}\n.compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}\ndetails.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}\n</style>"""
+              assert old_css in s, name
+              s=s.replace(old_css,new_css,1)
+
+              marker="""</div>\n${lastCore.issues.length ? `<div class=\"card\"><div class=\"k\" style=\"margin-bottom:8px\">Latest warnings</div>"""
+              summary="""</div>\n<div class=\"card compact\">\n<div class=\"metric\"><div class=\"k\">Current snapshot path</div><div class=\"v\">${currentSnapshotPath}</div></div>\n<div class=\"metric\"><div class=\"k\">beforeRequest</div><div class=\"v\">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>\n<div class=\"metric\"><div class=\"k\">output</div><div class=\"v\">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>\n</div>\n${lastCore.issues.length ? `<div class=\"card\"><div class=\"k\" style=\"margin-bottom:8px\">Latest warnings</div>"""
+              assert marker in s, name
+              s=s.replace(marker,summary,1)
+
+              s=s.replace('Last history restore (runtime)','Last snapshot restore (runtime)')
+
+              old_before='''${lastPerf ? `<div class="card"><div class="k" style="margin-bottom:8px">beforeRequest performance (latest)</div><table>'''
+              new_before='''${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>'''
+              assert old_before in s, name
+              s=s.replace(old_before,new_before,1)
+
+              old_bridge="""</table></div>` : ''}\n${lastOutputPerf ? `<div class=\"card\"><div class=\"k\" style=\"margin-bottom:8px\">output performance (latest)</div><table>"""
+              new_bridge="""</table></div></details>` : ''}\n${lastOutputPerf ? `<details class=\"card\"><summary>output performance · ${lastOutputPerf.totalMs.toFixed(1)} ms</summary><div class=\"detail-body\"><table>"""
+              assert old_bridge in s, name
+              s=s.replace(old_bridge,new_bridge,1)
+
+              old_output_end="""</table></div>` : ''}\n${storageDiag ? `<div class=\"card\"><div class=\"k\" style=\"margin-bottom:8px\">storage key scan (latest existing scan)</div><table>"""
+              new_output_end="""</table></div></details>` : ''}\n${storageDiag ? `<div class=\"card\"><div class=\"k\" style=\"margin-bottom:8px\">storage key scan (latest existing scan)</div><table>"""
+              assert old_output_end in s, name
+              s=s.replace(old_output_end,new_output_end,1)
+
+              old_react='''<div class="card"><div class="k" style="margin-bottom:8px">Platform-family reaction_max</div><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div>'''
+              new_react='''<details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>'''
+              assert old_react in s, name
+              s=s.replace(old_react,new_react,1)
+
+              s=s.replace('v0.62.18 Rewind Restore Diagnostic · runtime-only restore visibility · core behavior unchanged','v0.62.18 Compact Diagnostics Panel · details collapsed by default · core behavior unchanged')
+              assert 'Last history restore (runtime)' not in s
+              assert 'Current snapshot path' in s
+              p.write_text(s)
+          PY
+          node --check plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -m1 '^//@version ' plugins/simcore/latest.js
+          grep -m1 '^//@display-name ' plugins/simcore/latest.js
+          grep -q 'Current snapshot path' plugins/simcore/latest.js
+          grep -q 'Last snapshot restore (runtime)' plugins/simcore/latest.js
+      - name: Commit update channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Publish SimCore v0.62.18 compact diagnostics panel'
+          git pull --rebase origin main
+          git push origin HEAD:main

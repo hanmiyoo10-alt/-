@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.23 to alpha.3.24
+      - name: Patch alpha.3.23 to alpha.3.24 UI stall probe
         shell: bash
         run: |
           set -euo pipefail

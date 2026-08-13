@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.18
+//@version 3.0.0-alpha.3.19
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.18';
+  const VERSION = '3.0.0-alpha.3.19';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -19,6 +19,7 @@
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
     staleAfterMs: 0, stalePolicyV37Migrated: false,
     widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
+    usageScopeView: 'all',
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
@@ -198,6 +199,44 @@ async function importLegacyTodayBaselines() {
   return imported;
 }
 
+  function normalizeScopeActivity(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const rows = value => Array.isArray(value) ? value.map(row => ({
+      name:String(row?.name || 'Unknown'),
+      requests:num(row?.requests) ? Number(row.requests) : 0,
+      cost:num(row?.cost) ? Number(row.cost) : 0
+    })) : [];
+    const totalRequests = num(raw.totalRequests ?? raw.requests24h) ? Number(raw.totalRequests ?? raw.requests24h) : null;
+    const totalCost = num(raw.totalCost ?? raw.cost24h) ? Number(raw.totalCost ?? raw.cost24h) : null;
+    const totalTokens = num(raw.totalTokens ?? raw.totalTokens24h) ? Number(raw.totalTokens ?? raw.totalTokens24h) : null;
+    const inputTokens = num(raw.inputTokens) ? Number(raw.inputTokens) : null;
+    const outputTokens = num(raw.outputTokens) ? Number(raw.outputTokens) : null;
+    const errorCount = num(raw.errorCount) ? Number(raw.errorCount) : null;
+    const errorRate = num(raw.errorRate ?? raw.errorRate24h) ? Number(raw.errorRate ?? raw.errorRate24h) : null;
+    const cacheCount = num(raw.cacheCount) ? Number(raw.cacheCount) : null;
+    const cacheRate = num(raw.cacheRate) ? Number(raw.cacheRate) : null;
+    const providers = rows(raw.providers);
+    const models = rows(raw.models);
+    const recent = Array.isArray(raw.recent) ? raw.recent : [];
+    if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate].some(num) && !providers.length && !models.length && !recent.length) return null;
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+  }
+
+  function normalizeUsageScopesPayload(raw, fallbackRaw = null) {
+    const source = raw && typeof raw === 'object' ? (raw.scopes && typeof raw.scopes === 'object' ? raw.scopes : raw) : null;
+    const scopes = {};
+    for (const key of ['all','devpass','credits']) {
+      const normalized = normalizeScopeActivity(source?.[key]);
+      if (normalized) scopes[key] = normalized;
+    }
+    if (!scopes.all && fallbackRaw) {
+      const fallback = normalizeScopeActivity(fallbackRaw);
+      if (fallback) scopes.all = fallback;
+    }
+    if (!Object.keys(scopes).length) return null;
+    return {scopes,errors:raw?.errors && typeof raw.errors === 'object' ? raw.errors : {},fetchedAt:raw?.fetchedAt || scopes.all?.fetchedAt || Date.now(),source:String(raw?.source || 'LLMGateway hybrid scoped usage')};
+  }
+
   function normalize(payload) {
     const r = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     if (!r || typeof r !== 'object') throw new Error('snapshot 형식이 잘못됐어.');
@@ -248,6 +287,7 @@ async function importLegacyTodayBaselines() {
         totalTokens24h:num(ba.totalTokens)?Number(ba.totalTokens):null,
         errorRate24h:num(ba.errorRate)?Number(ba.errorRate):null
       } : null;
+      const usageScopes = normalizeUsageScopesPayload(r.usageScopes, ba || activity);
       const runwayRaw = r.runway && typeof r.runway === 'object' ? r.runway : null;
       const runway = runwayRaw ? {
         runwayDays:num(runwayRaw.runwayDays)?Number(runwayRaw.runwayDays):null,
@@ -259,7 +299,7 @@ async function importLegacyTodayBaselines() {
         fetchedAt:r.fetchedAt || ds?.fetchedAt || ba?.fetchedAt || Date.now(),
         source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
         health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
-        monthly, weekly, credits, activity, runway
+        monthly, weekly, credits, activity, runway, usageScopes
       };
       if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('DevPass Bridge에 표시할 데이터가 없어.');
       return out;
@@ -272,10 +312,11 @@ async function importLegacyTodayBaselines() {
     const activity = u.activity && typeof u.activity === 'object'
       ? {requests24h:num(u.activity.requests24h)?Number(u.activity.requests24h):null, cost24h:num(u.activity.cost24h)?Number(u.activity.cost24h):null, totalTokens24h:num(u.activity.totalTokens24h)?Number(u.activity.totalTokens24h):null, errorRate24h:num(u.activity.errorRate24h)?Number(u.activity.errorRate24h):null}
       : null;
+    const usageScopes = normalizeUsageScopesPayload(r.usageScopes ?? u.usageScopes, u.activity || activity);
     const out = {
       protocolVersion: Number(r.protocolVersion || 1), fetchedAt: r.fetchedAt || Date.now(),
       source: String(r.source || 'Local Bridge'), health: r.health && typeof r.health === 'object' ? r.health : null,
-      monthly: bucket(u.monthly, '월간'), weekly: bucket(u.weekly, '주간'), credits, activity
+      monthly: bucket(u.monthly, '월간'), weekly: bucket(u.weekly, '주간'), credits, activity, usageScopes
     };
     if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('표시할 usage 데이터가 없어.');
     return out;
@@ -439,6 +480,17 @@ function todayOverviewMetrics(d) {
     ].filter(Boolean).join(' · ');
     const today = todayOverviewMetrics(d);
     const observedStamp = state.dailyUsage?.updatedAt || state.creditDailyUsage?.updatedAt || state.lastSyncAt;
+    const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
+    const scopeNames = {all:['전체 24h Usage','DevPass + Credits 합산 서버 집계'],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage','Default organization 서버 집계']};
+    const scopeActivity = d.usageScopes?.scopes?.[scopeKey] || (scopeKey === 'all' ? normalizeScopeActivity({totalRequests:a?.requests24h,totalCost:a?.cost24h,totalTokens:a?.totalTokens24h,errorRate:a?.errorRate24h,fetchedAt:d.fetchedAt,source:d.source}) : null);
+    const scopeTopProvider = Array.isArray(scopeActivity?.providers) && scopeActivity.providers[0]?.name ? String(scopeActivity.providers[0].name) : '—';
+    const scopeTopModel = Array.isArray(scopeActivity?.models) && scopeActivity.models[0]?.name ? String(scopeActivity.models[0].name) : '—';
+    const scopeFetchedAt = scopeActivity?.fetchedAt || d.usageScopes?.fetchedAt || d.fetchedAt;
+    const scopeExtra = scopeKey === 'devpass'
+      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
+      : scopeKey === 'credits'
+        ? `<div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div><div class="mini cyan"><span>Runway</span><b>${num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '—'}</b></div>`
+        : `<div class="mini accent"><span>DevPass 월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div>`;
     return `<style>
       :root{color-scheme:dark;--b:#101114;--p:#191b20;--p2:#21242a;--l:#2c3037;--t:#f5f6f8;--m:#969da8;--g:#c5f277;--v:#b9a6f8;--c:#9fd7ee;--e:#ff9b95}
       *{box-sizing:border-box}body{margin:0;background:var(--b);color:var(--t);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(900px,100%);margin:auto;padding:14px}
@@ -446,6 +498,7 @@ function todayOverviewMetrics(d) {
       .panel{background:var(--p);border:1px solid var(--l);border-radius:13px;padding:13px}.metric{min-height:135px;display:flex;flex-direction:column}.metric small{color:var(--m);font-weight:700}.metric strong{font-size:24px;margin-top:9px}.metric em{font-style:normal;color:var(--m);font-size:12px}.metric p{margin-top:auto;margin-bottom:0}.bar{height:5px;background:#2d3138;border-radius:99px;overflow:hidden;margin:11px 0}.bar i{display:block;height:100%;background:var(--g)}.weekly .bar i{background:var(--v)}.wide{grid-column:1/-1}
       .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
+      .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}
       label{display:grid;gap:5px;margin-top:9px}label span{color:var(--m);font-size:11px}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;background:#111318;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:9px}textarea{min-height:62px}
       button{background:#25282f;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:8px 11px;font-weight:650}button.primary{background:var(--g);border-color:var(--g);color:#15170f}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.warn{color:var(--e)}
       @media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.minis,.today-grid{grid-template-columns:1fr 1fr}}
@@ -471,6 +524,23 @@ function todayOverviewMetrics(d) {
         <p>DevPass/Credits의 일간 총 사용량은 이 기기에서 그날 처음 확인한 서버 누적값 이후의 증가분이야.</p>
       </section>
       <section class="panel wide"><b>24h Activity</b><div class="minis"><div class="mini"><span>요청</span><b>${num(a?.requests24h)?`${a.requests24h}회`:'—'}</b></div><div class="mini"><span>비용</span><b>${money(a?.cost24h,4)}</b></div><div class="mini"><span>토큰</span><b>${num(a?.totalTokens24h)?Number(a.totalTokens24h).toLocaleString():'—'}</b></div><div class="mini"><span>오류율</span><b>${num(a?.errorRate24h)?`${Number(a.errorRate24h).toFixed(1)}%`:'—'}</b></div></div></section>
+      <section class="panel wide">
+        <div class="today-head"><div><b>24h Usage Scope</b><p style="margin:2px 0 0">${esc(scopeNames[scopeKey][1])}</p></div><span class="stamp">${scopeFetchedAt ? dashboardDateText(scopeFetchedAt) : ''}</span></div>
+        <div class="scope-tabs" role="tablist" aria-label="24h Usage scope">
+          ${[['all','전체'],['devpass','DevPass'],['credits','Credits']].map(([key,label]) => `<button class="scope-tab ${scopeKey===key?'active':''}" data-usage-scope="${key}">${label}</button>`).join('')}
+        </div>
+        ${scopeActivity ? `<div class="today-grid">
+          <div class="mini accent"><span>24h 요청</span><b>${num(scopeActivity.totalRequests) ? `${Number(scopeActivity.totalRequests).toLocaleString()}회` : '—'}</b></div>
+          <div class="mini"><span>24h 비용</span><b>${money(scopeActivity.totalCost,4)}</b></div>
+          <div class="mini"><span>총 토큰</span><b>${num(scopeActivity.totalTokens) ? Number(scopeActivity.totalTokens).toLocaleString() : '—'}</b></div>
+          <div class="mini"><span>입력 / 출력</span><b>${num(scopeActivity.inputTokens) || num(scopeActivity.outputTokens) ? `${num(scopeActivity.inputTokens)?Number(scopeActivity.inputTokens).toLocaleString():'—'} / ${num(scopeActivity.outputTokens)?Number(scopeActivity.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
+          <div class="mini"><span>오류</span><b>${num(scopeActivity.errorCount) ? `${Number(scopeActivity.errorCount).toLocaleString()}회 · ${num(scopeActivity.errorRate)?Number(scopeActivity.errorRate).toFixed(1):'0.0'}%` : (num(scopeActivity.errorRate) ? `${Number(scopeActivity.errorRate).toFixed(1)}%` : '—')}</b></div>
+          <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
+          <div class="mini"><span>Top Model</span><b>${esc(scopeTopModel)}</b></div>
+          ${scopeExtra}
+        </div>` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(d.usageScopes.errors[scopeKey])}</p>` : ''}
+      </section>
       <section class="panel wide"><b>Local Bridge</b>
         <label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
         <label><span>Bridge Token</span><textarea id="bridge-token" placeholder="저장된 값은 다시 표시하지 않음"></textarea></label>
@@ -502,6 +572,14 @@ function todayOverviewMetrics(d) {
         state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; await persist(); scheduleRefresh(); await refresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
     };
+    document.querySelectorAll('[data-usage-scope]').forEach(button => {
+      button.onclick = async () => {
+        const next = String(button.getAttribute('data-usage-scope') || 'all');
+        state.usageScopeView = ['all','devpass','credits'].includes(next) ? next : 'all';
+        await persist();
+        renderSettings();
+      };
+    });
     if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
     if (q('#retry-now')) q('#retry-now').onclick = async () => {
       state.consecutiveFailures = 0;

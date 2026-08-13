@@ -1,0 +1,74 @@
+name: Apply usage dashboard drag hotfix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/hotfix-usage-drag.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch latest.js
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/usage-dashboard/latest.js')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('//@version 3.0.0-alpha.3', '//@version 3.0.0-alpha.3.1', 1)
+          s = s.replace("const VERSION = '3.0.0-alpha.3';", "const VERSION = '3.0.0-alpha.3.1';", 1)
+          s = s.replace(
+              '<div style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>',
+              '<div data-drag-handle="1" style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>',
+              1,
+          )
+          old = '''    const down = async e => {
+            if (!num(e.clientX)||!num(e.clientY)) return;
+            const r=await widget.getBoundingClientRect();
+            drag={ox:Number(e.clientX)-r.left,oy:Number(e.clientY)-r.top,maxX:Math.max(8,(await rootBody.clientWidth())-r.width-8),maxY:Math.max(8,(await rootBody.clientHeight())-r.height-8)};
+          };
+          const move = async e => {
+            if (!drag||!num(e.clientX)||!num(e.clientY)) return;
+            state.widgetX=Math.max(8,Math.min(drag.maxX,Number(e.clientX)-drag.ox)); state.widgetY=Math.max(8,Math.min(drag.maxY,Number(e.clientY)-drag.oy));
+            await widget.setStyle('left',`${state.widgetX}px`); await widget.setStyle('top',`${state.widgetY}px`); await widget.setStyle('right','auto'); await widget.setStyle('bottom','auto');
+          };
+          const up = async () => { if (!drag) return; drag=null; await persist(); };
+          '''
+          new = '''    const down = async e => {
+            if (!num(e.clientX)||!num(e.clientY)) return;
+            const r=await widget.getBoundingClientRect();
+            const localY = Number(e.clientY) - r.top;
+            if (localY < 0 || localY > 18) { drag = null; return; }
+            drag={pointerId:e.pointerId ?? null,ox:Number(e.clientX)-r.left,oy:Number(e.clientY)-r.top,maxX:Math.max(8,(await rootBody.clientWidth())-r.width-8),maxY:Math.max(8,(await rootBody.clientHeight())-r.height-8)};
+          };
+          const move = async e => {
+            if (!drag||!num(e.clientX)||!num(e.clientY)) return;
+            if (drag.pointerId !== null && e.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
+            state.widgetX=Math.max(8,Math.min(drag.maxX,Number(e.clientX)-drag.ox)); state.widgetY=Math.max(8,Math.min(drag.maxY,Number(e.clientY)-drag.oy));
+            await widget.setStyle('left',`${state.widgetX}px`); await widget.setStyle('top',`${state.widgetY}px`); await widget.setStyle('right','auto'); await widget.setStyle('bottom','auto');
+          };
+          const up = async e => {
+            if (!drag) return;
+            if (drag.pointerId !== null && e?.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
+            drag=null; await persist();
+          };
+          '''
+          if old not in s:
+              raise SystemExit('drag block not found; refusing to change latest.js')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/latest.js
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: restrict dashboard drag to handle'
+          git push

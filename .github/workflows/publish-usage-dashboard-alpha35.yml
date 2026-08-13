@@ -14,144 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Patch latest.js to alpha.3.5
+      - name: Write exact alpha.3.5
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          p = Path('plugins/usage-dashboard/latest.js')
-          text = p.read_text(encoding='utf-8')
-
-          def rep(old, new, n=1):
-              global text
-              if old not in text:
-                  raise SystemExit('missing marker: ' + old[:80])
-              text = text.replace(old, new, n)
-
-          rep('//@version 3.0.0-alpha.3.4', '//@version 3.0.0-alpha.3.5')
-          rep("const VERSION = '3.0.0-alpha.3.4';", "const VERSION = '3.0.0-alpha.3.5';")
-
-          rep("""    refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
-    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
-    lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
-    data: null
-""", """    refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
-    staleAfterMs: 300000,
-    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
-    lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
-    consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
-    data: null
-""")
-
-          rep("""  function connectionBadge() {
-    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
-    if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
-    return {label:'WAIT', color:'#ffd27d'};
-  }
-""", """  function sourceAgeMs() {
-    const ts = Number(state.data?.fetchedAt);
-    return Number.isFinite(ts) && ts > 0 ? Math.max(0, Date.now() - ts) : null;
-  }
-
-  function dataIsStale() {
-    const a = sourceAgeMs();
-    const limit = Math.max(0, Number(state.staleAfterMs) || 0);
-    return state.bridgeStatus === 'connected' && a !== null && limit > 0 && a >= limit;
-  }
-
-  function retryDelayFor(failures) {
-    const base = Math.max(15000, Number(state.refreshMs) || 15000);
-    return Math.min(120000, base * Math.pow(2, Math.max(0, Number(failures || 1) - 1)));
-  }
-
-  function connectionBadge() {
-    if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
-    if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
-    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
-    return {label:'WAIT', color:'#ffd27d'};
-  }
-""")
-
-          rep("""        state.lastRefreshReason = reason;
-        state.refreshCount = Number(state.refreshCount || 0) + 1;
-        await persist();
-""", """        state.lastRefreshReason = reason;
-        state.refreshCount = Number(state.refreshCount || 0) + 1;
-        state.consecutiveFailures = 0;
-        state.retryDelayMs = 0;
-        state.nextRetryAt = null;
-        await persist();
-""")
-
-          rep("""        state.bridgeStatus = 'error';
-        state.bridgeError = e?.message || String(e);
-        state.lastRefreshReason = reason;
-        await persist();
-""", """        state.bridgeStatus = 'error';
-        state.bridgeError = e?.message || String(e);
-        state.lastRefreshReason = reason;
-        state.consecutiveFailures = Number(state.consecutiveFailures || 0) + 1;
-        state.retryDelayMs = retryDelayFor(state.consecutiveFailures);
-        state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
-        await persist();
-""")
-
-          rep("""      `Success count: ${Number(state.refreshCount || 0)}`,
-      `Error: ${state.bridgeError || 'none'}`,
-      `Updater: ${UPDATE_URL}`
-""", """      `Success count: ${Number(state.refreshCount || 0)}`,
-      `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
-      `Stale after: ${Math.round((Number(state.staleAfterMs)||0)/1000)}s`,
-      `Failures: ${Number(state.consecutiveFailures || 0)}`,
-      `Retry delay: ${Number(state.retryDelayMs || 0)}ms`,
-      `Next retry: ${state.nextRetryAt ? new Date(Number(state.nextRetryAt)).toISOString() : '—'}`,
-      `Error: ${state.bridgeError || 'none'}`,
-      `Updater: ${UPDATE_URL}`
-""")
-
-          rep("""        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':'자동 갱신'}</span>
-        <span>${age(state.lastSyncAt)} · ${VERSION}</span>
-""", """        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
-        <span>${age(state.lastSyncAt)} · ${VERSION}</span>
-""")
-
-          rep("""  function scheduleRefresh() {
-    if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
-    const ms=Math.max(0,Number(state.refreshMs)||0);
-    if (!ms||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
-    refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
-  }
-""", """  function scheduleRefresh() {
-    if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
-    const baseMs=Math.max(0,Number(state.refreshMs)||0);
-    if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
-    const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
-      ? Math.max(baseMs, Number(state.retryDelayMs)||baseMs)
-      : baseMs;
-    if (state.bridgeStatus === 'error') state.nextRetryAt = Date.now() + ms;
-    refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
-  }
-""")
-
-          rep("""        await renderWidget();
-        if (document.body?.dataset?.panelOpen === '1') renderSettings();
-      } catch (e) {""", """        await renderWidget();
-        scheduleRefresh();
-        if (document.body?.dataset?.panelOpen === '1') renderSettings();
-      } catch (e) {""")
-
-          rep("""        await renderWidget();
-        if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);""", """        await renderWidget();
-        scheduleRefresh();
-        if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);""")
-
-          p.write_text(text, encoding='utf-8')
+          import base64, gzip
+          blob = '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'
+          Path('plugins/usage-dashboard/latest.js').write_bytes(gzip.decompress(base64.b64decode(blob)))
           PY
 
       - name: Verify exact blob
         shell: bash
-        run: |
-          test "$(git hash-object plugins/usage-dashboard/latest.js)" = "ff4dc56041aaa5836920d9038ddc09545150a950"
+        run: test "$(git hash-object plugins/usage-dashboard/latest.js)" = "ff4dc56041aaa5836920d9038ddc09545150a950"
 
       - name: Commit updater
         shell: bash

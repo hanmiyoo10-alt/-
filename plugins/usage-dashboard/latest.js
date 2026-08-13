@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-beta.1
+//@version 3.0.0-alpha.3.8
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-beta.1';
+  const VERSION = '3.0.0-alpha.3.8';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -16,7 +16,7 @@
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
     staleAfterMs: 0, stalePolicyV37Migrated: false,
-    widgetVisible: false, widgetMode: 'compact', widgetX: null, widgetY: null, iconQuickViewV1Migrated: false,
+    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     data: null
@@ -83,6 +83,45 @@
   function normalize(payload) {
     const r = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     if (!r || typeof r !== 'object') throw new Error('snapshot 형식이 잘못됐어.');
+
+    // DevPass Bridge v1.6.x compatibility adapter.
+    // Keep the original generic local-JSON adapter below as a fallback.
+    const ds = r.devpassStatus && typeof r.devpassStatus === 'object' ? r.devpassStatus : null;
+    const ba = r.activity && typeof r.activity === 'object' ? r.activity : null;
+    if (ds || r.__bridgeSnapshot || r.bridgeVersion) {
+      const monthly = ds ? bucket({
+        label:'DevPass 월간',
+        used:ds.creditsUsed,
+        limit:ds.creditsLimit,
+        remaining:ds.creditsRemaining,
+        resetAt:ds.expiresAt
+      }, 'DevPass 월간') : null;
+      const weekly = ds ? bucket({
+        label:'Premium 주간',
+        used:ds.premiumCreditsUsed,
+        limit:ds.premiumWeeklyLimit,
+        resetAt:ds.premiumWeekResetsAt
+      }, 'Premium 주간') : null;
+      const credits = ds && num(ds.regularCredits)
+        ? {label:'Credits', balance:Number(ds.regularCredits), todayUsed:null}
+        : null;
+      const activity = ba ? {
+        requests24h:num(ba.totalRequests)?Number(ba.totalRequests):null,
+        cost24h:num(ba.totalCost)?Number(ba.totalCost):null,
+        totalTokens24h:num(ba.totalTokens)?Number(ba.totalTokens):null,
+        errorRate24h:num(ba.errorRate)?Number(ba.errorRate):null
+      } : null;
+      const out = {
+        protocolVersion:Number(r.protocolVersion || 1),
+        fetchedAt:r.fetchedAt || ds?.fetchedAt || ba?.fetchedAt || Date.now(),
+        source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
+        health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
+        monthly, weekly, credits, activity
+      };
+      if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('DevPass Bridge에 표시할 데이터가 없어.');
+      return out;
+    }
+
     const u = r.usage && typeof r.usage === 'object' ? r.usage : r;
     const credits = u.credits && typeof u.credits === 'object'
       ? {label:String(u.credits.label || 'Credits'), balance:num(u.credits.balance)?Number(u.credits.balance):null, todayUsed:num(u.credits.todayUsed)?Number(u.credits.todayUsed):null}
@@ -106,7 +145,7 @@
     const base = normalizeBridgeBase(state.bridgeBase);
     const res = await Risuai.nativeFetch(`${base}/snapshot`, {
       method:'GET',
-      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'Cache-Control':'no-cache'}
+      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
     });
     const text = await res.text();
     if (!res.ok) throw new Error(`Bridge HTTP ${res.status}: ${text.slice(0,120)}`);
@@ -162,7 +201,7 @@
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,
       `Source: ${d.source || '—'}`,
-      `Adapter: local-json-v1`,
+      `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
       `Health: ${h.status || '—'}`,
       `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
@@ -251,17 +290,10 @@
 
   async function openSettings() { document.body.dataset.panelOpen='1'; renderSettings(); await Risuai.showContainer('fullscreen'); }
 
-  async function toggleUsageQuickView() {
-    state.widgetVisible = state.widgetVisible === false;
-    await persist();
-    await renderWidget();
-    if (state.widgetVisible && state.bridgeEnabled && token) await refresh('icon', true);
-  }
-
   function widgetHtml() {
     const d=state.data||{}, m=d.monthly, w=d.weekly, c=d.credits, detailed=state.widgetMode==='detailed';
     const badge=connectionBadge();
-    const main = b => detailed ? money(b?.remaining) : money(b?.todayUsed,4);
+    const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));
     const row = (label,value,color) => `<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:${color}">${esc(label)}</span><b>${value}</b></div>`;
     return `<div style="font:12px/1.35 system-ui,-apple-system,'Segoe UI',sans-serif;color:#f5f7fa">
       <div data-drag-handle="1" style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>
@@ -272,7 +304,7 @@
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${m?pct(100-Number(m.percent||0)):0}%;background:#c5f277"></i></div>
       ${row(w?.label||'주간',main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(w?.todayUsed,4)}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${w?pct(100-Number(w.percent||0)):0}%;background:#b9a6f8"></i></div>
-      ${row(c?.label||'Credits',detailed?money(c?.balance):money(c?.todayUsed,4),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(c?.todayUsed,4)}</div>`:''}
+      ${row(c?.label||'Credits',detailed?money(c?.balance):(num(c?.todayUsed)?money(c.todayUsed,4):money(c?.balance)),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(c?.todayUsed,4)}</div>`:''}
       <div style="display:flex;justify-content:space-between;gap:8px;color:#7f8792;font-size:10px;margin-top:5px">
         <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
         <span>${age(state.lastSyncAt)} · ${VERSION}</span>
@@ -359,15 +391,10 @@
       state.stalePolicyV37Migrated = true;
       await store.setItem(STATE_KEY,state);
     }
-    if (state.iconQuickViewV1Migrated !== true) {
-      state.widgetVisible = false;
-      state.iconQuickViewV1Migrated = true;
-      await store.setItem(STATE_KEY,state);
-    }
     try{state.bridgeBase=normalizeBridgeBase(state.bridgeBase);}catch(_){state.bridgeBase=DEFAULT_BRIDGE;state.bridgeEnabled=false;}
     token=String((await store.getItem(TOKEN_KEY))||'').trim();
     uiParts.push(await Risuai.registerSetting('Local Usage Dashboard',openSettings,'◴','html','local-usage-dashboard-settings-v3'));
-    uiParts.push(await Risuai.registerButton({name:'Usage',icon:'$',iconType:'html',location:'hamburger',id:'local-usage-dashboard-button-v3'},toggleUsageQuickView));
+    uiParts.push(await Risuai.registerButton({name:'Usage',icon:'$',iconType:'html',location:'hamburger',id:'local-usage-dashboard-button-v3'},openSettings));
     await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)refresh('init',true);
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);

@@ -40,7 +40,7 @@ jobs:
           replaceOnce('메타 버전', '//@version 3.0.0-alpha.3.17', '//@version 3.0.0-alpha.3.18');
           replaceOnce('런타임 버전', "const VERSION = '3.0.0-alpha.3.17';", "const VERSION = '3.0.0-alpha.3.18';");
 
-          const todayHelpers = `  function dashboardDateText(value, short = false) {
+          const helpers = `  function dashboardDateText(value, short = false) {
             const ts = resetTimestamp(value);
             if (!Number.isFinite(ts)) return '—';
             return new Date(ts).toLocaleString('ko-KR', short
@@ -58,6 +58,20 @@ jobs:
             if (month < 0) { month = 11; year -= 1; }
             const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
             return Date.UTC(year, month, Math.min(originalDay, lastDay), kst.getUTCHours(), kst.getUTCMinutes(), kst.getUTCSeconds(), kst.getUTCMilliseconds()) - 9 * 3600000;
+          }
+
+          function remainingTimeForDashboard(value) {
+            const timestamp=resetTimestamp(value);
+            if (!Number.isFinite(timestamp)) return '—';
+            const diff=timestamp-Date.now();
+            if (diff<=0) return '곧 초기화';
+            const totalMinutes=Math.ceil(diff/60000);
+            const days=Math.floor(totalMinutes/1440);
+            const hours=Math.floor((totalMinutes%1440)/60);
+            const minutes=totalMinutes%60;
+            if (days>0) return days+'일 '+hours+'시간';
+            if (hours>0) return hours+'시간 '+minutes+'분';
+            return minutes+'분';
           }
 
           function todayOverviewMetrics(d) {
@@ -85,8 +99,8 @@ jobs:
             return {devToday,premiumToday,creditsToday,observedDailyTotal,monthEnd,monthlyLeft,weeklyLeft,projected,projectedPercent,cost24h:num(a?.cost24h)?Number(a.cost24h):null,resetPasses:num(w?.resetPasses)?Number(w.resetPasses):null,resetPassesExact:w?.resetPassesExact===true};
           }
 
-`;
-          replaceOnce('오늘 관측 helper 삽입', '  function settingsHtml() {', todayHelpers + '  function settingsHtml() {');
+          `;
+          replaceOnce('오늘 관측 helper 삽입', '  function settingsHtml() {', helpers + '  function settingsHtml() {');
 
           replaceOnce(
             '오늘 관측 변수',
@@ -105,42 +119,26 @@ jobs:
             '@media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.minis,.today-grid{grid-template-columns:1fr 1fr}}'
           );
 
-          const todaySection = `      <section class="panel wide">
-        <div class="today-head"><div><b>오늘 관측</b><p style="margin:2px 0 0">핵심 값만 한 화면에 유지</p></div><span class="stamp">KST${observedStamp ? ` · ${dashboardDateText(observedStamp)}` : ''}</span></div>
-        <div class="today-grid">
-          <div class="mini accent"><span>일간 총 사용량 · 관측</span><b>${money(today.observedDailyTotal,4)}</b></div>
-          <div class="mini"><span>월간 총 사용량 · DevPass</span><b>${money(d.monthly?.used,4)}</b></div>
-          <div class="mini"><span>오늘 DevPass</span><b>${money(today.devToday,4)}</b></div>
-          <div class="mini purple"><span>오늘 프리미엄</span><b>${money(today.premiumToday,4)}</b></div>
-          <div class="mini cyan"><span>오늘 Credits</span><b>${money(today.creditsToday,4)}</b></div>
-          <div class="mini"><span>24h 서버 비용</span><b>${money(today.cost24h,4)}</b></div>
-          <div class="mini accent"><span>월말 예상</span><b>${num(today.projected) ? `${money(today.projected)} · ${Number(today.projectedPercent).toFixed(0)}%` : '리셋 시각 필요'}</b></div>
-          <div class="mini"><span>월간 남은 권장</span><b>${money(today.monthlyLeft)}</b></div>
-          <div class="mini"><span>프리미엄 남은 권장</span><b>${money(today.weeklyLeft)}</b></div>
-          <div class="mini purple"><span>Reset Pass</span><b>${num(today.resetPasses) ? `${today.resetPasses}장${today.resetPassesExact ? '' : ' 기본'}` : 'API 미제공'}</b></div>
-          <div class="mini accent"><span>월간 초기화</span><b>${Number.isFinite(today.monthEnd) ? `${remainingTimeForDashboard(today.monthEnd)} · ${dashboardDateText(today.monthEnd,true)}` : '서버 미제공'}</b></div>
-          <div class="mini"><span>Bridge 상태</span><b>${esc(h.status || '—')} · ${esc(state.bridgeStatus)}</b></div>
-        </div>
-        <p>DevPass/Credits의 일간 총 사용량은 이 기기에서 그날 처음 확인한 서버 누적값 이후의 증가분이야.</p>
-      </section>
-`;
-
-          const remainingHelper = `  function remainingTimeForDashboard(value) {
-            const timestamp=resetTimestamp(value);
-            if (!Number.isFinite(timestamp)) return '—';
-            const diff=timestamp-Date.now();
-            if (diff<=0) return '곧 초기화';
-            const totalMinutes=Math.ceil(diff/60000);
-            const days=Math.floor(totalMinutes/1440);
-            const hours=Math.floor((totalMinutes%1440)/60);
-            const minutes=totalMinutes%60;
-            if (days>0) return `${days}일 ${hours}시간`;
-            if (hours>0) return `${hours}시간 ${minutes}분`;
-            return `${minutes}분`;
-          }
-
-`;
-          replaceOnce('남은 시간 helper 삽입', todayHelpers + '  function settingsHtml() {', todayHelpers + remainingHelper + '  function settingsHtml() {');
+          const todaySection = [
+            "      <section class=\"panel wide\">",
+            "        <div class=\"today-head\"><div><b>오늘 관측</b><p style=\"margin:2px 0 0\">핵심 값만 한 화면에 유지</p></div><span class=\"stamp\">KST${observedStamp ? ` · ${dashboardDateText(observedStamp)}` : ''}</span></div>",
+            "        <div class=\"today-grid\">",
+            "          <div class=\"mini accent\"><span>일간 총 사용량 · 관측</span><b>${money(today.observedDailyTotal,4)}</b></div>",
+            "          <div class=\"mini\"><span>월간 총 사용량 · DevPass</span><b>${money(d.monthly?.used,4)}</b></div>",
+            "          <div class=\"mini\"><span>오늘 DevPass</span><b>${money(today.devToday,4)}</b></div>",
+            "          <div class=\"mini purple\"><span>오늘 프리미엄</span><b>${money(today.premiumToday,4)}</b></div>",
+            "          <div class=\"mini cyan\"><span>오늘 Credits</span><b>${money(today.creditsToday,4)}</b></div>",
+            "          <div class=\"mini\"><span>24h 서버 비용</span><b>${money(today.cost24h,4)}</b></div>",
+            "          <div class=\"mini accent\"><span>월말 예상</span><b>${num(today.projected) ? `${money(today.projected)} · ${Number(today.projectedPercent).toFixed(0)}%` : '리셋 시각 필요'}</b></div>",
+            "          <div class=\"mini\"><span>월간 남은 권장</span><b>${money(today.monthlyLeft)}</b></div>",
+            "          <div class=\"mini\"><span>프리미엄 남은 권장</span><b>${money(today.weeklyLeft)}</b></div>",
+            "          <div class=\"mini purple\"><span>Reset Pass</span><b>${num(today.resetPasses) ? `${today.resetPasses}장${today.resetPassesExact ? '' : ' 기본'}` : 'API 미제공'}</b></div>",
+            "          <div class=\"mini accent\"><span>월간 초기화</span><b>${Number.isFinite(today.monthEnd) ? `${remainingTimeForDashboard(today.monthEnd)} · ${dashboardDateText(today.monthEnd,true)}` : '서버 미제공'}</b></div>",
+            "          <div class=\"mini\"><span>Bridge 상태</span><b>${esc(h.status || '—')} · ${esc(state.bridgeStatus)}</b></div>",
+            "        </div>",
+            "        <p>DevPass/Credits의 일간 총 사용량은 이 기기에서 그날 처음 확인한 서버 누적값 이후의 증가분이야.</p>",
+            "      </section>"
+          ].join('\n') + '\n';
 
           replaceOnce(
             '오늘 관측 section 삽입',

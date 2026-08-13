@@ -1,16 +1,18 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.9
+//@version 3.0.0-alpha.3.10
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.9';
+  const VERSION = '3.0.0-alpha.3.10';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
+  const LEGACY_DEVPASS_STATE_KEY = 'llmgateway-devpass-direct-v1';
+  const KST_TIME_ZONE = 'Asia/Seoul';
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
@@ -19,6 +21,7 @@
     widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
+    dailyUsage: null, creditDailyUsage: null,
     data: null
   };
 
@@ -79,6 +82,98 @@
     const percent = num(raw.percent) ? pct(raw.percent) : (num(used) && num(limit) && limit > 0 ? pct(used / limit * 100) : null);
     return {label:String(raw.label || label), used, limit, remaining, percent, todayUsed:num(raw.todayUsed)?Number(raw.todayUsed):null, resetAt:raw.resetAt ?? null};
   }
+
+  function localDateKey(timestamp = Date.now()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: KST_TIME_ZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(timestamp));
+  const value = type => parts.find(part => part.type === type)?.value;
+  return [value('year'), value('month'), value('day')].join('-');
+}
+
+function applyObservedToday(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  const today = localDateKey();
+
+  const previous = state.dailyUsage?.date === today ? state.dailyUsage : null;
+  const monthlyUsed = num(snapshot.monthly?.used) ? Number(snapshot.monthly.used) : null;
+  const premiumUsed = num(snapshot.weekly?.used) ? Number(snapshot.weekly.used) : null;
+  let monthlyBaseline = num(previous?.monthlyBaseline) ? Number(previous.monthlyBaseline) : monthlyUsed;
+  let premiumBaseline = num(previous?.premiumBaseline) ? Number(previous.premiumBaseline) : premiumUsed;
+
+  if (num(monthlyUsed) && num(monthlyBaseline) && monthlyUsed < monthlyBaseline) monthlyBaseline = monthlyUsed;
+  if (num(premiumUsed) && num(premiumBaseline) && premiumUsed < premiumBaseline) premiumBaseline = premiumUsed;
+
+  const monthlyAmount = num(monthlyUsed) && num(monthlyBaseline)
+    ? Math.max(0, monthlyUsed - monthlyBaseline)
+    : null;
+  const premiumAmount = num(premiumUsed) && num(premiumBaseline)
+    ? Math.max(0, premiumUsed - premiumBaseline)
+    : null;
+
+  state.dailyUsage = {
+    date: today,
+    amount: monthlyAmount,
+    premiumAmount,
+    monthlyBudgetAmount: monthlyAmount,
+    premiumBudgetAmount: premiumAmount,
+    monthlyBaseline,
+    premiumBaseline,
+    observedFrom: previous?.observedFrom || Date.now(),
+    updatedAt: Date.now(),
+    source: 'key-status-local-delta'
+  };
+
+  if (snapshot.monthly) snapshot.monthly.todayUsed = monthlyAmount;
+  if (snapshot.weekly) snapshot.weekly.todayUsed = premiumAmount;
+
+  const creditPrevious = state.creditDailyUsage?.date === today ? state.creditDailyUsage : null;
+  const balance = num(snapshot.credits?.balance) ? Number(snapshot.credits.balance) : null;
+  let balanceBaseline = num(creditPrevious?.balanceBaseline)
+    ? Number(creditPrevious.balanceBaseline)
+    : balance;
+
+  if (num(balance) && num(balanceBaseline) && balance > balanceBaseline) balanceBaseline = balance;
+
+  const creditsAmount = num(balance) && num(balanceBaseline)
+    ? Math.max(0, balanceBaseline - balance)
+    : null;
+
+  state.creditDailyUsage = {
+    date: today,
+    amount: creditsAmount,
+    usedBaseline: null,
+    balanceBaseline,
+    observedFrom: creditPrevious?.observedFrom || Date.now(),
+    updatedAt: Date.now(),
+    source: 'credits-local-delta'
+  };
+
+  if (snapshot.credits) snapshot.credits.todayUsed = creditsAmount;
+  return snapshot;
+}
+
+async function importLegacyTodayBaselines() {
+  const today = localDateKey();
+  let imported = false;
+  try {
+    const legacy = await store.getItem(LEGACY_DEVPASS_STATE_KEY);
+    if (!legacy || typeof legacy !== 'object') return false;
+
+    if (state.dailyUsage?.date !== today && legacy.dailyUsage?.date === today) {
+      state.dailyUsage = {...legacy.dailyUsage, importedFrom: LEGACY_DEVPASS_STATE_KEY};
+      imported = true;
+    }
+    if (state.creditDailyUsage?.date !== today && legacy.creditDailyUsage?.date === today) {
+      state.creditDailyUsage = {...legacy.creditDailyUsage, importedFrom: LEGACY_DEVPASS_STATE_KEY};
+      imported = true;
+    }
+
+    if (imported) await store.setItem(STATE_KEY, {...state});
+  } catch (_) {}
+  return imported;
+}
 
   function normalize(payload) {
     const r = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
@@ -172,7 +267,7 @@
     const started = Date.now();
     refreshInFlight = (async () => {
       try {
-        state.data = await fetchSnapshot();
+        state.data = applyObservedToday(await fetchSnapshot());
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();
@@ -398,6 +493,7 @@
   try {
     store=await Risuai.getLocalPluginStorage();
     state={...DEFAULTS,...((await store.getItem(STATE_KEY))||{})};
+    await importLegacyTodayBaselines();
     if (state.stalePolicyV37Migrated !== true) {
       if (Number(state.staleAfterMs) === 300000) state.staleAfterMs = 0;
       state.stalePolicyV37Migrated = true;

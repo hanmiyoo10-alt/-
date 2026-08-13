@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.8
+//@version 3.0.0-alpha.3.9
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.8';
+  const VERSION = '3.0.0-alpha.3.9';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -102,9 +102,21 @@
         limit:ds.premiumWeeklyLimit,
         resetAt:ds.premiumWeekResetsAt
       }, 'Premium 주간') : null;
-      const credits = ds && num(ds.regularCredits)
-        ? {label:'Credits', balance:Number(ds.regularCredits), todayUsed:null}
-        : null;
+      const orgRows = Array.isArray(r.orgs)
+        ? r.orgs
+        : (Array.isArray(r.orgs?.organizations)
+          ? r.orgs.organizations
+          : (Array.isArray(r.orgs?.data?.organizations) ? r.orgs.data.organizations : []));
+      const creditOrg = orgRows.find(org =>
+        String(org?.kind || 'default') === 'default' &&
+        String(org?.status || 'active') !== 'deleted' &&
+        num(org?.credits)
+      ) || orgRows.find(org => String(org?.status || 'active') !== 'deleted' && num(org?.credits)) || null;
+      const credits = creditOrg
+        ? {label:'Credits', balance:Number(creditOrg.credits), todayUsed:null}
+        : (ds && num(ds.regularCredits)
+          ? {label:'Credits', balance:Number(ds.regularCredits), todayUsed:null}
+          : null);
       const activity = ba ? {
         requests24h:num(ba.totalRequests)?Number(ba.totalRequests):null,
         cost24h:num(ba.totalCost)?Number(ba.totalCost):null,

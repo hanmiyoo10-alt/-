@@ -1,0 +1,105 @@
+name: Release SimCore v0.62.23 Request Lineage Probe
+
+on:
+  push:
+    paths:
+      - plugins/simcore/lineage-probe-release.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build lineage probe plugin
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          python plugins/simcore/patch_simcore_06223.py
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.62.23' plugins/simcore/latest.js
+          grep -q 'SimCore.define("lineage"' plugins/simcore/latest.js
+
+      - name: Verify prompt and storage invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          for token in ('pluginStorage.getItem', 'pluginStorage.setItem', 'pluginStorage.removeItem', 'pluginStorage.keys'):
+              assert before.count(token) == after.count(token), (token, before.count(token), after.count(token))
+          def block(src, a, b):
+              i = src.index(a); j = src.index(b, i); return src[i:j]
+          assert block(before, 'function renderRuntimePrompt(state) {', 'function finalizePreparedOutput') == block(after, 'function renderRuntimePrompt(state) {', 'function finalizePreparedOutput')
+          print('prompt bytes unchanged; storage API call counts unchanged')
+          PY
+
+      - name: Test request lineage probe
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const start = src.indexOf('SimCore.define("lineage"');
+          const end = src.indexOf('SimCore.define("kernel"', start);
+          if (start < 0 || end < 0) throw new Error('lineage module not found');
+          const mods = {};
+          const SimCore = { define(name, fn) { mods[name] = fn; } };
+          eval(src.slice(start, end));
+          const module = { exports: {} };
+          mods.lineage(() => { throw new Error('unexpected require'); }, module, module.exports);
+          const l = module.exports;
+          function run(seq) {
+            const state = {};
+            return seq.map(([text, mode, index]) => l.observe(state, text, mode, index));
+          }
+          let r = run([
+            ['한편 시우가 라이브를 켜고 팬들과 두 시간 동안 이야기를 나누며 신곡과 근황을 자세히 말했다', 'A', 100],
+            ['[커뮤니티] 라이브 반응', 'C', 102],
+            ['[커뮤니티] 신곡 언급 반응', 'C', 104],
+          ]);
+          if (r[0].rootMode !== 'A' || r[1].sourceKind !== 'CHAIN' || r[1].rootIndex !== 100 || r[1].depth !== 1 || r[2].depth !== 2) throw new Error('A-C-C failed');
+          r = run([
+            ['[방송 시작] 첫 무대', 'B_START', 200],
+            ['[방송 중] 두번째 무대', 'B_CONTINUE', 202],
+            ['[방송 종료] 엔딩', 'B_END', 204],
+            ['[커뮤니티] 방송 반응', 'C', 206],
+          ]);
+          if (r[3].rootMode !== 'B' || r[3].rootIndex !== 200 || r[3].parentIndex !== 204 || r[3].depth !== 1) throw new Error('B-C failed');
+          r = run([
+            ['한편 새 영화 예고편이 공개되었고 주연 배우들의 모습과 음악이 처음 공개되었다 [커뮤니티] 예고편 반응', 'C', 300],
+            ['[커뮤니티] 음악 반응', 'C', 302],
+          ]);
+          if (r[0].sourceKind !== 'INLINE' || !r[0].inlineSource || r[0].rootIndex !== 300 || r[1].rootIndex !== 300 || r[1].depth !== 1) throw new Error('inline-C failed');
+          r = run([['[커뮤니티] 기사 반응', 'C', 400]]);
+          if (r[0].sourceKind !== 'UNSEEDED') throw new Error('unseeded failed');
+          console.log('request lineage tests ok');
+          NODE
+
+      - name: Build backup before publish
+        run: |
+          mkdir -p artifact
+          cp plugins/simcore/latest.js artifact/latest.js
+          cp plugins/simcore/install.js artifact/install.js
+          (cd artifact && zip -9 simcore.plugin.v0.62.23.zip latest.js install.js)
+          sha256sum plugins/simcore/latest.js artifact/simcore.plugin.v0.62.23.zip | tee artifact/SHA256SUMS.txt
+          wc -c plugins/simcore/latest.js plugins/simcore/install.js | tee artifact/SIZES.txt
+
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-v0.62.23-backup
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish plugin files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'Publish SimCore v0.62.23 request lineage probe'
+          git push

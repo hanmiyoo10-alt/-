@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.12
+//@version 3.0.0-alpha.3.13
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.12';
+  const VERSION = '3.0.0-alpha.3.13';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -80,7 +80,13 @@
     const limit = num(raw.limit) ? Number(raw.limit) : null;
     const remaining = num(raw.remaining) ? Number(raw.remaining) : (num(used) && num(limit) ? Math.max(0, limit - used) : null);
     const percent = num(raw.percent) ? pct(raw.percent) : (num(used) && num(limit) && limit > 0 ? pct(used / limit * 100) : null);
-    return {label:String(raw.label || label), used, limit, remaining, percent, todayUsed:num(raw.todayUsed)?Number(raw.todayUsed):null, resetAt:raw.resetAt ?? null};
+    return {
+      label:String(raw.label || label), used, limit, remaining, percent,
+      todayUsed:num(raw.todayUsed)?Number(raw.todayUsed):null,
+      resetAt:raw.resetAt ?? null,
+      resetPasses:num(raw.resetPasses)?Number(raw.resetPasses):null,
+      resetPassesExact:raw.resetPassesExact === true
+    };
   }
 
   function localDateKey(timestamp = Date.now()) {
@@ -201,6 +207,11 @@ async function importLegacyTodayBaselines() {
     const ds = r.devpassStatus && typeof r.devpassStatus === 'object' ? r.devpassStatus : null;
     const ba = r.activity && typeof r.activity === 'object' ? r.activity : null;
     if (ds || r.__bridgeSnapshot || r.bridgeVersion) {
+      const directResetPasses = ds && num(ds.resetPasses) ? Number(ds.resetPasses) : null;
+      const includedResetPassesRemaining = ds && num(ds.includedResetPassesRemaining) ? Number(ds.includedResetPassesRemaining) : null;
+      const resetPassesRemaining = directResetPasses !== null
+        ? directResetPasses + Number(includedResetPassesRemaining || 0)
+        : includedResetPassesRemaining;
       const monthly = ds ? bucket({
         label:'DevPass 월간',
         used:ds.creditsUsed,
@@ -212,7 +223,9 @@ async function importLegacyTodayBaselines() {
         label:'Premium 주간',
         used:ds.premiumCreditsUsed,
         limit:ds.premiumWeeklyLimit,
-        resetAt:ds.premiumWeekResetsAt
+        resetAt:ds.premiumWeekResetsAt,
+        resetPasses:resetPassesRemaining,
+        resetPassesExact:num(resetPassesRemaining)
       }, 'Premium 주간') : null;
       const orgRows = Array.isArray(r.orgs)
         ? r.orgs
@@ -415,20 +428,51 @@ async function importLegacyTodayBaselines() {
   async function openSettings() { document.body.dataset.panelOpen='1'; renderSettings(); await Risuai.showContainer('fullscreen'); }
 
   function widgetHtml() {
-    const d=state.data||{}, m=d.monthly, w=d.weekly, c=d.credits, detailed=state.widgetMode==='detailed';
+    const d=state.data||{}, m=d.monthly, w=d.weekly, c=d.credits, a=d.activity, detailed=state.widgetMode==='detailed';
     const badge=connectionBadge();
     const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));
     const row = (label,value,color) => `<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:${color}">${esc(label)}</span><b>${value}</b></div>`;
+    const remainingTimeText = value => {
+      const timestamp = resetTimestamp(value);
+      if (!Number.isFinite(timestamp)) return '—';
+      const diff = timestamp - Date.now();
+      if (diff <= 0) return '곧 초기화';
+      const totalMinutes = Math.ceil(diff / 60000);
+      const days = Math.floor(totalMinutes / 1440);
+      const hours = Math.floor((totalMinutes % 1440) / 60);
+      const minutes = totalMinutes % 60;
+      if (days > 0) return `${days}일 ${hours}시간`;
+      if (hours > 0) return `${hours}시간 ${minutes}분`;
+      return `${minutes}분`;
+    };
+    const tokenText = value => {
+      if (!num(value)) return '—';
+      const n = Number(value);
+      if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}B`;
+      if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 1 : 2)}M`;
+      if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(n >= 1e4 ? 1 : 2)}K`;
+      return `${Math.round(n)}`;
+    };
+    const monthlySub = detailed
+      ? `오늘 ${money(m?.todayUsed,4)}${m?.resetAt ? ` · 월간 ${remainingTimeText(m.resetAt)}` : ''}`
+      : '';
+    const premiumSub = detailed
+      ? `오늘 ${money(w?.todayUsed,4)}${w?.resetAt ? ` · 주간 ${remainingTimeText(w.resetAt)}` : ''}${num(w?.resetPasses) ? ` · 패스 ${Number(w.resetPasses)}장` : ''}`
+      : '';
+    const creditsSub = detailed
+      ? `오늘 ${money(c?.todayUsed,4)}${num(c?.balance) ? ` · 잔액 ${money(c.balance)}` : ''}`
+      : '';
     return `<div style="font:12px/1.35 system-ui,-apple-system,'Segoe UI',sans-serif;color:#f5f7fa">
       <div data-drag-handle="1" style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>
       <div style="display:flex;justify-content:flex-end;margin:-2px 0 4px">
         <span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:1px 5px">${badge.label}</span>
       </div>
-      ${row(m?.label||'월간',main(m),'#aeb5c0')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(m?.todayUsed,4)}</div>`:''}
+      ${row(m?.label||'월간',main(m),'#aeb5c0')}${detailed?`<div style="color:#7f8792;font-size:10px">${monthlySub}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${m?pct(100-Number(m.percent||0)):0}%;background:#c5f277"></i></div>
-      ${row(w?.label||'주간',main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(w?.todayUsed,4)}</div>`:''}
+      ${row(w?.label||'주간',main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:10px">${premiumSub}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${w?pct(100-Number(w.percent||0)):0}%;background:#b9a6f8"></i></div>
-      ${row(c?.label||'Credits',detailed?money(c?.balance):(num(c?.todayUsed)?money(c.todayUsed,4):money(c?.balance)),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(c?.todayUsed,4)}</div>`:''}
+      ${row(c?.label||'Credits',detailed?money(c?.balance):(num(c?.todayUsed)?money(c.todayUsed,4):money(c?.balance)),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:10px">${creditsSub}</div>`:''}
+      ${detailed && a ? `<div style="color:#969da8;font-size:10px;border-top:1px solid rgba(255,255,255,.09);margin-top:7px;padding-top:6px">24h ${num(a.requests24h)?`${a.requests24h}회`:'—'} · ${money(a.cost24h,4)} · ${tokenText(a.totalTokens24h)} tok${state.lastSyncAt?` · LIVE ${age(state.lastSyncAt)} 동기화`:''}</div>`:''}
       <div style="display:flex;justify-content:space-between;gap:8px;color:#7f8792;font-size:10px;margin-top:5px">
         <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
         <span>${age(state.lastSyncAt)} · ${VERSION}</span>

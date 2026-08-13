@@ -1,4 +1,4 @@
-name: Release Local Usage Dashboard alpha.3.20
+name: Release Local Usage Dashboard alpha.3.21
 
 on:
   push:
@@ -18,32 +18,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.19 to alpha.3.20
+      - name: Patch alpha.3.20 to alpha.3.21
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha320_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha321_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.20$' plugins/usage-dashboard/latest.js
-          grep -q "analyticsScopeView: 'all'" plugins/usage-dashboard/latest.js
-          grep -q 'function normalizeAnalyticsPayload' plugins/usage-dashboard/latest.js
-          grep -q 'function normalizeAnalyticsScopesPayload' plugins/usage-dashboard/latest.js
-          grep -q 'analyticsScopes' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.21$' plugins/usage-dashboard/latest.js
+          grep -Fq "return days+'일 '+hours+'시간 '+minutes+'분';" plugins/usage-dashboard/latest.js
+          grep -Fq 'return `${days}일 ${hours}시간 ${minutes}분`;' plugins/usage-dashboard/latest.js
           grep -q 'Analytics · 24h / 7d / 30d' plugins/usage-dashboard/latest.js
-          grep -q 'data-analytics-scope' plugins/usage-dashboard/latest.js
-          grep -q '7일 총 비용' plugins/usage-dashboard/latest.js
-          grep -q '30일 총 비용' plugins/usage-dashboard/latest.js
+          grep -q '24h Usage Scope' plugins/usage-dashboard/latest.js
 
       - name: Commit release
         shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.20'
+            echo 'latest.js already matches alpha.3.21'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.20 scoped analytics'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.21 minute reset display'
           git push

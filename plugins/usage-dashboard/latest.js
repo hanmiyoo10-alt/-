@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.16
+//@version 3.0.0-alpha.3.17
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.16';
+  const VERSION = '3.0.0-alpha.3.17';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -248,12 +248,18 @@ async function importLegacyTodayBaselines() {
         totalTokens24h:num(ba.totalTokens)?Number(ba.totalTokens):null,
         errorRate24h:num(ba.errorRate)?Number(ba.errorRate):null
       } : null;
+      const runwayRaw = r.runway && typeof r.runway === 'object' ? r.runway : null;
+      const runway = runwayRaw ? {
+        runwayDays:num(runwayRaw.runwayDays)?Number(runwayRaw.runwayDays):null,
+        avgDailySpend7d:num(runwayRaw.avgDailySpend7d)?Number(runwayRaw.avgDailySpend7d):null,
+        fetchedAt:runwayRaw.fetchedAt || r.fetchedAt || Date.now()
+      } : null;
       const out = {
         protocolVersion:Number(r.protocolVersion || 1),
         fetchedAt:r.fetchedAt || ds?.fetchedAt || ba?.fetchedAt || Date.now(),
         source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
         health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
-        monthly, weekly, credits, activity
+        monthly, weekly, credits, activity, runway
       };
       if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('DevPass Bridge에 표시할 데이터가 없어.');
       return out;
@@ -365,7 +371,13 @@ async function importLegacyTodayBaselines() {
   }
 
   function settingsHtml() {
-    const d = state.data || {}, c = d.credits, a = d.activity, h = d.health || {};
+    const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
+    const creditsMeta = [
+      num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',
+      num(runway?.avgDailySpend7d) ? `7일평균 ${money(runway.avgDailySpend7d,4)}/일` : '',
+      num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '',
+      d.source ? esc(d.source) : ''
+    ].filter(Boolean).join(' · ');
     return `<style>
       :root{color-scheme:dark;--b:#101114;--p:#191b20;--p2:#21242a;--l:#2c3037;--t:#f5f6f8;--m:#969da8;--g:#c5f277;--v:#b9a6f8;--c:#9fd7ee;--e:#ff9b95}
       *{box-sizing:border-box}body{margin:0;background:var(--b);color:var(--t);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(900px,100%);margin:auto;padding:14px}
@@ -377,7 +389,7 @@ async function importLegacyTodayBaselines() {
       @media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.minis{grid-template-columns:1fr 1fr}}
     </style><div class="shell"><header><div><div class="muted">MODULAR CORE · v${VERSION}</div><h1>Local Usage Dashboard</h1></div><button id="close">닫기</button></header><main class="grid">
       ${card('월간',d.monthly)}${card('주간',d.weekly,'weekly')}
-      <section class="panel metric"><small>${esc(c?.label || 'Credits')}</small><strong>${money(c?.balance)}</strong><p>${num(c?.todayUsed)?`오늘 ${money(c.todayUsed,4)} · `:''}${esc(d.source || 'Local Bridge')}</p></section>
+      <section class="panel metric"><small>${esc(c?.label || 'Credits')}</small><strong>${money(c?.balance)}</strong><p>${creditsMeta || '—'}</p></section>
       <section class="panel wide"><b>24h Activity</b><div class="minis"><div class="mini"><span>요청</span><b>${num(a?.requests24h)?`${a.requests24h}회`:'—'}</b></div><div class="mini"><span>비용</span><b>${money(a?.cost24h,4)}</b></div><div class="mini"><span>토큰</span><b>${num(a?.totalTokens24h)?Number(a.totalTokens24h).toLocaleString():'—'}</b></div><div class="mini"><span>오류율</span><b>${num(a?.errorRate24h)?`${Number(a.errorRate24h).toFixed(1)}%`:'—'}</b></div></div></section>
       <section class="panel wide"><b>Local Bridge</b>
         <label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>

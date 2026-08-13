@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.25
-//@display-name SimCore v0.62.25 Community New-Source Guard ABC
+//@version 0.62.26
+//@display-name SimCore v0.62.26 Community Parent-Shift Probe
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,13 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.26 Community Parent-Shift Probe:
+// - Diagnostics/state only: observes repeated short Community requests that stay on the same A/B/C lineage root while their direct parent/depth changes
+// - Extends the bounded short-request registry with parent mode/index/depth only; no source/content body is stored
+// - Existing v1 registry rows establish a v2 parent baseline on first observation instead of guessing a shift
+// - NEW SOURCE behavior from v0.62.25 is unchanged; parent-shift observations inject no generation guidance
+// - No history bootstrap/rescan, no auxiliary model, no new pluginStorage API call sites, and zero new runtime-prompt tokens
 //
 // v0.62.25 Community New-Source Guard ABC:
 // - Closes the short Community follow-up gap left intentionally outside the detailed Template Recurrence Guard
@@ -748,7 +755,7 @@ module.exports = {
 });
 
 SimCore.define("handoff", function (require, module, exports) {
-const COMMUNITY_SOURCE_HANDOFF_VERSION = 1;
+const COMMUNITY_SOURCE_HANDOFF_VERSION = 2;
 const HANDOFF_REGISTRY_LIMIT = 128;
 const COMMUNITY_MARKER = '[커뮤니티]';
 const SHORT_REQUEST_MIN_CHARS = 4;
@@ -768,6 +775,19 @@ function sourceFamily(rootMode) {
   return null;
 }
 
+function parentFamily(parentMode) {
+  const m = String(parentMode || '');
+  if (/^B_/.test(m) || m === 'B') return 'B';
+  if (m === 'C') return 'C';
+  if (m === 'A') return 'A';
+  return null;
+}
+
+function normalizedDepth(v, fallback = -1) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
+}
+
 function normalizeRegistry(raw) {
   const src = Array.isArray(raw) ? raw : [];
   const out = [];
@@ -777,9 +797,19 @@ function normalizeRegistry(raw) {
     const rootIndex = intIndex(row?.rootIndex);
     if (!Number.isFinite(hash) || !rootMode || rootIndex < 0) continue;
     const h = hash >>> 0;
+    const parentMode = parentFamily(row?.parentMode);
+    const parentIndex = intIndex(row?.parentIndex);
+    const depth = normalizedDepth(row?.depth, -1);
     const prior = out.findIndex((x) => x.hash === h);
     if (prior >= 0) out.splice(prior, 1);
-    out.push({ hash: h, rootMode, rootIndex });
+    out.push({
+      hash: h,
+      rootMode,
+      rootIndex,
+      parentMode: parentMode && parentIndex >= 0 ? parentMode : null,
+      parentIndex: parentMode && parentIndex >= 0 ? parentIndex : -1,
+      depth,
+    });
   }
   return out.slice(-HANDOFF_REGISTRY_LIMIT);
 }
@@ -826,22 +856,31 @@ function observe(state, userText, mode, requestLineage, templateRecurrence) {
   const normalized = normalizeShortRequest(userText, mode);
   const rootMode = sourceFamily(requestLineage?.rootMode);
   const rootIndex = intIndex(requestLineage?.rootIndex);
+  const parentMode = parentFamily(requestLineage?.parentMode);
+  const parentIndex = intIndex(requestLineage?.parentIndex);
+  const depth = normalizedDepth(requestLineage?.depth, 0);
   const base = {
     eligible: false,
     seen: false,
     newSource: false,
+    parentComparable: false,
+    parentShift: false,
     hash: null,
     normalizedChars: normalized.length,
     rootMode,
     rootIndex,
+    parentMode,
+    parentIndex,
+    depth,
     priorRootMode: null,
     priorRootIndex: -1,
+    priorParentMode: null,
+    priorParentIndex: -1,
+    priorDepth: -1,
     registrySize: state.communitySourceRegistry.length,
     reason: 'ineligible',
   };
 
-  // Long/detailed C requests already have Template Recurrence Guard. Keep this guard for the
-  // short follow-up gap only so prompts never receive duplicate anti-reuse guidance.
   if (String(mode || '') !== 'C') return { ...base, reason: 'not-community' };
   if (templateRecurrence?.eligible) return { ...base, reason: 'template-recurrence-owned' };
   if (!normalized) return { ...base, reason: 'not-short-request' };
@@ -855,8 +894,29 @@ function observe(state, userText, mode, requestLineage, templateRecurrence) {
   const prior = idx >= 0 ? registry[idx] : null;
   const seen = !!prior;
   const newSource = !!prior && (prior.rootMode !== rootMode || prior.rootIndex !== rootIndex);
+  const sameRoot = !!prior && !newSource;
+  const priorParentMode = parentFamily(prior?.parentMode);
+  const priorParentIndex = intIndex(prior?.parentIndex);
+  const priorDepth = normalizedDepth(prior?.depth, -1);
+  const parentComparable = !!(
+    sameRoot
+    && priorParentMode && priorParentIndex >= 0 && priorDepth >= 0
+    && parentMode && parentIndex >= 0
+  );
+  const parentShift = !!(
+    parentComparable
+    && (priorParentMode !== parentMode || priorParentIndex !== parentIndex || priorDepth !== depth)
+  );
+
   if (idx >= 0) registry.splice(idx, 1);
-  registry.push({ hash, rootMode, rootIndex });
+  registry.push({
+    hash,
+    rootMode,
+    rootIndex,
+    parentMode: parentMode && parentIndex >= 0 ? parentMode : null,
+    parentIndex: parentMode && parentIndex >= 0 ? parentIndex : -1,
+    depth,
+  });
   if (registry.length > HANDOFF_REGISTRY_LIMIT) registry.splice(0, registry.length - HANDOFF_REGISTRY_LIMIT);
   state.communitySourceRegistry = registry;
 
@@ -864,14 +924,28 @@ function observe(state, userText, mode, requestLineage, templateRecurrence) {
     eligible: true,
     seen,
     newSource,
+    parentComparable,
+    parentShift,
     hash,
     normalizedChars: normalized.length,
     rootMode,
     rootIndex,
+    parentMode,
+    parentIndex,
+    depth,
     priorRootMode: prior?.rootMode || null,
     priorRootIndex: prior ? intIndex(prior.rootIndex) : -1,
+    priorParentMode,
+    priorParentIndex,
+    priorDepth,
     registrySize: registry.length,
-    reason: newSource ? 'same-short-request-new-source' : (seen ? 'same-source' : 'first'),
+    reason: newSource
+      ? 'same-short-request-new-source'
+      : (parentShift
+        ? 'same-root-new-parent'
+        : (seen
+          ? (parentComparable ? 'same-source-same-parent' : 'same-root-parent-baseline')
+          : 'first')),
   };
 }
 
@@ -879,13 +953,13 @@ module.exports = {
   COMMUNITY_SOURCE_HANDOFF_VERSION,
   HANDOFF_REGISTRY_LIMIT,
   sourceFamily,
+  parentFamily,
   normalizeRegistry,
   normalizeShortRequest,
   hashRequest,
   observe,
 };
 });
-
 
 SimCore.define("kernel", function (require, module, exports) {
 const { normalizePlatformMaxMap } = require('./community');
@@ -925,7 +999,7 @@ function initialState() {
     templateRegistry: [],
     requestLineageVersion: 1,
     requestLineage: lineage.normalizeLineage(null),
-    communitySourceHandoffVersion: 1,
+    communitySourceHandoffVersion: 2,
     communitySourceRegistry: [],
     broadcastLocked: false,
     broadcastAirtime: null,
@@ -1426,12 +1500,20 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     communitySourceHandoffEligible: !!communitySourceHandoff.eligible,
     communitySourceHandoffSeen: !!communitySourceHandoff.seen,
     communitySourceHandoffNewSource: !!communitySourceHandoff.newSource,
+    communitySourceHandoffParentComparable: !!communitySourceHandoff.parentComparable,
+    communitySourceHandoffParentShift: !!communitySourceHandoff.parentShift,
     communitySourceHandoffHash: communitySourceHandoff.hash == null ? null : Number(communitySourceHandoff.hash),
     communitySourceHandoffChars: Number(communitySourceHandoff.normalizedChars || 0),
     communitySourceHandoffRootMode: communitySourceHandoff.rootMode || null,
     communitySourceHandoffRootIndex: Number(communitySourceHandoff.rootIndex ?? -1),
+    communitySourceHandoffParentMode: communitySourceHandoff.parentMode || null,
+    communitySourceHandoffParentIndex: Number(communitySourceHandoff.parentIndex ?? -1),
+    communitySourceHandoffDepth: Number(communitySourceHandoff.depth ?? -1),
     communitySourceHandoffPriorRootMode: communitySourceHandoff.priorRootMode || null,
     communitySourceHandoffPriorRootIndex: Number(communitySourceHandoff.priorRootIndex ?? -1),
+    communitySourceHandoffPriorParentMode: communitySourceHandoff.priorParentMode || null,
+    communitySourceHandoffPriorParentIndex: Number(communitySourceHandoff.priorParentIndex ?? -1),
+    communitySourceHandoffPriorDepth: Number(communitySourceHandoff.priorDepth ?? -1),
     communitySourceHandoffRegistrySize: Number(communitySourceHandoff.registrySize || 0),
     communitySourceHandoffReason: communitySourceHandoff.reason || 'ineligible',
   };
@@ -3127,7 +3209,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.25] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.26] state mirror failed:', e.message);
     }
   }
 
@@ -3142,7 +3224,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.25] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.26] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3270,11 +3352,19 @@ module.exports = { perfNow, perfMs, normalizationIssues };
           eligible: !!pendingProbe.communitySourceHandoffEligible,
           seen: !!pendingProbe.communitySourceHandoffSeen,
           newSource: !!pendingProbe.communitySourceHandoffNewSource,
+          parentComparable: !!pendingProbe.communitySourceHandoffParentComparable,
+          parentShift: !!pendingProbe.communitySourceHandoffParentShift,
           normalizedChars: Number(pendingProbe.communitySourceHandoffChars || 0),
           rootMode: pendingProbe.communitySourceHandoffRootMode || null,
           rootIndex: Number(pendingProbe.communitySourceHandoffRootIndex ?? -1),
+          parentMode: pendingProbe.communitySourceHandoffParentMode || null,
+          parentIndex: Number(pendingProbe.communitySourceHandoffParentIndex ?? -1),
+          depth: Number(pendingProbe.communitySourceHandoffDepth ?? -1),
           priorRootMode: pendingProbe.communitySourceHandoffPriorRootMode || null,
           priorRootIndex: Number(pendingProbe.communitySourceHandoffPriorRootIndex ?? -1),
+          priorParentMode: pendingProbe.communitySourceHandoffPriorParentMode || null,
+          priorParentIndex: Number(pendingProbe.communitySourceHandoffPriorParentIndex ?? -1),
+          priorDepth: Number(pendingProbe.communitySourceHandoffPriorDepth ?? -1),
           registrySize: Number(pendingProbe.communitySourceHandoffRegistrySize || 0),
           reason: pendingProbe.communitySourceHandoffReason || 'ineligible',
           at: Date.now(),
@@ -3309,8 +3399,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.25] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.25] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.26] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.26] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -3322,7 +3412,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.25] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.26] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3367,7 +3457,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.25] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.26] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3393,7 +3483,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.25] output error:', e.message);
+      console.log('[simcore/v0.62.26] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3456,6 +3546,17 @@ module.exports = { perfNow, perfMs, normalizationIssues };
             ? (lastCommunitySourceHandoffProbe.seen ? 'SAME SOURCE' : 'FIRST')
             : 'INELIGIBLE'))
         : 'n/a';
+      const parentShiftLabel = lastCommunitySourceHandoffProbe
+        ? (lastCommunitySourceHandoffProbe.newSource
+          ? 'NEW ROOT'
+          : (!lastCommunitySourceHandoffProbe.eligible
+            ? 'INELIGIBLE'
+            : (!lastCommunitySourceHandoffProbe.seen
+              ? 'FIRST'
+              : (lastCommunitySourceHandoffProbe.parentShift
+                ? 'NEW PARENT'
+                : (lastCommunitySourceHandoffProbe.parentComparable ? 'SAME PARENT' : 'BASELINE')))))
+        : 'n/a';
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
@@ -3466,7 +3567,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.25 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.26 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3489,6 +3590,7 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Template recurrence</div><div class="v">${recurrenceLabel}</div></div>
 <div class="metric"><div class="k">Request lineage</div><div class="v">${escapeHtml(lineageLabel)}</div></div>
 <div class="metric"><div class="k">Source handoff</div><div class="v">${escapeHtml(handoffLabel)}</div></div>
+<div class="metric"><div class="k">Parent shift</div><div class="v">${escapeHtml(parentShiftLabel)}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 </div>
@@ -3497,6 +3599,7 @@ ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style=
 ${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · mode ${escapeHtml(lastTemplateRecurrenceProbe.modeFamily || '?')} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
 ${lastRequestLineageProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Request lineage probe (runtime)</div><div>${escapeHtml(lineageLabel)}</div><div class="muted" style="margin-top:5px">root ${escapeHtml(lastRequestLineageProbe.rootMode || 'none')}@${Number(lastRequestLineageProbe.rootIndex)} · parent ${escapeHtml(lastRequestLineageProbe.parentMode || 'none')}@${Number(lastRequestLineageProbe.parentIndex)} · transition ${escapeHtml(lastRequestLineageProbe.transitionFrom || '?')} → ${escapeHtml(String(lastRequestLineageProbe.currentMode || '?').replace(/^B_.*/, 'B'))}</div><div class="muted" style="margin-top:5px">recent A/B ${escapeHtml((lastRequestLineageProbe.recentSources || []).map((x) => `${x.mode}@${x.index}`).join(' · ') || 'none')} · diagnostics only · prompt +0</div></div>` : ''}
 ${lastCommunitySourceHandoffProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Community source handoff (runtime)</div><div>${escapeHtml(handoffLabel)} · registry ${Number(lastCommunitySourceHandoffProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">current ${escapeHtml(lastCommunitySourceHandoffProbe.rootMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.rootIndex)} · prior ${escapeHtml(lastCommunitySourceHandoffProbe.priorRootMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.priorRootIndex)} · request chars ${Number(lastCommunitySourceHandoffProbe.normalizedChars || 0)}</div><div class="muted" style="margin-top:5px">${lastCommunitySourceHandoffProbe.newSource ? '2-line current-source hint injected' : 'prompt +0'} · ${escapeHtml(lastCommunitySourceHandoffProbe.reason || 'ineligible')}</div></div>` : ''}
+${lastCommunitySourceHandoffProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Community parent-shift probe (runtime)</div><div>${escapeHtml(parentShiftLabel)} · same-root follow-up diagnostics</div><div class="muted" style="margin-top:5px">current parent ${escapeHtml(lastCommunitySourceHandoffProbe.parentMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.parentIndex)} depth ${Number(lastCommunitySourceHandoffProbe.depth)} · prior parent ${escapeHtml(lastCommunitySourceHandoffProbe.priorParentMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.priorParentIndex)} depth ${Number(lastCommunitySourceHandoffProbe.priorDepth)}</div><div class="muted" style="margin-top:5px">diagnostics/state only · prompt +0 · no semantic decision</div></div>` : ''}
 ${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Template history bootstrap</div><div>DONE · ${Number(recurrenceDiag.registrySize || 0)} templates retained</div><div class="muted" style="margin-top:5px">${Number(recurrenceDiag.userMessages || 0)} user msgs · eligible A/B/C ${Number(recurrenceDiag.modeEligible?.A || 0)}/${Number(recurrenceDiag.modeEligible?.B || 0)}/${Number(recurrenceDiag.modeEligible?.C || 0)} · ${Number(recurrenceDiag.repeatedTemplates || 0)} historical repeats</div></div>` : ''}
 ${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · observed ${escapeHtml(narrativeProbe.observedTimestamp || 'pending')} · committed ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
 ${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative current-time floor</div><div>${s.lastNarrativeClockWarning.action === 'clamped' ? 'FLOOR CLAMPED' : 'REJECTED BACKWARD'} · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">floor ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
@@ -3562,12 +3665,12 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">v0.62.24 Narrative Current-Time Floor · A/C current timestamp monotonic · B airtime unchanged</div>
+<div class="card muted">v0.62.26 Parent-Shift Probe · diagnostics/state only · prompt +0 · v0.62.24 current-time floor retained</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.25] panel error:', e.message);
+      console.log('[simcore/v0.62.26] panel error:', e.message);
     }
   }
 
@@ -3575,7 +3678,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.25] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.26] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3583,5 +3686,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.25] initialized');
+  console.log('[simcore/v0.62.26] initialized');
 })();

@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.18
-//@display-name SimCore v0.62.18 Compact Diagnostics Panel
+//@version 0.62.19
+//@display-name SimCore v0.62.19 Narrative Clock Guard Phase 1
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -20,12 +20,12 @@
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
 //
-// v0.62.18 Compact Diagnostics Panel:
-// - Runtime/state/storage/output behavior remains unchanged
-// - Adds a compact operational summary with current snapshot path and top-level request/output timing
-// - Detailed beforeRequest/output timing and reaction_max tables are collapsed by default
-// - Renames Last history restore to Last snapshot restore for rewind/repeat-send accuracy
-// - No snapshot format/state schema/Core prompt/lifecycle/community/reaction changes, no new storage I/O
+// v0.62.19 Narrative Clock Guard Phase 1:
+// - Adds a conservative current-narrative timestamp anchor for non-broadcast modes
+// - Activates only when the user opens with a clear forward calendar/relative-time transition
+// - When active, the next current timestamp may not precede the previous non-broadcast timestamp
+// - Embedded preview/flashback/event time must not replace the current narrative timestamp
+// - No calendar guessing for ambiguous week/day phrases; no Broadcast/Community/Reaction behavior changes
 //
 // v0.62 optimization rules:
 // - Stable behavior is the golden baseline; no semantic contract changes
@@ -339,7 +339,7 @@ SimCore.define("kernel", function (require, module, exports) {
 const { normalizePlatformMaxMap } = require('./community');
 
 const STATE_VERSION = 5;
-const CORE_STATE_VERSION = 8;
+const CORE_STATE_VERSION = 9;
 const HANDSHAKE_RE = /<SIMCORE_CORE_SWITCH>\s*1\s*<\/SIMCORE_CORE_SWITCH>/i;
 const CONTROL_TAG_RE = /\[방송\s*(?:시작|중|종료)\]/g;
 const KNOWLEDGE_RE = /<Knowledge>[\s\S]*?<\/Knowledge>/gi;
@@ -373,6 +373,8 @@ function initialState() {
     community: { activationCount: 0, platformMax: {}, lastNormalization: [], classifierVersion: 2 },
     worldYear: null,
     koreanAgeOffset: 0,
+    narrativeTimestamp: null,
+    narrativeClockVersion: 1,
     clockRepairVersion: 0,
     lastMode: 'A',
     pending: null,
@@ -403,6 +405,8 @@ function reconcileState(raw) {
   delete s.community.globalReactionMax;
   s.worldYear = legacyYear != null && Number.isFinite(Number(legacyYear)) ? Number(legacyYear) : null;
   s.koreanAgeOffset = Math.max(0, Math.round(Number(s.koreanAgeOffset) || 0));
+  s.narrativeTimestamp = typeof s.narrativeTimestamp === 'string' && s.narrativeTimestamp.trim() ? s.narrativeTimestamp.trim() : null;
+  s.narrativeClockVersion = Math.max(1, Math.round(Number(s.narrativeClockVersion) || 0));
   s.clockRepairVersion = Math.max(0, Math.round(Number(s.clockRepairVersion) || 0));
   s.lastMode = typeof s.lastMode === 'string' ? s.lastMode : 'A';
   s.pending = s.pending && typeof s.pending === 'object' ? s.pending : null;
@@ -664,6 +668,49 @@ function applyWorldYear(state, year) {
   return false;
 }
 
+// Phase 1 is intentionally relational, not a full Korean calendar parser.
+// Only a clear opening current-time transition activates the forward guard.
+function narrativeProgressionHint(userText) {
+  const head = String(userText || '').trim().slice(0, 420);
+  if (!head) return { active: false, reason: 'none' };
+  const lead = '(?:한편\\s+)?(?:그리고\\s+)?';
+  const weekday = '(?:월|화|수|목|금|토|일)요일';
+  const weekWord = '(?:\\d{1,2}주차|첫째\\s*주|둘째\\s*주|셋째\\s*주|넷째\\s*주|다섯째\\s*주|마지막\\s*주)';
+  const calendar = `(?:\\d{4}년\\s*)?\\d{1,2}월(?:\\s*${weekWord})?(?:\\s*${weekday})?`;
+  const namedWeek = `(?:(?:그|이번|다음)\\s*주)(?:\\s*${weekday})?`;
+  const dayOnly = `(?:${weekday}|오늘|내일|모레|다음\\s*날|이튿날)`;
+  const transition = new RegExp(`^${lead}(?:${calendar}|${namedWeek}|${dayOnly})\\s*(?:이|가)?\\s*(?:되고|되어|되면서|되었다|됐다)(?:\\s|$)`, 'i');
+  if (transition.test(head)) return { active: true, reason: 'calendar-transition' };
+
+  const relative = new RegExp(`^${lead}(?:(?:며칠|\\d+\\s*(?:일|주|개월|달|년))\\s*(?:뒤|후)|다음\\s*(?:달|주))(?:(?:이|가)?\\s*(?:되고|되어|지나|흘러))?(?:\\s|$)`, 'i');
+  if (relative.test(head)) return { active: true, reason: 'relative-forward' };
+  return { active: false, reason: 'none' };
+}
+
+function commitNarrativeTimestamp(state, pending, content) {
+  if (/^B_/.test(String(pending?.mode || ''))) return { changed: false, reason: 'broadcast', timestamp: null };
+  const parsed = parseTimestamp(content);
+  if (!parsed) return { changed: false, reason: 'missing-or-invalid', timestamp: null };
+  const current = parsed.raw;
+  const previous = pending?.narrativeTimestampPrevious || state.narrativeTimestamp || null;
+  if (pending?.narrativeClockGuard && previous) {
+    const cmp = compareTimestamps(current, previous);
+    if (cmp != null && cmp < 0) return { changed: false, reason: 'backward', timestamp: current, previous };
+  }
+  const changed = state.narrativeTimestamp !== current;
+  state.narrativeTimestamp = current;
+  return { changed, reason: 'committed', timestamp: current, previous };
+}
+
+function syncNarrativeTimestamp(state, content, mode) {
+  if (/^B_/.test(String(mode || ''))) return false;
+  const parsed = parseTimestamp(content);
+  if (!parsed) return false;
+  const changed = state.narrativeTimestamp !== parsed.raw;
+  state.narrativeTimestamp = parsed.raw;
+  return changed;
+}
+
 module.exports = {
   CLOCK_REPAIR_VERSION,
   BROADCAST_TIMESTAMP_RE,
@@ -674,6 +721,9 @@ module.exports = {
   elapsedMinutes,
   resetBroadcastAirtime,
   commitBroadcastAirtime,
+  narrativeProgressionHint,
+  commitNarrativeTimestamp,
+  syncNarrativeTimestamp,
   applyWorldYear,
 };
 });
@@ -730,6 +780,9 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const broadcastAirtimeStart = /^B_/.test(c.mode) ? (state.broadcastAirtimeStart || null) : null;
   const secondaryConfigured = !!(config.secondaryName && config.secondaryKeyword);
   const secondaryActive = secondaryConfigured && input.includes(config.secondaryKeyword);
+  const narrativeProgression = /^B_/.test(c.mode) ? { active: false, reason: 'broadcast' } : time.narrativeProgressionHint(input);
+  const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
+  const narrativeClockGuard = !!(narrativeProgression.active && narrativeTimestampPrevious);
 
   // Explicit user dates can advance world year before generation in every mode.
   time.applyWorldYear(state, time.explicitWorldYear(input));
@@ -751,6 +804,10 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     secondaryActive,
     secondaryName: config.secondaryName,
     secondaryKeyword: config.secondaryKeyword,
+    narrativeProgressionActive: !!narrativeProgression.active,
+    narrativeProgressionReason: narrativeProgression.reason || 'none',
+    narrativeTimestampPrevious,
+    narrativeClockGuard,
   };
   return state;
 }
@@ -989,6 +1046,13 @@ function validateStructure(content, pending) {
     const previousBroadcastTs = time.parseTimestamp(pending.broadcastAirtimePrevious);
     if (currentBroadcastTs && previousBroadcastTs && currentBroadcastTs.minuteKey < previousBroadcastTs.minuteKey) {
       issues.push(`Mode B 방송 송출 시각 역행: ${currentBroadcastTs.raw} < ${previousBroadcastTs.raw}`);
+    }
+  }
+  if (!/^B_/.test(String(pending.mode || '')) && pending.narrativeClockGuard && pending.narrativeTimestampPrevious) {
+    const currentNarrativeTs = time.parseTimestamp(text);
+    const previousNarrativeTs = time.parseTimestamp(pending.narrativeTimestampPrevious);
+    if (currentNarrativeTs && previousNarrativeTs && currentNarrativeTs.minuteKey < previousNarrativeTs.minuteKey) {
+      issues.push(`Narrative 현재 시각 역행: ${currentNarrativeTs.raw} < ${previousNarrativeTs.raw}`);
     }
   }
 
@@ -1252,6 +1316,7 @@ function bootstrapFromHistory(baseState, messages, endIndex = -1) {
   state.community = { activationCount: 0, platformMax: {}, lastNormalization: [], classifierVersion: community.COMMUNITY_CLASSIFIER_VERSION };
   state.worldYear = null;
   state.koreanAgeOffset = 0;
+  state.narrativeTimestamp = null;
   state.lastMode = 'A';
   state.pending = null;
 
@@ -1295,6 +1360,7 @@ function bootstrapFromHistory(baseState, messages, endIndex = -1) {
     communityBlocksSeen += blocks.length;
 
     if (/^B_/.test(String(pending.mode || ''))) time.commitBroadcastAirtime(state, pending, cleaned);
+    else time.syncNarrativeTimestamp(state, cleaned, pending.mode);
     if (pending.mode === 'B_END') {
       if (state.episodeNo === 0) state.episodeNo = 1;
       state.broadcastLocked = false;
@@ -1431,6 +1497,15 @@ function renderRuntimePrompt(state) {
     'response_envelope=exactly_one_no_restart',
     `community_blocks_expected=${communityExpected}`,
   ];
+  if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
+    lines.push('timestamp_semantics=current_narrative_time');
+    lines.push('embedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1');
+    lines.push(`narrative_progression_hint=${p.narrativeProgressionReason || 'forward'}`);
+    if (p.narrativeClockGuard && p.narrativeTimestampPrevious) {
+      lines.push(`narrative_timestamp_previous=${p.narrativeTimestampPrevious}`);
+      lines.push('narrative_timestamp_must_not_precede_previous=1');
+    }
+  }
   if (/^B_/.test(String(p.mode || ''))) {
     lines.push('mode_b_timestamp_semantics=broadcast_airtime');
     lines.push('mode_b_timestamp_is_not=depicted_scene_or_event_time');
@@ -1493,6 +1568,19 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   }
 
   time.applyWorldYear(state, time.timestampYear(finalText));
+  if (!/^B_/.test(String(p.mode || ''))) {
+    const narrativeCommit = time.commitNarrativeTimestamp(state, p, finalText);
+    if (narrativeCommit.reason === 'backward') {
+      state.lastNarrativeClockWarning = {
+        previous: narrativeCommit.previous || null,
+        rejected: narrativeCommit.timestamp || null,
+        outIndex: Number.isInteger(Number(outIndex)) ? Number(outIndex) : -1,
+        reason: p.narrativeProgressionReason || 'forward',
+      };
+    } else {
+      delete state.lastNarrativeClockWarning;
+    }
+  }
   if (/^B_/.test(String(p.mode || ''))) {
     const airtimeCommit = time.commitBroadcastAirtime(state, p, finalText);
     if (airtimeCommit.reason === 'backward') {
@@ -1885,6 +1973,15 @@ class CoreRulesetSession {
     return true;
   }
 
+  seedNarrativeTimestampFromVisible(content) {
+    if (!this.current || this.current.narrativeTimestamp) return false;
+    if (/^B_/.test(String(this.current.lastMode || ''))) return false;
+    const parsed = time.parseTimestamp(content);
+    if (!parsed) return false;
+    this.current.narrativeTimestamp = parsed.raw;
+    return true;
+  }
+
   async reconcileEditedOutput(outIndex, content, perfDetail = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
@@ -1919,15 +2016,19 @@ class CoreRulesetSession {
         && this.current.outputFingerprint === actualFingerprint
         && this.trustedOutputFingerprint === actualFingerprint) {
       const airtimeSeeded = this.seedBroadcastAirtimeFromVisible(content);
-      if (detail) { detail.path = airtimeSeeded ? 'same-fast+airtime-seed' : 'same-fast'; detail.compatibilitySource = 'canonical'; }
-      return { changed: false, reason: airtimeSeeded ? 'same-fast+airtime-seed' : 'same-fast' };
+      const narrativeSeeded = this.seedNarrativeTimestampFromVisible(content);
+      const seeded = airtimeSeeded || narrativeSeeded;
+      if (detail) { detail.path = airtimeSeeded ? 'same-fast+airtime-seed' : (narrativeSeeded ? 'same-fast+narrative-seed' : 'same-fast'); detail.compatibilitySource = 'canonical'; }
+      return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-fast+airtime-seed' : 'same-fast+narrative-seed') : 'same-fast' };
     }
     if (this.current?.hostOutputFingerprint
         && this.current.hostOutputFingerprint === actualFingerprint
         && this.trustedHostOutputFingerprint === actualFingerprint) {
       const airtimeSeeded = this.seedBroadcastAirtimeFromVisible(content);
-      if (detail) { detail.path = airtimeSeeded ? 'same-host-fast+airtime-seed' : 'same-host-fast'; detail.compatibilitySource = 'host-raw'; }
-      return { changed: false, reason: airtimeSeeded ? 'same-host-fast+airtime-seed' : 'same-host-fast' };
+      const narrativeSeeded = this.seedNarrativeTimestampFromVisible(content);
+      const seeded = airtimeSeeded || narrativeSeeded;
+      if (detail) { detail.path = airtimeSeeded ? 'same-host-fast+airtime-seed' : (narrativeSeeded ? 'same-host-fast+narrative-seed' : 'same-host-fast'); detail.compatibilitySource = 'host-raw'; }
+      return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-host-fast+airtime-seed' : 'same-host-fast+narrative-seed') : 'same-host-fast' };
     }
 
     t = sessionNow();
@@ -1953,12 +2054,15 @@ class CoreRulesetSession {
       this.trustedHostOutputFingerprint = same.hostOutputFingerprint || null;
       this.loadedFromLegacySnapshot = false;
       const airtimeSeeded = this.seedBroadcastAirtimeFromVisible(content);
+      const narrativeSeeded = this.seedNarrativeTimestampFromVisible(content);
       const hostMatch = savedOut.hostOutputFingerprint === actualFingerprint;
       if (detail) {
-        detail.path = airtimeSeeded ? (hostMatch ? 'same-host-snapshot+airtime-seed' : 'same-snapshot+airtime-seed') : (hostMatch ? 'same-host-snapshot' : 'same-snapshot');
+        detail.path = airtimeSeeded
+          ? (hostMatch ? 'same-host-snapshot+airtime-seed' : 'same-snapshot+airtime-seed')
+          : (narrativeSeeded ? (hostMatch ? 'same-host-snapshot+narrative-seed' : 'same-snapshot+narrative-seed') : (hostMatch ? 'same-host-snapshot' : 'same-snapshot'));
         detail.compatibilitySource = hostMatch ? 'host-raw' : 'canonical';
       }
-      return { changed: false, reason: airtimeSeeded ? (hostMatch ? 'same-host-snapshot+airtime-seed' : 'same-snapshot+airtime-seed') : (hostMatch ? 'same-host-snapshot' : 'same-snapshot') };
+      return { changed: false, reason: detail?.path || (hostMatch ? 'same-host-snapshot' : 'same-snapshot') };
     }
 
     t = sessionNow();
@@ -2037,6 +2141,7 @@ class CoreRulesetSession {
       if (detail) detail.clockRepairMs += sessionElapsed(t);
       t = sessionNow();
       const clockChanged = time.applyWorldYear(baseline, time.timestampYear(kernel.stripControlTags(content)));
+      const narrativeClockChanged = time.syncNarrativeTimestamp(baseline, kernel.stripControlTags(content), baseline.lastMode);
       baseline.outputFingerprint = actualFingerprint;
       baseline.hostOutputFingerprint = actualFingerprint;
       if (detail) detail.stateSyncMs += sessionElapsed(t);
@@ -2047,14 +2152,14 @@ class CoreRulesetSession {
         detail.outSetMs += Number(saveMetric.setMs || 0);
         detail.outPruneMs += Number(saveMetric.pruneMs || 0);
         detail.didSave = true;
-        detail.path = repaired ? 'clock-repaired' : (clockChanged ? 'clock-synced' : 'baseline-created');
+        detail.path = repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'baseline-created');
       }
       this.current = baseline;
       this.currentOutputIndex = outIndex;
       this.trustedOutputFingerprint = baseline.outputFingerprint || null;
       this.trustedHostOutputFingerprint = baseline.hostOutputFingerprint || null;
       this.loadedFromLegacySnapshot = false;
-      return { changed: repaired || clockChanged, reason: repaired ? 'clock-repaired' : (clockChanged ? 'clock-synced' : 'baseline-created') };
+      return { changed: repaired || clockChanged || narrativeClockChanged, reason: repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'baseline-created') };
     }
 
     if (savedOut.outputFingerprint === actualFingerprint) {
@@ -2066,8 +2171,9 @@ class CoreRulesetSession {
       if (detail) detail.clockRepairMs += sessionElapsed(t);
       t = sessionNow();
       const clockChanged = time.applyWorldYear(same, time.timestampYear(kernel.stripControlTags(content)));
+      const narrativeClockChanged = time.syncNarrativeTimestamp(same, kernel.stripControlTags(content), same.lastMode);
       if (detail) detail.stateSyncMs += sessionElapsed(t);
-      if (repaired || clockChanged) {
+      if (repaired || clockChanged || narrativeClockChanged) {
         const saveMetric = {};
         await this.store.save('out', outIndex, same, detail ? { metric: saveMetric } : {});
         if (detail) {
@@ -2077,13 +2183,13 @@ class CoreRulesetSession {
           detail.didSave = true;
         }
       }
-      if (detail) detail.path = repaired ? 'clock-repaired' : (clockChanged ? 'clock-synced' : 'same');
+      if (detail) detail.path = repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'same');
       this.current = same;
       this.currentOutputIndex = outIndex;
       this.trustedOutputFingerprint = same.outputFingerprint || null;
       this.trustedHostOutputFingerprint = same.hostOutputFingerprint || null;
       this.loadedFromLegacySnapshot = false;
-      return { changed: repaired || clockChanged, reason: repaired ? 'clock-repaired' : (clockChanged ? 'clock-synced' : 'same') };
+      return { changed: repaired || clockChanged || narrativeClockChanged, reason: repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'same') };
     }
 
     if (!sendForEnvelope) {
@@ -2253,7 +2359,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.18] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.19] state mirror failed:', e.message);
     }
   }
 
@@ -2268,7 +2374,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.18] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.19] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2366,8 +2472,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.18] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.18] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.19] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.19] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2379,7 +2485,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.18] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.19] reaction normalization:', normalizationIssues.join(' / '));
     const quarantineIssues = result.stateCommit?.communitySafe === false ? [result.stateCommit.reason] : [];
     lastCore = {
       active: true,
@@ -2414,7 +2520,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.18] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.19] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2440,7 +2546,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.18] output error:', e.message);
+      console.log('[simcore/v0.62.19] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2490,7 +2596,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.18 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.19 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2501,6 +2607,7 @@ ${broadcastClockRows}
 <div><div class="k">Reaction floor</div><div class="v">PER PLATFORM</div></div>
 <div><div class="k">Korean age offset</div><div class="v">+${Number(s?.koreanAgeOffset || 0)}</div></div>
 <div><div class="k">World year</div><div class="v">${s?.worldYear ?? 'unknown'}</div></div>
+<div><div class="k">Narrative anchor</div><div class="v">${escapeHtml(s?.narrativeTimestamp || 'unknown')}</div></div>
 <div><div class="k">Warnings</div><div class="v">${lastCore.issues.length}</div></div>
 <div><div class="k">Compatibility diagnostics</div><div class="v">${(lastCore.diagnostics || []).length}</div></div>
 </div>
@@ -2511,6 +2618,7 @@ ${broadcastClockRows}
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
+${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock guard</div><div>REJECTED BACKWARD · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">previous ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
 ${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
 ${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>
 <tr><td>Total</td><td>${lastPerf.totalMs.toFixed(1)} ms</td></tr>
@@ -2572,20 +2680,20 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">v0.62.18 Compact Diagnostics Panel · details collapsed by default · core behavior unchanged</div>
+<div class="card muted">v0.62.19 Narrative Clock Guard Phase 1 · relational forward guard · no calendar guessing</div>
 </div>`;
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.18] panel error:', e.message);
+      console.log('[simcore/v0.62.19] panel error:', e.message);
     }
   }
 
   try {
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
-    await Risuai.registerSetting('SimCore v0.62.18', openPanel, '⚙️', 'html');
+    await Risuai.registerSetting('SimCore v0.62.19', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.18] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.19] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -2593,5 +2701,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.18] initialized');
+  console.log('[simcore/v0.62.19] initialized');
 })();

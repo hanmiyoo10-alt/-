@@ -1,7 +1,7 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.21
-//@display-name SimCore v0.62.21 Template Recurrence Guard
+//@version 0.62.22
+//@display-name SimCore v0.62.22 Template Recurrence Guard ABC
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
@@ -19,6 +19,14 @@
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
 // - Session: thin orchestrator for one-pass request/output pipelines
 // - OPS: performance helpers/diagnostic formatting
+//
+// v0.62.22 Template Recurrence Guard ABC:
+// - Extends recurrence detection and guidance to Mode A, Mode B, and Mode C as one shared feature set
+// - Fingerprints are mode-family scoped (A/B/C) so different output contracts never contaminate each other
+// - Mode C keeps directive/checklist extraction; Mode B strips broadcast control tags; Mode A/B use conservative detailed-input matching
+// - v1 recurrence memory is rebuilt once from pre-update user history into the ABC registry; current input remains excluded
+// - Existing outputs are never rewritten; only new generations can receive the recurrence hint
+// - No auxiliary model, no new pluginStorage API calls, and no Broadcast/Community/Reaction/Narrative semantics changes
 //
 // v0.62.21 Template Recurrence Guard:
 // - Detects recurring detailed [커뮤니티] request templates without auxiliary-model calls
@@ -350,11 +358,18 @@ module.exports = {
 });
 
 SimCore.define("recurrence", function (require, module, exports) {
-const TEMPLATE_RECURRENCE_VERSION = 1;
+const TEMPLATE_RECURRENCE_VERSION = 2;
 const TEMPLATE_REGISTRY_LIMIT = 384;
 const COMMUNITY_MARKER = '[커뮤니티]';
 const TEMPLATE_MAX_CHARS = 4096;
-const TEMPLATE_MIN_CHARS = 32;
+const TEMPLATE_MIN_CHARS_C = 32;
+const TEMPLATE_MIN_CHARS_AB = 48;
+
+function modeFamily(mode) {
+  const m = String(mode || 'A');
+  if (/^B_/.test(m)) return 'B';
+  return m === 'C' ? 'C' : 'A';
+}
 
 function normalizeRegistry(raw) {
   const src = Array.isArray(raw) ? raw : [];
@@ -371,38 +386,62 @@ function normalizeRegistry(raw) {
   return out.slice(-TEMPLATE_REGISTRY_LIMIT);
 }
 
-function communityDirective(userText) {
-  const text = String(userText || '');
-  const idx = text.indexOf(COMMUNITY_MARKER);
-  if (idx < 0) return '';
-  return text.slice(idx + COMMUNITY_MARKER.length, idx + COMMUNITY_MARKER.length + TEMPLATE_MAX_CHARS);
+function stripBroadcastTags(text) {
+  return String(text || '')
+    .replace(/\[방송\s*(?:시작|중|종료)\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function normalizeTemplate(userText) {
-  let directive = communityDirective(userText);
-  if (!directive) return '';
-  try { directive = directive.normalize('NFKC'); } catch { /* older JS runtime */ }
+function templateSource(userText, mode) {
+  const family = modeFamily(mode);
+  const raw = String(userText || '');
+  const communityIndex = raw.indexOf(COMMUNITY_MARKER);
+  let source = '';
 
-  // When a long parenthetical checklist exists, it is the reusable request schema; the event/title
-  // before it is current-turn content and should not prevent recurrence detection across years/events.
-  const open = directive.indexOf('(');
-  const close = directive.lastIndexOf(')');
-  if (open >= 0 && close > open && (close - open) >= TEMPLATE_MIN_CHARS) directive = directive.slice(open);
+  // C is an explicit request mode. In B, an embedded community directive is also the strongest
+  // reusable request schema; otherwise B uses the broadcast request after removing control tags.
+  if (family === 'C' || (family === 'B' && communityIndex >= 0)) {
+    if (communityIndex < 0) return '';
+    source = raw.slice(communityIndex + COMMUNITY_MARKER.length);
+  } else {
+    source = stripBroadcastTags(raw);
+  }
+  return source.slice(0, TEMPLATE_MAX_CHARS);
+}
 
-  return directive
+function normalizeTemplate(userText, mode) {
+  const family = modeFamily(mode);
+  let source = templateSource(userText, mode);
+  if (!source) return '';
+  try { source = source.normalize('NFKC'); } catch { /* older JS runtime */ }
+
+  // A long parenthetical checklist is the most stable reusable schema across changed events.
+  // This keeps the requested fields while ignoring the event/title that naturally changes over time.
+  const open = source.indexOf('(');
+  const close = source.lastIndexOf(')');
+  if (open >= 0 && close > open && (close - open) >= TEMPLATE_MIN_CHARS_C) source = source.slice(open);
+
+  const normalized = source
     .replace(/https?:\/\/\S+/gi, '<url>')
     .replace(/\d+(?:[.,]\d+)*/g, '#')
     .replace(/[“”‘’`]/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+  // A/B lack C's explicit directive boundary, so require a little more substance unless a
+  // detailed parenthetical request schema was extracted. This avoids flagging short scene beats.
+  const minChars = family === 'C' ? TEMPLATE_MIN_CHARS_C : TEMPLATE_MIN_CHARS_AB;
+  return normalized.length >= minChars ? normalized : '';
 }
 
-function hashTemplate(normalized) {
+function hashTemplate(normalized, mode) {
   const text = String(normalized || '');
-  if (text.length < TEMPLATE_MIN_CHARS) return null;
+  if (!text) return null;
+  const family = modeFamily(mode);
   let h = 2166136261 >>> 0;
-  const seed = `${text.length}:`;
+  const seed = `${family}:${text.length}:`;
   for (let i = 0; i < seed.length; i++) {
     h ^= seed.charCodeAt(i);
     h = Math.imul(h, 16777619);
@@ -414,13 +453,15 @@ function hashTemplate(normalized) {
   return h >>> 0;
 }
 
-function templateFingerprint(userText) {
-  const normalized = normalizeTemplate(userText);
-  const hash = hashTemplate(normalized);
+function templateFingerprint(userText, mode) {
+  const family = modeFamily(mode);
+  const normalized = normalizeTemplate(userText, mode);
+  const hash = hashTemplate(normalized, mode);
   return {
     eligible: hash != null,
     hash,
     normalizedChars: normalized.length,
+    modeFamily: family,
   };
 }
 
@@ -435,8 +476,8 @@ function touchRegistry(registry, hash) {
   return { list, repeated };
 }
 
-function observe(state, userText) {
-  const fp = templateFingerprint(userText);
+function observe(state, userText, mode) {
+  const fp = templateFingerprint(userText, mode);
   state.templateRegistry = normalizeRegistry(state.templateRegistry);
   state.templateRecurrenceVersion = TEMPLATE_RECURRENCE_VERSION;
   if (!fp.eligible) {
@@ -451,18 +492,50 @@ function needsBootstrap(state) {
   return Math.max(0, Number(state?.templateRecurrenceVersion || 0)) < TEMPLATE_RECURRENCE_VERSION;
 }
 
+function classifyHistoricalMode(runtime, input) {
+  const text = String(input || '');
+  const hasContinue = /\[방송\s*중\]/.test(text);
+  const hasEnd = /\[방송\s*종료\]/.test(text);
+  const hasStart = /\[방송\s*시작\]/.test(text);
+  const hasCommunity = text.includes(COMMUNITY_MARKER);
+  let mode;
+
+  if (runtime.broadcastLocked) {
+    mode = hasContinue ? 'B_CONTINUE' : (hasEnd ? 'B_END' : 'B_CONTINUE');
+  } else if (hasStart && hasEnd) {
+    mode = 'B_END';
+  } else if (hasStart) {
+    mode = 'B_START';
+  } else if (hasCommunity) {
+    mode = 'C';
+  } else {
+    mode = 'A';
+  }
+
+  if (mode === 'B_START') runtime.broadcastLocked = true;
+  else if (mode === 'B_END') runtime.broadcastLocked = false;
+  return mode;
+}
+
 function bootstrapState(state, messages, stopExclusive, getText) {
   const rows = Array.isArray(messages) ? messages : [];
   const stop = Number.isInteger(Number(stopExclusive))
     ? Math.max(0, Math.min(Number(stopExclusive), rows.length))
     : rows.length;
-  let registry = normalizeRegistry(state.templateRegistry);
+
+  // v1 hashes were C-only and unsalted. Rebuild from history once so the registry becomes
+  // mode-family scoped and cannot cross-contaminate A/B/C.
+  let registry = Number(state?.templateRecurrenceVersion || 0) >= TEMPLATE_RECURRENCE_VERSION
+    ? normalizeRegistry(state.templateRegistry)
+    : [];
+  const runtime = { broadcastLocked: false };
   let visited = 0;
   let userMessages = 0;
-  let communityInputs = 0;
   let eligibleTemplates = 0;
   let repeatedTemplates = 0;
   let normalizedChars = 0;
+  const modeInputs = { A: 0, B: 0, C: 0 };
+  const modeEligible = { A: 0, B: 0, C: 0 };
 
   for (let i = 0; i < stop; i++) {
     visited += 1;
@@ -472,12 +545,14 @@ function bootstrapState(state, messages, stopExclusive, getText) {
     const text = typeof getText === 'function'
       ? getText(row)
       : String(row.data ?? row.content ?? row.text ?? '');
-    if (!String(text || '').includes(COMMUNITY_MARKER)) continue;
-    communityInputs += 1;
-    const fp = templateFingerprint(text);
+    const mode = classifyHistoricalMode(runtime, text);
+    const family = modeFamily(mode);
+    modeInputs[family] += 1;
+    const fp = templateFingerprint(text, mode);
     normalizedChars += fp.normalizedChars || 0;
     if (!fp.eligible) continue;
     eligibleTemplates += 1;
+    modeEligible[family] += 1;
     const touched = touchRegistry(registry, fp.hash);
     registry = touched.list;
     if (touched.repeated) repeatedTemplates += 1;
@@ -490,11 +565,12 @@ function bootstrapState(state, messages, stopExclusive, getText) {
     scannedThroughExclusive: stop,
     visited,
     userMessages,
-    communityInputs,
     eligibleTemplates,
     repeatedTemplates,
     registrySize: registry.length,
     normalizedChars,
+    modeInputs,
+    modeEligible,
   };
   return { state, stats };
 }
@@ -502,6 +578,7 @@ function bootstrapState(state, messages, stopExclusive, getText) {
 module.exports = {
   TEMPLATE_RECURRENCE_VERSION,
   TEMPLATE_REGISTRY_LIMIT,
+  modeFamily,
   normalizeRegistry,
   normalizeTemplate,
   templateFingerprint,
@@ -966,9 +1043,7 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const narrativeProgression = /^B_/.test(c.mode) ? { active: false, reason: 'broadcast' } : time.narrativeProgressionHint(input);
   const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
   const narrativeClockGuard = !!(narrativeProgression.active && narrativeTimestampPrevious);
-  const templateRecurrence = c.mode === 'C'
-    ? recurrence.observe(state, input)
-    : { eligible: false, repeated: false, hash: null, normalizedChars: 0, registrySize: Array.isArray(state.templateRegistry) ? state.templateRegistry.length : 0 };
+  const templateRecurrence = recurrence.observe(state, input, c.mode);
 
   // Explicit user dates can advance world year before generation in every mode.
   time.applyWorldYear(state, time.explicitWorldYear(input));
@@ -997,6 +1072,7 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     templateRecurrenceEligible: !!templateRecurrence.eligible,
     templateRecurrenceRepeated: !!templateRecurrence.repeated,
     templateRecurrenceHash: templateRecurrence.hash == null ? null : Number(templateRecurrence.hash),
+    templateRecurrenceModeFamily: templateRecurrence.modeFamily || recurrence.modeFamily(c.mode),
     templateRecurrenceChars: Number(templateRecurrence.normalizedChars || 0),
     templateRegistrySize: Number(templateRecurrence.registrySize || 0),
   };
@@ -1709,14 +1785,15 @@ function renderRuntimePrompt(state) {
     const elapsed = time.elapsedMinutes(p.broadcastAirtimeStart, p.broadcastAirtimePrevious);
     if (elapsed != null && elapsed >= 0) lines.push(`broadcast_airtime_elapsed_program_minutes=${elapsed}`);
   }
+  if (p.templateRecurrenceRepeated) {
+    lines.push('request_template_recurs_from_prior_history=1');
+    lines.push(`request_template_mode_family=${p.templateRecurrenceModeFamily || recurrence.modeFamily(p.mode)}`);
+    lines.push('prior_answer_is_not_a_content_template=1');
+    lines.push('preserve_requested_fields_and_output_contract=1');
+    lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');
+    lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');
+  }
   if (communityExpected > 0) {
-    if (p.mode === 'C' && p.templateRecurrenceRepeated) {
-      lines.push('request_template_recurs_from_prior_history=1');
-      lines.push('prior_answer_is_not_a_content_template=1');
-      lines.push('preserve_requested_fields_and_output_contract=1');
-      lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');
-      lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');
-    }
     lines.push('platform_groups_required=3_distinct');
     lines.push('platform_group_reuse_forbidden=1');
     if (/^B_/.test(p.mode)) lines.push('community_placement=after_broadcast_prose');
@@ -2609,7 +2686,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.21] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.22] state mirror failed:', e.message);
     }
   }
 
@@ -2624,7 +2701,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.21] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.22] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -2712,9 +2789,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
           at: Date.now(),
         };
       }
-      if (pendingProbe?.mode === 'C') {
+      if (pendingProbe) {
         lastTemplateRecurrenceProbe = {
           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+          mode: pendingProbe.mode || null,
+          modeFamily: pendingProbe.templateRecurrenceModeFamily || null,
           eligible: !!pendingProbe.templateRecurrenceEligible,
           repeated: !!pendingProbe.templateRecurrenceRepeated,
           normalizedChars: Number(pendingProbe.templateRecurrenceChars || 0),
@@ -2752,8 +2831,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.21] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.21] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.22] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.22] compatibility diagnostics:', diagnostics.join(' / '));
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -2765,7 +2844,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.21] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.22] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -2810,7 +2889,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.21] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.22] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -2836,7 +2915,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.21] output error:', e.message);
+      console.log('[simcore/v0.62.22] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -2895,7 +2974,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.21 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.22 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -2920,8 +2999,8 @@ ${broadcastClockRows}
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
-${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
-${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Template history bootstrap</div><div>DONE · ${Number(recurrenceDiag.registrySize || 0)} templates retained</div><div class="muted" style="margin-top:5px">${Number(recurrenceDiag.userMessages || 0)} user msgs · ${Number(recurrenceDiag.communityInputs || 0)} community inputs · ${Number(recurrenceDiag.repeatedTemplates || 0)} historical repeats</div></div>` : ''}
+${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · mode ${escapeHtml(lastTemplateRecurrenceProbe.modeFamily || '?')} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
+${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Template history bootstrap</div><div>DONE · ${Number(recurrenceDiag.registrySize || 0)} templates retained</div><div class="muted" style="margin-top:5px">${Number(recurrenceDiag.userMessages || 0)} user msgs · eligible A/B/C ${Number(recurrenceDiag.modeEligible?.A || 0)}/${Number(recurrenceDiag.modeEligible?.B || 0)}/${Number(recurrenceDiag.modeEligible?.C || 0)} · ${Number(recurrenceDiag.repeatedTemplates || 0)} historical repeats</div></div>` : ''}
 ${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · output ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
 ${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock guard</div><div>REJECTED BACKWARD · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">previous ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
 ${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
@@ -2991,7 +3070,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.21] panel error:', e.message);
+      console.log('[simcore/v0.62.22] panel error:', e.message);
     }
   }
 
@@ -2999,7 +3078,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore Lite', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore v0.62.20', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.21] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.22] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3007,5 +3086,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
   });
-  console.log('[simcore/v0.62.21] initialized');
+  console.log('[simcore/v0.62.22] initialized');
 })();

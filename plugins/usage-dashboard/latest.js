@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.11
+//@version 3.0.0-alpha.3.12
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.11';
+  const VERSION = '3.0.0-alpha.3.12';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -25,7 +25,7 @@
     data: null
   };
 
-  let store, state, token = '', refreshTimer = null, refreshInFlight = null;
+  let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let widget = null, rootBody = null, drag = null;
   const uiParts = [], remoteListeners = [], domListeners = [];
 
@@ -491,8 +491,41 @@ async function importLegacyTodayBaselines() {
     if (state.widgetVisible!==false) await widget.setInnerHTML(widgetHtml());
   }
 
+  function resetTimestamp(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (num(value)) {
+    const n = Number(value);
+    return n > 0 && n < 1000000000000 ? n * 1000 : n;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function scheduleResetSync() {
+  if (resetSyncTimer) clearTimeout(resetSyncTimer);
+  resetSyncTimer = null;
+  if (!state?.bridgeEnabled || !token || !state?.data) return;
+  const now = Date.now();
+  const resetCandidates = [
+    resetTimestamp(state.data.monthly?.resetAt),
+    resetTimestamp(state.data.weekly?.resetAt)
+  ].filter(value => Number.isFinite(value) && value > now);
+  if (!resetCandidates.length) return;
+  const nextReset = Math.min(...resetCandidates);
+  const delay = Math.min(2147480000, Math.max(1000, nextReset - now + 3000));
+  resetSyncTimer = setTimeout(async () => {
+    resetSyncTimer = null;
+    if (nextReset - Date.now() > 5000) {
+      scheduleResetSync();
+      return;
+    }
+    await refresh('reset', true);
+  }, delay);
+}
+
   function scheduleRefresh() {
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
+    scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);
     if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
     const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
@@ -523,6 +556,7 @@ async function importLegacyTodayBaselines() {
     await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)refresh('init',true);
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);
+      if(resetSyncTimer)clearTimeout(resetSyncTimer);
       for(const [t,ty,id] of remoteListeners.splice(0)){try{await t.removeEventListener(ty,id);}catch(_){}}
       for(const [t,ty,fn] of domListeners.splice(0)){try{t.removeEventListener(ty,fn);}catch(_){}}
       if(widget){try{await widget.remove();}catch(_){}}

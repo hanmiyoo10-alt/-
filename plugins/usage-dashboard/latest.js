@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.4
+//@version 3.0.0-alpha.3.5
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.4';
+  const VERSION = '3.0.0-alpha.3.5';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -15,8 +15,10 @@
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true,
+    staleAfterMs: 300000,
     widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
+    consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     data: null
   };
 
@@ -38,9 +40,26 @@
     return m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 전`;
   }
 
+  function sourceAgeMs() {
+    const ts = Number(state.data?.fetchedAt);
+    return Number.isFinite(ts) && ts > 0 ? Math.max(0, Date.now() - ts) : null;
+  }
+
+  function dataIsStale() {
+    const a = sourceAgeMs();
+    const limit = Math.max(0, Number(state.staleAfterMs) || 0);
+    return state.bridgeStatus === 'connected' && a !== null && limit > 0 && a >= limit;
+  }
+
+  function retryDelayFor(failures) {
+    const base = Math.max(15000, Number(state.refreshMs) || 15000);
+    return Math.min(120000, base * Math.pow(2, Math.max(0, Number(failures || 1) - 1)));
+  }
+
   function connectionBadge() {
-    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
     if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
+    if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
+    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
     return {label:'WAIT', color:'#ffd27d'};
   }
 
@@ -109,18 +128,26 @@
         state.lastSyncDurationMs = state.lastSyncAt - started;
         state.lastRefreshReason = reason;
         state.refreshCount = Number(state.refreshCount || 0) + 1;
+        state.consecutiveFailures = 0;
+        state.retryDelayMs = 0;
+        state.nextRetryAt = null;
         await persist();
         await renderWidget();
+        scheduleRefresh();
         if (document.body?.dataset?.panelOpen === '1') renderSettings();
       } catch (e) {
         // Keep the last successful snapshot in state.data; only status changes.
         state.bridgeStatus = 'error';
         state.bridgeError = e?.message || String(e);
         state.lastRefreshReason = reason;
+        state.consecutiveFailures = Number(state.consecutiveFailures || 0) + 1;
+        state.retryDelayMs = retryDelayFor(state.consecutiveFailures);
+        state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
         await persist();
         // Keep the last good values, but immediately repaint the widget so
         // LIVE changes to OFFLINE as soon as a refresh fails.
         await renderWidget();
+        scheduleRefresh();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
         if (document.body?.dataset?.panelOpen === '1') renderSettings();
       }
@@ -141,6 +168,11 @@
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
       `Reason: ${state.lastRefreshReason || '—'}`,
       `Success count: ${Number(state.refreshCount || 0)}`,
+      `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
+      `Stale after: ${Math.round((Number(state.staleAfterMs)||0)/1000)}s`,
+      `Failures: ${Number(state.consecutiveFailures || 0)}`,
+      `Retry delay: ${Number(state.retryDelayMs || 0)}ms`,
+      `Next retry: ${state.nextRetryAt ? new Date(Number(state.nextRetryAt)).toISOString() : '—'}`,
       `Error: ${state.bridgeError || 'none'}`,
       `Updater: ${UPDATE_URL}`
     ].join('\n');
@@ -223,7 +255,7 @@
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${w?pct(100-Number(w.percent||0)):0}%;background:#b9a6f8"></i></div>
       ${row(c?.label||'Credits',detailed?money(c?.balance):money(c?.todayUsed,4),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:10px">오늘 ${money(c?.todayUsed,4)}</div>`:''}
       <div style="display:flex;justify-content:space-between;gap:8px;color:#7f8792;font-size:10px;margin-top:5px">
-        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':'자동 갱신'}</span>
+        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
         <span>${age(state.lastSyncAt)} · ${VERSION}</span>
       </div>
     </div>`;
@@ -286,8 +318,12 @@
 
   function scheduleRefresh() {
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
-    const ms=Math.max(0,Number(state.refreshMs)||0);
-    if (!ms||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    const baseMs=Math.max(0,Number(state.refreshMs)||0);
+    if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
+      ? Math.max(baseMs, Number(state.retryDelayMs)||baseMs)
+      : baseMs;
+    if (state.bridgeStatus === 'error') state.nextRetryAt = Date.now() + ms;
     refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
   }
 

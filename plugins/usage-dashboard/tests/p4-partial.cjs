@@ -19,8 +19,9 @@ for (const marker of [
   "lastPanelRenderMode:'full'",
   'const PANEL_PARTIAL_SELECTORS = [',
   'function patchPanelSections(nextHtml)',
+  'function renderSettingsPartial()',
   "new DOMParser().parseFromString(nextHtml, 'text/html')",
-  "renderSettings(true)",
+  'renderSettingsPartial();',
   'performanceRuntime.panelPartialRenders += 1',
   'performanceRuntime.panelFullRenders += 1',
   'performanceRuntime.panelSectionWrites += writes',
@@ -38,6 +39,7 @@ assert.ok(source.includes("'.grid > section.analytics-panel'"), 'Analytics panel
 assert.ok(source.includes("const diagnosticsCurrent = currentAdvanced[1]?.querySelector('.advanced-body');"), 'open runtime diagnostics should be refreshed without touching Bridge settings');
 assert.ok(source.includes("if (currentAdvanced[1]?.open && diagnosticsCurrent && diagnosticsNext)"), 'runtime diagnostics partial update must preserve details open state');
 assert.ok(source.includes("if (force) { renderSettings(); return; }"), 'forced/user render must remain full');
+assert.ok(source.includes('  function renderSettings() {'), 'P2 module boundary must stay unchanged');
 assert.ok(source.includes('P4 render: closed-panel skip · widget DOM dedup'), 'P4.5 regression marker missing');
 assert.ok(source.includes('Recent UI: filter ${'), 'P3 recent UI regression');
 assert.ok(source.includes('Resume route: requested'), 'resume diagnostics regression');

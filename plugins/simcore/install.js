@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.35
+//@version 0.62.36
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: runtime prompt serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.62.36 Prompt Cache Probe:
+// - Diagnostics only: compares the current SimCore runtime prompt block with the previous live request for the same chat
+// - Measures exact common-prefix chars/lines, first changed line, changed line slots, and a coarse change-reason category
+// - Keeps only one prior runtime prompt in memory; no pluginStorage, snapshot, state-schema, history-scan, or persistent cache is added
+// - Reports SimCore runtime-block stability only; it does not claim or infer provider/PocketRisu cache hit or miss
+// - renderRuntimePrompt output remains byte-identical to v0.62.35; generation guidance and all Core/Community contracts are unchanged
 //
 // v0.62.35 Module Boundary Freeze:
 // - Freezes explicit responsibility/non-goal contracts for every internal module before the v0.63 prompt-compiler work
@@ -3239,6 +3246,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastRequestLineageProbe = null;
   let lastCommunitySourceHandoffProbe = null;
   let lastRuntimePromptBudget = null;
+  let lastRuntimePromptCacheProbe = null;
+  let previousRuntimePromptText = null;
+  let previousRuntimePromptKey = null;
   let lastTimestampCanonicalization = null;
 
   const { perfNow, perfMs } = ops;
@@ -3247,6 +3257,68 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     if (!m) return '';
     const v = m.content ?? m.data ?? m.text ?? '';
     return typeof v === 'string' ? v : String(v || '');
+  }
+
+  function promptChangeReason(previousLine, currentLine) {
+    const text = `${String(previousLine || '')}\n${String(currentLine || '')}`;
+    if (/^reaction_max=/m.test(text)) return 'reaction_max';
+    if (/broadcast_airtime_|broadcast_locked=|mode_b_/m.test(text)) return 'broadcast-time';
+    if (/narrative_|timestamp_semantics=/m.test(text)) return 'narrative-time';
+    if (/^(?:mode=|episode_no=)/m.test(text)) return 'mode/lifecycle';
+    if (/community_blocks_expected=|platform_groups_required=|b_end_|final_required_blocks=/m.test(text)) return 'community';
+    if (/request_template_|prior_answer_|reevaluate_current_event|do_not_mechanically_reuse/m.test(text)) return 'recurrence';
+    if (/short_community_|derive_reaction_from_current_source/m.test(text)) return 'handoff/lineage';
+    if (/korean_age_offset=|current_korean_age=|world_year=/m.test(text)) return 'age/world-year';
+    return 'other';
+  }
+
+  function buildRuntimePromptCacheProbe(previousText, currentText) {
+    const current = String(currentText || '');
+    const previous = previousText == null ? null : String(previousText);
+    const currentLines = current ? current.split('\n') : [];
+    if (previous == null) {
+      return {
+        baseline: true,
+        stable: false,
+        previousChars: 0,
+        currentChars: current.length,
+        stablePrefixChars: 0,
+        stablePrefixPercent: null,
+        stablePrefixLines: 0,
+        firstChangedLine: null,
+        changedLineSlots: 0,
+        reason: 'baseline',
+      };
+    }
+
+    let prefixChars = 0;
+    const charLimit = Math.min(previous.length, current.length);
+    while (prefixChars < charLimit && previous.charCodeAt(prefixChars) === current.charCodeAt(prefixChars)) prefixChars += 1;
+
+    const previousLines = previous ? previous.split('\n') : [];
+    let prefixLines = 0;
+    const lineLimit = Math.min(previousLines.length, currentLines.length);
+    while (prefixLines < lineLimit && previousLines[prefixLines] === currentLines[prefixLines]) prefixLines += 1;
+
+    const stable = previous === current;
+    const denominator = Math.max(previous.length, current.length, 1);
+    const firstChangedLine = stable ? null : prefixLines + 1;
+    const changedLineSlots = stable ? 0 : Math.max(previousLines.length, currentLines.length) - prefixLines;
+    const previousChangedLine = stable ? '' : (previousLines[prefixLines] || '');
+    const currentChangedLine = stable ? '' : (currentLines[prefixLines] || '');
+
+    return {
+      baseline: false,
+      stable,
+      previousChars: previous.length,
+      currentChars: current.length,
+      stablePrefixChars: prefixChars,
+      stablePrefixPercent: stable ? 100 : (prefixChars / denominator) * 100,
+      stablePrefixLines: prefixLines,
+      firstChangedLine,
+      changedLineSlots,
+      reason: stable ? 'stable' : promptChangeReason(previousChangedLine, currentChangedLine),
+    };
   }
 
   async function currentIndices() {
@@ -3330,7 +3402,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.35] state mirror failed:', e.message);
+      console.log('[simcore/v0.62.36] state mirror failed:', e.message);
     }
   }
 
@@ -3345,7 +3417,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.35] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.62.36] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3435,6 +3507,16 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         lineageAnchor: runtimeBudgetLines.some((line) => line === 'short_community_request_context_is_current_lineage=1'),
         at: Date.now(),
       };
+      const runtimePromptKey = String(coreKey || coreLocationKey || '');
+      const priorRuntimePrompt = previousRuntimePromptKey === runtimePromptKey ? previousRuntimePromptText : null;
+      lastRuntimePromptCacheProbe = {
+        ...buildRuntimePromptCacheProbe(priorRuntimePrompt, runtimeBudgetText),
+        sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
+        mode: runtimeBudgetMode,
+        at: Date.now(),
+      };
+      previousRuntimePromptText = runtimeBudgetText;
+      previousRuntimePromptKey = runtimePromptKey;
       messages.push({ role: 'system', content: result.promptBlock });
       const pendingProbe = result.state.pending || null;
       if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
@@ -3516,6 +3598,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
     } else {
       lastRuntimePromptBudget = null;
+      lastRuntimePromptCacheProbe = null;
+      previousRuntimePromptText = null;
+      previousRuntimePromptKey = null;
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
     }
     // v0.62: do not call setChatToIndex on the request-critical path. The authoritative
@@ -3541,8 +3626,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.35] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.35] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.62.36] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.62.36] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3555,7 +3640,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.35] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.62.36] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3600,7 +3685,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.35] beforeRequest error:', e.message);
+      console.log('[simcore/v0.62.36] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3626,7 +3711,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.35] output error:', e.message);
+      console.log('[simcore/v0.62.36] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3700,6 +3785,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
                 ? 'NEW PARENT'
                 : (lastCommunitySourceHandoffProbe.parentComparable ? 'SAME PARENT' : 'BASELINE')))))
         : 'n/a';
+      const promptCacheLabel = !lastRuntimePromptCacheProbe
+        ? 'n/a'
+        : (lastRuntimePromptCacheProbe.baseline
+          ? 'BASELINE'
+          : `${Number(lastRuntimePromptCacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${lastRuntimePromptCacheProbe.reason || 'other'}`);
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
@@ -3710,7 +3800,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.35 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.62.36 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3739,12 +3829,14 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Timestamp syntax</div><div class="v">${lastTimestampCanonicalization ? (lastTimestampCanonicalization.changed ? `CANONICALIZED · ${Number(lastTimestampCanonicalization.count || 0)}` : `OK`) : `n/a`}</div></div>
 <div class="metric"><div class="k">Short-C lineage</div><div class="v">${lastRuntimePromptBudget?.lineageAnchor ? 'CURRENT LINEAGE' : 'OFF'}</div></div>
 <div class="metric"><div class="k">Runtime prompt</div><div class="v">${lastRuntimePromptBudget ? `${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines` : 'n/a'}</div></div>
+<div class="metric"><div class="k">Prompt prefix</div><div class="v">${escapeHtml(promptCacheLabel)}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 </div>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${lastRuntimePromptBudget ? `<div class="card"><div class="k" style="margin-bottom:8px">Runtime prompt budget (current request)</div><div>${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines · mode ${escapeHtml(lastRuntimePromptBudget.mode || '?')}</div><div class="muted" style="margin-top:5px">reaction_max line ${Number(lastRuntimePromptBudget.reactionMaxChars || 0).toLocaleString('en-US')} chars · reference ${Number(lastRuntimePromptBudget.referenceLines || 0)} lines</div><div class="muted" style="margin-top:5px">active flags: ${escapeHtml([lastRuntimePromptBudget.broadcast ? 'broadcast' : '', lastRuntimePromptBudget.community ? 'community' : '', lastRuntimePromptBudget.narrativeProgression ? 'narrative' : '', lastRuntimePromptBudget.recurrence ? 'recurrence' : '', lastRuntimePromptBudget.handoff ? 'handoff' : '', lastRuntimePromptBudget.ageAnchor ? 'age-anchor' : '', lastRuntimePromptBudget.lineageAnchor ? 'lineage-anchor' : ''].filter(Boolean).join(' · ') || 'base-only')} · diagnostics only · prompt unchanged</div></div>` : ''}
+${lastRuntimePromptCacheProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Prompt cache probe (SimCore runtime block)</div><div>${lastRuntimePromptCacheProbe.baseline ? 'BASELINE · no previous same-chat runtime block' : `${Number(lastRuntimePromptCacheProbe.stablePrefixPercent || 0).toFixed(1)}% stable prefix · ${escapeHtml(lastRuntimePromptCacheProbe.reason || 'other')}`}</div><div class="muted" style="margin-top:5px">current ${Number(lastRuntimePromptCacheProbe.currentChars || 0).toLocaleString('en-US')} chars · previous ${Number(lastRuntimePromptCacheProbe.previousChars || 0).toLocaleString('en-US')} · stable prefix ${Number(lastRuntimePromptCacheProbe.stablePrefixChars || 0).toLocaleString('en-US')} chars / ${Number(lastRuntimePromptCacheProbe.stablePrefixLines || 0)} full lines</div><div class="muted" style="margin-top:5px">${lastRuntimePromptCacheProbe.firstChangedLine == null ? 'first change: none' : `first change: line ${Number(lastRuntimePromptCacheProbe.firstChangedLine)} · changed line slots ${Number(lastRuntimePromptCacheProbe.changedLineSlots || 0)}`} · memory-only previous block</div><div class="muted" style="margin-top:5px">SimCore runtime block only · does not observe or infer PocketRisu/provider cache hit/miss</div></div>` : ''}
 ${lastTemplateRecurrenceProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Template recurrence guard (runtime)</div><div>${escapeHtml(recurrenceLabel)} · mode ${escapeHtml(lastTemplateRecurrenceProbe.modeFamily || '?')} · registry ${Number(lastTemplateRecurrenceProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">template chars ${Number(lastTemplateRecurrenceProbe.normalizedChars || 0)} · ${lastTemplateRecurrenceProbe.repeated ? 'delta/variation hint injected' : 'no recurrence hint'}</div></div>` : ''}
 ${lastRequestLineageProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Request lineage probe (runtime)</div><div>${escapeHtml(lineageLabel)}</div><div class="muted" style="margin-top:5px">root ${escapeHtml(lastRequestLineageProbe.rootMode || 'none')}@${Number(lastRequestLineageProbe.rootIndex)} · parent ${escapeHtml(lastRequestLineageProbe.parentMode || 'none')}@${Number(lastRequestLineageProbe.parentIndex)} · transition ${escapeHtml(lastRequestLineageProbe.transitionFrom || '?')} → ${escapeHtml(String(lastRequestLineageProbe.currentMode || '?').replace(/^B_.*/, 'B'))}</div><div class="muted" style="margin-top:5px">recent A/B ${escapeHtml((lastRequestLineageProbe.recentSources || []).map((x) => `${x.mode}@${x.index}`).join(' · ') || 'none')} · diagnostics only · prompt +0</div></div>` : ''}
 ${lastCommunitySourceHandoffProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Community source handoff (runtime)</div><div>${escapeHtml(handoffLabel)} · registry ${Number(lastCommunitySourceHandoffProbe.registrySize || 0)}</div><div class="muted" style="margin-top:5px">current ${escapeHtml(lastCommunitySourceHandoffProbe.rootMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.rootIndex)} · prior ${escapeHtml(lastCommunitySourceHandoffProbe.priorRootMode || 'none')}@${Number(lastCommunitySourceHandoffProbe.priorRootIndex)} · request chars ${Number(lastCommunitySourceHandoffProbe.normalizedChars || 0)}</div><div class="muted" style="margin-top:5px">${lastCommunitySourceHandoffProbe.newSource ? '2-line current-source hint injected' : (lastRuntimePromptBudget?.lineageAnchor ? '1-line current-lineage hint injected' : 'prompt +0')} · ${escapeHtml(lastCommunitySourceHandoffProbe.reason || 'ineligible')}</div></div>` : ''}
@@ -3819,7 +3911,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.35] panel error:', e.message);
+      console.log('[simcore/v0.62.36] panel error:', e.message);
     }
   }
 
@@ -3827,13 +3919,16 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.35] UI registration failed:', e.message);
+    console.log('[simcore/v0.62.36] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
     coreSession = null;
     coreKey = null;
     coreLocationKey = null;
+    lastRuntimePromptCacheProbe = null;
+    previousRuntimePromptText = null;
+    previousRuntimePromptKey = null;
   });
-  console.log('[simcore/v0.62.35] initialized');
+  console.log('[simcore/v0.62.36] initialized');
 })();

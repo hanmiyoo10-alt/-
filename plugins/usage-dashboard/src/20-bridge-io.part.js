@@ -72,7 +72,7 @@
   // Live /status is authoritative. A persisted success marker must never suppress reconciliation.
   state.bridgeManagerSyncedProductVersion = '';
   try {
-    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
     const text = await res.text();
     if (!res.ok) {
       state.bridgeManagerLastProbeAt = 0;
@@ -111,7 +111,7 @@
   // Live engine ownership wins over a persisted attempt marker; retry safely when still unmanaged.
   state.bridgeEngineAdoptionAttemptedVersion = '';
   try {
-    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
     const text = await res.text();
     const payload = JSON.parse(text);
     if (!res.ok) {
@@ -139,7 +139,7 @@
   // Live bundle state wins over a persisted attempt marker; retry while the manager still reports adopted.
   state.bridgeEngineBundleSyncAttemptedVersion = '';
   try {
-    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
     const text = await res.text();
     const payload = JSON.parse(text);
     if (!res.ok) {

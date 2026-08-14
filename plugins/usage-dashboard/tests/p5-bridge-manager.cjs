@@ -82,4 +82,8 @@ assert.ok(!source.includes("if (String(state.bridgeManagerSyncedProductVersion |
 assert.ok(source.includes("state.bridgeManagerSyncedProductVersion = '';"), 'manager mismatch must clear stale sync marker');
 assert.ok(source.includes('for (const waitMs of [200, 350, 600, 900])'), 'manager restart re-probe loop missing');
 
+const managerPostBodyCalls = (source.match(/body:'\{\}'/g) || []).length;
+assert.equal(managerPostBodyCalls, 3, 'all Risuai.nativeFetch manager POST calls must include a body');
+assert.equal((source.match(/'Content-Type':'application\/json'/g) || []).length, 3, 'all manager POST calls must declare JSON content type');
+
 console.log(`usage-dashboard P5 bridge manager regression: OK · ${version}`);

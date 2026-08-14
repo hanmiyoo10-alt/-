@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.4
+//@version 0.63.5
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.5 Period Baseline Continuity:
+// - Adds one compact mode-independent continuity contract for successive period comparisons: the completed terminal state of the previous period becomes the next period baseline
+// - Forbids replaying an already-completed prior-period baseline-to-terminal transition as the current period transition
+// - Uses no year/number/platform parsing, content extraction, history scan, response copy, state-schema field, or pluginStorage/API call; the main model still interprets exposed history/content
+// - Keeps Recurrence, Lineage, Handoff, Time, Recovery, Reaction, Storage, Broadcast, diagnostics, and output handling unchanged
+// - Adds exactly two fixed Stable Contract lines on active prompts; compiler tier order and all existing dynamic prompt serialization stay unchanged
 //
 // v0.63.4 Long-Chat Regression Probe:
 // - Diagnostics-only mini release: generation behavior, runtime prompt, state schema, storage, recurrence, lineage, handoff, time, recovery, reaction, and broadcast semantics stay unchanged
@@ -2321,6 +2328,8 @@ function compileStableContract() {
     '[SIMCORE CORE STATE — AUTHORITATIVE]',
     'required_frame=응답,볼륨,챕터,Chatindex,timestamp',
     'response_envelope=exactly_one_no_restart',
+    'period_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline',
+    'do_not_replay_completed_prior_period_transition_as_current_period_transition=1',
     'reference_sources=character_card+currently_exposed_lore_if_present',
     'character_world_facts_use_reference_sources=1',
     'knowledge_required=1',
@@ -3980,7 +3989,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.4',
+      'Version: 0.63.5',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4132,7 +4141,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.4 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.5 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>

@@ -89,3 +89,5 @@ jobs:
           git add plugins/usage-dashboard/latest.js
           git commit -m 'release: publish Local Usage Dashboard v3.0.0-alpha.3.41'
           git push origin HEAD:release-usage-dashboard
+
+# retriggered after strict cache-card anchor fix

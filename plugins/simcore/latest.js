@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.7
+//@version 0.63.8
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.8 Diagnostics UI Polish:
+// - UI-only panel refresh: adds a sticky header, compact health chips, lineage breadcrumb, frame-continuity summary, and slowest-step performance highlight
+// - Frame summary is computed only when the SimCore panel is opened, using the chat object already loaded by the existing panel path; request/runtime generation paths receive no new work
+// - Adds no timer, polling, observer, storage/API call, history persistence, prompt line, state field, output repair, or generation guidance
+// - Keeps all internal modules byte-identical to v0.63.7, including Prompt, Session, Store, Recovery, Structure, Lineage, Handoff, Recurrence, Time, and Reaction
+// - Existing diagnostic-copy behavior remains unchanged except for the displayed version number
 //
 // v0.63.7 Short-C Source Facts Reinforcement:
 // - Strengthens the existing Short-C Source Lock after live long-chat drift where lineage/root metadata was correct but the model substituted facts from an older similar event
@@ -4005,7 +4012,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.7',
+      'Version: 0.63.8',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4147,17 +4154,74 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : (lastRuntimePromptCacheProbe.baseline
           ? 'BASELINE'
           : `${Number(lastRuntimePromptCacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${lastRuntimePromptCacheProbe.reason || 'other'}`);
+      const panelMessages = Array.isArray(chat?.message) ? chat.message : [];
+      let panelLatestAssistantIndex = -1;
+      for (let i = panelMessages.length - 1; i >= 0; i--) {
+        if (diagnosticAssistantRole(panelMessages[i])) { panelLatestAssistantIndex = i; break; }
+      }
+      let panelCurrentUserIndex = -1;
+      for (let i = panelLatestAssistantIndex - 1; i >= 0; i--) {
+        if (panelMessages[i]?.role === 'user') { panelCurrentUserIndex = i; break; }
+      }
+      const panelFrameProbe = diagnosticFrameContinuity(panelMessages, panelCurrentUserIndex, panelLatestAssistantIndex);
+      const panelFrameValue = (v) => Number.isFinite(v) ? Number(v) : 'n/a';
+      const panelModeLabel = lastCore.mode || s?.lastMode || 'A';
+      const panelWarningCount = Array.isArray(lastCore.issues) ? lastCore.issues.length : 0;
+      const panelSourceLock = !!lastRuntimePromptBudget?.sourceAnchor;
+      const panelFrameOk = panelFrameProbe.regression === 'NONE';
+      const panelPrefixClass = !lastRuntimePromptCacheProbe || lastRuntimePromptCacheProbe.baseline
+        ? 'neutral'
+        : (Number(lastRuntimePromptCacheProbe.stablePrefixPercent || 0) >= 60 ? 'good'
+          : (Number(lastRuntimePromptCacheProbe.stablePrefixPercent || 0) >= 30 ? 'warn' : 'bad'));
+      const panelRootLabel = lastRequestLineageProbe?.rootIndex >= 0
+        ? `${lastRequestLineageProbe.rootMode || '?'}@${Number(lastRequestLineageProbe.rootIndex)}`
+        : 'UNSEEDED';
+      const panelParentLabel = lastRequestLineageProbe?.parentIndex >= 0
+        ? `${lastRequestLineageProbe.parentMode || '?'}@${Number(lastRequestLineageProbe.parentIndex)}`
+        : 'none';
+      const panelCurrentLabel = `${String(lastRequestLineageProbe?.currentMode || panelModeLabel || '?').replace(/^B_.*/, 'B')}@current`;
+      const panelPerfLabelMap = {
+        indicesMs: 'Indices', chatLoadMs: 'Chat load', sessionLoadMs: 'Session load', promptScanMs: 'Prompt scan',
+        bootstrapMs: 'History bootstrap', aliasRepairMs: 'Community alias repair', editReconcileMs: 'Edit reconcile',
+        prepareMs: 'Core prepare', stateMirrorMs: 'State mirror', snapshotMs: 'Snapshot/onSend'
+      };
+      const panelPerfTop = Object.entries(lastPerf || {})
+        .filter(([k, v]) => k !== 'totalMs' && k.endsWith('Ms') && typeof v === 'number' && Number.isFinite(v) && v >= 0)
+        .sort((a, b) => b[1] - a[1])[0] || null;
+      const panelPerfTopLabel = panelPerfTop ? (panelPerfLabelMap[panelPerfTop[0]] || panelPerfTop[0].replace(/Ms$/, '')) : 'n/a';
       document.body.innerHTML = `
 <style>
-body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:20px}
-h1{font-size:18px;margin:0 0 14px}.card{background:#121a2d;border:1px solid #293754;border-radius:12px;padding:14px;margin:10px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.k{color:#9fb3d7;font-size:12px}.v{font-weight:700;margin-top:3px}
+body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:0 20px 20px}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0 10px;background:rgba(11,16,32,.94);backdrop-filter:blur(10px);border-bottom:1px solid #202c45}.title{font-size:18px;font-weight:800}.subtitle{color:#8291ad;font-size:11px;margin-top:2px}.actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.card{background:#121a2d;border:1px solid #293754;border-radius:12px;padding:14px;margin:10px 0}.health{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 8px}.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;border:1px solid #33415f;background:#111a2b}.chip.good{border-color:#285c4b;background:#10271f;color:#9ce5c3}.chip.warn{border-color:#66582f;background:#2b2512;color:#f2d889}.chip.bad{border-color:#743b48;background:#2d151b;color:#ffb3c0}.chip.neutral{color:#c4d1e8}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.k{color:#9fb3d7;font-size:12px}.v{font-weight:700;margin-top:3px}.section-title{font-size:13px;font-weight:800;margin-bottom:10px}.breadcrumb{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.crumb{background:#0e1628;border:1px solid #2a3b5d;border-radius:8px;padding:6px 8px;font-weight:700}.arrow{color:#7185aa}.frame-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.frame-cell{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px}.frame-step{font-size:11px;color:#91a6c9;margin-top:4px}.frame-ok{color:#9ce5c3}.frame-bad{color:#ffb3c0}.bottleneck{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#0e1628;border:1px solid #2a3b5d;border-radius:9px;padding:9px 10px;margin:0 0 8px}.bottleneck span{color:#9fb3d7;font-size:12px}
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px;border-bottom:1px solid #26324a}th{color:#9fb3d7}.muted{color:#8291ad}
 button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
+@media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.7 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
+<div class="topbar">
+<div><div class="title">⚙️ SimCore v0.63.8</div><div class="subtitle">Diagnostics UI Polish · runtime semantics unchanged</div></div>
+<div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
+</div>
+<div class="health">
+<span class="chip neutral">MODE ${escapeHtml(panelModeLabel)}</span>
+<span class="chip ${panelWarningCount === 0 ? 'good' : 'bad'}">WARN ${panelWarningCount}</span>
+<span class="chip ${panelSourceLock ? 'good' : 'neutral'}">SOURCE ${panelSourceLock ? 'LOCK' : 'STANDBY'}</span>
+<span class="chip ${panelFrameOk ? 'good' : 'bad'}">FRAME ${panelFrameOk ? 'OK' : escapeHtml(panelFrameProbe.regression)}</span>
+<span class="chip ${panelPrefixClass}">PREFIX ${escapeHtml(promptCacheLabel)}</span>
+</div>
+<div class="card">
+<div class="section-title">Continuity at a glance</div>
+<div class="breadcrumb"><span class="crumb">ROOT ${escapeHtml(panelRootLabel)}</span><span class="arrow">→</span><span class="crumb">PARENT ${escapeHtml(panelParentLabel)}</span><span class="arrow">→</span><span class="crumb">${escapeHtml(panelCurrentLabel)}</span></div>
+<div class="frame-grid">
+<div class="frame-cell"><div class="k">Volume</div><div class="v">${panelFrameValue(panelFrameProbe.previous.volume)} → ${panelFrameValue(panelFrameProbe.current.volume)}</div><div class="frame-step">${escapeHtml(diagnosticStepLabel(panelFrameProbe.previous.volume, panelFrameProbe.current.volume))}</div></div>
+<div class="frame-cell"><div class="k">Chapter</div><div class="v">${panelFrameValue(panelFrameProbe.previous.chapter)} → ${panelFrameValue(panelFrameProbe.current.chapter)}</div><div class="frame-step">${escapeHtml((Number.isFinite(panelFrameProbe.previous.volume) && Number.isFinite(panelFrameProbe.current.volume) && panelFrameProbe.current.volume > panelFrameProbe.previous.volume && Number.isFinite(panelFrameProbe.previous.chapter) && Number.isFinite(panelFrameProbe.current.chapter) && panelFrameProbe.current.chapter < panelFrameProbe.previous.chapter) ? 'RESET_AFTER_VOLUME_ADVANCE' : diagnosticStepLabel(panelFrameProbe.previous.chapter, panelFrameProbe.current.chapter))}</div></div>
+<div class="frame-cell"><div class="k">Chatindex</div><div class="v">${panelFrameValue(panelFrameProbe.previous.chatindex)} → ${panelFrameValue(panelFrameProbe.current.chatindex)}</div><div class="frame-step">${escapeHtml(diagnosticStepLabel(panelFrameProbe.previous.chatindex, panelFrameProbe.current.chatindex))}</div></div>
+</div>
+<div class="${panelFrameOk ? 'frame-ok' : 'frame-bad'}" style="font-weight:800;margin-top:10px">FRAME REGRESSION: ${escapeHtml(panelFrameProbe.regression)}</div>
+</div>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -4202,7 +4266,7 @@ ${recurrenceDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">T
 ${narrativeProbe ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative clock probe (runtime)</div><div>${escapeHtml(narrativeProbe.commitStatus || 'UNKNOWN')} · ${escapeHtml(narrativeTransition)} · guard ${narrativeProbe.guardActive ? 'ON' : 'OFF'}</div><div class="muted" style="margin-top:5px">trigger ${escapeHtml(narrativeProbe.trigger || 'none')} · previous ${escapeHtml(narrativeProbe.previousAnchor || 'unknown')} · observed ${escapeHtml(narrativeProbe.observedTimestamp || 'pending')} · committed ${escapeHtml(narrativeProbe.outputTimestamp || 'pending')}</div></div>` : ''}
 ${s?.lastNarrativeClockWarning ? `<div class="card"><div class="k" style="margin-bottom:8px">Narrative current-time floor</div><div>${s.lastNarrativeClockWarning.action === 'clamped' ? 'FLOOR CLAMPED' : 'REJECTED BACKWARD'} · ${escapeHtml(s.lastNarrativeClockWarning.rejected || 'unknown')}</div><div class="muted" style="margin-top:5px">floor ${escapeHtml(s.lastNarrativeClockWarning.previous || 'unknown')} · ${escapeHtml(s.lastNarrativeClockWarning.reason || 'forward')}</div></div>` : ''}
 ${lastHistoryRestore ? `<div class="card"><div class="k" style="margin-bottom:8px">Last snapshot restore (runtime)</div><div>RESTORED · ${escapeHtml(lastHistoryRestore.reason)} · send index ${Number(lastHistoryRestore.sendIndex)}</div><div class="muted" style="margin-top:5px">previous output index ${Number.isFinite(lastHistoryRestore.previousOutputIndex) ? Number(lastHistoryRestore.previousOutputIndex) : 'unknown'} · ${escapeHtml(new Date(lastHistoryRestore.at).toLocaleString())}</div></div>` : ''}
-${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms</summary><div class="detail-body"><table>
+${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${lastPerf.totalMs.toFixed(1)} ms${panelPerfTop ? ` · slowest ${escapeHtml(panelPerfTopLabel)} ${Number(panelPerfTop[1]).toFixed(1)} ms` : ''}</summary><div class="detail-body">${panelPerfTop ? `<div class="bottleneck"><span>Slowest step</span><strong>${escapeHtml(panelPerfTopLabel)} · ${Number(panelPerfTop[1]).toFixed(1)} ms</strong></div>` : ''}<table>
 <tr><td>Total</td><td>${lastPerf.totalMs.toFixed(1)} ms</td></tr>
 <tr><td>Indices</td><td>${lastPerf.indicesMs.toFixed(1)} ms</td></tr>
 <tr><td>Chat load</td><td>${lastPerf.chatLoadMs.toFixed(1)} ms</td></tr>

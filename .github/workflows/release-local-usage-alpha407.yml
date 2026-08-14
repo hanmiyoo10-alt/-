@@ -28,11 +28,16 @@ jobs:
           from pathlib import Path
           p = Path('plugins/usage-dashboard/tools/release_alpha407_patch.py')
           s = p.read_text()
-          old = "css_marker = '      .request-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--l)}'"
-          new = "css_marker = '      .request-detail-row{'"
-          if old not in s:
+          old_marker = "css_marker = '      .request-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--l)}'"
+          new_marker = "css_marker = '      .request-detail-row{'"
+          if old_marker not in s:
               raise SystemExit('alpha.4.7 CSS marker fix target missing')
-          p.write_text(s.replace(old, new, 1))
+          s = s.replace(old_marker, new_marker, 1)
+          old_apply = "s = replace_once(s, css_marker, css_insert + css_marker, 'hourly CSS')"
+          new_apply = "s = s.replace(css_marker, css_insert + css_marker, 1) if css_marker in s else replace_once(s, '    </style>', css_insert + '    </style>', 'hourly CSS fallback')"
+          if old_apply not in s:
+              raise SystemExit('alpha.4.7 CSS apply target missing')
+          p.write_text(s.replace(old_apply, new_apply, 1))
           PY
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha407_patch.py
           python3 plugins/usage-dashboard/tools/release_alpha407_patch.py

@@ -18,19 +18,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.31 to alpha.3.32 Usage chat quick menu fix
+      - name: Patch alpha.3.32 to alpha.3.33 runtime state
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha332_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha333_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.32$' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.33$' plugins/usage-dashboard/latest.js
+          grep -q 'runtimeStatus: null' plugins/usage-dashboard/latest.js
+          grep -q "runtimeState:'active'" plugins/usage-dashboard/latest.js
+          grep -q 'runtimeTransitions:0' plugins/usage-dashboard/latest.js
+          grep -q 'lastHealthySyncAt:null' plugins/usage-dashboard/latest.js
+          grep -q 'degradedSince:null' plugins/usage-dashboard/latest.js
+          grep -q 'function runtimeHasDegradation' plugins/usage-dashboard/latest.js
+          grep -q 'function setRuntimeState' plugins/usage-dashboard/latest.js
+          grep -q 'function updateRuntimeState' plugins/usage-dashboard/latest.js
+          grep -q 'Runtime state:' plugins/usage-dashboard/latest.js
+          grep -q 'Runtime State ·' plugins/usage-dashboard/latest.js
+          grep -q "setRuntimeState('resuming', reason)" plugins/usage-dashboard/latest.js
+          grep -q "setRuntimeState('background','hidden')" plugins/usage-dashboard/latest.js
+          grep -q "updateRuntimeState('refresh-error')" plugins/usage-dashboard/latest.js
+          grep -q "updateRuntimeState('refresh-complete')" plugins/usage-dashboard/latest.js
           grep -q "Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'" plugins/usage-dashboard/latest.js
-          grep -q "Risuai.registerSetting('Local Usage Dashboard'" plugins/usage-dashboard/latest.js
-          ! grep -q "Risuai.registerSetting('Usage',openSettings" plugins/usage-dashboard/latest.js
-          ! grep -q "location:'hamburger',id:'local-usage-dashboard-button-v3'" plugins/usage-dashboard/latest.js
           grep -q 'Resume input:' plugins/usage-dashboard/latest.js
-          grep -q 'Resume Input ·' plugins/usage-dashboard/latest.js
           grep -q 'Panel render scheduler:' plugins/usage-dashboard/latest.js
           grep -q 'Render spike:' plugins/usage-dashboard/latest.js
           grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
@@ -47,11 +57,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.32'
+            echo 'latest.js already matches alpha.3.33'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.32 Usage chat quick menu fix'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.33 runtime state'
           git push

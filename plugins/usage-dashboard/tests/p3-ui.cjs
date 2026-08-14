@@ -2,10 +2,12 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
 const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
+const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
+const alpha4 = version.match(/^3\.0\.0-alpha\.4\.(\d+)$/);
+assert.ok(alpha4 ? Number(alpha4[1]) >= 3 : /^(3\.0\.0-beta\.|3\.0\.0$)/.test(version), `P3 UI requires alpha.4.3+; got ${version}`);
+assert.ok(source.includes(`const VERSION = '${version}';`), 'runtime version must match metadata');
 
 for (const marker of [
-  '//@version 3.0.0-alpha.4.3',
-  "const VERSION = '3.0.0-alpha.4.3';",
   'const aggregateMetaText = row =>',
   'Provider · 요청 / 비용 / 효율',
   'Model · 요청 / 비용 / 효율',
@@ -28,4 +30,4 @@ assert.ok(source.includes("Risuai.registerButton({name:'Usage',icon:'📊',iconT
 assert.ok(source.includes('Resume route: requested'), 'resume diagnostics regression');
 assert.ok(source.includes('Bridge module freshness:'), 'bridge diagnostics regression');
 
-console.log('usage-dashboard P3 UI regression: OK');
+console.log(`usage-dashboard P3 UI regression: OK · ${version}`);

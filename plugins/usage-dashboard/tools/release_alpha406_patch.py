@@ -25,29 +25,19 @@ s = replace_once(
 p.write_text(s)
 
 
-# 60 settings runtime: keep the existing module boundary, then add partial helpers.
+# 60 settings runtime: preserve the original module boundary and keep user renders full.
 p = ROOT / '60-settings-runtime.part.js'
 s = p.read_text()
 pattern = re.compile(r"  function renderSettings\(\) \{\n.*?\n  \}\n\n  function bindSettings\(\) \{", re.S)
 match = pattern.search(s)
 if not match:
     raise SystemExit('renderSettings block not found')
-replacement = r'''  function renderSettings(partial = false) {
+replacement = r'''  function renderSettings() {
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
-    const nextHtml = settingsHtml();
-    let mode = 'full';
-    const partialApplied = partial === true
-      && document.body?.dataset?.panelOpen === '1'
-      && patchPanelSections(nextHtml);
-    if (partialApplied) {
-      mode = 'partial';
-      performanceRuntime.panelPartialRenders += 1;
-    } else {
-      document.body.innerHTML = nextHtml;
-      bindSettings();
-      performanceRuntime.panelFullRenders += 1;
-    }
-    performanceRuntime.lastPanelRenderMode = mode;
+    document.body.innerHTML = settingsHtml();
+    bindSettings();
+    performanceRuntime.panelFullRenders += 1;
+    performanceRuntime.lastPanelRenderMode = 'full';
     const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
     const duration = Math.max(0, endedPerf - startedPerf);
     performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);
@@ -103,18 +93,36 @@ replacement = r'''  function renderSettings(partial = false) {
     return true;
   }
 
+  function renderSettingsPartial() {
+    const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const nextHtml = settingsHtml();
+    if (document.body?.dataset?.panelOpen === '1' && patchPanelSections(nextHtml)) {
+      performanceRuntime.panelPartialRenders += 1;
+      performanceRuntime.lastPanelRenderMode = 'partial';
+    } else {
+      document.body.innerHTML = nextHtml;
+      bindSettings();
+      performanceRuntime.panelFullRenders += 1;
+      performanceRuntime.lastPanelRenderMode = 'full-fallback';
+    }
+    const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const duration = Math.max(0, endedPerf - startedPerf);
+    performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);
+    noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
+  }
+
   function bindSettings() {'''
 s = s[:match.start()] + replacement + s[match.end():]
 p.write_text(s)
 
 
-# 50 settings UI/runtime: scheduled refreshes use partial mode; forced renders stay full.
+# 50 settings UI/runtime: only scheduled/idle refreshes use the partial renderer.
 p = ROOT / '50-settings-ui.part.js'
 s = p.read_text()
 s = replace_once(
     s,
     "if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettings();",
-    "if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettings(true);",
+    "if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettingsPartial();",
     'scheduled partial render',
 )
 p.write_text(s)

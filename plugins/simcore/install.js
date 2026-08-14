@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.6
+//@version 0.63.7
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.7 Short-C Source Facts Reinforcement:
+// - Strengthens the existing Short-C Source Lock after live long-chat drift where lineage/root metadata was correct but the model substituted facts from an older similar event
+// - Adds exactly one fixed source-lock-only Prompt contract binding source-event identity and facts to the authoritative current lineage root and forbidding imported details from prior similar events
+// - Does not change lineage/handoff classification, inspect source semantics, copy source bodies, scan history, store event facts, or add output repair
+// - Keeps v0.63.6 Mode C Output Boundary and v0.63.5 Period Baseline Continuity unchanged; Recurrence, Time, Recovery, Structure, Reaction, Storage, Broadcast, diagnostics, and frame handling remain frozen
+// - A/B, ordinary long C, recurrence-owned C, and Short-C without an eligible source lock receive zero new runtime-prompt lines
 //
 // v0.63.6 Mode C Output Boundary:
 // - Closes a live Mode C formatting gap where model-side intent/analysis/narrative text could appear between the required frame and the first <COMMUNITY> block
@@ -2414,6 +2421,7 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push(`short_community_source_root_index=${sourceRootIndex}`);
     lines.push('short_community_source_is_authoritative=1');
     lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');
+    lines.push('source_event_identity_and_facts=current_lineage_root_only;do_not_import_prior_similar_event_details=1');
     if (p.communitySourceHandoffNewSource) {
       lines.push(`short_community_request_reused_with_new_source=${sourceRootMode}`);
       lines.push('derive_reaction_from_current_source_not_prior_answer=1');
@@ -3997,7 +4005,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.6',
+      'Version: 0.63.7',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4149,7 +4157,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.6 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.7 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>

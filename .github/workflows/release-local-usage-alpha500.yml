@@ -1,0 +1,98 @@
+name: Release Local Usage Dashboard alpha.5.0 unified runtime foundation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-local-usage-alpha500.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch unified runtime foundation and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha500_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha500_patch.py
+          rm plugins/usage-dashboard/tools/release_alpha500_patch.py
+
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
+          node plugins/usage-dashboard/tests/p2-build.cjs
+          node plugins/usage-dashboard/tests/p3-ui.cjs
+          node plugins/usage-dashboard/tests/p3-recent.cjs
+          node plugins/usage-dashboard/tests/p4-render.cjs
+          node plugins/usage-dashboard/tests/p4-partial.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          git diff --check
+
+          grep -Fq '//@version 3.0.0-alpha.5.0' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.0';" plugins/usage-dashboard/latest.js
+          grep -Fq "const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';" plugins/usage-dashboard/latest.js
+          grep -Fq 'function bridgeRuntimeSnapshot()' plugins/usage-dashboard/latest.js
+          grep -Fq 'Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION}' plugins/usage-dashboard/latest.js
+          grep -Fq 'Bridge manager: protocol ${runtimeBridge.managerProtocol}' plugins/usage-dashboard/latest.js
+          grep -Fq 'Runtime manifest: ${RUNTIME_MANIFEST_URL}' plugins/usage-dashboard/latest.js
+          grep -Fq '"architecture": "single-product-modular-sidecar"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"state": "legacy-external"' plugins/usage-dashboard/runtime/product-manifest.json
+
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          cp plugins/usage-dashboard/runtime/product-manifest.json /tmp/usage-dashboard-product-manifest.json
+
+      - name: Commit alpha.5.0 modular source and runtime manifest to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A plugins/usage-dashboard
+          git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.0 unified runtime foundation'
+          git push origin HEAD:main
+
+      - name: Publish alpha.5.0 product artifacts to release-usage-dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          mkdir -p plugins/usage-dashboard/runtime
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp /tmp/usage-dashboard-product-manifest.json plugins/usage-dashboard/runtime/product-manifest.json
+          node --check plugins/usage-dashboard/latest.js
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          grep -Fq '//@version 3.0.0-alpha.5.0' plugins/usage-dashboard/latest.js
+          grep -Fq '"productVersion": "3.0.0-alpha.5.0"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/product-manifest.json
+          if git diff --cached --quiet; then
+            echo 'release branch already matches alpha.5.0'
+            exit 0
+          fi
+          CHANGED="$(git diff --cached --name-only | sort)"
+          EXPECTED="$(printf '%s\n' plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/product-manifest.json | sort)"
+          test "$CHANGED" = "$EXPECTED"
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.0 product artifacts'
+          git push origin HEAD:release-usage-dashboard

@@ -33,6 +33,8 @@ jobs:
           set -euo pipefail
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           node plugins/usage-dashboard/tests/foundation.cjs
           node plugins/usage-dashboard/tests/p1-contract.cjs
           node plugins/usage-dashboard/tests/p2-build.cjs
@@ -44,6 +46,7 @@ jobs:
           node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
           node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
           node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
+          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
@@ -112,12 +115,23 @@ jobs:
           grep -q 'usage.input_tokens_details.cached_tokens' plugins/usage-dashboard/latest.js
           grep -q 'const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
           grep -q "const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';" plugins/usage-dashboard/latest.js
+          grep -q "const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';" plugins/usage-dashboard/latest.js
           grep -q 'function bridgeRuntimeSnapshot()' plugins/usage-dashboard/latest.js
+          grep -q 'async function fetchBridgeManagerStatus(force = false)' plugins/usage-dashboard/latest.js
+          grep -q 'async function syncBridgeManagerIfNeeded(status)' plugins/usage-dashboard/latest.js
           grep -q 'Unified runtime: schema v' plugins/usage-dashboard/latest.js
           grep -q 'Bridge manager: protocol' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge manager probe:' plugins/usage-dashboard/latest.js
           grep -q 'Runtime manifest:' plugins/usage-dashboard/latest.js
           grep -q 'single-product-modular-sidecar' plugins/usage-dashboard/runtime/product-manifest.json
           grep -q 'legacy-external' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q 'bootstrap-ready' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q 'bridge-manager-v1' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q "const HOST = '127.0.0.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -q "url.pathname === '/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -q "url.pathname === '/rollback'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -q 'start-services.sh' plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          grep -q 'sv-enable' plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js
           grep -q 'widgetRenderCache.html !== nextHtml' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
@@ -138,7 +152,8 @@ jobs:
 
           printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt
           cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
-          cp plugins/usage-dashboard/runtime/product-manifest.json /tmp/usage-dashboard-product-manifest.json
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
 
       - name: Publish validated product artifacts to release-usage-dashboard
         shell: bash
@@ -151,16 +166,19 @@ jobs:
           git switch -C release-usage-dashboard origin/release-usage-dashboard
           git reset --hard origin/release-usage-dashboard
           git clean -fd
-          mkdir -p plugins/usage-dashboard/runtime
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
           cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
-          cp /tmp/usage-dashboard-product-manifest.json plugins/usage-dashboard/runtime/product-manifest.json
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
           node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
           grep -Fq "//@version $VERSION" plugins/usage-dashboard/latest.js
           grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
           grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
           git diff --check
-          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/product-manifest.json
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
             echo "release-usage-dashboard already matches $VERSION"
             exit 0
@@ -168,7 +186,7 @@ jobs:
           CHANGED="$(git diff --cached --name-only | sort)"
           while IFS= read -r path; do
             case "$path" in
-              plugins/usage-dashboard/latest.js|plugins/usage-dashboard/runtime/product-manifest.json) ;;
+              plugins/usage-dashboard/latest.js|plugins/usage-dashboard/runtime/product-manifest.json|plugins/usage-dashboard/runtime/bridge-manager.cjs|plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh) ;;
               *) echo "unexpected release artifact: $path"; exit 1 ;;
             esac
           done <<< "$CHANGED"

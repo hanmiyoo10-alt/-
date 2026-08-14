@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.5
+//@version 0.63.6
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.6 Mode C Output Boundary:
+// - Closes a live Mode C formatting gap where model-side intent/analysis/narrative text could appear between the required frame and the first <COMMUNITY> block
+// - Adds exactly one fixed Mode C-only Prompt contract requiring <COMMUNITY> to begin immediately after the frame, with no intent/analysis/narrative/action/dialogue body before it
+// - Keeps the existing Structure warning as judge-only telemetry and does not add output deletion/repair logic
+// - Keeps v0.63.5 Period Baseline Continuity, Recurrence, Lineage, Handoff, Time, Recovery, Reaction, Storage, Broadcast, diagnostics, and output handling unchanged
+// - A/B runtime prompts are byte-identical to v0.63.5; no state/schema/storage/history/content parsing is added
 //
 // v0.63.5 Period Baseline Continuity:
 // - Adds one compact mode-independent continuity contract for successive period comparisons: the completed terminal state of the previous period becomes the next period baseline
@@ -2367,6 +2374,7 @@ function compileModeState(s, p, communityExpected) {
 
 function compileConditionalGuidance(s, p, communityExpected) {
   const lines = [];
+  if (p.mode === 'C') lines.push('mode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1');
   if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
     lines.push('timestamp_semantics=current_narrative_time');
     lines.push('embedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1');
@@ -3989,7 +3997,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.5',
+      'Version: 0.63.6',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4141,7 +4149,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.5 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.6 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>

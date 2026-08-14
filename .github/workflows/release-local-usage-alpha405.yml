@@ -83,3 +83,5 @@ jobs:
           test "$(git diff --cached --name-only)" = 'plugins/usage-dashboard/latest.js'
           git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.4.5'
           git push origin HEAD:release-usage-dashboard
+
+# rerun after moving the closed-panel guard patch to the settings UI module

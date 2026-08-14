@@ -21,7 +21,20 @@ jobs:
           fetch-depth: 0
 
       - name: Patch Local Usage 5.3 bundled runtime
-        run: python3 .github/lud53/patch53.py
+        shell: bash
+        run: |
+          set +e
+          python3 .github/lud53/patch53.py > .github/lud53/patch53-last.log 2>&1
+          code=$?
+          cat .github/lud53/patch53-last.log
+          if [ "$code" -ne 0 ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .github/lud53/patch53-last.log
+            git commit -m 'debug: capture Local Usage 5.3 patch failure' || true
+            git push origin HEAD:main || true
+            exit "$code"
+          fi
 
       - name: Validate full 5.3 suite
         shell: bash
@@ -48,6 +61,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/lud53/patch53-last.log
           git add plugins/usage-dashboard .github/workflows/release-local-usage-dashboard.yml
           git commit -m 'feat: Local Usage Dashboard 3.0.0-alpha.5.3 bundled engine'
           git push origin HEAD:main

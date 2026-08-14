@@ -1,40 +1,44 @@
 {
   "format": 1,
   "product": "Local Usage Dashboard",
-  "productVersion": "3.0.0-alpha.5.1",
+  "productVersion": "3.0.0-alpha.5.2",
   "releaseBranch": "release-usage-dashboard",
   "architecture": "single-product-modular-sidecar",
   "components": {
     "plugin": {
       "mode": "bundled",
-      "version": "3.0.0-alpha.5.1",
+      "version": "3.0.0-alpha.5.2",
       "artifact": "plugins/usage-dashboard/latest.js"
     },
     "bridge": {
       "mode": "sidecar",
-      "state": "legacy-external",
+      "state": "managed-adoption",
       "requiredVersion": "1.6.1",
       "managementProtocol": "bridge-manager-v1",
       "managed": false,
       "selfUpdate": false,
-      "artifact": null
+      "artifact": null,
+      "lifecycleManaged": true,
+      "sourceBundled": false
     },
     "bridgeManager": {
       "mode": "sidecar-manager",
-      "state": "bootstrap-ready",
-      "version": "1.0.0",
-      "productVersion": "3.0.0-alpha.5.1",
+      "state": "engine-adoption-ready",
+      "version": "1.1.0",
+      "productVersion": "3.0.0-alpha.5.2",
       "managementProtocol": "bridge-manager-v1",
       "host": "127.0.0.1",
       "port": 39119,
       "installedByDefault": false,
       "selfUpdate": true,
-      "engineManaged": false,
+      "engineManaged": true,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
-      "sha256": "a8929c8e1c0c9bd4dd1d691a9089b105ba76b61ff3f7895c986a4cf3a4058f9f",
+      "sha256": "53a6759ac70f7419ba1a7c695727b08846047846edc2ebaef2af0d06777a6e05",
       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
       "bootstrapSha256": "0903cd25adf1904e3beb189fc8df748aa58a3369ed9edaf9a26e03d05eccec3d",
-      "service": "local-usage-runtime-manager"
+      "service": "local-usage-runtime-manager",
+      "engineAdoption": true,
+      "engineService": "local-usage-runtime-engine"
     }
   },
   "contracts": {

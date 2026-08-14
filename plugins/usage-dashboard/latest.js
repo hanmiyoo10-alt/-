@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.1
+//@version 3.0.0-alpha.5.2
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.1';
+  const VERSION = '3.0.0-alpha.5.2';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -48,6 +48,7 @@
     bridgeManagerRuntime: null,
     bridgeManagerLastProbeAt: null,
     bridgeManagerSyncedProductVersion: '',
+    bridgeEngineAdoptionAttemptedVersion: '',
     data: null
   };
 
@@ -259,6 +260,10 @@
       managerProtocol,
       managerVersion:String(manager?.version || ''),
       managerProductVersion:String(manager?.productVersion || manager?.product_version || ''),
+      engineMode:String(manager?.engineMode || manager?.engine_mode || (engineManaged ? 'managed-adopted' : 'legacy-external')),
+      engineService:String(manager?.engineService || manager?.engine_service || ''),
+      engineAdoption:truthy(manager?.engineAdoption ?? manager?.engine_adoption),
+      candidateSafe:typeof manager?.candidateSafe === 'boolean' ? manager.candidateSafe : null,
       bridgeVersion:String(bridge?.version || '')
     };
   }
@@ -1554,6 +1559,12 @@ async function importLegacyTodayBaselines() {
       productVersion:String(raw.productVersion || raw.product_version || ''),
       selfUpdate:raw.selfUpdate === true || raw.self_update === true,
       engineManaged:raw.engineManaged === true || raw.engine_managed === true,
+      engineAdoption:raw.engineAdoption === true || raw.engine_adoption === true,
+      engineMode:String(raw.engineMode || raw.engine_mode || 'legacy-external'),
+      engineService:String(raw.engineService || raw.engine_service || ''),
+      engineVersion:String(raw.engineVersion || raw.engine_version || ''),
+      candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
+      adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
       restartMode:String(raw.restartMode || raw.restart_mode || ''),
       updateChannel:String(raw.updateChannel || raw.update_channel || ''),
       checkedAt:Date.now(),
@@ -1568,15 +1579,15 @@ async function importLegacyTodayBaselines() {
       return state.bridgeManagerRuntime;
     }
     state.bridgeManagerLastProbeAt = now;
-    if (!token) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:now,error:'missing token'};
+    if (!token) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:now,error:'missing token'};
     try {
       const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/status`, {method:'GET',headers:bridgeManagerAuthHeaders()});
       const text = await res.text();
-      if (!res.ok) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:`HTTP ${res.status}`};
+      if (!res.ok) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:Date.now(),error:`HTTP ${res.status}`};
       const normalized = normalizeBridgeManagerStatus(JSON.parse(text));
-      return normalized || {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:'invalid manager status'};
+      return normalized || {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:Date.now(),error:'invalid manager status'};
     } catch (e) {
-      return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:e?.message || String(e)};
+      return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:Date.now(),error:e?.message || String(e)};
     }
   }
 
@@ -1593,6 +1604,27 @@ async function importLegacyTodayBaselines() {
       return {...status,lastSyncAction:payload?.updated ? 'updated' : 'current',syncTarget:String(payload?.productVersion || VERSION),syncError:''};
     } catch (e) {
       return {...status,syncError:e?.message || String(e)};
+    }
+  }
+
+  async function adoptBridgeEngineIfNeeded(status) {
+    if (!status?.connected || status.engineManaged === true || status.engineAdoption !== true) return status;
+    if (String(status.productVersion || '') !== VERSION) return status;
+    if (String(state.bridgeEngineAdoptionAttemptedVersion || '') === VERSION) return status;
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      const payload = JSON.parse(text);
+      if (!res.ok) {
+        if (payload?.retryable === false) state.bridgeEngineAdoptionAttemptedVersion = VERSION;
+        return {...status,adoptionState:String(payload?.state || 'failed'),adoptionError:String(payload?.error || `HTTP ${res.status}`),candidateSafe:typeof payload?.candidateSafe === 'boolean' ? payload.candidateSafe : status.candidateSafe};
+      }
+      state.bridgeEngineAdoptionAttemptedVersion = VERSION;
+      state.bridgeManagerLastProbeAt = 0;
+      const fresh = await fetchBridgeManagerStatus(true);
+      return {...fresh,adoptionState:String(payload?.state || (payload?.adopted ? 'adopted' : 'current')),adoptionError:''};
+    } catch (e) {
+      return {...status,adoptionState:'probe-error',adoptionError:e?.message || String(e)};
     }
   }
   async function refresh(reason = 'manual', silent = false) {
@@ -1619,7 +1651,8 @@ async function importLegacyTodayBaselines() {
         state.data = applyObservedToday(await fetchSnapshot());
         collectRecentRequestLedger(state.data);
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
-        state.bridgeManagerRuntime = await syncBridgeManagerIfNeeded(managerStatus);
+        const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        state.bridgeManagerRuntime = await adoptBridgeEngineIfNeeded(managerSynced);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();
@@ -1686,6 +1719,7 @@ async function importLegacyTodayBaselines() {
       `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode} · manager ${runtimeBridge.managerInstalled ? 'installed' : 'absent'}`,
       `Bridge manager: protocol ${runtimeBridge.managerProtocol} · installed ${runtimeBridge.managerInstalled ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · engine-managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · ${runtimeBridge.managerVersion ? `v${runtimeBridge.managerVersion}` : 'v—'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
       `Bridge manager probe: ${state.bridgeManagerRuntime?.connected ? 'connected' : 'unavailable'} · checked ${state.bridgeManagerRuntime?.checkedAt ? age(state.bridgeManagerRuntime.checkedAt) : '—'} · product ${state.bridgeManagerRuntime?.productVersion || '—'} · sync ${state.bridgeManagerSyncedProductVersion || 'none'}`,
+      `Bridge engine: mode ${runtimeBridge.engineMode} · managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · adoption ${runtimeBridge.engineAdoption ? 'ready' : 'no'} · service ${runtimeBridge.engineService || '—'} · candidate ${runtimeBridge.candidateSafe === null ? 'unknown' : runtimeBridge.candidateSafe ? 'safe' : 'unsafe'} · state ${state.bridgeManagerRuntime?.adoptionState || '—'}`,
       `Runtime manifest: ${RUNTIME_MANIFEST_URL}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,

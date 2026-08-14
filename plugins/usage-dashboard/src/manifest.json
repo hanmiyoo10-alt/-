@@ -1,15 +1,15 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.3",
+  "version": "3.0.0-alpha.5.4",
   "source": "plugins/usage-dashboard/latest.js",
-  "artifactSha256": "c2f8c3dec20b7076287ab4a17d3d190b8107147bfa57c37f722907df9c249e9c",
+  "artifactSha256": "e56ad6c2e3feff38539319a8aeb830ec5426a54c046a83018ab76635884501da",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 48416,
-      "sha256": "cef7efb7fe651c7dce72822586564b8422d03fba4e6495a94422d0977d51c9a5"
+      "sha256": "1ba37650fc76324cd241b76a644540c1c46d0470add2ba409d54824d6cba486a"
     },
     {
       "file": "10-usage-data.part.js",
@@ -20,8 +20,8 @@
     {
       "file": "20-bridge-io.part.js",
       "label": "bridge I/O",
-      "bytes": 7937,
-      "sha256": "3bd58f16c1b27a17bc828c71406875f1adc3f108fc478d008c4ae0787183e68e"
+      "bytes": 9431,
+      "sha256": "f8a225b352ba4e3a8dd1ebca16114685751752e17618d6678e20909a675affde"
     },
     {
       "file": "30-refresh-runtime.part.js",

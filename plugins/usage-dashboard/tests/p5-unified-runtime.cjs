@@ -28,11 +28,11 @@ assert.equal(manifest.components.plugin.version, version);
 assert.equal(manifest.components.plugin.mode, 'bundled');
 assert.equal(manifest.components.bridge.mode, 'sidecar');
 if (/^3\.0\.0-alpha\.5\.[01]$/.test(version)) assert.equal(manifest.components.bridge.state, 'legacy-external');
-else if (version === '3.0.0-alpha.5.3') assert.equal(manifest.components.bridge.state, 'managed-bundled');
+else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) assert.equal(manifest.components.bridge.state, 'managed-bundled');
 else assert.equal(manifest.components.bridge.state, 'managed-adoption');
 assert.equal(manifest.components.bridge.managementProtocol, 'bridge-manager-v1');
 assert.equal(manifest.components.bridge.selfUpdate, false);
-if (version === '3.0.0-alpha.5.3') {
+if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) {
   assert.ok(String(manifest.components.bridge.artifact || '').endsWith('/runtime/bridge-engine.mjs'));
   assert.equal(manifest.components.bridge.sourceBundled, true);
 } else assert.equal(manifest.components.bridge.artifact, null);

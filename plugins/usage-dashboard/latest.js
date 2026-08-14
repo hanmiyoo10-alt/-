@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.3
+//@version 3.0.0-alpha.5.4
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.3';
+  const VERSION = '3.0.0-alpha.5.4';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1598,62 +1598,107 @@ async function importLegacyTodayBaselines() {
   }
 
   async function syncBridgeManagerIfNeeded(status) {
-    if (!status?.connected || status.selfUpdate !== true) return status;
-    if (String(status.productVersion || '') === VERSION) return status;
-    if (String(state.bridgeManagerSyncedProductVersion || '') === VERSION) return status;
-    try {
-      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
-      const text = await res.text();
-      if (!res.ok) return {...status,syncError:`HTTP ${res.status}`};
-      const payload = JSON.parse(text);
-      state.bridgeManagerSyncedProductVersion = VERSION;
-      return {...status,lastSyncAction:payload?.updated ? 'updated' : 'current',syncTarget:String(payload?.productVersion || VERSION),syncError:''};
-    } catch (e) {
-      return {...status,syncError:e?.message || String(e)};
-    }
+  if (!status?.connected || status.selfUpdate !== true) return status;
+  if (String(status.productVersion || '') === VERSION) {
+    state.bridgeManagerSyncedProductVersion = VERSION;
+    return status;
   }
+  // Live /status is authoritative. A persisted success marker must never suppress reconciliation.
+  state.bridgeManagerSyncedProductVersion = '';
+  try {
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const text = await res.text();
+    if (!res.ok) {
+      state.bridgeManagerLastProbeAt = 0;
+      return {...status,syncError:`HTTP ${res.status}`};
+    }
+    const payload = JSON.parse(text);
+    state.bridgeManagerLastProbeAt = 0;
+    let fresh = null;
+    for (const waitMs of [200, 350, 600, 900]) {
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      fresh = await fetchBridgeManagerStatus(true);
+      if (fresh?.connected && String(fresh.productVersion || '') === VERSION) break;
+    }
+    const reconciled = Boolean(fresh?.connected && String(fresh.productVersion || '') === VERSION);
+    if (reconciled) state.bridgeManagerSyncedProductVersion = VERSION;
+    else state.bridgeManagerLastProbeAt = 0;
+    return {
+      ...(fresh?.connected ? fresh : status),
+      lastSyncAction:payload?.updated ? 'updated' : 'current',
+      syncTarget:String(payload?.productVersion || VERSION),
+      syncError:reconciled ? '' : 'manager restart pending'
+    };
+  } catch (e) {
+    state.bridgeManagerLastProbeAt = 0;
+    return {...status,syncError:e?.message || String(e)};
+  }
+}
 
   async function adoptBridgeEngineIfNeeded(status) {
-    if (!status?.connected || status.engineManaged === true || status.engineAdoption !== true) return status;
-    if (String(status.productVersion || '') !== VERSION) return status;
-    if (String(state.bridgeEngineAdoptionAttemptedVersion || '') === VERSION) return status;
-    try {
-      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:bridgeManagerAuthHeaders()});
-      const text = await res.text();
-      const payload = JSON.parse(text);
-      if (!res.ok) {
-        if (payload?.retryable === false) state.bridgeEngineAdoptionAttemptedVersion = VERSION;
-        return {...status,adoptionState:String(payload?.state || 'failed'),adoptionError:String(payload?.error || `HTTP ${res.status}`),candidateSafe:typeof payload?.candidateSafe === 'boolean' ? payload.candidateSafe : status.candidateSafe};
-      }
-      state.bridgeEngineAdoptionAttemptedVersion = VERSION;
-      state.bridgeManagerLastProbeAt = 0;
-      const fresh = await fetchBridgeManagerStatus(true);
-      return {...fresh,adoptionState:String(payload?.state || (payload?.adopted ? 'adopted' : 'current')),adoptionError:''};
-    } catch (e) {
-      return {...status,adoptionState:'probe-error',adoptionError:e?.message || String(e)};
-    }
+  if (!status?.connected || status.engineAdoption !== true) return status;
+  if (String(status.productVersion || '') !== VERSION) return status;
+  if (status.engineManaged === true) {
+    state.bridgeEngineAdoptionAttemptedVersion = VERSION;
+    return status;
   }
+  // Live engine ownership wins over a persisted attempt marker; retry safely when still unmanaged.
+  state.bridgeEngineAdoptionAttemptedVersion = '';
+  try {
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const text = await res.text();
+    const payload = JSON.parse(text);
+    if (!res.ok) {
+      state.bridgeManagerLastProbeAt = 0;
+      return {...status,adoptionState:String(payload?.state || 'failed'),adoptionError:String(payload?.error || `HTTP ${res.status}`),candidateSafe:typeof payload?.candidateSafe === 'boolean' ? payload.candidateSafe : status.candidateSafe};
+    }
+    state.bridgeManagerLastProbeAt = 0;
+    const fresh = await fetchBridgeManagerStatus(true);
+    if (fresh?.connected && fresh.engineManaged === true) state.bridgeEngineAdoptionAttemptedVersion = VERSION;
+    else state.bridgeManagerLastProbeAt = 0;
+    return {...fresh,adoptionState:String(payload?.state || (payload?.adopted ? 'adopted' : 'current')),adoptionError:''};
+  } catch (e) {
+    state.bridgeManagerLastProbeAt = 0;
+    return {...status,adoptionState:'probe-error',adoptionError:e?.message || String(e)};
+  }
+}
 
   async function syncBridgeEngineBundleIfNeeded(status) {
-    if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true || status.engineBundled === true) return status;
-    if (String(status.productVersion || '') !== VERSION) return status;
-    if (String(state.bridgeEngineBundleSyncAttemptedVersion || '') === VERSION) return status;
-    try {
-      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
-      const text = await res.text();
-      const payload = JSON.parse(text);
-      if (!res.ok) {
-        if (payload?.retryable === false) state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
-        return {...status,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
-      }
-      state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
-      state.bridgeManagerLastProbeAt = 0;
-      const fresh = await fetchBridgeManagerStatus(true);
-      return {...fresh,engineBundleSyncState:String(payload?.state || (payload?.synced ? 'bundled' : 'current')),engineBundleSyncError:''};
-    } catch (e) {
-      return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
-    }
+  if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;
+  if (String(status.productVersion || '') !== VERSION) return status;
+  if (status.engineBundled === true) {
+    state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+    return status;
   }
+  // Live bundle state wins over a persisted attempt marker; retry while the manager still reports adopted.
+  state.bridgeEngineBundleSyncAttemptedVersion = '';
+  try {
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const text = await res.text();
+    const payload = JSON.parse(text);
+    if (!res.ok) {
+      state.bridgeManagerLastProbeAt = 0;
+      return {...status,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
+    }
+    state.bridgeManagerLastProbeAt = 0;
+    let fresh = await fetchBridgeManagerStatus(true);
+    if (!fresh?.connected || fresh.engineBundled !== true) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      fresh = await fetchBridgeManagerStatus(true);
+    }
+    const reconciled = Boolean(fresh?.connected && fresh.engineBundled === true);
+    if (reconciled) state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+    else state.bridgeManagerLastProbeAt = 0;
+    return {
+      ...(fresh?.connected ? fresh : status),
+      engineBundleSyncState:String(payload?.state || (payload?.synced ? 'bundled' : 'current')),
+      engineBundleSyncError:reconciled ? '' : 'engine restart pending'
+    };
+  } catch (e) {
+    state.bridgeManagerLastProbeAt = 0;
+    return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
+  }
+}
   async function refresh(reason = 'manual', silent = false) {
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;

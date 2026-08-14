@@ -48,10 +48,10 @@ assert.ok(bootstrap.includes('sv-enable'), 'termux-services enable missing');
 assert.ok(bootstrap.includes('기존 39117 Bridge와 토큰은 변경하지 않았어.'), 'legacy bridge preservation marker missing');
 assert.equal(manifest.productVersion, version);
 if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridge.state, 'legacy-external');
-else if (version === '3.0.0-alpha.5.3') assert.equal(manifest.components.bridge.state, 'managed-bundled');
+else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) assert.equal(manifest.components.bridge.state, 'managed-bundled');
 else assert.equal(manifest.components.bridge.state, 'managed-adoption');
 if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridgeManager.state, 'bootstrap-ready');
-else if (version === '3.0.0-alpha.5.3') assert.equal(manifest.components.bridgeManager.state, 'bundled-engine-ready');
+else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) assert.equal(manifest.components.bridgeManager.state, 'bundled-engine-ready');
 else assert.equal(manifest.components.bridgeManager.state, 'engine-adoption-ready');
 assert.equal(manifest.components.bridgeManager.managementProtocol, 'bridge-manager-v1');
 assert.equal(manifest.components.bridgeManager.port, 39119);
@@ -60,7 +60,7 @@ if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.brid
 else { assert.equal(manifest.components.bridgeManager.engineManaged, true); assert.equal(manifest.components.bridgeManager.engineAdoption, true); }
 assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
 assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.0';"), 'manager bundled-engine version missing');
+assert.ok(manager.includes("const MANAGER_VERSION = '1.2.1';"), 'manager bundled-engine version missing');
 assert.ok(manager.includes('bridge-manager.next-${process.pid}.cjs'), 'self-update temp file must preserve .cjs extension');
 assert.ok(manager.includes('bridge-manager.rollback-${process.pid}.cjs'), 'rollback temp file must preserve .cjs extension');
 assert.ok(manager.includes("const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');"), 'canonical legacy pidfile fallback missing');
@@ -76,5 +76,8 @@ assert.ok(!manager.includes("path:'/snapshot'"), 'manager lifecycle verification
 assert.ok(!manager.includes('bridgeSnapshot('), 'snapshot-based lifecycle verifier regressed');
 assert.ok(manager.includes('processMatchesSpec(service.pid, descriptor)'), 'managed service process fallback missing');
 assert.ok(!manager.includes('`${CURRENT_FILE}.next-${process.pid}`'), 'unknown-extension self-update temp path regressed');
+assert.ok(!source.includes("if (String(state.bridgeManagerSyncedProductVersion || '') === VERSION) return status;"), 'persisted manager sync marker must not suppress live reconciliation');
+assert.ok(source.includes("state.bridgeManagerSyncedProductVersion = '';"), 'manager mismatch must clear stale sync marker');
+assert.ok(source.includes('for (const waitMs of [200, 350, 600, 900])'), 'manager restart re-probe loop missing');
 
 console.log(`usage-dashboard P5 bridge manager regression: OK · ${version}`);

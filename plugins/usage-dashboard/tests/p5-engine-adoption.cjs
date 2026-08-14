@@ -24,8 +24,9 @@ for (const marker of [
   'engineAdoption:true',
 ]) assert.ok(manager.includes(marker), `missing manager adoption marker: ${marker}`);
 assert.ok(!manager.includes("process.kill(candidate.pid, 'SIGKILL')"), 'automatic adoption must not force-kill legacy bridge');
+assert.ok(!source.includes("if (String(state.bridgeEngineAdoptionAttemptedVersion || '') === VERSION) return status;"), 'persisted adoption marker must not suppress live reconciliation');
 assert.equal(manifest.productVersion, version);
-const bundled = version === '3.0.0-alpha.5.3';
+const bundled = /^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version);
 assert.equal(manifest.components.bridge.state, bundled ? 'managed-bundled' : 'managed-adoption');
 assert.equal(manifest.components.bridge.lifecycleManaged, true);
 assert.equal(manifest.components.bridge.sourceBundled, bundled);

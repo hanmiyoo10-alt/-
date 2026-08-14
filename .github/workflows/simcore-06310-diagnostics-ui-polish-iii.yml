@@ -1,0 +1,55 @@
+name: SimCore 0.63.10 Diagnostics UI Polish III
+
+on:
+  push:
+    branches:
+      - simcore-06310-diagnostics-ui-polish-iii
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06310-diagnostics-ui-polish-iii
+          fetch-depth: 2
+
+      - name: Freeze 0.63.9 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-06310-baseline.js
+
+      - name: Patch 0.63.10 artifacts
+        run: python3 plugins/simcore/tools/release_06310_diagnostics_ui_polish_iii.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: UI-only and frozen-runtime gates
+        run: python3 plugins/simcore/tools/test_06310_diagnostics_ui_polish_iii.py
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          PY
+
+      - name: Commit tested artifacts to work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.10 diagnostics UI III artifacts'
+          git push origin HEAD:simcore-06310-diagnostics-ui-polish-iii

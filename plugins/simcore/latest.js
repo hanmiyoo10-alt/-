@@ -1,8 +1,8 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.1
+//@version 0.63.2
 //@display-name SimCore
-//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
+//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
 //
 // Optimization/architecture refactor built on the v0.62 golden behavior baseline.
@@ -24,6 +24,11 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.2 Release Channel Split:
+// - Migration-only release: moves PocketRisu update checks from main to the dedicated release-simcore branch
+// - Runtime prompt, state, storage, lineage, handoff, recovery, time, reaction, broadcast, and diagnostic-copy behavior are unchanged from v0.63.1
+// - Future SimCore releases update release-simcore without moving main or the Usage Dashboard release channel
 //
 // v0.63.1 Short-C Source Lock + Turn Diagnostic Copy:
 // - Strengthens eligible short Mode C source guidance without changing lineage/handoff classification: the current lineage root is explicitly authoritative and prior similar events/community answers may not substitute it
@@ -3471,7 +3476,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.63.1] state mirror failed:', e.message);
+      console.log('[simcore/v0.63.2] state mirror failed:', e.message);
     }
   }
 
@@ -3486,7 +3491,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.63.1] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.63.2] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3696,8 +3701,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.63.1] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.63.1] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.63.2] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.63.2] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3710,7 +3715,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.63.1] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.63.2] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3755,7 +3760,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.1] beforeRequest error:', e.message);
+      console.log('[simcore/v0.63.2] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3781,7 +3786,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.1] output error:', e.message);
+      console.log('[simcore/v0.63.2] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -4023,7 +4028,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.1 <button id="copy-turn-diag">최근 턴 진단 복사</button> <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.2 <button id="copy-turn-diag">최근 턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -4140,7 +4145,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.63.1] panel error:', e.message);
+      console.log('[simcore/v0.63.2] panel error:', e.message);
     }
   }
 
@@ -4148,7 +4153,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.63.1] UI registration failed:', e.message);
+    console.log('[simcore/v0.63.2] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -4159,5 +4164,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     previousRuntimePromptText = null;
     previousRuntimePromptKey = null;
   });
-  console.log('[simcore/v0.63.1] initialized');
+  console.log('[simcore/v0.63.2] initialized');
 })();

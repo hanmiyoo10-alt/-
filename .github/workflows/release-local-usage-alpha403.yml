@@ -24,8 +24,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Remove one inert authoring-only line before compiling the patcher.
+          # Clean up two authoring-only patcher issues before compiling it.
           sed -i '/^usage_diag = /d' plugins/usage-dashboard/tools/release_alpha403_patch.py
+          sed -i "s/'function aggregateMetaText'/'const aggregateMetaText = row =>'/" plugins/usage-dashboard/tools/release_alpha403_patch.py
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha403_patch.py
           python3 plugins/usage-dashboard/tools/release_alpha403_patch.py
           rm plugins/usage-dashboard/tools/release_alpha403_patch.py

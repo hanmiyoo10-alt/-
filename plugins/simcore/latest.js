@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.9
+//@version 0.63.10
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.10 Diagnostics UI Polish III:
+// - UI-only mobile cleanup: empty EDIT/PREFIX chip states use a quiet dash instead of n/a
+// - Collapses Storage diagnostics into a default-closed summary using only the already-existing scan snapshot; opening the panel performs no extra storage scan or keys() call
+// - Converts Diagnostic Tools into a default-closed details card while preserving the existing manual two-turn diagnostic action and all probe semantics
+// - Adds no timer, polling, observer, request-path work, storage/API call, prompt line, state field, history scan, or output repair
+// - Keeps all 15 internal modules byte-identical to v0.63.9 and preserves runtime semantics, generation guidance, cache-prefix behavior, Recovery, Source Lock, Period Continuity, and diagnostics
 //
 // v0.63.9 Diagnostics UI Polish II:
 // - UI-only readability pass: adds an overall HEALTHY/CHECK/REGRESSION badge, EDIT CLEAN/REBUILT status, clearer source-idle labeling, and directional frame icons
@@ -4019,7 +4026,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.9',
+      'Version: 0.63.10',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4157,7 +4164,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
                 : (lastCommunitySourceHandoffProbe.parentComparable ? 'SAME PARENT' : 'BASELINE')))))
         : 'n/a';
       const promptCacheLabel = !lastRuntimePromptCacheProbe
-        ? 'n/a'
+        ? '—'
         : (lastRuntimePromptCacheProbe.baseline
           ? 'BASELINE'
           : `${Number(lastRuntimePromptCacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${lastRuntimePromptCacheProbe.reason || 'other'}`);
@@ -4200,7 +4207,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const panelHealthClass = !panelFrameOk ? 'bad' : (panelWarningCount > 0 ? 'warn' : 'good');
       const panelEditPath = String(lastPerf?.editDetail?.path || '');
       const panelEditRebuilt = panelEditPath === 'manual-edit-rebuilt';
-      const panelEditLabel = !lastPerf ? 'n/a' : (panelEditRebuilt ? 'REBUILT' : 'CLEAN');
+      const panelEditLabel = !lastPerf ? '—' : (panelEditRebuilt ? 'REBUILT' : 'CLEAN');
       const panelEditClass = !lastPerf ? 'neutral' : (panelEditRebuilt ? 'warn' : 'good');
       const panelSourceLabel = panelSourceLock ? 'LOCK' : (lastCommunitySourceHandoffProbe?.newSource ? 'NEW' : '—');
       const panelSourceClass = (panelSourceLock || lastCommunitySourceHandoffProbe?.newSource) ? 'good' : 'neutral';
@@ -4229,7 +4236,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.9</div><div class="subtitle">Diagnostics UI Polish II · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.10</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
@@ -4343,20 +4350,20 @@ ${lastOutputPerf.mirrorDetail ? `<tr><td>&nbsp;&nbsp;Mirror chat load</td><td>${
 <tr><td>&nbsp;&nbsp;setChatToIndex</td><td>${Number(lastOutputPerf.mirrorDetail.setChatMs || 0).toFixed(1)} ms</td></tr>` : ''}
 <tr><td>Post diagnostics</td><td>${lastOutputPerf.diagnosticsMs.toFixed(1)} ms</td></tr>
 </table></div></details>` : ''}
-${storageDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">storage key scan (latest existing scan)</div><table>
+${storageDiag ? `<details class="card"><summary>Storage diagnostics · ${escapeHtml(storageDiag.op || 'unknown')} · ${Number(storageDiag.ms || 0).toFixed(1)} ms · ${Number(storageDiag.totalKeys || 0).toLocaleString('en-US')} keys</summary><div class="detail-body"><table>
 <tr><td>Operation</td><td>${escapeHtml(storageDiag.op || 'unknown')}</td></tr>
 <tr><td>Key scan</td><td>${Number(storageDiag.ms || 0).toFixed(1)} ms</td></tr>
 <tr><td>Total plugin-storage keys</td><td>${Number(storageDiag.totalKeys || 0).toLocaleString('en-US')}</td></tr>
 <tr><td>Current-chat SimCore keys</td><td>${storageDiag.currentChatKeys == null ? 'n/a' : Number(storageDiag.currentChatKeys || 0).toLocaleString('en-US')}</td></tr>
 <tr><td>Operation-matching keys</td><td>${storageDiag.matchingKeys == null ? 'n/a' : Number(storageDiag.matchingKeys || 0).toLocaleString('en-US')}</td></tr>
-</table><div class="muted" style="margin-top:8px">No extra keys() call is made for this panel; values come only from an existing cold/deferred scan.</div></div>` : `<div class="card muted">Storage key scan: no scan observed in this live session yet (fast path only).</div>`}
+</table><div class="muted" style="margin-top:8px">No extra keys() call is made for this panel; values come only from an existing cold/deferred scan.</div></div></details>` : `<details class="card"><summary>Storage diagnostics · no scan yet</summary><div class="detail-body muted">No scan observed in this live session yet (fast path only).</div></details>`}
 ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Community alias backfill (this live session)</div><table>
 <tr><td>Assistant outputs scanned</td><td>${Number(aliasDiag.assistantScanned || 0)}</td></tr>
 <tr><td>Alias sections found</td><td>${Number(aliasDiag.aliasSections || 0)}</td></tr>
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted"><strong>Diagnostic Tools</strong> · frame continuity + recurrence-history match run only for manual diagnostic copy; runtime prompt/generation behavior unchanged</div>
+<details class="card"><summary>Diagnostic Tools</summary><div class="detail-body muted">Frame continuity + recurrence-history match run only for manual diagnostic copy; runtime prompt/generation behavior unchanged.</div></details>
 </div>`;
       const advancedGrid = document.getElementById('advanced-grid');
       const advancedCount = document.getElementById('advanced-count');
@@ -4365,7 +4372,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
         let standby = 0;
         for (const metric of metrics) {
           const value = String(metric.querySelector('.v')?.textContent || '').trim();
-          const isStandby = value === 'n/a' || value === 'OFF' || value === 'NO REQUEST DATA' || value.startsWith('STANDBY');
+          const isStandby = value === 'n/a' || value === '—' || value === 'OFF' || value === 'NO REQUEST DATA' || value.startsWith('STANDBY');
           if (isStandby) { metric.classList.add('dim'); standby += 1; }
         }
         if (advancedCount) advancedCount.textContent = `· ${metrics.length - standby} active · ${standby} standby`;

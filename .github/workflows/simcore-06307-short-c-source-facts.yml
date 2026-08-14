@@ -1,0 +1,145 @@
+name: SimCore 0.63.7 Short-C Source Facts Reinforcement
+
+on:
+  push:
+    branches:
+      - simcore-06307-short-c-source-facts
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06307-short-c-source-facts
+          fetch-depth: 2
+
+      - name: Freeze 0.63.6 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-06307-baseline.js
+
+      - name: Patch 0.63.7 artifacts
+        run: python3 plugins/simcore/tools/release_06307_short_c_source_facts.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Short-C source facts and cache gates
+        run: node plugins/simcore/tools/test_06307_short_c_source_facts.js
+
+      - name: Module boundaries and protected behavior gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          old = Path('/tmp/simcore-06307-baseline.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          contract = 'source_event_identity_and_facts=current_lineage_root_only;do_not_import_prior_similar_event_details=1'
+
+          def module_block(text, name):
+              marker = f'SimCore.define("{name}", function (require, module, exports) {{'
+              start = text.find(marker)
+              if start < 0:
+                  raise SystemExit(f'module missing: {name}')
+              nxt = text.find('\nSimCore.define("', start + len(marker))
+              if nxt < 0:
+                  nxt = text.find('\n(async () => {', start + len(marker))
+              if nxt < 0:
+                  raise SystemExit(f'module end missing: {name}')
+              return text[start:nxt]
+
+          frozen = [
+              'contracts', 'store', 'community', 'recurrence', 'lineage', 'handoff',
+              'kernel', 'time', 'lifecycle', 'reaction', 'structure', 'recovery',
+              'session', 'ops',
+          ]
+          for name in frozen:
+              if module_block(old, name) != module_block(new, name):
+                  raise SystemExit(f'boundary regression: frozen module {name} changed')
+
+          old_prompt = module_block(old, 'prompt')
+          new_prompt = module_block(new, 'prompt')
+          anchor = "    lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');\n"
+          if old_prompt.count(anchor) != 1:
+              raise SystemExit('0.63.6 Short-C source-lock anchor drift')
+          expected_prompt = old_prompt.replace(anchor, anchor + f"    lines.push('{contract}');\n", 1)
+          if new_prompt != expected_prompt:
+              raise SystemExit('Prompt changed beyond the exact one-line Short-C source-facts contract')
+
+          old_iife = old[old.index('(async () => {'):]
+          new_iife = new[new.index('(async () => {'):]
+          expected_iife = old_iife.replace('SimCore v0.63.6', 'SimCore v0.63.7', 1).replace("'Version: 0.63.6'", "'Version: 0.63.7'", 1)
+          if new_iife != expected_iife:
+              raise SystemExit('runtime IIFE changed beyond visible/diagnostic version labels')
+
+          protected = [
+              'Risuai.pluginStorage.',
+              "addRisuReplacer('beforeRequest'",
+              "addRisuScriptHandler('output'",
+              'function canonicalizeResponseEnvelope',
+              'function isKnownThoughtsPreamble',
+              'function isThoughtsCompatibilityPreamble',
+              'Mode C에 서사·행동·대사로 보이는 본문이 있음',
+              'mode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1',
+              'short_community_source_is_authoritative=1',
+              'do_not_substitute_prior_similar_source_or_prior_community_answer=1',
+              'request_template_recurs_from_prior_history=1',
+              'prior_answer_is_not_a_content_template=1',
+              'period_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline',
+              'do_not_replay_completed_prior_period_transition_as_current_period_transition=1',
+              'Recurrence history match:',
+              'Frame continuity:',
+              'Frame regression:',
+              'Diagnostic format: raw-lineage-v2',
+          ]
+          for token in protected:
+              if old.count(token) != new.count(token):
+                  raise SystemExit(f'protected behavior sentinel drift: {token}')
+
+          required = [
+              '//@version 0.63.7',
+              '//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js',
+              '// v0.63.7 Short-C Source Facts Reinforcement:',
+              contract,
+              'SimCore v0.63.7',
+              "'Version: 0.63.7'",
+          ]
+          for token in required:
+              if token not in new:
+                  raise SystemExit(f'missing 0.63.7 token: {token}')
+
+          if new_prompt.count(contract) != 1:
+              raise SystemExit('Short-C source-facts contract count drift')
+          if 'Holy Moly' in new_prompt or 'Hwaa' in new_prompt or '시상식' in new_prompt:
+              raise SystemExit('content-specific source fixture leaked into Prompt source')
+
+          print('all non-Prompt modules frozen; Prompt delta exactly one Short-C source-lock line')
+          print('0.63.6 boundary + 0.63.5 period continuity + recurrence/recovery/structure/frame diagnostics preserved')
+          PY
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          PY
+
+      - name: Commit tested artifacts to work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.7 Short-C source-facts artifacts'
+          git push origin HEAD:simcore-06307-short-c-source-facts

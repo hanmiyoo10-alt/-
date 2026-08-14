@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.4.0
+//@version 3.0.0-alpha.4.1
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.4.0';
+  const VERSION = '3.0.0-alpha.4.1';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -57,6 +57,85 @@
     return {...DEFAULTS,...(saved && typeof saved === 'object' ? saved : {})};
   }
 
+  function normalizeBridgeError(value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'string' || typeof value === 'number') {
+      return {code:'', type:'', message:String(value)};
+    }
+    if (typeof value !== 'object') return {code:'', type:'', message:String(value)};
+    const nested = value.error && typeof value.error === 'object' ? value.error : null;
+    const codeRaw = value.code ?? value.errorCode ?? value.error_code ?? value.statusCode ?? value.status_code ?? nested?.code ?? '';
+    const typeRaw = value.type ?? value.errorType ?? value.error_type ?? nested?.type ?? '';
+    const messageRaw = value.message ?? (typeof value.error === 'string' ? value.error : null) ?? nested?.message ?? '';
+    const code = codeRaw === null || codeRaw === undefined ? '' : String(codeRaw);
+    const type = typeRaw === null || typeRaw === undefined ? '' : String(typeRaw);
+    const message = messageRaw === null || messageRaw === undefined ? '' : String(messageRaw);
+    return (code || type || message) ? {code, type, message} : null;
+  }
+
+  function normalizeErrorMap(raw) {
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    for (const [key, value] of Object.entries(raw)) {
+      const normalized = normalizeBridgeError(value);
+      if (normalized) out[key] = normalized;
+    }
+    return out;
+  }
+
+  function errorSummaryText(value) {
+    const normalized = normalizeBridgeError(value);
+    if (!normalized) return '';
+    return [normalized.code, normalized.type, normalized.message].filter(Boolean).join(' · ') || '오류';
+  }
+
+  function countErrorMap(raw) {
+    if (!raw || typeof raw !== 'object') return 0;
+    return Object.values(raw).filter(value => Boolean(normalizeBridgeError(value))).length;
+  }
+
+  function usageCacheText(scope) {
+    const hasCount = num(scope?.cacheCount);
+    const hasRate = num(scope?.cacheRate);
+    if (!hasCount && !hasRate) return '—';
+    return [
+      hasCount ? `${Number(scope.cacheCount).toLocaleString()}회` : '',
+      hasRate ? `${Number(scope.cacheRate).toFixed(1)}%` : ''
+    ].filter(Boolean).join(' · ');
+  }
+
+  function normalizeBridgeModule(name, row) {
+    if (!row || typeof row !== 'object') return null;
+    const error = normalizeBridgeError(row.error || {
+      code: row.errorCode ?? row.error_code ?? '',
+      type: row.errorType ?? row.error_type ?? '',
+      message: row.errorMessage ?? row.error_message ?? ''
+    });
+    const status = String(row.status || row.state || (error ? 'error' : 'ok')).toLowerCase() || 'unknown';
+    const fetchedAt = bridgeTimestamp(row.fetchedAt ?? row.updatedAt ?? row.updated_at ?? row.lastUpdatedAt ?? row.completedAt);
+    const durationRaw = row.durationMs ?? row.duration_ms ?? row.elapsedMs ?? row.elapsed_ms ?? row.latencyMs ?? row.tookMs;
+    return {
+      name:String(name || row.name || 'module'),
+      status,
+      stale:row.stale === true || status === 'stale',
+      fetchedAt,
+      durationMs:num(durationRaw) ? Math.max(0, Number(durationRaw)) : null,
+      errorCode:String(row.errorCode ?? row.error_code ?? error?.code ?? ''),
+      errorType:String(row.errorType ?? row.error_type ?? error?.type ?? ''),
+      errorMessage:String(row.errorMessage ?? row.error_message ?? error?.message ?? '')
+    };
+  }
+
+  function normalizeBridgeModules(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const out = {};
+    for (const [name, row] of Object.entries(raw)) {
+      const normalized = normalizeBridgeModule(name, row);
+      if (normalized) out[name] = normalized;
+    }
+    return Object.keys(out).length ? out : null;
+  }
+
   function bridgeSemver(value) {
     const match = String(value || '').match(/(?:^|[^0-9])(\d+)\.(\d+)\.(\d+)(?:[^0-9]|$)/);
     return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
@@ -88,7 +167,7 @@
     if (!raw || typeof raw !== 'object') return null;
     const version = String(raw.bridgeVersion || raw.version || '');
     const compatibility = raw.compatibility && typeof raw.compatibility === 'object' ? raw.compatibility : null;
-    const modules = raw.modules && typeof raw.modules === 'object' ? raw.modules : null;
+    const modules = normalizeBridgeModules(raw.modules);
     const diagnostics = raw.diagnostics && typeof raw.diagnostics === 'object' ? raw.diagnostics : null;
     const protocolVersion = num(raw.protocolVersion) ? Number(raw.protocolVersion) : null;
     const fetchedAt = bridgeTimestamp(raw.fetchedAt) || Date.now();
@@ -115,8 +194,10 @@
     const circuitStats = diagnostics?.circuitStats && typeof diagnostics.circuitStats === 'object' ? diagnostics.circuitStats : null;
     const moduleError = row => {
       const status = String(row?.status || '').toLowerCase();
-      return ['error','open','partial'].includes(status) || Boolean(row?.errorCode) || Boolean(row?.error);
+      return ['error','open','partial'].includes(status) || Boolean(row?.errorCode) || Boolean(row?.errorType) || Boolean(row?.errorMessage);
     };
+    const partialModules = modules ? moduleRows.filter(row => String(row?.status || '').toLowerCase() === 'partial').length : null;
+    const slowestModule = moduleRows.filter(row => num(row?.durationMs)).sort((a,b) => Number(b.durationMs) - Number(a.durationMs))[0] || null;
     const numeric = value => num(value) ? Number(value) : null;
     return {
       version: bridge?.version || '',
@@ -125,6 +206,9 @@
       moduleCount: modules ? Object.keys(modules).length : null,
       staleModules: modules ? moduleRows.filter(row => row?.stale === true).length : null,
       errorModules: modules ? moduleRows.filter(moduleError).length : null,
+      partialModules,
+      moduleDetails:moduleRows,
+      slowestModule,
       cacheHitRate: numeric(cache?.hitRate),
       cacheEntries: numeric(cache?.entries ?? diagnostics?.cacheEntries),
       inFlight: numeric(cache?.inFlight ?? diagnostics?.inFlight),
@@ -134,6 +218,19 @@
       openCircuits: circuits ? Object.values(circuits).filter(row => String(row?.state || '').toLowerCase() === 'open').length : null,
       circuitRecoveries: numeric(circuitStats?.recoveries)
     };
+  }
+
+
+  function bridgeModuleFreshnessText(details) {
+    const rows = (Array.isArray(details) ? details : []).filter(row => row?.fetchedAt);
+    if (!rows.length) return '—';
+    return rows.slice(0, 8).map(row => `${row.name} ${age(row.fetchedAt)}`).join(' · ');
+  }
+
+  function bridgeModuleDurationText(details) {
+    const rows = (Array.isArray(details) ? details : []).filter(row => num(row?.durationMs));
+    if (!rows.length) return '—';
+    return rows.slice(0, 8).map(row => `${row.name} ${Math.round(Number(row.durationMs))}ms`).join(' · ');
   }
 
   function age(ts) {
@@ -960,7 +1057,7 @@ async function importLegacyTodayBaselines() {
       if (fallback) scopes.all = fallback;
     }
     if (!Object.keys(scopes).length) return null;
-    return {scopes,errors:raw?.errors && typeof raw.errors === 'object' ? raw.errors : {},fetchedAt:raw?.fetchedAt || scopes.all?.fetchedAt || Date.now(),source:String(raw?.source || 'LLMGateway hybrid scoped usage')};
+    return {scopes,errors:normalizeErrorMap(raw?.errors),fetchedAt:raw?.fetchedAt || scopes.all?.fetchedAt || Date.now(),source:String(raw?.source || 'LLMGateway hybrid scoped usage')};
   }
 
   function normalizeAnalyticsPayload(raw, fallback24h = null) {
@@ -985,7 +1082,7 @@ async function importLegacyTodayBaselines() {
         dailyRequests7d:num(raw?.averages?.dailyRequests7d)?Number(raw.averages.dailyRequests7d):null,
         dailyCost30d:num(raw?.averages?.dailyCost30d)?Number(raw.averages.dailyCost30d):null
       },
-      errors:raw?.errors && typeof raw.errors === 'object' ? raw.errors : {},
+      errors:normalizeErrorMap(raw?.errors),
       fetchedAt:raw?.fetchedAt || windows['24h']?.fetchedAt || Date.now(),
       source:String(raw?.source || 'LLMGateway CLI analytics')
     };
@@ -1005,7 +1102,7 @@ async function importLegacyTodayBaselines() {
     if (!Object.keys(scopes).length) return null;
     return {
       scopes,
-      errors:raw?.errors && typeof raw.errors === 'object' ? raw.errors : {},
+      errors:normalizeErrorMap(raw?.errors),
       fetchedAt:raw?.fetchedAt || scopes.all?.fetchedAt || Date.now(),
       source:String(raw?.source || 'LLMGateway hybrid scoped analytics')
     };
@@ -1206,9 +1303,12 @@ async function importLegacyTodayBaselines() {
       `Health: ${h.status || '—'}`,
       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
+      `Bridge module freshness: ${bridgeModuleFreshnessText(bridgeDiag.moduleDetails)}`,
+      `Bridge module duration: ${bridgeModuleDurationText(bridgeDiag.moduleDetails)}`,
+      `Bridge partial: modules ${bridgeDiag.partialModules ?? '—'} · usage ${countErrorMap(d.usageScopes?.errors)} · analytics ${countErrorMap(d.analyticsScopes?.errors)}`,
       `Bridge cache: hit ${bridgeDiag.cacheHitRate === null ? '—' : `${bridgeDiag.cacheHitRate.toFixed(0)}%`} · entries ${bridgeDiag.cacheEntries ?? '—'} · in-flight ${bridgeDiag.inFlight ?? '—'} · stale fallback ${bridgeDiag.staleFallbacks ?? '—'}`,
       `Bridge CLI/circuit: active ${bridgeDiag.cliActive ?? '—'} · queued ${bridgeDiag.cliQueued ?? '—'} · open ${bridgeDiag.openCircuits ?? '—'} · recoveries ${bridgeDiag.circuitRecoveries ?? '—'}`,
-      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)} · cache ${Number(diagUsage?.cacheCount || 0).toLocaleString()}회 · ${Number(diagUsage?.cacheRate || 0).toFixed(1)}%`,
+      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)} · cache ${usageCacheText(diagUsage)}`,
       `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
       `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
@@ -1396,12 +1496,12 @@ function todayOverviewMetrics(d) {
           <div class="mini"><span>총 토큰</span><b>${num(scopeActivity.totalTokens) ? Number(scopeActivity.totalTokens).toLocaleString() : '—'}</b></div>
           <div class="mini"><span>입력 / 출력</span><b>${num(scopeActivity.inputTokens) || num(scopeActivity.outputTokens) ? `${num(scopeActivity.inputTokens)?Number(scopeActivity.inputTokens).toLocaleString():'—'} / ${num(scopeActivity.outputTokens)?Number(scopeActivity.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
           <div class="mini"><span>오류</span><b>${num(scopeActivity.errorCount) ? `${Number(scopeActivity.errorCount).toLocaleString()}회 · ${num(scopeActivity.errorRate)?Number(scopeActivity.errorRate).toFixed(1):'0.0'}%` : (num(scopeActivity.errorRate) ? `${Number(scopeActivity.errorRate).toFixed(1)}%` : '—')}</b></div>
-          <div class="mini"><span>캐시</span><b>${Number(scopeActivity.cacheCount || 0).toLocaleString()}회 · ${Number(scopeActivity.cacheRate || 0).toFixed(1)}%</b></div>
+          <div class="mini"><span>캐시</span><b>${usageCacheText(scopeActivity)}</b></div>
           <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
           <div class="mini"><span>Top Model</span><b>${esc(scopeTopModel)}</b></div>
           ${scopeExtra}
         </div>${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
-        ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(d.usageScopes.errors[scopeKey])}</p>` : ''}
+        ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(errorSummaryText(d.usageScopes.errors[scopeKey]))}</p>` : ''}
       </section>
       <section class="panel wide">
         <div class="today-head"><div><b>Analytics · 24h / 7d / 30d</b><p style="margin:2px 0 0">${esc(analyticsNames[analyticsScopeKey][1])}</p></div><span class="stamp">${analyticsFetchedAt ? dashboardDateText(analyticsFetchedAt) : ''}</span></div>
@@ -1414,7 +1514,7 @@ function todayOverviewMetrics(d) {
           <div class="mini"><span>총 토큰</span><b>${num(analyticsW24.totalTokens) ? Number(analyticsW24.totalTokens).toLocaleString() : '—'}</b></div>
           <div class="mini"><span>입력 / 출력</span><b>${num(analyticsW24.inputTokens) || num(analyticsW24.outputTokens) ? `${num(analyticsW24.inputTokens)?Number(analyticsW24.inputTokens).toLocaleString():'—'} / ${num(analyticsW24.outputTokens)?Number(analyticsW24.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
           <div class="mini"><span>오류</span><b>${num(analyticsW24.errorCount) ? `${Number(analyticsW24.errorCount).toLocaleString()}회 · ${num(analyticsW24.errorRate)?Number(analyticsW24.errorRate).toFixed(1):'0.0'}%` : (num(analyticsW24.errorRate) ? `${Number(analyticsW24.errorRate).toFixed(1)}%` : '0회 · 0.0%')}</b></div>
-          <div class="mini"><span>캐시</span><b>${num(analyticsW24.cacheCount) ? `${Number(analyticsW24.cacheCount).toLocaleString()}회 · ${num(analyticsW24.cacheRate)?Number(analyticsW24.cacheRate).toFixed(1):'0.0'}%` : (num(analyticsW24.cacheRate) ? `${Number(analyticsW24.cacheRate).toFixed(1)}%` : '0회 · 0.0%')}</b></div>
+          <div class="mini"><span>캐시</span><b>${usageCacheText(analyticsW24)}</b></div>
           <div class="mini"><span>7일 총 비용</span><b>${money(analyticsW7?.totalCost,4)}</b></div>
           <div class="mini"><span>7일 일평균</span><b>${num(analyticsAverages.dailyCost7d) ? `${money(analyticsAverages.dailyCost7d,4)}/일` : '—'}</b></div>
           <div class="mini"><span>30일 총 비용</span><b>${money(analyticsW30?.totalCost,4)}</b></div>
@@ -1422,8 +1522,8 @@ function todayOverviewMetrics(d) {
           <div class="mini"><span>Top Provider</span><b>${esc(analyticsTopProvider)}</b></div>
           ${analyticsExtra}
         </div>` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
-        ${d.analyticsScopes?.errors?.[analyticsScopeKey] ? `<p class="warn">Analytics · ${esc(d.analyticsScopes.errors[analyticsScopeKey])}</p>` : ''}
-        ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,message])=>`${range}: ${message}`).join(' · '))}</p>` : ''}
+        ${d.analyticsScopes?.errors?.[analyticsScopeKey] ? `<p class="warn">Analytics · ${esc(errorSummaryText(d.analyticsScopes.errors[analyticsScopeKey]))}</p>` : ''}
+        ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
       </section>
       <section class="panel wide"><b>Local Bridge</b>
         <label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
@@ -1439,7 +1539,7 @@ function todayOverviewMetrics(d) {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Bridge Stability · ${bridgeDiag.version?`v${esc(bridgeDiag.version)}`:'—'} · required ≥${esc(REQUIRED_BRIDGE_VERSION)} · compatible ${bridgeDiag.compatible===null?'unknown':bridgeDiag.compatible?'yes':'no'} · modules ${bridgeDiag.moduleCount??'—'} · stale ${bridgeDiag.staleModules??'—'} · errors ${bridgeDiag.errorModules??'—'}</p><p>Bridge Runtime · cache ${bridgeDiag.cacheHitRate===null?'—':bridgeDiag.cacheHitRate.toFixed(0)+'%'} · entries ${bridgeDiag.cacheEntries??'—'} · in-flight ${bridgeDiag.inFlight??'—'} · stale fallback ${bridgeDiag.staleFallbacks??'—'} · CLI ${bridgeDiag.cliActive??'—'}/${bridgeDiag.cliQueued??'—'} · circuit ${bridgeDiag.openCircuits??'—'} open / ${bridgeDiag.circuitRecoveries??'—'} recoveries</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Stall / Render · coincidence ${performanceRuntime.lastUiStallRenderOverlap?'yes':'no'}${performanceRuntime.lastUiStallRenderOverlap?` · ${esc(performanceRuntime.lastUiStallRenderReason||'unknown')} · ${num(performanceRuntime.lastUiStallRenderMs)?roundPerfMs(performanceRuntime.lastUiStallRenderMs)+'ms':'—'}`:''} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap?'yes':'no'}</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Input · first ${num(performanceRuntime.lastResumeFirstInputAfterMs)?roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)+'ms':'—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs)?roundPerfMs(performanceRuntime.lastResumeInputDelayMs)+'ms':'—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs)?roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)+'ms':'—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh?'yes':'no'}</p><p>Resume Refresh · started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs)?roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)+'ms after':'—'} · duration ${num(performanceRuntime.lastResumeRefreshMs)?roundPerfMs(performanceRuntime.lastResumeRefreshMs)+'ms':'—'} · render ${num(performanceRuntime.lastResumeRenderMs)?roundPerfMs(performanceRuntime.lastResumeRenderMs)+'ms':'—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry?'yes':'no'}</p><p>Resume Route · requested ${esc(performanceRuntime.lastResumeRequestedReason||'—')} · actual ${esc(performanceRuntime.lastResumeActualReason||'—')} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced?'yes':'no'}${performanceRuntime.lastResumeRefreshWasCoalesced?` · into ${esc(performanceRuntime.lastResumeCoalescedIntoReason||'unknown')}`:''}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><p>Render · widget ${num(performanceRuntime.lastRenderMs)?roundPerfMs(performanceRuntime.lastRenderMs)+'ms':'—'} · panel ${num(performanceRuntime.lastPanelRenderMs)?roundPerfMs(performanceRuntime.lastPanelRenderMs)+'ms':'—'} · spike ≥${RENDER_SPIKE_THRESHOLD_MS}ms ${Number(performanceRuntime.renderSpikeCount||0)}회</p><p>Panel Render · ${panelRenderTimer || panelIdleHandle !== null?'pending':'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced||0)}회 · interaction defer 750ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Bridge Stability · ${bridgeDiag.version?`v${esc(bridgeDiag.version)}`:'—'} · required ≥${esc(REQUIRED_BRIDGE_VERSION)} · compatible ${bridgeDiag.compatible===null?'unknown':bridgeDiag.compatible?'yes':'no'} · modules ${bridgeDiag.moduleCount??'—'} · stale ${bridgeDiag.staleModules??'—'} · errors ${bridgeDiag.errorModules??'—'} · partial ${bridgeDiag.partialModules??'—'}</p><p>Bridge Modules · freshness ${esc(bridgeModuleFreshnessText(bridgeDiag.moduleDetails))} · duration ${esc(bridgeModuleDurationText(bridgeDiag.moduleDetails))}</p><p>Bridge Runtime · cache ${bridgeDiag.cacheHitRate===null?'—':bridgeDiag.cacheHitRate.toFixed(0)+'%'} · entries ${bridgeDiag.cacheEntries??'—'} · in-flight ${bridgeDiag.inFlight??'—'} · stale fallback ${bridgeDiag.staleFallbacks??'—'} · CLI ${bridgeDiag.cliActive??'—'}/${bridgeDiag.cliQueued??'—'} · circuit ${bridgeDiag.openCircuits??'—'} open / ${bridgeDiag.circuitRecoveries??'—'} recoveries</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Stall / Render · coincidence ${performanceRuntime.lastUiStallRenderOverlap?'yes':'no'}${performanceRuntime.lastUiStallRenderOverlap?` · ${esc(performanceRuntime.lastUiStallRenderReason||'unknown')} · ${num(performanceRuntime.lastUiStallRenderMs)?roundPerfMs(performanceRuntime.lastUiStallRenderMs)+'ms':'—'}`:''} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap?'yes':'no'}</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Input · first ${num(performanceRuntime.lastResumeFirstInputAfterMs)?roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)+'ms':'—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs)?roundPerfMs(performanceRuntime.lastResumeInputDelayMs)+'ms':'—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs)?roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)+'ms':'—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh?'yes':'no'}</p><p>Resume Refresh · started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs)?roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)+'ms after':'—'} · duration ${num(performanceRuntime.lastResumeRefreshMs)?roundPerfMs(performanceRuntime.lastResumeRefreshMs)+'ms':'—'} · render ${num(performanceRuntime.lastResumeRenderMs)?roundPerfMs(performanceRuntime.lastResumeRenderMs)+'ms':'—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry?'yes':'no'}</p><p>Resume Route · requested ${esc(performanceRuntime.lastResumeRequestedReason||'—')} · actual ${esc(performanceRuntime.lastResumeActualReason||'—')} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced?'yes':'no'}${performanceRuntime.lastResumeRefreshWasCoalesced?` · into ${esc(performanceRuntime.lastResumeCoalescedIntoReason||'unknown')}`:''}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><p>Render · widget ${num(performanceRuntime.lastRenderMs)?roundPerfMs(performanceRuntime.lastRenderMs)+'ms':'—'} · panel ${num(performanceRuntime.lastPanelRenderMs)?roundPerfMs(performanceRuntime.lastPanelRenderMs)+'ms':'—'} · spike ≥${RENDER_SPIKE_THRESHOLD_MS}ms ${Number(performanceRuntime.renderSpikeCount||0)}회</p><p>Panel Render · ${panelRenderTimer || panelIdleHandle !== null?'pending':'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced||0)}회 · interaction defer 750ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 

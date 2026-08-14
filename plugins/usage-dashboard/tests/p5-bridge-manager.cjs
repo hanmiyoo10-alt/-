@@ -1,3 +1,4 @@
+// Manager 1.1.3 authoritative release validation trigger.
 // Node --check must receive a recognized .cjs temp extension on device runtimes.
 // Android proc-net + fast authenticated lifecycle probe regression lock for Bridge Manager 1.1.3.
 const fs = require('node:fs');

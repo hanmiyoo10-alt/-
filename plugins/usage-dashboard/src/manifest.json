@@ -1,21 +1,21 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.4.6",
+  "version": "3.0.0-alpha.4.7",
   "source": "plugins/usage-dashboard/latest.js",
-  "artifactSha256": "83b8ef684194b5eeac13880ad05c1d335bc5b8862d90d0dc97da13d385795e40",
+  "artifactSha256": "417fba6f88f80c82c9be208c1506d07e6b1ec205ada7457f6d1fa062351d24a3",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 45281,
-      "sha256": "bc4e017083479c3e4f3e40edd5d92ffe089b3e228ce8ec51804022fa60886271"
+      "bytes": 45363,
+      "sha256": "0436ae3b14a65fad831fe64d7f0ddc76eb89d9e78e51bf8c1a857e5edfdcfa2e"
     },
     {
       "file": "10-usage-data.part.js",
       "label": "usage normalization",
-      "bytes": 18823,
-      "sha256": "9a2b8b98e44c495e04ef524f8bf2d9e7cc9ba89aff538dd8fc9a5248e040eea4"
+      "bytes": 27946,
+      "sha256": "203738b643c95154c8d33586a49906b255fed89fcab8fdca0eb3e94e38a1c667"
     },
     {
       "file": "20-bridge-io.part.js",
@@ -26,26 +26,26 @@
     {
       "file": "30-refresh-runtime.part.js",
       "label": "refresh runtime",
-      "bytes": 3636,
-      "sha256": "49cffef32cd99f2c0588426dfb8a44f1965cc894cd867098491699ee21f77e8b"
+      "bytes": 3684,
+      "sha256": "592e0a87f08b17637101351613f11a414d88c442991039bf867156ca4fc86560"
     },
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
-      "bytes": 14993,
-      "sha256": "846bcf132df3e22431ec46023282e314c20ab7b400a5d6ed4301bed75f109df9"
+      "bytes": 15511,
+      "sha256": "5373f89ece6617accef24704a868f4eeabebf20db73666cd4506dc4cc1b5b043"
     },
     {
       "file": "50-settings-ui.part.js",
       "label": "settings UI",
-      "bytes": 29611,
-      "sha256": "c2acb3cdc3c48c3eeea8ab5b5f1fd903d58593331e9bd343bff16f2a9d1813da"
+      "bytes": 30290,
+      "sha256": "a9b46c2c0b971c187bf8263d2e9063ed3e4529c8ccba553d3ac047d5b3d9d2f3"
     },
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
-      "bytes": 10076,
-      "sha256": "2ace5af709449c3aec197a013b5ed826f23d02862f3ccc3cce63f13db7831a28"
+      "bytes": 10486,
+      "sha256": "b21ed66392f44c6324a8ea0cb4fd0350c94ae6d37fd4ab23e37553359c170cde"
     },
     {
       "file": "70-floating-widget.part.js",

@@ -20,6 +20,7 @@
     refreshInFlight = (async () => {
       try {
         state.data = applyObservedToday(await fetchSnapshot());
+        collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();

@@ -8,7 +8,7 @@
     return fallback;
   }
 
-  function normalizeRecentRequestRows(rows) {
+  function normalizeRecentRequestRows(rows, limit = 12) {
     if (!Array.isArray(rows)) return [];
     return rows.map(row => {
       if (!row || typeof row !== 'object') return null;
@@ -46,7 +46,151 @@
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
         errorType:success ? '' : String(errorTypeRaw ?? '')
       };
-    }).filter(Boolean).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, 12);
+    }).filter(Boolean).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, Math.max(1, Number(limit) || 12));
+  }
+
+  function requestLedgerKey(row) {
+    return [
+      Number(row?.timestamp || 0),
+      String(row?.requestNumber || ''),
+      String(row?.provider || 'Unknown'),
+      String(row?.model || 'Unknown'),
+      num(row?.cost) ? Number(row.cost) : '',
+      num(row?.totalTokens) ? Number(row.totalTokens) : '',
+      row?.success === false ? 'error' : 'success',
+      String(row?.errorCode || ''),
+      String(row?.errorType || '')
+    ].join('|');
+  }
+
+  function collectRecentRequestLedger(data) {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const byKey = new Map();
+    for (const row of (Array.isArray(state.requestLedger) ? state.requestLedger : [])) {
+      if (!row || !num(row.timestamp) || Number(row.timestamp) < cutoff) continue;
+      byKey.set(requestLedgerKey(row), {...row, scopes:Array.isArray(row.scopes) ? row.scopes : ['all']});
+    }
+    let observed = 0;
+    for (const scopeKey of ['all','devpass','credits']) {
+      const scope = data?.usageScopes?.scopes?.[scopeKey];
+      const rows = Array.isArray(scope?.recentLedger) ? scope.recentLedger : (Array.isArray(scope?.recent) ? scope.recent : []);
+      for (const row of rows) {
+        if (!row || !num(row.timestamp) || Number(row.timestamp) < cutoff) continue;
+        const key = requestLedgerKey(row);
+        const current = byKey.get(key) || null;
+        const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
+        byKey.set(key, {
+          ...(current || {}),
+          ...row,
+          cost:num(row.cost) ? Number(row.cost) : (num(current?.cost) ? Number(current.cost) : null),
+          totalTokens:num(row.totalTokens) ? Number(row.totalTokens) : (num(current?.totalTokens) ? Number(current.totalTokens) : null),
+          cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
+          requestNumber:String(row.requestNumber || current?.requestNumber || ''),
+          errorCode:String(row.errorCode || current?.errorCode || ''),
+          errorType:String(row.errorType || current?.errorType || ''),
+          scopes:Array.from(scopes)
+        });
+        observed += 1;
+      }
+    }
+    state.requestLedger = Array.from(byKey.values())
+      .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
+      .slice(0, 2000);
+    if (observed > 0 && !num(state.requestLedgerStartedAt)) state.requestLedgerStartedAt = Date.now();
+  }
+
+  function requestLedgerRowsForScope(scopeKey) {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const key = ['all','devpass','credits'].includes(String(scopeKey)) ? String(scopeKey) : 'all';
+    return (Array.isArray(state.requestLedger) ? state.requestLedger : [])
+      .filter(row => row && num(row.timestamp) && Number(row.timestamp) >= cutoff)
+      .filter(row => key === 'all' || (Array.isArray(row.scopes) && row.scopes.includes(key)))
+      .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+  }
+
+  function requestHourKey(timestamp) {
+    if (!num(timestamp)) return '';
+    const d = new Date(Number(timestamp) + 9 * 60 * 60 * 1000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const h = String(d.getUTCHours()).padStart(2, '0');
+    return `${y}-${m}-${day}T${h}`;
+  }
+
+  function requestHourLabel(key) {
+    const match = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2})$/);
+    if (!match) return key || '시간 미제공';
+    const [,y,m,d,h] = match;
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
+    const date = `${y}-${m}-${d}`;
+    return `${date === today ? '오늘' : `${Number(m)}/${Number(d)}`} ${Number(h)}시`;
+  }
+
+  function requestExactTime(timestamp) {
+    if (!num(timestamp)) return '시간 미제공';
+    return new Date(Number(timestamp)).toLocaleTimeString('ko-KR', {timeZone:KST_TIME_ZONE,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  }
+
+  function hourlyRequestDrilldownHtml(scopeKey) {
+    const rows = requestLedgerRowsForScope(scopeKey);
+    if (!rows.length) {
+      return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>0건</span></div><p>아직 누적된 요청 메타데이터가 없어. 앱이 받은 recent 요청부터 자동으로 쌓여.</p></div>`;
+    }
+    const groups = new Map();
+    for (const row of rows) {
+      const key = requestHourKey(row.timestamp);
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    const selectedKey = groups.has(String(state.selectedHourKey || '')) ? String(state.selectedHourKey) : '';
+    const hourRows = Array.from(groups.entries()).sort((a,b) => b[0].localeCompare(a[0])).map(([key, hour]) => {
+      const costRows = hour.filter(row => num(row.cost));
+      const totalCost = costRows.reduce((sum,row) => sum + Number(row.cost), 0);
+      const cacheRows = hour.filter(row => typeof row.cacheHit === 'boolean');
+      const cacheHits = cacheRows.filter(row => row.cacheHit).length;
+      const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
+      const errors = hour.filter(row => row.success === false).length;
+      const cacheText = cacheRate === null ? '캐시 —' : `캐시 ${cacheRate.toFixed(1)}%`;
+      const errorText = errors ? ` · 오류 ${errors}` : '';
+      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText}${errorText}</em></button>`;
+    }).join('');
+
+    let selectedHtml = '';
+    if (selectedKey) {
+      const selected = groups.get(selectedKey) || [];
+      const costRows = selected.filter(row => num(row.cost));
+      const totalCost = costRows.reduce((sum,row) => sum + Number(row.cost), 0);
+      const tokenRows = selected.filter(row => num(row.totalTokens));
+      const totalTokens = tokenRows.reduce((sum,row) => sum + Number(row.totalTokens), 0);
+      const cacheRows = selected.filter(row => typeof row.cacheHit === 'boolean');
+      const cacheHits = cacheRows.filter(row => row.cacheHit).length;
+      const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
+      const errors = selected.filter(row => row.success === false).length;
+      const summary = [
+        `${selected.length}회`,
+        costRows.length ? money(totalCost,4) : '비용 —',
+        tokenRows.length ? `${totalTokens.toLocaleString()} tok` : '토큰 —',
+        cacheRate === null ? '캐시 —' : `캐시 ${cacheRate.toFixed(1)}% · HIT ${cacheHits}/${cacheRows.length}`,
+        errors ? `오류 ${errors}` : '오류 0'
+      ].join(' · ');
+      const visible = selected.slice(0, 300);
+      const detailRows = visible.map(row => {
+        const numberText = row.requestNumber ? `#${esc(row.requestNumber)} · ` : '';
+        const resultText = row.success === false
+          ? ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ')
+          : '성공';
+        const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '';
+        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
+        return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row.timestamp))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
+      }).join('');
+      const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
+      selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${detailRows}${truncated}</div>`;
+    }
+
+    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>앱이 받은 recent 메타데이터를 24시간 동안 중복 제거해 누적 · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
   }
 
   function scopeUsageDetailsHtml(scopeActivity) {
@@ -88,7 +232,9 @@
       : sourceRows > 0 ? `요청 단위 메타데이터 없음 · source rows ${sourceRows}`
       : 'Bridge가 최근 요청 메타데이터를 아직 제공하지 않음';
     const filterButton = (key, label, count) => `<button class="recent-filter-btn ${recentFilter===key?'active':''}" data-recent-filter="${key}">${label} ${count}</button>`;
-    return `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider · 요청 / 비용 / 효율</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model · 요청 / 비용 / 효율</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><div class="recent-head"><h3>최근 요청 · 메타데이터</h3><span>${recentRows.length}/${recentCounts.all}</span></div><div class="recent-filter" role="tablist" aria-label="최근 요청 필터">${filterButton('all','전체',recentCounts.all)}${filterButton('success','성공',recentCounts.success)}${filterButton('error','오류',recentCounts.error)}</div>${recentHtml || `<p>${filterEmpty}</p>`}</div>`;
+    const baseHtml = `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider · 요청 / 비용 / 효율</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model · 요청 / 비용 / 효율</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><div class="recent-head"><h3>최근 요청 · 메타데이터</h3><span>${recentRows.length}/${recentCounts.all}</span></div><div class="recent-filter" role="tablist" aria-label="최근 요청 필터">${filterButton('all','전체',recentCounts.all)}${filterButton('success','성공',recentCounts.success)}${filterButton('error','오류',recentCounts.error)}</div>${recentHtml || `<p>${filterEmpty}</p>`}</div>`;
+    const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
+    return baseHtml + hourlyRequestDrilldownHtml(scopeKey);
   }
 
   function normalizeScopeActivity(raw) {
@@ -118,8 +264,9 @@
     const models = rows(raw.models);
     const rawRecent = Array.isArray(raw.recent) ? raw.recent : [];
     const recent = normalizeRecentRequestRows(rawRecent);
+    const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
     if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,recentLedger,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {

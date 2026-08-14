@@ -109,6 +109,14 @@
         renderSettings();
       };
     });
+    document.querySelectorAll('[data-usage-hour]').forEach(button => {
+      button.onclick = async () => {
+        const key = String(button.getAttribute('data-usage-hour') || '');
+        state.selectedHourKey = state.selectedHourKey === key ? '' : key;
+        await persist();
+        renderSettings();
+      };
+    });
     document.querySelectorAll('[data-analytics-scope]').forEach(button => {
       button.onclick = async () => {
         const next = String(button.getAttribute('data-analytics-scope') || 'all');
@@ -174,6 +182,7 @@
         plugin: {name:'Local Usage Dashboard', version:VERSION},
         schema: {snapshot:SNAPSHOT_SCHEMA_VERSION, recentRequest:RECENT_REQUEST_SCHEMA_VERSION},
         usage: state.data || null,
+        requestLedger: Array.isArray(state.requestLedger) ? state.requestLedger : [],
         dailyUsage: state.dailyUsage || null,
         creditDailyUsage: state.creditDailyUsage || null,
         bridge: state.data?.bridge || null,

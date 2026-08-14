@@ -1,6 +1,6 @@
-// Manager 1.1.3 authoritative release validation trigger.
+// Bridge Manager 1.2.1 live-status reconciliation release validation trigger.
 // Node --check must receive a recognized .cjs temp extension on device runtimes.
-// Android proc-net + fast authenticated lifecycle probe + bundled engine regression lock for Bridge Manager 1.2.0.
+// Android proc-net + authenticated lifecycle probe + bundled engine regression lock for Bridge Manager 1.2.1.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');

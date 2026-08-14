@@ -1,5 +1,5 @@
 // Node --check must receive a recognized .cjs temp extension on device runtimes.
-// Android proc-net fallback regression lock for Bridge Manager 1.1.2.
+// Android proc-net + fast authenticated lifecycle probe regression lock for Bridge Manager 1.1.3.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
@@ -57,13 +57,18 @@ if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.brid
 else { assert.equal(manifest.components.bridgeManager.engineManaged, true); assert.equal(manifest.components.bridgeManager.engineAdoption, true); }
 assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
 assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.1.2';"), 'manager hotfix version missing');
+assert.ok(manager.includes("const MANAGER_VERSION = '1.1.3';"), 'manager hotfix version missing');
 assert.ok(manager.includes('bridge-manager.next-${process.pid}.cjs'), 'self-update temp file must preserve .cjs extension');
 assert.ok(manager.includes('bridge-manager.rollback-${process.pid}.cjs'), 'rollback temp file must preserve .cjs extension');
 assert.ok(manager.includes("const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');"), 'canonical legacy pidfile fallback missing');
 assert.ok(manager.includes("const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');"), 'canonical legacy bridge path guard missing');
 assert.ok(manager.includes('function canonicalPidFileCandidate()'), 'Android pidfile candidate fallback missing');
 assert.ok(manager.includes('async function bridgeReachable(timeoutMs = 700)'), 'endpoint transition verifier missing');
+assert.ok(manager.includes("const BRIDGE_PROBE_PATH = '/__local_usage_runtime_probe__';"), 'fast authenticated bridge probe path missing');
+assert.ok(manager.includes('async function bridgeAuthProbe(timeoutMs = 1500)'), 'authenticated lifecycle probe missing');
+assert.ok(manager.includes('async function bridgeIdentity(timeoutMs = 1500)'), 'bridge identity verifier missing');
+assert.ok(!manager.includes("path:'/snapshot'"), 'manager lifecycle verification must not call heavy snapshot');
+assert.ok(!manager.includes('bridgeSnapshot('), 'snapshot-based lifecycle verifier regressed');
 assert.ok(manager.includes('processMatchesSpec(service.pid, descriptor)'), 'managed service process fallback missing');
 assert.ok(!manager.includes('`${CURRENT_FILE}.next-${process.pid}`'), 'unknown-extension self-update temp path regressed');
 

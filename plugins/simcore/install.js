@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.2
+//@version 0.63.3
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,11 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.3 Two-Turn Diagnostic Copy:
+// - Changes the manual diagnostic copy body from lineage-selected root/parent/current raw turns to the two most recent completed user→assistant turns: 직전 턴 + 최근 턴
+// - Keeps lineage/handoff/recurrence/cache/clock/warning metadata in the diagnostic header; root/parent remain metadata only rather than extra raw-response payloads
+// - Locates the two completed turns only when the user presses the button; no persistent response copy, storage schema, runtime prompt, or generation behavior change
 //
 // v0.63.2 Release Channel Split:
 // - Migration-only release: moves PocketRisu update checks from main to the dedicated release-simcore branch
@@ -3476,7 +3481,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.63.2] state mirror failed:', e.message);
+      console.log('[simcore/v0.63.3] state mirror failed:', e.message);
     }
   }
 
@@ -3491,7 +3496,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.63.2] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.63.3] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3701,8 +3706,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.63.2] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.63.2] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.63.3] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.63.3] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3715,7 +3720,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.63.2] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.63.3] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3760,7 +3765,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.2] beforeRequest error:', e.message);
+      console.log('[simcore/v0.63.3] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3786,7 +3791,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.2] output error:', e.message);
+      console.log('[simcore/v0.63.3] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3907,32 +3912,36 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     ];
 
     const sections = [];
-    if (probeFresh && rootIndex >= 0 && rootIndex !== currentUserIndex) {
-      sections.push(diagnosticSection(
-        'ROOT SOURCE TURN (RAW)',
-        messages,
-        rootIndex,
-        rootAssistantIndex,
-        [`Root mode: ${lineage?.rootMode || 'n/a'}`, `Lineage role: authoritative root source`],
-      ));
-    } else if (probeFresh && rootIndex === currentUserIndex && rootIndex >= 0) {
-      lines.push('Root source: current input (INLINE/current-turn source); see CURRENT TURN below.', '');
-    } else {
-      lines.push('Root source: unavailable for this live probe.', '');
+    let previousAssistantIndex = -1;
+    const previousSearchBefore = currentUserIndex >= 0 ? currentUserIndex : latestAssistantIndex;
+    for (let i = previousSearchBefore - 1; i >= 0; i--) {
+      if (diagnosticAssistantRole(messages[i])) {
+        previousAssistantIndex = i;
+        break;
+      }
     }
+    const previousUserIndex = diagnosticUserBefore(
+      messages,
+      previousAssistantIndex >= 0 ? previousAssistantIndex : previousSearchBefore,
+    );
 
-    if (probeFresh && parentIndex >= 0 && parentIndex !== currentUserIndex && parentIndex !== rootIndex) {
+    if (previousUserIndex >= 0 || previousAssistantIndex >= 0) {
       sections.push(diagnosticSection(
-        'PARENT TURN (RAW)',
+        '직전 턴 (RAW)',
         messages,
-        parentIndex,
-        parentAssistantIndex,
-        [`Parent mode: ${lineage?.parentMode || 'n/a'}`, `Lineage depth: ${Number(lineage?.depth || 0)}`],
+        previousUserIndex,
+        previousAssistantIndex,
       ));
+    } else {
+      sections.push([
+        '--- 직전 턴 (RAW) ---',
+        'unavailable',
+        '',
+      ].join('\n'));
     }
 
     sections.push(diagnosticSection(
-      'CURRENT TURN (RAW)',
+      '최근 턴 (RAW)',
       messages,
       currentUserIndex,
       latestAssistantIndex,
@@ -4028,7 +4037,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.2 <button id="copy-turn-diag">최근 턴 진단 복사</button> <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.3 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -4134,7 +4143,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">Short-C Source Lock · eligible short-C is bound to the current lineage root; diagnostic copy is manual/raw-only</div>
+<div class="card muted">Short-C Source Lock · eligible short-C is bound to the current lineage root; diagnostic copy = previous + current completed turns, manual/raw-only</div>
 </div>`;
       const copyTurnDiagButton = document.getElementById('copy-turn-diag');
       if (copyTurnDiagButton) copyTurnDiagButton.onclick = async () => {
@@ -4145,7 +4154,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.63.2] panel error:', e.message);
+      console.log('[simcore/v0.63.3] panel error:', e.message);
     }
   }
 
@@ -4153,7 +4162,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.63.2] UI registration failed:', e.message);
+    console.log('[simcore/v0.63.3] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -4164,5 +4173,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     previousRuntimePromptText = null;
     previousRuntimePromptKey = null;
   });
-  console.log('[simcore/v0.63.2] initialized');
+  console.log('[simcore/v0.63.3] initialized');
 })();

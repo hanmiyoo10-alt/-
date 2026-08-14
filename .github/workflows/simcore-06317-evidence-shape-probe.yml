@@ -1,0 +1,67 @@
+name: SimCore 0.63.17 Evidence Shape Probe
+
+on:
+  push:
+    branches:
+      - simcore-06317-evidence-shape-probe
+    paths:
+      - '.github/workflows/simcore-06317-evidence-shape-probe.yml'
+      - 'plugins/simcore/tools/release_06317_evidence_shape_probe.py'
+      - 'plugins/simcore/tools/test_06317_evidence_shape_probe.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06317-evidence-shape-probe
+          fetch-depth: 2
+
+      - name: Freeze exact 0.63.16 baseline
+        shell: bash
+        run: |
+          test "$(git hash-object plugins/simcore/latest.js)" = "ecc4aaf8302f1a97636d79ca85e9427f883e99f6"
+          test "$(git hash-object plugins/simcore/install.js)" = "ecc4aaf8302f1a97636d79ca85e9427f883e99f6"
+          cp plugins/simcore/latest.js /tmp/simcore-06317-baseline.js
+
+      - name: Patch 0.63.17 artifacts
+        run: python3 plugins/simcore/tools/release_06317_evidence_shape_probe.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Evidence shape and full module-freeze gates
+        run: node plugins/simcore/tools/test_06317_evidence_shape_probe.js
+
+      - name: Artifact parity and diff hygiene
+        shell: bash
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          print('latest blob:', subprocess.check_output(['git', 'hash-object', 'plugins/simcore/latest.js'], text=True).strip())
+          print('install blob:', subprocess.check_output(['git', 'hash-object', 'plugins/simcore/install.js'], text=True).strip())
+          PY
+
+      - name: Commit tested artifacts to work branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.17 Evidence Shape Probe artifacts'
+          git push origin HEAD:simcore-06317-evidence-shape-probe

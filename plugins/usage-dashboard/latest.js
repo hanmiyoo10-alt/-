@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.39
+//@version 3.0.0-alpha.3.40
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.39';
+  const VERSION = '3.0.0-alpha.3.40';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -838,6 +838,71 @@ async function importLegacyTodayBaselines() {
   return imported;
 }
 
+  function recentRequestValue(row, keys, fallback = null) {
+    for (const key of keys) {
+      const parts = String(key).split('.');
+      let value = row;
+      for (const part of parts) value = value?.[part];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return fallback;
+  }
+
+  function normalizeRecentRequestRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows.map(row => {
+      if (!row || typeof row !== 'object') return null;
+      const timestamp = bridgeTimestamp(recentRequestValue(row, ['timestamp','createdAt','created_at','time','date','created'], null));
+      const provider = String(recentRequestValue(row, ['provider','providerName','provider_name','usedProvider','used_provider','metadata.used_provider','metadata.usedProvider','source.provider'], 'Unknown') || 'Unknown');
+      const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
+      const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
+      const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
+      const requestNumberRaw = recentRequestValue(row, ['sequence','seq','requestNumber','request_number','number'], null);
+      const status = String(recentRequestValue(row, ['status','state'], '') || '').toLowerCase();
+      const errorCodeRaw = recentRequestValue(row, ['errorCode','error_code','statusCode','status_code','httpStatus','http_status','error.code'], null);
+      const errorTypeRaw = recentRequestValue(row, ['errorType','error_type','error.type'], null);
+      const statusCode = num(errorCodeRaw) ? Number(errorCodeRaw) : null;
+      const explicitSuccess = typeof row.success === 'boolean' ? row.success : null;
+      const failedByStatus = ['error','failed','failure','upstream_error','gateway_error','timeout'].includes(status);
+      const hasErrorObject = Boolean(row.error && (typeof row.error === 'string' || typeof row.error === 'object'));
+      const success = explicitSuccess !== null ? explicitSuccess : !(failedByStatus || hasErrorObject || (statusCode !== null && statusCode >= 400));
+      if (!timestamp && provider === 'Unknown' && model === 'Unknown') return null;
+      return {
+        timestamp,
+        provider,
+        model,
+        cost:num(costRaw) ? Number(costRaw) : null,
+        totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
+        requestNumber:requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '',
+        success,
+        errorCode:success ? '' : String(errorCodeRaw ?? ''),
+        errorType:success ? '' : String(errorTypeRaw ?? '')
+      };
+    }).filter(Boolean).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, 12);
+  }
+
+  function scopeUsageDetailsHtml(scopeActivity) {
+    if (!scopeActivity) return '';
+    const aggregateRows = rows => (Array.isArray(rows) ? rows : []).slice(0, 8).map(row =>
+      `<div class="usage-detail-row"><b>${esc(row?.name || 'Unknown')}</b><span>${Number(row?.requests || 0).toLocaleString()}회 · ${money(row?.cost,4)}</span></div>`
+    ).join('');
+    const providers = aggregateRows(scopeActivity.providers);
+    const models = aggregateRows(scopeActivity.models);
+    const recentRows = (Array.isArray(scopeActivity.recent) ? scopeActivity.recent : []).map(row => {
+      const numberText = row.requestNumber ? `#${esc(row.requestNumber)} · ` : '';
+      const resultText = row.success
+        ? '성공'
+        : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
+      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : ''].filter(Boolean).join(' · ');
+      return `<div class="request-detail-row"><div><b>${numberText}${esc(row.provider)} · ${esc(row.model)}</b><span>${row.timestamp ? dashboardDateText(row.timestamp) : '시간 미제공'}</span></div><em>${usageText}</em></div>`;
+    }).join('');
+    const sourceRows = Number(scopeActivity.recentRawCount || 0);
+    const emptyRecent = sourceRows > 0
+      ? `요청 단위 메타데이터 없음 · source rows ${sourceRows}`
+      : 'Bridge가 최근 요청 메타데이터를 아직 제공하지 않음';
+    return `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><h3>최근 요청 · 요청 단위</h3>${recentRows || `<p>${emptyRecent}</p>`}</div>`;
+  }
+
   function normalizeScopeActivity(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const rows = value => Array.isArray(value) ? value.map(row => ({
@@ -856,9 +921,10 @@ async function importLegacyTodayBaselines() {
     const cacheRate = num(raw.cacheRate) ? Number(raw.cacheRate) : null;
     const providers = rows(raw.providers);
     const models = rows(raw.models);
-    const recent = Array.isArray(raw.recent) ? raw.recent : [];
-    if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate].some(num) && !providers.length && !models.length && !recent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    const rawRecent = Array.isArray(raw.recent) ? raw.recent : [];
+    const recent = normalizeRecentRequestRows(rawRecent);
+    if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {
@@ -1107,6 +1173,8 @@ async function importLegacyTodayBaselines() {
   function diagText() {
     const d = state.data || {}, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
+    const diagUsageKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
+    const diagUsage = d.usageScopes?.scopes?.[diagUsageKey] || null;
     return [
       `Local Usage Dashboard v${VERSION}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
@@ -1118,6 +1186,7 @@ async function importLegacyTodayBaselines() {
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
       `Bridge cache: hit ${bridgeDiag.cacheHitRate === null ? '—' : `${bridgeDiag.cacheHitRate.toFixed(0)}%`} · entries ${bridgeDiag.cacheEntries ?? '—'} · in-flight ${bridgeDiag.inFlight ?? '—'} · stale fallback ${bridgeDiag.staleFallbacks ?? '—'}`,
       `Bridge CLI/circuit: active ${bridgeDiag.cliActive ?? '—'} · queued ${bridgeDiag.cliQueued ?? '—'} · open ${bridgeDiag.openCircuits ?? '—'} · recoveries ${bridgeDiag.circuitRecoveries ?? '—'}`,
+      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)}`,
       `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
       `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
@@ -1268,9 +1337,10 @@ function todayOverviewMetrics(d) {
       .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
       .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}
+      .usage-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.usage-detail-box{background:var(--p2);border-radius:10px;padding:10px;margin-top:8px}.usage-detail-box h3{font-size:11px;margin:0 0 7px;color:var(--m)}.usage-detail-box p{margin:0}.usage-detail-row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--l)}.usage-detail-row:first-of-type{border-top:0}.usage-detail-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage-detail-row span{color:var(--m);font-size:11px;white-space:nowrap}.recent-requests{margin-top:8px}.request-detail-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--l)}.request-detail-row:first-of-type{border-top:0}.request-detail-row>div{min-width:0}.request-detail-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.request-detail-row span{display:block;color:var(--m);font-size:10px;margin-top:2px}.request-detail-row em{font-style:normal;color:var(--m);font-size:11px;text-align:right;white-space:nowrap}
       label{display:grid;gap:5px;margin-top:9px}label span{color:var(--m);font-size:11px}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;background:#111318;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:9px}textarea{min-height:62px}
       button{background:#25282f;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:8px 11px;font-weight:650}button.primary{background:var(--g);border-color:var(--g);color:#15170f}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.warn{color:var(--e)}
-      @media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.minis,.today-grid{grid-template-columns:1fr 1fr}}
+      @media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.minis,.today-grid{grid-template-columns:1fr 1fr}.usage-detail-grid{grid-template-columns:1fr}.request-detail-row{align-items:flex-start;flex-direction:column}.request-detail-row em{text-align:left;white-space:normal}}
     </style><div class="shell"><header><div><div class="muted">MODULAR CORE · v${VERSION}</div><h1>Local Usage Dashboard</h1></div><button id="close">닫기</button></header><main class="grid">
       ${card('월간',d.monthly)}${card('주간',d.weekly,'weekly')}
       <section class="panel metric"><small>${esc(c?.label || 'Credits')}</small><strong>${money(c?.balance)}</strong><p>${creditsMeta || '—'}</p></section>
@@ -1307,7 +1377,7 @@ function todayOverviewMetrics(d) {
           <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
           <div class="mini"><span>Top Model</span><b>${esc(scopeTopModel)}</b></div>
           ${scopeExtra}
-        </div>` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        </div>${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(d.usageScopes.errors[scopeKey])}</p>` : ''}
       </section>
       <section class="panel wide">

@@ -1,0 +1,67 @@
+name: SimCore 0.63.15 Frame Guard
+
+on:
+  push:
+    branches:
+      - simcore-06315-frame-guard
+    paths:
+      - '.github/workflows/simcore-06315-frame-guard.yml'
+      - 'plugins/simcore/tools/release_06315_frame_guard.py'
+      - 'plugins/simcore/tools/test_06315_frame_guard.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06315-frame-guard
+          fetch-depth: 2
+
+      - name: Freeze exact 0.63.14 baseline
+        shell: bash
+        run: |
+          test "$(git hash-object plugins/simcore/latest.js)" = "b2301560ab9bfac43048ad18dfc7c6e2ff453d33"
+          test "$(git hash-object plugins/simcore/install.js)" = "b2301560ab9bfac43048ad18dfc7c6e2ff453d33"
+          cp plugins/simcore/latest.js /tmp/simcore-06315-baseline.js
+
+      - name: Patch 0.63.15 artifacts
+        run: python3 plugins/simcore/tools/release_06315_frame_guard.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Frame module, freeze, and behavior gates
+        run: node plugins/simcore/tools/test_06315_frame_guard.js
+
+      - name: Artifact parity and diff hygiene
+        shell: bash
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          print('latest blob:', subprocess.check_output(['git', 'hash-object', 'plugins/simcore/latest.js'], text=True).strip())
+          print('install blob:', subprocess.check_output(['git', 'hash-object', 'plugins/simcore/install.js'], text=True).strip())
+          PY
+
+      - name: Commit tested artifacts to work branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.15 Frame Guard artifacts'
+          git push origin HEAD:simcore-06315-frame-guard

@@ -55,5 +55,9 @@ if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.brid
 else { assert.equal(manifest.components.bridgeManager.engineManaged, true); assert.equal(manifest.components.bridgeManager.engineAdoption, true); }
 assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
 assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
+assert.ok(manager.includes("const MANAGER_VERSION = '1.1.1';"), 'manager hotfix version missing');
+assert.ok(manager.includes('bridge-manager.next-${process.pid}.cjs'), 'self-update temp file must preserve .cjs extension');
+assert.ok(manager.includes('bridge-manager.rollback-${process.pid}.cjs'), 'rollback temp file must preserve .cjs extension');
+assert.ok(!manager.includes('`${CURRENT_FILE}.next-${process.pid}`'), 'unknown-extension self-update temp path regressed');
 
 console.log(`usage-dashboard P5 bridge manager regression: OK · ${version}`);

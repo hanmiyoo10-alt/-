@@ -24,7 +24,7 @@
     "bridgeManager": {
       "mode": "sidecar-manager",
       "state": "engine-adoption-ready",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "productVersion": "3.0.0-alpha.5.2",
       "managementProtocol": "bridge-manager-v1",
       "host": "127.0.0.1",
@@ -33,7 +33,7 @@
       "selfUpdate": true,
       "engineManaged": true,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
-      "sha256": "53a6759ac70f7419ba1a7c695727b08846047846edc2ebaef2af0d06777a6e05",
+      "sha256": "1d7601ed0f2c57098a08fb949e06c6db8962f09c27961a254ac4e3c61c1eb777",
       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
       "bootstrapSha256": "0903cd25adf1904e3beb189fc8df748aa58a3369ed9edaf9a26e03d05eccec3d",
       "service": "local-usage-runtime-manager",

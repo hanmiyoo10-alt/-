@@ -28,7 +28,7 @@ assert.equal(manifest.productVersion, version);
 assert.equal(manifest.components.bridge.state, 'managed-adoption');
 assert.equal(manifest.components.bridge.lifecycleManaged, true);
 assert.equal(manifest.components.bridge.sourceBundled, false);
-assert.equal(manifest.components.bridgeManager.version, '1.1.0');
+assert.ok(/^1\.1\.(?:[1-9]|\d{2,})$/.test(String(manifest.components.bridgeManager.version || '')), 'managed engine requires Bridge Manager >=1.1.1');
 assert.equal(manifest.components.bridgeManager.engineAdoption, true);
 assert.equal(manifest.components.bridgeManager.engineService, 'local-usage-runtime-engine');
 console.log(`usage-dashboard P5 engine adoption regression: OK · ${version}`);

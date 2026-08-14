@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # rerun after preserving the 60-settings-runtime modular boundary
+          # dedicated partial renderer preserves the P2 module boundary
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha406_patch.py
           python3 plugins/usage-dashboard/tools/release_alpha406_patch.py
           rm plugins/usage-dashboard/tools/release_alpha406_patch.py
@@ -43,7 +43,8 @@ jobs:
           grep -Fq '//@version 3.0.0-alpha.4.6' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '3.0.0-alpha.4.6';" plugins/usage-dashboard/latest.js
           grep -Fq 'function patchPanelSections(nextHtml)' plugins/usage-dashboard/latest.js
-          grep -Fq 'renderSettings(true)' plugins/usage-dashboard/latest.js
+          grep -Fq 'function renderSettingsPartial()' plugins/usage-dashboard/latest.js
+          grep -Fq 'renderSettingsPartial();' plugins/usage-dashboard/latest.js
           grep -Fq 'Panel partial: mode ${' plugins/usage-dashboard/latest.js
           grep -Fq 'P4 partial: auto section patch · diagnostics live · settings preserved' plugins/usage-dashboard/latest.js
           grep -Fq 'P4 render: closed-panel skip · widget DOM dedup' plugins/usage-dashboard/latest.js

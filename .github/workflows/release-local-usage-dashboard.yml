@@ -6,6 +6,7 @@ on:
     paths:
       - 'plugins/usage-dashboard/latest.js'
       - 'plugins/usage-dashboard/src/**'
+      - 'plugins/usage-dashboard/runtime/**'
       - 'plugins/usage-dashboard/contracts/**'
       - 'plugins/usage-dashboard/tests/**'
       - 'plugins/usage-dashboard/tools/build_usage_dashboard.cjs'
@@ -42,7 +43,9 @@ jobs:
           node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
           node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
           node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/foundation-snapshot.json >/dev/null
@@ -56,6 +59,8 @@ jobs:
           test -n "$VERSION"
           grep -Fq "const VERSION = '$VERSION';" plugins/usage-dashboard/latest.js
           grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/src/manifest.json
+          grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json || true
           case "$VERSION" in
             3.0.0-alpha.*|3.0.0-beta.*|3.0.0) ;;
             *) echo "unexpected Usage Dashboard version: $VERSION"; exit 1 ;;
@@ -105,6 +110,14 @@ jobs:
           grep -q '버킷 · 정확 시각 미제공' plugins/usage-dashboard/latest.js
           grep -Fq "['requestLedger', raw.requestLedger]" plugins/usage-dashboard/latest.js
           grep -q 'usage.input_tokens_details.cached_tokens' plugins/usage-dashboard/latest.js
+          grep -q 'const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -q "const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';" plugins/usage-dashboard/latest.js
+          grep -q 'function bridgeRuntimeSnapshot()' plugins/usage-dashboard/latest.js
+          grep -q 'Unified runtime: schema v' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge manager: protocol' plugins/usage-dashboard/latest.js
+          grep -q 'Runtime manifest:' plugins/usage-dashboard/latest.js
+          grep -q 'single-product-modular-sidecar' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q 'legacy-external' plugins/usage-dashboard/runtime/product-manifest.json
           grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js
           grep -q 'widgetRenderCache.html !== nextHtml' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
@@ -125,8 +138,9 @@ jobs:
 
           printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt
           cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          cp plugins/usage-dashboard/runtime/product-manifest.json /tmp/usage-dashboard-product-manifest.json
 
-      - name: Publish validated artifact to release-usage-dashboard
+      - name: Publish validated product artifacts to release-usage-dashboard
         shell: bash
         run: |
           set -euo pipefail
@@ -135,16 +149,28 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin release-usage-dashboard
           git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          mkdir -p plugins/usage-dashboard/runtime
           cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp /tmp/usage-dashboard-product-manifest.json plugins/usage-dashboard/runtime/product-manifest.json
           node --check plugins/usage-dashboard/latest.js
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
           grep -Fq "//@version $VERSION" plugins/usage-dashboard/latest.js
+          grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
           grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
           git diff --check
-          if git diff --quiet -- plugins/usage-dashboard/latest.js; then
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/product-manifest.json
+          if git diff --cached --quiet; then
             echo "release-usage-dashboard already matches $VERSION"
             exit 0
           fi
-          test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
-          git add plugins/usage-dashboard/latest.js
-          git commit -m "release: publish Local Usage Dashboard $VERSION"
+          CHANGED="$(git diff --cached --name-only | sort)"
+          while IFS= read -r path; do
+            case "$path" in
+              plugins/usage-dashboard/latest.js|plugins/usage-dashboard/runtime/product-manifest.json) ;;
+              *) echo "unexpected release artifact: $path"; exit 1 ;;
+            esac
+          done <<< "$CHANGED"
+          git commit -m "release: publish Local Usage Dashboard $VERSION product artifacts"
           git push origin HEAD:release-usage-dashboard

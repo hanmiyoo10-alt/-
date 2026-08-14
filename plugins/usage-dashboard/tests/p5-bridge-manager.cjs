@@ -25,6 +25,8 @@ for (const marker of [
   'async function fetchBridgeManagerStatus(force = false)',
   'async function syncBridgeManagerIfNeeded(status)',
   'Bridge manager probe:',
+  'Bridge manager sync: action',
+  'Bridge engine sync: bundle',
   'engine-managed ${runtimeBridge.engineManaged',
 ]) assert.ok(source.includes(marker), `missing plugin bridge-manager marker: ${marker}`);
 

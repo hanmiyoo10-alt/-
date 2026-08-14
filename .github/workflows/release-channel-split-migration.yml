@@ -1,0 +1,92 @@
+name: Release Channel Split Migration
+
+on:
+  push:
+    branches: [release-channel-split-migration]
+    paths:
+      - '.github/workflows/release-channel-split-migration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-release-channels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-channel-split-migration
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-simcore release-usage-dashboard
+
+      - name: Publish SimCore migration release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git switch -C release-simcore origin/release-simcore
+          python3 - <<'PY'
+          from pathlib import Path
+          files = [Path('plugins/simcore/latest.js'), Path('plugins/simcore/install.js')]
+          old_url = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js'
+          new_url = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js'
+          marker = '// v0.63.1 Short-C Source Lock + Turn Diagnostic Copy:'
+          block = """// v0.63.2 Release Channel Split:\n// - Migration-only release: moves PocketRisu update checks from main to the dedicated release-simcore branch\n// - Runtime prompt, state, storage, lineage, handoff, recovery, time, reaction, broadcast, and diagnostic-copy behavior are unchanged from v0.63.1\n// - Future SimCore releases update release-simcore without moving main or the Usage Dashboard release channel\n//\n"""
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              assert '//@version 0.63.1' in text, path
+              assert old_url in text, path
+              assert marker in text, path
+              text = text.replace('//@version 0.63.1', '//@version 0.63.2', 1)
+              text = text.replace(old_url, new_url)
+              text = text.replace('[simcore/v0.63.1]', '[simcore/v0.63.2]')
+              text = text.replace('⚙️ SimCore v0.63.1', '⚙️ SimCore v0.63.2')
+              text = text.replace(marker, block + marker, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          test "$(git diff --name-only | sort)" = $'plugins/simcore/install.js\nplugins/simcore/latest.js'
+          grep -q '^//@version 0.63.2$' plugins/simcore/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js$' plugins/simcore/latest.js
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.2 dedicated release channel'
+          git push origin HEAD:release-simcore
+
+      - name: Publish Usage Dashboard migration release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('plugins/usage-dashboard/latest.js')
+          text = path.read_text(encoding='utf-8')
+          old_url = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js'
+          new_url = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js'
+          assert '//@version 3.0.0-alpha.3.33' in text
+          assert "const VERSION = '3.0.0-alpha.3.33';" in text
+          assert old_url in text
+          text = text.replace('//@version 3.0.0-alpha.3.33', '//@version 3.0.0-alpha.3.34', 1)
+          text = text.replace("const VERSION = '3.0.0-alpha.3.33';", "const VERSION = '3.0.0-alpha.3.34';", 1)
+          text = text.replace(old_url, new_url)
+          path.write_text(text, encoding='utf-8')
+          PY
+          node --check plugins/usage-dashboard/latest.js
+          git diff --check
+          test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
+          grep -q '^//@version 3.0.0-alpha.3.34$' plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'release: Local Usage Dashboard alpha.3.34 dedicated release channel'
+          git push origin HEAD:release-usage-dashboard

@@ -37,6 +37,13 @@ jobs:
           new = "    const precision = row?.timestampPrecision && row.timestampPrecision !== 'unknown' ? row.timestampPrecision : requestTimestampPrecision(timestamp, row?.timestampSource, row?.requestNumber);\n    if (precision === 'hour' || precision === 'hour-estimated') return `${requestHourLabel(requestHourKey(timestamp))} 버킷 · 정확 시각 미제공`;"
           if s.count(old) != 1: raise SystemExit('request time migration marker mismatch')
           p.write_text(s.replace(old, new, 1))
+
+          t = Path('plugins/usage-dashboard/tests/p4-request-fidelity.cjs')
+          q = t.read_text()
+          old_test = "assert.ok(source.includes(\"row?.timestampPrecision === 'hour' || row?.timestampPrecision === 'hour-estimated'\"), 'bucket timestamps must not look exact');"
+          new_test = "assert.ok(source.includes(\"precision === 'hour' || precision === 'hour-estimated'\"), 'bucket timestamps must not look exact');\nassert.ok(source.includes(\"requestTimestampPrecision(row.timestamp, row.timestampSource, row.requestNumber)\"), 'persisted ledger rows must infer missing precision');"
+          if q.count(old_test) != 1: raise SystemExit('request fidelity test migration marker mismatch')
+          t.write_text(q.replace(old_test, new_test, 1))
           PY
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
@@ -61,7 +68,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/src
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/src plugins/usage-dashboard/tests/p4-request-fidelity.cjs
           git commit -m 'fix: migrate persisted request ledger fidelity in alpha.4.9'
           git push origin HEAD:main
       - name: Publish finalized 4.9

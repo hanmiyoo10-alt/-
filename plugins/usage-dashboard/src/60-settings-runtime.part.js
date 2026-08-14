@@ -2,6 +2,75 @@
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
     document.body.innerHTML = settingsHtml();
     bindSettings();
+    performanceRuntime.panelFullRenders += 1;
+    performanceRuntime.lastPanelRenderMode = 'full';
+    const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const duration = Math.max(0, endedPerf - startedPerf);
+    performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);
+    noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
+  }
+
+  const PANEL_PARTIAL_SELECTORS = [
+    '.grid > section.panel.metric',
+    '.grid > section.panel.wide:not(.usage-primary):not(.activity-secondary):not(.analytics-panel)',
+    '.grid > section.usage-primary',
+    '.grid > section.activity-secondary',
+    '.grid > section.analytics-panel',
+  ];
+
+  function patchPanelSections(nextHtml) {
+    if (typeof DOMParser !== 'function') return false;
+    const nextDoc = new DOMParser().parseFromString(nextHtml, 'text/html');
+    const currentShell = document.querySelector('.shell');
+    const nextShell = nextDoc.querySelector('.shell');
+    if (!currentShell || !nextShell) return false;
+
+    const staged = [];
+    for (const selector of PANEL_PARTIAL_SELECTORS) {
+      const currentNodes = Array.from(document.querySelectorAll(selector));
+      const nextNodes = Array.from(nextDoc.querySelectorAll(selector));
+      if (!currentNodes.length || currentNodes.length !== nextNodes.length) return false;
+      for (let i = 0; i < currentNodes.length; i += 1) staged.push([currentNodes[i], nextNodes[i]]);
+    }
+
+    // Runtime Diagnostics is safe to refresh live. Local Bridge settings are
+    // deliberately left untouched so typed-but-unsaved values are preserved.
+    const currentAdvanced = Array.from(document.querySelectorAll('details.advanced-panel'));
+    const nextAdvanced = Array.from(nextDoc.querySelectorAll('details.advanced-panel'));
+    const diagnosticsCurrent = currentAdvanced[1]?.querySelector('.advanced-body');
+    const diagnosticsNext = nextAdvanced[1]?.querySelector('.advanced-body');
+    if (currentAdvanced[1]?.open && diagnosticsCurrent && diagnosticsNext) {
+      staged.push([diagnosticsCurrent, diagnosticsNext]);
+    }
+
+    let writes = 0;
+    let skips = 0;
+    for (const [currentNode, nextNode] of staged) {
+      if (currentNode.innerHTML === nextNode.innerHTML) {
+        skips += 1;
+        continue;
+      }
+      currentNode.innerHTML = nextNode.innerHTML;
+      writes += 1;
+    }
+    performanceRuntime.panelSectionWrites += writes;
+    performanceRuntime.panelSectionSkips += skips;
+    if (writes > 0) bindSettings();
+    return true;
+  }
+
+  function renderSettingsPartial() {
+    const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const nextHtml = settingsHtml();
+    if (document.body?.dataset?.panelOpen === '1' && patchPanelSections(nextHtml)) {
+      performanceRuntime.panelPartialRenders += 1;
+      performanceRuntime.lastPanelRenderMode = 'partial';
+    } else {
+      document.body.innerHTML = nextHtml;
+      bindSettings();
+      performanceRuntime.panelFullRenders += 1;
+      performanceRuntime.lastPanelRenderMode = 'full-fallback';
+    }
     const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
     const duration = Math.max(0, endedPerf - startedPerf);
     performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);

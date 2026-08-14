@@ -161,7 +161,7 @@
       panelRenderTimer = null;
       const run = () => {
         panelIdleHandle = null;
-        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettings();
+        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettingsPartial();
       };
       if (state.performanceGuard !== false && typeof window?.requestIdleCallback === 'function') {
         panelIdleHandle = window.requestIdleCallback(run, {timeout:500});

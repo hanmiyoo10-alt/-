@@ -4,6 +4,7 @@ set -euo pipefail
 PRODUCT_MANIFEST_URL='https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json'
 ROOT="$HOME/.local/share/local-usage-dashboard/runtime"
 MANAGER="$ROOT/bridge-manager.cjs"
+ENGINE="$ROOT/bridge-engine.mjs"
 TOKEN_FILE="$HOME/.config/llmgateway-devpass-bridge/token"
 SERVICE_NAME='local-usage-runtime-manager'
 SERVICE_DIR="$PREFIX/var/service/$SERVICE_NAME"
@@ -15,17 +16,31 @@ curl -fLsS --retry 2 --connect-timeout 15 "$PRODUCT_MANIFEST_URL" -o "$TMP/produ
 MANAGER_URL="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridgeManager?.artifact||''))" "$TMP/product-manifest.json")"
 MANAGER_SHA="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridgeManager?.sha256||''))" "$TMP/product-manifest.json")"
 MANAGER_VERSION="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridgeManager?.version||''))" "$TMP/product-manifest.json")"
+ENGINE_URL="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridge?.artifact||''))" "$TMP/product-manifest.json")"
+ENGINE_SHA="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridge?.sha256||''))" "$TMP/product-manifest.json")"
+ENGINE_VERSION="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridge?.requiredVersion||''))" "$TMP/product-manifest.json")"
 case "$MANAGER_URL" in
   https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/*) ;;
   *) echo 'Bridge manager URL 검증 실패'; exit 1 ;;
 esac
 [[ "$MANAGER_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo 'Bridge manager SHA256 검증 실패'; exit 1; }
+case "$ENGINE_URL" in
+  https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/*) ;;
+  *) echo 'Bridge engine URL 검증 실패'; exit 1 ;;
+esac
+[[ "$ENGINE_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo 'Bridge engine SHA256 검증 실패'; exit 1; }
 
 curl -fLsS --retry 2 --connect-timeout 15 "$MANAGER_URL" -o "$TMP/bridge-manager.cjs"
 node --check "$TMP/bridge-manager.cjs" >/dev/null
 ACTUAL_SHA="$(node -e "const fs=require('fs'),c=require('crypto');process.stdout.write(c.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex'))" "$TMP/bridge-manager.cjs")"
 [[ "$ACTUAL_SHA" == "$MANAGER_SHA" ]] || { echo 'Bridge manager artifact SHA256 불일치'; exit 1; }
 install -m 700 "$TMP/bridge-manager.cjs" "$MANAGER"
+
+curl -fLsS --retry 2 --connect-timeout 15 "$ENGINE_URL" -o "$TMP/bridge-engine.mjs"
+node --check "$TMP/bridge-engine.mjs" >/dev/null
+ACTUAL_ENGINE_SHA="$(node -e "const fs=require('fs'),c=require('crypto');process.stdout.write(c.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex'))" "$TMP/bridge-engine.mjs")"
+[[ "$ACTUAL_ENGINE_SHA" == "$ENGINE_SHA" ]] || { echo 'Bridge engine artifact SHA256 불일치'; exit 1; }
+install -m 700 "$TMP/bridge-engine.mjs" "$ENGINE"
 
 mkdir -p "$SERVICE_DIR"
 cat > "$SERVICE_DIR/run" <<EOF
@@ -68,5 +83,6 @@ else
 fi
 
 echo "Manager: $MANAGER_VERSION"
+echo "Bundled engine: $ENGINE_VERSION · staged only"
 echo '기존 39117 Bridge와 토큰은 변경하지 않았어.'
 echo 'Termux:Boot이 설치되어 있고 한 번 실행된 기기에서는 ~/.termux/boot/20-local-usage-runtime 이 termux-services 시작을 이어받아.'

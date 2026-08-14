@@ -24,10 +24,10 @@ for path in FILES:
     prompt_add = prompt_anchor + f"    lines.push('{CONTRACT_1}');\n    lines.push('{CONTRACT_2}');\n"
     text = text.replace(prompt_anchor, prompt_add, 1)
 
-    panel_anchor = '<div class=\\"title\\">⚙️ SimCore v0.63.10</div>'
+    panel_anchor = '⚙️ SimCore v0.63.10'
     if text.count(panel_anchor) != 1:
         raise SystemExit(f'{path}: panel version anchor drift ({text.count(panel_anchor)})')
-    text = text.replace(panel_anchor, '<div class=\\"title\\">⚙️ SimCore v0.63.11</div>', 1)
+    text = text.replace(panel_anchor, '⚙️ SimCore v0.63.11', 1)
 
     diagnostic_anchor = "'Version: 0.63.10'"
     if text.count(diagnostic_anchor) != 1:

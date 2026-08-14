@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.15
+//@version 0.63.16
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -25,6 +25,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.16 Evidence Mapping Probe:
+// - Diagnostics-only probe for the next Short-C provenance design: measures whether the authoritative raw lineage root turn maps uniquely onto the final beforeRequest message array
+// - Confirms raw chat indices and provider-request indices as separate coordinate systems; never indexes request messages directly with the lineage rootIndex
+// - For source-locked requests only, compares the raw root user plus its first completed assistant response against already-loaded request messages by exact role/content, retaining only indices/counts/lengths
+// - Adds no prompt text, source-body copy, output repair, semantic scan, state/schema/storage field, host/storage/API call, timer, polling, or visible-chat mutation
+// - Keeps all 16 internal modules byte-identical to v0.63.15, including Frame, Prompt, Time, Structure, Recovery, Lineage, Handoff, Recurrence, Community, Reaction, Session, and OPS
 //
 // v0.63.15 Frame Guard:
 // - Adds a dedicated Frame module after repeated live regressions proved Volume/Chapter/Chatindex continuity is independent from Short-C source/provenance behavior
@@ -3537,6 +3544,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastOutputPerf = null;
   let lastHistoryRestore = null;
   let lastFrameGuardProbe = null;
+  let lastEvidenceMappingProbe = null;
   let lastNarrativeClockProbe = null;
   let lastTemplateRecurrenceProbe = null;
   let lastRequestLineageProbe = null;
@@ -3804,6 +3812,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         sourceAnchor: runtimeBudgetLines.some((line) => line === 'short_community_source_is_authoritative=1'),
         at: Date.now(),
       };
+      lastEvidenceMappingProbe = lastRuntimePromptBudget.sourceAnchor
+        ? buildEvidenceMappingProbe(messages, chat?.message || [], result.state.pending, sendIndex, textMessageContent)
+        : null;
       const runtimePromptKey = String(coreKey || coreLocationKey || '');
       const priorRuntimePrompt = previousRuntimePromptKey === runtimePromptKey ? previousRuntimePromptText : null;
       lastRuntimePromptCacheProbe = {
@@ -4056,6 +4067,82 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       : '';
   }
 
+  // EVIDENCE_MAPPING_PROBE_BEGIN
+  function evidenceAssistantRole(m) {
+    return m?.role === 'char' || m?.role === 'assistant';
+  }
+
+  function evidenceText(m, getText) {
+    if (!m) return '';
+    if (typeof getText === 'function') return String(getText(m) || '');
+    const v = m.content ?? m.data ?? m.text ?? '';
+    return typeof v === 'string' ? v : String(v || '');
+  }
+
+  function evidenceSourceAssistantIndex(chatMessages, rootIndex, sendIndex) {
+    const rows = Array.isArray(chatMessages) ? chatMessages : [];
+    const start = Number.isInteger(Number(rootIndex)) ? Number(rootIndex) + 1 : 0;
+    const stopRaw = Number.isInteger(Number(sendIndex)) ? Number(sendIndex) : rows.length;
+    const stop = Math.min(Math.max(start, stopRaw), rows.length);
+    for (let i = start; i < stop; i++) {
+      if (evidenceAssistantRole(rows[i])) return i;
+    }
+    return -1;
+  }
+
+  function evidenceExactRequestMatch(requestMessages, expectedRole, targetText, getText) {
+    const rows = Array.isArray(requestMessages) ? requestMessages : [];
+    const target = String(targetText || '');
+    if (!target) return { count: 0, requestIndex: -1 };
+    let count = 0;
+    let requestIndex = -1;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (expectedRole && rows[i]?.role !== expectedRole) continue;
+      const text = evidenceText(rows[i], getText);
+      if (text.length !== target.length || text !== target) continue;
+      count += 1;
+      if (requestIndex < 0) requestIndex = i;
+      if (count >= 2) break;
+    }
+    return { count, requestIndex };
+  }
+
+  function buildEvidenceMappingProbe(requestMessages, chatMessages, pending, sendIndex, getText) {
+    const p = pending && typeof pending === 'object' ? pending : null;
+    const rootIndex = Number(p?.requestLineageRootIndex);
+    const sourceLocked = !!p?.active && String(p?.mode || '') === 'C'
+      && Number.isInteger(rootIndex) && rootIndex >= 0
+      && String(p?.requestLineageSourceKind || '') !== 'UNSEEDED';
+    if (!sourceLocked) return null;
+
+    const chatRows = Array.isArray(chatMessages) ? chatMessages : [];
+    const rootUser = chatRows[rootIndex];
+    const rootUserText = rootUser?.role === 'user' ? evidenceText(rootUser, getText) : '';
+    const sourceAssistantIndex = evidenceSourceAssistantIndex(chatRows, rootIndex, sendIndex);
+    const sourceAssistant = sourceAssistantIndex >= 0 ? chatRows[sourceAssistantIndex] : null;
+    const sourceAssistantText = sourceAssistant ? evidenceText(sourceAssistant, getText) : '';
+
+    const rootMatch = evidenceExactRequestMatch(requestMessages, 'user', rootUserText, getText);
+    const assistantMatch = evidenceExactRequestMatch(requestMessages, 'assistant', sourceAssistantText, getText);
+    let status = 'MISSING';
+    if (rootUserText && sourceAssistantText && rootMatch.count === 1 && assistantMatch.count === 1) status = 'UNIQUE';
+    else if (rootMatch.count > 1 || assistantMatch.count > 1) status = 'AMBIGUOUS';
+
+    return {
+      status,
+      rootUserRawIndex: rootIndex,
+      rootUserRequestIndex: rootMatch.requestIndex,
+      rootUserMatches: rootMatch.count,
+      rootUserChars: rootUserText.length,
+      sourceAssistantRawIndex: sourceAssistantIndex,
+      sourceAssistantRequestIndex: assistantMatch.requestIndex,
+      sourceAssistantMatches: assistantMatch.count,
+      sourceAssistantChars: sourceAssistantText.length,
+      requestMessages: Array.isArray(requestMessages) ? requestMessages.length : 0,
+    };
+  }
+  // EVIDENCE_MAPPING_PROBE_END
+
   function diagnosticProbeFresh() {
     const currentKey = String(coreKey || coreLocationKey || '');
     return !!currentKey && previousRuntimePromptKey === currentKey;
@@ -4167,6 +4254,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const handoff = lastCommunitySourceHandoffProbe || null;
     const recurrenceProbe = lastTemplateRecurrenceProbe || null;
     const frameGuard = lastFrameGuardProbe || null;
+    const evidenceMap = lastEvidenceMappingProbe || null;
     const narrative = lastNarrativeClockProbe || null;
     const cacheProbe = lastRuntimePromptCacheProbe || null;
     const budget = lastRuntimePromptBudget || null;
@@ -4191,7 +4279,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.15',
+      'Version: 0.63.16',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4208,6 +4296,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Frame continuity: ${frameProbe.label}`,
       `Frame regression: ${frameProbe.regression}`,
       `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'CLAMPED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
+      `Evidence map: ${evidenceMap ? `${evidenceMap.status} · root user raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
       `Broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
@@ -4402,7 +4491,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.15</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.16</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

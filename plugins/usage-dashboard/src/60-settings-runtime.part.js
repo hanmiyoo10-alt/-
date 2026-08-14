@@ -10,7 +10,7 @@
 
   function bindSettings() {
     const q = s => document.querySelector(s);
-    if (q('#close')) q('#close').onclick = () => Risuai.hideContainer();
+    if (q('#close')) q('#close').onclick = () => { document.body.dataset.panelOpen='0'; Risuai.hideContainer(); };
     if (q('#connect')) q('#connect').onclick = async () => {
       try {
         state.bridgeBase = normalizeBridgeBase(q('#bridge-base')?.value || DEFAULT_BRIDGE);

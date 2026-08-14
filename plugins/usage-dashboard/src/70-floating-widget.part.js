@@ -116,12 +116,33 @@
       breakdown.ensure = roundPerfMs(nowPerf() - phaseStarted);
       if (!widget) return;
       phaseStarted = nowPerf();
-      await widget.setStyle('width',widgetWidth());
-      await widget.setStyle('display',state.widgetVisible===false?'none':'block');
+      const nextWidth = widgetWidth();
+      const nextDisplay = state.widgetVisible===false?'none':'block';
+      if (widgetRenderCache.width !== nextWidth) {
+        await widget.setStyle('width',nextWidth);
+        widgetRenderCache.width = nextWidth;
+        performanceRuntime.widgetStyleWrites += 1;
+      } else {
+        performanceRuntime.widgetStyleSkips += 1;
+      }
+      if (widgetRenderCache.display !== nextDisplay) {
+        await widget.setStyle('display',nextDisplay);
+        widgetRenderCache.display = nextDisplay;
+        performanceRuntime.widgetStyleWrites += 1;
+      } else {
+        performanceRuntime.widgetStyleSkips += 1;
+      }
       breakdown.style = roundPerfMs(nowPerf() - phaseStarted);
       if (state.widgetVisible!==false) {
         phaseStarted = nowPerf();
-        await widget.setInnerHTML(widgetHtml());
+        const nextHtml = widgetHtml();
+        if (widgetRenderCache.html !== nextHtml) {
+          await widget.setInnerHTML(nextHtml);
+          widgetRenderCache.html = nextHtml;
+          performanceRuntime.widgetHtmlWrites += 1;
+        } else {
+          performanceRuntime.widgetHtmlSkips += 1;
+        }
         breakdown.html = roundPerfMs(nowPerf() - phaseStarted);
       }
     } finally {

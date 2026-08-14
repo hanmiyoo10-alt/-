@@ -140,8 +140,6 @@ for (const token of [
   if (oldSource.split(token).length !== newSource.split(token).length) throw new Error(`protected behavior/UI token drift: ${token}`);
 }
 
-// Entire artifact must equal the 0.63.10 artifact plus only the declared release metadata/changelog,
-// two Prompt lines, panel version label, and diagnostic version label.
 const CHANGELOG = `// v0.63.11 Short-C Evidence Boundary:\n// - Tightens eligible Short-C current-event reactions after live evidence showed correct lineage/root/source-lock metadata but prior similar-event details still leaked into the post body and comments\n// - Adds exactly two fixed source-lock-only Prompt contracts: current-event factual claims require support from the authoritative current lineage root, while reaction/opinion/jokes/emphasis remain free\n// - Broader or retrospective event facts remain allowed only when the current user request explicitly asks for broader/comparative/retrospective context\n// - Does not parse source semantics, copy source bodies, scan history, store event facts, repair output, or change Lineage/Handoff/Recurrence/Frame/Time/Recovery/Storage ownership\n// - A/B, ordinary long C, recurrence-owned C, and Short-C without an eligible source lock receive zero new runtime-prompt lines; v0.63.5-0.63.10 behavior/UI remains unchanged\n//\n`;
 let expectedSource = oldSource;
 expectedSource = expectedSource.replace('//@version 0.63.10', '//@version 0.63.11');
@@ -150,7 +148,7 @@ expectedSource = expectedSource.replace(
   `    lines.push('${SOURCE_FACTS}');\n`,
   `    lines.push('${SOURCE_FACTS}');\n    lines.push('${CONTRACT_1}');\n    lines.push('${CONTRACT_2}');\n`
 );
-expectedSource = expectedSource.replace('<div class=\\"title\\">⚙️ SimCore v0.63.10</div>', '<div class=\\"title\\">⚙️ SimCore v0.63.11</div>');
+expectedSource = expectedSource.replace('⚙️ SimCore v0.63.10', '⚙️ SimCore v0.63.11');
 expectedSource = expectedSource.replace("'Version: 0.63.10'", "'Version: 0.63.11'");
 if (newSource !== expectedSource) throw new Error('artifact changed outside exact 0.63.11 scope');
 

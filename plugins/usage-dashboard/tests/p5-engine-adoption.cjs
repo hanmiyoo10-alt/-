@@ -18,7 +18,7 @@ for (const marker of [
   "'/proc/net/tcp'",
   'function safeCandidate(proc)',
   "process.kill(candidate.pid, 'SIGTERM')",
-  'await waitForManagedEngine()',
+  'waitForManagedEngine(',
   "url.pathname === '/engine/adopt'",
   'candidateSafe',
   'engineAdoption:true',

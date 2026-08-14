@@ -1,0 +1,60 @@
+name: SimCore 0.63.13 Short-C Event Scope Lock
+
+on:
+  push:
+    branches:
+      - simcore-06313-short-c-event-scope-lock
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06313-short-c-event-scope-lock
+          fetch-depth: 2
+
+      - name: Freeze exact 0.63.12 baseline
+        run: |
+          test "$(git hash-object plugins/simcore/latest.js)" = "019ae4cef517f5d0ca0b34a1b3ee3dd12bf77f7e"
+          test "$(git hash-object plugins/simcore/install.js)" = "019ae4cef517f5d0ca0b34a1b3ee3dd12bf77f7e"
+          cp plugins/simcore/latest.js /tmp/simcore-06313-baseline.js
+
+      - name: Patch 0.63.13 artifacts
+        run: python3 plugins/simcore/tools/release_06313_short_c_event_scope_lock.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Event scope lock, freeze, and cache gates
+        run: node plugins/simcore/tools/test_06313_short_c_event_scope_lock.js
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          print('latest blob:', subprocess.check_output(['git', 'hash-object', 'plugins/simcore/latest.js'], text=True).strip())
+          print('install blob:', subprocess.check_output(['git', 'hash-object', 'plugins/simcore/install.js'], text=True).strip())
+          PY
+
+      - name: Commit tested artifacts to work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.13 Short-C event-scope artifacts'
+          git push origin HEAD:simcore-06313-short-c-event-scope-lock

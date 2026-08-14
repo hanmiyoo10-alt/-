@@ -77,6 +77,43 @@
     noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
   }
 
+  function renderHourlyDrilldownOnly() {
+    const current = document.querySelector('.hourly-ledger');
+    const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
+    if (!current || typeof document?.createElement !== 'function') {
+      performanceRuntime.hourlyDetailFallbacks += 1;
+      renderSettings();
+      return;
+    }
+    const holder = document.createElement('div');
+    holder.innerHTML = hourlyRequestDrilldownHtml(scopeKey);
+    const next = holder.firstElementChild;
+    if (!next) {
+      performanceRuntime.hourlyDetailFallbacks += 1;
+      renderSettings();
+      return;
+    }
+    if (current.innerHTML === next.innerHTML && current.className === next.className) {
+      performanceRuntime.hourlyDetailSkips += 1;
+      bindHourlyDrilldown();
+      return;
+    }
+    current.replaceWith(next);
+    performanceRuntime.hourlyDetailWrites += 1;
+    bindHourlyDrilldown();
+  }
+
+  function bindHourlyDrilldown() {
+    document.querySelectorAll('[data-usage-hour]').forEach(button => {
+      button.onclick = async () => {
+        const key = String(button.getAttribute('data-usage-hour') || '');
+        state.selectedHourKey = state.selectedHourKey === key ? '' : key;
+        await persist();
+        renderHourlyDrilldownOnly();
+      };
+    });
+  }
+
   function bindSettings() {
     const q = s => document.querySelector(s);
     if (q('#close')) q('#close').onclick = () => { document.body.dataset.panelOpen='0'; Risuai.hideContainer(); };
@@ -109,14 +146,7 @@
         renderSettings();
       };
     });
-    document.querySelectorAll('[data-usage-hour]').forEach(button => {
-      button.onclick = async () => {
-        const key = String(button.getAttribute('data-usage-hour') || '');
-        state.selectedHourKey = state.selectedHourKey === key ? '' : key;
-        await persist();
-        renderSettings();
-      };
-    });
+    bindHourlyDrilldown();
     document.querySelectorAll('[data-analytics-scope]').forEach(button => {
       button.onclick = async () => {
         const next = String(button.getAttribute('data-analytics-scope') || 'all');

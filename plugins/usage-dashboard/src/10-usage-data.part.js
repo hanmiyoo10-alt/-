@@ -133,10 +133,60 @@
     return new Date(Number(timestamp)).toLocaleTimeString('ko-KR', {timeZone:KST_TIME_ZONE,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   }
 
+  function requestLedgerCoverageText() {
+    if (!num(state.requestLedgerStartedAt)) return '관측 시작 —';
+    const started = Number(state.requestLedgerStartedAt);
+    const elapsed = Math.max(0, Math.min(24 * 60 * 60 * 1000, Date.now() - started));
+    const minutes = Math.floor(elapsed / 60000);
+    const coverage = elapsed >= 24 * 60 * 60 * 1000
+      ? '24h 확보'
+      : minutes < 1
+        ? '1분 미만 확보'
+        : minutes < 60
+          ? `${minutes}분 확보`
+          : `${Math.floor(minutes / 60)}시간 ${minutes % 60}분 확보`;
+    const startedText = new Date(started).toLocaleString('ko-KR', {
+      timeZone:KST_TIME_ZONE,
+      month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false
+    });
+    return `로컬 관측 시작 ${startedText} · ${coverage} / 24h`;
+  }
+
+  function aggregateSelectedHour(rows, key) {
+    const groups = new Map();
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      const name = String(row?.[key] || 'Unknown');
+      if (!groups.has(name)) groups.set(name, {name, requests:0, cost:0, costKnown:0, tokens:0, tokenKnown:0, cacheKnown:0, cacheHits:0, errors:0});
+      const item = groups.get(name);
+      item.requests += 1;
+      if (num(row?.cost)) { item.cost += Number(row.cost); item.costKnown += 1; }
+      if (num(row?.totalTokens)) { item.tokens += Number(row.totalTokens); item.tokenKnown += 1; }
+      if (typeof row?.cacheHit === 'boolean') { item.cacheKnown += 1; if (row.cacheHit) item.cacheHits += 1; }
+      if (row?.success === false) item.errors += 1;
+    }
+    return Array.from(groups.values()).sort((a,b) => b.cost - a.cost || b.requests - a.requests || a.name.localeCompare(b.name));
+  }
+
+  function selectedHourAggregateHtml(title, rows) {
+    const html = (Array.isArray(rows) ? rows : []).map(row => {
+      const cacheText = row.cacheKnown
+        ? `캐시 ${(row.cacheHits / row.cacheKnown * 100).toFixed(1)}% · 정보 ${row.cacheKnown}/${row.requests}`
+        : `캐시 정보 0/${row.requests}`;
+      const meta = [
+        row.tokenKnown ? `${row.tokens.toLocaleString()} tok` : '',
+        cacheText,
+        row.errors ? `오류 ${row.errors}` : ''
+      ].filter(Boolean).join(' · ');
+      return `<div class="hour-aggregate-row"><div><b>${esc(row.name)}</b><small>${esc(meta)}</small></div><span>${row.requests}회 · ${row.costKnown ? money(row.cost,4) : '비용 —'}</span></div>`;
+    }).join('');
+    return `<div class="hour-aggregate-box"><h4>${esc(title)}</h4>${html || '<p>데이터 없음</p>'}</div>`;
+  }
+
   function hourlyRequestDrilldownHtml(scopeKey) {
     const rows = requestLedgerRowsForScope(scopeKey);
+    const coverageText = requestLedgerCoverageText();
     if (!rows.length) {
-      return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>0건</span></div><p>아직 누적된 요청 메타데이터가 없어. 앱이 받은 recent 요청부터 자동으로 쌓여.</p></div>`;
+      return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>0건</span></div><p>${esc(coverageText)} · 아직 누적된 요청 메타데이터가 없어.</p></div>`;
     }
     const groups = new Map();
     for (const row of rows) {
@@ -153,7 +203,9 @@
       const cacheHits = cacheRows.filter(row => row.cacheHit).length;
       const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
       const errors = hour.filter(row => row.success === false).length;
-      const cacheText = cacheRate === null ? '캐시 —' : `캐시 ${cacheRate.toFixed(1)}%`;
+      const cacheText = cacheRate === null
+        ? `캐시 정보 0/${hour.length}`
+        : `캐시 ${cacheRate.toFixed(1)}% · 정보 ${cacheRows.length}/${hour.length}`;
       const errorText = errors ? ` · 오류 ${errors}` : '';
       return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText}${errorText}</em></button>`;
     }).join('');
@@ -169,28 +221,34 @@
       const cacheHits = cacheRows.filter(row => row.cacheHit).length;
       const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
       const errors = selected.filter(row => row.success === false).length;
+      const cacheSummary = cacheRate === null
+        ? `캐시 정보 0/${selected.length} · 비율 —`
+        : `캐시 ${cacheRate.toFixed(1)}% · HIT ${cacheHits}/${cacheRows.length} · 정보 ${cacheRows.length}/${selected.length}`;
       const summary = [
         `${selected.length}회`,
         costRows.length ? money(totalCost,4) : '비용 —',
         tokenRows.length ? `${totalTokens.toLocaleString()} tok` : '토큰 —',
-        cacheRate === null ? '캐시 —' : `캐시 ${cacheRate.toFixed(1)}% · HIT ${cacheHits}/${cacheRows.length}`,
+        cacheSummary,
         errors ? `오류 ${errors}` : '오류 0'
       ].join(' · ');
+      const providerSummary = aggregateSelectedHour(selected, 'provider');
+      const modelSummary = aggregateSelectedHour(selected, 'model');
+      const aggregates = `<div class="hour-aggregate-grid">${selectedHourAggregateHtml('Provider 합계', providerSummary)}${selectedHourAggregateHtml('Model 합계', modelSummary)}</div>`;
       const visible = selected.slice(0, 300);
       const detailRows = visible.map(row => {
         const numberText = row.requestNumber ? `#${esc(row.requestNumber)} · ` : '';
         const resultText = row.success === false
           ? ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ')
           : '성공';
-        const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '';
+        const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '캐시 정보 없음';
         const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row.timestamp))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
-      selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${detailRows}${truncated}</div>`;
+      selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${aggregates}<div class="hour-request-list">${detailRows}</div>${truncated}</div>`;
     }
 
-    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>앱이 받은 recent 메타데이터를 24시간 동안 중복 제거해 누적 · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
+    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · recent 메타데이터 중복 제거 누적 · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
   }
 
   function scopeUsageDetailsHtml(scopeActivity) {

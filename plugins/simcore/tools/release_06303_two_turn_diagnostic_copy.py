@@ -2,9 +2,9 @@ from pathlib import Path
 
 FILES = [Path('plugins/simcore/latest.js'), Path('plugins/simcore/install.js')]
 
-CHANGELOG = """// v0.63.3 Two-Turn Diagnostic Copy:\n// - Changes the manual diagnostic copy body from lineage-selected root/parent/current raw turns to the two most recent completed user→assistant turns: 직전 턴 + 최근 턴\n// - Keeps lineage/handoff/recurrence/cache/clock/warning metadata in the diagnostic header; root/parent remain metadata only rather than extra raw-response payloads\n// - Reads only the nearby tail needed to locate the two completed turns when the user presses the button; no persistent response copy, storage schema, runtime prompt, or generation behavior change\n//\n"""
+CHANGELOG = """// v0.63.3 Two-Turn Diagnostic Copy:\n// - Changes the manual diagnostic copy body from lineage-selected root/parent/current raw turns to the two most recent completed user→assistant turns: 직전 턴 + 최근 턴\n// - Keeps lineage/handoff/recurrence/cache/clock/warning metadata in the diagnostic header; root/parent remain metadata only rather than extra raw-response payloads\n// - Locates the two completed turns only when the user presses the button; no persistent response copy, storage schema, runtime prompt, or generation behavior change\n//\n"""
 
-NEW_TAIL = r"""    const sections = [];
+NEW_TAIL = """    const sections = [];
     let previousAssistantIndex = -1;
     const previousSearchBefore = currentUserIndex >= 0 ? currentUserIndex : latestAssistantIndex;
     for (let i = previousSearchBefore - 1; i >= 0; i--) {
@@ -55,7 +55,7 @@ for path in FILES:
 
     text = text.replace('//@version 0.63.2', '//@version 0.63.3', 1)
     text = text.replace('// v0.63.2 Release Channel Split:\n', CHANGELOG + '// v0.63.2 Release Channel Split:\n', 1)
-    text = text.replace('<h1>⚙️ SimCore v0.63.2 <button id=\\"copy-turn-diag\\">최근 턴 진단 복사</button>', '<h1>⚙️ SimCore v0.63.3 <button id=\\"copy-turn-diag\\">최근 2턴 진단 복사</button>', 1)
+    text = text.replace('<h1>⚙️ SimCore v0.63.2 <button id="copy-turn-diag">최근 턴 진단 복사</button>', '<h1>⚙️ SimCore v0.63.3 <button id="copy-turn-diag">최근 2턴 진단 복사</button>', 1)
     text = text.replace('[simcore/v0.63.2]', '[simcore/v0.63.3]')
     text = text.replace('diagnostic copy is manual/raw-only', 'diagnostic copy = previous + current completed turns, manual/raw-only', 1)
 

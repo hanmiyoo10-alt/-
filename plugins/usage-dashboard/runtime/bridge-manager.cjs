@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.1.3';
-const PRODUCT_VERSION = '3.0.0-alpha.5.2';
+const MANAGER_VERSION = '1.2.0';
+const PRODUCT_VERSION = '3.0.0-alpha.5.3';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -25,6 +25,10 @@ const PREFIX = process.env.PREFIX || '/data/data/com.termux/files/usr';
 const ENGINE_SERVICE = 'local-usage-runtime-engine';
 const ENGINE_SERVICE_DIR = path.join(PREFIX, 'var/service', ENGINE_SERVICE);
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
+const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
+const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
+const BUNDLED_ENGINE_VERSION = '1.6.1';
+const BUNDLED_ENGINE_SHA256 = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d';
 const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');
 const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');
 const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
@@ -256,11 +260,60 @@ function readDescriptor() {
 function writeEngineService(candidate, down = true) {
   fs.mkdirSync(ENGINE_SERVICE_DIR, {recursive:true});
   const command = [candidate.exe, ...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs].map(shellQuote).join(' ');
-  const run = `#!/data/data/com.termux/files/usr/bin/sh\ncd ${shellQuote(candidate.cwd)}\nexec ${command}\n`;
+  const run = `#!/data/data/com.termux/files/usr/bin/sh
+cd ${shellQuote(candidate.cwd)}
+exec ${command}
+`;
   fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), run, {mode:0o700});
   fs.chmodSync(path.join(ENGINE_SERVICE_DIR, 'run'), 0o700);
   const downFile = path.join(ENGINE_SERVICE_DIR, 'down');
   if (down) fs.writeFileSync(downFile, ''); else { try { fs.unlinkSync(downFile); } catch (_) {} }
+}
+function fileSha256(file) {
+  try { return sha256(fs.readFileSync(file)); } catch (_) { return ''; }
+}
+function bundledEngineReady() {
+  return fileSha256(BUNDLED_ENGINE_FILE) === BUNDLED_ENGINE_SHA256;
+}
+async function ensureBundledEngine() {
+  if (bundledEngineReady()) return {ready:true,updated:false,path:BUNDLED_ENGINE_FILE,sha256:BUNDLED_ENGINE_SHA256,version:BUNDLED_ENGINE_VERSION};
+  const text = await requestText(BUNDLED_ENGINE_URL);
+  const bytes = Buffer.from(text, 'utf8');
+  if (sha256(bytes) !== BUNDLED_ENGINE_SHA256) throw new Error('bundled engine sha256 mismatch');
+  const nextFile = path.join(RUNTIME_ROOT, `bridge-engine.next-${process.pid}.mjs`);
+  fs.writeFileSync(nextFile, bytes, {mode:0o700});
+  try {
+    syntaxCheck(nextFile);
+    fs.renameSync(nextFile, BUNDLED_ENGINE_FILE);
+    fs.chmodSync(BUNDLED_ENGINE_FILE, 0o700);
+  } catch (e) {
+    try { if (fs.existsSync(nextFile)) fs.unlinkSync(nextFile); } catch (_) {}
+    throw e;
+  }
+  if (!bundledEngineReady()) throw new Error('bundled engine install verification failed');
+  return {ready:true,updated:true,path:BUNDLED_ENGINE_FILE,sha256:BUNDLED_ENGINE_SHA256,version:BUNDLED_ENGINE_VERSION};
+}
+function descriptorCandidate(descriptor) {
+  if (!descriptor || typeof descriptor !== 'object') return null;
+  const exe = String(descriptor.exe || descriptor.executable || '');
+  const script = String(descriptor.script || '');
+  const cwd = String(descriptor.cwd || '');
+  if (!exe || !script || !cwd) return null;
+  return {safe:true,reason:'descriptor',pid:null,exe,script,cwd,nodeArgs:Array.isArray(descriptor.nodeArgs) ? descriptor.nodeArgs : [],scriptArgs:Array.isArray(descriptor.scriptArgs) ? descriptor.scriptArgs : []};
+}
+async function waitForEngineDown(pid, timeoutMs = 6000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (!processAlive(pid) && !(await bridgeReachable(500))) return true;
+    await sleep(200);
+  }
+  return false;
+}
+async function startManagedCandidate(candidate) {
+  writeEngineService(candidate, false);
+  try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
+  try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+  return waitForManagedEngine(candidate);
 }
 const BRIDGE_PROBE_PATH = '/__local_usage_runtime_probe__';
 async function bridgeAuthProbe(timeoutMs = 1500) {
@@ -353,15 +406,24 @@ async function engineRuntimeStatus() {
   try { identity = await bridgeIdentity(1500); } catch (_) {}
   const processVerified = Boolean(descriptor && service.running && service.pid && processMatchesSpec(service.pid, descriptor));
   const managed = Boolean(descriptor && identity && service.running && service.pid && (pid === service.pid || (!pid && processVerified)));
+  const bundleReady = bundledEngineReady();
+  const descriptorBundled = Boolean(descriptor && path.resolve(String(descriptor.script || '')) === path.resolve(BUNDLED_ENGINE_FILE));
+  const engineBundled = Boolean(managed && descriptorBundled && bundleReady);
   const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
   const fallbackNeedsProbe = candidate?.reason === 'canonical-pidfile';
   const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsProbe || Boolean(identity))) : null;
   const candidateReason = fallbackNeedsProbe && !identity ? 'pidfile-auth-unverified' : String(candidate?.reason || '');
   return {
     engineManaged:managed,
-    engineMode:managed ? 'managed-adopted' : 'legacy-external',
+    engineMode:managed ? (engineBundled ? 'managed-bundled' : 'managed-adopted') : 'legacy-external',
     engineService:ENGINE_SERVICE,
     engineVersion:String(identity?.bridgeVersion || ''),
+    engineBundled,
+    engineSourceMode:engineBundled ? 'bundled' : (managed ? 'adopted' : 'legacy'),
+    engineBundleAvailable:true,
+    engineBundleReady:bundleReady,
+    engineBundleVersion:BUNDLED_ENGINE_VERSION,
+    engineBundleSha256:BUNDLED_ENGINE_SHA256,
     candidateSafe,
     candidateReason,
     adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'
@@ -420,6 +482,48 @@ async function adoptEngine() {
   }
   return {ok:false,adopted:false,state:'verification-failed',candidateSafe:true,retryable:true,error:verified.error || 'managed engine verification failed'};
 }
+async function syncBundledEngine() {
+  const current = await engineRuntimeStatus();
+  if (!current.engineManaged) return {ok:false,synced:false,state:'engine-not-managed',retryable:true,error:'managed engine required before bundle sync',...current};
+  if (current.engineBundled) return {ok:true,synced:false,state:'current',...current};
+  const descriptor = readDescriptor();
+  const previous = descriptorCandidate(descriptor);
+  const service = serviceStatus();
+  if (!previous || !service.running || !service.pid || !processMatchesSpec(service.pid, descriptor)) {
+    return {ok:false,synced:false,state:'managed-identity-unverified',retryable:true,error:'managed engine process identity could not be verified'};
+  }
+  try { await ensureBundledEngine(); }
+  catch (e) { return {ok:false,synced:false,state:'bundle-stage-failed',retryable:true,error:e?.message || String(e)}; }
+  const next = {...previous,script:BUNDLED_ENGINE_FILE};
+  try { execFileSync('sv', ['down', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+  if (!(await waitForEngineDown(service.pid))) {
+    try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+    return {ok:false,synced:false,state:'stop-timeout',retryable:true,error:'managed engine did not stop cleanly for bundle sync'};
+  }
+  const verified = await startManagedCandidate(next);
+  if (verified.ok) {
+    const nextDescriptor = {
+      ...descriptor,
+      format:2,
+      bundledAt:new Date().toISOString(),
+      service:ENGINE_SERVICE,
+      cwd:next.cwd,
+      executable:next.exe,
+      script:next.script,
+      nodeArgs:next.nodeArgs,
+      scriptArgs:next.scriptArgs,
+      sourceMode:'bundled',
+      sourceVersion:String(verified.bridgeVersion || BUNDLED_ENGINE_VERSION),
+      artifactSha256:BUNDLED_ENGINE_SHA256
+    };
+    fs.writeFileSync(ENGINE_DESCRIPTOR, JSON.stringify(nextDescriptor, null, 2) + '\n', {mode:0o600});
+    return {ok:true,synced:true,state:'bundled',engineManaged:true,engineBundled:true,engineMode:'managed-bundled',engineSourceMode:'bundled',engineService:ENGINE_SERVICE,engineVersion:nextDescriptor.sourceVersion,engineBundleVersion:BUNDLED_ENGINE_VERSION,engineBundleSha256:BUNDLED_ENGINE_SHA256};
+  }
+  try { execFileSync('sv', ['down', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+  const rollback = await startManagedCandidate(previous);
+  if (rollback.ok) fs.writeFileSync(ENGINE_DESCRIPTOR, JSON.stringify(descriptor, null, 2) + '\n', {mode:0o600});
+  return {ok:false,synced:false,state:'verification-failed',retryable:true,rollbackRestored:Boolean(rollback.ok),error:verified.error || 'bundled engine verification failed'};
+}
 function ensureAdoptedServiceUp() {
   if (!readDescriptor()) return;
   try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
@@ -452,6 +556,10 @@ const server = http.createServer(async (req, res) => {
     try { const result = await adoptEngine(); return send(res, result.ok ? 200 : (result.retryable === false ? 409 : 503), result); }
     catch (e) { return send(res, 500, {ok:false,adopted:false,state:'error',retryable:true,error:e?.message || String(e)}); }
   }
+  if (req.method === 'POST' && url.pathname === '/engine/sync') {
+    try { const result = await syncBundledEngine(); return send(res, result.ok ? 200 : (result.retryable === false ? 409 : 503), result); }
+    catch (e) { return send(res, 500, {ok:false,synced:false,state:'error',retryable:true,error:e?.message || String(e)}); }
+  }
   if (req.method === 'POST' && url.pathname === '/restart') return send(res, 200, {ok:true,restart:true}, true);
   if (req.method === 'POST' && url.pathname === '/rollback') {
     try { const result = rollbackSelf(); return send(res, result.ok ? 200 : 409, result, result.restartRequired === true); }
@@ -460,4 +568,4 @@ const server = http.createServer(async (req, res) => {
   return send(res, 404, {ok:false,error:'not found'});
 });
 server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });
-server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · engine-adoption`));
+server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`));

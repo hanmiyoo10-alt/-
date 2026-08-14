@@ -25,10 +25,11 @@ for (const marker of [
 ]) assert.ok(manager.includes(marker), `missing manager adoption marker: ${marker}`);
 assert.ok(!manager.includes("process.kill(candidate.pid, 'SIGKILL')"), 'automatic adoption must not force-kill legacy bridge');
 assert.equal(manifest.productVersion, version);
-assert.equal(manifest.components.bridge.state, 'managed-adoption');
+const bundled = version === '3.0.0-alpha.5.3';
+assert.equal(manifest.components.bridge.state, bundled ? 'managed-bundled' : 'managed-adoption');
 assert.equal(manifest.components.bridge.lifecycleManaged, true);
-assert.equal(manifest.components.bridge.sourceBundled, false);
-assert.ok(/^1\.1\.(?:[1-9]|\d{2,})$/.test(String(manifest.components.bridgeManager.version || '')), 'managed engine requires Bridge Manager >=1.1.1');
+assert.equal(manifest.components.bridge.sourceBundled, bundled);
+{ const parts=String(manifest.components.bridgeManager.version||'').split('.').map(Number); assert.ok(parts[0] > 1 || (parts[0] === 1 && (parts[1] > 1 || (parts[1] === 1 && parts[2] >= 1))), 'managed engine requires Bridge Manager >=1.1.1'); }
 assert.equal(manifest.components.bridgeManager.engineAdoption, true);
 assert.equal(manifest.components.bridgeManager.engineService, 'local-usage-runtime-engine');
 console.log(`usage-dashboard P5 engine adoption regression: OK · ${version}`);

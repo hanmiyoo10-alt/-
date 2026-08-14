@@ -30,6 +30,11 @@
       engineMode:String(raw.engineMode || raw.engine_mode || 'legacy-external'),
       engineService:String(raw.engineService || raw.engine_service || ''),
       engineVersion:String(raw.engineVersion || raw.engine_version || ''),
+      engineBundled:raw.engineBundled === true || raw.engine_bundled === true,
+      engineBundleAvailable:raw.engineBundleAvailable === true || raw.engine_bundle_available === true,
+      engineBundleReady:raw.engineBundleReady === true || raw.engine_bundle_ready === true,
+      engineSourceMode:String(raw.engineSourceMode || raw.engine_source_mode || ''),
+      engineBundleVersion:String(raw.engineBundleVersion || raw.engine_bundle_version || ''),
       candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
       adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
       restartMode:String(raw.restartMode || raw.restart_mode || ''),
@@ -92,5 +97,26 @@
       return {...fresh,adoptionState:String(payload?.state || (payload?.adopted ? 'adopted' : 'current')),adoptionError:''};
     } catch (e) {
       return {...status,adoptionState:'probe-error',adoptionError:e?.message || String(e)};
+    }
+  }
+
+  async function syncBridgeEngineBundleIfNeeded(status) {
+    if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true || status.engineBundled === true) return status;
+    if (String(status.productVersion || '') !== VERSION) return status;
+    if (String(state.bridgeEngineBundleSyncAttemptedVersion || '') === VERSION) return status;
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      const payload = JSON.parse(text);
+      if (!res.ok) {
+        if (payload?.retryable === false) state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+        return {...status,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
+      }
+      state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+      state.bridgeManagerLastProbeAt = 0;
+      const fresh = await fetchBridgeManagerStatus(true);
+      return {...fresh,engineBundleSyncState:String(payload?.state || (payload?.synced ? 'bundled' : 'current')),engineBundleSyncError:''};
+    } catch (e) {
+      return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
     }
   }

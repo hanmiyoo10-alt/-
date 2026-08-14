@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.2
+//@version 3.0.0-alpha.5.3
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.2';
+  const VERSION = '3.0.0-alpha.5.3';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -49,6 +49,7 @@
     bridgeManagerLastProbeAt: null,
     bridgeManagerSyncedProductVersion: '',
     bridgeEngineAdoptionAttemptedVersion: '',
+    bridgeEngineBundleSyncAttemptedVersion: '',
     data: null
   };
 
@@ -1563,6 +1564,11 @@ async function importLegacyTodayBaselines() {
       engineMode:String(raw.engineMode || raw.engine_mode || 'legacy-external'),
       engineService:String(raw.engineService || raw.engine_service || ''),
       engineVersion:String(raw.engineVersion || raw.engine_version || ''),
+      engineBundled:raw.engineBundled === true || raw.engine_bundled === true,
+      engineBundleAvailable:raw.engineBundleAvailable === true || raw.engine_bundle_available === true,
+      engineBundleReady:raw.engineBundleReady === true || raw.engine_bundle_ready === true,
+      engineSourceMode:String(raw.engineSourceMode || raw.engine_source_mode || ''),
+      engineBundleVersion:String(raw.engineBundleVersion || raw.engine_bundle_version || ''),
       candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
       adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
       restartMode:String(raw.restartMode || raw.restart_mode || ''),
@@ -1627,6 +1633,27 @@ async function importLegacyTodayBaselines() {
       return {...status,adoptionState:'probe-error',adoptionError:e?.message || String(e)};
     }
   }
+
+  async function syncBridgeEngineBundleIfNeeded(status) {
+    if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true || status.engineBundled === true) return status;
+    if (String(status.productVersion || '') !== VERSION) return status;
+    if (String(state.bridgeEngineBundleSyncAttemptedVersion || '') === VERSION) return status;
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      const payload = JSON.parse(text);
+      if (!res.ok) {
+        if (payload?.retryable === false) state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+        return {...status,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
+      }
+      state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+      state.bridgeManagerLastProbeAt = 0;
+      const fresh = await fetchBridgeManagerStatus(true);
+      return {...fresh,engineBundleSyncState:String(payload?.state || (payload?.synced ? 'bundled' : 'current')),engineBundleSyncError:''};
+    } catch (e) {
+      return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
+    }
+  }
   async function refresh(reason = 'manual', silent = false) {
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;
@@ -1652,7 +1679,8 @@ async function importLegacyTodayBaselines() {
         collectRecentRequestLedger(state.data);
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
-        state.bridgeManagerRuntime = await adoptBridgeEngineIfNeeded(managerSynced);
+        const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
+        state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();

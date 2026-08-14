@@ -41,6 +41,7 @@ jobs:
           node plugins/usage-dashboard/tests/p4-partial.cjs
           node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
           node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
@@ -96,6 +97,14 @@ jobs:
           grep -q 'function requestLedgerCoverageText()' plugins/usage-dashboard/latest.js
           grep -q 'function renderHourlyDrilldownOnly()' plugins/usage-dashboard/latest.js
           grep -q 'Hourly detail: provider/model summary · cache coverage · click-only partial render' plugins/usage-dashboard/latest.js
+          grep -q 'function recentRequestField(row, keys)' plugins/usage-dashboard/latest.js
+          grep -q 'function requestCacheSignal(row)' plugins/usage-dashboard/latest.js
+          grep -q 'function requestTimestampPrecision(timestamp, sourceKey, requestNumber)' plugins/usage-dashboard/latest.js
+          grep -q 'function requestLedgerCapabilities(rows)' plugins/usage-dashboard/latest.js
+          grep -q 'Request fidelity: exact' plugins/usage-dashboard/latest.js
+          grep -q '버킷 · 정확 시각 미제공' plugins/usage-dashboard/latest.js
+          grep -Fq "['requestLedger', raw.requestLedger]" plugins/usage-dashboard/latest.js
+          grep -q 'usage.input_tokens_details.cached_tokens' plugins/usage-dashboard/latest.js
           grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js
           grep -q 'widgetRenderCache.html !== nextHtml' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js

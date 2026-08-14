@@ -1,0 +1,20 @@
+{
+  "totalRequests": 2,
+  "totalCost": 0.2,
+  "totalTokens": 200,
+  "errorCount": 0,
+  "errorRate": 0,
+  "cacheCount": 0,
+  "cacheRate": 0,
+  "providers": [
+    {
+      "name": "google-vertex",
+      "requests": 2,
+      "cost": 0.2,
+      "cacheCount": 0,
+      "cacheRate": 0
+    }
+  ],
+  "models": [],
+  "recent": []
+}

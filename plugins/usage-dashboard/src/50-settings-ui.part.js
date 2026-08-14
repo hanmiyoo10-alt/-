@@ -1,0 +1,168 @@
+  function settingsHtml() {
+    const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
+    const bridgeDiag = bridgeStabilitySnapshot();
+    const creditsMeta = [
+      num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',
+      num(runway?.avgDailySpend7d) ? `7일평균 ${money(runway.avgDailySpend7d,4)}/일` : '',
+      num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '',
+      d.source ? esc(d.source) : ''
+    ].filter(Boolean).join(' · ');
+    const today = todayOverviewMetrics(d);
+    const observedStamp = state.dailyUsage?.updatedAt || state.creditDailyUsage?.updatedAt || state.lastSyncAt;
+    const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
+    const scopeNames = {all:['전체 24h Usage','DevPass + Credits 합산 서버 집계'],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage','Default organization 서버 집계']};
+    const scopeActivity = d.usageScopes?.scopes?.[scopeKey] || (scopeKey === 'all' ? normalizeScopeActivity({totalRequests:a?.requests24h,totalCost:a?.cost24h,totalTokens:a?.totalTokens24h,errorRate:a?.errorRate24h,fetchedAt:d.fetchedAt,source:d.source}) : null);
+    const scopeTopProvider = Array.isArray(scopeActivity?.providers) && scopeActivity.providers[0]?.name ? String(scopeActivity.providers[0].name) : '—';
+    const scopeTopModel = Array.isArray(scopeActivity?.models) && scopeActivity.models[0]?.name ? String(scopeActivity.models[0].name) : '—';
+    const scopeFetchedAt = scopeActivity?.fetchedAt || d.usageScopes?.fetchedAt || d.fetchedAt;
+    const scopeExtra = scopeKey === 'devpass'
+      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
+      : scopeKey === 'credits'
+        ? `<div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div><div class="mini cyan"><span>Runway</span><b>${num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '—'}</b></div>`
+        : `<div class="mini accent"><span>DevPass 월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div>`;
+    const analyticsScopeKey = ['all','devpass','credits'].includes(String(state.analyticsScopeView)) ? String(state.analyticsScopeView) : 'all';
+    const analyticsNames = {
+      all:['전체 Analytics','DevPass + Credits 합산 서버 분석'],
+      devpass:['DevPass Analytics','DevPass project 서버 분석'],
+      credits:['Credits Analytics','Default organization 서버 분석']
+    };
+    const analyticsBundle = d.analyticsScopes?.scopes?.[analyticsScopeKey] || (analyticsScopeKey === 'all' ? d.analytics : null) || null;
+    const analyticsW24 = analyticsBundle?.windows?.['24h'] || d.usageScopes?.scopes?.[analyticsScopeKey] || (analyticsScopeKey === 'all' ? scopeActivity : null) || null;
+    const analyticsW7 = analyticsBundle?.windows?.['7d'] || null;
+    const analyticsW30 = analyticsBundle?.windows?.['30d'] || null;
+    const analyticsAverages = analyticsBundle?.averages || {};
+    const analyticsTopProvider = Array.isArray(analyticsW24?.providers) && analyticsW24.providers[0]?.name ? String(analyticsW24.providers[0].name) : '—';
+    const analyticsTopModel = Array.isArray(analyticsW24?.models) && analyticsW24.models[0]?.name ? String(analyticsW24.models[0].name) : '—';
+    const analyticsFetchedAt = analyticsBundle?.fetchedAt || d.analyticsScopes?.fetchedAt || analyticsW24?.fetchedAt || d.fetchedAt;
+    const analyticsExtra = analyticsScopeKey === 'devpass'
+      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
+      : analyticsScopeKey === 'credits'
+        ? `<div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div><div class="mini cyan"><span>Runway</span><b>${num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '—'}</b></div>`
+        : `<div class="mini accent"><span>DevPass 월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div>`;
+    return `<style>
+      :root{color-scheme:dark;--b:#101114;--p:#191b20;--p2:#21242a;--l:#2c3037;--t:#f5f6f8;--m:#969da8;--g:#c5f277;--v:#b9a6f8;--c:#9fd7ee;--e:#ff9b95}
+      *{box-sizing:border-box}body{margin:0;background:var(--b);color:var(--t);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(900px,100%);margin:auto;padding:14px}
+      header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}h1{margin:0;font-size:23px}.muted,p{color:var(--m);font-size:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+      .panel{background:var(--p);border:1px solid var(--l);border-radius:13px;padding:13px}.metric{min-height:135px;display:flex;flex-direction:column}.metric small{color:var(--m);font-weight:700}.metric strong{font-size:24px;margin-top:9px}.metric em{font-style:normal;color:var(--m);font-size:12px}.metric p{margin-top:auto;margin-bottom:0}.bar{height:5px;background:#2d3138;border-radius:99px;overflow:hidden;margin:11px 0}.bar i{display:block;height:100%;background:var(--g)}.weekly .bar i{background:var(--v)}.wide{grid-column:1/-1}
+      .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
+      .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}
+      .usage-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.usage-detail-box{background:var(--p2);border-radius:10px;padding:10px;margin-top:8px}.usage-detail-box h3{font-size:11px;margin:0 0 7px;color:var(--m)}.usage-detail-box p{margin:0}.usage-detail-row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--l)}.usage-detail-row:first-of-type{border-top:0}.usage-detail-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage-detail-row span{color:var(--m);font-size:11px;white-space:nowrap}.recent-requests{margin-top:8px}.request-detail-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--l)}.request-detail-row:first-of-type{border-top:0}.request-detail-row>div{min-width:0}.request-detail-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.request-detail-row span{display:block;color:var(--m);font-size:10px;margin-top:2px}.request-detail-row em{font-style:normal;color:var(--m);font-size:11px;text-align:right;white-space:nowrap}
+      label{display:grid;gap:5px;margin-top:9px}label span{color:var(--m);font-size:11px}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;background:#111318;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:9px}textarea{min-height:62px}
+      button{background:#25282f;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:8px 11px;font-weight:650}button.primary{background:var(--g);border-color:var(--g);color:#15170f}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.warn{color:var(--e)}
+      @media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.minis,.today-grid{grid-template-columns:1fr 1fr}.usage-detail-grid{grid-template-columns:1fr}.request-detail-row{align-items:flex-start;flex-direction:column}.request-detail-row em{text-align:left;white-space:normal}}
+    </style><div class="shell"><header><div><div class="muted">MODULAR CORE · v${VERSION}</div><h1>Local Usage Dashboard</h1></div><button id="close">닫기</button></header><main class="grid">
+      ${card('월간',d.monthly)}${card('주간',d.weekly,'weekly')}
+      <section class="panel metric"><small>${esc(c?.label || 'Credits')}</small><strong>${money(c?.balance)}</strong><p>${creditsMeta || '—'}</p></section>
+      <section class="panel wide">
+        <div class="today-head"><div><b>오늘 관측</b><p style="margin:2px 0 0">핵심 값만 한 화면에 유지</p></div><span class="stamp">KST${observedStamp ? ` · ${dashboardDateText(observedStamp)}` : ''}</span></div>
+        <div class="today-grid">
+          <div class="mini accent"><span>일간 총 사용량 · 관측</span><b>${money(today.observedDailyTotal,4)}</b></div>
+          <div class="mini"><span>월간 총 사용량 · DevPass</span><b>${money(d.monthly?.used,4)}</b></div>
+          <div class="mini"><span>오늘 DevPass</span><b>${money(today.devToday,4)}</b></div>
+          <div class="mini purple"><span>오늘 프리미엄</span><b>${money(today.premiumToday,4)}</b></div>
+          <div class="mini cyan"><span>오늘 Credits</span><b>${money(today.creditsToday,4)}</b></div>
+          <div class="mini"><span>24h 서버 비용</span><b>${money(today.cost24h,4)}</b></div>
+          <div class="mini accent"><span>월말 예상</span><b>${num(today.projected) ? `${money(today.projected)} · ${Number(today.projectedPercent).toFixed(0)}%` : '리셋 시각 필요'}</b></div>
+          <div class="mini"><span>월간 남은 권장</span><b>${money(today.monthlyLeft)}</b></div>
+          <div class="mini"><span>프리미엄 남은 권장</span><b>${money(today.weeklyLeft)}</b></div>
+          <div class="mini purple"><span>Reset Pass</span><b>${num(today.resetPasses) ? `${today.resetPasses}장${today.resetPassesExact ? '' : ' 기본'}` : 'API 미제공'}</b></div>
+          <div class="mini accent"><span>월간 초기화</span><b>${Number.isFinite(today.monthEnd) ? `${remainingTimeForDashboard(today.monthEnd)} · ${dashboardDateText(today.monthEnd,true)}` : '서버 미제공'}</b></div>
+          <div class="mini"><span>Bridge 상태</span><b>${esc(h.status || '—')} · ${esc(state.bridgeStatus)}</b></div>
+        </div>
+        <p>DevPass/Credits의 일간 총 사용량은 이 기기에서 그날 처음 확인한 서버 누적값 이후의 증가분이야.</p>
+      </section>
+      <section class="panel wide"><b>24h Activity</b><div class="minis"><div class="mini"><span>요청</span><b>${num(a?.requests24h)?`${a.requests24h}회`:'—'}</b></div><div class="mini"><span>비용</span><b>${money(a?.cost24h,4)}</b></div><div class="mini"><span>토큰</span><b>${num(a?.totalTokens24h)?Number(a.totalTokens24h).toLocaleString():'—'}</b></div><div class="mini"><span>오류율</span><b>${num(a?.errorRate24h)?`${Number(a.errorRate24h).toFixed(1)}%`:'—'}</b></div></div></section>
+      <section class="panel wide">
+        <div class="today-head"><div><b>24h Usage Scope</b><p style="margin:2px 0 0">${esc(scopeNames[scopeKey][1])}</p></div><span class="stamp">${scopeFetchedAt ? dashboardDateText(scopeFetchedAt) : ''}</span></div>
+        <div class="scope-tabs" role="tablist" aria-label="24h Usage scope">
+          ${[['all','전체'],['devpass','DevPass'],['credits','Credits']].map(([key,label]) => `<button class="scope-tab ${scopeKey===key?'active':''}" data-usage-scope="${key}">${label}</button>`).join('')}
+        </div>
+        ${scopeActivity ? `<div class="today-grid">
+          <div class="mini accent"><span>24h 요청</span><b>${num(scopeActivity.totalRequests) ? `${Number(scopeActivity.totalRequests).toLocaleString()}회` : '—'}</b></div>
+          <div class="mini"><span>24h 비용</span><b>${money(scopeActivity.totalCost,4)}</b></div>
+          <div class="mini"><span>총 토큰</span><b>${num(scopeActivity.totalTokens) ? Number(scopeActivity.totalTokens).toLocaleString() : '—'}</b></div>
+          <div class="mini"><span>입력 / 출력</span><b>${num(scopeActivity.inputTokens) || num(scopeActivity.outputTokens) ? `${num(scopeActivity.inputTokens)?Number(scopeActivity.inputTokens).toLocaleString():'—'} / ${num(scopeActivity.outputTokens)?Number(scopeActivity.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
+          <div class="mini"><span>오류</span><b>${num(scopeActivity.errorCount) ? `${Number(scopeActivity.errorCount).toLocaleString()}회 · ${num(scopeActivity.errorRate)?Number(scopeActivity.errorRate).toFixed(1):'0.0'}%` : (num(scopeActivity.errorRate) ? `${Number(scopeActivity.errorRate).toFixed(1)}%` : '—')}</b></div>
+          <div class="mini"><span>캐시</span><b>${usageCacheText(scopeActivity)}</b></div>
+          <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
+          <div class="mini"><span>Top Model</span><b>${esc(scopeTopModel)}</b></div>
+          ${scopeExtra}
+        </div>${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(errorSummaryText(d.usageScopes.errors[scopeKey]))}</p>` : ''}
+      </section>
+      <section class="panel wide">
+        <div class="today-head"><div><b>Analytics · 24h / 7d / 30d</b><p style="margin:2px 0 0">${esc(analyticsNames[analyticsScopeKey][1])}</p></div><span class="stamp">${analyticsFetchedAt ? dashboardDateText(analyticsFetchedAt) : ''}</span></div>
+        <div class="scope-tabs" role="tablist" aria-label="Analytics scope">
+          ${[['all','전체'],['devpass','DevPass'],['credits','Credits']].map(([key,label]) => `<button class="scope-tab ${analyticsScopeKey===key?'active':''}" data-analytics-scope="${key}">${label}</button>`).join('')}
+        </div>
+        ${analyticsW24 ? `<div class="today-grid">
+          <div class="mini accent"><span>24h 요청</span><b>${num(analyticsW24.totalRequests) ? `${Number(analyticsW24.totalRequests).toLocaleString()}회` : '—'}</b></div>
+          <div class="mini"><span>24h 비용</span><b>${money(analyticsW24.totalCost,4)}</b></div>
+          <div class="mini"><span>총 토큰</span><b>${num(analyticsW24.totalTokens) ? Number(analyticsW24.totalTokens).toLocaleString() : '—'}</b></div>
+          <div class="mini"><span>입력 / 출력</span><b>${num(analyticsW24.inputTokens) || num(analyticsW24.outputTokens) ? `${num(analyticsW24.inputTokens)?Number(analyticsW24.inputTokens).toLocaleString():'—'} / ${num(analyticsW24.outputTokens)?Number(analyticsW24.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
+          <div class="mini"><span>오류</span><b>${num(analyticsW24.errorCount) ? `${Number(analyticsW24.errorCount).toLocaleString()}회 · ${num(analyticsW24.errorRate)?Number(analyticsW24.errorRate).toFixed(1):'0.0'}%` : (num(analyticsW24.errorRate) ? `${Number(analyticsW24.errorRate).toFixed(1)}%` : '0회 · 0.0%')}</b></div>
+          <div class="mini"><span>캐시</span><b>${usageCacheText(analyticsW24)}</b></div>
+          <div class="mini"><span>7일 총 비용</span><b>${money(analyticsW7?.totalCost,4)}</b></div>
+          <div class="mini"><span>7일 일평균</span><b>${num(analyticsAverages.dailyCost7d) ? `${money(analyticsAverages.dailyCost7d,4)}/일` : '—'}</b></div>
+          <div class="mini"><span>30일 총 비용</span><b>${money(analyticsW30?.totalCost,4)}</b></div>
+          <div class="mini"><span>Top Model</span><b>${esc(analyticsTopModel)}</b></div>
+          <div class="mini"><span>Top Provider</span><b>${esc(analyticsTopProvider)}</b></div>
+          ${analyticsExtra}
+        </div>` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        ${d.analyticsScopes?.errors?.[analyticsScopeKey] ? `<p class="warn">Analytics · ${esc(errorSummaryText(d.analyticsScopes.errors[analyticsScopeKey]))}</p>` : ''}
+        ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
+      </section>
+      <section class="panel wide"><b>Local Bridge</b>
+        <label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
+        <label><span>Bridge Token</span><textarea id="bridge-token" placeholder="저장된 값은 다시 표시하지 않음"></textarea></label>
+        <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><span>STALE 기준</span><select id="stale-ms">${[[0,'사용 안 함 · Local JSON 기본'],[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><span>미니 위젯</span><select id="widget-mode"><option value="compact" ${state.widgetMode!=='detailed'?'selected':''}>간편 · 오늘 사용량</option><option value="detailed" ${state.widgetMode==='detailed'?'selected':''}>상세 · 남은 양 + 오늘 사용량</option></select></label>
+        <label style="margin-top:10px"><span><input id="sync-on-focus" type="checkbox" ${state.syncOnFocus !== false ? 'checked' : ''} style="width:auto;margin-right:7px">앱/탭 복귀 시 부드럽게 동기화 · 첫 조작 우선</span></label>
+        <label style="margin-top:8px"><span><input id="performance-guard" type="checkbox" ${state.performanceGuard !== false ? 'checked' : ''} style="width:auto;margin-right:7px">Performance Guard · 느려지면 자동으로 갱신 간격 완화</span></label>
+        <label style="margin-top:8px"><span><input id="adaptive-refresh" type="checkbox" ${state.adaptiveRefresh !== false ? 'checked' : ''} style="width:auto;margin-right:7px">Adaptive refresh · 빠르게 회복되면 원래 주기로 복귀</span></label>
+        <label style="margin-top:8px"><span><input id="background-pause" type="checkbox" ${state.backgroundPause !== false ? 'checked' : ''} style="width:auto;margin-right:7px">백그라운드에서는 자동 갱신 일시정지</span></label>
+        <div class="actions"><button id="save-performance">성능 설정 저장</button></div>
+        <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
+        <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
+      </section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Bridge Stability · ${bridgeDiag.version?`v${esc(bridgeDiag.version)}`:'—'} · required ≥${esc(REQUIRED_BRIDGE_VERSION)} · compatible ${bridgeDiag.compatible===null?'unknown':bridgeDiag.compatible?'yes':'no'} · modules ${bridgeDiag.moduleCount??'—'} · stale ${bridgeDiag.staleModules??'—'} · errors ${bridgeDiag.errorModules??'—'} · partial ${bridgeDiag.partialModules??'—'}</p><p>Bridge Modules · freshness ${esc(bridgeModuleFreshnessText(bridgeDiag.moduleDetails))} · duration ${esc(bridgeModuleDurationText(bridgeDiag.moduleDetails))}</p><p>Bridge Runtime · cache ${bridgeDiag.cacheHitRate===null?'—':bridgeDiag.cacheHitRate.toFixed(0)+'%'} · entries ${bridgeDiag.cacheEntries??'—'} · in-flight ${bridgeDiag.inFlight??'—'} · stale fallback ${bridgeDiag.staleFallbacks??'—'} · CLI ${bridgeDiag.cliActive??'—'}/${bridgeDiag.cliQueued??'—'} · circuit ${bridgeDiag.openCircuits??'—'} open / ${bridgeDiag.circuitRecoveries??'—'} recoveries</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Stall / Render · coincidence ${performanceRuntime.lastUiStallRenderOverlap?'yes':'no'}${performanceRuntime.lastUiStallRenderOverlap?` · ${esc(performanceRuntime.lastUiStallRenderReason||'unknown')} · ${num(performanceRuntime.lastUiStallRenderMs)?roundPerfMs(performanceRuntime.lastUiStallRenderMs)+'ms':'—'}`:''} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap?'yes':'no'}</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Input · first ${num(performanceRuntime.lastResumeFirstInputAfterMs)?roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)+'ms':'—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs)?roundPerfMs(performanceRuntime.lastResumeInputDelayMs)+'ms':'—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs)?roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)+'ms':'—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh?'yes':'no'}</p><p>Resume Refresh · started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs)?roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)+'ms after':'—'} · duration ${num(performanceRuntime.lastResumeRefreshMs)?roundPerfMs(performanceRuntime.lastResumeRefreshMs)+'ms':'—'} · render ${num(performanceRuntime.lastResumeRenderMs)?roundPerfMs(performanceRuntime.lastResumeRenderMs)+'ms':'—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry?'yes':'no'}</p><p>Resume Route · requested ${esc(performanceRuntime.lastResumeRequestedReason||'—')} · actual ${esc(performanceRuntime.lastResumeActualReason||'—')} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced?'yes':'no'}${performanceRuntime.lastResumeRefreshWasCoalesced?` · into ${esc(performanceRuntime.lastResumeCoalescedIntoReason||'unknown')}`:''}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><p>Render · widget ${num(performanceRuntime.lastRenderMs)?roundPerfMs(performanceRuntime.lastRenderMs)+'ms':'—'} · panel ${num(performanceRuntime.lastPanelRenderMs)?roundPerfMs(performanceRuntime.lastPanelRenderMs)+'ms':'—'} · spike ≥${RENDER_SPIKE_THRESHOLD_MS}ms ${Number(performanceRuntime.renderSpikeCount||0)}회</p><p>Panel Render · ${panelRenderTimer || panelIdleHandle !== null?'pending':'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced||0)}회 · interaction defer 750ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+    </main></div>`;
+  }
+
+  function cancelPanelRender() {
+    if (panelRenderTimer) clearTimeout(panelRenderTimer);
+    panelRenderTimer = null;
+    if (panelIdleHandle !== null && typeof window?.cancelIdleCallback === 'function') {
+      try { window.cancelIdleCallback(panelIdleHandle); } catch (_) {}
+    }
+    panelIdleHandle = null;
+  }
+
+  // DevPass 2.7.3 panel rendering policy: collapse automatic panel refreshes,
+  // wait briefly while the user is interacting, then prefer an idle callback.
+  function schedulePanelRender(force = false) {
+    if (document.body?.dataset?.panelOpen !== '1') return;
+    if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
+    if (force) { renderSettings(); return; }
+    if (panelRenderTimer || panelIdleHandle !== null) {
+      performanceRuntime.panelRenderCoalesced += 1;
+      return;
+    }
+    const interacting = Date.now() - Number(performanceRuntime.lastInteractionAt || 0) < 700;
+    const delay = state.performanceGuard !== false && interacting ? 750 : 0;
+    panelRenderTimer = setTimeout(() => {
+      panelRenderTimer = null;
+      const run = () => {
+        panelIdleHandle = null;
+        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettings();
+      };
+      if (state.performanceGuard !== false && typeof window?.requestIdleCallback === 'function') {
+        panelIdleHandle = window.requestIdleCallback(run, {timeout:500});
+      } else {
+        run();
+      }
+    }, delay);
+  }
+

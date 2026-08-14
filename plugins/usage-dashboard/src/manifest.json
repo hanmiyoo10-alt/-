@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "plugin": "Local Usage Dashboard",
+  "version": "3.0.0-alpha.4.2",
+  "source": "plugins/usage-dashboard/latest.js",
+  "artifactSha256": "c45b05c96ee55a559ea285e019229ac4da53d7046ac91709c9c1a8e1a635d852",
+  "parts": [
+    {
+      "file": "00-runtime-core.part.js",
+      "label": "runtime/core",
+      "bytes": 44974,
+      "sha256": "15bb0a10a9a1c04f953fafbfbc7daf6523920ee322ab4536efff055715f600df"
+    },
+    {
+      "file": "10-usage-data.part.js",
+      "label": "usage normalization",
+      "bytes": 16629,
+      "sha256": "4ba57ed8a0d8880916166fb4a58dbc92178e43fcceb2ab42a9fe830e421db8fe"
+    },
+    {
+      "file": "20-bridge-io.part.js",
+      "label": "bridge I/O",
+      "bytes": 667,
+      "sha256": "d2bbde0ee2c8c768a3a9fc48ec589af418a7c32819425a873ef08ac966410f8e"
+    },
+    {
+      "file": "30-refresh-runtime.part.js",
+      "label": "refresh runtime",
+      "bytes": 3636,
+      "sha256": "49cffef32cd99f2c0588426dfb8a44f1965cc894cd867098491699ee21f77e8b"
+    },
+    {
+      "file": "40-diagnostics.part.js",
+      "label": "diagnostics",
+      "bytes": 13878,
+      "sha256": "a5408ed8055080aecc93b82a90f86eb75817da7b8809d8febd8031e16fdb7fa9"
+    },
+    {
+      "file": "50-settings-ui.part.js",
+      "label": "settings UI",
+      "bytes": 27234,
+      "sha256": "832a161adffd1bff6fe03a2f55297f549f34d725e05d7e8268f0772c3bf569d0"
+    },
+    {
+      "file": "60-settings-runtime.part.js",
+      "label": "settings runtime",
+      "bytes": 6569,
+      "sha256": "81ff1768554238cbe334a40ab99993f9c246a05dc90ac769f50466109f5faaaf"
+    },
+    {
+      "file": "70-floating-widget.part.js",
+      "label": "floating widget",
+      "bytes": 9959,
+      "sha256": "6f01085a624b25b3dac7f2a939f50b5f6b8ad2c2c4eba00d04a49377c3430e6f"
+    },
+    {
+      "file": "80-lifecycle.part.js",
+      "label": "lifecycle/scheduling",
+      "bytes": 1691,
+      "sha256": "afaca4d992529ffd3716f32974fdcb115e5f49cf3432c217648b6763b1b810eb"
+    },
+    {
+      "file": "90-bootstrap.part.js",
+      "label": "bootstrap/unload",
+      "bytes": 1886,
+      "sha256": "e1fd7fd9cd0d2c1a0a7bfa6338238d62799129833f370b818110fd86d7259507"
+    }
+  ]
+}

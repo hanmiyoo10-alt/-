@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.5
+//@version 3.0.0-alpha.5.6
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.5';
+  const VERSION = '3.0.0-alpha.5.6';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1606,7 +1606,7 @@ async function importLegacyTodayBaselines() {
   // Live /status is authoritative. A persisted success marker must never suppress reconciliation.
   state.bridgeManagerSyncedProductVersion = '';
   try {
-    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
     const text = await res.text();
     if (!res.ok) {
       state.bridgeManagerLastProbeAt = 0;
@@ -1645,7 +1645,7 @@ async function importLegacyTodayBaselines() {
   // Live engine ownership wins over a persisted attempt marker; retry safely when still unmanaged.
   state.bridgeEngineAdoptionAttemptedVersion = '';
   try {
-    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
     const text = await res.text();
     const payload = JSON.parse(text);
     if (!res.ok) {
@@ -1673,7 +1673,7 @@ async function importLegacyTodayBaselines() {
   // Live bundle state wins over a persisted attempt marker; retry while the manager still reports adopted.
   state.bridgeEngineBundleSyncAttemptedVersion = '';
   try {
-    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+    const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
     const text = await res.text();
     const payload = JSON.parse(text);
     if (!res.ok) {

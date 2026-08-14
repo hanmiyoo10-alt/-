@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.26
+//@version 3.0.0-alpha.3.27
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.26';
+  const VERSION = '3.0.0-alpha.3.27';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -23,7 +23,7 @@
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
-    refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true,
+    refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
     staleAfterMs: 0, stalePolicyV37Migrated: false,
     widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
     usageScopeView: 'all',
@@ -35,9 +35,10 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let uiStallProbeTimer = null, resumeProbeTimer = null, resumeMeasureTimer = null, resumeRefreshTimer = null, resumeLongTaskObserver = null;
   let widget = null, rootBody = null, drag = null;
-  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeMainThreadLagSamples:[],resumeLongTaskSamples:[]};
+  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -281,7 +282,7 @@
     }
     performanceRuntime.resumePending = false;
     performanceRuntime.lastResumeDelayMs = elapsed;
-    refresh('visibility', true);
+    enqueueRefresh('visibility', true);
   }
 
   function requestResumeRefresh(reason = 'visibility') {
@@ -292,6 +293,147 @@
     performanceRuntime.resumePending = true;
     performanceRuntime.resumeStartedAt = Date.now();
     resumeRefreshTimer = setTimeout(runResumeRefreshWhenQuiet, RESUME_GRACE_MS);
+  }
+
+  // DevPass 2.7.3 stability scheduler, adapted to the single local snapshot profile.
+  const REFRESH_PRIORITY = Object.freeze({
+    manual:100,
+    connect:95,
+    'manual-retry':95,
+    reset:85,
+    visibility:80,
+    init:70,
+    timer:30,
+    scheduled:25,
+  });
+
+  const refreshSchedulerState = {
+    pending:null,
+    queuedAt:0,
+    running:false,
+    lastReason:'',
+    lastRunAt:null,
+    lastCompletedAt:null,
+  };
+
+  function cancelRefreshSchedulerTimer() {
+    if (refreshSchedulerTimer) clearTimeout(refreshSchedulerTimer);
+    refreshSchedulerTimer = null;
+    if (refreshSchedulerIdleHandle !== null && typeof window?.cancelIdleCallback === 'function') {
+      try { window.cancelIdleCallback(refreshSchedulerIdleHandle); } catch (_) {}
+    }
+    refreshSchedulerIdleHandle = null;
+  }
+
+  function settleSchedulerJob(job, error = null) {
+    const waiters = Array.isArray(job?.waiters) ? job.waiters.splice(0) : [];
+    for (const waiter of waiters) {
+      try { error ? waiter.reject(error) : waiter.resolve(); } catch (_) {}
+    }
+  }
+
+  function cancelRefreshScheduler() {
+    cancelRefreshSchedulerTimer();
+    const pending = refreshSchedulerState.pending;
+    refreshSchedulerState.pending = null;
+    if (pending) settleSchedulerJob(pending);
+  }
+
+  function scheduleQueuedRefresh(delay = 0) {
+    if (!refreshSchedulerState.pending || refreshSchedulerTimer || refreshSchedulerIdleHandle !== null) return;
+    const job = refreshSchedulerState.pending;
+    const highPriority = Number(job.priority || 0) >= 80;
+    const run = () => {
+      refreshSchedulerIdleHandle = null;
+      void runQueuedRefresh();
+    };
+    if (!highPriority && state?.performanceGuard !== false && typeof window?.requestIdleCallback === 'function') {
+      refreshSchedulerIdleHandle = window.requestIdleCallback(run, {timeout:Math.max(500, Number(delay) || 900)});
+    } else {
+      refreshSchedulerTimer = setTimeout(() => {
+        refreshSchedulerTimer = null;
+        run();
+      }, Math.max(0, Number(delay) || 0));
+    }
+  }
+
+  async function runQueuedRefresh() {
+    if (refreshSchedulerState.running || !refreshSchedulerState.pending) return;
+    if (refreshInFlight) {
+      scheduleQueuedRefresh(180);
+      return;
+    }
+
+    const job = refreshSchedulerState.pending;
+    const now = Date.now();
+    const highPriority = Number(job.priority || 0) >= 80;
+    if (!highPriority && state?.backgroundPause !== false && document.visibilityState === 'hidden') {
+      refreshSchedulerState.pending = null;
+      settleSchedulerJob(job);
+      return;
+    }
+
+    const interacting = now - Number(performanceRuntime.lastInteractionAt || 0) < 700;
+    const ageMs = now - Number(refreshSchedulerState.queuedAt || now);
+    if (!highPriority && state?.performanceGuard !== false && interacting && ageMs < 2200) {
+      performanceRuntime.schedulerDeferredForInteraction += 1;
+      scheduleQueuedRefresh(500);
+      return;
+    }
+
+    refreshSchedulerState.pending = null;
+    refreshSchedulerState.running = true;
+    refreshSchedulerState.lastReason = job.reason;
+    refreshSchedulerState.lastRunAt = Date.now();
+    performanceRuntime.schedulerExecuted += 1;
+    try {
+      await refresh(job.reason, job.silent);
+      settleSchedulerJob(job);
+    } catch (error) {
+      settleSchedulerJob(job, error);
+    } finally {
+      refreshSchedulerState.running = false;
+      refreshSchedulerState.lastCompletedAt = Date.now();
+      if (refreshSchedulerState.pending) scheduleQueuedRefresh(0);
+    }
+  }
+
+  function enqueueRefresh(reason = 'scheduled', silent = false) {
+    if (state?.schedulerEnabled === false) return refresh(reason, silent);
+    const normalizedReason = String(reason || 'scheduled');
+    const priority = REFRESH_PRIORITY[normalizedReason] ?? 50;
+
+    if (refreshInFlight) {
+      performanceRuntime.schedulerMerged += 1;
+      return refreshInFlight;
+    }
+
+    performanceRuntime.schedulerQueued += 1;
+    const current = refreshSchedulerState.pending;
+    if (current) {
+      performanceRuntime.schedulerMerged += 1;
+      if (priority >= Number(current.priority || 0)) {
+        current.reason = normalizedReason;
+        current.priority = priority;
+        current.silent = Boolean(silent && current.silent);
+      } else {
+        current.silent = Boolean(current.silent && silent);
+      }
+    } else {
+      refreshSchedulerState.pending = {
+        silent:Boolean(silent),
+        reason:normalizedReason,
+        priority,
+        waiters:[],
+      };
+      refreshSchedulerState.queuedAt = Date.now();
+    }
+
+    const targetJob = refreshSchedulerState.pending;
+    const promise = new Promise((resolve, reject) => targetJob.waiters.push({resolve,reject}));
+    cancelRefreshSchedulerTimer();
+    scheduleQueuedRefresh(priority >= 80 ? 0 : 80);
+    return promise;
   }
 
   function sourceAgeMs() {
@@ -711,6 +853,7 @@ async function importLegacyTodayBaselines() {
       `Resume probe: events ${Number(performanceRuntime.resumeEvents || 0)} · reason ${performanceRuntime.lastResumeReason || '—'} · main-thread lag ${num(performanceRuntime.lastResumeMainThreadLagMs) ? `${roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)}ms` : '—'} · after ${num(performanceRuntime.lastResumeProbeAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeProbeAfterMs)}ms` : '—'} · refresh overlap ${performanceRuntime.lastResumeProbeDuringRefresh ? 'yes' : 'no'}`,
       `Resume long task: ${performanceRuntime.longTaskSupported ? 'supported' : 'unsupported'} · count ${Number(performanceRuntime.resumeLongTaskCount || 0)} · ${num(performanceRuntime.lastResumeLongTaskMs) ? `last ${roundPerfMs(performanceRuntime.lastResumeLongTaskMs)}ms @ +${roundPerfMs(performanceRuntime.lastResumeLongTaskStartedAfterMs)}ms · refresh overlap ${performanceRuntime.lastResumeLongTaskDuringRefresh ? 'yes' : 'no'}` : 'last none'}`,
       `Resume grace: ${performanceRuntime.resumePending ? 'pending' : 'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs) ? `${Number(performanceRuntime.lastResumeDelayMs)}ms` : '—'} · deferred ${Number(performanceRuntime.resumeDeferred || 0)} · coalesced ${Number(performanceRuntime.resumeCoalesced || 0)} · quiet ${RESUME_INTERACTION_QUIET_MS}ms · max ${RESUME_MAX_DEFER_MS}ms`,
+      `Scheduler: pending ${refreshSchedulerState.pending ? 'yes' : 'no'} · running ${refreshSchedulerState.running ? 'yes' : 'no'} · queued ${Number(performanceRuntime.schedulerQueued || 0)} · merged ${Number(performanceRuntime.schedulerMerged || 0)} · executed ${Number(performanceRuntime.schedulerExecuted || 0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction || 0)} · last ${refreshSchedulerState.lastReason || '—'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
@@ -912,7 +1055,7 @@ function todayOverviewMetrics(d) {
         <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button></div>
         <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </section>
-      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
+      <section class="panel wide"><b>Runtime Diagnostics</b><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></section>
     </main></div>`;
   }
 
@@ -931,7 +1074,7 @@ function todayOverviewMetrics(d) {
         const entered = String(q('#bridge-token')?.value || '').trim();
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
-        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; await persist(); scheduleRefresh(); await refresh('connect');
+        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; await persist(); scheduleRefresh(); await enqueueRefresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
     };
     document.querySelectorAll('[data-usage-scope]').forEach(button => {
@@ -950,14 +1093,14 @@ function todayOverviewMetrics(d) {
         renderSettings();
       };
     });
-    if (q('#refresh')) q('#refresh').onclick = () => refresh('manual');
+    if (q('#refresh')) q('#refresh').onclick = () => enqueueRefresh('manual');
     if (q('#retry-now')) q('#retry-now').onclick = async () => {
       state.consecutiveFailures = 0;
       state.retryDelayMs = 0;
       state.nextRetryAt = null;
       await persist();
       scheduleRefresh();
-      await refresh('manual-retry');
+      await enqueueRefresh('manual-retry');
     };
     if (q('#toggle')) q('#toggle').onclick = async () => { state.widgetVisible = state.widgetVisible === false; await persist(); await renderWidget(); renderSettings(); };
     if (q('#reset-position')) q('#reset-position').onclick = async () => {
@@ -1148,7 +1291,7 @@ function scheduleResetSync() {
       scheduleResetSync();
       return;
     }
-    await refresh('reset', true);
+    await enqueueRefresh('reset', true);
   }, delay);
 }
 
@@ -1162,7 +1305,7 @@ function scheduleResetSync() {
       ? Math.max(adaptiveMs, Number(state.retryDelayMs)||adaptiveMs)
       : adaptiveMs;
     if (state.bridgeStatus === 'error') state.nextRetryAt = Date.now() + ms;
-    refreshTimer=setTimeout(async()=>{try{await refresh('timer',true);}finally{scheduleRefresh();}},ms);
+    refreshTimer=setTimeout(async()=>{try{await enqueueRefresh('timer',true);}finally{scheduleRefresh();}},ms);
   }
 
   function installLifecycle() {
@@ -1201,10 +1344,11 @@ function scheduleResetSync() {
     token=String((await store.getItem(TOKEN_KEY))||'').trim();
     uiParts.push(await Risuai.registerSetting('Local Usage Dashboard',openSettings,'◴','html','local-usage-dashboard-settings-v3'));
     uiParts.push(await Risuai.registerButton({name:'Usage',icon:'$',iconType:'html',location:'hamburger',id:'local-usage-dashboard-button-v3'},openSettings));
-    await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)refresh('init',true);
+    await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)enqueueRefresh('init',true);
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
+      cancelRefreshScheduler();
       cancelResumeRefresh();
       stopResumeLongTaskObserver();
       stopUiStallProbe();

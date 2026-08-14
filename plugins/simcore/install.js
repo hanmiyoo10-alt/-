@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.17
+//@version 0.63.18
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -25,6 +25,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.18 Evidence Boundary Probe:
+// - Diagnostics-only follow-up after v0.63.17 live mapping uniquely located the root user as NORMALIZED and the authoritative source assistant as TRANSFORMED in the final beforeRequest array
+// - Extends transformed-source telemetry with deterministic start/middle/end anchor survival, normalized source/request lengths, and leading/trailing boundary gaps so the next release can decide whether whole-message in-place fencing is safe
+// - Does not fence, inject, copy, summarize, semantically compare, retain source bodies, repair output, or add state/schema/storage fields
+// - Adds no host/storage/API call, timer, polling, or visible-chat mutation and keeps all 16 internal modules byte-identical to v0.63.17
 //
 // v0.63.17 Evidence Shape Probe:
 // - Diagnostics-only follow-up after v0.63.16 live mapping returned MISSING for both authoritative root messages
@@ -4103,25 +4109,21 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   function evidencePick(rows, predicate, stage) {
     let count = 0;
-    let requestIndex = -1;
-    let role = null;
-    let requestChars = 0;
+    let picked = null;
     for (let i = rows.length - 1; i >= 0; i--) {
       if (!predicate(rows[i])) continue;
       count += 1;
-      if (requestIndex < 0) {
-        requestIndex = i;
-        role = rows[i]?.role || null;
-        requestChars = rows[i]?.text?.length || 0;
-      }
+      if (!picked) picked = { ...rows[i], requestIndex: i };
       if (count >= 2) break;
     }
     return {
       stage: count === 0 ? 'ABSENT' : (count === 1 ? stage : 'AMBIGUOUS'),
       count,
-      requestIndex,
-      role,
-      requestChars,
+      requestIndex: picked?.requestIndex ?? -1,
+      role: picked?.role || null,
+      requestChars: picked?.text?.length || 0,
+      requestNormChars: picked?.norm?.length || 0,
+      requestNorm: picked?.norm || '',
     };
   }
 
@@ -4131,17 +4133,35 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const size = Math.min(64, Math.max(24, Math.floor(text.length / 8)));
     const middleStart = Math.max(0, Math.floor((text.length - size) / 2));
     return [
-      text.slice(0, size),
-      text.slice(middleStart, middleStart + size),
-      text.slice(Math.max(0, text.length - size)),
-    ].filter((x, i, a) => x && a.indexOf(x) === i);
+      { key: 'S', text: text.slice(0, size) },
+      { key: 'M', text: text.slice(middleStart, middleStart + size) },
+      { key: 'E', text: text.slice(Math.max(0, text.length - size)) },
+    ].filter((x, i, a) => x.text && a.findIndex((y) => y.text === x.text) === i);
+  }
+
+  function evidenceBoundary(targetNorm, requestNorm) {
+    const anchors = evidenceAnchorChunks(targetNorm);
+    const found = [];
+    for (const anchor of anchors) {
+      const pos = requestNorm.indexOf(anchor.text);
+      if (pos >= 0) found.push({ key: anchor.key, pos, len: anchor.text.length });
+    }
+    found.sort((a, b) => a.pos - b.pos);
+    const first = found[0] || null;
+    const last = found[found.length - 1] || null;
+    return {
+      anchorMask: found.map((x) => x.key).join('') || 'NONE',
+      anchorCount: found.length,
+      leadingGap: first ? first.pos : -1,
+      trailingGap: last ? Math.max(0, requestNorm.length - (last.pos + last.len)) : -1,
+    };
   }
 
   function evidenceTargetShape(requestMessages, targetText, getText) {
     const target = String(targetText || '');
     const targetNorm = evidenceNormalize(target);
     if (!target || !targetNorm) {
-      return { stage: 'ABSENT', count: 0, requestIndex: -1, role: null, requestChars: 0 };
+      return { stage: 'ABSENT', count: 0, requestIndex: -1, role: null, requestChars: 0, requestNormChars: 0, targetNormChars: targetNorm.length, anchorMask: 'NONE', anchorCount: 0, leadingGap: -1, trailingGap: -1 };
     }
     const rows = (Array.isArray(requestMessages) ? requestMessages : []).map((m) => {
       const text = evidenceText(m, getText);
@@ -4149,21 +4169,26 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     });
 
     let r = evidencePick(rows, (x) => x.text === target, 'EXACT');
-    if (r.count) return r;
-    r = evidencePick(rows, (x) => x.norm === targetNorm, 'NORMALIZED');
-    if (r.count) return r;
-    if (targetNorm.length >= 24) {
-      r = evidencePick(rows, (x) => x.norm.length >= targetNorm.length && x.norm.includes(targetNorm), 'EMBEDDED');
-      if (r.count) return r;
+    if (!r.count) r = evidencePick(rows, (x) => x.norm === targetNorm, 'NORMALIZED');
+    if (!r.count && targetNorm.length >= 24) r = evidencePick(rows, (x) => x.norm.length >= targetNorm.length && x.norm.includes(targetNorm), 'EMBEDDED');
+    if (!r.count) {
+      const anchors = evidenceAnchorChunks(targetNorm);
+      if (anchors.length >= 2) {
+        const required = Math.min(2, anchors.length);
+        r = evidencePick(rows, (x) => anchors.reduce((n, a) => n + (x.norm.includes(a.text) ? 1 : 0), 0) >= required, 'TRANSFORMED');
+      }
     }
-
-    const anchors = evidenceAnchorChunks(targetNorm);
-    if (anchors.length >= 2) {
-      const required = Math.min(2, anchors.length);
-      r = evidencePick(rows, (x) => anchors.reduce((n, a) => n + (x.norm.includes(a) ? 1 : 0), 0) >= required, 'TRANSFORMED');
-      if (r.count) return r;
-    }
-    return r;
+    const boundary = r.requestIndex >= 0 ? evidenceBoundary(targetNorm, r.requestNorm) : { anchorMask: 'NONE', anchorCount: 0, leadingGap: -1, trailingGap: -1 };
+    return {
+      stage: r.stage,
+      count: r.count,
+      requestIndex: r.requestIndex,
+      role: r.role,
+      requestChars: r.requestChars,
+      requestNormChars: r.requestNormChars,
+      targetNormChars: targetNorm.length,
+      ...boundary,
+    };
   }
 
   function evidenceCombinedStatus(rootShape, assistantShape) {
@@ -4200,6 +4225,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       rootUserMatches: rootShape.count,
       rootUserChars: rootUserText.length,
       rootUserRequestChars: rootShape.requestChars,
+      rootUserNormChars: rootShape.targetNormChars,
+      rootUserRequestNormChars: rootShape.requestNormChars,
+      rootUserAnchorMask: rootShape.anchorMask,
+      rootUserLeadingGap: rootShape.leadingGap,
+      rootUserTrailingGap: rootShape.trailingGap,
       sourceAssistantShape: assistantShape.stage,
       sourceAssistantRawIndex: sourceAssistantIndex,
       sourceAssistantRequestIndex: assistantShape.requestIndex,
@@ -4207,10 +4237,16 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       sourceAssistantMatches: assistantShape.count,
       sourceAssistantChars: sourceAssistantText.length,
       sourceAssistantRequestChars: assistantShape.requestChars,
+      sourceAssistantNormChars: assistantShape.targetNormChars,
+      sourceAssistantRequestNormChars: assistantShape.requestNormChars,
+      sourceAssistantAnchorMask: assistantShape.anchorMask,
+      sourceAssistantLeadingGap: assistantShape.leadingGap,
+      sourceAssistantTrailingGap: assistantShape.trailingGap,
       requestMessages: Array.isArray(requestMessages) ? requestMessages.length : 0,
     };
   }
   // EVIDENCE_MAPPING_PROBE_END
+
 
 
   function diagnosticProbeFresh() {
@@ -4349,7 +4385,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.17',
+      'Version: 0.63.18',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4367,6 +4403,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Frame regression: ${frameProbe.regression}`,
       `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'CLAMPED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
+      `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
       `Broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
@@ -4561,7 +4598,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.17</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.18</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

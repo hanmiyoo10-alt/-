@@ -18,20 +18,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.28 to alpha.3.29 panel render coalescing
+      - name: Patch alpha.3.29 to alpha.3.30 resume input diagnostics
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha329_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha330_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.29$' plugins/usage-dashboard/latest.js
-          grep -q 'panelRenderCoalesced:0' plugins/usage-dashboard/latest.js
-          grep -q 'function schedulePanelRender' plugins/usage-dashboard/latest.js
-          grep -q 'function cancelPanelRender' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.30$' plugins/usage-dashboard/latest.js
+          grep -q 'resumeInputCaptured:false' plugins/usage-dashboard/latest.js
+          grep -q 'lastResumeFirstInputAfterMs:null' plugins/usage-dashboard/latest.js
+          grep -q 'lastResumeInputDelayMs:null' plugins/usage-dashboard/latest.js
+          grep -q 'lastResumeFrameDelayMs:null' plugins/usage-dashboard/latest.js
+          grep -q 'lastResumeInputDuringRefresh:false' plugins/usage-dashboard/latest.js
+          grep -q 'resumeInputDelaySamples:\[\]' plugins/usage-dashboard/latest.js
+          grep -q 'resumeFrameDelaySamples:\[\]' plugins/usage-dashboard/latest.js
+          grep -q 'function markPerformanceInteraction' plugins/usage-dashboard/latest.js
+          grep -q 'Resume input:' plugins/usage-dashboard/latest.js
+          grep -q 'Resume Input ·' plugins/usage-dashboard/latest.js
           grep -q 'Panel render scheduler:' plugins/usage-dashboard/latest.js
-          grep -q 'Panel Render ·' plugins/usage-dashboard/latest.js
-          test "$(grep -Fc 'schedulePanelRender(false);' plugins/usage-dashboard/latest.js)" -eq 2
-          grep -q 'RENDER_SPIKE_THRESHOLD_MS = 50' plugins/usage-dashboard/latest.js
           grep -q 'Render spike:' plugins/usage-dashboard/latest.js
           grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
           grep -q 'Resume grace:' plugins/usage-dashboard/latest.js
@@ -47,11 +51,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.29'
+            echo 'latest.js already matches alpha.3.30'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.29 panel render coalescing'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.30 resume input diagnostics'
           git push

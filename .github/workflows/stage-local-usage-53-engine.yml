@@ -34,13 +34,15 @@ jobs:
             ac80e8f41eae72019af0d687e90c713199c65125995cfeed615378715329fefd
             7ce72cdc7df3208274737a8393be41ad33a43d7335d7ef6962338462c3a9a4a0
           )
+          bad=0
           for i in 00 01 02 03 04 05 06 07; do
             n=15000; [ "$i" = 07 ] && n=6632
             actual="$(head -c "$n" ".github/lud53/bridge.b64.$i" | sha256sum | awk '{print $1}')"
             idx=$((10#$i))
             echo "chunk $i · $actual"
-            test "$actual" = "${expected[$idx]}" || { echo "chunk $i mismatch"; exit 1; }
+            if [ "$actual" != "${expected[$idx]}" ]; then echo "chunk $i mismatch"; bad=1; fi
           done
+          [ "$bad" -eq 0 ] || exit 1
           mkdir -p plugins/usage-dashboard/runtime
           {
             head -c 15000 .github/lud53/bridge.b64.00

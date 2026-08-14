@@ -1,0 +1,347 @@
+name: Hotfix Local Usage Manager Android Proc Fallback
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hotfix-local-usage-manager-android-proc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hotfix-local-usage-manager-android-proc
+  cancel-in-progress: false
+
+jobs:
+  patch-validate-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch Manager 1.1.2 Android proc fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          test_path = Path('plugins/usage-dashboard/tests/p5-bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+
+          s = manager_path.read_text()
+          old = "const MANAGER_VERSION = '1.1.1';"
+          if old not in s:
+              raise SystemExit('expected Manager 1.1.1 baseline missing')
+          s = s.replace(old, "const MANAGER_VERSION = '1.1.2';", 1)
+
+          old = "const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');\n"
+          new = old + "const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');\nconst LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');\n"
+          if old not in s:
+              raise SystemExit('engine descriptor anchor missing')
+          s = s.replace(old, new, 1)
+
+          old = """function discoverEngineCandidate() {
+            const pid = listenerPid(ENGINE_PORT);
+            if (!pid) return {safe:false,reason:'listener-unresolved',pid:null};
+            return safeCandidate(readProcess(pid));
+          }
+          """
+          new = """function processAlive(pid) {
+            if (!Number.isInteger(pid) || pid <= 1) return false;
+            try { process.kill(pid, 0); return true; } catch (_) { return false; }
+          }
+          function processUid(pid) {
+            try {
+              const text = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+              const match = text.match(/^Uid:\\s+(\\d+)/m);
+              return match ? Number(match[1]) : null;
+            } catch (_) { return null; }
+          }
+          function sameArgs(a, b) {
+            return JSON.stringify(Array.isArray(a) ? a : []) === JSON.stringify(Array.isArray(b) ? b : []);
+          }
+          function processMatchesSpec(pid, spec) {
+            const candidate = safeCandidate(readProcess(pid));
+            if (!candidate.safe || !spec) return false;
+            return path.resolve(candidate.exe) === path.resolve(String(spec.exe || spec.executable || ''))
+              && path.resolve(candidate.script) === path.resolve(String(spec.script || ''))
+              && path.resolve(candidate.cwd) === path.resolve(String(spec.cwd || ''))
+              && sameArgs(candidate.nodeArgs, spec.nodeArgs)
+              && sameArgs(candidate.scriptArgs, spec.scriptArgs);
+          }
+          function canonicalPidFileCandidate() {
+            let raw = '';
+            try {
+              const stat = fs.statSync(LEGACY_ENGINE_PID_FILE);
+              if (!stat.isFile()) return {safe:false,reason:'pidfile-not-file',pid:null};
+              if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) return {safe:false,reason:'pidfile-foreign-owner',pid:null};
+              raw = fs.readFileSync(LEGACY_ENGINE_PID_FILE, 'utf8').trim();
+            } catch (_) { return {safe:false,reason:'pidfile-missing',pid:null}; }
+            if (!/^\\d+$/.test(raw)) return {safe:false,reason:'pidfile-invalid',pid:null};
+            const pid = Number(raw);
+            if (!processAlive(pid)) return {safe:false,reason:'pidfile-stale',pid};
+            if (typeof process.getuid === 'function') {
+              const uid = processUid(pid);
+              if (uid != null && uid !== process.getuid()) return {safe:false,reason:'pidfile-foreign-process',pid};
+            }
+            const candidate = safeCandidate(readProcess(pid));
+            if (!candidate.safe) return {...candidate,pid};
+            if (path.resolve(candidate.script) !== path.resolve(LEGACY_ENGINE_SCRIPT)) return {safe:false,reason:'pidfile-unexpected-script',pid};
+            return {...candidate,reason:'canonical-pidfile'};
+          }
+          function discoverEngineCandidate() {
+            const pid = listenerPid(ENGINE_PORT);
+            if (pid) return safeCandidate(readProcess(pid));
+            const fallback = canonicalPidFileCandidate();
+            if (fallback.safe) return fallback;
+            return {safe:false,reason:fallback.reason || 'listener-unresolved',pid:fallback.pid ?? null};
+          }
+          """
+          if old not in s:
+              raise SystemExit('discoverEngineCandidate baseline missing')
+          s = s.replace(old, new, 1)
+
+          old = """async function waitForManagedEngine(timeoutMs = 12000) {
+            const started = Date.now();
+            let lastError = '';
+            while (Date.now() - started < timeoutMs) {
+              const service = serviceStatus();
+              const pid = listenerPid(ENGINE_PORT);
+              if (service.running && service.pid && pid === service.pid) {
+                try {
+                  const snap = await bridgeSnapshot();
+                  return {ok:true,service,pid,snapshot:snap};
+                } catch (e) { lastError = e?.message || String(e); }
+              }
+              await sleep(350);
+            }
+            return {ok:false,error:lastError || 'managed engine did not become healthy',service:serviceStatus(),pid:listenerPid(ENGINE_PORT)};
+          }
+          async function engineRuntimeStatus() {
+            const descriptor = readDescriptor();
+            const service = serviceStatus();
+            const pid = listenerPid(ENGINE_PORT);
+            const managed = Boolean(descriptor && service.running && service.pid && pid === service.pid);
+            let snapshot = null;
+            try { snapshot = await bridgeSnapshot(1200); } catch (_) {}
+            const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
+            return {
+              engineManaged:managed,
+              engineMode:managed ? 'managed-adopted' : 'legacy-external',
+              engineService:ENGINE_SERVICE,
+              engineVersion:String(snapshot?.bridgeVersion || snapshot?.health?.bridgeVersion || ''),
+              candidateSafe:typeof candidate?.safe === 'boolean' ? candidate.safe : null,
+              candidateReason:String(candidate?.reason || ''),
+              adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'
+            };
+          }
+          """
+          new = """async function bridgeReachable(timeoutMs = 700) {
+            try { await bridgeSnapshot(timeoutMs); return true; } catch (_) { return false; }
+          }
+          async function waitForManagedEngine(expected, timeoutMs = 12000) {
+            const started = Date.now();
+            let lastError = '';
+            while (Date.now() - started < timeoutMs) {
+              const service = serviceStatus();
+              const pid = listenerPid(ENGINE_PORT);
+              const processVerified = Boolean(service.running && service.pid && processMatchesSpec(service.pid, expected));
+              if (service.running && service.pid && (pid === service.pid || (!pid && processVerified))) {
+                try {
+                  const snap = await bridgeSnapshot();
+                  return {ok:true,service,pid:service.pid,snapshot:snap,ownership:pid === service.pid ? 'proc-net' : 'service-process'};
+                } catch (e) { lastError = e?.message || String(e); }
+              }
+              await sleep(350);
+            }
+            return {ok:false,error:lastError || 'managed engine did not become healthy',service:serviceStatus(),pid:listenerPid(ENGINE_PORT)};
+          }
+          async function engineRuntimeStatus() {
+            const descriptor = readDescriptor();
+            const service = serviceStatus();
+            const pid = listenerPid(ENGINE_PORT);
+            let snapshot = null;
+            try { snapshot = await bridgeSnapshot(1200); } catch (_) {}
+            const processVerified = Boolean(descriptor && service.running && service.pid && processMatchesSpec(service.pid, descriptor));
+            const managed = Boolean(descriptor && snapshot && service.running && service.pid && (pid === service.pid || (!pid && processVerified)));
+            const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
+            const fallbackNeedsHealth = candidate?.reason === 'canonical-pidfile';
+            const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsHealth || Boolean(snapshot))) : null;
+            const candidateReason = fallbackNeedsHealth && !snapshot ? 'pidfile-health-unverified' : String(candidate?.reason || '');
+            return {
+              engineManaged:managed,
+              engineMode:managed ? 'managed-adopted' : 'legacy-external',
+              engineService:ENGINE_SERVICE,
+              engineVersion:String(snapshot?.bridgeVersion || snapshot?.health?.bridgeVersion || ''),
+              candidateSafe,
+              candidateReason,
+              adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'
+            };
+          }
+          """
+          if old not in s:
+              raise SystemExit('managed verification baseline missing')
+          s = s.replace(old, new, 1)
+
+          old = """  const candidate = discoverEngineCandidate();
+            if (!candidate.safe) return {ok:false,adopted:false,state:'unsafe-candidate',candidateSafe:false,retryable:false,error:`engine adoption refused: ${candidate.reason}`};
+            writeEngineService(candidate, true);
+            try {
+              process.kill(candidate.pid, 'SIGTERM');
+            } catch (e) {
+              return {ok:false,adopted:false,state:'stop-failed',candidateSafe:true,retryable:true,error:e?.message || String(e)};
+            }
+            const stopStarted = Date.now();
+            while (Date.now() - stopStarted < 5000) {
+              const pid = listenerPid(ENGINE_PORT);
+              if (!pid || pid !== candidate.pid) break;
+              await sleep(200);
+            }
+            if (listenerPid(ENGINE_PORT) === candidate.pid) {
+              return {ok:false,adopted:false,state:'stop-timeout',candidateSafe:true,retryable:true,error:'legacy bridge did not stop after SIGTERM'};
+            }
+            try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
+            try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+            const verified = await waitForManagedEngine();
+          """
+          new = """  const candidate = discoverEngineCandidate();
+            if (!candidate.safe) {
+              const retryable = ['listener-unresolved','pidfile-missing','pidfile-stale','process-unavailable'].includes(String(candidate.reason || ''));
+              return {ok:false,adopted:false,state:'unsafe-candidate',candidateSafe:false,retryable,error:`engine adoption refused: ${candidate.reason}`};
+            }
+            try { await bridgeSnapshot(1200); }
+            catch (e) { return {ok:false,adopted:false,state:'bridge-unhealthy',candidateSafe:true,retryable:true,error:e?.message || String(e)}; }
+            writeEngineService(candidate, true);
+            try {
+              process.kill(candidate.pid, 'SIGTERM');
+            } catch (e) {
+              return {ok:false,adopted:false,state:'stop-failed',candidateSafe:true,retryable:true,error:e?.message || String(e)};
+            }
+            const stopStarted = Date.now();
+            let stopped = false;
+            while (Date.now() - stopStarted < 5000) {
+              if (!processAlive(candidate.pid) && !(await bridgeReachable(500))) { stopped = true; break; }
+              await sleep(200);
+            }
+            if (!stopped) {
+              return {ok:false,adopted:false,state:'stop-timeout',candidateSafe:true,retryable:true,error:'legacy bridge did not stop cleanly after SIGTERM'};
+            }
+            try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
+            try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+            const verified = await waitForManagedEngine(candidate);
+          """
+          if old not in s:
+              raise SystemExit('adoption stop baseline missing')
+          s = s.replace(old, new, 1)
+
+          old = """  if (!listenerPid(ENGINE_PORT)) {
+              try {
+                const child = spawn(candidate.exe, [...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs], {cwd:candidate.cwd,detached:true,stdio:'ignore',env:process.env});
+                child.unref();
+              } catch (_) {}
+            }
+          """
+          new = """  if (!(await bridgeReachable(700)) && !processAlive(candidate.pid)) {
+              try {
+                const child = spawn(candidate.exe, [...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs], {cwd:candidate.cwd,detached:true,stdio:'ignore',env:process.env});
+                child.unref();
+              } catch (_) {}
+            }
+          """
+          if old not in s:
+              raise SystemExit('restore baseline missing')
+          s = s.replace(old, new, 1)
+
+          manager_path.write_text(s)
+
+          t = test_path.read_text()
+          t = t.replace("const MANAGER_VERSION = '1.1.1';", "const MANAGER_VERSION = '1.1.2';")
+          marker = "assert.ok(manager.includes('bridge-manager.rollback-${process.pid}.cjs'), 'rollback temp file must preserve .cjs extension');\n"
+          additions = marker + "assert.ok(manager.includes(\"const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');\"), 'canonical legacy pidfile fallback missing');\nassert.ok(manager.includes(\"const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');\"), 'canonical legacy bridge path guard missing');\nassert.ok(manager.includes('function canonicalPidFileCandidate()'), 'Android pidfile candidate fallback missing');\nassert.ok(manager.includes('async function bridgeReachable(timeoutMs = 700)'), 'endpoint transition verifier missing');\nassert.ok(manager.includes('processMatchesSpec(service.pid, descriptor)'), 'managed service process fallback missing');\n"
+          if marker not in t:
+              raise SystemExit('test marker anchor missing')
+          t = t.replace(marker, additions, 1)
+          test_path.write_text(t)
+
+          manifest = json.loads(manifest_path.read_text())
+          manifest['components']['bridgeManager']['version'] = '1.1.2'
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+      - name: Validate product and regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
+          node plugins/usage-dashboard/tests/p2-build.cjs
+          node plugins/usage-dashboard/tests/p3-ui.cjs
+          node plugins/usage-dashboard/tests/p3-recent.cjs
+          node plugins/usage-dashboard/tests/p4-render.cjs
+          node plugins/usage-dashboard/tests/p4-partial.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
+          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          m = json.loads(Path('plugins/usage-dashboard/runtime/product-manifest.json').read_text())
+          assert m['productVersion'] == '3.0.0-alpha.5.2'
+          assert m['components']['bridgeManager']['version'] == '1.1.2'
+          assert m['components']['bridgeManager']['sha256'] == hashlib.sha256(Path('plugins/usage-dashboard/runtime/bridge-manager.cjs').read_bytes()).hexdigest()
+          PY
+          git diff --check
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+
+      - name: Commit hotfix to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          git diff --cached --check
+          git commit -m 'fix: support Android bridge adoption without proc net'
+          git push origin HEAD:main
+
+      - name: Publish runtime hotfix to release channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          grep -Fq '"version": "1.1.2"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/runtime
+          if git diff --cached --quiet; then
+            echo 'release runtime already current'
+            exit 0
+          fi
+          git commit -m 'release: publish Manager 1.1.2 Android proc fallback'
+          git push origin HEAD:release-usage-dashboard

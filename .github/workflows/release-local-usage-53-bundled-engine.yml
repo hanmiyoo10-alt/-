@@ -24,8 +24,16 @@ jobs:
         shell: bash
         run: |
           set +e
-          python3 .github/lud53/patch53.py > .github/lud53/patch53-last.log 2>&1
+          python3 .github/lud53/prepatch53.py > .github/lud53/patch53-last.log 2>&1
           code=$?
+          if [ "$code" -eq 0 ]; then
+            python3 .github/lud53/patch53.py >> .github/lud53/patch53-last.log 2>&1
+            code=$?
+          fi
+          if [ "$code" -eq 0 ]; then
+            python3 .github/lud53/postpatch53.py >> .github/lud53/patch53-last.log 2>&1
+            code=$?
+          fi
           cat .github/lud53/patch53-last.log
           if [ "$code" -ne 0 ]; then
             git config user.name 'github-actions[bot]'
@@ -39,21 +47,33 @@ jobs:
       - name: Validate full 5.3 suite
         shell: bash
         run: |
-          set -euo pipefail
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
-          node --check plugins/usage-dashboard/latest.js
-          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
-          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
-          for test in plugins/usage-dashboard/tests/*.cjs; do node "$test"; done
-          python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
-          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
-          test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
-          grep -Fq '//@version 3.0.0-alpha.5.3' plugins/usage-dashboard/latest.js
-          grep -Fq "const MANAGER_VERSION = '1.2.0';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "url.pathname === '/engine/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq 'async function syncBridgeEngineBundleIfNeeded(status)' plugins/usage-dashboard/latest.js
-          git diff --check
+          set +e
+          {
+            node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check &&
+            node --check plugins/usage-dashboard/latest.js &&
+            node --check plugins/usage-dashboard/runtime/bridge-manager.cjs &&
+            node --check plugins/usage-dashboard/runtime/bridge-engine.mjs &&
+            bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh &&
+            for test in plugins/usage-dashboard/tests/*.cjs; do node "$test" || exit $?; done &&
+            python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null &&
+            python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null &&
+            test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d' &&
+            grep -Fq '//@version 3.0.0-alpha.5.3' plugins/usage-dashboard/latest.js &&
+            grep -Fq "const MANAGER_VERSION = '1.2.0';" plugins/usage-dashboard/runtime/bridge-manager.cjs &&
+            grep -Fq "url.pathname === '/engine/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs &&
+            grep -Fq 'async function syncBridgeEngineBundleIfNeeded(status)' plugins/usage-dashboard/latest.js &&
+            git diff --check
+          } > .github/lud53/validate53-last.log 2>&1
+          code=$?
+          cat .github/lud53/validate53-last.log
+          if [ "$code" -ne 0 ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .github/lud53/validate53-last.log
+            git commit -m 'debug: capture Local Usage 5.3 validation failure' || true
+            git push origin HEAD:main || true
+            exit "$code"
+          fi
 
       - name: Commit 5.3 to main
         shell: bash
@@ -61,7 +81,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          rm -f .github/lud53/patch53-last.log
+          rm -f .github/lud53/patch53-last.log .github/lud53/validate53-last.log
           git add plugins/usage-dashboard .github/workflows/release-local-usage-dashboard.yml
           git commit -m 'feat: Local Usage Dashboard 3.0.0-alpha.5.3 bundled engine'
           git push origin HEAD:main

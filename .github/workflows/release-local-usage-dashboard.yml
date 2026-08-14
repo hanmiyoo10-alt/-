@@ -18,15 +18,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.30 to alpha.3.31 Usage chat quick menu
+      - name: Patch alpha.3.31 to alpha.3.32 Usage chat quick menu fix
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha331_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha332_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.31$' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.32$' plugins/usage-dashboard/latest.js
           grep -q "Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'" plugins/usage-dashboard/latest.js
           grep -q "Risuai.registerSetting('Local Usage Dashboard'" plugins/usage-dashboard/latest.js
+          ! grep -q "Risuai.registerSetting('Usage',openSettings" plugins/usage-dashboard/latest.js
           ! grep -q "location:'hamburger',id:'local-usage-dashboard-button-v3'" plugins/usage-dashboard/latest.js
           grep -q 'Resume input:' plugins/usage-dashboard/latest.js
           grep -q 'Resume Input ·' plugins/usage-dashboard/latest.js
@@ -46,11 +47,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.31'
+            echo 'latest.js already matches alpha.3.32'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.31 Usage chat quick menu'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.32 Usage chat quick menu fix'
           git push

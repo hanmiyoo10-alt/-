@@ -18,15 +18,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.30 to alpha.3.31 Usage quick menu
+      - name: Patch alpha.3.30 to alpha.3.31 Usage chat quick menu
         shell: bash
         run: |
           set -euo pipefail
           python3 plugins/usage-dashboard/tools/release_alpha331_patch.py
           node --check plugins/usage-dashboard/latest.js
           grep -q '^//@version 3.0.0-alpha.3.31$' plugins/usage-dashboard/latest.js
-          grep -q "Risuai.registerSetting('Usage',openSettings,'📊','html')" plugins/usage-dashboard/latest.js
-          test "$(grep -Fc "registerButton({name:'Usage'" plugins/usage-dashboard/latest.js || true)" -eq 0
+          grep -q "Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'" plugins/usage-dashboard/latest.js
+          grep -q "Risuai.registerSetting('Local Usage Dashboard'" plugins/usage-dashboard/latest.js
+          ! grep -q "location:'hamburger',id:'local-usage-dashboard-button-v3'" plugins/usage-dashboard/latest.js
           grep -q 'Resume input:' plugins/usage-dashboard/latest.js
           grep -q 'Resume Input ·' plugins/usage-dashboard/latest.js
           grep -q 'Panel render scheduler:' plugins/usage-dashboard/latest.js
@@ -51,5 +52,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.31 Usage quick menu'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.31 Usage chat quick menu'
           git push

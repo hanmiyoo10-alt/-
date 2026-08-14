@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 
 ROOT = Path('plugins/usage-dashboard')
 core = ROOT / 'src/00-runtime-core.part.js'
@@ -95,6 +96,33 @@ manifest = {
     }
 }
 (runtime_dir / 'product-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+
+# Season transitions must not silently disable earlier regression suites.
+p1 = ROOT / 'tests/p1-contract.cjs'
+p1_text = p1.read_text()
+p1_text = replace_once(
+    p1_text,
+    "assert.match(source, /^\\/\\/@version 3\\.0\\.0-alpha\\.4\\./m);",
+    "assert.match(source, /^\\/\\/@version (?:3\\.0\\.0-alpha\\.\\d+\\.\\d+|3\\.0\\.0-beta\\.\\d+|3\\.0\\.0)$/m);",
+    'P1 version-forward guard'
+)
+p1.write_text(p1_text)
+
+for test_path in sorted((ROOT / 'tests').glob('p*.cjs')):
+    text = test_path.read_text()
+    old_decl = "const alpha4 = version.match(/^3\\.0\\.0-alpha\\.4\\.(\\d+)$/);"
+    if old_decl not in text:
+        continue
+    text = text.replace(old_decl, "const alpha = version.match(/^3\\.0\\.0-alpha\\.(\\d+)\\.(\\d+)$/);", 1)
+    text, count = re.subn(
+        r"alpha4 \? Number\(alpha4\[1\]\) >= (\d+) : ",
+        r"alpha ? (Number(alpha[1]) > 4 || (Number(alpha[1]) === 4 && Number(alpha[2]) >= \1)) : ",
+        text,
+        count=1
+    )
+    if count != 1:
+        raise SystemExit(f'{test_path.name} alpha season guard mismatch')
+    test_path.write_text(text)
 
 (ROOT / 'tests/p5-unified-runtime.cjs').write_text(r"""const fs = require('node:fs');
 const assert = require('node:assert/strict');

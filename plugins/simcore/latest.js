@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.3
+//@version 0.63.4
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.4 Long-Chat Regression Probe:
+// - Diagnostics-only mini release: generation behavior, runtime prompt, state schema, storage, recurrence, lineage, handoff, time, recovery, reaction, and broadcast semantics stay unchanged
+// - Extends the manual two-turn raw diagnostic with Volume/Chapter/Chatindex continuity and explicit regression flags
+// - Reports recurrence guidance state, the current template fingerprint, and the most recent exact historical fingerprint match by user/assistant index
+// - Historical fingerprint lookup runs only when the user presses the diagnostic-copy button; no request/output hot-path history scan, response persistence, or new pluginStorage call is added
+// - Keeps the v0.63.0 cache-aware Prompt compiler byte-identical; runtime prompt text and cache-prefix behavior are unchanged by construction
 //
 // v0.63.3 Two-Turn Diagnostic Copy:
 // - Changes the manual diagnostic copy body from lineage-selected root/parent/current raw turns to the two most recent completed user→assistant turns: 직전 턴 + 최근 턴
@@ -3312,6 +3319,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
 (async () => {
   const coreRules = SimCore.require('session');
+  const recurrenceRules = SimCore.require('recurrence');
   const ops = SimCore.require('ops');
   let coreSession = null;
   let coreKey = null;
@@ -3481,7 +3489,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.63.3] state mirror failed:', e.message);
+      console.log('[simcore/v0.63.4] state mirror failed:', e.message);
     }
   }
 
@@ -3496,7 +3504,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.63.3] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.63.4] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3620,6 +3628,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
           mode: pendingProbe.mode || null,
           modeFamily: pendingProbe.templateRecurrenceModeFamily || null,
+          hash: pendingProbe.templateRecurrenceHash == null ? null : Number(pendingProbe.templateRecurrenceHash),
           eligible: !!pendingProbe.templateRecurrenceEligible,
           repeated: !!pendingProbe.templateRecurrenceRepeated,
           normalizedChars: Number(pendingProbe.templateRecurrenceChars || 0),
@@ -3706,8 +3715,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.63.3] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.63.3] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.63.4] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.63.4] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3720,7 +3729,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.63.3] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.63.4] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3765,7 +3774,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.3] beforeRequest error:', e.message);
+      console.log('[simcore/v0.63.4] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3791,7 +3800,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.3] output error:', e.message);
+      console.log('[simcore/v0.63.4] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3842,6 +3851,86 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     return !!currentKey && previousRuntimePromptKey === currentKey;
   }
 
+  function diagnosticFrameState(raw) {
+    const text = String(raw || '');
+    const volume = text.match(/^\s*##\s+볼륨\s+(\d+)\s*[:：]/mi);
+    const chapter = text.match(/^\s*###\s+챕터\s+(\d+)\s*[:：]/mi);
+    const chatindex = text.match(/^\s*####\s+Chatindex\s*[:：]\s*(\d+)\s*∮/mi);
+    return {
+      volume: volume ? Number(volume[1]) : null,
+      chapter: chapter ? Number(chapter[1]) : null,
+      chatindex: chatindex ? Number(chatindex[1]) : null,
+    };
+  }
+
+  function diagnosticStepLabel(previous, current) {
+    if (!Number.isFinite(previous) || !Number.isFinite(current)) return 'n/a';
+    if (current > previous) return 'ADVANCED';
+    if (current < previous) return 'REGRESSED';
+    return 'SAME';
+  }
+
+  function diagnosticFrameContinuity(messages, currentUserIndex, latestAssistantIndex) {
+    const rows = Array.isArray(messages) ? messages : [];
+    const before = currentUserIndex >= 0 ? currentUserIndex : latestAssistantIndex;
+    let previousAssistantIndex = -1;
+    for (let i = before - 1; i >= 0; i--) {
+      if (diagnosticAssistantRole(rows[i])) { previousAssistantIndex = i; break; }
+    }
+    const previous = diagnosticFrameState(diagnosticRawMessage(rows, previousAssistantIndex));
+    const current = diagnosticFrameState(diagnosticRawMessage(rows, latestAssistantIndex));
+    const volumeStep = diagnosticStepLabel(previous.volume, current.volume);
+    let chapterStep = diagnosticStepLabel(previous.chapter, current.chapter);
+    if (Number.isFinite(previous.volume) && Number.isFinite(current.volume) && current.volume > previous.volume
+        && Number.isFinite(previous.chapter) && Number.isFinite(current.chapter) && current.chapter < previous.chapter) {
+      chapterStep = 'RESET_AFTER_VOLUME_ADVANCE';
+    }
+    const chatindexStep = diagnosticStepLabel(previous.chatindex, current.chatindex);
+    const regressions = [];
+    if (Number.isFinite(previous.volume) && Number.isFinite(current.volume) && current.volume < previous.volume) regressions.push('VOLUME');
+    if (Number.isFinite(previous.volume) && Number.isFinite(current.volume) && current.volume === previous.volume
+        && Number.isFinite(previous.chapter) && Number.isFinite(current.chapter) && current.chapter < previous.chapter) regressions.push('CHAPTER');
+    if (Number.isFinite(previous.chatindex) && Number.isFinite(current.chatindex) && current.chatindex < previous.chatindex) regressions.push('CHATINDEX');
+    const value = (v) => Number.isFinite(v) ? Number(v) : 'n/a';
+    return {
+      previousAssistantIndex,
+      previous,
+      current,
+      label: `volume ${value(previous.volume)}→${value(current.volume)} ${volumeStep} · chapter ${value(previous.chapter)}→${value(current.chapter)} ${chapterStep} · Chatindex ${value(previous.chatindex)}→${value(current.chatindex)} ${chatindexStep}`,
+      regression: regressions.length ? regressions.join('+') : 'NONE',
+    };
+  }
+
+  function diagnosticRecurrencePrior(messages, currentUserIndex, probe) {
+    if (!probe?.eligible) return { status: 'INELIGIBLE', userIndex: -1, assistantIndex: -1, distance: null, hashHex: 'n/a' };
+    const hash = Number(probe.hash);
+    if (!Number.isFinite(hash)) return { status: 'NO HASH', userIndex: -1, assistantIndex: -1, distance: null, hashHex: 'n/a' };
+    const family = String(probe.modeFamily || 'A');
+    const mode = family === 'C' ? 'C' : (family === 'B' ? 'B_START' : 'A');
+    const rows = Array.isArray(messages) ? messages : [];
+    for (let i = Math.min(rows.length - 1, Number(currentUserIndex) - 1); i >= 0; i--) {
+      if (rows[i]?.role !== 'user') continue;
+      const fp = recurrenceRules.templateFingerprint(textMessageContent(rows[i]), mode);
+      if (fp.eligible && Number(fp.hash) === hash) {
+        const assistantIndex = diagnosticAssistantAfterUser(rows, i);
+        return {
+          status: 'MATCH',
+          userIndex: i,
+          assistantIndex,
+          distance: Number(currentUserIndex) - i,
+          hashHex: `0x${(hash >>> 0).toString(16).padStart(8, '0')}`,
+        };
+      }
+    }
+    return {
+      status: 'NO MATCH',
+      userIndex: -1,
+      assistantIndex: -1,
+      distance: null,
+      hashHex: `0x${(hash >>> 0).toString(16).padStart(8, '0')}`,
+    };
+  }
+
   function diagnosticSection(title, messages, userIndex, assistantIndex, meta = []) {
     const userRaw = diagnosticRawMessage(messages, userIndex);
     const assistantRaw = diagnosticRawMessage(messages, assistantIndex);
@@ -3879,6 +3968,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const parentAssistantIndex = parentIndex >= 0 && parentIndex !== currentUserIndex
       ? diagnosticAssistantAfterUser(messages, parentIndex)
       : -1;
+    const recurrenceHistory = probeFresh && recurrenceProbe ? diagnosticRecurrencePrior(messages, currentUserIndex, recurrenceProbe) : null;
+    const frameProbe = diagnosticFrameContinuity(messages, currentUserIndex, latestAssistantIndex);
     const warnings = Array.isArray(lastCore?.issues) ? lastCore.issues : [];
     const compatibility = Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
     const prefixLabel = !probeFresh || !cacheProbe
@@ -3888,8 +3979,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : `${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${cacheProbe.reason || 'other'}`);
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
-      'Diagnostic format: raw-lineage-v1',
-      'Version: 0.63.1',
+      'Diagnostic format: raw-lineage-v2',
+      'Version: 0.63.4',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -3899,8 +3990,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Short-C source lock: ${probeFresh && budget?.sourceAnchor ? 'ON' : 'OFF'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
+      `Recurrence guidance: ${probeFresh && budget ? (budget.recurrence ? 'ON' : 'OFF') : 'n/a'}`,
+      `Recurrence history match: ${recurrenceHistory ? `${recurrenceHistory.status} · hash ${recurrenceHistory.hashHex} · user @${recurrenceHistory.userIndex >= 0 ? recurrenceHistory.userIndex : 'n/a'} · assistant @${recurrenceHistory.assistantIndex >= 0 ? recurrenceHistory.assistantIndex : 'n/a'}${recurrenceHistory.distance != null ? ` · distance ${recurrenceHistory.distance}` : ''}` : 'n/a'}`,
       `Request lineage: ${probeFresh && lineage ? `${lineage.sourceKind || 'UNSEEDED'} · root ${lineage.rootMode || 'n/a'}@${Number(lineage.rootIndex ?? -1)} · parent ${lineage.parentMode || 'n/a'}@${Number(lineage.parentIndex ?? -1)} · depth ${Number(lineage.depth || 0)}` : 'n/a'}`,
       `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
+      `Frame continuity: ${frameProbe.label}`,
+      `Frame regression: ${frameProbe.regression}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
       `Broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
@@ -4037,7 +4132,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.3 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.4 <button id="copy-turn-diag">최근 2턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -4143,7 +4238,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">Short-C Source Lock · eligible short-C is bound to the current lineage root; diagnostic copy = previous + current completed turns, manual/raw-only</div>
+<div class="card muted">Long-Chat Regression Probe · frame continuity + recurrence-history match are computed only for manual diagnostic copy; runtime prompt/generation behavior unchanged</div>
 </div>`;
       const copyTurnDiagButton = document.getElementById('copy-turn-diag');
       if (copyTurnDiagButton) copyTurnDiagButton.onclick = async () => {
@@ -4154,7 +4249,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.63.3] panel error:', e.message);
+      console.log('[simcore/v0.63.4] panel error:', e.message);
     }
   }
 
@@ -4162,7 +4257,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.63.3] UI registration failed:', e.message);
+    console.log('[simcore/v0.63.4] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -4173,5 +4268,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     previousRuntimePromptText = null;
     previousRuntimePromptKey = null;
   });
-  console.log('[simcore/v0.63.3] initialized');
+  console.log('[simcore/v0.63.4] initialized');
 })();

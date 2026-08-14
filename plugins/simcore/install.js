@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.10
+//@version 0.63.11
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.11 Short-C Evidence Boundary:
+// - Tightens eligible Short-C current-event reactions after live evidence showed correct lineage/root/source-lock metadata but prior similar-event details still leaked into the post body and comments
+// - Adds exactly two fixed source-lock-only Prompt contracts: current-event factual claims require support from the authoritative current lineage root, while reaction/opinion/jokes/emphasis remain free
+// - Broader or retrospective event facts remain allowed only when the current user request explicitly asks for broader/comparative/retrospective context
+// - Does not parse source semantics, copy source bodies, scan history, store event facts, repair output, or change Lineage/Handoff/Recurrence/Frame/Time/Recovery/Storage ownership
+// - A/B, ordinary long C, recurrence-owned C, and Short-C without an eligible source lock receive zero new runtime-prompt lines; v0.63.5-0.63.10 behavior/UI remains unchanged
 //
 // v0.63.10 Diagnostics UI Polish III:
 // - UI-only mobile cleanup: empty EDIT/PREFIX chip states use a quiet dash instead of n/a
@@ -2443,6 +2450,8 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push('short_community_source_is_authoritative=1');
     lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');
     lines.push('source_event_identity_and_facts=current_lineage_root_only;do_not_import_prior_similar_event_details=1');
+    lines.push('current_event_fact_claims=current_root_supported_only;omit_absent_details;no_prior_similar_event_fill=1');
+    lines.push('reaction_opinion_jokes_emphasis_are_free=1;broader_retrospective_event_facts_only_if_user_explicitly_asks=1');
     if (p.communitySourceHandoffNewSource) {
       lines.push(`short_community_request_reused_with_new_source=${sourceRootMode}`);
       lines.push('derive_reaction_from_current_source_not_prior_answer=1');
@@ -4026,7 +4035,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.10',
+      'Version: 0.63.11',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4236,7 +4245,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.10</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.11</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

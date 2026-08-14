@@ -41,6 +41,7 @@ const scopeCode = sliceBetween('  function normalizeScopeActivity(raw) {', '  fu
 const context = {};
 vm.createContext(context);
 vm.runInContext(`
+  const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
   function bridgeTimestamp(value) {
     if (value === null || value === undefined || value === '') return null;

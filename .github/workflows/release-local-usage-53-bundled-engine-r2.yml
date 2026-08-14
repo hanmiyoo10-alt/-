@@ -1,0 +1,138 @@
+name: Release Local Usage 5.3 Bundled Engine R2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-local-usage-53-bundled-engine-r2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile-validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Reconcile 5.3 patch idempotently
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq '//@version 3.0.0-alpha.5.3' plugins/usage-dashboard/src/00-runtime-core.part.js; then
+            echo '5.3 product patch already present on main'
+          else
+            python3 .github/lud53/prepatch53.py
+            python3 .github/lud53/patch53.py
+          fi
+          python3 .github/lud53/postpatch53.py
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+
+      - name: Normalize remaining 5.3 regression expectations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('plugins/usage-dashboard/tests/p5-engine-adoption.cjs')
+          s=p.read_text()
+          if "const bundled = version === '3.0.0-alpha.5.3';" not in s:
+              s=s.replace("assert.equal(manifest.components.bridge.state, 'managed-adoption');", "const bundled = version === '3.0.0-alpha.5.3';\nassert.equal(manifest.components.bridge.state, bundled ? 'managed-bundled' : 'managed-adoption');")
+              s=s.replace("assert.equal(manifest.components.bridge.sourceBundled, false);", "assert.equal(manifest.components.bridge.sourceBundled, bundled);")
+          s=s.replace("assert.ok(/^1\\.1\\.(?:[1-9]|\\d{2,})$/.test(String(manifest.components.bridgeManager.version || '')), 'managed engine requires Bridge Manager >=1.1.1');", "{ const parts=String(manifest.components.bridgeManager.version||'').split('.').map(Number); assert.ok(parts[0] > 1 || (parts[0] === 1 && (parts[1] > 1 || (parts[1] === 1 && parts[2] >= 1))), 'managed engine requires Bridge Manager >=1.1.1'); }")
+          p.write_text(s)
+
+          p=Path('plugins/usage-dashboard/tests/p5-bridge-manager.cjs')
+          s=p.read_text()
+          s=s.replace("else assert.equal(manifest.components.bridge.state, 'managed-adoption');", "else if (version === '3.0.0-alpha.5.3') assert.equal(manifest.components.bridge.state, 'managed-bundled');\nelse assert.equal(manifest.components.bridge.state, 'managed-adoption');", 1)
+          s=s.replace("else assert.equal(manifest.components.bridgeManager.state, 'engine-adoption-ready');", "else if (version === '3.0.0-alpha.5.3') assert.equal(manifest.components.bridgeManager.state, 'bundled-engine-ready');\nelse assert.equal(manifest.components.bridgeManager.state, 'engine-adoption-ready');", 1)
+          p.write_text(s)
+
+          p=Path('plugins/usage-dashboard/tests/p5-unified-runtime.cjs')
+          s=p.read_text()
+          s=s.replace("else assert.equal(manifest.components.bridge.state, 'managed-adoption');", "else if (version === '3.0.0-alpha.5.3') assert.equal(manifest.components.bridge.state, 'managed-bundled');\nelse assert.equal(manifest.components.bridge.state, 'managed-adoption');", 1)
+          if "endsWith('/runtime/bridge-engine.mjs')" not in s:
+              s=s.replace("assert.equal(manifest.components.bridge.artifact, null);", "if (version === '3.0.0-alpha.5.3') {\n  assert.ok(String(manifest.components.bridge.artifact || '').endsWith('/runtime/bridge-engine.mjs'));\n  assert.equal(manifest.components.bridge.sourceBundled, true);\n} else assert.equal(manifest.components.bridge.artifact, null);")
+          p.write_text(s)
+
+          p=Path('.github/workflows/release-local-usage-dashboard.yml')
+          s=p.read_text()
+          s=s.replace("grep -q 'managed-adoption' plugins/usage-dashboard/runtime/product-manifest.json", "grep -q 'managed-bundled' plugins/usage-dashboard/runtime/product-manifest.json")
+          s=s.replace("grep -q 'engine-adoption-ready' plugins/usage-dashboard/runtime/product-manifest.json", "grep -q 'bundled-engine-ready' plugins/usage-dashboard/runtime/product-manifest.json")
+          p.write_text(s)
+          PY
+
+      - name: Validate complete 5.3 product
+        shell: bash
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          for test in plugins/usage-dashboard/tests/*.cjs; do
+            echo "=== $test ==="
+            node "$test"
+          done
+          python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
+          grep -Fq '//@version 3.0.0-alpha.5.3' plugins/usage-dashboard/latest.js
+          grep -Fq "const MANAGER_VERSION = '1.2.0';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.3';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "url.pathname === '/engine/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq 'async function syncBridgeEngineBundleIfNeeded(status)' plugins/usage-dashboard/latest.js
+          grep -Fq '"sourceBundled": true' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+
+      - name: Commit reconciled 5.3 to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/lud53/patch53-last.log .github/lud53/validate53-last.log .github/lud53/r2-last.log
+          git add plugins/usage-dashboard .github/workflows/release-local-usage-dashboard.yml
+          if ! git diff --cached --quiet; then
+            git commit -m 'feat: Local Usage Dashboard 3.0.0-alpha.5.3 bundled engine'
+            git push origin HEAD:main
+          else
+            echo 'main already matches 5.3'
+          fi
+
+      - name: Publish product artifacts to release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/lud53-runtime
+          mkdir -p /tmp/lud53-runtime
+          cp plugins/usage-dashboard/latest.js /tmp/lud53-latest.js
+          cp -R plugins/usage-dashboard/runtime/. /tmp/lud53-runtime/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard/runtime
+          cp /tmp/lud53-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/lud53-runtime/. plugins/usage-dashboard/runtime/
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          if ! git diff --cached --quiet; then
+            git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.3 bundled engine'
+            git push origin HEAD:release-usage-dashboard
+          else
+            echo 'release branch already matches 5.3'
+          fi

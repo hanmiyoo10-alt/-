@@ -1,0 +1,119 @@
+name: SimCore 0.63.0 Cache-Aware Prompt Compiler
+
+on:
+  push:
+    branches:
+      - simcore-06300-cache-aware-prompt-compiler
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06300-cache-aware-prompt-compiler
+          fetch-depth: 2
+
+      - name: Patch 0.63.0 artifacts
+        run: python3 plugins/simcore/tools/release_06300_cache_aware_prompt_compiler.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Prompt compiler semantic and cache-floor gates
+        run: node plugins/simcore/tools/test_06300_prompt_compiler.js
+
+      - name: Module-boundary and recovery parity gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          path = 'plugins/simcore/latest.js'
+          old = subprocess.check_output(['git', 'show', f'HEAD:{path}'], text=True)
+          new = Path(path).read_text(encoding='utf-8')
+
+          def module_block(text, name):
+              marker = f'SimCore.define("{name}", function (require, module, exports) {{'
+              start = text.find(marker)
+              if start < 0:
+                  raise SystemExit(f'module missing: {name}')
+              nxt = text.find('\nSimCore.define("', start + len(marker))
+              if nxt < 0:
+                  nxt = text.find('\n(async () => {', start + len(marker))
+              if nxt < 0:
+                  raise SystemExit(f'module end missing: {name}')
+              return text[start:nxt]
+
+          frozen = [
+              'contracts', 'store', 'community', 'recurrence', 'lineage', 'handoff',
+              'kernel', 'time', 'lifecycle', 'reaction', 'structure', 'recovery',
+              'session', 'ops',
+          ]
+          for name in frozen:
+              if module_block(old, name) != module_block(new, name):
+                  raise SystemExit(f'boundary regression: {name} changed')
+
+          old_iife = old[old.index('(async () => {'):]
+          new_iife = new[new.index('(async () => {'):]
+          expected_iife = old_iife.replace('0.62.36', '0.63.0')
+          if new_iife != expected_iife:
+              raise SystemExit('runtime IIFE changed beyond version labels')
+
+          old_storage_calls = old.count('Risuai.pluginStorage.')
+          new_storage_calls = new.count('Risuai.pluginStorage.')
+          if old_storage_calls != new_storage_calls:
+              raise SystemExit(f'pluginStorage call-site drift: {old_storage_calls} -> {new_storage_calls}')
+
+          recovery = module_block(new, 'recovery')
+          required_recovery = [
+              'function isKnownThoughtsPreamble',
+              'function isThoughtsCompatibilityPreamble',
+              '응답 envelope 앞 비정상 preamble',
+              'Thoughts 호환 preamble',
+              'function canonicalizeResponseEnvelope',
+          ]
+          for token in required_recovery:
+              if token not in recovery:
+                  raise SystemExit(f'visible-preamble recovery sentinel missing: {token}')
+
+          if '//@version 0.63.0' not in new:
+              raise SystemExit('0.63.0 metadata missing')
+          if '// v0.63.0 Cache-Aware Prompt Compiler:' not in new:
+              raise SystemExit('0.63.0 changelog missing')
+          if 'community_format_contract_condition=community_blocks_expected>0' not in new:
+              raise SystemExit('stable Community format guard missing')
+
+          print('module boundaries/recovery/IIFE parity OK')
+          PY
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          extra = changed - allowed
+          if extra:
+              raise SystemExit(f'unexpected working-tree changes: {sorted(extra)}')
+          if changed != allowed:
+              raise SystemExit(f'expected exactly SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          PY
+
+      - name: Commit tested artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.0 cache-aware prompt compiler'
+          git push origin HEAD:simcore-06300-cache-aware-prompt-compiler

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.4.9
+//@version 3.0.0-alpha.5.0
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.4.9';
+  const VERSION = '3.0.0-alpha.5.0';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -25,6 +25,9 @@
   const REQUIRED_BRIDGE_VERSION = '1.6.1';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
+  const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
+  const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';
+  const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -174,9 +177,13 @@
     const compatibility = raw.compatibility && typeof raw.compatibility === 'object' ? raw.compatibility : null;
     const modules = normalizeBridgeModules(raw.modules);
     const diagnostics = raw.diagnostics && typeof raw.diagnostics === 'object' ? raw.diagnostics : null;
+    const capabilitiesRaw = raw.bridgeCapabilities ?? raw.capabilities?.bridge ?? raw.capabilities;
+    const capabilities = capabilitiesRaw && typeof capabilitiesRaw === 'object' ? capabilitiesRaw : null;
+    const managerRaw = raw.bridgeManager ?? raw.manager ?? raw.updateManager;
+    const manager = managerRaw && typeof managerRaw === 'object' ? managerRaw : null;
     const protocolVersion = num(raw.protocolVersion) ? Number(raw.protocolVersion) : null;
     const fetchedAt = bridgeTimestamp(raw.fetchedAt) || Date.now();
-    if (!version && !compatibility && !modules && !diagnostics && raw.__bridgeSnapshot !== true) return null;
+    if (!version && !compatibility && !modules && !diagnostics && !capabilities && !manager && raw.__bridgeSnapshot !== true) return null;
     return {
       version,
       protocolVersion,
@@ -184,6 +191,8 @@
       compatible: bridgeCompatibleVersion(version, compatibility),
       modules,
       diagnostics,
+      capabilities,
+      manager,
       fetchedAt
     };
   }
@@ -222,6 +231,24 @@
       cliQueued: numeric(cli?.queued),
       openCircuits: circuits ? Object.values(circuits).filter(row => String(row?.state || '').toLowerCase() === 'open').length : null,
       circuitRecoveries: numeric(circuitStats?.recoveries)
+    };
+  }
+
+
+  function bridgeRuntimeSnapshot() {
+    const bridge = state?.data?.bridge || null;
+    const capabilities = bridge?.capabilities && typeof bridge.capabilities === 'object' ? bridge.capabilities : null;
+    const manager = bridge?.manager && typeof bridge.manager === 'object' ? bridge.manager : null;
+    const truthy = value => value === true || value === 1 || String(value || '').toLowerCase() === 'true';
+    const selfUpdate = truthy(manager?.selfUpdate ?? manager?.self_update ?? capabilities?.selfUpdate ?? capabilities?.self_update);
+    const managed = truthy(manager?.managed ?? capabilities?.managed) || selfUpdate;
+    const managerProtocol = String(manager?.protocol || manager?.managementProtocol || manager?.management_protocol || capabilities?.managementProtocol || capabilities?.management_protocol || capabilities?.managerProtocol || 'none');
+    return {
+      mode: managed ? 'managed-sidecar' : 'legacy-external',
+      managed,
+      selfUpdate,
+      managerProtocol,
+      bridgeVersion:String(bridge?.version || '')
     };
   }
 
@@ -1579,6 +1606,7 @@ async function importLegacyTodayBaselines() {
   function diagText() {
     const d = state.data || {}, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
+    const runtimeBridge = bridgeRuntimeSnapshot();
     const diagUsageKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const diagUsage = d.usageScopes?.scopes?.[diagUsageKey] || null;
     const diagLedgerRows = requestLedgerRowsForScope(diagUsageKey);
@@ -1586,6 +1614,9 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     return [
       `Local Usage Dashboard v${VERSION}`,
+      `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode}`,
+      `Bridge manager: protocol ${runtimeBridge.managerProtocol} · managed ${runtimeBridge.managed ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
+      `Runtime manifest: ${RUNTIME_MANIFEST_URL}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,
       `Source: ${d.source || '—'}`,

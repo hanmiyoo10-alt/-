@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.8
+//@version 0.63.9
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.9 Diagnostics UI Polish II:
+// - UI-only readability pass: adds an overall HEALTHY/CHECK/REGRESSION badge, EDIT CLEAN/REBUILT status, clearer source-idle labeling, and directional frame icons
+// - Collapses the dense secondary metric grid into a default-closed Advanced diagnostics section and visually dims standby/n/a metrics when the panel is opened
+// - Generalizes the old Long-Chat Regression Probe panel footer to Diagnostic Tools while keeping the manual diagnostic-copy behavior unchanged
+// - All display-only classification/counting runs after the existing panel DOM is rendered; no timer, polling, observer, request-path work, storage/API call, prompt line, or state field is added
+// - Keeps all 15 internal modules byte-identical to v0.63.8 and preserves runtime semantics, generation guidance, cache-prefix behavior, Recovery, Source Lock, Period Continuity, and diagnostics
 //
 // v0.63.8 Diagnostics UI Polish:
 // - UI-only panel refresh: adds a sticky header, compact health chips, lineage breadcrumb, frame-continuity summary, and slowest-step performance highlight
@@ -4012,7 +4019,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.8',
+      'Version: 0.63.9',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4189,6 +4196,26 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         .filter(([k, v]) => k !== 'totalMs' && k.endsWith('Ms') && typeof v === 'number' && Number.isFinite(v) && v >= 0)
         .sort((a, b) => b[1] - a[1])[0] || null;
       const panelPerfTopLabel = panelPerfTop ? (panelPerfLabelMap[panelPerfTop[0]] || panelPerfTop[0].replace(/Ms$/, '')) : 'n/a';
+      const panelHealthLabel = !panelFrameOk ? 'REGRESSION' : (panelWarningCount > 0 ? 'CHECK' : 'HEALTHY');
+      const panelHealthClass = !panelFrameOk ? 'bad' : (panelWarningCount > 0 ? 'warn' : 'good');
+      const panelEditPath = String(lastPerf?.editDetail?.path || '');
+      const panelEditRebuilt = panelEditPath === 'manual-edit-rebuilt';
+      const panelEditLabel = !lastPerf ? 'n/a' : (panelEditRebuilt ? 'REBUILT' : 'CLEAN');
+      const panelEditClass = !lastPerf ? 'neutral' : (panelEditRebuilt ? 'warn' : 'good');
+      const panelSourceLabel = panelSourceLock ? 'LOCK' : (lastCommunitySourceHandoffProbe?.newSource ? 'NEW' : '—');
+      const panelSourceClass = (panelSourceLock || lastCommunitySourceHandoffProbe?.newSource) ? 'good' : 'neutral';
+      const panelFrameStepUi = (step) => {
+        const value = String(step || 'n/a');
+        if (value === 'ADVANCED') return '↑ ADVANCED';
+        if (value === 'SAME') return '━ SAME';
+        if (value === 'REGRESSED') return '↓ REGRESSED';
+        if (value === 'RESET_AFTER_VOLUME_ADVANCE') return '↻ RESET';
+        return `· ${value}`;
+      };
+      const panelChapterStep = (Number.isFinite(panelFrameProbe.previous.volume) && Number.isFinite(panelFrameProbe.current.volume)
+        && panelFrameProbe.current.volume > panelFrameProbe.previous.volume && Number.isFinite(panelFrameProbe.previous.chapter)
+        && Number.isFinite(panelFrameProbe.current.chapter) && panelFrameProbe.current.chapter < panelFrameProbe.previous.chapter)
+        ? 'RESET_AFTER_VOLUME_ADVANCE' : diagnosticStepLabel(panelFrameProbe.previous.chapter, panelFrameProbe.current.chapter);
       document.body.innerHTML = `
 <style>
 body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .wrap{max-width:720px;margin:auto;padding:0 20px 20px}
@@ -4197,28 +4224,30 @@ body{margin:0;background:#0b1020;color:#e7ecf6;font:14px system-ui,sans-serif} .
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.k{color:#9fb3d7;font-size:12px}.v{font-weight:700;margin-top:3px}.section-title{font-size:13px;font-weight:800;margin-bottom:10px}.breadcrumb{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.crumb{background:#0e1628;border:1px solid #2a3b5d;border-radius:8px;padding:6px 8px;font-weight:700}.arrow{color:#7185aa}.frame-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.frame-cell{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px}.frame-step{font-size:11px;color:#91a6c9;margin-top:4px}.frame-ok{color:#9ce5c3}.frame-bad{color:#ffb3c0}.bottleneck{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#0e1628;border:1px solid #2a3b5d;border-radius:9px;padding:9px 10px;margin:0 0 8px}.bottleneck span{color:#9fb3d7;font-size:12px}
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px;border-bottom:1px solid #26324a}th{color:#9fb3d7}.muted{color:#8291ad}
 button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px;padding:7px 11px;cursor:pointer}
-.compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
+.compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px;transition:opacity .15s ease,border-color .15s ease}.metric.dim{opacity:.42}.overall-chip{font-size:12px;padding:7px 10px}.advanced-count{font-weight:500;color:#8291ad;font-size:11px;margin-left:5px}.crumb.root{border-color:#385781}.crumb.current{border-color:#285c4b;color:#b7efd5}.crumb.mutedcrumb{opacity:.55}.frame-step.regressed{color:#ffb3c0;font-weight:800}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.8</div><div class="subtitle">Diagnostics UI Polish · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.9</div><div class="subtitle">Diagnostics UI Polish II · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
+<span class="chip overall-chip ${panelHealthClass}">● ${panelHealthLabel}</span>
 <span class="chip neutral">MODE ${escapeHtml(panelModeLabel)}</span>
 <span class="chip ${panelWarningCount === 0 ? 'good' : 'bad'}">WARN ${panelWarningCount}</span>
-<span class="chip ${panelSourceLock ? 'good' : 'neutral'}">SOURCE ${panelSourceLock ? 'LOCK' : 'STANDBY'}</span>
+<span class="chip ${panelSourceClass}">SOURCE ${escapeHtml(panelSourceLabel)}</span>
 <span class="chip ${panelFrameOk ? 'good' : 'bad'}">FRAME ${panelFrameOk ? 'OK' : escapeHtml(panelFrameProbe.regression)}</span>
+<span class="chip ${panelEditClass}">EDIT ${escapeHtml(panelEditLabel)}</span>
 <span class="chip ${panelPrefixClass}">PREFIX ${escapeHtml(promptCacheLabel)}</span>
 </div>
 <div class="card">
 <div class="section-title">Continuity at a glance</div>
-<div class="breadcrumb"><span class="crumb">ROOT ${escapeHtml(panelRootLabel)}</span><span class="arrow">→</span><span class="crumb">PARENT ${escapeHtml(panelParentLabel)}</span><span class="arrow">→</span><span class="crumb">${escapeHtml(panelCurrentLabel)}</span></div>
+<div class="breadcrumb"><span class="crumb root ${panelRootLabel === 'UNSEEDED' ? 'mutedcrumb' : ''}">ROOT ${escapeHtml(panelRootLabel)}</span><span class="arrow">→</span><span class="crumb ${panelParentLabel === 'none' ? 'mutedcrumb' : ''}">PARENT ${escapeHtml(panelParentLabel)}</span><span class="arrow">→</span><span class="crumb current">${escapeHtml(panelCurrentLabel)}</span></div>
 <div class="frame-grid">
-<div class="frame-cell"><div class="k">Volume</div><div class="v">${panelFrameValue(panelFrameProbe.previous.volume)} → ${panelFrameValue(panelFrameProbe.current.volume)}</div><div class="frame-step">${escapeHtml(diagnosticStepLabel(panelFrameProbe.previous.volume, panelFrameProbe.current.volume))}</div></div>
-<div class="frame-cell"><div class="k">Chapter</div><div class="v">${panelFrameValue(panelFrameProbe.previous.chapter)} → ${panelFrameValue(panelFrameProbe.current.chapter)}</div><div class="frame-step">${escapeHtml((Number.isFinite(panelFrameProbe.previous.volume) && Number.isFinite(panelFrameProbe.current.volume) && panelFrameProbe.current.volume > panelFrameProbe.previous.volume && Number.isFinite(panelFrameProbe.previous.chapter) && Number.isFinite(panelFrameProbe.current.chapter) && panelFrameProbe.current.chapter < panelFrameProbe.previous.chapter) ? 'RESET_AFTER_VOLUME_ADVANCE' : diagnosticStepLabel(panelFrameProbe.previous.chapter, panelFrameProbe.current.chapter))}</div></div>
-<div class="frame-cell"><div class="k">Chatindex</div><div class="v">${panelFrameValue(panelFrameProbe.previous.chatindex)} → ${panelFrameValue(panelFrameProbe.current.chatindex)}</div><div class="frame-step">${escapeHtml(diagnosticStepLabel(panelFrameProbe.previous.chatindex, panelFrameProbe.current.chatindex))}</div></div>
+<div class="frame-cell"><div class="k">Volume</div><div class="v">${panelFrameValue(panelFrameProbe.previous.volume)} → ${panelFrameValue(panelFrameProbe.current.volume)}</div><div class="frame-step ${diagnosticStepLabel(panelFrameProbe.previous.volume, panelFrameProbe.current.volume) === 'REGRESSED' ? 'regressed' : ''}">${escapeHtml(panelFrameStepUi(diagnosticStepLabel(panelFrameProbe.previous.volume, panelFrameProbe.current.volume)))}</div></div>
+<div class="frame-cell"><div class="k">Chapter</div><div class="v">${panelFrameValue(panelFrameProbe.previous.chapter)} → ${panelFrameValue(panelFrameProbe.current.chapter)}</div><div class="frame-step ${panelChapterStep === 'REGRESSED' ? 'regressed' : ''}">${escapeHtml(panelFrameStepUi(panelChapterStep))}</div></div>
+<div class="frame-cell"><div class="k">Chatindex</div><div class="v">${panelFrameValue(panelFrameProbe.previous.chatindex)} → ${panelFrameValue(panelFrameProbe.current.chatindex)}</div><div class="frame-step ${diagnosticStepLabel(panelFrameProbe.previous.chatindex, panelFrameProbe.current.chatindex) === 'REGRESSED' ? 'regressed' : ''}">${escapeHtml(panelFrameStepUi(diagnosticStepLabel(panelFrameProbe.previous.chatindex, panelFrameProbe.current.chatindex)))}</div></div>
 </div>
 <div class="${panelFrameOk ? 'frame-ok' : 'frame-bad'}" style="font-weight:800;margin-top:10px">FRAME REGRESSION: ${escapeHtml(panelFrameProbe.regression)}</div>
 </div>
@@ -4236,7 +4265,7 @@ ${broadcastClockRows}
 <div><div class="k">Warnings</div><div class="v">${lastCore.issues.length}</div></div>
 <div><div class="k">Compatibility diagnostics</div><div class="v">${(lastCore.diagnostics || []).length}</div></div>
 </div>
-<div class="card compact">
+<details class="card" id="advanced-diagnostics"><summary>Advanced diagnostics <span class="advanced-count" id="advanced-count"></span></summary><div class="detail-body compact" id="advanced-grid">
 <div class="metric"><div class="k">Current snapshot path</div><div class="v">${currentSnapshotPath}</div></div>
 <div class="metric"><div class="k">Narrative guard</div><div class="v">${narrativeGuardLabel}</div></div>
 <div class="metric"><div class="k">Current-time floor</div><div class="v">${narrativeProbe?.floorApplied ? 'CLAMPED' : 'ON'}</div></div>
@@ -4253,7 +4282,7 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Prompt prefix</div><div class="v">${escapeHtml(promptCacheLabel)}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
 <div class="metric"><div class="k">output</div><div class="v">${lastOutputPerf ? `${lastOutputPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
-</div>
+</div></details>
 ${lastCore.issues.length ? `<div class="card"><div class="k" style="margin-bottom:8px">Latest warnings</div><div>${lastCore.issues.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${(lastCore.diagnostics || []).length ? `<div class="card"><div class="k" style="margin-bottom:8px">Compatibility diagnostics</div><div>${lastCore.diagnostics.map((x) => `• ${escapeHtml(x)}`).join('<br>')}</div></div>` : ''}
 ${lastRuntimePromptBudget ? `<div class="card"><div class="k" style="margin-bottom:8px">Runtime prompt budget (current request)</div><div>${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines · mode ${escapeHtml(lastRuntimePromptBudget.mode || '?')}</div><div class="muted" style="margin-top:5px">reaction_max line ${Number(lastRuntimePromptBudget.reactionMaxChars || 0).toLocaleString('en-US')} chars · reference ${Number(lastRuntimePromptBudget.referenceLines || 0)} lines</div><div class="muted" style="margin-top:5px">active flags: ${escapeHtml([lastRuntimePromptBudget.broadcast ? 'broadcast' : '', lastRuntimePromptBudget.community ? 'community' : '', lastRuntimePromptBudget.narrativeProgression ? 'narrative' : '', lastRuntimePromptBudget.recurrence ? 'recurrence' : '', lastRuntimePromptBudget.handoff ? 'handoff' : '', lastRuntimePromptBudget.ageAnchor ? 'age-anchor' : '', lastRuntimePromptBudget.lineageAnchor ? 'lineage-anchor' : ''].filter(Boolean).join(' · ') || 'base-only')} · diagnostics only · prompt unchanged</div></div>` : ''}
@@ -4327,8 +4356,20 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">Long-Chat Regression Probe · frame continuity + recurrence-history match are computed only for manual diagnostic copy; runtime prompt/generation behavior unchanged</div>
+<div class="card muted"><strong>Diagnostic Tools</strong> · frame continuity + recurrence-history match run only for manual diagnostic copy; runtime prompt/generation behavior unchanged</div>
 </div>`;
+      const advancedGrid = document.getElementById('advanced-grid');
+      const advancedCount = document.getElementById('advanced-count');
+      if (advancedGrid) {
+        const metrics = Array.from(advancedGrid.querySelectorAll('.metric'));
+        let standby = 0;
+        for (const metric of metrics) {
+          const value = String(metric.querySelector('.v')?.textContent || '').trim();
+          const isStandby = value === 'n/a' || value === 'OFF' || value === 'NO REQUEST DATA' || value.startsWith('STANDBY');
+          if (isStandby) { metric.classList.add('dim'); standby += 1; }
+        }
+        if (advancedCount) advancedCount.textContent = `· ${metrics.length - standby} active · ${standby} standby`;
+      }
       const copyTurnDiagButton = document.getElementById('copy-turn-diag');
       if (copyTurnDiagButton) copyTurnDiagButton.onclick = async () => {
         const oldText = copyTurnDiagButton.textContent;

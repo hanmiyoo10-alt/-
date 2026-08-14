@@ -92,7 +92,7 @@ one(
 
 one(
     'resume grace state',
-    '    performanceRuntime.resumePending = false;\n    performanceRuntime.lastResumeDelayMs = elapsed;\n    enqueueRefresh(\'visibility\', true);',
+    "    performanceRuntime.resumePending = false;\n    performanceRuntime.lastResumeDelayMs = elapsed;\n    enqueueRefresh('visibility', true);",
     "    performanceRuntime.resumePending = false;\n    updateRuntimeState('resume-grace-complete');\n    performanceRuntime.lastResumeDelayMs = elapsed;\n    enqueueRefresh('visibility', true);"
 )
 
@@ -128,14 +128,17 @@ one(
 
 one(
     'runtime diagnostics line',
-    "      `Health: ${h.status || '—'}`,\n      `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
-    "      `Health: ${h.status || '—'}`,\n      `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,\n      `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`"
+    '''      `Health: ${h.status || '—'}`,
+      `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,''',
+    '''      `Health: ${h.status || '—'}`,
+      `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
+      `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,'''
 )
 
 one(
     'runtime panel line',
-    '<p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard ·',
-    "<p>Updater · GitHub HTTPS · ${VERSION}</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard ·"
+    '''<p>Updater · GitHub HTTPS · ${VERSION}</p><p>Performance Guard ·''',
+    '''<p>Updater · GitHub HTTPS · ${VERSION}</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard ·'''
 )
 
 one(

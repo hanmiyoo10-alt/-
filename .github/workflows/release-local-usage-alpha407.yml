@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # rerun after aligning the cache HIT/MISS regression marker
           python3 - <<'PY'
           from pathlib import Path
           p = Path('plugins/usage-dashboard/tools/release_alpha407_patch.py')

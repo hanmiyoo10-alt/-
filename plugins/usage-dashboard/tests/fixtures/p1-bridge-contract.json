@@ -1,0 +1,56 @@
+{
+  "protocolVersion": 2,
+  "bridgeVersion": "1.6.1",
+  "fetchedAt": "2026-08-14T07:50:00.000Z",
+  "modules": {
+    "activity": {
+      "status": "ok",
+      "stale": false,
+      "fetchedAt": "2026-08-14T07:49:59.500Z",
+      "durationMs": 142
+    },
+    "credits": {
+      "status": "partial",
+      "stale": true,
+      "updatedAt": "2026-08-14T07:49:55.000Z",
+      "elapsedMs": 921,
+      "errorCode": "timeout",
+      "errorType": "upstream_error",
+      "error": {
+        "message": "Credits CLI timeout"
+      }
+    }
+  },
+  "usageScopes": {
+    "scopes": {
+      "all": {
+        "totalRequests": 8,
+        "totalCost": 2.5,
+        "providers": [
+          { "name": "google-ai-studio", "requests": 8, "cost": 2.5 }
+        ],
+        "models": [
+          { "name": "google-ai-studio/gemini-test", "requests": 8, "cost": 2.5 }
+        ]
+      },
+      "credits": {
+        "totalRequests": 0,
+        "totalCost": 0,
+        "cacheCount": 0,
+        "cacheRate": 0
+      }
+    },
+    "errors": {
+      "credits": {
+        "code": "timeout",
+        "type": "upstream_error",
+        "message": "Credits CLI timeout"
+      }
+    }
+  },
+  "analyticsScopes": {
+    "errors": {
+      "devpass": "analytics unavailable"
+    }
+  }
+}

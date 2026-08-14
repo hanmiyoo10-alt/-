@@ -37,6 +37,7 @@ jobs:
           node plugins/usage-dashboard/tests/p2-build.cjs
           node plugins/usage-dashboard/tests/p3-ui.cjs
           node plugins/usage-dashboard/tests/p3-recent.cjs
+          node plugins/usage-dashboard/tests/p4-render.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
@@ -75,6 +76,10 @@ jobs:
           grep -q 'Provider · 요청 / 비용 / 효율' plugins/usage-dashboard/latest.js
           grep -q '최근 요청 · 메타데이터' plugins/usage-dashboard/latest.js
           grep -q 'class="panel wide advanced-panel"' plugins/usage-dashboard/latest.js
+          grep -q 'Render cache: widget html writes' plugins/usage-dashboard/latest.js
+          grep -q 'P4 render: closed-panel skip · widget DOM dedup' plugins/usage-dashboard/latest.js
+          grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js
+          grep -q 'widgetRenderCache.html !== nextHtml' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
           grep -q 'Stall/render coincidence:' plugins/usage-dashboard/latest.js
           grep -q 'Bridge detail:' plugins/usage-dashboard/latest.js

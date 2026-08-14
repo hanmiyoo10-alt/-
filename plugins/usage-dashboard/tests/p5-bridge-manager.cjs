@@ -1,4 +1,5 @@
 // Node --check must receive a recognized .cjs temp extension on device runtimes.
+// Android proc-net fallback regression lock for Bridge Manager 1.1.2.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');

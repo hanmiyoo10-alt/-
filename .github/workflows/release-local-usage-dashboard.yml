@@ -5,8 +5,11 @@ on:
     branches: [main]
     paths:
       - 'plugins/usage-dashboard/latest.js'
+      - 'plugins/usage-dashboard/src/**'
       - 'plugins/usage-dashboard/contracts/**'
       - 'plugins/usage-dashboard/tests/**'
+      - 'plugins/usage-dashboard/tools/build_usage_dashboard.cjs'
+      - 'plugins/usage-dashboard/tools/split_usage_dashboard.cjs'
       - '.github/workflows/release-local-usage-dashboard.yml'
   workflow_dispatch:
 
@@ -27,20 +30,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
           node plugins/usage-dashboard/tests/foundation.cjs
           node plugins/usage-dashboard/tests/p1-contract.cjs
+          node plugins/usage-dashboard/tests/p2-build.cjs
+          python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/foundation-snapshot.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/cache-zero.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/state-v3.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/p1-bridge-contract.json >/dev/null
+          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 10
           git diff --check
 
           VERSION="$(sed -n 's#^//@version ##p' plugins/usage-dashboard/latest.js | head -n1)"
           test -n "$VERSION"
           grep -Fq "const VERSION = '$VERSION';" plugins/usage-dashboard/latest.js
+          grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/src/manifest.json
           case "$VERSION" in
             3.0.0-alpha.*|3.0.0-beta.*|3.0.0) ;;
             *) echo "unexpected Usage Dashboard version: $VERSION"; exit 1 ;;

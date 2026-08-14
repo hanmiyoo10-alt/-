@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'plugins/usage-dashboard/latest.js'
+      - 'plugins/usage-dashboard/contracts/**'
+      - 'plugins/usage-dashboard/tests/**'
       - '.github/workflows/release-local-usage-dashboard.yml'
   workflow_dispatch:
 
@@ -11,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  validate-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -20,26 +23,33 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Patch alpha.3.38 to alpha.3.39 resume merge diagnostics
+      - name: Validate Usage Dashboard artifact and contracts
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha339_patch.py
-          python3 plugins/usage-dashboard/tools/release_alpha339_patch.py
           node --check plugins/usage-dashboard/latest.js
+          node plugins/usage-dashboard/tests/foundation.cjs
+          python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/foundation-snapshot.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/cache-zero.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/state-v3.json >/dev/null
           git diff --check
-          grep -q '^//@version 3.0.0-alpha.3.39$' plugins/usage-dashboard/latest.js
-          grep -q "const VERSION = '3.0.0-alpha.3.39';" plugins/usage-dashboard/latest.js
-          grep -q "activeRefreshReason:''" plugins/usage-dashboard/latest.js
-          grep -q "lastResumeRequestedReason:''" plugins/usage-dashboard/latest.js
-          grep -q "lastResumeActualReason:''" plugins/usage-dashboard/latest.js
-          grep -q 'lastResumeRefreshWasCoalesced:false' plugins/usage-dashboard/latest.js
-          grep -q "lastResumeCoalescedIntoReason:''" plugins/usage-dashboard/latest.js
-          grep -q "normalizedReason === 'visibility' && performanceRuntime.resumeMeasurePending" plugins/usage-dashboard/latest.js
-          grep -q "performanceRuntime.lastResumeRefreshWasCoalesced = true;" plugins/usage-dashboard/latest.js
+
+          VERSION="$(sed -n 's#^//@version ##p' plugins/usage-dashboard/latest.js | head -n1)"
+          test -n "$VERSION"
+          grep -Fq "const VERSION = '$VERSION';" plugins/usage-dashboard/latest.js
+          case "$VERSION" in
+            3.0.0-alpha.*|3.0.0-beta.*|3.0.0) ;;
+            *) echo "unexpected Usage Dashboard version: $VERSION"; exit 1 ;;
+          esac
+
+          grep -q 'const SNAPSHOT_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -q 'const RECENT_REQUEST_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -q 'function hydrateState(saved)' plugins/usage-dashboard/latest.js
+          grep -q 'Schema: snapshot v' plugins/usage-dashboard/latest.js
+          grep -q 'Usage detail:' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
-          grep -q 'Resume Route · requested' plugins/usage-dashboard/latest.js
-          grep -q 'Resume refresh: started' plugins/usage-dashboard/latest.js
           grep -q 'Stall/render coincidence:' plugins/usage-dashboard/latest.js
           grep -q 'Bridge detail:' plugins/usage-dashboard/latest.js
           grep -q 'Performance settings:' plugins/usage-dashboard/latest.js
@@ -54,43 +64,29 @@ jobs:
           grep -q 'Analytics · 24h / 7d / 30d' plugins/usage-dashboard/latest.js
           grep -q '24h Usage Scope' plugins/usage-dashboard/latest.js
           grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+
+          printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt
           cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
 
-      - name: Commit staged release to main
+      - name: Publish validated artifact to release-usage-dashboard
         shell: bash
         run: |
           set -euo pipefail
-          if ! git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add plugins/usage-dashboard/latest.js
-            git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.39 resume merge diagnostics'
-            git pull --rebase origin main
-            git push origin HEAD:main
-          else
-            echo 'main latest.js already matches alpha.3.39'
-          fi
-
-      - name: Publish alpha.3.39 to release-usage-dashboard
-        shell: bash
-        run: |
-          set -euo pipefail
+          VERSION="$(cat /tmp/usage-dashboard-version.txt)"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin release-usage-dashboard
           git switch -C release-usage-dashboard origin/release-usage-dashboard
           cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.39$' plugins/usage-dashboard/latest.js
-          grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
+          grep -Fq "//@version $VERSION" plugins/usage-dashboard/latest.js
           grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
           git diff --check
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'release-usage-dashboard already matches alpha.3.39'
+            echo "release-usage-dashboard already matches $VERSION"
             exit 0
           fi
           test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: publish Local Usage Dashboard v3.0.0-alpha.3.39'
+          git commit -m "release: publish Local Usage Dashboard $VERSION"
           git push origin HEAD:release-usage-dashboard

@@ -20,8 +20,7 @@ for (const marker of [
   'function hourlyRequestDrilldownHtml(scopeKey)',
   'data-usage-hour=',
   '시간별 요청 · 24h 로컬 관측',
-  '캐시 HIT',
-  '캐시 MISS',
+  "row.cacheHit ? 'HIT' : 'MISS'",
   'Request ledger: rows ${',
   'Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS',
 ]) {

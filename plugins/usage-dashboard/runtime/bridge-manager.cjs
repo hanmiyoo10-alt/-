@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.1.2';
+const MANAGER_VERSION = '1.1.3';
 const PRODUCT_VERSION = '3.0.0-alpha.5.2';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
@@ -262,25 +262,71 @@ function writeEngineService(candidate, down = true) {
   const downFile = path.join(ENGINE_SERVICE_DIR, 'down');
   if (down) fs.writeFileSync(downFile, ''); else { try { fs.unlinkSync(downFile); } catch (_) {} }
 }
-async function bridgeSnapshot(timeoutMs = 2500) {
+const BRIDGE_PROBE_PATH = '/__local_usage_runtime_probe__';
+async function bridgeAuthProbe(timeoutMs = 1500) {
   const token = readToken();
   if (!token) throw new Error('bridge token missing');
   return new Promise((resolve, reject) => {
-    const req = http.request({host:ENGINE_HOST,port:ENGINE_PORT,path:'/snapshot',method:'GET',headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}}, res => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
+    const chunks = [];
+    let total = 0;
+    const req = http.request({host:ENGINE_HOST,port:ENGINE_PORT,path:BRIDGE_PROBE_PATH,method:'GET',headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}}, res => {
+      res.on('data', chunk => {
+        total += chunk.length;
+        if (total > 8192) return req.destroy(new Error('bridge auth probe response too large'));
+        chunks.push(chunk);
+      });
       res.on('end', () => {
+        const statusCode = Number(res.statusCode);
         const text = Buffer.concat(chunks).toString('utf8');
-        if (Number(res.statusCode) < 200 || Number(res.statusCode) >= 300) return reject(new Error(`bridge HTTP ${res.statusCode}`));
-        try { resolve(JSON.parse(text)); } catch (_) { reject(new Error('bridge JSON invalid')); }
+        if (statusCode !== 404) return reject(new Error(`bridge auth probe HTTP ${statusCode}`));
+        let body;
+        try { body = JSON.parse(text); } catch (_) { return reject(new Error('bridge auth probe JSON invalid')); }
+        if (String(body?.error || '') !== 'Not found') return reject(new Error('bridge auth probe signature mismatch'));
+        resolve({ok:true,statusCode});
       });
     });
-    req.setTimeout(timeoutMs, () => req.destroy(new Error('bridge snapshot timeout')));
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('bridge auth probe timeout')));
     req.on('error', reject); req.end();
   });
 }
+async function bridgeHealth(timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    const req = http.request({host:ENGINE_HOST,port:ENGINE_PORT,path:'/health',method:'GET',headers:{Accept:'application/json','Cache-Control':'no-cache'}}, res => {
+      res.on('data', chunk => {
+        total += chunk.length;
+        if (total > 64 * 1024) return req.destroy(new Error('bridge health response too large'));
+        chunks.push(chunk);
+      });
+      res.on('end', () => {
+        const statusCode = Number(res.statusCode);
+        if (statusCode < 200 || statusCode >= 300) return reject(new Error(`bridge health HTTP ${statusCode}`));
+        let body;
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (_) { return reject(new Error('bridge health JSON invalid')); }
+        if (body?.ok !== true || String(body?.status || '') !== 'healthy' || Number(body?.port) !== ENGINE_PORT) return reject(new Error('bridge health signature mismatch'));
+        resolve(body);
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('bridge health timeout')));
+    req.on('error', reject); req.end();
+  });
+}
+async function bridgeIdentity(timeoutMs = 1500) {
+  const [probe, health] = await Promise.all([bridgeAuthProbe(timeoutMs), bridgeHealth(timeoutMs)]);
+  return {ok:true,probe,health,bridgeVersion:String(health?.version || '')};
+}
 async function bridgeReachable(timeoutMs = 700) {
-  try { await bridgeSnapshot(timeoutMs); return true; } catch (_) { return false; }
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = value => { if (!settled) { settled = true; resolve(value); } };
+    const req = http.request({host:ENGINE_HOST,port:ENGINE_PORT,path:'/health',method:'GET',headers:{Connection:'close'}}, res => {
+      res.resume();
+      finish(true);
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('bridge reachability timeout')));
+    req.on('error', () => finish(false)); req.end();
+  });
 }
 async function waitForManagedEngine(expected, timeoutMs = 12000) {
   const started = Date.now();
@@ -291,31 +337,31 @@ async function waitForManagedEngine(expected, timeoutMs = 12000) {
     const processVerified = Boolean(service.running && service.pid && processMatchesSpec(service.pid, expected));
     if (service.running && service.pid && (pid === service.pid || (!pid && processVerified))) {
       try {
-        const snap = await bridgeSnapshot();
-        return {ok:true,service,pid:service.pid,snapshot:snap,ownership:pid === service.pid ? 'proc-net' : 'service-process'};
+        const identity = await bridgeIdentity();
+        return {ok:true,service,pid:service.pid,identity,bridgeVersion:identity.bridgeVersion,ownership:pid === service.pid ? 'proc-net' : 'service-process'};
       } catch (e) { lastError = e?.message || String(e); }
     }
     await sleep(350);
   }
-  return {ok:false,error:lastError || 'managed engine did not become healthy',service:serviceStatus(),pid:listenerPid(ENGINE_PORT)};
+  return {ok:false,error:lastError || 'managed engine did not become verified',service:serviceStatus(),pid:listenerPid(ENGINE_PORT)};
 }
 async function engineRuntimeStatus() {
   const descriptor = readDescriptor();
   const service = serviceStatus();
   const pid = listenerPid(ENGINE_PORT);
-  let snapshot = null;
-  try { snapshot = await bridgeSnapshot(1200); } catch (_) {}
+  let identity = null;
+  try { identity = await bridgeIdentity(1500); } catch (_) {}
   const processVerified = Boolean(descriptor && service.running && service.pid && processMatchesSpec(service.pid, descriptor));
-  const managed = Boolean(descriptor && snapshot && service.running && service.pid && (pid === service.pid || (!pid && processVerified)));
+  const managed = Boolean(descriptor && identity && service.running && service.pid && (pid === service.pid || (!pid && processVerified)));
   const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
-  const fallbackNeedsHealth = candidate?.reason === 'canonical-pidfile';
-  const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsHealth || Boolean(snapshot))) : null;
-  const candidateReason = fallbackNeedsHealth && !snapshot ? 'pidfile-health-unverified' : String(candidate?.reason || '');
+  const fallbackNeedsProbe = candidate?.reason === 'canonical-pidfile';
+  const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsProbe || Boolean(identity))) : null;
+  const candidateReason = fallbackNeedsProbe && !identity ? 'pidfile-auth-unverified' : String(candidate?.reason || '');
   return {
     engineManaged:managed,
     engineMode:managed ? 'managed-adopted' : 'legacy-external',
     engineService:ENGINE_SERVICE,
-    engineVersion:String(snapshot?.bridgeVersion || snapshot?.health?.bridgeVersion || ''),
+    engineVersion:String(identity?.bridgeVersion || ''),
     candidateSafe,
     candidateReason,
     adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'
@@ -329,7 +375,7 @@ async function adoptEngine() {
     const retryable = ['listener-unresolved','pidfile-missing','pidfile-stale','process-unavailable'].includes(String(candidate.reason || ''));
     return {ok:false,adopted:false,state:'unsafe-candidate',candidateSafe:false,retryable,error:`engine adoption refused: ${candidate.reason}`};
   }
-  try { await bridgeSnapshot(1200); }
+  try { await bridgeIdentity(1500); }
   catch (e) { return {ok:false,adopted:false,state:'bridge-unhealthy',candidateSafe:true,retryable:true,error:e?.message || String(e)}; }
   writeEngineService(candidate, true);
   try {
@@ -359,7 +405,7 @@ async function adoptEngine() {
       script:candidate.script,
       nodeArgs:candidate.nodeArgs,
       scriptArgs:candidate.scriptArgs,
-      sourceVersion:String(verified.snapshot?.bridgeVersion || '')
+      sourceVersion:String(verified.bridgeVersion || '')
     };
     fs.writeFileSync(ENGINE_DESCRIPTOR, JSON.stringify(descriptor, null, 2) + '\n', {mode:0o600});
     return {ok:true,adopted:true,state:'adopted',engineManaged:true,engineMode:'managed-adopted',engineService:ENGINE_SERVICE,engineVersion:descriptor.sourceVersion,candidateSafe:true};

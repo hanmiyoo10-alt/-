@@ -10,7 +10,7 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-# 00 runtime/core: version, counters/cache state, and closed-panel scheduler guard.
+# 00 runtime/core: version plus render cache/counters.
 p = ROOT / '00-runtime-core.part.js'
 s = p.read_text()
 s = replace_once(s, '//@version 3.0.0-alpha.4.4', '//@version 3.0.0-alpha.4.5', 'metadata version')
@@ -27,6 +27,11 @@ s = replace_once(
     'panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,runtimeState:',
     'render counters',
 )
+p.write_text(s)
+
+# 50 settings UI: automatic refreshes must not rebuild a closed panel.
+p = ROOT / '50-settings-ui.part.js'
+s = p.read_text()
 s = replace_once(
     s,
     "if (document.body?.dataset?.panelOpen !== '1') return;",

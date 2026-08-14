@@ -1,0 +1,109 @@
+name: SimCore 0.62.36 Prompt Cache Probe Branch Build
+
+on:
+  push:
+    branches:
+      - simcore-06236-prompt-cache-probe
+    paths:
+      - '.github/workflows/simcore-06236-prompt-cache-probe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout probe branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06236-prompt-cache-probe
+          fetch-depth: 0
+
+      - name: Apply 0.62.36 probe patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 plugins/simcore/tools/release_06236_prompt_cache_probe.py
+
+      - name: Validate syntax and artifact parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.62.36$' plugins/simcore/latest.js
+          grep -q 'Prompt Cache Probe' plugins/simcore/latest.js
+          grep -q 'Prompt cache probe (SimCore runtime block)' plugins/simcore/latest.js
+          grep -q 'does not observe or infer PocketRisu/provider cache hit/miss' plugins/simcore/latest.js
+
+      - name: Verify runtime prompt byte parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-06235.js').read_text()
+          new = Path('plugins/simcore/latest.js').read_text()
+
+          def prompt_block(src):
+              a = src.index('SimCore.define("prompt"')
+              b = src.index('SimCore.define("session"', a)
+              return src[a:b]
+
+          if prompt_block(old) != prompt_block(new):
+              raise SystemExit('FAIL: Prompt module changed; runtime prompt parity not guaranteed')
+
+          def initial_state_block(src):
+              a = src.index('function initialState() {')
+              b = src.index('\n}\n\nfunction reconcileState', a) + 2
+              return src[a:b]
+
+          if initial_state_block(old) != initial_state_block(new):
+              raise SystemExit('FAIL: initialState changed')
+
+          if old.count('pluginStorage') != new.count('pluginStorage'):
+              raise SystemExit('FAIL: pluginStorage call-site count changed')
+
+          print('PASS: prompt module byte-identical to 0.62.35')
+          print('PASS: initialState byte-identical to 0.62.35')
+          print('PASS: pluginStorage call-site count unchanged')
+          PY
+
+      - name: Verify probe is memory-only and bounded
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          s = Path('plugins/simcore/latest.js').read_text()
+          required = [
+              'let previousRuntimePromptText = null;',
+              'let previousRuntimePromptKey = null;',
+              'function buildRuntimePromptCacheProbe(previousText, currentText)',
+              'previousRuntimePromptText = runtimeBudgetText;',
+              'previousRuntimePromptKey = runtimePromptKey;',
+              "reason: stable ? 'stable' : promptChangeReason(previousChangedLine, currentChangedLine)",
+          ]
+          for token in required:
+              if token not in s:
+                  raise SystemExit('FAIL: missing probe token: ' + token)
+          if 'simcore_prompt_cache' in s or '$simcore_core_prompt_cache' in s:
+              raise SystemExit('FAIL: unexpected persistent cache key')
+          print('PASS: single previous runtime block only; no persistent cache key')
+          PY
+
+      - name: Commit generated plugin artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- plugins/simcore/latest.js plugins/simcore/install.js; then
+            echo 'No generated SimCore changes'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.62.36 prompt cache probe'
+          git push origin HEAD:simcore-06236-prompt-cache-probe

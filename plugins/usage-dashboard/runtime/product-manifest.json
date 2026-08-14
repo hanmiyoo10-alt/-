@@ -1,0 +1,27 @@
+{
+  "format": 1,
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.0",
+  "releaseBranch": "release-usage-dashboard",
+  "architecture": "single-product-modular-sidecar",
+  "components": {
+    "plugin": {
+      "mode": "bundled",
+      "version": "3.0.0-alpha.5.0",
+      "artifact": "plugins/usage-dashboard/latest.js"
+    },
+    "bridge": {
+      "mode": "sidecar",
+      "state": "legacy-external",
+      "requiredVersion": "1.6.1",
+      "managementProtocol": "bridge-manager-v1",
+      "managed": false,
+      "selfUpdate": false,
+      "artifact": null
+    }
+  },
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  }
+}

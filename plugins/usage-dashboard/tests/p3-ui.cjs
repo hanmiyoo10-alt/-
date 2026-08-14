@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 
 const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
-const alpha4 = version.match(/^3\.0\.0-alpha\.4\.(\d+)$/);
-assert.ok(alpha4 ? Number(alpha4[1]) >= 3 : /^(3\.0\.0-beta\.|3\.0\.0$)/.test(version), `P3 UI requires alpha.4.3+; got ${version}`);
+const alpha = version.match(/^3\.0\.0-alpha\.(\d+)\.(\d+)$/);
+assert.ok(alpha ? (Number(alpha[1]) > 4 || (Number(alpha[1]) === 4 && Number(alpha[2]) >= 3)) : /^(3\.0\.0-beta\.|3\.0\.0$)/.test(version), `P3 UI requires alpha.4.3+; got ${version}`);
 assert.ok(source.includes(`const VERSION = '${version}';`), 'runtime version must match metadata');
 
 for (const marker of [

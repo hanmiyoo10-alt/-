@@ -1,6 +1,7 @@
   function diagText() {
     const d = state.data || {}, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
+    const runtimeBridge = bridgeRuntimeSnapshot();
     const diagUsageKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const diagUsage = d.usageScopes?.scopes?.[diagUsageKey] || null;
     const diagLedgerRows = requestLedgerRowsForScope(diagUsageKey);
@@ -8,6 +9,9 @@
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     return [
       `Local Usage Dashboard v${VERSION}`,
+      `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode}`,
+      `Bridge manager: protocol ${runtimeBridge.managerProtocol} · managed ${runtimeBridge.managed ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
+      `Runtime manifest: ${RUNTIME_MANIFEST_URL}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,
       `Source: ${d.source || '—'}`,

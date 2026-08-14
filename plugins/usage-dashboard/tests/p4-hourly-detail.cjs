@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 
 const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
-const alpha4 = version.match(/^3\.0\.0-alpha\.4\.(\d+)$/);
-const enabled = alpha4 ? Number(alpha4[1]) >= 8 : /^(3\.0\.0-beta\.|3\.0\.0$)/.test(version);
+const alpha = version.match(/^3\.0\.0-alpha\.(\d+)\.(\d+)$/);
+const enabled = alpha ? (Number(alpha[1]) > 4 || (Number(alpha[1]) === 4 && Number(alpha[2]) >= 8)) : /^(3\.0\.0-beta\.|3\.0\.0$)/.test(version);
 
 if (!enabled) {
   console.log(`usage-dashboard P4 hourly detail regression: skipped · ${version}`);

@@ -8,7 +8,7 @@ const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const json = rel => JSON.parse(read(rel));
 const source = read('latest.js');
 
-assert.match(source, /^\/\/@version 3\.0\.0-alpha\.4\./m);
+assert.match(source, /^\/\/@version (?:3\.0\.0-alpha\.\d+\.\d+|3\.0\.0-beta\.\d+|3\.0\.0)$/m);
 assert.match(source, /function normalizeBridgeModule\(name, row\)/);
 assert.match(source, /function normalizeErrorMap\(raw\)/);
 assert.match(source, /function usageCacheText\(scope\)/);

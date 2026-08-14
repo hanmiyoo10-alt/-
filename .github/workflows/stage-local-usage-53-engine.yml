@@ -24,43 +24,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected=(
-            472b576f9ee36ddd09fd5522d80dd4d876f2de7cf0d46dc54136755468f0b3c1
-            2e42728f49782a55af00f4a4e837765e80326e80e1a7c92d6a13ee91d8339a82
-            2353af1da55d5a53c7d50ed809c2680dad29ccaa80b4e5181e1dc7a62bf8371d
-            00c31d23f783b2de8998b4bbb11d17891bda271797022ca85d9b26847edebd31
-            7c368576501e0f42b960a98c48abb7b60d8ee6b7545faafeed48d992d487c89d
-            72c99bd52f41eacb3791b0ec35d59eed8e4df640c0d4b6926dcd794c51e592bc
-            ac80e8f41eae72019af0d687e90c713199c65125995cfeed615378715329fefd
-            7ce72cdc7df3208274737a8393be41ad33a43d7335d7ef6962338462c3a9a4a0
-          )
-          bad=0
-          for i in 00 01 02 03 04 05 06 07; do
-            n=15000; [ "$i" = 07 ] && n=6632
-            actual="$(head -c "$n" ".github/lud53/bridge.b64.$i" | sha256sum | awk '{print $1}')"
-            idx=$((10#$i))
-            echo "chunk $i · $actual"
-            if [ "$actual" != "${expected[$idx]}" ]; then echo "chunk $i mismatch"; bad=1; fi
-          done
-          [ "$bad" -eq 0 ] || exit 1
+          check() { test "$(sha256sum "$1" | awk '{print $1}')" = "$2" || { echo "hash mismatch: $1"; exit 1; }; }
+          check .github/lud53/fix00.0 c8a015eb906b544229bbb8d9e8f5a8bfa872622840e12a0307e0bbcc973160f2
+          check .github/lud53/fix00.1 c6d39a66c2eec44bff38c4729f7c611ae2173b5cee8a4f2481c86715ac88bcce
+          check .github/lud53/fix00.2 6eab38bd206912912420c30a69a1ccfe3e1739783e7c192f4cbb8e4000eb214a
+          check .github/lud53/fix04.0 2077dcf0bee0cb34b7538ba6949ad3f01647d8adc9e7eca6bb5ac198a7ae5586
+          check .github/lud53/fix04.1 16c9d32cd4406aef1b4257ae8fe9c4350e79fe1828219db25231b668c3d5d0e6
+          check .github/lud53/fix04.2a 69b1e615d7eda803920b3edf22883ab50ccd9a5900e1351719670c6b6044ba33
+          check .github/lud53/fix04.2b a632cc327d3e355cb2415e2b9e1eaed151c6729ce2c8aae2d713eedf4a0600ba
+          cat .github/lud53/fix00.0 .github/lud53/fix00.1 .github/lud53/fix00.2 > /tmp/00
+          cat .github/lud53/fix04.0 .github/lud53/fix04.1 .github/lud53/fix04.2a .github/lud53/fix04.2b > /tmp/04
+          check /tmp/00 472b576f9ee36ddd09fd5522d80dd4d876f2de7cf0d46dc54136755468f0b3c1
+          check /tmp/04 7c368576501e0f42b960a98c48abb7b60d8ee6b7545faafeed48d992d487c89d
           mkdir -p plugins/usage-dashboard/runtime
           {
-            head -c 15000 .github/lud53/bridge.b64.00
+            cat /tmp/00
             head -c 15000 .github/lud53/bridge.b64.01
             head -c 15000 .github/lud53/bridge.b64.02
             head -c 15000 .github/lud53/bridge.b64.03
-            head -c 15000 .github/lud53/bridge.b64.04
+            cat /tmp/04
             head -c 15000 .github/lud53/bridge.b64.05
             head -c 15000 .github/lud53/bridge.b64.06
             head -c 6632 .github/lud53/bridge.b64.07
           } > /tmp/bridge.b64
-          echo "base64 sha · $(sha256sum /tmp/bridge.b64 | awk '{print $1}')"
-          test "$(sha256sum /tmp/bridge.b64 | awk '{print $1}')" = 'e0b48fcd5bc816185251c2039a063b1a75f91bb3c71f9e61eed7a4baf38a9bb9'
+          check /tmp/bridge.b64 e0b48fcd5bc816185251c2039a063b1a75f91bb3c71f9e61eed7a4baf38a9bb9
           base64 -d /tmp/bridge.b64 > plugins/usage-dashboard/runtime/bridge-engine.mjs
-          echo "engine bytes · $(wc -c < plugins/usage-dashboard/runtime/bridge-engine.mjs)"
-          echo "engine sha · $(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           test "$(wc -c < plugins/usage-dashboard/runtime/bridge-engine.mjs)" -eq 83723
-          test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
+          check plugins/usage-dashboard/runtime/bridge-engine.mjs fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const VERSION = '1.6.1';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const HOST = '127.0.0.1';" plugins/usage-dashboard/runtime/bridge-engine.mjs

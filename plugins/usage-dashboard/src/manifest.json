@@ -3,7 +3,7 @@
   "plugin": "Local Usage Dashboard",
   "version": "3.0.0-alpha.4.9",
   "source": "plugins/usage-dashboard/latest.js",
-  "artifactSha256": "976856d7f2cae02a1e269fc08eddffa126877a00cf60c8442c9209b12d7609e5",
+  "artifactSha256": "c734b18e7f6c72eacee5a8f8627a4211342679a6b0e030352bc697e94bb92b9e",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
@@ -14,8 +14,8 @@
     {
       "file": "10-usage-data.part.js",
       "label": "usage normalization",
-      "bytes": 34685,
-      "sha256": "16060f139c64d8c245e2c8b45e46cd68895fdc565f85f21c69540976589dab6a"
+      "bytes": 35219,
+      "sha256": "84ac689146adee5f9e0058c9e67bac9946ee791b46576978f045bfe798c61087"
     },
     {
       "file": "20-bridge-io.part.js",

@@ -25,7 +25,8 @@ for (const marker of [
   'usage.input_tokens_details.cached_tokens',
 ]) assert.ok(source.includes(marker), `missing request fidelity marker: ${marker}`);
 
-assert.ok(source.includes("row?.timestampPrecision === 'hour' || row?.timestampPrecision === 'hour-estimated'"), 'bucket timestamps must not look exact');
+assert.ok(source.includes("precision === 'hour' || precision === 'hour-estimated'"), 'bucket timestamps must not look exact');
+assert.ok(source.includes("requestTimestampPrecision(row.timestamp, row.timestampSource, row.requestNumber)"), 'persisted ledger rows must infer missing precision');
 assert.ok(source.includes('cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows}'), 'cache coverage diagnostic missing');
 assert.ok(source.includes('Hourly detail: provider/model summary · cache coverage · click-only partial render'), 'alpha.4.8 hourly detail regression');
 assert.ok(source.includes('P4 partial: auto section patch · diagnostics live · settings preserved'), 'P4 partial regression');

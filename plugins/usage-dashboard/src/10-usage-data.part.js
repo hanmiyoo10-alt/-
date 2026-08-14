@@ -85,8 +85,9 @@
 
   function requestLedgerCapabilities(rows) {
     const list = Array.isArray(rows) ? rows : [];
-    const exact = list.filter(row => row?.timestampPrecision === 'exact').length;
-    const bucket = list.filter(row => row?.timestampPrecision === 'hour' || row?.timestampPrecision === 'hour-estimated').length;
+    const precisionOf = row => row?.timestampPrecision && row.timestampPrecision !== 'unknown' ? row.timestampPrecision : requestTimestampPrecision(row?.timestamp, row?.timestampSource, row?.requestNumber);
+    const exact = list.filter(row => precisionOf(row) === 'exact').length;
+    const bucket = list.filter(row => ['hour','hour-estimated'].includes(precisionOf(row))).length;
     const cacheKnown = list.filter(row => typeof row?.cacheHit === 'boolean').length;
     const ids = list.filter(row => String(row?.requestNumber || '')).length;
     return {rows:list.length, exact, bucket, cacheKnown, ids};
@@ -111,7 +112,7 @@
     const byKey = new Map();
     for (const row of (Array.isArray(state.requestLedger) ? state.requestLedger : [])) {
       if (!row || !num(row.timestamp) || Number(row.timestamp) < cutoff) continue;
-      byKey.set(requestLedgerKey(row), {...row, scopes:Array.isArray(row.scopes) ? row.scopes : ['all']});
+      byKey.set(requestLedgerKey(row), {...row, timestampPrecision:String(row.timestampPrecision && row.timestampPrecision !== 'unknown' ? row.timestampPrecision : requestTimestampPrecision(row.timestamp, row.timestampSource, row.requestNumber)), scopes:Array.isArray(row.scopes) ? row.scopes : ['all']});
     }
     let observed = 0;
     for (const scopeKey of ['all','devpass','credits']) {
@@ -176,7 +177,8 @@
   function requestExactTime(row) {
     const timestamp = row?.timestamp;
     if (!num(timestamp)) return '시간 미제공';
-    if (row?.timestampPrecision === 'hour' || row?.timestampPrecision === 'hour-estimated') return `${requestHourLabel(requestHourKey(timestamp))} 버킷 · 정확 시각 미제공`;
+    const precision = row?.timestampPrecision && row.timestampPrecision !== 'unknown' ? row.timestampPrecision : requestTimestampPrecision(timestamp, row?.timestampSource, row?.requestNumber);
+    if (precision === 'hour' || precision === 'hour-estimated') return `${requestHourLabel(requestHourKey(timestamp))} 버킷 · 정확 시각 미제공`;
     return new Date(Number(timestamp)).toLocaleTimeString('ko-KR', {timeZone:KST_TIME_ZONE,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   }
 

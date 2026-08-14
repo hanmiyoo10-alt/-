@@ -26,13 +26,13 @@ def one(label, old, new):
 one('meta version', f'//@version {SOURCE}', f'//@version {TARGET}')
 one('runtime version', f"const VERSION = '{SOURCE}';", f"const VERSION = '{TARGET}';")
 
-cache_card_anchor = r'''          <div class=\"mini\"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>'''
-cache_card_new = r'''          <div class=\"mini\"><span>캐시</span><b>${Number(scopeActivity.cacheCount || 0).toLocaleString()}회 · ${Number(scopeActivity.cacheRate || 0).toFixed(1)}%</b></div>
-          <div class=\"mini\"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>'''
+cache_card_anchor = '''          <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>'''
+cache_card_new = '''          <div class="mini"><span>캐시</span><b>${Number(scopeActivity.cacheCount || 0).toLocaleString()}회 · ${Number(scopeActivity.cacheRate || 0).toFixed(1)}%</b></div>
+          <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>'''
 one('usage scope cache card', cache_card_anchor, cache_card_new)
 
-diag_old = r'''      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)}`,'''
-diag_new = r'''      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)} · cache ${Number(diagUsage?.cacheCount || 0).toLocaleString()}회 · ${Number(diagUsage?.cacheRate || 0).toFixed(1)}%`,'''
+diag_old = '''      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)}`,'''
+diag_new = '''      `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)} · cache ${Number(diagUsage?.cacheCount || 0).toLocaleString()}회 · ${Number(diagUsage?.cacheRate || 0).toFixed(1)}%`,'''
 one('usage detail cache diagnostics', diag_old, diag_new)
 
 widget_start_after = s.index('  function widgetHtml() {')

@@ -51,22 +51,30 @@
 
   function scopeUsageDetailsHtml(scopeActivity) {
     if (!scopeActivity) return '';
-    const aggregateMetaText = row => [
-      num(row?.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '',
-      num(row?.errorCount) || num(row?.errorRate)
-        ? `오류 ${num(row?.errorCount) ? `${Number(row.errorCount).toLocaleString()}회` : ''}${num(row?.errorRate) ? `${num(row?.errorCount) ? ' · ' : ''}${Number(row.errorRate).toFixed(1)}%` : ''}`
-        : '',
-      num(row?.cacheCount) || num(row?.cacheRate)
-        ? `캐시 ${num(row?.cacheCount) ? `${Number(row.cacheCount).toLocaleString()}회` : ''}${num(row?.cacheRate) ? `${num(row?.cacheCount) ? ' · ' : ''}${Number(row.cacheRate).toFixed(1)}%` : ''}`
-        : ''
-    ].filter(Boolean).join(' · ');
+    const aggregateMetaItems = row => [
+      num(row?.totalTokens) ? `토큰 ${Number(row.totalTokens).toLocaleString()}` : '',
+      num(row?.errorRate)
+        ? `오류 ${Number(row.errorRate).toFixed(1)}%${num(row?.errorCount) ? ` · ${Number(row.errorCount).toLocaleString()}회` : ''}`
+        : num(row?.errorCount) ? `오류 ${Number(row.errorCount).toLocaleString()}회` : '',
+      num(row?.cacheRate)
+        ? `캐시 ${Number(row.cacheRate).toFixed(1)}%${num(row?.cacheCount) ? ` · ${Number(row.cacheCount).toLocaleString()}회` : ''}`
+        : num(row?.cacheCount) ? `캐시 ${Number(row.cacheCount).toLocaleString()}회` : ''
+    ].filter(Boolean);
     const aggregateRows = rows => (Array.isArray(rows) ? rows : []).slice(0, 8).map(row => {
-      const meta = aggregateMetaText(row);
-      return `<div class="usage-detail-row"><div><b>${esc(row?.name || 'Unknown')}</b>${meta ? `<small>${meta}</small>` : ''}</div><span>${Number(row?.requests || 0).toLocaleString()}회 · ${money(row?.cost,4)}</span></div>`;
+      const chips = aggregateMetaItems(row).map(item => `<span class="stat-chip">${item}</span>`).join('');
+      return `<div class="usage-detail-row"><div><b>${esc(row?.name || 'Unknown')}</b>${chips ? `<small class="aggregate-meta">${chips}</small>` : ''}</div><span>${Number(row?.requests || 0).toLocaleString()}회 · ${money(row?.cost,4)}</span></div>`;
     }).join('');
     const providers = aggregateRows(scopeActivity.providers);
     const models = aggregateRows(scopeActivity.models);
-    const recentRows = (Array.isArray(scopeActivity.recent) ? scopeActivity.recent : []).map(row => {
+    const recentFilter = ['all','success','error'].includes(String(state.recentRequestFilter)) ? String(state.recentRequestFilter) : 'all';
+    const recentAll = Array.isArray(scopeActivity.recent) ? scopeActivity.recent : [];
+    const recentCounts = {
+      all:recentAll.length,
+      success:recentAll.filter(row => row.success).length,
+      error:recentAll.filter(row => !row.success).length
+    };
+    const recentRows = recentAll.filter(row => recentFilter === 'all' || (recentFilter === 'success' ? row.success : !row.success));
+    const recentHtml = recentRows.map(row => {
       const numberText = row.requestNumber ? `#${esc(row.requestNumber)} · ` : '';
       const resultText = row.success
         ? '성공'
@@ -76,10 +84,11 @@
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? dashboardDateText(row.timestamp) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
-    const emptyRecent = sourceRows > 0
-      ? `요청 단위 메타데이터 없음 · source rows ${sourceRows}`
+    const filterEmpty = recentAll.length > 0 ? '이 필터에 해당하는 최근 요청 없음'
+      : sourceRows > 0 ? `요청 단위 메타데이터 없음 · source rows ${sourceRows}`
       : 'Bridge가 최근 요청 메타데이터를 아직 제공하지 않음';
-    return `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider · 요청 / 비용 / 효율</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model · 요청 / 비용 / 효율</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><h3>최근 요청 · 메타데이터</h3>${recentRows || `<p>${emptyRecent}</p>`}</div>`;
+    const filterButton = (key, label, count) => `<button class="recent-filter-btn ${recentFilter===key?'active':''}" data-recent-filter="${key}">${label} ${count}</button>`;
+    return `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider · 요청 / 비용 / 효율</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model · 요청 / 비용 / 효율</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><div class="recent-head"><h3>최근 요청 · 메타데이터</h3><span>${recentRows.length}/${recentCounts.all}</span></div><div class="recent-filter" role="tablist" aria-label="최근 요청 필터">${filterButton('all','전체',recentCounts.all)}${filterButton('success','성공',recentCounts.success)}${filterButton('error','오류',recentCounts.error)}</div>${recentHtml || `<p>${filterEmpty}</p>`}</div>`;
   }
 
   function normalizeScopeActivity(raw) {

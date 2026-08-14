@@ -32,6 +32,14 @@
         renderSettings();
       };
     });
+    document.querySelectorAll('[data-recent-filter]').forEach(button => {
+      button.onclick = async () => {
+        const next = String(button.getAttribute('data-recent-filter') || 'all');
+        state.recentRequestFilter = ['all','success','error'].includes(next) ? next : 'all';
+        await persist();
+        renderSettings();
+      };
+    });
     document.querySelectorAll('[data-analytics-scope]').forEach(button => {
       button.onclick = async () => {
         const next = String(button.getAttribute('data-analytics-scope') || 'all');

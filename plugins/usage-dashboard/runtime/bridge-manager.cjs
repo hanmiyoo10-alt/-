@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.1.0';
+const MANAGER_VERSION = '1.1.1';
 const PRODUCT_VERSION = '3.0.0-alpha.5.2';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
@@ -101,7 +101,7 @@ async function syncSelf() {
   if (sha256(current) === expected) return {ok:true,updated:false,version:MANAGER_VERSION,productVersion:String(manifest.productVersion || PRODUCT_VERSION),restartRequired:false};
   const nextText = await requestText(artifact);
   if (sha256(Buffer.from(nextText, 'utf8')) !== expected) throw new Error('manager sha256 mismatch');
-  const nextFile = `${CURRENT_FILE}.next-${process.pid}`;
+  const nextFile = path.join(path.dirname(CURRENT_FILE), `bridge-manager.next-${process.pid}.cjs`);
   fs.writeFileSync(nextFile, nextText, {mode:0o700});
   try {
     syntaxCheck(nextFile);
@@ -117,7 +117,7 @@ async function syncSelf() {
 }
 function rollbackSelf() {
   if (!fs.existsSync(BACKUP_FILE)) return {ok:false,rolledBack:false,error:'backup unavailable'};
-  const nextFile = `${CURRENT_FILE}.rollback-${process.pid}`;
+  const nextFile = path.join(path.dirname(CURRENT_FILE), `bridge-manager.rollback-${process.pid}.cjs`);
   fs.copyFileSync(BACKUP_FILE, nextFile);
   syntaxCheck(nextFile);
   fs.renameSync(nextFile, CURRENT_FILE);

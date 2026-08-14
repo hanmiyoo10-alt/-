@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.1.1';
+const MANAGER_VERSION = '1.1.2';
 const PRODUCT_VERSION = '3.0.0-alpha.5.2';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
@@ -25,6 +25,8 @@ const PREFIX = process.env.PREFIX || '/data/data/com.termux/files/usr';
 const ENGINE_SERVICE = 'local-usage-runtime-engine';
 const ENGINE_SERVICE_DIR = path.join(PREFIX, 'var/service', ENGINE_SERVICE);
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
+const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');
+const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');
 const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
 const TOKEN_FILES = [
   process.env.LUD_BRIDGE_TOKEN_FILE,
@@ -187,10 +189,55 @@ function safeCandidate(proc) {
   if (allArgs.some(arg => /[\r\n\0]/.test(String(arg)))) return {safe:false,reason:'control-arg'};
   return {safe:true,reason:'node-script',pid:proc.pid,exe:proc.exe,script,cwd:proc.cwd,nodeArgs,scriptArgs};
 }
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 1) return false;
+  try { process.kill(pid, 0); return true; } catch (_) { return false; }
+}
+function processUid(pid) {
+  try {
+    const text = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+    const match = text.match(/^Uid:\s+(\d+)/m);
+    return match ? Number(match[1]) : null;
+  } catch (_) { return null; }
+}
+function sameArgs(a, b) {
+  return JSON.stringify(Array.isArray(a) ? a : []) === JSON.stringify(Array.isArray(b) ? b : []);
+}
+function processMatchesSpec(pid, spec) {
+  const candidate = safeCandidate(readProcess(pid));
+  if (!candidate.safe || !spec) return false;
+  return path.resolve(candidate.exe) === path.resolve(String(spec.exe || spec.executable || ''))
+    && path.resolve(candidate.script) === path.resolve(String(spec.script || ''))
+    && path.resolve(candidate.cwd) === path.resolve(String(spec.cwd || ''))
+    && sameArgs(candidate.nodeArgs, spec.nodeArgs)
+    && sameArgs(candidate.scriptArgs, spec.scriptArgs);
+}
+function canonicalPidFileCandidate() {
+  let raw = '';
+  try {
+    const stat = fs.statSync(LEGACY_ENGINE_PID_FILE);
+    if (!stat.isFile()) return {safe:false,reason:'pidfile-not-file',pid:null};
+    if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) return {safe:false,reason:'pidfile-foreign-owner',pid:null};
+    raw = fs.readFileSync(LEGACY_ENGINE_PID_FILE, 'utf8').trim();
+  } catch (_) { return {safe:false,reason:'pidfile-missing',pid:null}; }
+  if (!/^\d+$/.test(raw)) return {safe:false,reason:'pidfile-invalid',pid:null};
+  const pid = Number(raw);
+  if (!processAlive(pid)) return {safe:false,reason:'pidfile-stale',pid};
+  if (typeof process.getuid === 'function') {
+    const uid = processUid(pid);
+    if (uid != null && uid !== process.getuid()) return {safe:false,reason:'pidfile-foreign-process',pid};
+  }
+  const candidate = safeCandidate(readProcess(pid));
+  if (!candidate.safe) return {...candidate,pid};
+  if (path.resolve(candidate.script) !== path.resolve(LEGACY_ENGINE_SCRIPT)) return {safe:false,reason:'pidfile-unexpected-script',pid};
+  return {...candidate,reason:'canonical-pidfile'};
+}
 function discoverEngineCandidate() {
   const pid = listenerPid(ENGINE_PORT);
-  if (!pid) return {safe:false,reason:'listener-unresolved',pid:null};
-  return safeCandidate(readProcess(pid));
+  if (pid) return safeCandidate(readProcess(pid));
+  const fallback = canonicalPidFileCandidate();
+  if (fallback.safe) return fallback;
+  return {safe:false,reason:fallback.reason || 'listener-unresolved',pid:fallback.pid ?? null};
 }
 function serviceStatus() {
   try {
@@ -232,16 +279,20 @@ async function bridgeSnapshot(timeoutMs = 2500) {
     req.on('error', reject); req.end();
   });
 }
-async function waitForManagedEngine(timeoutMs = 12000) {
+async function bridgeReachable(timeoutMs = 700) {
+  try { await bridgeSnapshot(timeoutMs); return true; } catch (_) { return false; }
+}
+async function waitForManagedEngine(expected, timeoutMs = 12000) {
   const started = Date.now();
   let lastError = '';
   while (Date.now() - started < timeoutMs) {
     const service = serviceStatus();
     const pid = listenerPid(ENGINE_PORT);
-    if (service.running && service.pid && pid === service.pid) {
+    const processVerified = Boolean(service.running && service.pid && processMatchesSpec(service.pid, expected));
+    if (service.running && service.pid && (pid === service.pid || (!pid && processVerified))) {
       try {
         const snap = await bridgeSnapshot();
-        return {ok:true,service,pid,snapshot:snap};
+        return {ok:true,service,pid:service.pid,snapshot:snap,ownership:pid === service.pid ? 'proc-net' : 'service-process'};
       } catch (e) { lastError = e?.message || String(e); }
     }
     await sleep(350);
@@ -252,17 +303,21 @@ async function engineRuntimeStatus() {
   const descriptor = readDescriptor();
   const service = serviceStatus();
   const pid = listenerPid(ENGINE_PORT);
-  const managed = Boolean(descriptor && service.running && service.pid && pid === service.pid);
   let snapshot = null;
   try { snapshot = await bridgeSnapshot(1200); } catch (_) {}
+  const processVerified = Boolean(descriptor && service.running && service.pid && processMatchesSpec(service.pid, descriptor));
+  const managed = Boolean(descriptor && snapshot && service.running && service.pid && (pid === service.pid || (!pid && processVerified)));
   const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
+  const fallbackNeedsHealth = candidate?.reason === 'canonical-pidfile';
+  const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsHealth || Boolean(snapshot))) : null;
+  const candidateReason = fallbackNeedsHealth && !snapshot ? 'pidfile-health-unverified' : String(candidate?.reason || '');
   return {
     engineManaged:managed,
     engineMode:managed ? 'managed-adopted' : 'legacy-external',
     engineService:ENGINE_SERVICE,
     engineVersion:String(snapshot?.bridgeVersion || snapshot?.health?.bridgeVersion || ''),
-    candidateSafe:typeof candidate?.safe === 'boolean' ? candidate.safe : null,
-    candidateReason:String(candidate?.reason || ''),
+    candidateSafe,
+    candidateReason,
     adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'
   };
 }
@@ -270,7 +325,12 @@ async function adoptEngine() {
   const current = await engineRuntimeStatus();
   if (current.engineManaged) return {ok:true,adopted:false,state:'current',...current};
   const candidate = discoverEngineCandidate();
-  if (!candidate.safe) return {ok:false,adopted:false,state:'unsafe-candidate',candidateSafe:false,retryable:false,error:`engine adoption refused: ${candidate.reason}`};
+  if (!candidate.safe) {
+    const retryable = ['listener-unresolved','pidfile-missing','pidfile-stale','process-unavailable'].includes(String(candidate.reason || ''));
+    return {ok:false,adopted:false,state:'unsafe-candidate',candidateSafe:false,retryable,error:`engine adoption refused: ${candidate.reason}`};
+  }
+  try { await bridgeSnapshot(1200); }
+  catch (e) { return {ok:false,adopted:false,state:'bridge-unhealthy',candidateSafe:true,retryable:true,error:e?.message || String(e)}; }
   writeEngineService(candidate, true);
   try {
     process.kill(candidate.pid, 'SIGTERM');
@@ -278,17 +338,17 @@ async function adoptEngine() {
     return {ok:false,adopted:false,state:'stop-failed',candidateSafe:true,retryable:true,error:e?.message || String(e)};
   }
   const stopStarted = Date.now();
+  let stopped = false;
   while (Date.now() - stopStarted < 5000) {
-    const pid = listenerPid(ENGINE_PORT);
-    if (!pid || pid !== candidate.pid) break;
+    if (!processAlive(candidate.pid) && !(await bridgeReachable(500))) { stopped = true; break; }
     await sleep(200);
   }
-  if (listenerPid(ENGINE_PORT) === candidate.pid) {
-    return {ok:false,adopted:false,state:'stop-timeout',candidateSafe:true,retryable:true,error:'legacy bridge did not stop after SIGTERM'};
+  if (!stopped) {
+    return {ok:false,adopted:false,state:'stop-timeout',candidateSafe:true,retryable:true,error:'legacy bridge did not stop cleanly after SIGTERM'};
   }
   try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
   try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
-  const verified = await waitForManagedEngine();
+  const verified = await waitForManagedEngine(candidate);
   if (verified.ok) {
     const descriptor = {
       format:1,
@@ -306,7 +366,7 @@ async function adoptEngine() {
   }
   try { execFileSync('sv', ['down', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
   try { fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'down'), ''); } catch (_) {}
-  if (!listenerPid(ENGINE_PORT)) {
+  if (!(await bridgeReachable(700)) && !processAlive(candidate.pid)) {
     try {
       const child = spawn(candidate.exe, [...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs], {cwd:candidate.cwd,detached:true,stdio:'ignore',env:process.env});
       child.unref();

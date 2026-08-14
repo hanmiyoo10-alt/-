@@ -1,3 +1,4 @@
+// Node --check must receive a recognized .cjs temp extension on device runtimes.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');

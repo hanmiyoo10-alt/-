@@ -51,9 +51,19 @@
 
   function scopeUsageDetailsHtml(scopeActivity) {
     if (!scopeActivity) return '';
-    const aggregateRows = rows => (Array.isArray(rows) ? rows : []).slice(0, 8).map(row =>
-      `<div class="usage-detail-row"><b>${esc(row?.name || 'Unknown')}</b><span>${Number(row?.requests || 0).toLocaleString()}회 · ${money(row?.cost,4)}</span></div>`
-    ).join('');
+    const aggregateMetaText = row => [
+      num(row?.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '',
+      num(row?.errorCount) || num(row?.errorRate)
+        ? `오류 ${num(row?.errorCount) ? `${Number(row.errorCount).toLocaleString()}회` : ''}${num(row?.errorRate) ? `${num(row?.errorCount) ? ' · ' : ''}${Number(row.errorRate).toFixed(1)}%` : ''}`
+        : '',
+      num(row?.cacheCount) || num(row?.cacheRate)
+        ? `캐시 ${num(row?.cacheCount) ? `${Number(row.cacheCount).toLocaleString()}회` : ''}${num(row?.cacheRate) ? `${num(row?.cacheCount) ? ' · ' : ''}${Number(row.cacheRate).toFixed(1)}%` : ''}`
+        : ''
+    ].filter(Boolean).join(' · ');
+    const aggregateRows = rows => (Array.isArray(rows) ? rows : []).slice(0, 8).map(row => {
+      const meta = aggregateMetaText(row);
+      return `<div class="usage-detail-row"><div><b>${esc(row?.name || 'Unknown')}</b>${meta ? `<small>${meta}</small>` : ''}</div><span>${Number(row?.requests || 0).toLocaleString()}회 · ${money(row?.cost,4)}</span></div>`;
+    }).join('');
     const providers = aggregateRows(scopeActivity.providers);
     const models = aggregateRows(scopeActivity.models);
     const recentRows = (Array.isArray(scopeActivity.recent) ? scopeActivity.recent : []).map(row => {
@@ -61,14 +71,15 @@
       const resultText = row.success
         ? '성공'
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
-      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : ''].filter(Boolean).join(' · ');
-      return `<div class="request-detail-row"><div><b>${numberText}${esc(row.provider)} · ${esc(row.model)}</b><span>${row.timestamp ? dashboardDateText(row.timestamp) : '시간 미제공'}</span></div><em>${usageText}</em></div>`;
+      const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '';
+      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
+      return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? dashboardDateText(row.timestamp) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
     const emptyRecent = sourceRows > 0
       ? `요청 단위 메타데이터 없음 · source rows ${sourceRows}`
       : 'Bridge가 최근 요청 메타데이터를 아직 제공하지 않음';
-    return `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><h3>최근 요청 · 요청 단위</h3>${recentRows || `<p>${emptyRecent}</p>`}</div>`;
+    return `<div class="usage-detail-grid"><div class="usage-detail-box"><h3>Provider · 요청 / 비용 / 효율</h3>${providers || '<p>데이터 없음</p>'}</div><div class="usage-detail-box"><h3>Model · 요청 / 비용 / 효율</h3>${models || '<p>데이터 없음</p>'}</div></div><div class="usage-detail-box recent-requests"><h3>최근 요청 · 메타데이터</h3>${recentRows || `<p>${emptyRecent}</p>`}</div>`;
   }
 
   function normalizeScopeActivity(raw) {

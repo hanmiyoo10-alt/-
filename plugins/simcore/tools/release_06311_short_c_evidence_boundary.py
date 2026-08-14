@@ -1,8 +1,8 @@
 from pathlib import Path
 
 FILES = [Path('plugins/simcore/latest.js'), Path('plugins/simcore/install.js')]
-CONTRACT_1 = "short_community_event_claims=current_lineage_root_supported_only;omit_absent_current_event_details;do_not_fill_from_prior_similar_events=1"
-CONTRACT_2 = "reaction_opinion_jokes_and_emphasis_are_free;broader_or_retrospective_event_facts_allowed_only_when_current_user_request_explicitly_asks=1"
+CONTRACT_1 = "current_event_fact_claims=current_root_supported_only;omit_absent_details;no_prior_similar_event_fill=1"
+CONTRACT_2 = "reaction_opinion_jokes_emphasis_are_free=1;broader_retrospective_event_facts_only_if_user_explicitly_asks=1"
 CHANGELOG = """// v0.63.11 Short-C Evidence Boundary:\n// - Tightens eligible Short-C current-event reactions after live evidence showed correct lineage/root/source-lock metadata but prior similar-event details still leaked into the post body and comments\n// - Adds exactly two fixed source-lock-only Prompt contracts: current-event factual claims require support from the authoritative current lineage root, while reaction/opinion/jokes/emphasis remain free\n// - Broader or retrospective event facts remain allowed only when the current user request explicitly asks for broader/comparative/retrospective context\n// - Does not parse source semantics, copy source bodies, scan history, store event facts, repair output, or change Lineage/Handoff/Recurrence/Frame/Time/Recovery/Storage ownership\n// - A/B, ordinary long C, recurrence-owned C, and Short-C without an eligible source lock receive zero new runtime-prompt lines; v0.63.5-0.63.10 behavior/UI remains unchanged\n//\n"""
 
 for path in FILES:

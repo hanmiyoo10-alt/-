@@ -1,3 +1,4 @@
+// Finalized alpha.4.9: persisted pre-fidelity ledger rows must be classified safely.
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 

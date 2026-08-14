@@ -47,6 +47,7 @@ jobs:
           node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
           node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
           node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
@@ -63,7 +64,6 @@ jobs:
           grep -Fq "const VERSION = '$VERSION';" plugins/usage-dashboard/latest.js
           grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/src/manifest.json
           grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
-          grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json || true
           case "$VERSION" in
             3.0.0-alpha.*|3.0.0-beta.*|3.0.0) ;;
             *) echo "unexpected Usage Dashboard version: $VERSION"; exit 1 ;;
@@ -119,17 +119,22 @@ jobs:
           grep -q 'function bridgeRuntimeSnapshot()' plugins/usage-dashboard/latest.js
           grep -q 'async function fetchBridgeManagerStatus(force = false)' plugins/usage-dashboard/latest.js
           grep -q 'async function syncBridgeManagerIfNeeded(status)' plugins/usage-dashboard/latest.js
+          grep -q 'async function adoptBridgeEngineIfNeeded(status)' plugins/usage-dashboard/latest.js
           grep -q 'Unified runtime: schema v' plugins/usage-dashboard/latest.js
           grep -q 'Bridge manager: protocol' plugins/usage-dashboard/latest.js
           grep -q 'Bridge manager probe:' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge engine: mode' plugins/usage-dashboard/latest.js
           grep -q 'Runtime manifest:' plugins/usage-dashboard/latest.js
           grep -q 'single-product-modular-sidecar' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q 'legacy-external' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q 'bootstrap-ready' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q 'managed-adoption' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q 'engine-adoption-ready' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -q '"engineAdoption": true' plugins/usage-dashboard/runtime/product-manifest.json
           grep -q 'bridge-manager-v1' plugins/usage-dashboard/runtime/product-manifest.json
           grep -q "const HOST = '127.0.0.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -q "url.pathname === '/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -q "url.pathname === '/engine/adopt'" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -q "url.pathname === '/rollback'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -q "const ENGINE_SERVICE = 'local-usage-runtime-engine';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -q 'start-services.sh' plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           grep -q 'sv-enable' plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js

@@ -1,0 +1,67 @@
+name: SimCore 0.63.19 Evidence Fence
+
+on:
+  push:
+    branches:
+      - simcore-06319-evidence-fence
+    paths:
+      - '.github/workflows/simcore-06319-evidence-fence.yml'
+      - 'plugins/simcore/tools/release_06319_evidence_fence.py'
+      - 'plugins/simcore/tools/test_06319_evidence_fence.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06319-evidence-fence
+          fetch-depth: 2
+
+      - name: Freeze exact 0.63.18 baseline
+        shell: bash
+        run: |
+          test "$(git hash-object plugins/simcore/latest.js)" = "f6b19937f9b3ebca494e168d3d19ad733ed60b24"
+          test "$(git hash-object plugins/simcore/install.js)" = "f6b19937f9b3ebca494e168d3d19ad733ed60b24"
+          cp plugins/simcore/latest.js /tmp/simcore-06318-baseline.js
+
+      - name: Patch 0.63.19 artifacts
+        run: python3 plugins/simcore/tools/release_06319_evidence_fence.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Evidence Fence and ownership-freeze gates
+        run: node plugins/simcore/tools/test_06319_evidence_fence.js
+
+      - name: Artifact parity and diff hygiene
+        shell: bash
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git','status','--short'], text=True).splitlines()
+          allowed={'plugins/simcore/latest.js','plugins/simcore/install.js'}
+          changed={row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          print('latest blob:', subprocess.check_output(['git','hash-object','plugins/simcore/latest.js'], text=True).strip())
+          print('install blob:', subprocess.check_output(['git','hash-object','plugins/simcore/install.js'], text=True).strip())
+          PY
+
+      - name: Commit tested artifacts to work branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.19 Evidence Fence artifacts'
+          git push origin HEAD:simcore-06319-evidence-fence

@@ -153,8 +153,8 @@ for path in FILES:
     structure_anchor = 'SimCore.define("structure", function (require, module, exports) {\n'
     text = replace_once(text, structure_anchor, FRAME_MODULE + structure_anchor, 'frame module insertion', path)
 
-    session_require_anchor = "const kernel = require('./kernel');\nconst lifecycle = require('./lifecycle');\nconst time = require('./time');\nconst community = require('./community');\n"
-    session_require_new = "const kernel = require('./kernel');\nconst lifecycle = require('./lifecycle');\nconst time = require('./time');\nconst frame = require('./frame');\nconst community = require('./community');\n"
+    session_require_anchor = "const kernel = require('./kernel');\nconst lifecycle = require('./lifecycle');\nconst time = require('./time');\nconst community = require('./community');\nconst reaction = require('./reaction');\nconst structure = require('./structure');\nconst recovery = require('./recovery');\nconst recurrence = require('./recurrence');\nconst prompt = require('./prompt');\n"
+    session_require_new = "const kernel = require('./kernel');\nconst lifecycle = require('./lifecycle');\nconst time = require('./time');\nconst frame = require('./frame');\nconst community = require('./community');\nconst reaction = require('./reaction');\nconst structure = require('./structure');\nconst recovery = require('./recovery');\nconst recurrence = require('./recurrence');\nconst prompt = require('./prompt');\n"
     text = replace_once(text, session_require_anchor, session_require_new, 'session frame require', path)
 
     on_send_anchor = "    const state = lifecycle.prepareTurn(base, userText, promptProbe, sendIndex);\n    if (detail) {\n"

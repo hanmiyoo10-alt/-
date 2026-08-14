@@ -9,15 +9,22 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.0.0';
-const PRODUCT_VERSION = '3.0.0-alpha.5.1';
+const MANAGER_VERSION = '1.1.0';
+const PRODUCT_VERSION = '3.0.0-alpha.5.2';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
+const ENGINE_HOST = '127.0.0.1';
+const ENGINE_PORT = 39117;
 const PRODUCT_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
 const RELEASE_PREFIX = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/';
 const CURRENT_FILE = path.resolve(__filename);
 const BACKUP_FILE = `${CURRENT_FILE}.bak`;
+const RUNTIME_ROOT = path.dirname(CURRENT_FILE);
+const PREFIX = process.env.PREFIX || '/data/data/com.termux/files/usr';
+const ENGINE_SERVICE = 'local-usage-runtime-engine';
+const ENGINE_SERVICE_DIR = path.join(PREFIX, 'var/service', ENGINE_SERVICE);
+const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
 const TOKEN_FILES = [
   process.env.LUD_BRIDGE_TOKEN_FILE,
@@ -25,31 +32,25 @@ const TOKEN_FILES = [
   path.join(os.homedir(), '.config/local-usage-dashboard/token')
 ].filter(Boolean);
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readToken() {
   for (const file of TOKEN_FILES) {
-    try {
-      const value = fs.readFileSync(file, 'utf8').trim();
-      if (value) return value;
-    } catch (_) {}
+    try { const value = fs.readFileSync(file, 'utf8').trim(); if (value) return value; } catch (_) {}
   }
   return '';
 }
-
 function equalSecret(a, b) {
   const aa = Buffer.from(String(a || ''));
   const bb = Buffer.from(String(b || ''));
   return aa.length === bb.length && aa.length > 0 && crypto.timingSafeEqual(aa, bb);
 }
-
 function authorized(req) {
   const token = readToken();
   if (!token) return false;
   return equalSecret(req.headers['x-local-bridge-key'], token) || equalSecret(req.headers['x-devpass-bridge-key'], token);
 }
-
-function sha256(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
+function sha256(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
+function shellQuote(value) { return `'${String(value).replace(/'/g, `'"'"'`)}'`; }
 
 function requestText(url, redirects = 0) {
   return new Promise((resolve, reject) => {
@@ -64,14 +65,10 @@ function requestText(url, redirects = 0) {
         res.resume();
         return reject(new Error(`release HTTP ${res.statusCode}`));
       }
-      const chunks = [];
-      let total = 0;
+      const chunks = []; let total = 0;
       res.on('data', chunk => {
         total += chunk.length;
-        if (total > 2 * 1024 * 1024) {
-          req.destroy(new Error('release artifact too large'));
-          return;
-        }
+        if (total > 2 * 1024 * 1024) return req.destroy(new Error('release artifact too large'));
         chunks.push(chunk);
       });
       res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
@@ -80,26 +77,17 @@ function requestText(url, redirects = 0) {
     req.on('error', reject);
   });
 }
-
-function syntaxCheck(file) {
-  execFileSync(process.execPath, ['--check', file], {stdio:'ignore'});
-}
-
+function syntaxCheck(file) { execFileSync(process.execPath, ['--check', file], {stdio:'ignore'}); }
 function scheduleRestart() {
   setTimeout(() => {
     if (RESTART_MODE === 'runit') process.exit(0);
     try {
-      const child = spawn(process.execPath, [CURRENT_FILE], {
-        detached:true,
-        stdio:'ignore',
-        env:{...process.env,LUD_MANAGER_RESTART_MODE:'manual'}
-      });
+      const child = spawn(process.execPath, [CURRENT_FILE], {detached:true,stdio:'ignore',env:{...process.env,LUD_MANAGER_RESTART_MODE:'manual'}});
       child.unref();
     } catch (_) {}
     process.exit(0);
   }, 150);
 }
-
 async function syncSelf() {
   const manifestText = await requestText(PRODUCT_MANIFEST_URL);
   const manifest = JSON.parse(manifestText);
@@ -110,9 +98,7 @@ async function syncSelf() {
   if (!artifact.startsWith(RELEASE_PREFIX)) throw new Error('manager artifact URL denied');
   if (!/^[0-9a-f]{64}$/.test(expected)) throw new Error('manager sha256 invalid');
   const current = fs.readFileSync(CURRENT_FILE);
-  if (sha256(current) === expected) {
-    return {ok:true,updated:false,version:MANAGER_VERSION,productVersion:String(manifest.productVersion || PRODUCT_VERSION),restartRequired:false};
-  }
+  if (sha256(current) === expected) return {ok:true,updated:false,version:MANAGER_VERSION,productVersion:String(manifest.productVersion || PRODUCT_VERSION),restartRequired:false};
   const nextText = await requestText(artifact);
   if (sha256(Buffer.from(nextText, 'utf8')) !== expected) throw new Error('manager sha256 mismatch');
   const nextFile = `${CURRENT_FILE}.next-${process.pid}`;
@@ -129,7 +115,6 @@ async function syncSelf() {
   }
   return {ok:true,updated:true,version:String(spec.version || ''),productVersion:String(manifest.productVersion || ''),restartRequired:true};
 }
-
 function rollbackSelf() {
   if (!fs.existsSync(BACKUP_FILE)) return {ok:false,rolledBack:false,error:'backup unavailable'};
   const nextFile = `${CURRENT_FILE}.rollback-${process.pid}`;
@@ -140,55 +125,233 @@ function rollbackSelf() {
   return {ok:true,rolledBack:true,restartRequired:true};
 }
 
+function listenerInodes(port) {
+  const wanted = Number(port).toString(16).toUpperCase().padStart(4, '0');
+  const out = new Set();
+  for (const file of ['/proc/net/tcp', '/proc/net/tcp6']) {
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); } catch (_) { continue; }
+    for (const line of text.split('\n').slice(1)) {
+      const fields = line.trim().split(/\s+/);
+      if (fields.length < 10 || fields[3] !== '0A') continue;
+      const local = fields[1] || '';
+      if (local.endsWith(`:${wanted}`) && fields[9]) out.add(fields[9]);
+    }
+  }
+  return out;
+}
+function listenerPid(port) {
+  const inodes = listenerInodes(port);
+  if (!inodes.size) return null;
+  let entries = [];
+  try { entries = fs.readdirSync('/proc').filter(name => /^\d+$/.test(name)); } catch (_) { return null; }
+  for (const name of entries) {
+    const fdDir = `/proc/${name}/fd`;
+    let fds = [];
+    try { fds = fs.readdirSync(fdDir); } catch (_) { continue; }
+    for (const fd of fds) {
+      try {
+        const target = fs.readlinkSync(path.join(fdDir, fd));
+        const m = target.match(/^socket:\[(\d+)\]$/);
+        if (m && inodes.has(m[1])) return Number(name);
+      } catch (_) {}
+    }
+  }
+  return null;
+}
+function readProcess(pid) {
+  if (!Number.isInteger(pid) || pid <= 1) return null;
+  try {
+    const cmd = fs.readFileSync(`/proc/${pid}/cmdline`).toString('utf8').split('\0').filter(Boolean);
+    const cwd = fs.readlinkSync(`/proc/${pid}/cwd`);
+    const exe = fs.readlinkSync(`/proc/${pid}/exe`);
+    return {pid,cmd,cwd,exe};
+  } catch (_) { return null; }
+}
+function safeCandidate(proc) {
+  if (!proc || proc.pid === process.pid || !Array.isArray(proc.cmd) || proc.cmd.length < 2) return {safe:false,reason:'process-unavailable'};
+  if (!/^node(?:js)?(?:$|[-.0-9])/i.test(path.basename(proc.exe || proc.cmd[0] || ''))) return {safe:false,reason:'not-node'};
+  const scriptIndex = proc.cmd.findIndex((arg, index) => index > 0 && /\.(?:c?js|mjs)$/i.test(String(arg || '')));
+  if (scriptIndex < 1) return {safe:false,reason:'script-unresolved'};
+  const rawScript = proc.cmd[scriptIndex];
+  const script = path.isAbsolute(rawScript) ? rawScript : path.resolve(proc.cwd, rawScript);
+  try {
+    const stat = fs.statSync(script);
+    if (!stat.isFile()) return {safe:false,reason:'script-not-file'};
+    if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) return {safe:false,reason:'foreign-owner'};
+  } catch (_) { return {safe:false,reason:'script-missing'}; }
+  const nodeArgs = proc.cmd.slice(1, scriptIndex);
+  const scriptArgs = proc.cmd.slice(scriptIndex + 1);
+  const allArgs = [...nodeArgs, ...scriptArgs];
+  if (allArgs.some(arg => /(?:token|secret|password|cookie|session|bearer|api[-_]?key)/i.test(String(arg)))) return {safe:false,reason:'sensitive-arg'};
+  if (allArgs.some(arg => /[\r\n\0]/.test(String(arg)))) return {safe:false,reason:'control-arg'};
+  return {safe:true,reason:'node-script',pid:proc.pid,exe:proc.exe,script,cwd:proc.cwd,nodeArgs,scriptArgs};
+}
+function discoverEngineCandidate() {
+  const pid = listenerPid(ENGINE_PORT);
+  if (!pid) return {safe:false,reason:'listener-unresolved',pid:null};
+  return safeCandidate(readProcess(pid));
+}
+function serviceStatus() {
+  try {
+    const text = execFileSync('sv', ['status', ENGINE_SERVICE_DIR], {encoding:'utf8',timeout:3000}).trim();
+    const m = text.match(/\(pid (\d+)\)/);
+    return {running:/^run:/.test(text),pid:m ? Number(m[1]) : null,text};
+  } catch (e) {
+    const text = String(e?.stdout || e?.message || '').trim();
+    const m = text.match(/\(pid (\d+)\)/);
+    return {running:/^run:/.test(text),pid:m ? Number(m[1]) : null,text};
+  }
+}
+function readDescriptor() {
+  try { const value = JSON.parse(fs.readFileSync(ENGINE_DESCRIPTOR, 'utf8')); return value && typeof value === 'object' ? value : null; } catch (_) { return null; }
+}
+function writeEngineService(candidate, down = true) {
+  fs.mkdirSync(ENGINE_SERVICE_DIR, {recursive:true});
+  const command = [candidate.exe, ...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs].map(shellQuote).join(' ');
+  const run = `#!/data/data/com.termux/files/usr/bin/sh\ncd ${shellQuote(candidate.cwd)}\nexec ${command}\n`;
+  fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), run, {mode:0o700});
+  fs.chmodSync(path.join(ENGINE_SERVICE_DIR, 'run'), 0o700);
+  const downFile = path.join(ENGINE_SERVICE_DIR, 'down');
+  if (down) fs.writeFileSync(downFile, ''); else { try { fs.unlinkSync(downFile); } catch (_) {} }
+}
+async function bridgeSnapshot(timeoutMs = 2500) {
+  const token = readToken();
+  if (!token) throw new Error('bridge token missing');
+  return new Promise((resolve, reject) => {
+    const req = http.request({host:ENGINE_HOST,port:ENGINE_PORT,path:'/snapshot',method:'GET',headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}}, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        if (Number(res.statusCode) < 200 || Number(res.statusCode) >= 300) return reject(new Error(`bridge HTTP ${res.statusCode}`));
+        try { resolve(JSON.parse(text)); } catch (_) { reject(new Error('bridge JSON invalid')); }
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('bridge snapshot timeout')));
+    req.on('error', reject); req.end();
+  });
+}
+async function waitForManagedEngine(timeoutMs = 12000) {
+  const started = Date.now();
+  let lastError = '';
+  while (Date.now() - started < timeoutMs) {
+    const service = serviceStatus();
+    const pid = listenerPid(ENGINE_PORT);
+    if (service.running && service.pid && pid === service.pid) {
+      try {
+        const snap = await bridgeSnapshot();
+        return {ok:true,service,pid,snapshot:snap};
+      } catch (e) { lastError = e?.message || String(e); }
+    }
+    await sleep(350);
+  }
+  return {ok:false,error:lastError || 'managed engine did not become healthy',service:serviceStatus(),pid:listenerPid(ENGINE_PORT)};
+}
+async function engineRuntimeStatus() {
+  const descriptor = readDescriptor();
+  const service = serviceStatus();
+  const pid = listenerPid(ENGINE_PORT);
+  const managed = Boolean(descriptor && service.running && service.pid && pid === service.pid);
+  let snapshot = null;
+  try { snapshot = await bridgeSnapshot(1200); } catch (_) {}
+  const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
+  return {
+    engineManaged:managed,
+    engineMode:managed ? 'managed-adopted' : 'legacy-external',
+    engineService:ENGINE_SERVICE,
+    engineVersion:String(snapshot?.bridgeVersion || snapshot?.health?.bridgeVersion || ''),
+    candidateSafe:typeof candidate?.safe === 'boolean' ? candidate.safe : null,
+    candidateReason:String(candidate?.reason || ''),
+    adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'
+  };
+}
+async function adoptEngine() {
+  const current = await engineRuntimeStatus();
+  if (current.engineManaged) return {ok:true,adopted:false,state:'current',...current};
+  const candidate = discoverEngineCandidate();
+  if (!candidate.safe) return {ok:false,adopted:false,state:'unsafe-candidate',candidateSafe:false,retryable:false,error:`engine adoption refused: ${candidate.reason}`};
+  writeEngineService(candidate, true);
+  try {
+    process.kill(candidate.pid, 'SIGTERM');
+  } catch (e) {
+    return {ok:false,adopted:false,state:'stop-failed',candidateSafe:true,retryable:true,error:e?.message || String(e)};
+  }
+  const stopStarted = Date.now();
+  while (Date.now() - stopStarted < 5000) {
+    const pid = listenerPid(ENGINE_PORT);
+    if (!pid || pid !== candidate.pid) break;
+    await sleep(200);
+  }
+  if (listenerPid(ENGINE_PORT) === candidate.pid) {
+    return {ok:false,adopted:false,state:'stop-timeout',candidateSafe:true,retryable:true,error:'legacy bridge did not stop after SIGTERM'};
+  }
+  try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
+  try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+  const verified = await waitForManagedEngine();
+  if (verified.ok) {
+    const descriptor = {
+      format:1,
+      adoptedAt:new Date().toISOString(),
+      service:ENGINE_SERVICE,
+      cwd:candidate.cwd,
+      executable:candidate.exe,
+      script:candidate.script,
+      nodeArgs:candidate.nodeArgs,
+      scriptArgs:candidate.scriptArgs,
+      sourceVersion:String(verified.snapshot?.bridgeVersion || '')
+    };
+    fs.writeFileSync(ENGINE_DESCRIPTOR, JSON.stringify(descriptor, null, 2) + '\n', {mode:0o600});
+    return {ok:true,adopted:true,state:'adopted',engineManaged:true,engineMode:'managed-adopted',engineService:ENGINE_SERVICE,engineVersion:descriptor.sourceVersion,candidateSafe:true};
+  }
+  try { execFileSync('sv', ['down', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
+  try { fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'down'), ''); } catch (_) {}
+  if (!listenerPid(ENGINE_PORT)) {
+    try {
+      const child = spawn(candidate.exe, [...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs], {cwd:candidate.cwd,detached:true,stdio:'ignore',env:process.env});
+      child.unref();
+    } catch (_) {}
+  }
+  return {ok:false,adopted:false,state:'verification-failed',candidateSafe:true,retryable:true,error:verified.error || 'managed engine verification failed'};
+}
+function ensureAdoptedServiceUp() {
+  if (!readDescriptor()) return;
+  try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
+  try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:2500}); } catch (_) {}
+}
+
 function send(res, status, body, restart = false) {
   const text = JSON.stringify(body);
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(text)});
   res.end(text, () => { if (restart) scheduleRestart(); });
 }
 
+ensureAdoptedServiceUp();
 const server = http.createServer(async (req, res) => {
   if (!authorized(req)) return send(res, 401, {ok:false,error:'unauthorized'});
   const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
   if (req.method === 'GET' && url.pathname === '/status') {
+    const engine = await engineRuntimeStatus();
     return send(res, 200, {
-      ok:true,
-      protocol:PROTOCOL,
-      version:MANAGER_VERSION,
-      productVersion:PRODUCT_VERSION,
-      selfUpdate:true,
-      engineManaged:false,
-      restartMode:RESTART_MODE,
-      updateChannel:PRODUCT_MANIFEST_URL,
-      bind:`${HOST}:${PORT}`,
+      ok:true,protocol:PROTOCOL,version:MANAGER_VERSION,productVersion:PRODUCT_VERSION,selfUpdate:true,engineAdoption:true,
+      ...engine,restartMode:RESTART_MODE,updateChannel:PRODUCT_MANIFEST_URL,bind:`${HOST}:${PORT}`,
       tokenSource:TOKEN_FILES.find(file => { try { return Boolean(fs.readFileSync(file, 'utf8').trim()); } catch (_) { return false; } }) ? 'existing-file' : 'missing'
     });
   }
   if (req.method === 'POST' && url.pathname === '/sync') {
-    try {
-      const result = await syncSelf();
-      return send(res, 200, result, result.restartRequired === true);
-    } catch (e) {
-      return send(res, 500, {ok:false,updated:false,error:e?.message || String(e)});
-    }
+    try { const result = await syncSelf(); return send(res, 200, result, result.restartRequired === true); }
+    catch (e) { return send(res, 500, {ok:false,updated:false,error:e?.message || String(e)}); }
   }
-  if (req.method === 'POST' && url.pathname === '/restart') {
-    return send(res, 200, {ok:true,restart:true}, true);
+  if (req.method === 'POST' && url.pathname === '/engine/adopt') {
+    try { const result = await adoptEngine(); return send(res, result.ok ? 200 : (result.retryable === false ? 409 : 503), result); }
+    catch (e) { return send(res, 500, {ok:false,adopted:false,state:'error',retryable:true,error:e?.message || String(e)}); }
   }
+  if (req.method === 'POST' && url.pathname === '/restart') return send(res, 200, {ok:true,restart:true}, true);
   if (req.method === 'POST' && url.pathname === '/rollback') {
-    try {
-      const result = rollbackSelf();
-      return send(res, result.ok ? 200 : 409, result, result.restartRequired === true);
-    } catch (e) {
-      return send(res, 500, {ok:false,rolledBack:false,error:e?.message || String(e)});
-    }
+    try { const result = rollbackSelf(); return send(res, result.ok ? 200 : 409, result, result.restartRequired === true); }
+    catch (e) { return send(res, 500, {ok:false,rolledBack:false,error:e?.message || String(e)}); }
   }
   return send(res, 404, {ok:false,error:'not found'});
 });
-
-server.on('error', error => {
-  console.error(`[Local Usage Runtime Manager] ${error?.message || error}`);
-  process.exitCode = 1;
-});
-server.listen(PORT, HOST, () => {
-  console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE}`);
-});
+server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });
+server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · engine-adoption`));

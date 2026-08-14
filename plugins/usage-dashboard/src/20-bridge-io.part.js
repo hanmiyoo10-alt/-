@@ -26,6 +26,12 @@
       productVersion:String(raw.productVersion || raw.product_version || ''),
       selfUpdate:raw.selfUpdate === true || raw.self_update === true,
       engineManaged:raw.engineManaged === true || raw.engine_managed === true,
+      engineAdoption:raw.engineAdoption === true || raw.engine_adoption === true,
+      engineMode:String(raw.engineMode || raw.engine_mode || 'legacy-external'),
+      engineService:String(raw.engineService || raw.engine_service || ''),
+      engineVersion:String(raw.engineVersion || raw.engine_version || ''),
+      candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
+      adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
       restartMode:String(raw.restartMode || raw.restart_mode || ''),
       updateChannel:String(raw.updateChannel || raw.update_channel || ''),
       checkedAt:Date.now(),
@@ -40,15 +46,15 @@
       return state.bridgeManagerRuntime;
     }
     state.bridgeManagerLastProbeAt = now;
-    if (!token) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:now,error:'missing token'};
+    if (!token) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:now,error:'missing token'};
     try {
       const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/status`, {method:'GET',headers:bridgeManagerAuthHeaders()});
       const text = await res.text();
-      if (!res.ok) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:`HTTP ${res.status}`};
+      if (!res.ok) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:Date.now(),error:`HTTP ${res.status}`};
       const normalized = normalizeBridgeManagerStatus(JSON.parse(text));
-      return normalized || {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:'invalid manager status'};
+      return normalized || {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:Date.now(),error:'invalid manager status'};
     } catch (e) {
-      return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:e?.message || String(e)};
+      return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,engineAdoption:false,engineMode:'legacy-external',engineService:'',engineVersion:'',candidateSafe:null,adoptionState:'',restartMode:'',updateChannel:'',checkedAt:Date.now(),error:e?.message || String(e)};
     }
   }
 
@@ -65,5 +71,26 @@
       return {...status,lastSyncAction:payload?.updated ? 'updated' : 'current',syncTarget:String(payload?.productVersion || VERSION),syncError:''};
     } catch (e) {
       return {...status,syncError:e?.message || String(e)};
+    }
+  }
+
+  async function adoptBridgeEngineIfNeeded(status) {
+    if (!status?.connected || status.engineManaged === true || status.engineAdoption !== true) return status;
+    if (String(status.productVersion || '') !== VERSION) return status;
+    if (String(state.bridgeEngineAdoptionAttemptedVersion || '') === VERSION) return status;
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/adopt`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      const payload = JSON.parse(text);
+      if (!res.ok) {
+        if (payload?.retryable === false) state.bridgeEngineAdoptionAttemptedVersion = VERSION;
+        return {...status,adoptionState:String(payload?.state || 'failed'),adoptionError:String(payload?.error || `HTTP ${res.status}`),candidateSafe:typeof payload?.candidateSafe === 'boolean' ? payload.candidateSafe : status.candidateSafe};
+      }
+      state.bridgeEngineAdoptionAttemptedVersion = VERSION;
+      state.bridgeManagerLastProbeAt = 0;
+      const fresh = await fetchBridgeManagerStatus(true);
+      return {...fresh,adoptionState:String(payload?.state || (payload?.adopted ? 'adopted' : 'current')),adoptionError:''};
+    } catch (e) {
+      return {...status,adoptionState:'probe-error',adoptionError:e?.message || String(e)};
     }
   }

@@ -22,7 +22,8 @@
         state.data = applyObservedToday(await fetchSnapshot());
         collectRecentRequestLedger(state.data);
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
-        state.bridgeManagerRuntime = await syncBridgeManagerIfNeeded(managerStatus);
+        const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        state.bridgeManagerRuntime = await adoptBridgeEngineIfNeeded(managerSynced);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();

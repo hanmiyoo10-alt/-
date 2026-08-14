@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.1
+//@version 3.0.0-alpha.5.2
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.1';
+  const VERSION = '3.0.0-alpha.5.2';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -48,6 +48,7 @@
     bridgeManagerRuntime: null,
     bridgeManagerLastProbeAt: null,
     bridgeManagerSyncedProductVersion: '',
+    bridgeEngineAdoptionAttemptedVersion: '',
     data: null
   };
 
@@ -259,6 +260,10 @@
       managerProtocol,
       managerVersion:String(manager?.version || ''),
       managerProductVersion:String(manager?.productVersion || manager?.product_version || ''),
+      engineMode:String(manager?.engineMode || manager?.engine_mode || (engineManaged ? 'managed-adopted' : 'legacy-external')),
+      engineService:String(manager?.engineService || manager?.engine_service || ''),
+      engineAdoption:truthy(manager?.engineAdoption ?? manager?.engine_adoption),
+      candidateSafe:typeof manager?.candidateSafe === 'boolean' ? manager.candidateSafe : null,
       bridgeVersion:String(bridge?.version || '')
     };
   }

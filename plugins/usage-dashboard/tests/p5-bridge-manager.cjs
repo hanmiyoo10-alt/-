@@ -35,19 +35,24 @@ for (const marker of [
   "url.pathname === '/sync'",
   "url.pathname === '/rollback'",
   "url.pathname === '/restart'",
-  "engineManaged:false",
+  "url.pathname === '/engine/adopt'",
+  "const ENGINE_SERVICE = 'local-usage-runtime-engine';",
+  "engineAdoption:true",
 ]) assert.ok(manager.includes(marker), `missing manager marker: ${marker}`);
 
 assert.ok(bootstrap.includes('start-services.sh'), 'Termux boot services handoff missing');
 assert.ok(bootstrap.includes('sv-enable'), 'termux-services enable missing');
 assert.ok(bootstrap.includes('기존 39117 Bridge와 토큰은 변경하지 않았어.'), 'legacy bridge preservation marker missing');
 assert.equal(manifest.productVersion, version);
-assert.equal(manifest.components.bridge.state, 'legacy-external');
-assert.equal(manifest.components.bridgeManager.state, 'bootstrap-ready');
+if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridge.state, 'legacy-external');
+else assert.equal(manifest.components.bridge.state, 'managed-adoption');
+if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridgeManager.state, 'bootstrap-ready');
+else assert.equal(manifest.components.bridgeManager.state, 'engine-adoption-ready');
 assert.equal(manifest.components.bridgeManager.managementProtocol, 'bridge-manager-v1');
 assert.equal(manifest.components.bridgeManager.port, 39119);
 assert.equal(manifest.components.bridgeManager.selfUpdate, true);
-assert.equal(manifest.components.bridgeManager.engineManaged, false);
+if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridgeManager.engineManaged, false);
+else { assert.equal(manifest.components.bridgeManager.engineManaged, true); assert.equal(manifest.components.bridgeManager.engineAdoption, true); }
 assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
 assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
 

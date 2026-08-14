@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.41
+//@version 3.0.0-alpha.4.0
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.41';
+  const VERSION = '3.0.0-alpha.4.0';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -23,6 +23,8 @@
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const REQUIRED_BRIDGE_VERSION = '1.6.1';
+  const SNAPSHOT_SCHEMA_VERSION = 1;
+  const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -50,6 +52,10 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const pct = v => Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 0;
 
+
+  function hydrateState(saved) {
+    return {...DEFAULTS,...(saved && typeof saved === 'object' ? saved : {})};
+  }
 
   function bridgeSemver(value) {
     const match = String(value || '').match(/(?:^|[^0-9])(\d+)\.(\d+)\.(\d+)(?:[^0-9]|$)/);
@@ -857,6 +863,13 @@ async function importLegacyTodayBaselines() {
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
+      const cacheRaw = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
+      const cacheText = typeof cacheRaw === 'string' ? cacheRaw.trim().toLowerCase() : '';
+      const cacheHit = typeof cacheRaw === 'boolean' ? cacheRaw
+        : num(cacheRaw) ? Number(cacheRaw) > 0
+        : ['true','yes','hit','cached'].includes(cacheText) ? true
+        : ['false','no','miss','uncached'].includes(cacheText) ? false
+        : null;
       const requestNumberRaw = recentRequestValue(row, ['sequence','seq','requestNumber','request_number','number'], null);
       const status = String(recentRequestValue(row, ['status','state'], '') || '').toLowerCase();
       const errorCodeRaw = recentRequestValue(row, ['errorCode','error_code','statusCode','status_code','httpStatus','http_status','error.code'], null);
@@ -873,6 +886,7 @@ async function importLegacyTodayBaselines() {
         model,
         cost:num(costRaw) ? Number(costRaw) : null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
+        cacheHit,
         requestNumber:requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '',
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
@@ -908,7 +922,14 @@ async function importLegacyTodayBaselines() {
     const rows = value => Array.isArray(value) ? value.map(row => ({
       name:String(row?.name || 'Unknown'),
       requests:num(row?.requests) ? Number(row.requests) : 0,
-      cost:num(row?.cost) ? Number(row.cost) : 0
+      cost:num(row?.cost) ? Number(row.cost) : 0,
+      totalTokens:num(row?.totalTokens ?? row?.total_tokens) ? Number(row.totalTokens ?? row.total_tokens) : null,
+      inputTokens:num(row?.inputTokens ?? row?.input_tokens) ? Number(row.inputTokens ?? row.input_tokens) : null,
+      outputTokens:num(row?.outputTokens ?? row?.output_tokens) ? Number(row.outputTokens ?? row.output_tokens) : null,
+      errorCount:num(row?.errorCount ?? row?.error_count) ? Number(row.errorCount ?? row.error_count) : null,
+      errorRate:num(row?.errorRate ?? row?.error_rate) ? Number(row.errorRate ?? row.error_rate) : null,
+      cacheCount:num(row?.cacheCount ?? row?.cache_count) ? Number(row.cacheCount ?? row.cache_count) : null,
+      cacheRate:num(row?.cacheRate ?? row?.cache_rate) ? Number(row.cacheRate ?? row.cache_rate) : null
     })) : [];
     const totalRequests = num(raw.totalRequests ?? raw.requests24h) ? Number(raw.totalRequests ?? raw.requests24h) : null;
     const totalCost = num(raw.totalCost ?? raw.cost24h) ? Number(raw.totalCost ?? raw.cost24h) : null;
@@ -1181,6 +1202,7 @@ async function importLegacyTodayBaselines() {
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,
       `Source: ${d.source || '—'}`,
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
+      `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
       `Health: ${h.status || '—'}`,
       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
@@ -1553,6 +1575,7 @@ function todayOverviewMetrics(d) {
       const payload = {
         exportedAt: new Date().toISOString(),
         plugin: {name:'Local Usage Dashboard', version:VERSION},
+        schema: {snapshot:SNAPSHOT_SCHEMA_VERSION, recentRequest:RECENT_REQUEST_SCHEMA_VERSION},
         usage: state.data || null,
         dailyUsage: state.dailyUsage || null,
         creditDailyUsage: state.creditDailyUsage || null,
@@ -1792,7 +1815,7 @@ function scheduleResetSync() {
 
   try {
     store=await Risuai.getLocalPluginStorage();
-    state={...DEFAULTS,...((await store.getItem(STATE_KEY))||{})};
+    state=hydrateState(await store.getItem(STATE_KEY));
     await importLegacyTodayBaselines();
     if (state.stalePolicyV37Migrated !== true) {
       if (Number(state.staleAfterMs) === 300000) state.staleAfterMs = 0;

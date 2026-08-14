@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.0
+//@version 3.0.0-alpha.5.1
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.0';
+  const VERSION = '3.0.0-alpha.5.1';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -28,6 +28,8 @@
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
   const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';
   const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
+  const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
+  const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -43,6 +45,9 @@
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
     runtimeStatus: null,
+    bridgeManagerRuntime: null,
+    bridgeManagerLastProbeAt: null,
+    bridgeManagerSyncedProductVersion: '',
     data: null
   };
 
@@ -238,16 +243,22 @@
   function bridgeRuntimeSnapshot() {
     const bridge = state?.data?.bridge || null;
     const capabilities = bridge?.capabilities && typeof bridge.capabilities === 'object' ? bridge.capabilities : null;
-    const manager = bridge?.manager && typeof bridge.manager === 'object' ? bridge.manager : null;
+    const embeddedManager = bridge?.manager && typeof bridge.manager === 'object' ? bridge.manager : null;
+    const probedManager = state?.bridgeManagerRuntime?.connected === true ? state.bridgeManagerRuntime : null;
+    const manager = probedManager || embeddedManager;
     const truthy = value => value === true || value === 1 || String(value || '').toLowerCase() === 'true';
+    const managerInstalled = Boolean(probedManager) || truthy(embeddedManager?.managed ?? capabilities?.managed);
     const selfUpdate = truthy(manager?.selfUpdate ?? manager?.self_update ?? capabilities?.selfUpdate ?? capabilities?.self_update);
-    const managed = truthy(manager?.managed ?? capabilities?.managed) || selfUpdate;
+    const engineManaged = truthy(manager?.engineManaged ?? manager?.engine_managed ?? capabilities?.engineManaged ?? capabilities?.engine_managed);
     const managerProtocol = String(manager?.protocol || manager?.managementProtocol || manager?.management_protocol || capabilities?.managementProtocol || capabilities?.management_protocol || capabilities?.managerProtocol || 'none');
     return {
-      mode: managed ? 'managed-sidecar' : 'legacy-external',
-      managed,
+      mode: engineManaged ? 'managed-sidecar' : 'legacy-external',
+      managerInstalled,
+      engineManaged,
       selfUpdate,
       managerProtocol,
+      managerVersion:String(manager?.version || ''),
+      managerProductVersion:String(manager?.productVersion || manager?.product_version || ''),
       bridgeVersion:String(bridge?.version || '')
     };
   }
@@ -1528,6 +1539,62 @@ async function importLegacyTodayBaselines() {
     catch (e) { if (e instanceof SyntaxError) throw new Error('Bridge 응답이 JSON이 아니야.'); throw e; }
   }
 
+
+  function bridgeManagerAuthHeaders() {
+    return {Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'};
+  }
+
+  function normalizeBridgeManagerStatus(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+      connected:true,
+      ok:raw.ok !== false,
+      protocol:String(raw.protocol || raw.managementProtocol || 'none'),
+      version:String(raw.version || ''),
+      productVersion:String(raw.productVersion || raw.product_version || ''),
+      selfUpdate:raw.selfUpdate === true || raw.self_update === true,
+      engineManaged:raw.engineManaged === true || raw.engine_managed === true,
+      restartMode:String(raw.restartMode || raw.restart_mode || ''),
+      updateChannel:String(raw.updateChannel || raw.update_channel || ''),
+      checkedAt:Date.now(),
+      error:''
+    };
+  }
+
+  async function fetchBridgeManagerStatus(force = false) {
+    const now = Date.now();
+    const lastProbe = Number(state.bridgeManagerLastProbeAt || 0);
+    if (!force && state.bridgeManagerRuntime && lastProbe > 0 && now - lastProbe < BRIDGE_MANAGER_PROBE_INTERVAL_MS) {
+      return state.bridgeManagerRuntime;
+    }
+    state.bridgeManagerLastProbeAt = now;
+    if (!token) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:now,error:'missing token'};
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/status`, {method:'GET',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      if (!res.ok) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:`HTTP ${res.status}`};
+      const normalized = normalizeBridgeManagerStatus(JSON.parse(text));
+      return normalized || {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:'invalid manager status'};
+    } catch (e) {
+      return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:e?.message || String(e)};
+    }
+  }
+
+  async function syncBridgeManagerIfNeeded(status) {
+    if (!status?.connected || status.selfUpdate !== true) return status;
+    if (String(status.productVersion || '') === VERSION) return status;
+    if (String(state.bridgeManagerSyncedProductVersion || '') === VERSION) return status;
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      if (!res.ok) return {...status,syncError:`HTTP ${res.status}`};
+      const payload = JSON.parse(text);
+      state.bridgeManagerSyncedProductVersion = VERSION;
+      return {...status,lastSyncAction:payload?.updated ? 'updated' : 'current',syncTarget:String(payload?.productVersion || VERSION),syncError:''};
+    } catch (e) {
+      return {...status,syncError:e?.message || String(e)};
+    }
+  }
   async function refresh(reason = 'manual', silent = false) {
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;
@@ -1551,6 +1618,8 @@ async function importLegacyTodayBaselines() {
       try {
         state.data = applyObservedToday(await fetchSnapshot());
         collectRecentRequestLedger(state.data);
+        const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
+        state.bridgeManagerRuntime = await syncBridgeManagerIfNeeded(managerStatus);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();
@@ -1614,8 +1683,9 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     return [
       `Local Usage Dashboard v${VERSION}`,
-      `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode}`,
-      `Bridge manager: protocol ${runtimeBridge.managerProtocol} · managed ${runtimeBridge.managed ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
+      `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode} · manager ${runtimeBridge.managerInstalled ? 'installed' : 'absent'}`,
+      `Bridge manager: protocol ${runtimeBridge.managerProtocol} · installed ${runtimeBridge.managerInstalled ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · engine-managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · ${runtimeBridge.managerVersion ? `v${runtimeBridge.managerVersion}` : 'v—'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
+      `Bridge manager probe: ${state.bridgeManagerRuntime?.connected ? 'connected' : 'unavailable'} · checked ${state.bridgeManagerRuntime?.checkedAt ? age(state.bridgeManagerRuntime.checkedAt) : '—'} · product ${state.bridgeManagerRuntime?.productVersion || '—'} · sync ${state.bridgeManagerSyncedProductVersion || 'none'}`,
       `Runtime manifest: ${RUNTIME_MANIFEST_URL}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,

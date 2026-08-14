@@ -29,11 +29,13 @@ jobs:
           set -euo pipefail
           node --check plugins/usage-dashboard/latest.js
           node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/foundation-snapshot.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/cache-zero.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/tests/fixtures/state-v3.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/p1-bridge-contract.json >/dev/null
           git diff --check
 
           VERSION="$(sed -n 's#^//@version ##p' plugins/usage-dashboard/latest.js | head -n1)"
@@ -47,6 +49,12 @@ jobs:
           grep -q 'const SNAPSHOT_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
           grep -q 'const RECENT_REQUEST_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
           grep -q 'function hydrateState(saved)' plugins/usage-dashboard/latest.js
+          grep -q 'function normalizeBridgeModule(name, row)' plugins/usage-dashboard/latest.js
+          grep -q 'function normalizeErrorMap(raw)' plugins/usage-dashboard/latest.js
+          grep -q 'function usageCacheText(scope)' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge module freshness:' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge module duration:' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge partial:' plugins/usage-dashboard/latest.js
           grep -q 'Schema: snapshot v' plugins/usage-dashboard/latest.js
           grep -q 'Usage detail:' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js

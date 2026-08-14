@@ -8,7 +8,6 @@ assert.ok(alpha4 ? Number(alpha4[1]) >= 3 : /^(3\.0\.0-beta\.|3\.0\.0$)/.test(ve
 assert.ok(source.includes(`const VERSION = '${version}';`), 'runtime version must match metadata');
 
 for (const marker of [
-  'const aggregateMetaText = row =>',
   'Provider · 요청 / 비용 / 효율',
   'Model · 요청 / 비용 / 효율',
   '최근 요청 · 메타데이터',
@@ -24,6 +23,7 @@ for (const marker of [
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }
 
+assert.ok(source.includes('const aggregateMetaText = row =>') || source.includes('const aggregateMetaItems = row =>'), 'aggregate metadata renderer regression');
 assert.ok(!source.includes('<details class="panel wide advanced-panel" open>'), 'advanced panels must default closed');
 assert.ok(source.indexOf('class="panel wide usage-primary"') < source.indexOf('class="panel wide analytics-panel"'), 'usage panel must precede analytics in source');
 assert.ok(source.includes("Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'"), 'Usage quick menu regression');

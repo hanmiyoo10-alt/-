@@ -63,12 +63,12 @@ jobs:
           if initial_state_block(old) != initial_state_block(new):
               raise SystemExit('FAIL: initialState changed')
 
-          if old.count('pluginStorage') != new.count('pluginStorage'):
-              raise SystemExit('FAIL: pluginStorage call-site count changed')
+          if old.count('Risuai.pluginStorage') != new.count('Risuai.pluginStorage'):
+              raise SystemExit('FAIL: Risuai.pluginStorage call-site count changed')
 
           print('PASS: prompt module byte-identical to 0.62.35')
           print('PASS: initialState byte-identical to 0.62.35')
-          print('PASS: pluginStorage call-site count unchanged')
+          print('PASS: Risuai.pluginStorage call-site count unchanged')
           PY
 
       - name: Verify probe is memory-only and bounded

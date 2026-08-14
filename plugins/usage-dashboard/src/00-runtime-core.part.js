@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.0
+//@version 3.0.0-alpha.5.1
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.0';
+  const VERSION = '3.0.0-alpha.5.1';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -28,6 +28,8 @@
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
   const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';
   const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
+  const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
+  const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -43,6 +45,9 @@
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
     runtimeStatus: null,
+    bridgeManagerRuntime: null,
+    bridgeManagerLastProbeAt: null,
+    bridgeManagerSyncedProductVersion: '',
     data: null
   };
 
@@ -238,16 +243,22 @@
   function bridgeRuntimeSnapshot() {
     const bridge = state?.data?.bridge || null;
     const capabilities = bridge?.capabilities && typeof bridge.capabilities === 'object' ? bridge.capabilities : null;
-    const manager = bridge?.manager && typeof bridge.manager === 'object' ? bridge.manager : null;
+    const embeddedManager = bridge?.manager && typeof bridge.manager === 'object' ? bridge.manager : null;
+    const probedManager = state?.bridgeManagerRuntime?.connected === true ? state.bridgeManagerRuntime : null;
+    const manager = probedManager || embeddedManager;
     const truthy = value => value === true || value === 1 || String(value || '').toLowerCase() === 'true';
+    const managerInstalled = Boolean(probedManager) || truthy(embeddedManager?.managed ?? capabilities?.managed);
     const selfUpdate = truthy(manager?.selfUpdate ?? manager?.self_update ?? capabilities?.selfUpdate ?? capabilities?.self_update);
-    const managed = truthy(manager?.managed ?? capabilities?.managed) || selfUpdate;
+    const engineManaged = truthy(manager?.engineManaged ?? manager?.engine_managed ?? capabilities?.engineManaged ?? capabilities?.engine_managed);
     const managerProtocol = String(manager?.protocol || manager?.managementProtocol || manager?.management_protocol || capabilities?.managementProtocol || capabilities?.management_protocol || capabilities?.managerProtocol || 'none');
     return {
-      mode: managed ? 'managed-sidecar' : 'legacy-external',
-      managed,
+      mode: engineManaged ? 'managed-sidecar' : 'legacy-external',
+      managerInstalled,
+      engineManaged,
       selfUpdate,
       managerProtocol,
+      managerVersion:String(manager?.version || ''),
+      managerProductVersion:String(manager?.productVersion || manager?.product_version || ''),
       bridgeVersion:String(bridge?.version || '')
     };
   }

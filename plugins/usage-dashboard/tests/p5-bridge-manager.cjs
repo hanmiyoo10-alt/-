@@ -1,0 +1,54 @@
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const assert = require('node:assert/strict');
+
+const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
+const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
+const enabled = /^3\.0\.0-alpha\.5\.(?:[1-9]|\d{2,})$/.test(version) || /^3\.0\.0-beta\./.test(version) || version === '3.0.0';
+if (!enabled) {
+  console.log(`usage-dashboard P5 bridge manager regression: skipped · ${version}`);
+  process.exit(0);
+}
+
+const managerPath = 'plugins/usage-dashboard/runtime/bridge-manager.cjs';
+const bootstrapPath = 'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh';
+const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
+const manager = fs.readFileSync(managerPath, 'utf8');
+const bootstrap = fs.readFileSync(bootstrapPath, 'utf8');
+const hash = path => crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex');
+
+for (const marker of [
+  "const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';",
+  'async function fetchBridgeManagerStatus(force = false)',
+  'async function syncBridgeManagerIfNeeded(status)',
+  'Bridge manager probe:',
+  'engine-managed ${runtimeBridge.engineManaged',
+]) assert.ok(source.includes(marker), `missing plugin bridge-manager marker: ${marker}`);
+
+for (const marker of [
+  "const HOST = '127.0.0.1';",
+  "const PROTOCOL = 'bridge-manager-v1';",
+  "req.headers['x-local-bridge-key']",
+  "req.headers['x-devpass-bridge-key']",
+  'crypto.timingSafeEqual',
+  "execFileSync(process.execPath, ['--check', file]",
+  "url.pathname === '/sync'",
+  "url.pathname === '/rollback'",
+  "url.pathname === '/restart'",
+  "engineManaged:false",
+]) assert.ok(manager.includes(marker), `missing manager marker: ${marker}`);
+
+assert.ok(bootstrap.includes('start-services.sh'), 'Termux boot services handoff missing');
+assert.ok(bootstrap.includes('sv-enable'), 'termux-services enable missing');
+assert.ok(bootstrap.includes('기존 39117 Bridge와 토큰은 변경하지 않았어.'), 'legacy bridge preservation marker missing');
+assert.equal(manifest.productVersion, version);
+assert.equal(manifest.components.bridge.state, 'legacy-external');
+assert.equal(manifest.components.bridgeManager.state, 'bootstrap-ready');
+assert.equal(manifest.components.bridgeManager.managementProtocol, 'bridge-manager-v1');
+assert.equal(manifest.components.bridgeManager.port, 39119);
+assert.equal(manifest.components.bridgeManager.selfUpdate, true);
+assert.equal(manifest.components.bridgeManager.engineManaged, false);
+assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
+assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
+
+console.log(`usage-dashboard P5 bridge manager regression: OK · ${version}`);

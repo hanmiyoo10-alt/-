@@ -11,3 +11,59 @@
     catch (e) { if (e instanceof SyntaxError) throw new Error('Bridge 응답이 JSON이 아니야.'); throw e; }
   }
 
+
+  function bridgeManagerAuthHeaders() {
+    return {Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'};
+  }
+
+  function normalizeBridgeManagerStatus(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+      connected:true,
+      ok:raw.ok !== false,
+      protocol:String(raw.protocol || raw.managementProtocol || 'none'),
+      version:String(raw.version || ''),
+      productVersion:String(raw.productVersion || raw.product_version || ''),
+      selfUpdate:raw.selfUpdate === true || raw.self_update === true,
+      engineManaged:raw.engineManaged === true || raw.engine_managed === true,
+      restartMode:String(raw.restartMode || raw.restart_mode || ''),
+      updateChannel:String(raw.updateChannel || raw.update_channel || ''),
+      checkedAt:Date.now(),
+      error:''
+    };
+  }
+
+  async function fetchBridgeManagerStatus(force = false) {
+    const now = Date.now();
+    const lastProbe = Number(state.bridgeManagerLastProbeAt || 0);
+    if (!force && state.bridgeManagerRuntime && lastProbe > 0 && now - lastProbe < BRIDGE_MANAGER_PROBE_INTERVAL_MS) {
+      return state.bridgeManagerRuntime;
+    }
+    state.bridgeManagerLastProbeAt = now;
+    if (!token) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:now,error:'missing token'};
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/status`, {method:'GET',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      if (!res.ok) return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:`HTTP ${res.status}`};
+      const normalized = normalizeBridgeManagerStatus(JSON.parse(text));
+      return normalized || {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:'invalid manager status'};
+    } catch (e) {
+      return {connected:false,ok:false,protocol:'none',version:'',productVersion:'',selfUpdate:false,engineManaged:false,restartMode:'',updateChannel:'',checkedAt:Date.now(),error:e?.message || String(e)};
+    }
+  }
+
+  async function syncBridgeManagerIfNeeded(status) {
+    if (!status?.connected || status.selfUpdate !== true) return status;
+    if (String(status.productVersion || '') === VERSION) return status;
+    if (String(state.bridgeManagerSyncedProductVersion || '') === VERSION) return status;
+    try {
+      const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/sync`, {method:'POST',headers:bridgeManagerAuthHeaders()});
+      const text = await res.text();
+      if (!res.ok) return {...status,syncError:`HTTP ${res.status}`};
+      const payload = JSON.parse(text);
+      state.bridgeManagerSyncedProductVersion = VERSION;
+      return {...status,lastSyncAction:payload?.updated ? 'updated' : 'current',syncTarget:String(payload?.productVersion || VERSION),syncError:''};
+    } catch (e) {
+      return {...status,syncError:e?.message || String(e)};
+    }
+  }

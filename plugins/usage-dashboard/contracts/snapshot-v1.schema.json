@@ -20,16 +20,61 @@
           },
           "additionalProperties": true
         },
-        "errors": { "type": "object" }
+        "errors": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/errorValue" }
+        }
       },
       "additionalProperties": true
     },
-    "analyticsScopes": { "type": "object" },
-    "modules": { "type": "object" },
+    "analyticsScopes": {
+      "type": "object",
+      "properties": {
+        "errors": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/errorValue" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "modules": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/moduleState" }
+    },
     "diagnostics": { "type": "object" }
   },
   "additionalProperties": true,
   "$defs": {
+    "errorDetail": {
+      "type": "object",
+      "properties": {
+        "code": { "type": ["string", "number"] },
+        "type": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "errorValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "$ref": "#/$defs/errorDetail" }
+      ]
+    },
+    "moduleState": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "stale": { "type": "boolean" },
+        "fetchedAt": { "type": ["string", "number"] },
+        "updatedAt": { "type": ["string", "number"] },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "elapsedMs": { "type": "number", "minimum": 0 },
+        "errorCode": { "type": ["string", "number"] },
+        "errorType": { "type": "string" },
+        "error": { "$ref": "#/$defs/errorValue" }
+      },
+      "additionalProperties": true
+    },
     "aggregateRow": {
       "type": "object",
       "required": ["name"],

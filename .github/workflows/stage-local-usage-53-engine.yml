@@ -24,6 +24,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected=(
+            472b576f9ee36ddd09fd5522d80dd4d876f2de7cf0d46dc54136755468f0b3c1
+            2e42728f49782a55af00f4a4e837765e80326e80e1a7c92d6a13ee91d8339a82
+            2353af1da55d5a53c7d50ed809c2680dad29ccaa80b4e5181e1dc7a62bf8371d
+            00c31d23f783b2de8998b4bbb11d17891bda271797022ca85d9b26847edebd31
+            7c368576501e0f42b960a98c48abb7b60d8ee6b7545faafeed48d992d487c89d
+            72c99bd52f41eacb3791b0ec35d59eed8e4df640c0d4b6926dcd794c51e592bc
+            ac80e8f41eae72019af0d687e90c713199c65125995cfeed615378715329fefd
+            7ce72cdc7df3208274737a8393be41ad33a43d7335d7ef6962338462c3a9a4a0
+          )
+          for i in 00 01 02 03 04 05 06 07; do
+            n=15000; [ "$i" = 07 ] && n=6632
+            actual="$(head -c "$n" ".github/lud53/bridge.b64.$i" | sha256sum | awk '{print $1}')"
+            idx=$((10#$i))
+            echo "chunk $i · $actual"
+            test "$actual" = "${expected[$idx]}" || { echo "chunk $i mismatch"; exit 1; }
+          done
           mkdir -p plugins/usage-dashboard/runtime
           {
             head -c 15000 .github/lud53/bridge.b64.00
@@ -35,7 +52,11 @@ jobs:
             head -c 15000 .github/lud53/bridge.b64.06
             head -c 6632 .github/lud53/bridge.b64.07
           } > /tmp/bridge.b64
+          echo "base64 sha · $(sha256sum /tmp/bridge.b64 | awk '{print $1}')"
+          test "$(sha256sum /tmp/bridge.b64 | awk '{print $1}')" = 'e0b48fcd5bc816185251c2039a063b1a75f91bb3c71f9e61eed7a4baf38a9bb9'
           base64 -d /tmp/bridge.b64 > plugins/usage-dashboard/runtime/bridge-engine.mjs
+          echo "engine bytes · $(wc -c < plugins/usage-dashboard/runtime/bridge-engine.mjs)"
+          echo "engine sha · $(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           test "$(wc -c < plugins/usage-dashboard/runtime/bridge-engine.mjs)" -eq 83723
           test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs

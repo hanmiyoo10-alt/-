@@ -1,0 +1,89 @@
+name: Hotfix Local Usage Dashboard alpha.5.2 manager temp extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hotfix-local-usage-alpha502-manager-temp-ext.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply and validate manager hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile plugins/usage-dashboard/tools/hotfix_alpha502_manager_temp_ext.py
+          python3 plugins/usage-dashboard/tools/hotfix_alpha502_manager_temp_ext.py
+          rm plugins/usage-dashboard/tools/hotfix_alpha502_manager_temp_ext.py
+
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          git diff --check
+
+          grep -Fq "const MANAGER_VERSION = '1.1.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq 'bridge-manager.next-${process.pid}.cjs' plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq 'bridge-manager.rollback-${process.pid}.cjs' plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"version": "1.1.1"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"productVersion": "3.0.0-alpha.5.2"' plugins/usage-dashboard/runtime/product-manifest.json
+
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+
+      - name: Commit hotfix to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A plugins/usage-dashboard
+          git commit -m 'fix: alpha.5.2 manager Node check temp extension'
+          git push origin HEAD:main
+
+      - name: Publish hotfixed runtime to release-usage-dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          grep -Fq "const MANAGER_VERSION = '1.1.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.2"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/runtime
+          if git diff --cached --quiet; then
+            echo 'release runtime already matches hotfix'
+            exit 0
+          fi
+          CHANGED="$(git diff --cached --name-only | sort)"
+          while IFS= read -r path; do
+            case "$path" in
+              plugins/usage-dashboard/runtime/product-manifest.json|plugins/usage-dashboard/runtime/bridge-manager.cjs|plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh) ;;
+              *) echo "unexpected runtime artifact: $path"; exit 1 ;;
+            esac
+          done <<< "$CHANGED"
+          git commit -m 'fix: publish alpha.5.2 manager temp extension hotfix'
+          git push origin HEAD:release-usage-dashboard

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.13
+//@version 0.63.14
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.14 Short-C Example Provenance Lock:
+// - Refines the eligible Short-C evidence contract after v0.63.13 live testing showed that broad character-pattern generalization was legitimate but unsupported concrete prior-event examples still leaked into posts/comments
+// - Replaces the three v0.63.13 scope lines with three provenance-focused lines: abstract generalization and stable background remain available, while every concrete event example/scene/action/item/quote/outcome requires support from the authoritative current root
+// - Outside-root specific event evidence is omitted unless the current user explicitly requests prior-event/history/comparison/retrospective context; the boundary applies across title/body/comments/descriptions/Knowledge
+// - Preserves reaction/opinion/joke/tone/emphasis freedom and does not parse source semantics, copy source bodies, scan history, store event facts, or repair output
+// - Keeps Frame/Chapter/Chatindex handling deliberately frozen for independent live validation; all non-Prompt modules, state/storage paths, compiler structure, and v0.63.10 diagnostics UI remain unchanged
 //
 // v0.63.13 Short-C Event Scope Lock:
 // - Refines the v0.63.12 Short-C scope contract after live testing showed that outside-root events were correctly labeled as past but the model still widened a plain current-scene reaction into a series-wide recap
@@ -2464,9 +2471,9 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push('short_community_source_is_authoritative=1');
     lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');
     lines.push('source_event_identity_and_facts=current_lineage_root_only;do_not_import_prior_similar_event_details=1');
-    lines.push('short_community_default_scope=current_root_event;stable_character_world_background_allowed_as_background_only=1;outside_root_event_details_forbidden=1');
-    lines.push('expand_event_scope_only_if_current_user_explicitly_requests_overall_history_comparison_retrospective_or_prior_events=1;otherwise_no_series_wide_recap_compilation_or_prior_event_examples=1');
-    lines.push('reaction_freedom=opinion_joke_tone_emphasis_only;event_fact_premises_in_title_body_comments_descriptions_Knowledge_obey_event_scope=1');
+    lines.push('abstract_generalization_from_current_root_allowed=1;stable_character_world_background_allowed_as_context_not_event_evidence=1;reaction_opinion_joke_tone_emphasis_free=1');
+    lines.push('specific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support=1;outside_root_specifics_omit=1');
+    lines.push('outside_root_specific_event_evidence_only_if_current_user_explicitly_requests_prior_events_history_comparison_or_retrospective=1;boundary_applies_title_body_comments_descriptions_Knowledge=1');
     if (p.communitySourceHandoffNewSource) {
       lines.push(`short_community_request_reused_with_new_source=${sourceRootMode}`);
       lines.push('derive_reaction_from_current_source_not_prior_answer=1');
@@ -4050,7 +4057,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.13',
+      'Version: 0.63.14',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4260,7 +4267,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.13</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.14</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

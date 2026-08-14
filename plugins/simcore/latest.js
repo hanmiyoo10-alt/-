@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.0
+//@version 0.63.1
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -24,6 +24,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.1 Short-C Source Lock + Turn Diagnostic Copy:
+// - Strengthens eligible short Mode C source guidance without changing lineage/handoff classification: the current lineage root is explicitly authoritative and prior similar events/community answers may not substitute it
+// - Emits only deterministic lineage metadata already computed by SimCore; no lore/content extraction, semantic source selection, history search, or state-schema/storage change
+// - Adds a manual '최근 턴 진단 복사' panel action that copies raw root/parent/current turns plus live SimCore probes on demand, with no persistent response copy
+// - Reuses the proven navigator.clipboard.writeText pattern from Local Usage Dashboard; clipboard work occurs only after the user presses the diagnostic button
+// - Keeps Cache-Aware Prompt Compiler ordering, >=20% mode-transition cache-floor gate, visible Thoughts/preamble recovery, reaction/time/broadcast behavior, and pluginStorage call sites unchanged
 //
 // v0.63.0 Cache-Aware Prompt Compiler:
 // - Replaces the monolithic runtime-prompt serializer with explicit Stable/Slow/Mode/Conditional/Hot/Footer compiler tiers inside the existing Prompt module
@@ -2362,12 +2369,21 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');
     lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');
   }
-  if (p.communitySourceHandoffNewSource) {
-    lines.push(`short_community_request_reused_with_new_source=${p.communitySourceHandoffRootMode || 'unknown'}`);
-    lines.push('derive_reaction_from_current_source_not_prior_answer=1');
-  }
-  else if (p.mode === 'C' && p.communitySourceHandoffEligible) {
+  if (p.mode === 'C' && p.communitySourceHandoffEligible) {
+    const sourceRootMode = p.communitySourceHandoffRootMode || 'unknown';
+    const sourceRootIndex = Number.isInteger(Number(p.communitySourceHandoffRootIndex)) && Number(p.communitySourceHandoffRootIndex) >= 0
+      ? Number(p.communitySourceHandoffRootIndex)
+      : 'unknown';
     lines.push('short_community_request_context_is_current_lineage=1');
+    lines.push('short_community_source_selector=current_lineage_root_turn');
+    lines.push(`short_community_source_root_mode=${sourceRootMode}`);
+    lines.push(`short_community_source_root_index=${sourceRootIndex}`);
+    lines.push('short_community_source_is_authoritative=1');
+    lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');
+    if (p.communitySourceHandoffNewSource) {
+      lines.push(`short_community_request_reused_with_new_source=${sourceRootMode}`);
+      lines.push('derive_reaction_from_current_source_not_prior_answer=1');
+    }
   }
   if (communityExpected > 0) {
     lines.push('platform_groups_required=3_distinct');
@@ -3455,7 +3471,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.63.0] state mirror failed:', e.message);
+      console.log('[simcore/v0.63.1] state mirror failed:', e.message);
     }
   }
 
@@ -3470,7 +3486,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.63.0] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.63.1] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3558,6 +3574,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         recurrence: runtimeBudgetLines.some((line) => line === 'request_template_recurs_from_prior_history=1'),
         handoff: runtimeBudgetLines.some((line) => line.startsWith('short_community_request_reused_with_new_source=')),
         lineageAnchor: runtimeBudgetLines.some((line) => line === 'short_community_request_context_is_current_lineage=1'),
+        sourceAnchor: runtimeBudgetLines.some((line) => line === 'short_community_source_is_authoritative=1'),
         at: Date.now(),
       };
       const runtimePromptKey = String(coreKey || coreLocationKey || '');
@@ -3679,8 +3696,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.63.0] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.63.0] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.63.1] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.63.1] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3693,7 +3710,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.63.0] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.63.1] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3738,7 +3755,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.0] beforeRequest error:', e.message);
+      console.log('[simcore/v0.63.1] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3764,7 +3781,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.63.0] output error:', e.message);
+      console.log('[simcore/v0.63.1] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3774,6 +3791,159 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   function escapeHtml(v) {
     return String(v ?? '').replace(/[&<>\"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;' }[c]));
+  }
+
+  function diagnosticAssistantRole(m) {
+    return m?.role === 'char' || m?.role === 'assistant';
+  }
+
+  function diagnosticLastAssistantIndex(messages) {
+    const rows = Array.isArray(messages) ? messages : [];
+    for (let i = rows.length - 1; i >= 0; i--) if (diagnosticAssistantRole(rows[i])) return i;
+    return -1;
+  }
+
+  function diagnosticUserBefore(messages, beforeIndex) {
+    const rows = Array.isArray(messages) ? messages : [];
+    const start = Math.min(rows.length - 1, Math.max(-1, Number(beforeIndex) - 1));
+    for (let i = start; i >= 0; i--) if (rows[i]?.role === 'user') return i;
+    return -1;
+  }
+
+  function diagnosticAssistantAfterUser(messages, userIndex) {
+    const rows = Array.isArray(messages) ? messages : [];
+    const start = Number.isInteger(Number(userIndex)) ? Number(userIndex) + 1 : rows.length;
+    for (let i = start; i < rows.length; i++) {
+      if (rows[i]?.role === 'user') break;
+      if (diagnosticAssistantRole(rows[i])) return i;
+    }
+    return -1;
+  }
+
+  function diagnosticRawMessage(messages, index) {
+    const rows = Array.isArray(messages) ? messages : [];
+    return Number.isInteger(Number(index)) && Number(index) >= 0 && Number(index) < rows.length
+      ? textMessageContent(rows[Number(index)])
+      : '';
+  }
+
+  function diagnosticProbeFresh() {
+    const currentKey = String(coreKey || coreLocationKey || '');
+    return !!currentKey && previousRuntimePromptKey === currentKey;
+  }
+
+  function diagnosticSection(title, messages, userIndex, assistantIndex, meta = []) {
+    const userRaw = diagnosticRawMessage(messages, userIndex);
+    const assistantRaw = diagnosticRawMessage(messages, assistantIndex);
+    return [
+      `--- ${title} ---`,
+      ...meta,
+      `User index: ${Number.isInteger(Number(userIndex)) && Number(userIndex) >= 0 ? Number(userIndex) : 'n/a'}`,
+      `Assistant index: ${Number.isInteger(Number(assistantIndex)) && Number(assistantIndex) >= 0 ? Number(assistantIndex) : 'n/a'}`,
+      '',
+      'USER (RAW):',
+      userRaw || '[unavailable]',
+      '',
+      'ASSISTANT (RAW):',
+      assistantRaw || '[unavailable]',
+      '',
+    ].join('\n');
+  }
+
+  function buildLastTurnDiagnosticReport(chat, state) {
+    const messages = Array.isArray(chat?.message) ? chat.message : [];
+    const latestAssistantIndex = diagnosticLastAssistantIndex(messages);
+    const currentUserIndex = diagnosticUserBefore(messages, latestAssistantIndex >= 0 ? latestAssistantIndex : messages.length);
+    const lineage = lastRequestLineageProbe || null;
+    const handoff = lastCommunitySourceHandoffProbe || null;
+    const recurrenceProbe = lastTemplateRecurrenceProbe || null;
+    const narrative = lastNarrativeClockProbe || null;
+    const cacheProbe = lastRuntimePromptCacheProbe || null;
+    const budget = lastRuntimePromptBudget || null;
+    const probeFresh = diagnosticProbeFresh();
+    const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
+    const parentIndex = probeFresh && lineage ? Number(lineage.parentIndex) : -1;
+    const rootAssistantIndex = rootIndex >= 0 && rootIndex !== currentUserIndex
+      ? diagnosticAssistantAfterUser(messages, rootIndex)
+      : -1;
+    const parentAssistantIndex = parentIndex >= 0 && parentIndex !== currentUserIndex
+      ? diagnosticAssistantAfterUser(messages, parentIndex)
+      : -1;
+    const warnings = Array.isArray(lastCore?.issues) ? lastCore.issues : [];
+    const compatibility = Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
+    const prefixLabel = !probeFresh || !cacheProbe
+      ? 'n/a'
+      : (cacheProbe.baseline
+        ? 'BASELINE'
+        : `${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${cacheProbe.reason || 'other'}`);
+    const lines = [
+      '=== SimCore Last Turn Diagnostic ===',
+      'Diagnostic format: raw-lineage-v1',
+      'Version: 0.63.1',
+      `Captured: ${new Date().toISOString()}`,
+      `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
+      `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
+      `Warnings: ${warnings.length}`,
+      `Compatibility diagnostics: ${compatibility.length}`,
+      `Prompt prefix: ${prefixLabel}`,
+      `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
+      `Short-C source lock: ${probeFresh && budget?.sourceAnchor ? 'ON' : 'OFF'}`,
+      `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
+      `Request lineage: ${probeFresh && lineage ? `${lineage.sourceKind || 'UNSEEDED'} · root ${lineage.rootMode || 'n/a'}@${Number(lineage.rootIndex ?? -1)} · parent ${lineage.parentMode || 'n/a'}@${Number(lineage.parentIndex ?? -1)} · depth ${Number(lineage.depth || 0)}` : 'n/a'}`,
+      `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
+      `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
+      `Broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
+      '',
+      'Warnings detail:',
+      ...(warnings.length ? warnings.map((x) => `- ${x}`) : ['- none']),
+      'Compatibility detail:',
+      ...(compatibility.length ? compatibility.map((x) => `- ${x}`) : ['- none']),
+      '',
+    ];
+
+    const sections = [];
+    if (probeFresh && rootIndex >= 0 && rootIndex !== currentUserIndex) {
+      sections.push(diagnosticSection(
+        'ROOT SOURCE TURN (RAW)',
+        messages,
+        rootIndex,
+        rootAssistantIndex,
+        [`Root mode: ${lineage?.rootMode || 'n/a'}`, `Lineage role: authoritative root source`],
+      ));
+    } else if (probeFresh && rootIndex === currentUserIndex && rootIndex >= 0) {
+      lines.push('Root source: current input (INLINE/current-turn source); see CURRENT TURN below.', '');
+    } else {
+      lines.push('Root source: unavailable for this live probe.', '');
+    }
+
+    if (probeFresh && parentIndex >= 0 && parentIndex !== currentUserIndex && parentIndex !== rootIndex) {
+      sections.push(diagnosticSection(
+        'PARENT TURN (RAW)',
+        messages,
+        parentIndex,
+        parentAssistantIndex,
+        [`Parent mode: ${lineage?.parentMode || 'n/a'}`, `Lineage depth: ${Number(lineage?.depth || 0)}`],
+      ));
+    }
+
+    sections.push(diagnosticSection(
+      'CURRENT TURN (RAW)',
+      messages,
+      currentUserIndex,
+      latestAssistantIndex,
+      [`Current mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`],
+    ));
+    return lines.join('\n') + sections.join('\n');
+  }
+
+  async function copyLastTurnDiagnostic(chat, state) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(buildLastTurnDiagnosticReport(chat, state));
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   async function openPanel() {
@@ -3853,7 +4023,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.63.0 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.1 <button id="copy-turn-diag">최근 턴 진단 복사</button> <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3880,7 +4050,7 @@ ${broadcastClockRows}
 <div class="metric"><div class="k">Reference anchor</div><div class="v">ON · +2 lines</div></div>
 <div class="metric"><div class="k">Current age anchor</div><div class="v">${Number(s?.koreanAgeOffset || 0) > 0 ? `ON · +1 line · offset +${Number(s?.koreanAgeOffset || 0)}` : `STANDBY · offset +0`}</div></div>
 <div class="metric"><div class="k">Timestamp syntax</div><div class="v">${lastTimestampCanonicalization ? (lastTimestampCanonicalization.changed ? `CANONICALIZED · ${Number(lastTimestampCanonicalization.count || 0)}` : `OK`) : `n/a`}</div></div>
-<div class="metric"><div class="k">Short-C lineage</div><div class="v">${lastRuntimePromptBudget?.lineageAnchor ? 'CURRENT LINEAGE' : 'OFF'}</div></div>
+<div class="metric"><div class="k">Short-C lineage</div><div class="v">${lastRuntimePromptBudget?.sourceAnchor ? 'SOURCE LOCKED' : (lastRuntimePromptBudget?.lineageAnchor ? 'CURRENT LINEAGE' : 'OFF')}</div></div>
 <div class="metric"><div class="k">Runtime prompt</div><div class="v">${lastRuntimePromptBudget ? `${Number(lastRuntimePromptBudget.chars || 0).toLocaleString('en-US')} chars · ${Number(lastRuntimePromptBudget.lines || 0)} lines` : 'n/a'}</div></div>
 <div class="metric"><div class="k">Prompt prefix</div><div class="v">${escapeHtml(promptCacheLabel)}</div></div>
 <div class="metric"><div class="k">beforeRequest</div><div class="v">${lastPerf ? `${lastPerf.totalMs.toFixed(1)} ms` : 'n/a'}</div></div>
@@ -3959,12 +4129,18 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
 <tr><td>Changed families</td><td>${escapeHtml((aliasDiag.changedFamilies || []).join(', ') || 'none')}</td></tr>
 </table></div>` : ''}
 <details class="card"><summary>Platform-family reaction_max · ${maxima.length} families</summary><div class="detail-body"><table><tr><th>Platform</th><th>Max</th></tr>${rows}</table></div></details>
-<div class="card muted">Short Community Lineage Anchor · FIRST/SAME SOURCE seeded short-C gets one current-lineage hint</div>
+<div class="card muted">Short-C Source Lock · eligible short-C is bound to the current lineage root; diagnostic copy is manual/raw-only</div>
 </div>`;
+      const copyTurnDiagButton = document.getElementById('copy-turn-diag');
+      if (copyTurnDiagButton) copyTurnDiagButton.onclick = async () => {
+        const oldText = copyTurnDiagButton.textContent;
+        copyTurnDiagButton.textContent = (await copyLastTurnDiagnostic(chat, s)) ? '복사됨 ✓' : '복사 실패';
+        setTimeout(() => { copyTurnDiagButton.textContent = oldText; }, 1200);
+      };
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.63.0] panel error:', e.message);
+      console.log('[simcore/v0.63.1] panel error:', e.message);
     }
   }
 
@@ -3972,7 +4148,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.63.0] UI registration failed:', e.message);
+    console.log('[simcore/v0.63.1] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3983,5 +4159,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     previousRuntimePromptText = null;
     previousRuntimePromptKey = null;
   });
-  console.log('[simcore/v0.63.0] initialized');
+  console.log('[simcore/v0.63.1] initialized');
 })();

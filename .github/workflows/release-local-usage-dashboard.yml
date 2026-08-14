@@ -18,20 +18,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.25 to alpha.3.26 resume grace
+      - name: Patch alpha.3.26 to alpha.3.27 refresh scheduler
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha325_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha327_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.26$' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.27$' plugins/usage-dashboard/latest.js
+          grep -q 'schedulerEnabled: true' plugins/usage-dashboard/latest.js
+          grep -q 'const REFRESH_PRIORITY = Object.freeze' plugins/usage-dashboard/latest.js
+          grep -q 'function enqueueRefresh' plugins/usage-dashboard/latest.js
+          grep -q 'function runQueuedRefresh' plugins/usage-dashboard/latest.js
+          grep -q 'schedulerQueued:0' plugins/usage-dashboard/latest.js
+          grep -q 'schedulerMerged:0' plugins/usage-dashboard/latest.js
+          grep -q 'schedulerExecuted:0' plugins/usage-dashboard/latest.js
+          grep -q 'schedulerDeferredForInteraction:0' plugins/usage-dashboard/latest.js
+          grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
+          grep -q 'Scheduler ·' plugins/usage-dashboard/latest.js
+          grep -q "enqueueRefresh('timer',true)" plugins/usage-dashboard/latest.js
+          grep -q "enqueueRefresh('visibility', true)" plugins/usage-dashboard/latest.js
           grep -q 'RESUME_GRACE_MS = 1200' plugins/usage-dashboard/latest.js
-          grep -q 'RESUME_INTERACTION_QUIET_MS = 900' plugins/usage-dashboard/latest.js
-          grep -q 'RESUME_MAX_DEFER_MS = 4500' plugins/usage-dashboard/latest.js
-          grep -q 'function requestResumeRefresh' plugins/usage-dashboard/latest.js
-          grep -q 'function runResumeRefreshWhenQuiet' plugins/usage-dashboard/latest.js
           grep -q 'Resume grace:' plugins/usage-dashboard/latest.js
-          grep -q 'Resume Grace ·' plugins/usage-dashboard/latest.js
           grep -q 'Resume probe:' plugins/usage-dashboard/latest.js
           grep -q 'Resume long task:' plugins/usage-dashboard/latest.js
           grep -q 'UI stall probe:' plugins/usage-dashboard/latest.js
@@ -44,11 +51,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.26'
+            echo 'latest.js already matches alpha.3.27'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.26 resume grace'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.27 refresh scheduler'
           git push

@@ -25,14 +25,36 @@ s = replace_once(
 p.write_text(s)
 
 
-# 60 settings runtime: automatic updates patch only live dashboard sections.
+# 60 settings runtime: keep the existing module boundary, then add partial helpers.
 p = ROOT / '60-settings-runtime.part.js'
 s = p.read_text()
 pattern = re.compile(r"  function renderSettings\(\) \{\n.*?\n  \}\n\n  function bindSettings\(\) \{", re.S)
 match = pattern.search(s)
 if not match:
     raise SystemExit('renderSettings block not found')
-replacement = r'''  const PANEL_PARTIAL_SELECTORS = [
+replacement = r'''  function renderSettings(partial = false) {
+    const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const nextHtml = settingsHtml();
+    let mode = 'full';
+    const partialApplied = partial === true
+      && document.body?.dataset?.panelOpen === '1'
+      && patchPanelSections(nextHtml);
+    if (partialApplied) {
+      mode = 'partial';
+      performanceRuntime.panelPartialRenders += 1;
+    } else {
+      document.body.innerHTML = nextHtml;
+      bindSettings();
+      performanceRuntime.panelFullRenders += 1;
+    }
+    performanceRuntime.lastPanelRenderMode = mode;
+    const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const duration = Math.max(0, endedPerf - startedPerf);
+    performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);
+    noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
+  }
+
+  const PANEL_PARTIAL_SELECTORS = [
     '.grid > section.panel.metric',
     '.grid > section.panel.wide:not(.usage-primary):not(.activity-secondary):not(.analytics-panel)',
     '.grid > section.usage-primary',
@@ -79,28 +101,6 @@ replacement = r'''  const PANEL_PARTIAL_SELECTORS = [
     performanceRuntime.panelSectionSkips += skips;
     if (writes > 0) bindSettings();
     return true;
-  }
-
-  function renderSettings(partial = false) {
-    const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
-    const nextHtml = settingsHtml();
-    let mode = 'full';
-    const partialApplied = partial === true
-      && document.body?.dataset?.panelOpen === '1'
-      && patchPanelSections(nextHtml);
-    if (partialApplied) {
-      mode = 'partial';
-      performanceRuntime.panelPartialRenders += 1;
-    } else {
-      document.body.innerHTML = nextHtml;
-      bindSettings();
-      performanceRuntime.panelFullRenders += 1;
-    }
-    performanceRuntime.lastPanelRenderMode = mode;
-    const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
-    const duration = Math.max(0, endedPerf - startedPerf);
-    performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);
-    noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
   }
 
   function bindSettings() {'''

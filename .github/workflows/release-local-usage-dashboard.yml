@@ -40,6 +40,7 @@ jobs:
           node plugins/usage-dashboard/tests/p4-render.cjs
           node plugins/usage-dashboard/tests/p4-partial.cjs
           node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
@@ -89,6 +90,12 @@ jobs:
           grep -q '시간별 요청 · 24h 로컬 관측' plugins/usage-dashboard/latest.js
           grep -q 'Request ledger: rows' plugins/usage-dashboard/latest.js
           grep -q 'Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS' plugins/usage-dashboard/latest.js
+          grep -q 'function aggregateSelectedHour(rows, key)' plugins/usage-dashboard/latest.js
+          grep -q 'Provider 합계' plugins/usage-dashboard/latest.js
+          grep -q 'Model 합계' plugins/usage-dashboard/latest.js
+          grep -q 'function requestLedgerCoverageText()' plugins/usage-dashboard/latest.js
+          grep -q 'function renderHourlyDrilldownOnly()' plugins/usage-dashboard/latest.js
+          grep -q 'Hourly detail: provider/model summary · cache coverage · click-only partial render' plugins/usage-dashboard/latest.js
           grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js
           grep -q 'widgetRenderCache.html !== nextHtml' plugins/usage-dashboard/latest.js
           grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.3.31
+//@version 3.0.0-alpha.3.32
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.3.31';
+  const VERSION = '3.0.0-alpha.3.32';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1481,9 +1481,8 @@ function scheduleResetSync() {
     }
     try{state.bridgeBase=normalizeBridgeBase(state.bridgeBase);}catch(_){state.bridgeBase=DEFAULT_BRIDGE;state.bridgeEnabled=false;}
     token=String((await store.getItem(TOKEN_KEY))||'').trim();
-    // Use the same registerSetting path as SimCore so Usage appears in the same quick-menu section.
-    // With the current plugin load order this places Usage directly after SimCore.
-    uiParts.push(await Risuai.registerSetting('Usage',openSettings,'📊','html'));
+    uiParts.push(await Risuai.registerSetting('Local Usage Dashboard',openSettings,'◴','html','local-usage-dashboard-settings-v3'));
+    uiParts.push(await Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat',id:'local-usage-dashboard-button-v3'},openSettings));
     await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)enqueueRefresh('init',true);
     await Risuai.onUnload(async()=>{
       if(refreshTimer)clearTimeout(refreshTimer);

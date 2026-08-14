@@ -50,6 +50,7 @@ jobs:
           grep -q 'Analytics · 24h / 7d / 30d' plugins/usage-dashboard/latest.js
           grep -q '24h Usage Scope' plugins/usage-dashboard/latest.js
           grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
 
       - name: Commit staged release to main
         shell: bash
@@ -66,3 +67,26 @@ jobs:
           git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.37 stall render correlation'
           git pull --rebase origin main
           git push origin HEAD:main
+
+      - name: Publish alpha.3.37 to release-usage-dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.37$' plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          grep -q 'Stall/render coincidence:' plugins/usage-dashboard/latest.js
+          git diff --check
+          if git diff --quiet -- plugins/usage-dashboard/latest.js; then
+            echo 'release-usage-dashboard already matches alpha.3.37'
+            exit 0
+          fi
+          test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'release: publish Local Usage Dashboard v3.0.0-alpha.3.37'
+          git push origin HEAD:release-usage-dashboard

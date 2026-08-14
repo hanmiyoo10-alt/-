@@ -52,7 +52,7 @@ jobs:
           node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
-          ENGINE_SHA="$(node -e 'const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
+          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
           test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
@@ -187,7 +187,7 @@ jobs:
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
           bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
-          ENGINE_SHA="$(node -e 'const m=require(process.argv[1]);process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
+          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
           test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           grep -Fq "//@version $VERSION" plugins/usage-dashboard/latest.js
           grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json

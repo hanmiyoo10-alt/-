@@ -1,0 +1,145 @@
+name: SimCore 0.63.5 Period Baseline Continuity
+
+on:
+  push:
+    branches:
+      - simcore-06305-period-baseline-continuity
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06305-period-baseline-continuity
+          fetch-depth: 2
+
+      - name: Freeze 0.63.4 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-06305-baseline.js
+
+      - name: Patch 0.63.5 artifacts
+        run: python3 plugins/simcore/tools/release_06305_period_baseline_continuity.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Prompt continuity and cache gates
+        run: node plugins/simcore/tools/test_06305_period_baseline_continuity.js
+
+      - name: Module boundaries and protected behavior gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          old = Path('/tmp/simcore-06305-baseline.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def module_block(text, name):
+              marker = f'SimCore.define("{name}", function (require, module, exports) {{'
+              start = text.find(marker)
+              if start < 0:
+                  raise SystemExit(f'module missing: {name}')
+              nxt = text.find('\nSimCore.define("', start + len(marker))
+              if nxt < 0:
+                  nxt = text.find('\n(async () => {', start + len(marker))
+              if nxt < 0:
+                  raise SystemExit(f'module end missing: {name}')
+              return text[start:nxt]
+
+          frozen = [
+              'contracts', 'store', 'community', 'recurrence', 'lineage', 'handoff',
+              'kernel', 'time', 'lifecycle', 'reaction', 'structure', 'recovery',
+              'session', 'ops',
+          ]
+          for name in frozen:
+              if module_block(old, name) != module_block(new, name):
+                  raise SystemExit(f'boundary regression: frozen module {name} changed')
+
+          old_prompt = module_block(old, 'prompt')
+          new_prompt = module_block(new, 'prompt')
+          old_anchor = """    'response_envelope=exactly_one_no_restart',
+              'reference_sources=character_card+currently_exposed_lore_if_present',""".replace('              ', '    ')
+          new_anchor = """    'response_envelope=exactly_one_no_restart',
+              'period_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline',
+              'do_not_replay_completed_prior_period_transition_as_current_period_transition=1',
+              'reference_sources=character_card+currently_exposed_lore_if_present',""".replace('              ', '    ')
+          if old_prompt.count(old_anchor) != 1:
+              raise SystemExit('0.63.4 prompt stable anchor drift')
+          expected_prompt = old_prompt.replace(old_anchor, new_anchor, 1)
+          if new_prompt != expected_prompt:
+              raise SystemExit('Prompt changed beyond the exact two-line period continuity contract')
+
+          old_iife = old[old.index('(async () => {'):]
+          new_iife = new[new.index('(async () => {'):]
+          expected_iife = old_iife.replace('SimCore v0.63.4', 'SimCore v0.63.5', 1).replace("'Version: 0.63.4'", "'Version: 0.63.5'", 1)
+          if new_iife != expected_iife:
+              raise SystemExit('runtime IIFE changed beyond visible/diagnostic version labels')
+
+          protected = [
+              'Risuai.pluginStorage.',
+              "addRisuReplacer('beforeRequest'",
+              "addRisuScriptHandler('output'",
+              'function canonicalizeResponseEnvelope',
+              'function isKnownThoughtsPreamble',
+              'function isThoughtsCompatibilityPreamble',
+              'short_community_source_is_authoritative=1',
+              'do_not_substitute_prior_similar_source_or_prior_community_answer=1',
+              'request_template_recurs_from_prior_history=1',
+              'prior_answer_is_not_a_content_template=1',
+              'reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1',
+              'Recurrence history match:',
+              'Frame continuity:',
+              'Frame regression:',
+              'Diagnostic format: raw-lineage-v2',
+          ]
+          for token in protected:
+              if old.count(token) != new.count(token):
+                  raise SystemExit(f'protected behavior sentinel drift: {token}')
+
+          required = [
+              '//@version 0.63.5',
+              '//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js',
+              '// v0.63.5 Period Baseline Continuity:',
+              'period_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline',
+              'do_not_replay_completed_prior_period_transition_as_current_period_transition=1',
+              'SimCore v0.63.5',
+              "'Version: 0.63.5'",
+          ]
+          for token in required:
+              if token not in new:
+                  raise SystemExit(f'missing 0.63.5 token: {token}')
+
+          if '4400' in new_prompt or '5500' in new_prompt or '2027.12.31' in new_prompt or 'YouTube' in new_prompt:
+              raise SystemExit('content-specific fixture leaked into runtime Prompt module')
+
+          print('all non-Prompt modules frozen; Prompt delta exactly two fixed stable lines')
+          print('storage/hooks/source-lock/recurrence/recovery/0.63.4 diagnostics preserved')
+          PY
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          PY
+
+      - name: Commit tested artifacts to work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.5 period baseline continuity artifacts'
+          git push origin HEAD:simcore-06305-period-baseline-continuity

@@ -8,23 +8,55 @@
     return fallback;
   }
 
+  function recentRequestField(row, keys) {
+    for (const key of keys) {
+      const value = recentRequestValue(row, [key], null);
+      if (value !== null && value !== undefined && value !== '') return {key, value};
+    }
+    return {key:'', value:null};
+  }
+
+  function requestCacheSignal(row) {
+    const explicit = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
+    const text = typeof explicit === 'string' ? explicit.trim().toLowerCase() : '';
+    if (typeof explicit === 'boolean') return explicit;
+    if (num(explicit)) return Number(explicit) > 0;
+    if (['true','yes','hit','cached'].includes(text)) return true;
+    if (['false','no','miss','uncached'].includes(text)) return false;
+    const cachedTokens = recentRequestValue(row, [
+      'cachedTokens','cached_tokens','usage.cachedTokens','usage.cached_tokens',
+      'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens',
+      'cachedContentTokenCount','cached_content_token_count','usage.cachedContentTokenCount','usage.cached_content_token_count',
+      'usage.input_tokens_details.cached_tokens','usage.prompt_tokens_details.cached_tokens',
+      'input_tokens_details.cached_tokens','prompt_tokens_details.cached_tokens'
+    ], null);
+    return num(cachedTokens) ? Number(cachedTokens) > 0 : null;
+  }
+
+  function requestTimestampPrecision(timestamp, sourceKey, requestNumber) {
+    const bucketKeys = new Set(['hour','hourStart','hour_start','bucketStart','bucket_start','windowStart','window_start']);
+    if (bucketKeys.has(String(sourceKey || ''))) return 'hour';
+    if (!num(timestamp)) return 'unknown';
+    const d = new Date(Number(timestamp));
+    const onHourBoundary = d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+    return onHourBoundary && !requestNumber ? 'hour-estimated' : 'exact';
+  }
+
   function normalizeRecentRequestRows(rows, limit = 12) {
     if (!Array.isArray(rows)) return [];
     return rows.map(row => {
       if (!row || typeof row !== 'object') return null;
-      const timestamp = bridgeTimestamp(recentRequestValue(row, ['timestamp','createdAt','created_at','time','date','created'], null));
+      const timestampField = recentRequestField(row, [
+        'timestamp','createdAt','created_at','time','date','created','startedAt','started_at','completedAt','completed_at','requestTime','request_time',
+        'hour','hourStart','hour_start','bucketStart','bucket_start','windowStart','window_start'
+      ]);
+      const timestamp = bridgeTimestamp(timestampField.value);
       const provider = String(recentRequestValue(row, ['provider','providerName','provider_name','usedProvider','used_provider','metadata.used_provider','metadata.usedProvider','source.provider'], 'Unknown') || 'Unknown');
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
-      const cacheRaw = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
-      const cacheText = typeof cacheRaw === 'string' ? cacheRaw.trim().toLowerCase() : '';
-      const cacheHit = typeof cacheRaw === 'boolean' ? cacheRaw
-        : num(cacheRaw) ? Number(cacheRaw) > 0
-        : ['true','yes','hit','cached'].includes(cacheText) ? true
-        : ['false','no','miss','uncached'].includes(cacheText) ? false
-        : null;
-      const requestNumberRaw = recentRequestValue(row, ['sequence','seq','requestNumber','request_number','number'], null);
+      const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
+      const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
       const status = String(recentRequestValue(row, ['status','state'], '') || '').toLowerCase();
       const errorCodeRaw = recentRequestValue(row, ['errorCode','error_code','statusCode','status_code','httpStatus','http_status','error.code'], null);
       const errorTypeRaw = recentRequestValue(row, ['errorType','error_type','error.type'], null);
@@ -36,17 +68,28 @@
       if (!timestamp && provider === 'Unknown' && model === 'Unknown') return null;
       return {
         timestamp,
+        timestampPrecision:requestTimestampPrecision(timestamp, timestampField.key, requestNumber),
+        timestampSource:String(timestampField.key || ''),
         provider,
         model,
         cost:num(costRaw) ? Number(costRaw) : null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
-        cacheHit,
-        requestNumber:requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '',
+        cacheHit:requestCacheSignal(row),
+        requestNumber,
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
         errorType:success ? '' : String(errorTypeRaw ?? '')
       };
     }).filter(Boolean).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, Math.max(1, Number(limit) || 12));
+  }
+
+  function requestLedgerCapabilities(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const exact = list.filter(row => row?.timestampPrecision === 'exact').length;
+    const bucket = list.filter(row => row?.timestampPrecision === 'hour' || row?.timestampPrecision === 'hour-estimated').length;
+    const cacheKnown = list.filter(row => typeof row?.cacheHit === 'boolean').length;
+    const ids = list.filter(row => String(row?.requestNumber || '')).length;
+    return {rows:list.length, exact, bucket, cacheKnown, ids};
   }
 
   function requestLedgerKey(row) {
@@ -85,6 +128,8 @@
           cost:num(row.cost) ? Number(row.cost) : (num(current?.cost) ? Number(current.cost) : null),
           totalTokens:num(row.totalTokens) ? Number(row.totalTokens) : (num(current?.totalTokens) ? Number(current.totalTokens) : null),
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
+          timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
+          timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
           errorCode:String(row.errorCode || current?.errorCode || ''),
           errorType:String(row.errorType || current?.errorType || ''),
@@ -128,8 +173,10 @@
     return `${date === today ? '오늘' : `${Number(m)}/${Number(d)}`} ${Number(h)}시`;
   }
 
-  function requestExactTime(timestamp) {
+  function requestExactTime(row) {
+    const timestamp = row?.timestamp;
     if (!num(timestamp)) return '시간 미제공';
+    if (row?.timestampPrecision === 'hour' || row?.timestampPrecision === 'hour-estimated') return `${requestHourLabel(requestHourKey(timestamp))} 버킷 · 정확 시각 미제공`;
     return new Date(Number(timestamp)).toLocaleTimeString('ko-KR', {timeZone:KST_TIME_ZONE,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   }
 
@@ -185,6 +232,7 @@
   function hourlyRequestDrilldownHtml(scopeKey) {
     const rows = requestLedgerRowsForScope(scopeKey);
     const coverageText = requestLedgerCoverageText();
+    const fidelity = requestLedgerCapabilities(rows);
     if (!rows.length) {
       return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>0건</span></div><p>${esc(coverageText)} · 아직 누적된 요청 메타데이터가 없어.</p></div>`;
     }
@@ -242,13 +290,13 @@
           : '성공';
         const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '캐시 정보 없음';
         const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
-        return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row.timestamp))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
+        return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
       selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${aggregates}<div class="hour-request-list">${detailRows}</div>${truncated}</div>`;
     }
 
-    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · recent 메타데이터 중복 제거 누적 · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
+    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
   }
 
   function scopeUsageDetailsHtml(scopeActivity) {
@@ -283,7 +331,7 @@
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
       const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '';
       const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
-      return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? dashboardDateText(row.timestamp) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
+      return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
     const filterEmpty = recentAll.length > 0 ? '이 필터에 해당하는 최근 요청 없음'
@@ -320,11 +368,18 @@
     const cacheRate = num(raw.cacheRate) ? Number(raw.cacheRate) : null;
     const providers = rows(raw.providers);
     const models = rows(raw.models);
-    const rawRecent = Array.isArray(raw.recent) ? raw.recent : [];
+    const recentCandidates = [
+      ['requestLedger', raw.requestLedger], ['request_ledger', raw.request_ledger],
+      ['recentRequests', raw.recentRequests], ['recent_requests', raw.recent_requests],
+      ['requests', raw.requests], ['recent', raw.recent]
+    ];
+    const recentSource = recentCandidates.find(([,value]) => Array.isArray(value) && value.length) || recentCandidates.find(([,value]) => Array.isArray(value)) || ['none', []];
+    const recentSourceKey = recentSource[0];
+    const rawRecent = Array.isArray(recentSource[1]) ? recentSource[1] : [];
     const recent = normalizeRecentRequestRows(rawRecent);
     const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
     if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,recentLedger,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {

@@ -18,21 +18,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.27 to alpha.3.28 render spike diagnostics
+      - name: Patch alpha.3.28 to alpha.3.29 panel render coalescing
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha328_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha329_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.28$' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.29$' plugins/usage-dashboard/latest.js
+          grep -q 'panelRenderCoalesced:0' plugins/usage-dashboard/latest.js
+          grep -q 'function schedulePanelRender' plugins/usage-dashboard/latest.js
+          grep -q 'function cancelPanelRender' plugins/usage-dashboard/latest.js
+          grep -q 'Panel render scheduler:' plugins/usage-dashboard/latest.js
+          grep -q 'Panel Render ·' plugins/usage-dashboard/latest.js
+          test "$(grep -Fc 'schedulePanelRender(false);' plugins/usage-dashboard/latest.js)" -eq 2
           grep -q 'RENDER_SPIKE_THRESHOLD_MS = 50' plugins/usage-dashboard/latest.js
-          grep -q 'function noteRenderSpike' plugins/usage-dashboard/latest.js
-          grep -q 'function renderBreakdownText' plugins/usage-dashboard/latest.js
-          grep -q 'lastRenderMs:null' plugins/usage-dashboard/latest.js
-          grep -q 'renderSpikeCount:0' plugins/usage-dashboard/latest.js
-          grep -q 'Render: widget' plugins/usage-dashboard/latest.js
           grep -q 'Render spike:' plugins/usage-dashboard/latest.js
-          grep -q 'Render · widget' plugins/usage-dashboard/latest.js
           grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
           grep -q 'Resume grace:' plugins/usage-dashboard/latest.js
           grep -q 'Resume probe:' plugins/usage-dashboard/latest.js
@@ -47,11 +47,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.28'
+            echo 'latest.js already matches alpha.3.29'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.28 render spike diagnostics'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.29 panel render coalescing'
           git push

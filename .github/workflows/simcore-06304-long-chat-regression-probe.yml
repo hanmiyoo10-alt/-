@@ -1,0 +1,160 @@
+name: SimCore 0.63.4 Long-Chat Regression Probe
+
+on:
+  push:
+    branches:
+      - simcore-06304-long-chat-regression-probe
+    paths:
+      - plugins/simcore/tools/release_06304_long_chat_regression_probe.py
+      - .github/workflows/simcore-06304-long-chat-regression-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06304-long-chat-regression-probe
+          fetch-depth: 2
+
+      - name: Freeze 0.63.3 baseline
+        run: cp plugins/simcore/latest.js /tmp/simcore-06304-baseline.js
+
+      - name: Patch diagnostics-only 0.63.4 artifacts
+        run: python3 plugins/simcore/tools/release_06304_long_chat_regression_probe.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Diagnostic semantics gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          required = [
+              '//@version 0.63.4',
+              '// v0.63.4 Long-Chat Regression Probe:',
+              'Diagnostic format: raw-lineage-v2',
+              "'Version: 0.63.4'",
+              'function diagnosticFrameState(raw)',
+              'function diagnosticFrameContinuity(messages, currentUserIndex, latestAssistantIndex)',
+              'function diagnosticRecurrencePrior(messages, currentUserIndex, probe)',
+              'Recurrence guidance:',
+              'Recurrence history match:',
+              'Frame continuity:',
+              'Frame regression:',
+              "hash: pendingProbe.templateRecurrenceHash == null ? null : Number(pendingProbe.templateRecurrenceHash)",
+              "recurrenceRules.templateFingerprint(textMessageContent(rows[i]), mode)",
+              "regressions.push('VOLUME')",
+              "regressions.push('CHAPTER')",
+              "regressions.push('CHATINDEX')",
+              "regression: regressions.length ? regressions.join('+') : 'NONE'",
+              'Long-Chat Regression Probe · frame continuity + recurrence-history match are computed only for manual diagnostic copy',
+          ]
+          for token in required:
+              if token not in new:
+                  raise SystemExit(f'missing 0.63.4 diagnostic token: {token}')
+
+          if new.count("diagnosticSection(\n        '직전 턴 (RAW)'") != 1:
+              raise SystemExit('previous-turn raw diagnostic section drift')
+          if new.count("diagnosticSection(\n      '최근 턴 (RAW)'") != 1:
+              raise SystemExit('current-turn raw diagnostic section drift')
+          if 'ROOT SOURCE TURN (RAW)' in new or 'PARENT TURN (RAW)' in new or 'CURRENT TURN (RAW)' in new:
+              raise SystemExit('old raw-lineage body sections reintroduced')
+
+          build_start = new.index('  function buildLastTurnDiagnosticReport(chat, state) {')
+          copy_start = new.index('  async function copyLastTurnDiagnostic(chat, state) {', build_start)
+          pre_build = new[:build_start]
+          build_body = new[build_start:copy_start]
+          if pre_build.count('diagnosticRecurrencePrior(') != 1:  # definition only
+              raise SystemExit('recurrence history scan leaked outside manual diagnostic builder')
+          if build_body.count('diagnosticRecurrencePrior(') != 1:
+              raise SystemExit('manual diagnostic builder must call recurrence scan exactly once')
+
+          print('0.63.4 diagnostic semantics / manual-scan scope OK')
+          PY
+
+      - name: Frozen modules and cache contract gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          old = Path('/tmp/simcore-06304-baseline.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def module_block(text, name):
+              marker = f'SimCore.define("{name}", function (require, module, exports) {{'
+              start = text.find(marker)
+              if start < 0:
+                  raise SystemExit(f'module missing: {name}')
+              nxt = text.find('\nSimCore.define("', start + len(marker))
+              if nxt < 0:
+                  nxt = text.find('\n(async () => {', start + len(marker))
+              if nxt < 0:
+                  raise SystemExit(f'module end missing: {name}')
+              return text[start:nxt]
+
+          frozen = [
+              'contracts', 'store', 'community', 'recurrence', 'lineage', 'handoff',
+              'kernel', 'time', 'lifecycle', 'reaction', 'structure', 'recovery',
+              'prompt', 'session', 'ops',
+          ]
+          for name in frozen:
+              before = module_block(old, name)
+              after = module_block(new, name)
+              if before != after:
+                  raise SystemExit(f'boundary regression: frozen module {name} changed')
+
+          prompt_sha = hashlib.sha256(module_block(new, 'prompt').encode()).hexdigest()
+          print('all internal modules byte-identical; prompt SHA256', prompt_sha)
+          print('runtime prompt/cache-prefix contract unchanged by construction')
+
+          protected = [
+              'Risuai.pluginStorage.',
+              "addRisuReplacer('beforeRequest'",
+              "addRisuScriptHandler('output'",
+              'function canonicalizeResponseEnvelope',
+              'function isKnownThoughtsPreamble',
+              'function isThoughtsCompatibilityPreamble',
+              'short_community_source_is_authoritative=1',
+              'do_not_substitute_prior_similar_source_or_prior_community_answer=1',
+              'request_template_recurs_from_prior_history=1',
+              'prior_answer_is_not_a_content_template=1',
+              'reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1',
+          ]
+          for token in protected:
+              if old.count(token) != new.count(token):
+                  raise SystemExit(f'protected runtime sentinel drift: {token}')
+
+          print('storage/hooks/source-lock/recurrence/recovery sentinels unchanged')
+          PY
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          PY
+
+      - name: Commit tested artifacts to work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.4 long-chat regression probe artifacts'
+          git push origin HEAD:simcore-06304-long-chat-regression-probe

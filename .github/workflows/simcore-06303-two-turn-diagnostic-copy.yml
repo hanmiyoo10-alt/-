@@ -1,0 +1,140 @@
+name: SimCore 0.63.3 Two-Turn Diagnostic Copy
+
+on:
+  push:
+    branches: [simcore-06303-two-turn-diagnostic-copy]
+    paths:
+      - '.github/workflows/simcore-06303-two-turn-diagnostic-copy.yml'
+      - 'plugins/simcore/tools/release_06303_two_turn_diagnostic_copy.py'
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06303-two-turn-diagnostic-copy
+          fetch-depth: 2
+
+      - name: Freeze baseline artifact
+        run: cp plugins/simcore/latest.js /tmp/simcore-06303-baseline.js
+
+      - name: Patch 0.63.3 artifacts
+        run: python3 plugins/simcore/tools/release_06303_two_turn_diagnostic_copy.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Diagnostic-copy semantic gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          baseline = Path('/tmp/simcore-06303-baseline.js').read_text(encoding='utf-8')
+
+          assert '//@version 0.63.3' in text
+          assert '//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js' in text
+          assert '최근 2턴 진단 복사' in text
+          assert "'직전 턴 (RAW)'" in text
+          assert "'최근 턴 (RAW)'" in text
+          assert 'previousSearchBefore = currentUserIndex >= 0 ? currentUserIndex : latestAssistantIndex' in text
+          assert 'previousAssistantIndex = i' in text
+
+          start = text.index('  function buildLastTurnDiagnosticReport(chat, state) {')
+          end = text.index('\n  async function copyLastTurnDiagnostic(chat, state) {', start)
+          report = text[start:end]
+          assert 'ROOT SOURCE TURN (RAW)' not in report
+          assert 'PARENT TURN (RAW)' not in report
+          assert report.count("diagnosticSection(") == 2
+          assert "'직전 턴 (RAW)'" in report
+          assert "'최근 턴 (RAW)'" in report
+          assert 'diagnosticUserBefore(' in report
+
+          # The old implementation must really have been root/parent/current so this
+          # gate proves the patch changed the intended section rather than a lookalike.
+          old_start = baseline.index('  function buildLastTurnDiagnosticReport(chat, state) {')
+          old_end = baseline.index('\n  async function copyLastTurnDiagnostic(chat, state) {', old_start)
+          old_report = baseline[old_start:old_end]
+          assert 'ROOT SOURCE TURN (RAW)' in old_report
+          assert 'PARENT TURN (RAW)' in old_report
+          assert 'CURRENT TURN (RAW)' in old_report
+
+          print('two-turn diagnostic semantics OK')
+          PY
+
+      - name: Frozen runtime and storage gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          old = Path('/tmp/simcore-06303-baseline.js').read_text(encoding='utf-8')
+          new = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def module_block(text, name):
+              marker = f'SimCore.define("{name}", function (require, module, exports) {{'
+              start = text.find(marker)
+              if start < 0:
+                  raise SystemExit(f'module missing: {name}')
+              nxt = text.find('\nSimCore.define("', start + len(marker))
+              if nxt < 0:
+                  nxt = text.find('\n(async () => {', start + len(marker))
+              if nxt < 0:
+                  raise SystemExit(f'module end missing: {name}')
+              return text[start:nxt]
+
+          frozen = [
+              'contracts', 'store', 'community', 'recurrence', 'lineage', 'handoff',
+              'kernel', 'time', 'lifecycle', 'reaction', 'structure', 'recovery',
+              'prompt', 'session', 'ops',
+          ]
+          for name in frozen:
+              if module_block(old, name) != module_block(new, name):
+                  raise SystemExit(f'frozen module changed: {name}')
+
+          for token in [
+              'Risuai.pluginStorage.',
+              "addRisuReplacer('beforeRequest'",
+              "addRisuScriptHandler('output'",
+              'function canonicalizeResponseEnvelope',
+              'function isKnownThoughtsPreamble',
+              'function isThoughtsCompatibilityPreamble',
+              'short_community_source_is_authoritative=1',
+              'do_not_substitute_prior_similar_source_or_prior_community_answer=1',
+          ]:
+              if old.count(token) != new.count(token):
+                  raise SystemExit(f'protected call/sentinel drift: {token}')
+
+          print('frozen runtime / storage / prompt / recovery gates OK')
+          PY
+
+      - name: Artifact parity and diff hygiene
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git', 'status', '--short'], text=True).splitlines()
+          allowed = {'plugins/simcore/latest.js', 'plugins/simcore/install.js'}
+          changed = {row[3:] for row in rows if row.strip()}
+          extra = changed - allowed
+          if extra:
+              raise SystemExit(f'unexpected working-tree changes: {sorted(extra)}')
+          if changed != allowed:
+              raise SystemExit(f'expected exactly SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          PY
+
+      - name: Commit tested artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.3 two-turn diagnostic copy'
+          git push origin HEAD:simcore-06303-two-turn-diagnostic-copy

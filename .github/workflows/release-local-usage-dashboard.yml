@@ -18,26 +18,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch alpha.3.26 to alpha.3.27 refresh scheduler
+      - name: Patch alpha.3.27 to alpha.3.28 render spike diagnostics
         shell: bash
         run: |
           set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha327_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha328_patch.py
           node --check plugins/usage-dashboard/latest.js
-          grep -q '^//@version 3.0.0-alpha.3.27$' plugins/usage-dashboard/latest.js
-          grep -q 'schedulerEnabled: true' plugins/usage-dashboard/latest.js
-          grep -q 'const REFRESH_PRIORITY = Object.freeze' plugins/usage-dashboard/latest.js
-          grep -q 'function enqueueRefresh' plugins/usage-dashboard/latest.js
-          grep -q 'function runQueuedRefresh' plugins/usage-dashboard/latest.js
-          grep -q 'schedulerQueued:0' plugins/usage-dashboard/latest.js
-          grep -q 'schedulerMerged:0' plugins/usage-dashboard/latest.js
-          grep -q 'schedulerExecuted:0' plugins/usage-dashboard/latest.js
-          grep -q 'schedulerDeferredForInteraction:0' plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.3.28$' plugins/usage-dashboard/latest.js
+          grep -q 'RENDER_SPIKE_THRESHOLD_MS = 50' plugins/usage-dashboard/latest.js
+          grep -q 'function noteRenderSpike' plugins/usage-dashboard/latest.js
+          grep -q 'function renderBreakdownText' plugins/usage-dashboard/latest.js
+          grep -q 'lastRenderMs:null' plugins/usage-dashboard/latest.js
+          grep -q 'renderSpikeCount:0' plugins/usage-dashboard/latest.js
+          grep -q 'Render: widget' plugins/usage-dashboard/latest.js
+          grep -q 'Render spike:' plugins/usage-dashboard/latest.js
+          grep -q 'Render · widget' plugins/usage-dashboard/latest.js
           grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
-          grep -q 'Scheduler ·' plugins/usage-dashboard/latest.js
-          grep -q "enqueueRefresh('timer',true)" plugins/usage-dashboard/latest.js
-          grep -q "enqueueRefresh('visibility', true)" plugins/usage-dashboard/latest.js
-          grep -q 'RESUME_GRACE_MS = 1200' plugins/usage-dashboard/latest.js
           grep -q 'Resume grace:' plugins/usage-dashboard/latest.js
           grep -q 'Resume probe:' plugins/usage-dashboard/latest.js
           grep -q 'Resume long task:' plugins/usage-dashboard/latest.js
@@ -51,11 +47,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- plugins/usage-dashboard/latest.js; then
-            echo 'latest.js already matches alpha.3.27'
+            echo 'latest.js already matches alpha.3.28'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/latest.js
-          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.27 refresh scheduler'
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.28 render spike diagnostics'
           git push

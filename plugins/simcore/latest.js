@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.14
+//@version 0.63.15
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -14,6 +14,7 @@
 // - Store: snapshot persistence/retention only
 // - Lifecycle: mode/broadcast/episode request preparation
 // - Time: timestamp syntax + narrative/broadcast clock primitives + world-year/age synchronization
+// - Frame: visible response-frame parsing + backward continuity floor only
 // - Recurrence: repeated request-template detection/state only
 // - Lineage: request root/parent/depth tracking only
 // - Handoff: short-C source/parent-shift detection/state only
@@ -24,6 +25,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.15 Frame Guard:
+// - Adds a dedicated Frame module after repeated live regressions proved Volume/Chapter/Chatindex continuity is independent from Short-C source/provenance behavior
+// - Captures only the immediately previous visible assistant frame from the already-loaded request history; adds no host/storage read, history semantic scan, prompt line, or creative decision
+// - Enforces a deterministic backward-only floor: same-volume Chapter and Chatindex may not decrease, Volume may not decrease, and Chapter reset remains allowed after a genuine Volume advance
+// - A regressed heading is restored as the prior full heading rather than rewriting only its number, preventing mixed-number/mixed-title Frankenstein headers
+// - Keeps Prompt, Time, Recovery, Structure, Lineage, Handoff, Recurrence, Community, Reaction, storage paths, provenance policy, and diagnostics UI behavior otherwise frozen
 //
 // v0.63.14 Short-C Example Provenance Lock:
 // - Refines the eligible Short-C evidence contract after v0.63.13 live testing showed that broad character-pattern generalization was legitimate but unsupported concrete prior-event examples still leaked into posts/comments
@@ -295,6 +303,7 @@ const MODULE_CONTRACTS = Object.freeze({
   store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
   lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
   time: Object.freeze({ owns: 'timestamp syntax, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
+  frame: Object.freeze({ owns: 'visible response-frame parsing and deterministic backward continuity floor', excludes: 'progression decisions, semantic rewriting, host/storage I/O' }),
   recurrence: Object.freeze({ owns: 'request-template recurrence detection and bounded registry', excludes: 'source meaning or response composition' }),
   lineage: Object.freeze({ owns: 'request root/parent/depth tracking', excludes: 'source importance or response content' }),
   handoff: Object.freeze({ owns: 'short-C source/parent-shift detection and bounded registry', excludes: 'semantic source selection or reaction content' }),
@@ -1882,6 +1891,121 @@ module.exports = {
 };
 });
 
+SimCore.define("frame", function (require, module, exports) {
+const VOLUME_LINE_RE = /^[ \t]*##[ \t]+볼륨[ \t]+(\d+)[ \t]*[:：][^\r\n]*$/mi;
+const CHAPTER_LINE_RE = /^[ \t]*###[ \t]+챕터[ \t]+(\d+)[ \t]*[:：][^\r\n]*$/mi;
+const CHATINDEX_LINE_RE = /^[ \t]*####[ \t]+Chatindex[ \t]*[:：][ \t]*(\d+)[^\r\n]*∮[ \t]*$/mi;
+
+function headerState(raw, re) {
+  const m = String(raw || '').match(re);
+  return m ? { value: Number(m[1]), header: String(m[0] || '').trim() } : { value: null, header: null };
+}
+
+function parseFrame(raw) {
+  const text = String(raw || '');
+  const volume = headerState(text, VOLUME_LINE_RE);
+  const chapter = headerState(text, CHAPTER_LINE_RE);
+  const chatindex = headerState(text, CHATINDEX_LINE_RE);
+  return {
+    volume: Number.isFinite(volume.value) ? volume.value : null,
+    volumeHeader: volume.header,
+    chapter: Number.isFinite(chapter.value) ? chapter.value : null,
+    chapterHeader: chapter.header,
+    chatindex: Number.isFinite(chatindex.value) ? chatindex.value : null,
+    chatindexHeader: chatindex.header,
+  };
+}
+
+function assistantRole(message) {
+  return message?.role === 'assistant' || message?.role === 'char';
+}
+
+function capturePreviousFrame(messages, sendIndex, textOfMessage) {
+  const rows = Array.isArray(messages) ? messages : [];
+  const parsedSend = Number(sendIndex);
+  const before = Number.isInteger(parsedSend) && parsedSend >= 0 ? Math.min(parsedSend, rows.length) : rows.length;
+  for (let i = before - 1; i >= 0; i--) {
+    if (!assistantRole(rows[i])) continue;
+    const raw = typeof textOfMessage === 'function'
+      ? textOfMessage(rows[i])
+      : (rows[i]?.content ?? rows[i]?.data ?? rows[i]?.text ?? '');
+    const frame = parseFrame(raw);
+    if ([frame.volume, frame.chapter, frame.chatindex].some(Number.isFinite)) {
+      return { ...frame, sourceAssistantIndex: i };
+    }
+    return null;
+  }
+  return null;
+}
+
+function numericFrame(frame) {
+  return {
+    volume: Number.isFinite(frame?.volume) ? Number(frame.volume) : null,
+    chapter: Number.isFinite(frame?.chapter) ? Number(frame.chapter) : null,
+    chatindex: Number.isFinite(frame?.chatindex) ? Number(frame.chatindex) : null,
+  };
+}
+
+function replaceHeader(text, re, header) {
+  return header ? String(text || '').replace(re, header) : String(text || '');
+}
+
+function enforceContinuity(content, floor) {
+  let text = String(content || '');
+  const observed = parseFrame(text);
+  const previous = floor && typeof floor === 'object' ? floor : null;
+  const applied = [];
+
+  if (previous) {
+    const volumeComparable = Number.isFinite(previous.volume) && Number.isFinite(observed.volume);
+    const volumeRegressed = volumeComparable && observed.volume < previous.volume;
+    const sameVolume = volumeComparable && observed.volume === previous.volume;
+
+    if (volumeRegressed) {
+      if (previous.volumeHeader && observed.volumeHeader) {
+        text = replaceHeader(text, VOLUME_LINE_RE, previous.volumeHeader);
+        applied.push('VOLUME');
+      }
+      if (previous.chapterHeader && observed.chapterHeader) {
+        text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
+        applied.push('CHAPTER');
+      }
+    } else if (sameVolume
+        && Number.isFinite(previous.chapter) && Number.isFinite(observed.chapter)
+        && observed.chapter < previous.chapter
+        && previous.chapterHeader && observed.chapterHeader) {
+      text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
+      applied.push('CHAPTER');
+    }
+
+    if (Number.isFinite(previous.chatindex) && Number.isFinite(observed.chatindex)
+        && observed.chatindex < previous.chatindex
+        && previous.chatindexHeader && observed.chatindexHeader) {
+      text = replaceHeader(text, CHATINDEX_LINE_RE, previous.chatindexHeader);
+      applied.push('CHATINDEX');
+    }
+  }
+
+  const output = parseFrame(text);
+  return {
+    content: text,
+    probe: {
+      applied: applied.length > 0,
+      regression: applied.length ? applied.join('+') : 'NONE',
+      previous: numericFrame(previous),
+      observed: numericFrame(observed),
+      output: numericFrame(output),
+    },
+  };
+}
+
+module.exports = {
+  parseFrame,
+  capturePreviousFrame,
+  enforceContinuity,
+};
+});
+
 SimCore.define("structure", function (require, module, exports) {
 const kernel = require('./kernel');
 const community = require('./community');
@@ -2535,6 +2659,7 @@ const { SnapshotStore } = require('./store');
 const kernel = require('./kernel');
 const lifecycle = require('./lifecycle');
 const time = require('./time');
+const frame = require('./frame');
 const community = require('./community');
 const reaction = require('./reaction');
 const structure = require('./structure');
@@ -2558,6 +2683,8 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   }
 
   let finalText = String(prepared?.content || '');
+  const frameGuard = frame.enforceContinuity(finalText, p.frameFloor || null);
+  finalText = frameGuard.content;
   const timestampCanonicalization = time.canonicalizeTimestampSyntax(finalText);
   finalText = timestampCanonicalization.content;
   const envelope = prepared?.envelope || { resolved: true, issues: [], diagnostics: [], repaired: false };
@@ -2660,6 +2787,7 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
     envelopeDiagnostics: envelope.diagnostics || [],
     envelopeRepaired: !!envelope.repaired,
     stateCommit: commit,
+    frameGuardProbe: frameGuard.probe,
     narrativeClockProbe,
     timestampCanonicalization,
   };
@@ -2960,6 +3088,9 @@ class CoreRulesetSession {
 
     t = sessionNow();
     const state = lifecycle.prepareTurn(base, userText, promptProbe, sendIndex);
+    if (state.pending?.active) {
+      state.pending.frameFloor = frame.capturePreviousFrame(historyMessages, sendIndex, kernel.textOfMessage);
+    }
     if (detail) {
       detail.lifecycleMs = sessionElapsed(t);
       detail.templateRecurrenceEligible = !!state.pending?.templateRecurrenceEligible;
@@ -3405,6 +3536,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastPerf = null;
   let lastOutputPerf = null;
   let lastHistoryRestore = null;
+  let lastFrameGuardProbe = null;
   let lastNarrativeClockProbe = null;
   let lastTemplateRecurrenceProbe = null;
   let lastRequestLineageProbe = null;
@@ -3807,6 +3939,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
     if (normalizationIssues.length) console.log('[simcore/v0.63.4] reaction normalization:', normalizationIssues.join(' / '));
+    lastFrameGuardProbe = result.frameGuardProbe || null;
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -4033,6 +4166,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lineage = lastRequestLineageProbe || null;
     const handoff = lastCommunitySourceHandoffProbe || null;
     const recurrenceProbe = lastTemplateRecurrenceProbe || null;
+    const frameGuard = lastFrameGuardProbe || null;
     const narrative = lastNarrativeClockProbe || null;
     const cacheProbe = lastRuntimePromptCacheProbe || null;
     const budget = lastRuntimePromptBudget || null;
@@ -4057,7 +4191,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.14',
+      'Version: 0.63.15',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4073,6 +4207,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
       `Frame continuity: ${frameProbe.label}`,
       `Frame regression: ${frameProbe.regression}`,
+      `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'CLAMPED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
       `Broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
@@ -4267,7 +4402,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.14</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
+<div><div class="title">⚙️ SimCore v0.63.15</div><div class="subtitle">Diagnostics UI Polish III · runtime semantics unchanged</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.62.36
+//@version 0.63.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -21,9 +21,16 @@
 // - Reaction: reaction parser, per-family historical maxima, normalization
 // - Structure: validation/integrity/state-commit safety (judge; does not repair)
 // - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
-// - Prompt: runtime prompt serialization only; does not own semantic state
+// - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.0 Cache-Aware Prompt Compiler:
+// - Replaces the monolithic runtime-prompt serializer with explicit Stable/Slow/Mode/Conditional/Hot/Footer compiler tiers inside the existing Prompt module
+// - Keeps lifecycle/time/recurrence/lineage/handoff/reaction/recovery/state ownership unchanged; Prompt still serializes already-computed state only
+// - Moves mode-independent output/reference/Knowledge contracts to the stable prefix and generalizes the existing Community comment/reaction format contract behind an explicit community_blocks_expected>0 guard
+// - Keeps the proven Prompt Cache Probe active for live A/B/C verification; cache-floor tests require >=20% exact SimCore runtime-block common prefix across all synthetic A/B/C mode transitions
+// - No state schema, storage key, snapshot, pluginStorage/API call, history scan, output repair, visible-Thoughts/preamble recovery, lore fetch, or creative/semantic ownership change
 //
 // v0.62.36 Prompt Cache Probe:
 // - Diagnostics only: compares the current SimCore runtime prompt block with the previous live request for the same chat
@@ -2283,27 +2290,50 @@ const lifecycle = require('./lifecycle');
 const time = require('./time');
 const recurrence = require('./recurrence');
 
-function renderRuntimePrompt(state) {
-  const s = kernel.reconcileState(state);
-  const p = s.pending;
-  if (!p?.active) return '';
-  const communityExpected = lifecycle.expectedCommunityBlocks(p.mode);
-  const lines = [
+const PROMPT_COMPILER_VERSION = 1;
+
+function compileStableContract() {
+  return [
     '[SIMCORE CORE STATE — AUTHORITATIVE]',
-    `mode=${p.mode}`,
-    `broadcast_locked=${s.broadcastLocked ? 1 : 0}`,
-    `episode_no=${s.episodeNo}`,
-    `secondary_configured=${p.secondaryConfigured ? 1 : 0}`,
-    `secondary_active=${p.secondaryActive ? 1 : 0}`,
-    `korean_age_offset=+${s.koreanAgeOffset}`,
-    ...(Number(s.koreanAgeOffset || 0) > 0 ? [`current_korean_age=character_reference_age+${s.koreanAgeOffset};past_event_age_not_current=1`] : []),
-    `world_year=${s.worldYear ?? 'unknown'}`,
     'required_frame=응답,볼륨,챕터,Chatindex,timestamp',
     'response_envelope=exactly_one_no_restart',
     'reference_sources=character_card+currently_exposed_lore_if_present',
     'character_world_facts_use_reference_sources=1',
+    'knowledge_required=1',
+    'knowledge_position=final_output_block',
+    'required_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>',
+    'community_format_contract_condition=community_blocks_expected>0',
+    'community_comment_shape=4_top_level+1_nested_reply_exactly',
+    'reaction_required=each_comment_and_reply',
+    'reaction_floor_scope=per_platform_family',
+    'reaction_history_shared_across_modes=1',
+  ];
+}
+
+function compileSlowState(s, p) {
+  const lines = [
+    `korean_age_offset=+${s.koreanAgeOffset}`,
+  ];
+  if (Number(s.koreanAgeOffset || 0) > 0) {
+    lines.push(`current_korean_age=character_reference_age+${s.koreanAgeOffset};past_event_age_not_current=1`);
+  }
+  lines.push(`world_year=${s.worldYear ?? 'unknown'}`);
+  lines.push(`secondary_configured=${p.secondaryConfigured ? 1 : 0}`);
+  lines.push(`secondary_active=${p.secondaryActive ? 1 : 0}`);
+  lines.push(`episode_no=${s.episodeNo}`);
+  return lines;
+}
+
+function compileModeState(s, p, communityExpected) {
+  return [
+    `mode=${p.mode}`,
+    `broadcast_locked=${s.broadcastLocked ? 1 : 0}`,
     `community_blocks_expected=${communityExpected}`,
   ];
+}
+
+function compileConditionalGuidance(s, p, communityExpected) {
+  const lines = [];
   if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
     lines.push('timestamp_semantics=current_narrative_time');
     lines.push('embedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1');
@@ -2349,22 +2379,45 @@ function renderRuntimePrompt(state) {
       lines.push('b_end_platform_groups_required=6_distinct_across_blocks');
       lines.push('b_end_cross_block_group_reuse_forbidden=1');
     }
-    lines.push('community_comment_shape=4_top_level+1_nested_reply_exactly');
-    lines.push('reaction_required=each_comment_and_reply');
-    lines.push('reaction_floor_scope=per_platform_family');
-    lines.push('reaction_history_shared_across_modes=1');
-    lines.push(`reaction_max=${JSON.stringify(s.community.platformMax)}`);
+    lines.push('knowledge_after_last_community=1');
   }
-  lines.push('knowledge_required=1');
-  lines.push('knowledge_position=final_output_block');
-  if (communityExpected > 0) lines.push('knowledge_after_last_community=1');
-  lines.push('required_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>');
-  lines.push(`final_required_blocks=COMMUNITY:${communityExpected},Knowledge:1_last`);
-  lines.push('[/SIMCORE CORE STATE]');
-  return lines.join('\n');
+  return lines;
 }
 
-module.exports = { renderRuntimePrompt };
+function compileHotState(s, communityExpected) {
+  return communityExpected > 0
+    ? [`reaction_max=${JSON.stringify(s.community.platformMax)}`]
+    : [];
+}
+
+function compileFooter(communityExpected) {
+  return [
+    `final_required_blocks=COMMUNITY:${communityExpected},Knowledge:1_last`,
+    '[/SIMCORE CORE STATE]',
+  ];
+}
+
+function compileRuntimePrompt(state) {
+  const s = kernel.reconcileState(state);
+  const p = s.pending;
+  if (!p?.active) return '';
+  const communityExpected = lifecycle.expectedCommunityBlocks(p.mode);
+  const tiers = [
+    compileStableContract(),
+    compileSlowState(s, p),
+    compileModeState(s, p, communityExpected),
+    compileConditionalGuidance(s, p, communityExpected),
+    compileHotState(s, communityExpected),
+    compileFooter(communityExpected),
+  ];
+  return tiers.flat().join('\n');
+}
+
+function renderRuntimePrompt(state) {
+  return compileRuntimePrompt(state);
+}
+
+module.exports = { PROMPT_COMPILER_VERSION, compileRuntimePrompt, renderRuntimePrompt };
 });
 
 SimCore.define("session", function (require, module, exports) {
@@ -3402,7 +3455,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
       if (detail) detail.setChatMs = perfMs(t);
     } catch (e) {
-      console.log('[simcore/v0.62.36] state mirror failed:', e.message);
+      console.log('[simcore/v0.63.0] state mirror failed:', e.message);
     }
   }
 
@@ -3417,7 +3470,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.62.36] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log('[simcore/v0.63.0] manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -3626,8 +3679,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.62.36] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.62.36] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log('[simcore/v0.63.0] structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log('[simcore/v0.63.0] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
 
     const mirrorDetail = perf ? {} : null;
@@ -3640,7 +3693,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.62.36] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log('[simcore/v0.63.0] reaction normalization:', normalizationIssues.join(' / '));
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
         ? lastNarrativeClockProbe
@@ -3685,7 +3738,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.36] beforeRequest error:', e.message);
+      console.log('[simcore/v0.63.0] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -3711,7 +3764,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
-      console.log('[simcore/v0.62.36] output error:', e.message);
+      console.log('[simcore/v0.63.0] output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -3800,7 +3853,7 @@ button{background:#263d73;color:white;border:1px solid #4564a2;border-radius:8px
 .compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.metric{background:#0e1628;border:1px solid #23314d;border-radius:9px;padding:9px 10px}
 details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-weight:700;color:#dbe6fb;list-style:none}details.card>summary::-webkit-details-marker{display:none}details.card>summary:before{content:'▸';display:inline-block;width:18px;color:#9fb3d7}details.card[open]>summary:before{content:'▾'}.detail-body{padding:0 13px 13px}
 </style><div class="wrap">
-<h1>⚙️ SimCore v0.62.36 <button id="close">닫기</button></h1>
+<h1>⚙️ SimCore v0.63.0 <button id="close">닫기</button></h1>
 <div class="card grid">
 <div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
@@ -3911,7 +3964,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.62.36] panel error:', e.message);
+      console.log('[simcore/v0.63.0] panel error:', e.message);
     }
   }
 
@@ -3919,7 +3972,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
     await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
   } catch (e) {
-    console.log('[simcore/v0.62.36] UI registration failed:', e.message);
+    console.log('[simcore/v0.63.0] UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(() => {
@@ -3930,5 +3983,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     previousRuntimePromptText = null;
     previousRuntimePromptKey = null;
   });
-  console.log('[simcore/v0.62.36] initialized');
+  console.log('[simcore/v0.63.0] initialized');
 })();

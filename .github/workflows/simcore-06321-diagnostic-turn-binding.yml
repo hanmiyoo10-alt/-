@@ -1,0 +1,67 @@
+name: SimCore 0.63.21 Diagnostic Turn Binding
+
+on:
+  push:
+    branches:
+      - simcore-06321-diagnostic-turn-binding
+    paths:
+      - '.github/workflows/simcore-06321-diagnostic-turn-binding.yml'
+      - 'plugins/simcore/tools/release_06321_diagnostic_turn_binding.py'
+      - 'plugins/simcore/tools/test_06321_diagnostic_turn_binding.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06321-diagnostic-turn-binding
+          fetch-depth: 2
+
+      - name: Freeze exact 0.63.20 baseline
+        shell: bash
+        run: |
+          test "$(git hash-object plugins/simcore/latest.js)" = "23aabe7db71a5411cfd0971962ba7d3e058f2f3d"
+          test "$(git hash-object plugins/simcore/install.js)" = "23aabe7db71a5411cfd0971962ba7d3e058f2f3d"
+          cp plugins/simcore/latest.js /tmp/simcore-06320-baseline.js
+
+      - name: Patch 0.63.21 artifacts
+        run: python3 plugins/simcore/tools/release_06321_diagnostic_turn_binding.py
+
+      - name: Syntax check
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Diagnostic turn binding and freeze gates
+        run: node plugins/simcore/tools/test_06321_diagnostic_turn_binding.js
+
+      - name: Artifact parity and diff hygiene
+        shell: bash
+        run: |
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          rows = subprocess.check_output(['git','status','--short'], text=True).splitlines()
+          allowed={'plugins/simcore/latest.js','plugins/simcore/install.js'}
+          changed={row[3:] for row in rows if row.strip()}
+          if changed != allowed:
+              raise SystemExit(f'expected exactly tested SimCore artifacts, got: {sorted(changed)}')
+          print('scope OK:', sorted(changed))
+          print('latest blob:', subprocess.check_output(['git','hash-object','plugins/simcore/latest.js'], text=True).strip())
+          print('install blob:', subprocess.check_output(['git','hash-object','plugins/simcore/install.js'], text=True).strip())
+          PY
+
+      - name: Commit tested artifacts to work branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'test: SimCore v0.63.21 Diagnostic Turn Binding artifacts'
+          git push origin HEAD:simcore-06321-diagnostic-turn-binding

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.20
+//@version 0.63.21
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.21 Diagnostic Turn Binding:
+// - Binds manual/panel runtime diagnostics to the exact current user turn and chat location instead of treating any same-chat in-memory probe as current
+// - Records memory-only beforeRequest route telemetry (hook seen, Core handshake found/not found, active/inactive/error, send index) without retaining request/story content or adding storage
+// - Separates current runtime mode from persisted last mode so a stale/inactive request can never display an older mode as if it were the current request classification
+// - Gates request/output-derived probes by turn freshness; RAW Frame continuity remains independently computed from the two visible completed turns
+// - Generation behavior, runtime prompt text, Frame/Evidence/Time/Lineage/Handoff/Recurrence semantics, state schema, storage and host/API call sites remain frozen
 //
 // v0.63.20 Same-Title Chapter Hold:
 // - Extends the proven Frame Guard with one deterministic frame invariant observed in live long-chat use: an unchanged Chapter title must not advance its Chapter number
@@ -3828,6 +3835,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let previousRuntimePromptText = null;
   let previousRuntimePromptKey = null;
   let lastTimestampCanonicalization = null;
+  let lastDiagnosticRequestProbe = null;
 
   const { perfNow, perfMs } = ops;
 
@@ -3835,6 +3843,31 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     if (!m) return '';
     const v = m.content ?? m.data ?? m.text ?? '';
     return typeof v === 'string' ? v : String(v || '');
+  }
+
+  function diagnosticLocationKey(chaIdx, chatIdx, chat) {
+    return `${chaIdx}:${chatIdx}:${chat?.id ?? ''}`;
+  }
+
+  function diagnosticRequestProbeFresh(probe, currentKey, currentUserIndex) {
+    const index = Number(currentUserIndex);
+    return !!probe
+      && !!String(currentKey || '')
+      && Number.isInteger(index) && index >= 0
+      && String(probe.locationKey || '') === String(currentKey || '')
+      && Number(probe.sendIndex) === index;
+  }
+
+  function diagnosticRuntimeMode(probeFresh, probe) {
+    return probeFresh && probe?.status === 'ACTIVE' && probe?.mode ? String(probe.mode) : null;
+  }
+
+  function markDiagnosticRequestProbe(sendIndex, patch) {
+    if (!lastDiagnosticRequestProbe) return;
+    const expected = Number(sendIndex);
+    if (Number.isInteger(expected) && expected >= 0
+        && Number(lastDiagnosticRequestProbe.sendIndex) !== expected) return;
+    Object.assign(lastDiagnosticRequestProbe, patch || {});
   }
 
   function promptChangeReason(previousLine, currentLine) {
@@ -4002,10 +4035,19 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     let t = perfNow();
     const cs = await loadCoreForChat(chaIdx, chatIdx, chat);
     if (perf) perf.sessionLoadMs = perfMs(t);
-    if (!cs) return { active: false };
+    if (!cs) {
+      markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'session-load' });
+      return { active: false };
+    }
 
     t = perfNow();
     const promptProbe = coreRules.inspectPromptMessages(messages, textMessageContent);
+    markDiagnosticRequestProbe(sendIndex, {
+      locationKey: String(coreLocationKey || diagnosticLocationKey(chaIdx, chatIdx, chat)),
+      handshake: promptProbe.active ? 'FOUND' : 'NOT FOUND',
+      promptProbeActive: !!promptProbe.active,
+      status: 'INSPECTED',
+    });
     if (perf) {
       perf.promptScanMs = perfMs(t);
       perf.promptScannedMessages = promptProbe.stats?.scannedMessages || 0;
@@ -4051,6 +4093,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const userText = coreRules.latestUserText(chat);
     const snapshotDetail = perf ? {} : null;
     const result = await cs.onSend(sendIndex, userText, promptProbe, snapshotDetail, chat?.message || []);
+    markDiagnosticRequestProbe(sendIndex, {
+      status: result.active ? 'ACTIVE' : 'INACTIVE',
+      active: !!result.active,
+      mode: result.active ? (result.state?.pending?.mode || null) : null,
+      preparedAt: Date.now(),
+    });
     if (perf) {
       perf.onSendMs = perfMs(t);
       perf.snapshotDetail = snapshotDetail;
@@ -4209,7 +4257,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       perf.sessionProcessMs = perfMs(t);
       perf.outputDetail = outputDetail;
     }
-    if (!result.active) return content;
+    if (!result.active) {
+      markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'BYPASSED', outputAt: Date.now() });
+      return content;
+    }
+    markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'COMMITTED', outputAt: Date.now() });
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
@@ -4252,6 +4304,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   await Risuai.addRisuReplacer('beforeRequest', async (messages, type) => {
     if (type !== 'model') return messages;
+    lastDiagnosticRequestProbe = {
+      locationKey: '', sendIndex: -1, requestType: String(type || ''), hookSeen: true,
+      handshake: 'UNKNOWN', promptProbeActive: null, status: 'SEEN', active: null, mode: null,
+      outIndex: -1, outputStatus: 'PENDING', errorStage: null, at: Date.now(),
+    };
+    let requestSendIndex = -1;
     const totalStart = perfNow();
     const perf = {
       totalMs: 0, indicesMs: 0, chatLoadMs: 0, sessionLoadMs: 0, promptScanMs: 0,
@@ -4271,8 +4329,14 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const sendIndex = detectedUserIndex >= 0
         ? detectedUserIndex
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
+      requestSendIndex = sendIndex;
+      Object.assign(lastDiagnosticRequestProbe, {
+        locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
+        sendIndex,
+      });
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
+      markDiagnosticRequestProbe(requestSendIndex, { status: 'ERROR', active: false, mode: null, errorStage: 'beforeRequest', errorName: e?.name || 'Error' });
       console.log('[simcore/v0.63.4] beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -4299,6 +4363,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
+      if (lastDiagnosticRequestProbe) Object.assign(lastDiagnosticRequestProbe, { outputStatus: 'ERROR', outputErrorStage: 'output', outputErrorName: e?.name || 'Error' });
       console.log('[simcore/v0.63.4] output error:', e.message);
       return content;
     } finally {
@@ -4348,9 +4413,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
 
 
-  function diagnosticProbeFresh() {
-    const currentKey = String(coreKey || coreLocationKey || '');
-    return !!currentKey && previousRuntimePromptKey === currentKey;
+  function diagnosticProbeFresh(currentUserIndex) {
+    const currentKey = String(coreLocationKey || '');
+    return diagnosticRequestProbeFresh(lastDiagnosticRequestProbe, currentKey, currentUserIndex);
   }
 
   function diagnosticFrameState(raw) {
@@ -4455,16 +4520,22 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const messages = Array.isArray(chat?.message) ? chat.message : [];
     const latestAssistantIndex = diagnosticLastAssistantIndex(messages);
     const currentUserIndex = diagnosticUserBefore(messages, latestAssistantIndex >= 0 ? latestAssistantIndex : messages.length);
-    const lineage = lastRequestLineageProbe || null;
-    const handoff = lastCommunitySourceHandoffProbe || null;
-    const recurrenceProbe = lastTemplateRecurrenceProbe || null;
-    const frameGuard = lastFrameGuardProbe || null;
-    const evidenceMap = lastEvidenceMappingProbe || null;
-    const evidenceFence = lastEvidenceFenceProbe || null;
-    const narrative = lastNarrativeClockProbe || null;
-    const cacheProbe = lastRuntimePromptCacheProbe || null;
-    const budget = lastRuntimePromptBudget || null;
-    const probeFresh = diagnosticProbeFresh();
+    const requestProbe = lastDiagnosticRequestProbe || null;
+    const probeFresh = diagnosticProbeFresh(currentUserIndex);
+    const runtimeMode = diagnosticRuntimeMode(probeFresh, requestProbe);
+    const runtimeActive = !!runtimeMode;
+    const outputFresh = !!(runtimeActive
+      && requestProbe?.outputStatus === 'COMMITTED'
+      && Number(requestProbe?.outIndex) === Number(latestAssistantIndex));
+    const lineage = runtimeActive ? (lastRequestLineageProbe || null) : null;
+    const handoff = runtimeActive ? (lastCommunitySourceHandoffProbe || null) : null;
+    const recurrenceProbe = runtimeActive ? (lastTemplateRecurrenceProbe || null) : null;
+    const frameGuard = outputFresh ? (lastFrameGuardProbe || null) : null;
+    const evidenceMap = runtimeActive ? (lastEvidenceMappingProbe || null) : null;
+    const evidenceFence = runtimeActive ? (lastEvidenceFenceProbe || null) : null;
+    const narrative = outputFresh ? (lastNarrativeClockProbe || null) : null;
+    const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
+    const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
     const parentIndex = probeFresh && lineage ? Number(lineage.parentIndex) : -1;
     const rootAssistantIndex = rootIndex >= 0 && rootIndex !== currentUserIndex
@@ -4475,8 +4546,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       : -1;
     const recurrenceHistory = probeFresh && recurrenceProbe ? diagnosticRecurrencePrior(messages, currentUserIndex, recurrenceProbe) : null;
     const frameProbe = diagnosticFrameContinuity(messages, currentUserIndex, latestAssistantIndex);
-    const warnings = Array.isArray(lastCore?.issues) ? lastCore.issues : [];
-    const compatibility = Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
+    const warnings = outputFresh && Array.isArray(lastCore?.issues) ? lastCore.issues : [];
+    const compatibility = outputFresh && Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
     const prefixLabel = !probeFresh || !cacheProbe
       ? 'n/a'
       : (cacheProbe.baseline
@@ -4485,28 +4556,33 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.20',
+      'Version: 0.63.21',
       `Captured: ${new Date().toISOString()}`,
-      `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
-      `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
-      `Warnings: ${warnings.length}`,
-      `Compatibility diagnostics: ${compatibility.length}`,
+      `Probe context: ${probeFresh ? 'CURRENT TURN' : (requestProbe?.sendIndex >= 0 ? `STALE · probe user @${Number(requestProbe.sendIndex)} · current user @${currentUserIndex >= 0 ? currentUserIndex : 'n/a'}` : 'UNAVAILABLE')}`,
+      `Request hook: ${probeFresh ? (requestProbe?.hookSeen ? 'SEEN' : 'n/a') : 'n/a'}`,
+      `Core handshake: ${probeFresh ? (requestProbe?.handshake || 'UNKNOWN') : 'n/a'}`,
+      `Runtime status: ${probeFresh ? (requestProbe?.status || 'UNKNOWN') : 'n/a'} · output ${probeFresh ? (requestProbe?.outputStatus || 'n/a') : 'n/a'}`,
+      `Mode: ${runtimeMode || 'n/a'}`,
+      `Stored last mode: ${state?.lastMode || 'n/a'}`,
+      `Turn binding: request user @${probeFresh ? Number(requestProbe?.sendIndex) : 'n/a'} · output assistant @${outputFresh ? Number(requestProbe?.outIndex) : 'n/a'}`,
+      `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
+      `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
-      `Short-C source lock: ${probeFresh && budget?.sourceAnchor ? 'ON' : 'OFF'}`,
+      `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
       `Recurrence guidance: ${probeFresh && budget ? (budget.recurrence ? 'ON' : 'OFF') : 'n/a'}`,
       `Recurrence history match: ${recurrenceHistory ? `${recurrenceHistory.status} · hash ${recurrenceHistory.hashHex} · user @${recurrenceHistory.userIndex >= 0 ? recurrenceHistory.userIndex : 'n/a'} · assistant @${recurrenceHistory.assistantIndex >= 0 ? recurrenceHistory.assistantIndex : 'n/a'}${recurrenceHistory.distance != null ? ` · distance ${recurrenceHistory.distance}` : ''}` : 'n/a'}`,
       `Request lineage: ${probeFresh && lineage ? `${lineage.sourceKind || 'UNSEEDED'} · root ${lineage.rootMode || 'n/a'}@${Number(lineage.rootIndex ?? -1)} · parent ${lineage.parentMode || 'n/a'}@${Number(lineage.parentIndex ?? -1)} · depth ${Number(lineage.depth || 0)}` : 'n/a'}`,
       `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
-      `Frame continuity: ${frameProbe.label}`,
-      `Frame regression: ${frameProbe.regression}`,
+      `RAW frame continuity: ${frameProbe.label}`,
+      `RAW frame regression: ${frameProbe.regression}`,
       `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'CLAMPED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
       `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
       `Evidence fence: ${evidenceFence ? `${evidenceFence.status} · request @${evidenceFence.requestIndex >= 0 ? evidenceFence.requestIndex : 'n/a'} role ${evidenceFence.role || 'n/a'} · source ${evidenceFence.sourceShape || 'n/a'} · delta ${evidenceFence.normDelta == null ? 'n/a' : evidenceFence.normDelta} · ${evidenceFence.reason || 'n/a'}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
-      `Broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
+      `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
       'Warnings detail:',
       ...(warnings.length ? warnings.map((x) => `- ${x}`) : ['- none']),
@@ -4549,7 +4625,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       messages,
       currentUserIndex,
       latestAssistantIndex,
-      [`Current mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`],
+      [`Runtime mode: ${runtimeMode || 'n/a'} · stored last mode: ${state?.lastMode || 'n/a'}`],
     ));
     return lines.join('\n') + sections.join('\n');
   }
@@ -4642,8 +4718,13 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       }
       const panelFrameProbe = diagnosticFrameContinuity(panelMessages, panelCurrentUserIndex, panelLatestAssistantIndex);
       const panelFrameValue = (v) => Number.isFinite(v) ? Number(v) : 'n/a';
-      const panelModeLabel = lastCore.mode || s?.lastMode || 'A';
-      const panelWarningCount = Array.isArray(lastCore.issues) ? lastCore.issues.length : 0;
+      const panelProbeFresh = diagnosticProbeFresh(panelCurrentUserIndex);
+      const panelModeLabel = diagnosticRuntimeMode(panelProbeFresh, lastDiagnosticRequestProbe) || 'n/a';
+      const panelRuntimeStatus = panelProbeFresh ? (lastDiagnosticRequestProbe?.status || 'UNKNOWN') : 'STALE';
+      const panelOutputFresh = !!(panelProbeFresh && panelModeLabel !== 'n/a'
+        && lastDiagnosticRequestProbe?.outputStatus === 'COMMITTED'
+        && Number(lastDiagnosticRequestProbe?.outIndex) === Number(panelLatestAssistantIndex));
+      const panelWarningCount = panelOutputFresh && Array.isArray(lastCore.issues) ? lastCore.issues.length : 0;
       const panelSourceLock = !!lastRuntimePromptBudget?.sourceAnchor;
       const panelFrameOk = panelFrameProbe.regression === 'NONE';
       const panelPrefixClass = !lastRuntimePromptCacheProbe || lastRuntimePromptCacheProbe.baseline
@@ -4699,12 +4780,13 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.20</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.21</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
 <span class="chip overall-chip ${panelHealthClass}">● ${panelHealthLabel}</span>
 <span class="chip neutral">MODE ${escapeHtml(panelModeLabel)}</span>
+<span class="chip ${panelRuntimeStatus === 'ACTIVE' ? 'good' : (panelRuntimeStatus === 'ERROR' ? 'bad' : 'neutral')}">RUNTIME ${escapeHtml(panelRuntimeStatus)}</span>
 <span class="chip ${panelWarningCount === 0 ? 'good' : 'bad'}">WARN ${panelWarningCount}</span>
 <span class="chip ${panelSourceClass}">SOURCE ${escapeHtml(panelSourceLabel)}</span>
 <span class="chip ${panelFrameOk ? 'good' : 'bad'}">FRAME ${panelFrameOk ? 'OK' : escapeHtml(panelFrameProbe.regression)}</span>
@@ -4722,7 +4804,8 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 <div class="${panelFrameOk ? 'frame-ok' : 'frame-bad'}" style="font-weight:800;margin-top:10px">FRAME REGRESSION: ${escapeHtml(panelFrameProbe.regression)}</div>
 </div>
 <div class="card grid">
-<div><div class="k">Mode</div><div class="v">${escapeHtml(lastCore.mode || s?.lastMode || 'A')}</div></div>
+<div><div class="k">Runtime mode</div><div class="v">${escapeHtml(panelModeLabel)}</div></div>
+<div><div class="k">Stored last mode</div><div class="v">${escapeHtml(s?.lastMode || 'A')}</div></div>
 <div><div class="k">Broadcast</div><div class="v">${s?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'}</div></div>
 ${broadcastClockRows}
 <div><div class="k">Episode</div><div class="v">${Number(s?.episodeNo || 0)}</div></div>
@@ -4869,6 +4952,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     previousRuntimePromptKey = null;
     lastEvidenceMappingProbe = null;
     lastEvidenceFenceProbe = null;
+    lastDiagnosticRequestProbe = null;
   });
   console.log('[simcore/v0.63.4] initialized');
 })();

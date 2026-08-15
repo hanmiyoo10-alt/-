@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.2.1';
-const PRODUCT_VERSION = '3.0.0-alpha.5.6';
+const MANAGER_VERSION = '1.2.2';
+const PRODUCT_VERSION = '3.0.0-alpha.5.7';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -24,6 +24,7 @@ const RUNTIME_ROOT = path.dirname(CURRENT_FILE);
 const PREFIX = process.env.PREFIX || '/data/data/com.termux/files/usr';
 const ENGINE_SERVICE = 'local-usage-runtime-engine';
 const ENGINE_SERVICE_DIR = path.join(PREFIX, 'var/service', ENGINE_SERVICE);
+const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-preload.so');
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
@@ -257,11 +258,21 @@ function serviceStatus() {
 function readDescriptor() {
   try { const value = JSON.parse(fs.readFileSync(ENGINE_DESCRIPTOR, 'utf8')); return value && typeof value === 'object' ? value : null; } catch (_) { return null; }
 }
+function engineServiceLdPreloadLine() {
+  return fs.existsSync(TERMUX_EXEC_LD_PRELOAD) ? `export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}\n` : '';
+}
+function engineServiceEnvironmentReady() {
+  if (!fs.existsSync(TERMUX_EXEC_LD_PRELOAD)) return true;
+  try {
+    const run = fs.readFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), 'utf8');
+    return run.includes(`export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}`);
+  } catch (_) { return false; }
+}
 function writeEngineService(candidate, down = true) {
   fs.mkdirSync(ENGINE_SERVICE_DIR, {recursive:true});
   const command = [candidate.exe, ...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs].map(shellQuote).join(' ');
   const run = `#!/data/data/com.termux/files/usr/bin/sh
-cd ${shellQuote(candidate.cwd)}
+${engineServiceLdPreloadLine()}cd ${shellQuote(candidate.cwd)}
 exec ${command}
 `;
   fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), run, {mode:0o700});
@@ -408,7 +419,8 @@ async function engineRuntimeStatus() {
   const managed = Boolean(descriptor && identity && service.running && service.pid && (pid === service.pid || (!pid && processVerified)));
   const bundleReady = bundledEngineReady();
   const descriptorBundled = Boolean(descriptor && path.resolve(String(descriptor.script || '')) === path.resolve(BUNDLED_ENGINE_FILE));
-  const engineBundled = Boolean(managed && descriptorBundled && bundleReady);
+  const serviceEnvironmentReady = engineServiceEnvironmentReady();
+  const engineBundled = Boolean(managed && descriptorBundled && bundleReady && serviceEnvironmentReady);
   const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
   const fallbackNeedsProbe = candidate?.reason === 'canonical-pidfile';
   const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsProbe || Boolean(identity))) : null;
@@ -424,6 +436,7 @@ async function engineRuntimeStatus() {
     engineBundleReady:bundleReady,
     engineBundleVersion:BUNDLED_ENGINE_VERSION,
     engineBundleSha256:BUNDLED_ENGINE_SHA256,
+    engineServiceEnvironmentReady:serviceEnvironmentReady,
     candidateSafe,
     candidateReason,
     adoptionState:managed ? 'adopted' : descriptor ? 'service-degraded' : 'pending'

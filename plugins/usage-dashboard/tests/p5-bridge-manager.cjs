@@ -1,6 +1,6 @@
-// Bridge Manager 1.2.1 live-status reconciliation release validation trigger.
+// Bridge Manager 1.2.2 live-status reconciliation release validation trigger.
 // Node --check must receive a recognized .cjs temp extension on device runtimes.
-// Android proc-net + authenticated lifecycle probe + bundled engine regression lock for Bridge Manager 1.2.1.
+// Android proc-net + authenticated lifecycle probe + bundled engine regression lock for Bridge Manager 1.2.2.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
@@ -62,7 +62,7 @@ if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.brid
 else { assert.equal(manifest.components.bridgeManager.engineManaged, true); assert.equal(manifest.components.bridgeManager.engineAdoption, true); }
 assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
 assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.1';"), 'manager bundled-engine version missing');
+assert.ok(manager.includes("const MANAGER_VERSION = '1.2.2';"), 'manager bundled-engine version missing');
 assert.ok(manager.includes('bridge-manager.next-${process.pid}.cjs'), 'self-update temp file must preserve .cjs extension');
 assert.ok(manager.includes('bridge-manager.rollback-${process.pid}.cjs'), 'rollback temp file must preserve .cjs extension');
 assert.ok(manager.includes("const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');"), 'canonical legacy pidfile fallback missing');
@@ -77,6 +77,10 @@ assert.ok(manager.includes('async function syncBundledEngine()'), 'bundled engin
 assert.ok(!manager.includes("path:'/snapshot'"), 'manager lifecycle verification must not call heavy snapshot');
 assert.ok(!manager.includes('bridgeSnapshot('), 'snapshot-based lifecycle verifier regressed');
 assert.ok(manager.includes('processMatchesSpec(service.pid, descriptor)'), 'managed service process fallback missing');
+assert.ok(manager.includes("const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-preload.so');"), 'Termux exec preload path missing');
+assert.ok(manager.includes('function engineServiceEnvironmentReady()'), 'engine service environment verifier missing');
+assert.ok(manager.includes('export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}'), 'engine service LD_PRELOAD export missing');
+assert.ok(manager.includes('bundleReady && serviceEnvironmentReady'), 'bad engine service environment must force bundle reconciliation');
 assert.ok(!manager.includes('`${CURRENT_FILE}.next-${process.pid}`'), 'unknown-extension self-update temp path regressed');
 assert.ok(!source.includes("if (String(state.bridgeManagerSyncedProductVersion || '') === VERSION) return status;"), 'persisted manager sync marker must not suppress live reconciliation');
 assert.ok(source.includes("state.bridgeManagerSyncedProductVersion = '';"), 'manager mismatch must clear stale sync marker');

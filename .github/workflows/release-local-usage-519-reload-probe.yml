@@ -1,0 +1,77 @@
+name: Release Local Usage 5.19 Reload Probe
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-519-reload-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish identity-only 5.19 probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git checkout -B release-usage-dashboard origin/release-usage-dashboard
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          old = '3.0.0-alpha.5.18'
+          new = '3.0.0-alpha.5.19'
+
+          latest_path = Path('plugins/usage-dashboard/latest.js')
+          latest = latest_path.read_text()
+          count = latest.count(old)
+          if count != 2:
+              raise SystemExit(f'latest.js version count mismatch: {count}')
+          latest_path.write_text(latest.replace(old, new))
+
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manager = manager_path.read_text()
+          count = manager.count(old)
+          if count != 1:
+              raise SystemExit(f'bridge-manager.cjs version count mismatch: {count}')
+          manager_path.write_text(manager.replace(old, new))
+
+          manager_sha = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+          manifest = json.loads(manifest_path.read_text())
+          if manifest.get('productVersion') != old:
+              raise SystemExit('manifest productVersion mismatch')
+          if manifest['components']['plugin'].get('version') != old:
+              raise SystemExit('manifest plugin version mismatch')
+          if manifest['components']['bridgeManager'].get('productVersion') != old:
+              raise SystemExit('manifest manager productVersion mismatch')
+
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = manager_sha
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+
+          print('5.19 identity-only probe prepared')
+          print('manager sha256:', manager_sha)
+          PY
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          git commit -m "release: usage dashboard 3.0.0-alpha.5.19 reload probe"
+          git push origin release-usage-dashboard

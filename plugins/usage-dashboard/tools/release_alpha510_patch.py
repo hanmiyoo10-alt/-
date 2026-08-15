@@ -50,14 +50,14 @@ settings = replace_once(
 )
 write(settings_path, settings)
 
-# Floating widget: mobile-only safe collapsed pill + tap expansion; desktop behavior stays intact.
+# Floating widget: keep the existing module boundary while adding mobile-only
+# safe collapsed pill + tap expansion. Desktop behavior stays intact.
 widget_path = ROOT / 'src/70-floating-widget.part.js'
 widget = read(widget_path)
-widget = replace_once(widget, "  function widgetHtml() {", "  function widgetHtml(mobileCollapsed = false) {", 'widgetHtml signature')
 widget = replace_once(
     widget,
     "    const badge=connectionBadge();\n    const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));",
-    "    const badge=connectionBadge();\n    if (mobileCollapsed) {\n      const monthlyValue = num(m?.remaining) ? money(m.remaining) : (num(m?.todayUsed) ? money(m.todayUsed,4) : '—');\n      return `<div data-mobile-widget-summary=\"1\" title=\"탭해서 사용량 펼치기\" style=\"display:flex;align-items:center;justify-content:flex-end;gap:7px;min-height:24px;font:11px/1 system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#f5f7fa;white-space:nowrap;cursor:pointer\"><span style=\"font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:2px 5px\">${badge.label}</span><span style=\"color:#aeb5c0;font-weight:650\">월간</span><b>${monthlyValue}</b><span style=\"color:#7f8792;font-size:10px\">▾</span></div>`;\n    }\n    const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));",
+    "    const badge=connectionBadge();\n    const mobileCollapsed = widgetMobileViewport && !widgetMobileExpanded;\n    if (mobileCollapsed) {\n      const monthlyValue = num(m?.remaining) ? money(m.remaining) : (num(m?.todayUsed) ? money(m.todayUsed,4) : '—');\n      return `<div data-mobile-widget-summary=\"1\" title=\"탭해서 사용량 펼치기\" style=\"display:flex;align-items:center;justify-content:flex-end;gap:7px;min-height:24px;font:11px/1 system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#f5f7fa;white-space:nowrap;cursor:pointer\"><span style=\"font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:2px 5px\">${badge.label}</span><span style=\"color:#aeb5c0;font-weight:650\">월간</span><b>${monthlyValue}</b><span style=\"color:#7f8792;font-size:10px\">▾</span></div>`;\n    }\n    const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));",
     'mobile collapsed html',
 )
 widget = replace_once(
@@ -83,12 +83,6 @@ widget = replace_once(
     "      phaseStarted = nowPerf();\n      const nextWidth = widgetWidth();\n      const nextDisplay = state.widgetVisible===false?'none':'block';",
     "      phaseStarted = nowPerf();\n      const nextMobileViewport = await widgetMobileMode();\n      if (widgetMobileViewport !== nextMobileViewport) {\n        widgetMobileViewport = nextMobileViewport;\n        widgetMobileExpanded = false;\n        widgetRenderCache.layout = null;\n        widgetRenderCache.width = null;\n        widgetRenderCache.html = null;\n      }\n      await applyWidgetResponsiveLayout(widgetMobileViewport, widgetMobileExpanded);\n      const nextWidth = widgetWidth(widgetMobileViewport, widgetMobileExpanded);\n      const nextDisplay = state.widgetVisible===false?'none':'block';",
     'responsive render phase',
-)
-widget = replace_once(
-    widget,
-    "        const nextHtml = widgetHtml();",
-    "        const nextHtml = widgetHtml(widgetMobileViewport && !widgetMobileExpanded);",
-    'responsive widget html call',
 )
 write(widget_path, widget)
 

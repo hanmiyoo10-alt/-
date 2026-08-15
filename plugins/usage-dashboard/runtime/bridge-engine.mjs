@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.1';
+const VERSION = '1.6.2';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -397,10 +397,10 @@ const output = process.env.DEVPASS_BRIDGE_CAPTURE_FILE;
 const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || ''))
   ? String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE)
   : '';
-const marker = Symbol.for('llmgateway.devpass.bridge.capture.v6');
+const marker = Symbol.for('llmgateway.devpass.bridge.capture.v7');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
-  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, captureMode: null };
+  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, captureMode: null };
   let extrasInFlight = false;
   let extrasDone = false;
   const rawHttpRequest = http.request;
@@ -473,6 +473,31 @@ if (output && !globalThis[marker]) {
     return safe;
   };
 
+  // The official Activity UI uses /logs for per-request rows. Keep only the
+  // non-content metadata needed by the local dashboard. Prompt/response bodies,
+  // messages, custom headers, cookies, and auth material are never persisted.
+  const sanitizeLogs = (value) => {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value.data && typeof value.data === 'object' ? value.data : value;
+    const rows = Array.isArray(raw.logs) ? raw.logs : [];
+    return rows.map((row) => {
+      if (!row || typeof row !== 'object') return null;
+      const requestNumber = row.requestId ?? row.request_id ?? row.id ?? '';
+      const timestamp = row.createdAt ?? row.created_at ?? null;
+      if (!requestNumber || !timestamp) return null;
+      return {
+        timestamp,
+        requestNumber: String(requestNumber),
+        provider: String(row.usedProvider ?? row.used_provider ?? row.requestedProvider ?? row.requested_provider ?? 'Unknown'),
+        model: String(row.usedModel ?? row.used_model ?? row.requestedModel ?? row.requested_model ?? 'Unknown'),
+        cost: row.cost ?? null,
+        totalTokens: row.totalTokens ?? row.total_tokens ?? null,
+        cacheHit: typeof row.cached === 'boolean' ? row.cached : null,
+        success: row.hasError === true ? false : true,
+      };
+    }).filter(Boolean);
+  };
+
   const storeStatus = (value, mode) => {
     const safe = sanitizeStatus(value);
     if (!safe || !Object.keys(safe).length) return null;
@@ -486,6 +511,14 @@ if (output && !globalThis[marker]) {
     const safe = sanitizeActivity(value);
     if (!safe) return false;
     state.devpassActivity = { range: String(range), payload: safe, mode: String(mode || '') };
+    writeState();
+    return true;
+  };
+
+  const storeLogs = (value, range, mode) => {
+    const safe = sanitizeLogs(value);
+    if (!safe) return false;
+    state.devpassLogs = { range: String(range), rows: safe.slice(0, 100), mode: String(mode || '') };
     writeState();
     return true;
   };
@@ -564,6 +597,32 @@ if (output && !globalThis[marker]) {
     return [...new Map(out.map((u) => [u.toString(), u])).values()];
   };
 
+  const logsCandidates = (orgUrl, statusUrl, projectId, range) => {
+    const prefixes = [...new Set([
+      pathPrefix(statusUrl && statusUrl.pathname, '/dev-plans/status'),
+      pathPrefix(orgUrl.pathname, '/orgs'),
+      ''
+    ])];
+    const rangeMs = range === '30d'
+      ? 30 * 24 * 60 * 60 * 1000
+      : range === '7d'
+        ? 7 * 24 * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
+    const out = [];
+    for (const origin of officialOrigins(orgUrl, statusUrl)) {
+      for (const prefix of prefixes) {
+        const u = new URL(origin);
+        u.pathname = (prefix + '/logs').replace(/\/{2,}/g, '/');
+        u.searchParams.set('projectId', String(projectId));
+        u.searchParams.set('orderBy', 'createdAt_desc');
+        u.searchParams.set('limit', '100');
+        u.searchParams.set('startDate', new Date(Date.now() - rangeMs).toISOString());
+        out.push(u);
+      }
+    }
+    return [...new Map(out.map((u) => [u.toString(), u])).values()];
+  };
+
   const originalFetch = globalThis.fetch;
   const requestJsonFetch = async (target, headers, baseInit) => {
     try {
@@ -594,6 +653,12 @@ if (output && !globalThis[marker]) {
           for (const activityTarget of activityCandidates(orgUrl, target, safeStatus.projectId, requestedActivityRange)) {
             const activity = await requestJsonFetch(activityTarget, headers, init);
             if (activity && storeActivity(activity, requestedActivityRange, 'fetch')) break;
+          }
+        }
+        if (requestedActivityRange === '24h' && safeStatus.projectId) {
+          for (const logsTarget of logsCandidates(orgUrl, target, safeStatus.projectId, requestedActivityRange)) {
+            const logs = await requestJsonFetch(logsTarget, headers, init);
+            if (logs && storeLogs(logs, requestedActivityRange, 'fetch')) break;
           }
         }
         extrasDone = true;
@@ -692,6 +757,12 @@ if (output && !globalThis[marker]) {
             if (activity && storeActivity(activity, requestedActivityRange, 'node-request')) break;
           }
         }
+        if (requestedActivityRange === '24h' && safeStatus.projectId) {
+          for (const logsTarget of logsCandidates(orgUrl, target, safeStatus.projectId, requestedActivityRange)) {
+            const logs = await requestJsonNode(logsTarget, headers);
+            if (logs && storeLogs(logs, requestedActivityRange, 'node-request')) break;
+          }
+        }
         extrasDone = true;
         return;
       }
@@ -722,7 +793,7 @@ if (output && !globalThis[marker]) {
   };
 
   // Authentication headers stay in memory only long enough to perform official,
-  // read-only /dev-plans/status and optional project-scoped /activity requests.
+  // read-only /dev-plans/status plus optional project-scoped /activity and /logs requests.
   // They are never written to the capture file or returned by the bridge.
   patchNodeRequest(http, 'http:');
   patchNodeRequest(https, 'https:');
@@ -1268,6 +1339,26 @@ function officialActivityRows(root) {
   return [];
 }
 
+function normalizeCapturedRecentLogs(root) {
+  const rows = Array.isArray(root?.rows) ? root.rows : [];
+  return rows.map((row) => {
+    if (!row || typeof row !== 'object') return null;
+    const timestamp = timestampMs(row.timestamp);
+    const requestNumber = String(row.requestNumber || '');
+    if (timestamp === null || !requestNumber) return null;
+    return {
+      timestamp,
+      provider: String(row.provider || 'Unknown'),
+      model: String(row.model || 'Unknown'),
+      cost: finite(row.cost),
+      totalTokens: finite(row.totalTokens),
+      cacheHit: typeof row.cacheHit === 'boolean' ? row.cacheHit : null,
+      requestNumber,
+      success: row.success !== false,
+    };
+  }).filter(Boolean).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
+}
+
 function genericBreakdownRows(root) {
   const queue = [root];
   const seen = new Set();
@@ -1442,6 +1533,7 @@ function mergeUsageActivities(items, range = '24h') {
   const providerMap = new Map();
   const modelMap = new Map();
   const recent = [];
+  const recentRequests = [];
   let totalRequests = 0;
   let totalCost = 0;
   const metrics = blankMetrics();
@@ -1453,6 +1545,7 @@ function mergeUsageActivities(items, range = '24h') {
     for (const row of item.providers || []) addNamed(providerMap, row.name, row.requests, row.cost, row);
     for (const row of item.models || []) addNamed(modelMap, row.name, row.requests, row.cost, row);
     for (const row of item.recent || []) recent.push(row);
+    for (const row of item.recentRequests || []) recentRequests.push(row);
   }
   return {
     __bridgeActivity: true,
@@ -1465,6 +1558,7 @@ function mergeUsageActivities(items, range = '24h') {
     providers: [...providerMap.values()].sort((a, b) => b.cost - a.cost || b.requests - a.requests),
     models: [...modelMap.values()].sort((a, b) => b.cost - a.cost || b.requests - a.requests),
     recent: recent.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 20),
+    recentRequests: recentRequests.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 100),
     fetchedAt: Date.now(),
     source: `LLMGateway hybrid · DevPass /activity + Credits CLI · ${range}`,
   };
@@ -1560,8 +1654,12 @@ async function devPassActivityForRange(range = '24h') {
       projectId: status?.projectId || null,
     };
     const normalized = normalizeUsageActivity(rawActivity, org, range);
+    const exactRecent = range === '24h' ? normalizeCapturedRecentLogs(captured?.devpassLogs) : [];
+    if (exactRecent.length) normalized.recentRequests = exactRecent;
     normalized.usageScope = 'devpass';
-    normalized.source = `LLMGateway authenticated session · /activity · DevPass project · ${range}`;
+    normalized.source = exactRecent.length
+      ? `LLMGateway authenticated session · /activity + /logs · DevPass project · ${range}`
+      : `LLMGateway authenticated session · /activity · DevPass project · ${range}`;
     return normalized;
   });
 }

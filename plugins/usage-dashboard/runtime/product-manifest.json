@@ -1,32 +1,32 @@
 {
   "format": 1,
   "product": "Local Usage Dashboard",
-  "productVersion": "3.0.0-alpha.5.8",
+  "productVersion": "3.0.0-alpha.5.9",
   "releaseBranch": "release-usage-dashboard",
   "architecture": "single-product-modular-sidecar",
   "components": {
     "plugin": {
       "mode": "bundled",
-      "version": "3.0.0-alpha.5.8",
+      "version": "3.0.0-alpha.5.9",
       "artifact": "plugins/usage-dashboard/latest.js"
     },
     "bridge": {
       "mode": "sidecar",
       "state": "managed-bundled",
-      "requiredVersion": "1.6.1",
+      "requiredVersion": "1.6.2",
       "managementProtocol": "bridge-manager-v1",
       "managed": true,
       "selfUpdate": false,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-engine.mjs",
       "lifecycleManaged": true,
       "sourceBundled": true,
-      "sha256": "fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d"
+      "sha256": "48fb53490937d4507662bb42414e0a84b260bb18c6c7e259a12cf42fc8b6d524"
     },
     "bridgeManager": {
       "mode": "sidecar-manager",
       "state": "bundled-engine-ready",
-      "version": "1.2.3",
-      "productVersion": "3.0.0-alpha.5.8",
+      "version": "1.2.4",
+      "productVersion": "3.0.0-alpha.5.9",
       "managementProtocol": "bridge-manager-v1",
       "host": "127.0.0.1",
       "port": 39119,
@@ -34,7 +34,7 @@
       "selfUpdate": true,
       "engineManaged": true,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
-      "sha256": "816f8cfa63aa8408631d96d323110e832c0aea07b2fed2e80742a54d285839e8",
+      "sha256": "3dd9641451760839852c81342ecea41afa7d9fe9dd0946c7a48bb7653b6d46ae",
       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
       "bootstrapSha256": "4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c",
       "service": "local-usage-runtime-manager",

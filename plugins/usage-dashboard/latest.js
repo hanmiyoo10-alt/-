@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.7
+//@version 3.0.0-alpha.5.8
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.7';
+  const VERSION = '3.0.0-alpha.5.8';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1720,12 +1720,12 @@ async function importLegacyTodayBaselines() {
     }
     refreshInFlight = (async () => {
       try {
-        state.data = applyObservedToday(await fetchSnapshot());
-        collectRecentRequestLedger(state.data);
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
         state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        state.data = applyObservedToday(await fetchSnapshot());
+        collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();

@@ -4,10 +4,16 @@ PREFIX="/data/data/com.termux/files/usr"
 export PATH="$PREFIX/bin:$PATH"
 
 BOOT_DIR="$HOME/.termux/boot"
+STATE_DIR="$HOME/.local/share/pocketrisu-local-stack"
 BACKUP_DIR="$HOME/.termux/boot-backups"
+DISABLED_DIR="$HOME/.termux/boot-disabled"
 LOG_FILE="$HOME/pocketrisu-update.log"
 DISABLE_FILE="$HOME/.config/pocketrisu-local-stack/disable-auto-update"
 BASE_URL="https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/local/termux"
+
+BOOTSTRAP_FILE="$BOOT_DIR/00-update-local-stack"
+RUNTIME_FILE="$STATE_DIR/start-local-stack"
+LEGACY_BOOT_FILE="$BOOT_DIR/10-start-local-stack"
 
 CURL="$PREFIX/bin/curl"
 SHA256SUM="$PREFIX/bin/sha256sum"
@@ -24,10 +30,15 @@ log() {
     printf '%s %s\n' "$("$DATE" -Iseconds 2>/dev/null || "$DATE")" "$*" >> "$LOG_FILE"
 }
 
+validate_script() {
+    [ -s "$1" ] && "$SH" -n "$1" >/dev/null 2>&1
+}
+
 sync_script() {
-    name="$1"
+    remote_name="$1"
     target="$2"
-    url="$BASE_URL/$name"
+    backup_name="$3"
+    url="$BASE_URL/$remote_name"
     tmp="$target.download.$$"
 
     "$RM" -f "$tmp" >/dev/null 2>&1 || true
@@ -36,13 +47,13 @@ sync_script() {
         --connect-timeout 3 \
         --max-time 10 \
         "$url" -o "$tmp"; then
-        log "file=$name result=fetch-failed"
+        log "file=$remote_name result=fetch-failed"
         "$RM" -f "$tmp" >/dev/null 2>&1 || true
         return 1
     fi
 
-    if ! "$SH" -n "$tmp" >/dev/null 2>&1; then
-        log "file=$name result=syntax-failed"
+    if ! validate_script "$tmp"; then
+        log "file=$remote_name result=syntax-failed"
         "$RM" -f "$tmp" >/dev/null 2>&1 || true
         return 1
     fi
@@ -53,7 +64,7 @@ sync_script() {
     if [ -f "$target" ]; then
         current_sha="$("$SHA256SUM" "$target" | awk '{print $1}')"
         if [ "$new_sha" = "$current_sha" ]; then
-            log "file=$name result=current sha=$new_sha"
+            log "file=$remote_name result=current sha=$new_sha"
             "$RM" -f "$tmp" >/dev/null 2>&1 || true
             return 0
         fi
@@ -63,9 +74,9 @@ sync_script() {
 
     if [ -f "$target" ]; then
         stamp="$("$DATE" '+%Y%m%d-%H%M%S')"
-        backup="$BACKUP_DIR/$name.before-$stamp"
+        backup="$BACKUP_DIR/$backup_name.before-$stamp"
         if ! "$CP" -p "$target" "$backup"; then
-            log "file=$name result=backup-failed"
+            log "file=$remote_name result=backup-failed"
             "$RM" -f "$tmp" >/dev/null 2>&1 || true
             return 1
         fi
@@ -74,51 +85,98 @@ sync_script() {
     "$CHMOD" 700 "$tmp"
 
     if ! "$MV" -f "$tmp" "$target"; then
-        log "file=$name result=install-failed"
+        log "file=$remote_name result=install-failed"
         "$RM" -f "$tmp" >/dev/null 2>&1 || true
         return 1
     fi
 
-    log "file=$name result=updated from=$current_sha to=$new_sha"
+    log "file=$remote_name result=updated from=$current_sha to=$new_sha"
     return 0
 }
 
-update_once() {
-    "$MKDIR" -p "$BOOT_DIR"
+migrate_runtime() {
+    "$MKDIR" -p "$STATE_DIR" "$DISABLED_DIR" "$BACKUP_DIR"
 
-    # Keep the updater itself current. Atomic replacement is safe; this
-    # already-running process continues with the version it started with.
-    sync_script "00-update-local-stack" "$BOOT_DIR/00-update-local-stack" || true
+    if [ ! -f "$RUNTIME_FILE" ] && [ -f "$LEGACY_BOOT_FILE" ]; then
+        tmp="$RUNTIME_FILE.migrate.$$"
+        if "$CP" -p "$LEGACY_BOOT_FILE" "$tmp" && validate_script "$tmp"; then
+            "$CHMOD" 700 "$tmp"
+            "$MV" -f "$tmp" "$RUNTIME_FILE"
+            log "migration=runtime-from-legacy result=ok"
+        else
+            "$RM" -f "$tmp" >/dev/null 2>&1 || true
+            log "migration=runtime-from-legacy result=failed"
+        fi
+    fi
 
-    # Stage the latest validated startup script. Termux:Boot may use the new
-    # file on this boot if the update finishes first; otherwise it is ready
-    # for the next boot. Existing running services are never restarted here.
-    sync_script "10-start-local-stack" "$BOOT_DIR/10-start-local-stack"
+    if [ ! -f "$RUNTIME_FILE" ]; then
+        sync_script "10-start-local-stack" "$RUNTIME_FILE" "start-local-stack" || return 1
+    fi
+
+    if ! validate_script "$RUNTIME_FILE"; then
+        log "runtime=result=invalid"
+        return 1
+    fi
+
+    return 0
 }
 
+retire_legacy_boot_entry() {
+    [ -f "$LEGACY_BOOT_FILE" ] || return 0
+
+    stamp="$("$DATE" '+%Y%m%d-%H%M%S')"
+    target="$DISABLED_DIR/10-start-local-stack.migrated-$stamp"
+
+    if "$MV" "$LEGACY_BOOT_FILE" "$target"; then
+        log "migration=legacy-boot-disabled path=$target"
+    else
+        log "migration=legacy-boot-disable-failed"
+    fi
+}
+
+update_once() {
+    "$MKDIR" -p "$BOOT_DIR" "$STATE_DIR"
+    sync_script "00-update-local-stack" "$BOOTSTRAP_FILE" "00-update-local-stack" || true
+    sync_script "10-start-local-stack" "$RUNTIME_FILE" "start-local-stack"
+}
+
+"$MKDIR" -p "$BOOT_DIR" "$STATE_DIR"
+
+if ! migrate_runtime; then
+    log "runtime=result=missing-or-invalid"
+    exit 1
+fi
+
+# Start the installed runtime immediately. Network update work never blocks
+# PocketRisu or the local usage runtime from coming up.
+"$SH" "$RUNTIME_FILE" >/dev/null 2>&1 || log "runtime=result=launch-failed"
+
+# The old 10-* Boot entry is no longer needed once a validated runtime copy
+# exists outside ~/.termux/boot. Keeping one Boot entry removes update/start races.
+retire_legacy_boot_entry
+
 if [ -e "$DISABLE_FILE" ]; then
-    log "result=disabled marker=$DISABLE_FILE"
+    log "update=result=disabled marker=$DISABLE_FILE"
     exit 0
 fi
 
-# Do update work out of the Termux:Boot runner so local services are never
-# blocked by GitHub/network availability. Retry later if Android networking
-# is not ready immediately after boot.
+# Refresh bootstrap + runtime in the background for the next boot. Atomic
+# replacement means a failed network fetch never destroys the working copy.
 (
     if update_once; then
         exit 0
     fi
 
-    log "result=retry-scheduled delay=30s"
+    log "update=result=retry-scheduled delay=30s"
     "$SLEEP" 30
 
     if update_once; then
         exit 0
     fi
 
-    log "result=retry-scheduled delay=90s"
+    log "update=result=retry-scheduled delay=90s"
     "$SLEEP" 90
-    update_once || log "result=gave-up-until-next-boot"
+    update_once || log "update=result=gave-up-until-next-boot"
 ) >/dev/null 2>&1 &
 
 exit 0

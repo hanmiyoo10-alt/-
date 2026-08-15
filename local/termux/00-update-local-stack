@@ -38,7 +38,9 @@ sync_script() {
     remote_name="$1"
     target="$2"
     backup_name="$3"
-    url="$BASE_URL/$remote_name"
+    # raw.githubusercontent.com can briefly serve a cached branch-tip response
+    # after a commit. A unique query keeps update checks on the current main tip.
+    url="$BASE_URL/$remote_name?cb=$("$DATE" +%s)"
     tmp="$target.download.$$"
 
     "$RM" -f "$tmp" >/dev/null 2>&1 || true

@@ -1,0 +1,73 @@
+name: Release Local Usage 5.9 Exact Logs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-local-usage-59-exact-logs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-validate-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply 5.9 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 plugins/usage-dashboard/tools/release_alpha59_patch.py
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+
+      - name: Validate 5.9 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
+          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          grep -Fq '//@version 3.0.0-alpha.5.9' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '1.6.2';" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "const MANAGER_VERSION = '1.2.4';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "u.pathname = (prefix + '/logs')" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq 'normalized.recentRequests = exactRecent;' plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq 'Prompt/response bodies' plugins/usage-dashboard/runtime/bridge-engine.mjs
+          ENGINE_SHA="$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
+          MANIFEST_ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(m.components.bridge.sha256)' plugins/usage-dashboard/runtime/product-manifest.json)"
+          test "$ENGINE_SHA" = "$MANIFEST_ENGINE_SHA"
+          MANAGER_SHA="$(sha256sum plugins/usage-dashboard/runtime/bridge-manager.cjs | awk '{print $1}')"
+          MANIFEST_MANAGER_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(m.components.bridgeManager.sha256)' plugins/usage-dashboard/runtime/product-manifest.json)"
+          test "$MANAGER_SHA" = "$MANIFEST_MANAGER_SHA"
+          git diff --check
+
+      - name: Commit 5.9 source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            plugins/usage-dashboard/src/00-runtime-core.part.js \
+            plugins/usage-dashboard/src/manifest.json \
+            plugins/usage-dashboard/latest.js \
+            plugins/usage-dashboard/runtime/bridge-engine.mjs \
+            plugins/usage-dashboard/runtime/bridge-manager.cjs \
+            plugins/usage-dashboard/runtime/product-manifest.json \
+            plugins/usage-dashboard/tests/p5-bridge-manager.cjs \
+            plugins/usage-dashboard/tests/p5-bundled-engine.cjs
+          git diff --cached --check
+          git commit -m 'feat: add exact DevPass request timestamps from logs'
+          git push origin HEAD:main

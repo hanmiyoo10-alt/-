@@ -1,0 +1,89 @@
+name: Release Local Usage 5.15 Reload Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/release-local-usage-515-reload-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare version bump helper
+        run: |
+          cat > /tmp/bump515.py <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          OLD = '3.0.0-alpha.5.14'
+          NEW = '3.0.0-alpha.5.15'
+          root = Path('plugins/usage-dashboard')
+
+          latest = root / 'latest.js'
+          manager = root / 'runtime/bridge-manager.cjs'
+          manifest = root / 'runtime/product-manifest.json'
+
+          latest_text = latest.read_text()
+          if latest_text.count(OLD) != 2:
+              raise SystemExit(f'latest.js old-version count={latest_text.count(OLD)}, expected 2')
+          latest.write_text(latest_text.replace(OLD, NEW))
+
+          manager_text = manager.read_text()
+          if manager_text.count(OLD) != 1:
+              raise SystemExit(f'bridge-manager.cjs old-version count={manager_text.count(OLD)}, expected 1')
+          manager.write_text(manager_text.replace(OLD, NEW))
+
+          manager_sha = hashlib.sha256(manager.read_bytes()).hexdigest()
+          data = json.loads(manifest.read_text())
+          if data.get('productVersion') != OLD:
+              raise SystemExit(f"manifest productVersion={data.get('productVersion')!r}, expected {OLD!r}")
+          data['productVersion'] = NEW
+          data['components']['plugin']['version'] = NEW
+          data['components']['bridgeManager']['productVersion'] = NEW
+          data['components']['bridgeManager']['sha256'] = manager_sha
+          manifest.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+
+          print(f'bumped {OLD} -> {NEW}')
+          print(f'manager sha256 {manager_sha}')
+          PY
+
+      - name: Update main source product
+        run: |
+          git checkout main
+          python3 /tmp/bump515.py
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m "Release Local Usage 5.15 reload probe"
+          git push origin main
+
+      - name: Publish release branch
+        run: |
+          git fetch origin release-usage-dashboard
+          git checkout -B release-usage-dashboard origin/release-usage-dashboard
+          python3 /tmp/bump515.py
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m "Publish Local Usage 5.15 reload probe"
+          git push origin release-usage-dashboard
+
+      - name: Verify release identity
+        run: |
+          grep -F '//@version 3.0.0-alpha.5.15' plugins/usage-dashboard/latest.js
+          grep -F "const VERSION = '3.0.0-alpha.5.15';" plugins/usage-dashboard/latest.js
+          grep -F "const PRODUCT_VERSION = '3.0.0-alpha.5.15';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node -e "const m=require('./plugins/usage-dashboard/runtime/product-manifest.json'); if(m.productVersion!=='3.0.0-alpha.5.15'||m.components.plugin.version!=='3.0.0-alpha.5.15'||m.components.bridgeManager.productVersion!=='3.0.0-alpha.5.15') process.exit(1); console.log('manifest 5.15 OK')"

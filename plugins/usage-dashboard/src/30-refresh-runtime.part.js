@@ -19,12 +19,12 @@
     }
     refreshInFlight = (async () => {
       try {
-        state.data = applyObservedToday(await fetchSnapshot());
-        collectRecentRequestLedger(state.data);
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
         state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        state.data = applyObservedToday(await fetchSnapshot());
+        collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
         state.lastSyncAt = Date.now();

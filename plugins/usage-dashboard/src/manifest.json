@@ -1,15 +1,15 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.11",
+  "version": "3.0.0-alpha.5.12",
   "source": "plugins/usage-dashboard/latest.js",
-  "artifactSha256": "3dfff1fa55540d43714acb8abf72879d2f5a67ac2d322dd300f709e42002e148",
+  "artifactSha256": "a1740d5108f20c6b934a107676402eae372c17c5ff6be020c09599aa7f0a6418",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 48532,
-      "sha256": "116e172cfed16b00a7ef0c3ae55913df1b65b06830205f65c877a63a5384b23c"
+      "sha256": "95d4ed927d5301a541a4c484c3d8d39142e1523c0a0fb6ca8c5abd5d340a04dc"
     },
     {
       "file": "10-usage-data.part.js",

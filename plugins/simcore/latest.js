@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.19
+//@version 0.63.20
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -14,7 +14,7 @@
 // - Store: snapshot persistence/retention only
 // - Lifecycle: mode/broadcast/episode request preparation
 // - Time: timestamp syntax + narrative/broadcast clock primitives + world-year/age synchronization
-// - Frame: visible response-frame parsing + backward continuity floor only
+// - Frame: visible response-frame parsing + backward floor + same-title Chapter hold
 // - Recurrence: repeated request-template detection/state only
 // - Lineage: request root/parent/depth tracking only
 // - Handoff: short-C source/parent-shift detection/state only
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.20 Same-Title Chapter Hold:
+// - Extends the proven Frame Guard with one deterministic frame invariant observed in live long-chat use: an unchanged Chapter title must not advance its Chapter number
+// - Compares only normalized visible Chapter-title text (NFKC + whitespace collapse); it does not interpret story meaning, infer progression, scan history semantically, or add prompt guidance
+// - When the previous/current Chapter titles are identical and the model advances the Chapter number, restores the previous full Chapter heading while leaving Volume, Chatindex, timestamp, body, COMMUNITY and Knowledge untouched
+// - Existing backward Volume/Chapter/Chatindex floors remain unchanged, genuine Chapter-title changes may advance normally, and a Volume advance may still reset Chapter numbering
+// - Evidence Fence, Prompt, Time, Lineage, Handoff, Recurrence, Community, Reaction, Structure, Recovery, Session, storage/state schema and host/API call sites remain frozen
 //
 // v0.63.19 Evidence Fence:
 // - Promotes the v0.63.16-v0.63.18 provenance probes into a request-only concrete-evidence boundary for eligible Short-C source locks
@@ -331,7 +338,7 @@ const MODULE_CONTRACTS = Object.freeze({
   store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
   lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
   time: Object.freeze({ owns: 'timestamp syntax, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
-  frame: Object.freeze({ owns: 'visible response-frame parsing and deterministic backward continuity floor', excludes: 'progression decisions, semantic rewriting, host/storage I/O' }),
+  frame: Object.freeze({ owns: 'visible response-frame parsing, deterministic backward continuity floor, and same-title Chapter-number hold', excludes: 'semantic title interpretation, narrative progression decisions, host/storage I/O' }),
   recurrence: Object.freeze({ owns: 'request-template recurrence detection and bounded registry', excludes: 'source meaning or response composition' }),
   lineage: Object.freeze({ owns: 'request root/parent/depth tracking', excludes: 'source importance or response content' }),
   handoff: Object.freeze({ owns: 'short-C source/parent-shift detection and bounded registry', excludes: 'semantic source selection or reaction content' }),
@@ -2145,7 +2152,7 @@ module.exports = {
 
 SimCore.define("frame", function (require, module, exports) {
 const VOLUME_LINE_RE = /^[ \t]*##[ \t]+볼륨[ \t]+(\d+)[ \t]*[:：][^\r\n]*$/mi;
-const CHAPTER_LINE_RE = /^[ \t]*###[ \t]+챕터[ \t]+(\d+)[ \t]*[:：][^\r\n]*$/mi;
+const CHAPTER_LINE_RE = /^[ \t]*###[ \t]+챕터[ \t]+(\d+)[ \t]*[:：][ \t]*([^\r\n]*)$/mi;
 const CHATINDEX_LINE_RE = /^[ \t]*####[ \t]+Chatindex[ \t]*[:：][ \t]*(\d+)[^\r\n]*∮[ \t]*$/mi;
 
 function headerState(raw, re) {
@@ -2153,16 +2160,30 @@ function headerState(raw, re) {
   return m ? { value: Number(m[1]), header: String(m[0] || '').trim() } : { value: null, header: null };
 }
 
+function normalizeChapterTitle(raw) {
+  let text = String(raw || '');
+  try { text = text.normalize('NFKC'); } catch { /* older JS runtime */ }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function chapterState(raw) {
+  const m = String(raw || '').match(CHAPTER_LINE_RE);
+  return m
+    ? { value: Number(m[1]), header: String(m[0] || '').trim(), title: normalizeChapterTitle(m[2]) }
+    : { value: null, header: null, title: '' };
+}
+
 function parseFrame(raw) {
   const text = String(raw || '');
   const volume = headerState(text, VOLUME_LINE_RE);
-  const chapter = headerState(text, CHAPTER_LINE_RE);
+  const chapter = chapterState(text);
   const chatindex = headerState(text, CHATINDEX_LINE_RE);
   return {
     volume: Number.isFinite(volume.value) ? volume.value : null,
     volumeHeader: volume.header,
     chapter: Number.isFinite(chapter.value) ? chapter.value : null,
     chapterHeader: chapter.header,
+    chapterTitle: chapter.title,
     chatindex: Number.isFinite(chatindex.value) ? chatindex.value : null,
     chatindexHeader: chatindex.header,
   };
@@ -2228,6 +2249,13 @@ function enforceContinuity(content, floor) {
         && previous.chapterHeader && observed.chapterHeader) {
       text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
       applied.push('CHAPTER');
+    } else if (Number.isFinite(previous.chapter) && Number.isFinite(observed.chapter)
+        && observed.chapter > previous.chapter
+        && previous.chapterTitle && observed.chapterTitle
+        && previous.chapterTitle === observed.chapterTitle
+        && previous.chapterHeader && observed.chapterHeader) {
+      text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
+      applied.push('CHAPTER_TITLE_HOLD');
     }
 
     if (Number.isFinite(previous.chatindex) && Number.isFinite(observed.chatindex)
@@ -2257,7 +2285,6 @@ module.exports = {
   enforceContinuity,
 };
 });
-
 SimCore.define("structure", function (require, module, exports) {
 const kernel = require('./kernel');
 const community = require('./community');
@@ -4458,7 +4485,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.19',
+      'Version: 0.63.20',
       `Captured: ${new Date().toISOString()}`,
       `Probe context: ${probeFresh ? 'CURRENT CHAT' : 'STALE/UNAVAILABLE'}`,
       `Mode: ${lastCore?.mode || state?.lastMode || 'n/a'}`,
@@ -4672,7 +4699,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.19</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.20</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

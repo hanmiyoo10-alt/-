@@ -20,6 +20,7 @@ WAKE_UNLOCK="$PREFIX/bin/termux-wake-unlock"
 DATE="$PREFIX/bin/date"
 SLEEP="$PREFIX/bin/sleep"
 OPEN_URL="$PREFIX/bin/termux-open-url"
+NOTIFY="$PREFIX/bin/termux-notification"
 
 (
     echo "===== Local stack boot $("$DATE") =====" >> "$TRACE_LOG"
@@ -88,6 +89,22 @@ OPEN_URL="$PREFIX/bin/termux-open-url"
                     http://127.0.0.1:6001/ >/dev/null 2>&1; then
                 pocket_ready=1
                 echo "pocketrisu=ready attempt=$attempt $("$DATE")" >> "$TRACE_LOG"
+
+                if [ -x "$NOTIFY" ]; then
+                    if "$NOTIFY" \
+                        --id 8473 \
+                        --title "PocketRisu" \
+                        --content "서버 준비 완료" \
+                        --priority high \
+                        --sound >/dev/null 2>&1; then
+                        echo "pocketrisu_notification=sent $("$DATE")" >> "$TRACE_LOG"
+                    else
+                        echo "pocketrisu_notification=send-failed $("$DATE")" >> "$TRACE_LOG"
+                    fi
+                else
+                    echo "pocketrisu_notification=tool-missing $("$DATE")" >> "$TRACE_LOG"
+                fi
+
                 if [ -x "$OPEN_URL" ]; then
                     if "$OPEN_URL" http://localhost:6001/ >/dev/null 2>&1; then
                         echo "pocketrisu_browser=opened $("$DATE")" >> "$TRACE_LOG"

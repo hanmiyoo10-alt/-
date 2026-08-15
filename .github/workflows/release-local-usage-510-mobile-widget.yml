@@ -1,3 +1,4 @@
+# retry after preserving the existing 70-floating-widget module boundary
 name: Release Local Usage 5.10 Mobile Widget
 
 on:

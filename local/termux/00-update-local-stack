@@ -1,0 +1,124 @@
+#!/data/data/com.termux/files/usr/bin/sh
+
+PREFIX="/data/data/com.termux/files/usr"
+export PATH="$PREFIX/bin:$PATH"
+
+BOOT_DIR="$HOME/.termux/boot"
+BACKUP_DIR="$HOME/.termux/boot-backups"
+LOG_FILE="$HOME/pocketrisu-update.log"
+DISABLE_FILE="$HOME/.config/pocketrisu-local-stack/disable-auto-update"
+BASE_URL="https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/local/termux"
+
+CURL="$PREFIX/bin/curl"
+SHA256SUM="$PREFIX/bin/sha256sum"
+SH="$PREFIX/bin/sh"
+CHMOD="$PREFIX/bin/chmod"
+CP="$PREFIX/bin/cp"
+MV="$PREFIX/bin/mv"
+RM="$PREFIX/bin/rm"
+MKDIR="$PREFIX/bin/mkdir"
+DATE="$PREFIX/bin/date"
+SLEEP="$PREFIX/bin/sleep"
+
+log() {
+    printf '%s %s\n' "$("$DATE" -Iseconds 2>/dev/null || "$DATE")" "$*" >> "$LOG_FILE"
+}
+
+sync_script() {
+    name="$1"
+    target="$2"
+    url="$BASE_URL/$name"
+    tmp="$target.download.$$"
+
+    "$RM" -f "$tmp" >/dev/null 2>&1 || true
+
+    if ! "$CURL" -fsSL \
+        --connect-timeout 3 \
+        --max-time 10 \
+        "$url" -o "$tmp"; then
+        log "file=$name result=fetch-failed"
+        "$RM" -f "$tmp" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    if ! "$SH" -n "$tmp" >/dev/null 2>&1; then
+        log "file=$name result=syntax-failed"
+        "$RM" -f "$tmp" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    new_sha="$("$SHA256SUM" "$tmp" | awk '{print $1}')"
+    current_sha="missing"
+
+    if [ -f "$target" ]; then
+        current_sha="$("$SHA256SUM" "$target" | awk '{print $1}')"
+        if [ "$new_sha" = "$current_sha" ]; then
+            log "file=$name result=current sha=$new_sha"
+            "$RM" -f "$tmp" >/dev/null 2>&1 || true
+            return 0
+        fi
+    fi
+
+    "$MKDIR" -p "$BACKUP_DIR"
+
+    if [ -f "$target" ]; then
+        stamp="$("$DATE" '+%Y%m%d-%H%M%S')"
+        backup="$BACKUP_DIR/$name.before-$stamp"
+        if ! "$CP" -p "$target" "$backup"; then
+            log "file=$name result=backup-failed"
+            "$RM" -f "$tmp" >/dev/null 2>&1 || true
+            return 1
+        fi
+    fi
+
+    "$CHMOD" 700 "$tmp"
+
+    if ! "$MV" -f "$tmp" "$target"; then
+        log "file=$name result=install-failed"
+        "$RM" -f "$tmp" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    log "file=$name result=updated from=$current_sha to=$new_sha"
+    return 0
+}
+
+update_once() {
+    "$MKDIR" -p "$BOOT_DIR"
+
+    # Keep the updater itself current. Atomic replacement is safe; this
+    # already-running process continues with the version it started with.
+    sync_script "00-update-local-stack" "$BOOT_DIR/00-update-local-stack" || true
+
+    # Stage the latest validated startup script. Termux:Boot may use the new
+    # file on this boot if the update finishes first; otherwise it is ready
+    # for the next boot. Existing running services are never restarted here.
+    sync_script "10-start-local-stack" "$BOOT_DIR/10-start-local-stack"
+}
+
+if [ -e "$DISABLE_FILE" ]; then
+    log "result=disabled marker=$DISABLE_FILE"
+    exit 0
+fi
+
+# Do update work out of the Termux:Boot runner so local services are never
+# blocked by GitHub/network availability. Retry later if Android networking
+# is not ready immediately after boot.
+(
+    if update_once; then
+        exit 0
+    fi
+
+    log "result=retry-scheduled delay=30s"
+    "$SLEEP" 30
+
+    if update_once; then
+        exit 0
+    fi
+
+    log "result=retry-scheduled delay=90s"
+    "$SLEEP" 90
+    update_once || log "result=gave-up-until-next-boot"
+) >/dev/null 2>&1 &
+
+exit 0

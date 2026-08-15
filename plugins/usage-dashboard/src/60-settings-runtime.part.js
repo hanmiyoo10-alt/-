@@ -169,6 +169,7 @@
       state.widgetX = null;
       state.widgetY = null;
       drag = null;
+      widgetRenderCache.layout = null;
       await persist();
       if (widget) {
         await widget.setStyle('left','auto');
@@ -239,5 +240,5 @@
     };
   }
 
-  async function openSettings() { document.body.dataset.panelOpen='1'; renderSettings(); await Risuai.showContainer('fullscreen'); }
+  async function openSettings() { widgetMobileExpanded=false; document.body.dataset.panelOpen='1'; renderSettings(); await renderWidget('panel-open'); await Risuai.showContainer('fullscreen'); }
 

@@ -1,6 +1,11 @@
   function widgetHtml() {
     const d=state.data||{}, m=d.monthly, w=d.weekly, c=d.credits, a=d.activity, detailed=state.widgetMode==='detailed';
     const badge=connectionBadge();
+    const mobileCollapsed = widgetMobileViewport && !widgetMobileExpanded;
+    if (mobileCollapsed) {
+      const monthlyValue = num(m?.remaining) ? money(m.remaining) : (num(m?.todayUsed) ? money(m.todayUsed,4) : '—');
+      return `<div data-mobile-widget-summary="1" title="탭해서 사용량 펼치기" style="display:flex;align-items:center;justify-content:flex-end;gap:7px;min-height:24px;font:11px/1 system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#f5f7fa;white-space:nowrap;cursor:pointer"><span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:2px 5px">${badge.label}</span><span style="color:#aeb5c0;font-weight:650">월간</span><b>${monthlyValue}</b><span style="color:#7f8792;font-size:10px">▾</span></div>`;
+    }
     const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));
     const row = (label,value,color) => `<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:${color}">${esc(label)}</span><b>${value}</b></div>`;
     const remainingTimeText = value => {
@@ -51,7 +56,43 @@
     </div>`;
   }
 
-  const widgetWidth = () => state.widgetMode === 'detailed' ? 'clamp(196px,52vw,220px)' : 'clamp(166px,44vw,184px)';
+  const widgetWidth = (mobile = false, expanded = false) => mobile
+    ? (expanded ? 'min(220px,calc(100vw - 16px))' : 'min(176px,calc(100vw - 16px))')
+    : (state.widgetMode === 'detailed' ? 'clamp(196px,52vw,220px)' : 'clamp(166px,44vw,184px)');
+
+  async function widgetMobileMode() {
+    if (!rootBody) return false;
+    try { return Number(await rootBody.clientWidth()) <= 600; } catch { return false; }
+  }
+
+  async function applyWidgetResponsiveLayout(mobile, expanded) {
+    if (!widget) return;
+    const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
+    if (widgetRenderCache.layout === layout) return;
+    if (mobile) {
+      await widget.setStyle('left','auto');
+      await widget.setStyle('top','auto');
+      await widget.setStyle('right','8px');
+      await widget.setStyle('bottom','88px');
+      await widget.setStyle('border-radius',expanded?'11px':'999px');
+      await widget.setStyle('padding',expanded?'5px 10px 8px':'6px 9px');
+    } else {
+      if (num(state.widgetX)&&num(state.widgetY)) {
+        await widget.setStyle('left',`${state.widgetX}px`);
+        await widget.setStyle('top',`${state.widgetY}px`);
+        await widget.setStyle('right','auto');
+        await widget.setStyle('bottom','auto');
+      } else {
+        await widget.setStyle('left','auto');
+        await widget.setStyle('top','auto');
+        await widget.setStyle('right','12px');
+        await widget.setStyle('bottom','74px');
+      }
+      await widget.setStyle('border-radius','11px');
+      await widget.setStyle('padding','5px 10px 8px');
+    }
+    widgetRenderCache.layout = layout;
+  }
 
   async function ensureWidget() {
     if (widget) return;
@@ -63,6 +104,7 @@
     await widget.setStyleAttribute(`position:fixed;${pos}width:${widgetWidth()};max-width:calc(100vw - 16px);z-index:2147483000;background:#191b20;color:#f5f7fa;border:1px solid rgba(255,255,255,.12);border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.24);padding:5px 10px 8px;box-sizing:border-box;user-select:none;touch-action:none;`);
     await rootBody.appendChild(widget);
     const down = async e => {
+      if (widgetMobileViewport) { drag = null; return; }
       if (!num(e.clientX)||!num(e.clientY)) return;
       const r=await widget.getBoundingClientRect();
 
@@ -99,7 +141,12 @@
       drag=null;
       await persist();
     };
-    remoteListeners.push([widget,'pointerdown',await widget.addEventListener('pointerdown',down)],[root,'pointermove',await root.addEventListener('pointermove',move)],[root,'pointerup',await root.addEventListener('pointerup',up)],[root,'pointercancel',await root.addEventListener('pointercancel',up)]);
+    const toggleMobileWidget = async () => {
+      if (!widgetMobileViewport) return;
+      widgetMobileExpanded = !widgetMobileExpanded;
+      await renderWidget('mobile-widget-toggle');
+    };
+    remoteListeners.push([widget,'pointerdown',await widget.addEventListener('pointerdown',down)],[widget,'click',await widget.addEventListener('click',toggleMobileWidget)],[root,'pointermove',await root.addEventListener('pointermove',move)],[root,'pointerup',await root.addEventListener('pointerup',up)],[root,'pointercancel',await root.addEventListener('pointercancel',up)]);
   }
 
   async function renderWidget(reason = 'ui') {
@@ -116,7 +163,16 @@
       breakdown.ensure = roundPerfMs(nowPerf() - phaseStarted);
       if (!widget) return;
       phaseStarted = nowPerf();
-      const nextWidth = widgetWidth();
+      const nextMobileViewport = await widgetMobileMode();
+      if (widgetMobileViewport !== nextMobileViewport) {
+        widgetMobileViewport = nextMobileViewport;
+        widgetMobileExpanded = false;
+        widgetRenderCache.layout = null;
+        widgetRenderCache.width = null;
+        widgetRenderCache.html = null;
+      }
+      await applyWidgetResponsiveLayout(widgetMobileViewport, widgetMobileExpanded);
+      const nextWidth = widgetWidth(widgetMobileViewport, widgetMobileExpanded);
       const nextDisplay = state.widgetVisible===false?'none':'block';
       if (widgetRenderCache.width !== nextWidth) {
         await widget.setStyle('width',nextWidth);

@@ -19,6 +19,13 @@ for (const marker of [
   '<summary><b>Local Bridge</b><span>연결 · 설정</span></summary>',
   '<summary><b>Runtime Diagnostics</b><span>성능 · 진단</span></summary>',
   'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed',
+  'data-mobile-widget-summary=\"1\"',
+  'function widgetMobileMode()',
+  "return Number(await rootBody.clientWidth()) <= 600;",
+  'async function applyWidgetResponsiveLayout(mobile, expanded)',
+  "bottom','88px'",
+  'widgetMobileExpanded = !widgetMobileExpanded;',
+  "await renderWidget('panel-open');",
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

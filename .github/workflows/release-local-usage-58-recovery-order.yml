@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-validate-commit:
+  validate-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -19,23 +19,33 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Apply 5.8 patch
-        run: |
-          set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_alpha58_patch.py
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
-
-      - name: Validate 5.8 patch
+      - name: Validate 5.8 product
         run: |
           set -euo pipefail
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
+          node plugins/usage-dashboard/tests/p2-build.cjs
+          node plugins/usage-dashboard/tests/p3-ui.cjs
+          node plugins/usage-dashboard/tests/p3-recent.cjs
+          node plugins/usage-dashboard/tests/p4-render.cjs
+          node plugins/usage-dashboard/tests/p4-partial.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
           node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
           node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
           node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
+          test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
+          MANAGER_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridgeManager?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
+          test "$MANAGER_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-manager.cjs | awk '{print $1}')"
           grep -Fq '//@version 3.0.0-alpha.5.8' plugins/usage-dashboard/latest.js
           grep -Fq "const MANAGER_VERSION = '1.2.3';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           node - <<'NODE'
@@ -47,20 +57,30 @@ jobs:
           NODE
           git diff --check
 
-      - name: Commit 5.8 source patch
+      - name: Publish 5.8 product artifacts
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            plugins/usage-dashboard/src/00-runtime-core.part.js \
-            plugins/usage-dashboard/src/30-refresh-runtime.part.js \
-            plugins/usage-dashboard/src/manifest.json \
-            plugins/usage-dashboard/latest.js \
-            plugins/usage-dashboard/runtime/bridge-manager.cjs \
-            plugins/usage-dashboard/runtime/product-manifest.json \
-            plugins/usage-dashboard/tests/p5-bridge-manager.cjs \
-            plugins/usage-dashboard/tests/p5-bundled-engine.cjs
-          git diff --cached --check
-          git commit -m 'fix: reconcile managed runtime before snapshot fetch'
-          git push origin HEAD:main
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          grep -Fq '//@version 3.0.0-alpha.5.8' plugins/usage-dashboard/latest.js
+          grep -Fq '"productVersion": "3.0.0-alpha.5.8"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const MANAGER_VERSION = '1.2.3';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git diff --check
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.8 product artifacts'
+          git push origin HEAD:release-usage-dashboard

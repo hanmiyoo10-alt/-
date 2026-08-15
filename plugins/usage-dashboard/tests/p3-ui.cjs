@@ -26,6 +26,9 @@ for (const marker of [
   "bottom','88px'",
   'widgetMobileExpanded = !widgetMobileExpanded;',
   "await renderWidget('panel-open');",
+  'widgetMobileToggleBlockedUntil=Date.now()+800;',
+  "await renderWidget('panel-open-settled');",
+  'Date.now() < widgetMobileToggleBlockedUntil',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

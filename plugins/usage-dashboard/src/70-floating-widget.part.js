@@ -143,6 +143,7 @@
     };
     const toggleMobileWidget = async () => {
       if (!widgetMobileViewport) return;
+      if (Date.now() < widgetMobileToggleBlockedUntil) { widgetMobileExpanded = false; return; }
       widgetMobileExpanded = !widgetMobileExpanded;
       await renderWidget('mobile-widget-toggle');
     };

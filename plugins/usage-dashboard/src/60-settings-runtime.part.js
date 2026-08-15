@@ -240,5 +240,15 @@
     };
   }
 
-  async function openSettings() { widgetMobileExpanded=false; document.body.dataset.panelOpen='1'; renderSettings(); await renderWidget('panel-open'); await Risuai.showContainer('fullscreen'); }
+  async function openSettings() {
+    widgetMobileExpanded=false;
+    widgetMobileToggleBlockedUntil=Date.now()+800;
+    document.body.dataset.panelOpen='1';
+    renderSettings();
+    await renderWidget('panel-open');
+    await Risuai.showContainer('fullscreen');
+    widgetMobileExpanded=false;
+    widgetMobileToggleBlockedUntil=Math.max(widgetMobileToggleBlockedUntil,Date.now()+250);
+    await renderWidget('panel-open-settled');
+  }
 

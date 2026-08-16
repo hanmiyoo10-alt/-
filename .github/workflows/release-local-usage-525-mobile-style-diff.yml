@@ -28,7 +28,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          import json, hashlib
+          import json, hashlib, base64
 
           old = '3.0.0-alpha.5.24'
           new = '3.0.0-alpha.5.25'
@@ -53,99 +53,17 @@ jobs:
               raise SystemExit('power runtime anchor mismatch')
           s = s.replace(power_anchor, power_new, 1)
 
-          layout_old = '''  async function applyWidgetResponsiveLayout(mobile, expanded) {
-    if (!widget) return;
-    const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
-    if (widgetRenderCache.layout === layout) return;
-    if (mobile) {
-      await widget.setStyle('left','auto');
-      await widget.setStyle('top','auto');
-      await widget.setStyle('right','8px');
-      await widget.setStyle('bottom','88px');
-      await widget.setStyle('border-radius',expanded?'11px':'999px');
-      await widget.setStyle('padding',expanded?'5px 10px 8px':'6px 9px');
-    } else {
-      if (num(state.widgetX)&&num(state.widgetY)) {
-        await widget.setStyle('left',`${state.widgetX}px`);
-        await widget.setStyle('top',`${state.widgetY}px`);
-        await widget.setStyle('right','auto');
-        await widget.setStyle('bottom','auto');
-      } else {
-        await widget.setStyle('left','auto');
-        await widget.setStyle('top','auto');
-        await widget.setStyle('right','12px');
-        await widget.setStyle('bottom','74px');
-      }
-      await widget.setStyle('border-radius','11px');
-      await widget.setStyle('padding','5px 10px 8px');
-    }
-    widgetRenderCache.layout = layout;
-  }
-'''
-          layout_new = '''  async function setResponsiveWidgetStyle(name, value) {
-    if (!widget) return false;
-    if (!widgetRenderCache.responsiveStyles || typeof widgetRenderCache.responsiveStyles !== 'object') {
-      widgetRenderCache.responsiveStyles = Object.create(null);
-    }
-    if (widgetRenderCache.responsiveStyles[name] === value) {
-      powerRuntime.responsiveStyleSkips += 1;
-      performanceRuntime.widgetStyleSkips += 1;
-      return false;
-    }
-    await widget.setStyle(name, value);
-    widgetRenderCache.responsiveStyles[name] = value;
-    powerRuntime.responsiveStyleWrites += 1;
-    performanceRuntime.widgetStyleWrites += 1;
-    return true;
-  }
-
-  async function applyWidgetResponsiveLayout(mobile, expanded) {
-    if (!widget) return;
-    const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
-    if (widgetRenderCache.layout === layout) return;
-    let desired;
-    if (mobile) {
-      desired = {
-        left:'auto', top:'auto', right:'8px', bottom:'88px',
-        'border-radius':expanded?'11px':'999px',
-        padding:expanded?'5px 10px 8px':'6px 9px'
-      };
-    } else if (num(state.widgetX)&&num(state.widgetY)) {
-      desired = {
-        left:`${state.widgetX}px`, top:`${state.widgetY}px`, right:'auto', bottom:'auto',
-        'border-radius':'11px', padding:'5px 10px 8px'
-      };
-    } else {
-      desired = {
-        left:'auto', top:'auto', right:'12px', bottom:'74px',
-        'border-radius':'11px', padding:'5px 10px 8px'
-      };
-    }
-    for (const [name, value] of Object.entries(desired)) {
-      await setResponsiveWidgetStyle(name, value);
-    }
-    widgetRenderCache.layout = layout;
-  }
-'''
+          layout_old = base64.b64decode('ICBhc3luYyBmdW5jdGlvbiBhcHBseVdpZGdldFJlc3BvbnNpdmVMYXlvdXQobW9iaWxlLCBleHBhbmRlZCkgewogICAgaWYgKCF3aWRnZXQpIHJldHVybjsKICAgIGNvbnN0IGxheW91dCA9IG1vYmlsZSA/IChleHBhbmRlZCA/ICdtb2JpbGUtZXhwYW5kZWQnIDogJ21vYmlsZS1jb2xsYXBzZWQnKSA6ICdkZXNrdG9wJzsKICAgIGlmICh3aWRnZXRSZW5kZXJDYWNoZS5sYXlvdXQgPT09IGxheW91dCkgcmV0dXJuOwogICAgaWYgKG1vYmlsZSkgewogICAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUoJ2xlZnQnLCdhdXRvJyk7CiAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgndG9wJywnYXV0bycpOwogICAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUoJ3JpZ2h0JywnOHB4Jyk7CiAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgnYm90dG9tJywnODhweCcpOwogICAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUoJ2JvcmRlci1yYWRpdXMnLGV4cGFuZGVkPycxMXB4JzonOTk5cHgnKTsKICAgICAgYXdhaXQgd2lkZ2V0LnNldFN0eWxlKCdwYWRkaW5nJyxleHBhbmRlZD8nNXB4IDEwcHggOHB4JzonNnB4IDlweCcpOwogICAgfSBlbHNlIHsKICAgICAgaWYgKG51bShzdGF0ZS53aWRnZXRYKSYmbnVtKHN0YXRlLndpZGdldFkpKSB7CiAgICAgICAgYXdhaXQgd2lkZ2V0LnNldFN0eWxlKCdsZWZ0JyxgJHtzdGF0ZS53aWRnZXRYfXB4YCk7CiAgICAgICAgYXdhaXQgd2lkZ2V0LnNldFN0eWxlKCd0b3AnLGAke3N0YXRlLndpZGdldFl9cHhgKTsKICAgICAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUoJ3JpZ2h0JywnYXV0bycpOwogICAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgnYm90dG9tJywnYXV0bycpOwogICAgICB9IGVsc2UgewogICAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgnbGVmdCcsJ2F1dG8nKTsKICAgICAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUoJ3RvcCcsJ2F1dG8nKTsKICAgICAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUoJ3JpZ2h0JywnMTJweCcpOwogICAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgnYm90dG9tJywnNzRweCcpOwogICAgICB9CiAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgnYm9yZGVyLXJhZGl1cycsJzExcHgnKTsKICAgICAgYXdhaXQgd2lkZ2V0LnNldFN0eWxlKCdwYWRkaW5nJywnNXB4IDEwcHggOHB4Jyk7CiAgICB9CiAgICB3aWRnZXRSZW5kZXJDYWNoZS5sYXlvdXQgPSBsYXlvdXQ7CiAgfQo=').decode()
+          layout_new = base64.b64decode('ICBhc3luYyBmdW5jdGlvbiBzZXRSZXNwb25zaXZlV2lkZ2V0U3R5bGUobmFtZSwgdmFsdWUpIHsKICAgIGlmICghd2lkZ2V0KSByZXR1cm4gZmFsc2U7CiAgICBpZiAoIXdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXMgfHwgdHlwZW9mIHdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXMgIT09ICdvYmplY3QnKSB7CiAgICAgIHdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXMgPSBPYmplY3QuY3JlYXRlKG51bGwpOwogICAgfQogICAgaWYgKHdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXNbbmFtZV0gPT09IHZhbHVlKSB7CiAgICAgIHBvd2VyUnVudGltZS5yZXNwb25zaXZlU3R5bGVTa2lwcyArPSAxOwogICAgICBwZXJmb3JtYW5jZVJ1bnRpbWUud2lkZ2V0U3R5bGVTa2lwcyArPSAxOwogICAgICByZXR1cm4gZmFsc2U7CiAgICB9CiAgICBhd2FpdCB3aWRnZXQuc2V0U3R5bGUobmFtZSwgdmFsdWUpOwogICAgd2lkZ2V0UmVuZGVyQ2FjaGUucmVzcG9uc2l2ZVN0eWxlc1tuYW1lXSA9IHZhbHVlOwogICAgcG93ZXJSdW50aW1lLnJlc3BvbnNpdmVTdHlsZVdyaXRlcyArPSAxOwogICAgcGVyZm9ybWFuY2VSdW50aW1lLndpZGdldFN0eWxlV3JpdGVzICs9IDE7CiAgICByZXR1cm4gdHJ1ZTsKICB9CgogIGFzeW5jIGZ1bmN0aW9uIGFwcGx5V2lkZ2V0UmVzcG9uc2l2ZUxheW91dChtb2JpbGUsIGV4cGFuZGVkKSB7CiAgICBpZiAoIXdpZGdldCkgcmV0dXJuOwogICAgY29uc3QgbGF5b3V0ID0gbW9iaWxlID8gKGV4cGFuZGVkID8gJ21vYmlsZS1leHBhbmRlZCcgOiAnbW9iaWxlLWNvbGxhcHNlZCcpIDogJ2Rlc2t0b3AnOwogICAgaWYgKHdpZGdldFJlbmRlckNhY2hlLmxheW91dCA9PT0gbGF5b3V0KSByZXR1cm47CiAgICBsZXQgZGVzaXJlZDsKICAgIGlmIChtb2JpbGUpIHsKICAgICAgZGVzaXJlZCA9IHsKICAgICAgICBsZWZ0OidhdXRvJywgdG9wOidhdXRvJywgcmlnaHQ6JzhweCcsIGJvdHRvbTonODhweCcsCiAgICAgICAgJ2JvcmRlci1yYWRpdXMnOmV4cGFuZGVkPycxMXB4JzonOTk5cHgnLAogICAgICAgIHBhZGRpbmc6ZXhwYW5kZWQ/JzVweCAxMHB4IDhweCc6JzZweCA5cHgnCiAgICAgIH07CiAgICB9IGVsc2UgaWYgKG51bShzdGF0ZS53aWRnZXRYKSYmbnVtKHN0YXRlLndpZGdldFkpKSB7CiAgICAgIGRlc2lyZWQgPSB7CiAgICAgICAgbGVmdDpgJHtzdGF0ZS53aWRnZXRYfXB4YCwgdG9wOmAke3N0YXRlLndpZGdldFl9cHhgLCByaWdodDonYXV0bycsIGJvdHRvbTonYXV0bycsCiAgICAgICAgJ2JvcmRlci1yYWRpdXMnOicxMXB4JywgcGFkZGluZzonNXB4IDEwcHggOHB4JwogICAgICB9OwogICAgfSBlbHNlIHsKICAgICAgZGVzaXJlZCA9IHsKICAgICAgICBsZWZ0OidhdXRvJywgdG9wOidhdXRvJywgcmlnaHQ6JzEycHgnLCBib3R0b206Jzc0cHgnLAogICAgICAgICdib3JkZXItcmFkaXVzJzonMTFweCcsIHBhZGRpbmc6JzVweCAxMHB4IDhweCcKICAgICAgfTsKICAgIH0KICAgIGZvciAoY29uc3QgW25hbWUsIHZhbHVlXSBvZiBPYmplY3QuZW50cmllcyhkZXNpcmVkKSkgewogICAgICBhd2FpdCBzZXRSZXNwb25zaXZlV2lkZ2V0U3R5bGUobmFtZSwgdmFsdWUpOwogICAgfQogICAgd2lkZ2V0UmVuZGVyQ2FjaGUubGF5b3V0ID0gbGF5b3V0OwogIH0K').decode()
           if s.count(layout_old) != 1:
               raise SystemExit('responsive layout body mismatch')
           s = s.replace(layout_old, layout_new, 1)
 
-          move_anchor = '''      await widget.setStyle('left',`${state.widgetX}px`);
-      await widget.setStyle('top',`${state.widgetY}px`);
-      await widget.setStyle('right','auto');
-      await widget.setStyle('bottom','auto');
-'''
-          move_new = move_anchor + '''      if (widgetRenderCache.responsiveStyles && typeof widgetRenderCache.responsiveStyles === 'object') {
-        widgetRenderCache.responsiveStyles.left = `${state.widgetX}px`;
-        widgetRenderCache.responsiveStyles.top = `${state.widgetY}px`;
-        widgetRenderCache.responsiveStyles.right = 'auto';
-        widgetRenderCache.responsiveStyles.bottom = 'auto';
-      }
-'''
+          move_anchor = base64.b64decode('ICAgICAgYXdhaXQgd2lkZ2V0LnNldFN0eWxlKCdsZWZ0JyxgJHtzdGF0ZS53aWRnZXRYfXB4YCk7CiAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgndG9wJyxgJHtzdGF0ZS53aWRnZXRZfXB4YCk7CiAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgncmlnaHQnLCdhdXRvJyk7CiAgICAgIGF3YWl0IHdpZGdldC5zZXRTdHlsZSgnYm90dG9tJywnYXV0bycpOwo=').decode()
+          move_extra = base64.b64decode('ICAgICAgaWYgKHdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXMgJiYgdHlwZW9mIHdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXMgPT09ICdvYmplY3QnKSB7CiAgICAgICAgd2lkZ2V0UmVuZGVyQ2FjaGUucmVzcG9uc2l2ZVN0eWxlcy5sZWZ0ID0gYCR7c3RhdGUud2lkZ2V0WH1weGA7CiAgICAgICAgd2lkZ2V0UmVuZGVyQ2FjaGUucmVzcG9uc2l2ZVN0eWxlcy50b3AgPSBgJHtzdGF0ZS53aWRnZXRZfXB4YDsKICAgICAgICB3aWRnZXRSZW5kZXJDYWNoZS5yZXNwb25zaXZlU3R5bGVzLnJpZ2h0ID0gJ2F1dG8nOwogICAgICAgIHdpZGdldFJlbmRlckNhY2hlLnJlc3BvbnNpdmVTdHlsZXMuYm90dG9tID0gJ2F1dG8nOwogICAgICB9Cg==').decode()
           if s.count(move_anchor) != 1:
               raise SystemExit('drag style anchor mismatch')
-          s = s.replace(move_anchor, move_new, 1)
+          s = s.replace(move_anchor, move_anchor + move_extra, 1)
 
           diag_anchor = "      `Power activity: probe ${Date.now() < Number(powerRuntime.probeBurstUntil || 0) ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,\n"
           diag_new = diag_anchor + "      `Mobile style cache: writes ${powerRuntime.responsiveStyleWrites} · skips ${powerRuntime.responsiveStyleSkips} · layout ${widgetRenderCache.layout || 'none'}`,\n"

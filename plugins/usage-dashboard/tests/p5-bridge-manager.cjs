@@ -1,6 +1,6 @@
-// Bridge Manager 1.2.4 live-status reconciliation release validation trigger.
+// Bridge Manager 1.2.5 live-status reconciliation release validation trigger.
 // Node --check must receive a recognized .cjs temp extension on device runtimes.
-// Android proc-net + authenticated lifecycle probe + bundled engine regression lock for Bridge Manager 1.2.4.
+// Android proc-net + authenticated lifecycle probe + bundled engine regression lock for Bridge Manager 1.2.5.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
@@ -62,7 +62,7 @@ if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.brid
 else { assert.equal(manifest.components.bridgeManager.engineManaged, true); assert.equal(manifest.components.bridgeManager.engineAdoption, true); }
 assert.equal(manifest.components.bridgeManager.sha256, hash(managerPath));
 assert.equal(manifest.components.bridgeManager.bootstrapSha256, hash(bootstrapPath));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.4';"), 'manager bundled-engine version missing');
+assert.ok(manager.includes("const MANAGER_VERSION = '1.2.5';"), 'manager bundled-engine version missing');
 assert.ok(manager.includes('bridge-manager.next-${process.pid}.cjs'), 'self-update temp file must preserve .cjs extension');
 assert.ok(manager.includes('bridge-manager.rollback-${process.pid}.cjs'), 'rollback temp file must preserve .cjs extension');
 assert.ok(manager.includes("const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');"), 'canonical legacy pidfile fallback missing');

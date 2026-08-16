@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.24
+//@version 3.0.0-alpha.5.25
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.24';
+  const VERSION = '3.0.0-alpha.5.25';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -64,9 +64,9 @@
   let uiStallProbeTimer = null, resumeProbeTimer = null, resumeMeasureTimer = null, resumeRefreshTimer = null, resumeLongTaskObserver = null;
   let widget = null, rootBody = null, drag = null;
   let widgetMobileExpanded = false, widgetMobileViewport = false, widgetMobileToggleBlockedUntil = 0;
-  let widgetRenderCache = {html:null,width:null,display:null,layout:null};
+  let widgetRenderCache = {html:null,width:null,display:null,layout:null,responsiveStyles:Object.create(null)};
   const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,activeRefreshReason:'',lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,lastUiStallRenderOverlap:false,lastUiStallRenderReason:'',lastUiStallRenderMs:null,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeInputCaptured:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeFirstInputAfterMs:null,lastResumeInputDelayMs:null,lastResumeFrameDelayMs:null,lastResumeRefreshStartedAfterMs:null,lastResumeRefreshMs:null,lastResumeRenderMs:null,lastResumeHadRefreshAtEntry:false,lastResumeRequestedReason:'',lastResumeActualReason:'',lastResumeRefreshWasCoalesced:false,lastResumeCoalescedIntoReason:'',resumeRefreshSamples:[],lastResumeInputDuringRefresh:false,lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeInputDelaySamples:[],resumeFrameDelaySamples:[],resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0,panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,panelPartialRenders:0,panelFullRenders:0,panelSectionWrites:0,panelSectionSkips:0,hourlyDetailWrites:0,hourlyDetailSkips:0,hourlyDetailFallbacks:0,lastPanelRenderMode:'full',runtimeState:'active',runtimeStateChangedAt:Date.now(),runtimeTransitions:0,lastHealthySyncAt:null,degradedSince:null,lastRenderMs:null,lastPanelRenderMs:null,lastRenderReason:'',lastRenderStartedPerf:0,lastRenderEndedPerf:0,activeRenderStartedPerf:0,activeRenderReason:'',lastRenderBreakdown:null,renderSpikeCount:0,renderSpikeSamples:[],lastRenderSpikeMs:null,lastRenderSpikeAt:null,lastRenderSpikeReason:'',lastRenderSpikeRefreshOverlap:false,lastRenderSpikeBreakdown:null};
-  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0};
+  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   function runtimeIsCurrent(epoch = runtimeEpoch) { return !runtimeDisposed && epoch === runtimeEpoch; }
@@ -1899,6 +1899,7 @@ async function importLegacyTodayBaselines() {
       `Performance settings: focus ${state.syncOnFocus === false ? 'off' : 'on'} · guard ${state.performanceGuard === false ? 'off' : 'on'} · adaptive ${state.adaptiveRefresh === false ? 'off' : 'on'} · background pause ${state.backgroundPause === false ? 'off' : 'on'}`,
       `Power guard: adaptive-probe · idle ${UI_STALL_PROBE_IDLE_INTERVAL_MS}ms · burst ${UI_STALL_PROBE_INTERVAL_MS}ms · timer-burst ${UI_STALL_PROBE_TIMER_BURST_MS}ms · active-burst ${UI_STALL_PROBE_ACTIVE_BURST_MS}ms`,
       `Power activity: probe ${Date.now() < Number(powerRuntime.probeBurstUntil || 0) ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,
+      `Mobile style cache: writes ${powerRuntime.responsiveStyleWrites} · skips ${powerRuntime.responsiveStyleSkips} · layout ${widgetRenderCache.layout || 'none'}`,
       `Guard samples: timer ${Number(performanceRuntime.timerSamples || 0)} · ignored ${Number(performanceRuntime.ignoredSamples || 0)} · slow streak ${Number(performanceRuntime.slowRefreshes || 0)}`,
       `UI stall probe: ${performanceRuntime.uiStallProbeActive ? 'active' : 'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50 || 0)} · ≥100ms ${Number(performanceRuntime.uiStallCount100 || 0)} · ≥200ms ${Number(performanceRuntime.uiStallCount200 || 0)} · max ${roundPerfMs(performanceRuntime.uiStallMaxMs) || 0}ms`,
       `Last UI stall: ${num(performanceRuntime.lastUiStallMs) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · render overlap ${performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}${performanceRuntime.lastUiStallRenderOverlap ? ` (${performanceRuntime.lastUiStallRenderReason || 'unknown'} · ${num(performanceRuntime.lastUiStallRenderMs) ? `${roundPerfMs(performanceRuntime.lastUiStallRenderMs)}ms` : '—'})` : ''} · ${age(performanceRuntime.lastUiStallAt)}` : 'none'}`,
@@ -2492,31 +2493,47 @@ function todayOverviewMetrics(d) {
     try { return Number(await rootBody.clientWidth()) <= 600; } catch { return false; }
   }
 
+  async function setResponsiveWidgetStyle(name, value) {
+    if (!widget) return false;
+    if (!widgetRenderCache.responsiveStyles || typeof widgetRenderCache.responsiveStyles !== 'object') {
+      widgetRenderCache.responsiveStyles = Object.create(null);
+    }
+    if (widgetRenderCache.responsiveStyles[name] === value) {
+      powerRuntime.responsiveStyleSkips += 1;
+      performanceRuntime.widgetStyleSkips += 1;
+      return false;
+    }
+    await widget.setStyle(name, value);
+    widgetRenderCache.responsiveStyles[name] = value;
+    powerRuntime.responsiveStyleWrites += 1;
+    performanceRuntime.widgetStyleWrites += 1;
+    return true;
+  }
+
   async function applyWidgetResponsiveLayout(mobile, expanded) {
     if (!widget) return;
     const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
     if (widgetRenderCache.layout === layout) return;
+    let desired;
     if (mobile) {
-      await widget.setStyle('left','auto');
-      await widget.setStyle('top','auto');
-      await widget.setStyle('right','8px');
-      await widget.setStyle('bottom','88px');
-      await widget.setStyle('border-radius',expanded?'11px':'999px');
-      await widget.setStyle('padding',expanded?'5px 10px 8px':'6px 9px');
+      desired = {
+        left:'auto', top:'auto', right:'8px', bottom:'88px',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 9px'
+      };
+    } else if (num(state.widgetX)&&num(state.widgetY)) {
+      desired = {
+        left:`${state.widgetX}px`, top:`${state.widgetY}px`, right:'auto', bottom:'auto',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
     } else {
-      if (num(state.widgetX)&&num(state.widgetY)) {
-        await widget.setStyle('left',`${state.widgetX}px`);
-        await widget.setStyle('top',`${state.widgetY}px`);
-        await widget.setStyle('right','auto');
-        await widget.setStyle('bottom','auto');
-      } else {
-        await widget.setStyle('left','auto');
-        await widget.setStyle('top','auto');
-        await widget.setStyle('right','12px');
-        await widget.setStyle('bottom','74px');
-      }
-      await widget.setStyle('border-radius','11px');
-      await widget.setStyle('padding','5px 10px 8px');
+      desired = {
+        left:'auto', top:'auto', right:'12px', bottom:'74px',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
+    }
+    for (const [name, value] of Object.entries(desired)) {
+      await setResponsiveWidgetStyle(name, value);
     }
     widgetRenderCache.layout = layout;
   }
@@ -2561,6 +2578,12 @@ function todayOverviewMetrics(d) {
       await widget.setStyle('top',`${state.widgetY}px`);
       await widget.setStyle('right','auto');
       await widget.setStyle('bottom','auto');
+      if (widgetRenderCache.responsiveStyles && typeof widgetRenderCache.responsiveStyles === 'object') {
+        widgetRenderCache.responsiveStyles.left = `${state.widgetX}px`;
+        widgetRenderCache.responsiveStyles.top = `${state.widgetY}px`;
+        widgetRenderCache.responsiveStyles.right = 'auto';
+        widgetRenderCache.responsiveStyles.bottom = 'auto';
+      }
     };
     const up = async e => {
       if (!drag) return;

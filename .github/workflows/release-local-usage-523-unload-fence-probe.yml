@@ -1,0 +1,75 @@
+name: Release Local Usage 5.23 Unload Fence Probe
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-523-unload-fence-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish 5.23 identity-only probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git switch release-usage-dashboard
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+
+          old = '3.0.0-alpha.5.22'
+          new = '3.0.0-alpha.5.23'
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+
+          plugin = plugin_path.read_text()
+          if plugin.count(old) != 2:
+              raise SystemExit(f'unexpected plugin version count: {plugin.count(old)}')
+          plugin_path.write_text(plugin.replace(old, new))
+
+          manager = manager_path.read_text()
+          if manager.count(old) != 1:
+              raise SystemExit(f'unexpected manager version count: {manager.count(old)}')
+          manager_path.write_text(manager.replace(old, new))
+
+          manifest = json.loads(manifest_path.read_text())
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git diff --check
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json | sort)"
+          grep -Fq '//@version 3.0.0-alpha.5.23' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.23'" plugins/usage-dashboard/latest.js
+          grep -Fq 'Diagnostic captured:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Runtime loaded at:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Runtime uptime:' plugins/usage-dashboard/latest.js
+          grep -Fq "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.23'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.2'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '  function widgetHtml() {' plugins/usage-dashboard/latest.js
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m 'release: local usage dashboard 5.23 unload fence probe'
+          git push origin release-usage-dashboard

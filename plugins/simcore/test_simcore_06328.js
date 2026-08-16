@@ -38,6 +38,11 @@ function response(lines = []) {
   return ['host preamble with inline ⏱️[2099-01-01 (Thu) 11:59 PM]', '# 응답', '', '## 볼륨 65: 테스트', '### 챕터 2: 테스트', '#### Chatindex: 801∮', frame, '', ...lines, '', '<Knowledge>ok</Knowledge>'].join('\n');
 }
 
+function canonicalResponse(lines = []) {
+  const raw = response(lines);
+  return raw.slice(raw.indexOf('# 응답'));
+}
+
 let seq = time.narrativeTimestampSequence(response());
 assert(seq.frameTimestamp === frame, 'A: frame timestamp must be scoped after # 응답');
 assert(seq.candidate === frame && seq.sceneCount === 0 && seq.tailStatus === 'FRAME_ONLY', 'A: frame-only output must preserve legacy commit');
@@ -66,10 +71,10 @@ state = { narrativeTimestamp: '⏱️[2029-06-14 (Thu) 02:00 PM]' };
 commit = time.commitNarrativeTimestamp(state, { mode: 'A', narrativeTimestampPrevious: state.narrativeTimestamp }, response([backward, '', forward]));
 assert(commit.timestamp === frame && state.narrativeTimestamp === frame && commit.tailStatus === 'SKIPPED_NON_MONOTONIC', 'H: skipped tail must persist frame only');
 
-let floor = time.enforceNarrativeCurrentTimeFloor(
-  response([]).replace(frame, '⏱️[2029-06-14 (Thu) 01:00 PM]').replace('<Knowledge>', `${forward}\n\n<Knowledge>`),
-  frame,
-);
+let floorInput = canonicalResponse([])
+  .replace(frame, '⏱️[2029-06-14 (Thu) 01:00 PM]')
+  .replace('<Knowledge>', `${forward}\n\n<Knowledge>`);
+let floor = time.enforceNarrativeCurrentTimeFloor(floorInput, frame);
 assert(floor.changed, 'I: backward frame must still clamp');
 state = { narrativeTimestamp: frame };
 commit = time.commitNarrativeTimestamp(state, { mode: 'A', narrativeTimestampPrevious: frame }, floor.content);
@@ -80,7 +85,7 @@ assert(time.syncNarrativeTimestamp(state, response([futureYear]), 'A'), 'J: sync
 assert(state.narrativeTimestamp === futureYear, 'J: sync path must persist future-year tail');
 
 const broadcastState = { broadcastAirtime: null, broadcastAirtimeStart: null };
-const broadcastCommit = time.commitBroadcastAirtime(broadcastState, { mode: 'B_START', broadcastAirtimeIsNew: true }, response([forward]));
+const broadcastCommit = time.commitBroadcastAirtime(broadcastState, { mode: 'B_START', broadcastAirtimeIsNew: true }, canonicalResponse([forward]));
 assert(broadcastCommit.timestamp === frame && broadcastState.broadcastAirtime === frame, 'K: broadcast airtime must remain first-timestamp based');
 
 console.log('SimCore 0.63.28 multi-scene narrative clock fixtures: PASS');

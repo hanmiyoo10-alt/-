@@ -1,0 +1,41 @@
+name: Fix Usage 5.32 Engine Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-usage-dashboard-532-probe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Correct engine version probe and retrigger seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='.github/workflows/usage-dashboard-532-source-parity.yml'
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/usage-dashboard-532-source-parity.yml')
+          text = p.read_text()
+          old = "const ENGINE_VERSION = '1.6.3';"
+          new = "const VERSION = '1.6.3';"
+          count = text.count(old)
+          if count != 2:
+              raise SystemExit(f'unexpected engine probe count: {count}')
+          p.write_text(text.replace(old, new))
+          PY
+          git rm .github/workflows/fix-usage-dashboard-532-probe.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$TARGET"
+          git commit -m 'chore: correct Usage 5.32 engine version probe'
+          git push origin HEAD:main

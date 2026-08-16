@@ -1,0 +1,102 @@
+name: Stage SimCore v0.63.27 Response Envelope Scope
+
+on:
+  push:
+    paths:
+      - 'plugins/simcore/simcore-06327-stage.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture v0.63.26 baseline
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.26' /tmp/simcore-before.js
+
+      - name: Apply Response Envelope Scope patch
+        run: python plugins/simcore/patch_simcore_06327.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.27' plugins/simcore/latest.js
+          grep -q 'function responseEnvelopeScope(content)' plugins/simcore/latest.js
+          grep -q 'hook cleanup NAMED' plugins/simcore/latest.js
+
+      - name: Envelope regression fixtures
+        run: node plugins/simcore/test_simcore_06327.js
+
+      - name: Frozen-module and host-call invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end]
+              return out
+
+          bmods = modules(before)
+          amods = modules(after)
+          expected = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          assert set(bmods) == expected, set(bmods)
+          assert set(amods) == expected, set(amods)
+          changed = [name for name in sorted(expected) if bmods[name] != amods[name]]
+          assert changed == ['structure'], changed
+
+          frozen = expected - {'structure'}
+          frozen_bytes = sum(len(amods[name].encode('utf-8')) for name in frozen)
+          print('frozen modules:', len(frozen), 'bytes:', frozen_bytes)
+
+          call_tokens = [
+              "Risuai.addRisuReplacer('beforeRequest'",
+              "Risuai.removeRisuReplacer('beforeRequest'",
+              "Risuai.addRisuScriptHandler('output'",
+              "Risuai.removeRisuScriptHandler('output'",
+              'Risuai.registerButton(',
+              'Risuai.registerSetting(',
+              'Risuai.unregisterUIPart(',
+              'pluginStorage.getItem(',
+              'pluginStorage.setItem(',
+              'pluginStorage.removeItem(',
+              'pluginStorage.keys(',
+              'setTimeout(',
+          ]
+          for token in call_tokens:
+              assert before.count(token) == after.count(token), (token, before.count(token), after.count(token))
+
+          assert "validateHostFrameItem(text, issues, 'timestamp'" not in after
+          assert 'const frameOk = scope.frameOk;' in after
+          assert "const text = String(scope.envelope || '');" in after
+          assert 'responseEnvelopeScope, responseEnvelopeIntegrity' in after
+          assert after.count('//@version 0.63.27') == 1
+          assert after.count("'Version: 0.63.27'") == 1
+          assert after.count('⚙️ SimCore v0.63.27') == 1
+          assert '0.63.26' not in after
+          print('module freeze + host call invariants: PASS')
+          PY
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --quiet && { echo 'No plugin changes produced'; exit 1; }
+          git commit -m 'Stage SimCore v0.63.27 response envelope scope'
+          git push origin HEAD:${GITHUB_REF_NAME}

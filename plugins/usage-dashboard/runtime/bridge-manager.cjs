@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.2.4';
-const PRODUCT_VERSION = '3.0.0-alpha.5.30';
+const MANAGER_VERSION = '1.2.5';
+const PRODUCT_VERSION = '3.0.0-alpha.5.31';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -551,6 +551,7 @@ function send(res, status, body, restart = false) {
 
 ensureAdoptedServiceUp();
 const server = http.createServer(async (req, res) => {
+  try {
   if (!authorized(req)) return send(res, 401, {ok:false,error:'unauthorized'});
   const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
   if (req.method === 'GET' && url.pathname === '/status') {
@@ -579,6 +580,16 @@ const server = http.createServer(async (req, res) => {
     catch (e) { return send(res, 500, {ok:false,rolledBack:false,error:e?.message || String(e)}); }
   }
   return send(res, 404, {ok:false,error:'not found'});
+  } catch (error) {
+    const kind = String(error?.code || error?.name || 'ERROR').slice(0, 80);
+    console.error(`[Local Usage Runtime Manager] request boundary: ${kind}`);
+    if (res.writableEnded) return;
+    if (res.headersSent) {
+      try { res.destroy(); } catch (_) {}
+      return;
+    }
+    return send(res, 500, {ok:false,error:'manager internal request error',code:'MANAGER_INTERNAL_ERROR',retryable:true});
+  }
 });
 server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });
 server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`));

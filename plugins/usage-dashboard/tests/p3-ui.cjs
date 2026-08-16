@@ -23,7 +23,7 @@ for (const marker of [
   'function widgetMobileMode()',
   "return Number(await rootBody.clientWidth()) <= 600;",
   'async function applyWidgetResponsiveLayout(mobile, expanded)',
-  "bottom','88px'",
+  "bottom:'88px'",
   'widgetMobileExpanded = !widgetMobileExpanded;',
   "await renderWidget('panel-open');",
   'widgetMobileToggleBlockedUntil=Date.now()+800;',

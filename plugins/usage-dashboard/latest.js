@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.28
+//@version 3.0.0-alpha.5.29
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.28';
+  const VERSION = '3.0.0-alpha.5.29';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -69,6 +69,7 @@
   const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};
   const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
+  const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
 
   function refreshAttributionKey(reason) {
     const key = String(reason || 'scheduled');
@@ -1661,6 +1662,32 @@ async function importLegacyTodayBaselines() {
     powerRuntime.persistWrites += 1;
   }
 
+  function noteLocalRuntimeError(stage, error) {
+    const key = String(stage || 'runtime');
+    const message = String(error?.message || error || 'unknown error')
+      .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
+      .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 180);
+    localRuntimeErrors.count += 1;
+    if (key.includes('persist')) localRuntimeErrors.persistFailures += 1;
+    if (key.includes('render')) localRuntimeErrors.renderFailures += 1;
+    localRuntimeErrors.lastStage = key;
+    localRuntimeErrors.lastMessage = message;
+    localRuntimeErrors.lastAt = Date.now();
+    console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
+  }
+
+  async function persistRefreshState(stage) {
+    try { await persist(); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
+  async function renderRefreshWidget(reason, stage) {
+    try { await renderWidget(reason); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
     const base = normalizeBridgeBase(state.bridgeBase);
@@ -1878,9 +1905,9 @@ async function importLegacyTodayBaselines() {
         state.retryDelayMs = 0;
         state.nextRetryAt = null;
         updateRuntimeState('refresh-success');
-        await persist();
+        await persistRefreshState('refresh-success-persist');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
-        await renderWidget(reason);
+        await renderRefreshWidget(reason, 'refresh-success-render');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (resumeVisibilityRefresh) {
           performanceRuntime.lastResumeRefreshMs = state.lastSyncDurationMs;
@@ -1899,11 +1926,12 @@ async function importLegacyTodayBaselines() {
         state.retryDelayMs = retryDelayFor(state.consecutiveFailures);
         state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
         updateRuntimeState('refresh-error');
-        await persist();
+        await persistRefreshState('refresh-error-persist');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last good values, but immediately repaint the widget so
-        // LIVE changes to OFFLINE as soon as a refresh fails.
-        await renderWidget(reason);
+        // LIVE changes to OFFLINE as soon as a refresh fails. Local persist/render
+        // failures must not abort retry scheduling or masquerade as bridge errors.
+        await renderRefreshWidget(reason, 'refresh-error-render');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         scheduleRefresh();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
@@ -2003,6 +2031,7 @@ async function importLegacyTodayBaselines() {
       `P4 partial: auto section patch · diagnostics live · settings preserved`,
       `Render cache: widget html writes ${Number(performanceRuntime.widgetHtmlWrites || 0)} · skips ${Number(performanceRuntime.widgetHtmlSkips || 0)} · style writes ${Number(performanceRuntime.widgetStyleWrites || 0)} · skips ${Number(performanceRuntime.widgetStyleSkips || 0)} · closed panel skips ${Number(performanceRuntime.panelRenderSkippedClosed || 0)}`,
       `P4 render: closed-panel skip · widget DOM dedup`,
+      `Local runtime errors: ${Number(localRuntimeErrors.count || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
@@ -2248,7 +2277,10 @@ function todayOverviewMetrics(d) {
       panelRenderTimer = null;
       const run = () => {
         panelIdleHandle = null;
-        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettingsPartial();
+        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') {
+          try { renderSettingsPartial(); }
+          catch (error) { noteLocalRuntimeError('panel-render', error); }
+        }
       };
       if (state.performanceGuard !== false && typeof window?.requestIdleCallback === 'function') {
         panelIdleHandle = window.requestIdleCallback(run, {timeout:500});

@@ -1,0 +1,4 @@
+Base release-simcore: a1eb5b8d0e9efa4f8dcdec5e8408d06691b1470f
+Base tree: cc0ca78bc070a6424da7ea83517332aa71037f46
+Validated plugin blob: 01b96a03625cf0a9065161081c58c7776658db5a
+Clean release must replace only plugins/simcore/latest.js and plugins/simcore/install.js.

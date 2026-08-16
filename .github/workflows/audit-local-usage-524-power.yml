@@ -26,23 +26,31 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           s = Path('/tmp/latest.js').read_text()
-          anchors = [
-              'async function persist()',
-              'function stopUiStallProbe()',
-              'function startUiStallProbe()',
-              'async function renderWidget(',
-              'function scheduleRefresh(',
-              'function diagText()',
-              'function recordInteraction(',
-              'function handleVisibility',
-          ]
-          for anchor in anchors:
+
+          def around(anchor, before=800, after=5000):
               i = s.find(anchor)
               print('\n===== ' + anchor + ' =====')
               if i < 0:
                   print('NOT FOUND')
-                  continue
-              start = max(0, i - 500)
-              end = min(len(s), i + 4500)
-              print(s[start:end])
+                  return
+              print(s[max(0, i-before):min(len(s), i+after)])
+
+          for anchor in [
+              'function markPerformanceInteraction(',
+              'function beginResumeMeasurement(',
+              'async function refresh(',
+              'async function renderPanel(',
+              'async function openSettings(',
+          ]:
+              around(anchor)
+
+          print('\n===== persist call sites =====')
+          for n, line in enumerate(s.splitlines(), 1):
+              if 'persist(' in line:
+                  print(f'{n}: {line}')
+
+          print('\n===== renderWidget call sites =====')
+          for n, line in enumerate(s.splitlines(), 1):
+              if 'renderWidget(' in line:
+                  print(f'{n}: {line}')
           PY

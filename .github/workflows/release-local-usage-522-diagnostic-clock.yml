@@ -1,0 +1,124 @@
+name: Release Local Usage 5.22 Diagnostic Clock
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-522-diagnostic-clock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish 5.22 diagnostic clock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git switch release-usage-dashboard
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+
+          old = '3.0.0-alpha.5.21'
+          new = '3.0.0-alpha.5.22'
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+
+          s = plugin_path.read_text()
+          if s.count(old) != 2:
+              raise SystemExit(f'unexpected plugin version count: {s.count(old)}')
+          s = s.replace(old, new)
+
+          anchor = "  const KST_TIME_ZONE = 'Asia/Seoul';\n"
+          if s.count(anchor) != 1:
+              raise SystemExit('KST anchor mismatch')
+          s = s.replace(anchor, anchor + "  const RUNTIME_LOADED_AT = Date.now();\n", 1)
+
+          helper_anchor = "  const pct = v => Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 0;\n"
+          helper = r'''
+
+  function diagnosticTimestamp(timestamp) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: KST_TIME_ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(new Date(Number(timestamp)));
+    const value = type => parts.find(part => part.type === type)?.value || '00';
+    return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} KST`;
+  }
+
+  function diagnosticUptime(durationMs) {
+    let seconds = Math.max(0, Math.floor((Number(durationMs) || 0) / 1000));
+    const days = Math.floor(seconds / 86400); seconds %= 86400;
+    const hours = Math.floor(seconds / 3600); seconds %= 3600;
+    const minutes = Math.floor(seconds / 60); seconds %= 60;
+    const parts = [];
+    if (days) parts.push(`${days}일`);
+    if (hours || days) parts.push(`${hours}시간`);
+    if (minutes || hours || days) parts.push(`${minutes}분`);
+    parts.push(`${seconds}초`);
+    return parts.join(' ');
+  }
+'''
+          if s.count(helper_anchor) != 1:
+              raise SystemExit('helper anchor mismatch')
+          s = s.replace(helper_anchor, helper_anchor + helper, 1)
+
+          diag_anchor = "  function diagText() {\n    const d = state.data || {}, h = d.health || {};\n"
+          diag_replacement = "  function diagText() {\n    const diagnosticCapturedAt = Date.now();\n    const d = state.data || {}, h = d.health || {};\n"
+          if s.count(diag_anchor) != 1:
+              raise SystemExit('diag function anchor mismatch')
+          s = s.replace(diag_anchor, diag_replacement, 1)
+
+          return_anchor = "    return [\n      `Local Usage Dashboard v${VERSION}`,\n      `Unified runtime:"
+          return_replacement = "    return [\n      `Local Usage Dashboard v${VERSION}`,\n      `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,\n      `Runtime loaded at: ${diagnosticTimestamp(RUNTIME_LOADED_AT)}`,\n      `Runtime uptime: ${diagnosticUptime(diagnosticCapturedAt - RUNTIME_LOADED_AT)}`,\n      `Unified runtime:"
+          if s.count(return_anchor) != 1:
+              raise SystemExit('diag return anchor mismatch')
+          s = s.replace(return_anchor, return_replacement, 1)
+
+          plugin_path.write_text(s)
+
+          m = manager_path.read_text()
+          if m.count(old) != 1:
+              raise SystemExit(f'unexpected manager version count: {m.count(old)}')
+          m = m.replace(old, new)
+          manager_path.write_text(m)
+
+          manifest = json.loads(manifest_path.read_text())
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git diff --check
+          grep -Fq '//@version 3.0.0-alpha.5.22' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.22'" plugins/usage-dashboard/latest.js
+          grep -Fq 'Diagnostic captured:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Runtime loaded at:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Runtime uptime:' plugins/usage-dashboard/latest.js
+          grep -Fq "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.22'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.2'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '  function widgetHtml() {' plugins/usage-dashboard/latest.js
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m 'release: local usage dashboard 5.22 diagnostic clock'
+          git push origin release-usage-dashboard

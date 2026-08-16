@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.2';
+const VERSION = '1.6.3';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -2083,7 +2083,23 @@ async function handle(req, res) {
 }
 
 await ensureToken();
-const server = http.createServer((req, res) => void handle(req, res));
+const server = http.createServer((req, res) => {
+  void handle(req, res).catch((error) => {
+    const route = String(req?.url || '/').split('?')[0].slice(0, 160) || '/';
+    const message = safeMessage(error);
+    logRateLimited('error', `request-boundary:${route}:${message.slice(0,120)}`, `Unhandled request error on ${route}: ${message}`, 30_000);
+    if (res.writableEnded) return;
+    if (res.headersSent) {
+      try { res.destroy(); } catch {}
+      return;
+    }
+    json(res, 500, {
+      error: 'Bridge internal request error',
+      code: 'BRIDGE_INTERNAL_ERROR',
+      retryable: true,
+    });
+  });
+});
 server.listen(PORT, HOST, () => {
   console.log('');
   console.log(`LLMGateway DevPass Termux Bridge v${VERSION}`);

@@ -1,19 +1,23 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.15
+//@version 3.0.0-alpha.5.32
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.15';
+  const VERSION = '3.0.0-alpha.5.32';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
   const LEGACY_DEVPASS_STATE_KEY = 'llmgateway-devpass-direct-v1';
   const KST_TIME_ZONE = 'Asia/Seoul';
+  const RUNTIME_LOADED_AT = Date.now();
   const UI_STALL_PROBE_INTERVAL_MS = 100;
+  const UI_STALL_PROBE_IDLE_INTERVAL_MS = 1000;
+  const UI_STALL_PROBE_TIMER_BURST_MS = 1500;
+  const UI_STALL_PROBE_ACTIVE_BURST_MS = 5000;
   const UI_STALL_THRESHOLD_MS = 50;
   const RENDER_SPIKE_THRESHOLD_MS = 50;
   const RESUME_GRACE_MS = 1200;
@@ -54,19 +58,115 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
   let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let panelRenderTimer = null, panelIdleHandle = null;
   let uiStallProbeTimer = null, resumeProbeTimer = null, resumeMeasureTimer = null, resumeRefreshTimer = null, resumeLongTaskObserver = null;
   let widget = null, rootBody = null, drag = null;
   let widgetMobileExpanded = false, widgetMobileViewport = false, widgetMobileToggleBlockedUntil = 0;
-  let widgetRenderCache = {html:null,width:null,display:null,layout:null};
+  let widgetRenderCache = {html:null,width:null,display:null,layout:null,responsiveStyles:Object.create(null)};
   const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,activeRefreshReason:'',lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,lastUiStallRenderOverlap:false,lastUiStallRenderReason:'',lastUiStallRenderMs:null,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeInputCaptured:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeFirstInputAfterMs:null,lastResumeInputDelayMs:null,lastResumeFrameDelayMs:null,lastResumeRefreshStartedAfterMs:null,lastResumeRefreshMs:null,lastResumeRenderMs:null,lastResumeHadRefreshAtEntry:false,lastResumeRequestedReason:'',lastResumeActualReason:'',lastResumeRefreshWasCoalesced:false,lastResumeCoalescedIntoReason:'',resumeRefreshSamples:[],lastResumeInputDuringRefresh:false,lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeInputDelaySamples:[],resumeFrameDelaySamples:[],resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0,panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,panelPartialRenders:0,panelFullRenders:0,panelSectionWrites:0,panelSectionSkips:0,hourlyDetailWrites:0,hourlyDetailSkips:0,hourlyDetailFallbacks:0,lastPanelRenderMode:'full',runtimeState:'active',runtimeStateChangedAt:Date.now(),runtimeTransitions:0,lastHealthySyncAt:null,degradedSince:null,lastRenderMs:null,lastPanelRenderMs:null,lastRenderReason:'',lastRenderStartedPerf:0,lastRenderEndedPerf:0,activeRenderStartedPerf:0,activeRenderReason:'',lastRenderBreakdown:null,renderSpikeCount:0,renderSpikeSamples:[],lastRenderSpikeMs:null,lastRenderSpikeAt:null,lastRenderSpikeReason:'',lastRenderSpikeRefreshOverlap:false,lastRenderSpikeBreakdown:null};
+  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};
+  const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
+  const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
+  const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
+
+  function refreshAttributionKey(reason) {
+    const key = String(reason || 'scheduled');
+    return REFRESH_ATTRIBUTION_KEYS.includes(key) ? key : 'other';
+  }
+
+  function noteRefreshRequested(reason) {
+    const key = refreshAttributionKey(reason);
+    refreshAttributionRuntime.requested[key] = Number(refreshAttributionRuntime.requested[key] || 0) + 1;
+  }
+
+  function beginRefreshAttribution(reason, startedAt) {
+    const key = refreshAttributionKey(reason);
+    const bucket = refreshAttributionRuntime.executed[key] || {
+      count:0,lastStatus:'none',lastStartedAt:null,lastCompletedAt:null,lastTotalDurationMs:null,lastDataDurationMs:null,
+      lastUiStallCount:0,lastUiStallMaxMs:null,lastRenderSpikeCount:0,lastRenderSpikeMaxMs:null
+    };
+    bucket.count += 1;
+    bucket.lastStartedAt = Number(startedAt || Date.now());
+    refreshAttributionRuntime.executed[key] = bucket;
+    const active = {key,startedAt:bucket.lastStartedAt,uiStallCount:0,uiStallMaxMs:0,renderSpikeCount:0,renderSpikeMaxMs:0};
+    refreshAttributionRuntime.active = active;
+    return active;
+  }
+
+  function noteAttributedUiStall(durationMs) {
+    const active = refreshAttributionRuntime.active;
+    const duration = roundPerfMs(durationMs);
+    if (!active || !Number.isFinite(duration)) return;
+    active.uiStallCount += 1;
+    active.uiStallMaxMs = Math.max(Number(active.uiStallMaxMs || 0), duration);
+  }
+
+  function noteAttributedRenderSpike(durationMs) {
+    const active = refreshAttributionRuntime.active;
+    const duration = roundPerfMs(durationMs);
+    if (!active || !Number.isFinite(duration)) return;
+    active.renderSpikeCount += 1;
+    active.renderSpikeMaxMs = Math.max(Number(active.renderSpikeMaxMs || 0), duration);
+  }
+
+  function finishRefreshAttribution(active, status, totalDurationMs, dataDurationMs = null) {
+    if (!active) return;
+    const bucket = refreshAttributionRuntime.executed[active.key];
+    if (bucket) {
+      bucket.lastStatus = String(status || 'unknown');
+      bucket.lastCompletedAt = Date.now();
+      bucket.lastTotalDurationMs = Math.max(0, Number(totalDurationMs) || 0);
+      bucket.lastDataDurationMs = num(dataDurationMs) ? Number(dataDurationMs) : null;
+      bucket.lastUiStallCount = Number(active.uiStallCount || 0);
+      bucket.lastUiStallMaxMs = active.uiStallCount > 0 ? roundPerfMs(active.uiStallMaxMs) : null;
+      bucket.lastRenderSpikeCount = Number(active.renderSpikeCount || 0);
+      bucket.lastRenderSpikeMaxMs = active.renderSpikeCount > 0 ? roundPerfMs(active.renderSpikeMaxMs) : null;
+    }
+    if (refreshAttributionRuntime.active === active) refreshAttributionRuntime.active = null;
+  }
+
+  function refreshAttributionDetail(reason) {
+    const key = refreshAttributionKey(reason);
+    const requested = Number(refreshAttributionRuntime.requested[key] || 0);
+    const bucket = refreshAttributionRuntime.executed[key];
+    if (!bucket) return `requested ${requested} · executed 0 · last none`;
+    return `requested ${requested} · executed ${Number(bucket.count || 0)} · status ${bucket.lastStatus || 'unknown'} · total ${num(bucket.lastTotalDurationMs) ? `${roundPerfMs(bucket.lastTotalDurationMs)}ms` : '—'} · data ${num(bucket.lastDataDurationMs) ? `${roundPerfMs(bucket.lastDataDurationMs)}ms` : '—'} · UI stalls ${Number(bucket.lastUiStallCount || 0)}${num(bucket.lastUiStallMaxMs) ? ` · max ${roundPerfMs(bucket.lastUiStallMaxMs)}ms` : ''} · render spikes ${Number(bucket.lastRenderSpikeCount || 0)}${num(bucket.lastRenderSpikeMaxMs) ? ` · max ${roundPerfMs(bucket.lastRenderSpikeMaxMs)}ms` : ''} · completed ${bucket.lastCompletedAt ? age(bucket.lastCompletedAt) : '—'}`;
+  }
   const uiParts = [], remoteListeners = [], domListeners = [];
+
+  function runtimeIsCurrent(epoch = runtimeEpoch) { return !runtimeDisposed && epoch === runtimeEpoch; }
+  function dropStaleAsync() { staleAsyncDrops += 1; return undefined; }
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
   const money = (v, d = 2) => num(v) ? `$${Number(v).toFixed(d)}` : '—';
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const pct = v => Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 0;
+
+
+  function diagnosticTimestamp(timestamp) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: KST_TIME_ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(new Date(Number(timestamp)));
+    const value = type => parts.find(part => part.type === type)?.value || '00';
+    return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} KST`;
+  }
+
+  function diagnosticUptime(durationMs) {
+    let seconds = Math.max(0, Math.floor((Number(durationMs) || 0) / 1000));
+    const days = Math.floor(seconds / 86400); seconds %= 86400;
+    const hours = Math.floor(seconds / 3600); seconds %= 3600;
+    const minutes = Math.floor(seconds / 60); seconds %= 60;
+    const parts = [];
+    if (days) parts.push(`${days}일`);
+    if (hours || days) parts.push(`${hours}시간`);
+    if (minutes || hours || days) parts.push(`${minutes}분`);
+    parts.push(`${seconds}초`);
+    return parts.join(' ');
+  }
 
 
   function hydrateState(saved) {
@@ -401,6 +501,7 @@
     const duration = roundPerfMs(durationMs);
     if (!Number.isFinite(duration) || duration < RENDER_SPIKE_THRESHOLD_MS) return;
     performanceRuntime.renderSpikeCount += 1;
+    noteAttributedRenderSpike(duration);
     performanceRuntime.lastRenderSpikeMs = duration;
     performanceRuntime.lastRenderSpikeAt = Date.now();
     performanceRuntime.lastRenderSpikeReason = String(reason || 'ui');
@@ -415,12 +516,28 @@
     performanceRuntime.uiStallProbeActive = false;
   }
 
+  function uiStallProbeInterval() {
+    return Date.now() < Number(powerRuntime.probeBurstUntil || 0)
+      ? UI_STALL_PROBE_INTERVAL_MS
+      : UI_STALL_PROBE_IDLE_INTERVAL_MS;
+  }
+
+  function requestUiStallProbeBurst(durationMs = UI_STALL_PROBE_TIMER_BURST_MS) {
+    if (runtimeDisposed) return;
+    const duration = Math.max(0, Number(durationMs) || 0);
+    powerRuntime.probeBurstUntil = Math.max(Number(powerRuntime.probeBurstUntil || 0), Date.now() + duration);
+    if (performanceRuntime.uiStallProbeActive && !(state?.backgroundPause !== false && document.visibilityState === 'hidden')) {
+      startUiStallProbe();
+    }
+  }
+
   function startUiStallProbe() {
     stopUiStallProbe();
     if (typeof performance?.now !== 'function') return;
     if (state?.backgroundPause !== false && document.visibilityState === 'hidden') return;
     performanceRuntime.uiStallProbeActive = true;
-    let expected = performance.now() + UI_STALL_PROBE_INTERVAL_MS;
+    let scheduledInterval = uiStallProbeInterval();
+    let expected = performance.now() + scheduledInterval;
     const tick = () => {
       uiStallProbeTimer = null;
       if (state?.backgroundPause !== false && document.visibilityState === 'hidden') {
@@ -429,8 +546,12 @@
       }
       const nowPerf = performance.now();
       const lag = Math.max(0, nowPerf - expected);
+      powerRuntime.probeWakeups += 1;
+      if (scheduledInterval <= UI_STALL_PROBE_INTERVAL_MS) powerRuntime.probeBurstWakeups += 1;
+      else powerRuntime.probeIdleWakeups += 1;
       if (lag >= UI_STALL_THRESHOLD_MS) {
         const rounded = roundPerfMs(lag);
+        noteAttributedUiStall(rounded);
         performanceRuntime.uiStallCount50 += 1;
         if (lag >= 100) performanceRuntime.uiStallCount100 += 1;
         if (lag >= 200) performanceRuntime.uiStallCount200 += 1;
@@ -449,10 +570,11 @@
           : null;
         pushPerformanceSample('uiStallSamples', lag);
       }
-      expected = nowPerf + UI_STALL_PROBE_INTERVAL_MS;
-      uiStallProbeTimer = setTimeout(tick, UI_STALL_PROBE_INTERVAL_MS);
+      scheduledInterval = uiStallProbeInterval();
+      expected = nowPerf + scheduledInterval;
+      uiStallProbeTimer = setTimeout(tick, scheduledInterval);
     };
-    uiStallProbeTimer = setTimeout(tick, UI_STALL_PROBE_INTERVAL_MS);
+    uiStallProbeTimer = setTimeout(tick, scheduledInterval);
   }
 
   function stopResumeMeasurement() {
@@ -465,6 +587,7 @@
 
   function beginResumeMeasurement(reason = 'visibility') {
     stopResumeMeasurement();
+    requestUiStallProbeBurst(UI_STALL_PROBE_ACTIVE_BURST_MS);
     performanceRuntime.resumeEvents += 1;
     performanceRuntime.lastResumeReason = String(reason || 'visibility');
     performanceRuntime.resumeMeasurePending = true;
@@ -776,6 +899,8 @@
   }
 
   function enqueueRefresh(reason = 'scheduled', silent = false) {
+    if (runtimeDisposed) return;
+    noteRefreshRequested(reason);
     if (state?.schedulerEnabled === false) return refresh(reason, silent);
     const normalizedReason = String(reason || 'scheduled');
     const priority = REFRESH_PRIORITY[normalizedReason] ?? 50;
@@ -1531,7 +1656,37 @@ async function importLegacyTodayBaselines() {
     return out;
   }
 
-  async function persist() { await store.setItem(STATE_KEY, {...state}); }
+  async function persist() {
+    if (runtimeDisposed) return dropStaleAsync();
+    await store.setItem(STATE_KEY, {...state});
+    powerRuntime.persistWrites += 1;
+  }
+
+  function noteLocalRuntimeError(stage, error) {
+    const key = String(stage || 'runtime');
+    const message = String(error?.message || error || 'unknown error')
+      .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
+      .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 180);
+    localRuntimeErrors.count += 1;
+    if (key.includes('persist')) localRuntimeErrors.persistFailures += 1;
+    if (key.includes('render')) localRuntimeErrors.renderFailures += 1;
+    localRuntimeErrors.lastStage = key;
+    localRuntimeErrors.lastMessage = message;
+    localRuntimeErrors.lastAt = Date.now();
+    console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
+  }
+
+  async function persistRefreshState(stage) {
+    try { await persist(); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
+  async function renderRefreshWidget(reason, stage) {
+    try { await renderWidget(reason); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
 
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
@@ -1701,10 +1856,14 @@ async function importLegacyTodayBaselines() {
   }
 }
   async function refresh(reason = 'manual', silent = false) {
+    if (runtimeDisposed) return;
+    const refreshEpoch = runtimeEpoch;
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
+    requestUiStallProbeBurst(reason === 'timer' ? UI_STALL_PROBE_TIMER_BURST_MS : UI_STALL_PROBE_ACTIVE_BURST_MS);
     const started = Date.now();
+    const refreshAttribution = beginRefreshAttribution(reason, started);
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
     performanceRuntime.activeRefreshStartedPerf = startedPerf;
     performanceRuntime.activeRefreshReason = String(reason || 'manual');
@@ -1722,10 +1881,17 @@ async function importLegacyTodayBaselines() {
     refreshInFlight = (async () => {
       try {
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
-        state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
-        state.data = applyObservedToday(await fetchSnapshot());
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        state.bridgeManagerRuntime = managerRuntime;
+        const snapshot = await fetchSnapshot();
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        state.data = applyObservedToday(snapshot);
         collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
@@ -1739,8 +1905,10 @@ async function importLegacyTodayBaselines() {
         state.retryDelayMs = 0;
         state.nextRetryAt = null;
         updateRuntimeState('refresh-success');
-        await persist();
-        await renderWidget(reason);
+        await persistRefreshState('refresh-success-persist');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        await renderRefreshWidget(reason, 'refresh-success-render');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (resumeVisibilityRefresh) {
           performanceRuntime.lastResumeRefreshMs = state.lastSyncDurationMs;
           performanceRuntime.lastResumeRenderMs = performanceRuntime.lastRenderMs;
@@ -1749,6 +1917,7 @@ async function importLegacyTodayBaselines() {
         scheduleRefresh();
         schedulePanelRender(false);
       } catch (e) {
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last successful snapshot in state.data; only status changes.
         state.bridgeStatus = 'error';
         state.bridgeError = e?.message || String(e);
@@ -1757,10 +1926,13 @@ async function importLegacyTodayBaselines() {
         state.retryDelayMs = retryDelayFor(state.consecutiveFailures);
         state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
         updateRuntimeState('refresh-error');
-        await persist();
+        await persistRefreshState('refresh-error-persist');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last good values, but immediately repaint the widget so
-        // LIVE changes to OFFLINE as soon as a refresh fails.
-        await renderWidget(reason);
+        // LIVE changes to OFFLINE as soon as a refresh fails. Local persist/render
+        // failures must not abort retry scheduling or masquerade as bridge errors.
+        await renderRefreshWidget(reason, 'refresh-error-render');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         scheduleRefresh();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
         schedulePanelRender(false);
@@ -1772,14 +1944,20 @@ async function importLegacyTodayBaselines() {
         performanceRuntime.lastRefreshStartedPerf = startedPerf;
         performanceRuntime.lastRefreshEndedPerf = endedPerf;
       }
+      const attributionStatus = state.lastRefreshReason === reason
+        ? (state.bridgeStatus === 'connected' ? 'ok' : state.bridgeStatus === 'error' ? 'error' : String(state.bridgeStatus || 'unknown'))
+        : 'unknown';
+      const attributionDataDuration = attributionStatus === 'ok' && num(state.lastSyncDurationMs) ? Number(state.lastSyncDurationMs) : null;
+      finishRefreshAttribution(refreshAttribution, attributionStatus, Date.now() - started, attributionDataDuration);
       performanceRuntime.activeRefreshStartedPerf = 0;
       performanceRuntime.activeRefreshReason = '';
       refreshInFlight = null;
-      updateRuntimeState('refresh-complete');
+      if (runtimeIsCurrent(refreshEpoch)) updateRuntimeState('refresh-complete');
     }
   }
 
   function diagText() {
+    const diagnosticCapturedAt = Date.now();
     const d = state.data || {}, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
     const runtimeBridge = bridgeRuntimeSnapshot();
@@ -1790,6 +1968,9 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     return [
       `Local Usage Dashboard v${VERSION}`,
+      `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
+      `Runtime loaded at: ${diagnosticTimestamp(RUNTIME_LOADED_AT)}`,
+      `Runtime uptime: ${diagnosticUptime(diagnosticCapturedAt - RUNTIME_LOADED_AT)}`,
       `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode} · manager ${runtimeBridge.managerInstalled ? 'installed' : 'absent'}`,
       `Bridge manager: protocol ${runtimeBridge.managerProtocol} · installed ${runtimeBridge.managerInstalled ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · engine-managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · ${runtimeBridge.managerVersion ? `v${runtimeBridge.managerVersion}` : 'v—'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
       `Bridge manager probe: ${state.bridgeManagerRuntime?.connected ? 'connected' : 'unavailable'} · checked ${state.bridgeManagerRuntime?.checkedAt ? age(state.bridgeManagerRuntime.checkedAt) : '—'} · product ${state.bridgeManagerRuntime?.productVersion || '—'} · sync ${state.bridgeManagerSyncedProductVersion || 'none'}`,
@@ -1822,8 +2003,16 @@ async function importLegacyTodayBaselines() {
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
       `Reason: ${state.lastRefreshReason || '—'}`,
       `Success count: ${Number(state.refreshCount || 0)}`,
+      `Refresh requests: manual ${Number(refreshAttributionRuntime.requested.manual || 0)} · timer ${Number(refreshAttributionRuntime.requested.timer || 0)} · visibility ${Number(refreshAttributionRuntime.requested.visibility || 0)} · init ${Number(refreshAttributionRuntime.requested.init || 0)} · other ${Object.entries(refreshAttributionRuntime.requested).filter(([key]) => !['manual','timer','visibility','init'].includes(key)).reduce((sum,[,value]) => sum + Number(value || 0), 0)}`,
+      `Refresh executions: manual ${Number(refreshAttributionRuntime.executed.manual?.count || 0)} · timer ${Number(refreshAttributionRuntime.executed.timer?.count || 0)} · visibility ${Number(refreshAttributionRuntime.executed.visibility?.count || 0)} · init ${Number(refreshAttributionRuntime.executed.init?.count || 0)} · active ${refreshAttributionRuntime.active?.key || 'none'}`,
+      `Last manual refresh: ${refreshAttributionDetail('manual')}`,
+      `Last timer refresh: ${refreshAttributionDetail('timer')}`,
+      `Last visibility refresh: ${refreshAttributionDetail('visibility')}`,
       `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)} · timer-only`,
       `Performance settings: focus ${state.syncOnFocus === false ? 'off' : 'on'} · guard ${state.performanceGuard === false ? 'off' : 'on'} · adaptive ${state.adaptiveRefresh === false ? 'off' : 'on'} · background pause ${state.backgroundPause === false ? 'off' : 'on'}`,
+      `Power guard: adaptive-probe · idle ${UI_STALL_PROBE_IDLE_INTERVAL_MS}ms · burst ${UI_STALL_PROBE_INTERVAL_MS}ms · timer-burst ${UI_STALL_PROBE_TIMER_BURST_MS}ms · active-burst ${UI_STALL_PROBE_ACTIVE_BURST_MS}ms`,
+      `Power activity: probe ${Date.now() < Number(powerRuntime.probeBurstUntil || 0) ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,
+      `Mobile style cache: writes ${powerRuntime.responsiveStyleWrites} · skips ${powerRuntime.responsiveStyleSkips} · layout ${widgetRenderCache.layout || 'none'}`,
       `Guard samples: timer ${Number(performanceRuntime.timerSamples || 0)} · ignored ${Number(performanceRuntime.ignoredSamples || 0)} · slow streak ${Number(performanceRuntime.slowRefreshes || 0)}`,
       `UI stall probe: ${performanceRuntime.uiStallProbeActive ? 'active' : 'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50 || 0)} · ≥100ms ${Number(performanceRuntime.uiStallCount100 || 0)} · ≥200ms ${Number(performanceRuntime.uiStallCount200 || 0)} · max ${roundPerfMs(performanceRuntime.uiStallMaxMs) || 0}ms`,
       `Last UI stall: ${num(performanceRuntime.lastUiStallMs) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · render overlap ${performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}${performanceRuntime.lastUiStallRenderOverlap ? ` (${performanceRuntime.lastUiStallRenderReason || 'unknown'} · ${num(performanceRuntime.lastUiStallRenderMs) ? `${roundPerfMs(performanceRuntime.lastUiStallRenderMs)}ms` : '—'})` : ''} · ${age(performanceRuntime.lastUiStallAt)}` : 'none'}`,
@@ -1842,6 +2031,7 @@ async function importLegacyTodayBaselines() {
       `P4 partial: auto section patch · diagnostics live · settings preserved`,
       `Render cache: widget html writes ${Number(performanceRuntime.widgetHtmlWrites || 0)} · skips ${Number(performanceRuntime.widgetHtmlSkips || 0)} · style writes ${Number(performanceRuntime.widgetStyleWrites || 0)} · skips ${Number(performanceRuntime.widgetStyleSkips || 0)} · closed panel skips ${Number(performanceRuntime.panelRenderSkippedClosed || 0)}`,
       `P4 render: closed-panel skip · widget DOM dedup`,
+      `Local runtime errors: ${Number(localRuntimeErrors.count || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
@@ -2070,6 +2260,7 @@ function todayOverviewMetrics(d) {
   // DevPass 2.7.3 panel rendering policy: collapse automatic panel refreshes,
   // wait briefly while the user is interacting, then prefer an idle callback.
   function schedulePanelRender(force = false) {
+    if (runtimeDisposed) return;
     if (document.body?.dataset?.panelOpen !== '1') {
       performanceRuntime.panelRenderSkippedClosed += 1;
       return;
@@ -2086,7 +2277,10 @@ function todayOverviewMetrics(d) {
       panelRenderTimer = null;
       const run = () => {
         panelIdleHandle = null;
-        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettingsPartial();
+        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') {
+          try { renderSettingsPartial(); }
+          catch (error) { noteLocalRuntimeError('panel-render', error); }
+        }
       };
       if (state.performanceGuard !== false && typeof window?.requestIdleCallback === 'function') {
         panelIdleHandle = window.requestIdleCallback(run, {timeout:500});
@@ -2417,31 +2611,47 @@ function todayOverviewMetrics(d) {
     try { return Number(await rootBody.clientWidth()) <= 600; } catch { return false; }
   }
 
+  async function setResponsiveWidgetStyle(name, value) {
+    if (!widget) return false;
+    if (!widgetRenderCache.responsiveStyles || typeof widgetRenderCache.responsiveStyles !== 'object') {
+      widgetRenderCache.responsiveStyles = Object.create(null);
+    }
+    if (widgetRenderCache.responsiveStyles[name] === value) {
+      powerRuntime.responsiveStyleSkips += 1;
+      performanceRuntime.widgetStyleSkips += 1;
+      return false;
+    }
+    await widget.setStyle(name, value);
+    widgetRenderCache.responsiveStyles[name] = value;
+    powerRuntime.responsiveStyleWrites += 1;
+    performanceRuntime.widgetStyleWrites += 1;
+    return true;
+  }
+
   async function applyWidgetResponsiveLayout(mobile, expanded) {
     if (!widget) return;
     const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
     if (widgetRenderCache.layout === layout) return;
+    let desired;
     if (mobile) {
-      await widget.setStyle('left','auto');
-      await widget.setStyle('top','auto');
-      await widget.setStyle('right','8px');
-      await widget.setStyle('bottom','88px');
-      await widget.setStyle('border-radius',expanded?'11px':'999px');
-      await widget.setStyle('padding',expanded?'5px 10px 8px':'6px 9px');
+      desired = {
+        left:'auto', top:'auto', right:'8px', bottom:'88px',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 9px'
+      };
+    } else if (num(state.widgetX)&&num(state.widgetY)) {
+      desired = {
+        left:`${state.widgetX}px`, top:`${state.widgetY}px`, right:'auto', bottom:'auto',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
     } else {
-      if (num(state.widgetX)&&num(state.widgetY)) {
-        await widget.setStyle('left',`${state.widgetX}px`);
-        await widget.setStyle('top',`${state.widgetY}px`);
-        await widget.setStyle('right','auto');
-        await widget.setStyle('bottom','auto');
-      } else {
-        await widget.setStyle('left','auto');
-        await widget.setStyle('top','auto');
-        await widget.setStyle('right','12px');
-        await widget.setStyle('bottom','74px');
-      }
-      await widget.setStyle('border-radius','11px');
-      await widget.setStyle('padding','5px 10px 8px');
+      desired = {
+        left:'auto', top:'auto', right:'12px', bottom:'74px',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
+    }
+    for (const [name, value] of Object.entries(desired)) {
+      await setResponsiveWidgetStyle(name, value);
     }
     widgetRenderCache.layout = layout;
   }
@@ -2486,6 +2696,12 @@ function todayOverviewMetrics(d) {
       await widget.setStyle('top',`${state.widgetY}px`);
       await widget.setStyle('right','auto');
       await widget.setStyle('bottom','auto');
+      if (widgetRenderCache.responsiveStyles && typeof widgetRenderCache.responsiveStyles === 'object') {
+        widgetRenderCache.responsiveStyles.left = `${state.widgetX}px`;
+        widgetRenderCache.responsiveStyles.top = `${state.widgetY}px`;
+        widgetRenderCache.responsiveStyles.right = 'auto';
+        widgetRenderCache.responsiveStyles.bottom = 'auto';
+      }
     };
     const up = async e => {
       if (!drag) return;
@@ -2503,6 +2719,8 @@ function todayOverviewMetrics(d) {
   }
 
   async function renderWidget(reason = 'ui') {
+    if (runtimeDisposed) return;
+    powerRuntime.widgetRenderCalls += 1;
     const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
     const startedPerf = nowPerf();
     const breakdown = {};
@@ -2600,6 +2818,7 @@ function scheduleResetSync() {
 }
 
   function scheduleRefresh() {
+    if (runtimeDisposed) return;
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
     scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);
@@ -2653,6 +2872,8 @@ function scheduleResetSync() {
     uiParts.push(await Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat',id:'local-usage-dashboard-button-v3'},openSettings));
     await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)enqueueRefresh('init',true);
     await Risuai.onUnload(async()=>{
+      runtimeDisposed = true;
+      runtimeEpoch += 1;
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
       cancelPanelRender();

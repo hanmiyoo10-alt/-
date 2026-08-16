@@ -146,6 +146,7 @@
   // DevPass 2.7.3 panel rendering policy: collapse automatic panel refreshes,
   // wait briefly while the user is interacting, then prefer an idle callback.
   function schedulePanelRender(force = false) {
+    if (runtimeDisposed) return;
     if (document.body?.dataset?.panelOpen !== '1') {
       performanceRuntime.panelRenderSkippedClosed += 1;
       return;
@@ -162,7 +163,10 @@
       panelRenderTimer = null;
       const run = () => {
         panelIdleHandle = null;
-        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettingsPartial();
+        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') {
+          try { renderSettingsPartial(); }
+          catch (error) { noteLocalRuntimeError('panel-render', error); }
+        }
       };
       if (state.performanceGuard !== false && typeof window?.requestIdleCallback === 'function') {
         panelIdleHandle = window.requestIdleCallback(run, {timeout:500});

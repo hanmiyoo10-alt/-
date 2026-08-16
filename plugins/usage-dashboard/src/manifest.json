@@ -1,21 +1,23 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.14",
+  "version": "3.0.0-alpha.5.32",
   "source": "plugins/usage-dashboard/latest.js",
-  "artifactSha256": "2c0b9e38f4b8dcaf5f0cf8ed9e9ff623933a51d8dc7e81d85737f40334aa43ee",
+  "sourceOfTruth": "modules",
+  "layout": "plugins/usage-dashboard/src/parts.cjs",
+  "artifactSha256": "6e94545eb70aa2fd067d850b188af5467274bfddbb04674ce95cbf85b552b377",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 48532,
-      "sha256": "49c18cd3d1097cf3507b9aae7fbc89e1cbc9dadc362ec335ed5e37c736db7120"
+      "bytes": 55373,
+      "sha256": "0d65f06cae43502b2d71e6fd0f4805ee8e2dc9b11d2103ea6d11659661519e84"
     },
     {
       "file": "10-usage-data.part.js",
       "label": "usage normalization",
-      "bytes": 35219,
-      "sha256": "84ac689146adee5f9e0058c9e67bac9946ee791b46576978f045bfe798c61087"
+      "bytes": 36393,
+      "sha256": "7e9cfe38d792b7bd9c443d5a13c35254a14e6fc4d20e28b9d9e43c12742e35ff"
     },
     {
       "file": "20-bridge-io.part.js",
@@ -26,20 +28,20 @@
     {
       "file": "30-refresh-runtime.part.js",
       "label": "refresh runtime",
-      "bytes": 4014,
-      "sha256": "f809184f26f789938fb15d4fb1a7fdfe28fff95e5660b94cb5bb7e55c86bafca"
+      "bytes": 5819,
+      "sha256": "41a22bb2093ea5f5d153237a8301fb4d868039211fa1e474ccbba872c64e9c69"
     },
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
-      "bytes": 18016,
-      "sha256": "b1f3189c384caaa6bd3df8a639d14fa2b26a387a2d5866d3ce0a766c4facd421"
+      "bytes": 20484,
+      "sha256": "06545e03ffcac3bf384a926e2c562bf1f939e5c3d5dc68a226249d9ad2b09420"
     },
     {
       "file": "50-settings-ui.part.js",
       "label": "settings UI",
-      "bytes": 31276,
-      "sha256": "18c039f906f76098dd4b88ee9e4d1c3c823d0b9dea445372f92d686e81b3349a"
+      "bytes": 31413,
+      "sha256": "768130b46215238a41d958f39906409b246485367e753d66a914ecdafd437fc6"
     },
     {
       "file": "60-settings-runtime.part.js",
@@ -50,20 +52,20 @@
     {
       "file": "70-floating-widget.part.js",
       "label": "floating widget",
-      "bytes": 14009,
-      "sha256": "d21675e84dc66d2c3dad1bbd28692b06608273183608c54049112bab11aad178"
+      "bytes": 14901,
+      "sha256": "560b2e41adfa83cae2ef7792527ca41876101e4bdfbf76faa40c2b4e7688d977"
     },
     {
       "file": "80-lifecycle.part.js",
       "label": "lifecycle/scheduling",
-      "bytes": 1691,
-      "sha256": "afaca4d992529ffd3716f32974fdcb115e5f49cf3432c217648b6763b1b810eb"
+      "bytes": 1724,
+      "sha256": "c0d756023c4b7a0d05f585e7f3f67e734cdf07fab7667fd36e45fc518624aaf8"
     },
     {
       "file": "90-bootstrap.part.js",
       "label": "bootstrap/unload",
-      "bytes": 1886,
-      "sha256": "e1fd7fd9cd0d2c1a0a7bfa6338238d62799129833f370b818110fd86d7259507"
+      "bytes": 1942,
+      "sha256": "a33e4abba720b7b9f438c5bed81fb91b6fd1751a07dc207f4674d0dd5d2c5214"
     }
   ]
 }

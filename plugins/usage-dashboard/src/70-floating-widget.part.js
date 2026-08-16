@@ -65,31 +65,47 @@
     try { return Number(await rootBody.clientWidth()) <= 600; } catch { return false; }
   }
 
+  async function setResponsiveWidgetStyle(name, value) {
+    if (!widget) return false;
+    if (!widgetRenderCache.responsiveStyles || typeof widgetRenderCache.responsiveStyles !== 'object') {
+      widgetRenderCache.responsiveStyles = Object.create(null);
+    }
+    if (widgetRenderCache.responsiveStyles[name] === value) {
+      powerRuntime.responsiveStyleSkips += 1;
+      performanceRuntime.widgetStyleSkips += 1;
+      return false;
+    }
+    await widget.setStyle(name, value);
+    widgetRenderCache.responsiveStyles[name] = value;
+    powerRuntime.responsiveStyleWrites += 1;
+    performanceRuntime.widgetStyleWrites += 1;
+    return true;
+  }
+
   async function applyWidgetResponsiveLayout(mobile, expanded) {
     if (!widget) return;
     const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
     if (widgetRenderCache.layout === layout) return;
+    let desired;
     if (mobile) {
-      await widget.setStyle('left','auto');
-      await widget.setStyle('top','auto');
-      await widget.setStyle('right','8px');
-      await widget.setStyle('bottom','88px');
-      await widget.setStyle('border-radius',expanded?'11px':'999px');
-      await widget.setStyle('padding',expanded?'5px 10px 8px':'6px 9px');
+      desired = {
+        left:'auto', top:'auto', right:'8px', bottom:'88px',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 9px'
+      };
+    } else if (num(state.widgetX)&&num(state.widgetY)) {
+      desired = {
+        left:`${state.widgetX}px`, top:`${state.widgetY}px`, right:'auto', bottom:'auto',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
     } else {
-      if (num(state.widgetX)&&num(state.widgetY)) {
-        await widget.setStyle('left',`${state.widgetX}px`);
-        await widget.setStyle('top',`${state.widgetY}px`);
-        await widget.setStyle('right','auto');
-        await widget.setStyle('bottom','auto');
-      } else {
-        await widget.setStyle('left','auto');
-        await widget.setStyle('top','auto');
-        await widget.setStyle('right','12px');
-        await widget.setStyle('bottom','74px');
-      }
-      await widget.setStyle('border-radius','11px');
-      await widget.setStyle('padding','5px 10px 8px');
+      desired = {
+        left:'auto', top:'auto', right:'12px', bottom:'74px',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
+    }
+    for (const [name, value] of Object.entries(desired)) {
+      await setResponsiveWidgetStyle(name, value);
     }
     widgetRenderCache.layout = layout;
   }
@@ -134,6 +150,12 @@
       await widget.setStyle('top',`${state.widgetY}px`);
       await widget.setStyle('right','auto');
       await widget.setStyle('bottom','auto');
+      if (widgetRenderCache.responsiveStyles && typeof widgetRenderCache.responsiveStyles === 'object') {
+        widgetRenderCache.responsiveStyles.left = `${state.widgetX}px`;
+        widgetRenderCache.responsiveStyles.top = `${state.widgetY}px`;
+        widgetRenderCache.responsiveStyles.right = 'auto';
+        widgetRenderCache.responsiveStyles.bottom = 'auto';
+      }
     };
     const up = async e => {
       if (!drag) return;
@@ -151,6 +173,8 @@
   }
 
   async function renderWidget(reason = 'ui') {
+    if (runtimeDisposed) return;
+    powerRuntime.widgetRenderCalls += 1;
     const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
     const startedPerf = nowPerf();
     const breakdown = {};

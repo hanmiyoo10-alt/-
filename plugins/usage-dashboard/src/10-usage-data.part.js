@@ -538,5 +538,35 @@
     return out;
   }
 
-  async function persist() { await store.setItem(STATE_KEY, {...state}); }
+  async function persist() {
+    if (runtimeDisposed) return dropStaleAsync();
+    await store.setItem(STATE_KEY, {...state});
+    powerRuntime.persistWrites += 1;
+  }
+
+  function noteLocalRuntimeError(stage, error) {
+    const key = String(stage || 'runtime');
+    const message = String(error?.message || error || 'unknown error')
+      .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
+      .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 180);
+    localRuntimeErrors.count += 1;
+    if (key.includes('persist')) localRuntimeErrors.persistFailures += 1;
+    if (key.includes('render')) localRuntimeErrors.renderFailures += 1;
+    localRuntimeErrors.lastStage = key;
+    localRuntimeErrors.lastMessage = message;
+    localRuntimeErrors.lastAt = Date.now();
+    console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
+  }
+
+  async function persistRefreshState(stage) {
+    try { await persist(); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
+  async function renderRefreshWidget(reason, stage) {
+    try { await renderWidget(reason); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
 

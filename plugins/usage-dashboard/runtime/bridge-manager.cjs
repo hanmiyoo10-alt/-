@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.2.4';
-const PRODUCT_VERSION = '3.0.0-alpha.5.15';
+const MANAGER_VERSION = '1.2.5';
+const PRODUCT_VERSION = '3.0.0-alpha.5.32';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -28,8 +28,8 @@ const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-prelo
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
-const BUNDLED_ENGINE_VERSION = '1.6.2';
-const BUNDLED_ENGINE_SHA256 = '48fb53490937d4507662bb42414e0a84b260bb18c6c7e259a12cf42fc8b6d524';
+const BUNDLED_ENGINE_VERSION = '1.6.3';
+const BUNDLED_ENGINE_SHA256 = '16807420932bb5a8bbdb8f85ae3a998042067997c6e6afa788b79da3b3eb6c01';
 const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');
 const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');
 const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
@@ -551,6 +551,7 @@ function send(res, status, body, restart = false) {
 
 ensureAdoptedServiceUp();
 const server = http.createServer(async (req, res) => {
+  try {
   if (!authorized(req)) return send(res, 401, {ok:false,error:'unauthorized'});
   const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
   if (req.method === 'GET' && url.pathname === '/status') {
@@ -579,6 +580,16 @@ const server = http.createServer(async (req, res) => {
     catch (e) { return send(res, 500, {ok:false,rolledBack:false,error:e?.message || String(e)}); }
   }
   return send(res, 404, {ok:false,error:'not found'});
+  } catch (error) {
+    const kind = String(error?.code || error?.name || 'ERROR').slice(0, 80);
+    console.error(`[Local Usage Runtime Manager] request boundary: ${kind}`);
+    if (res.writableEnded) return;
+    if (res.headersSent) {
+      try { res.destroy(); } catch (_) {}
+      return;
+    }
+    return send(res, 500, {ok:false,error:'manager internal request error',code:'MANAGER_INTERNAL_ERROR',retryable:true});
+  }
 });
 server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });
 server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`));

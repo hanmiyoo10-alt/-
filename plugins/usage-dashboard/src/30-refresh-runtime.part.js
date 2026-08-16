@@ -1,8 +1,12 @@
   async function refresh(reason = 'manual', silent = false) {
+    if (runtimeDisposed) return;
+    const refreshEpoch = runtimeEpoch;
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
+    requestUiStallProbeBurst(reason === 'timer' ? UI_STALL_PROBE_TIMER_BURST_MS : UI_STALL_PROBE_ACTIVE_BURST_MS);
     const started = Date.now();
+    const refreshAttribution = beginRefreshAttribution(reason, started);
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
     performanceRuntime.activeRefreshStartedPerf = startedPerf;
     performanceRuntime.activeRefreshReason = String(reason || 'manual');
@@ -20,10 +24,17 @@
     refreshInFlight = (async () => {
       try {
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
-        state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
-        state.data = applyObservedToday(await fetchSnapshot());
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        state.bridgeManagerRuntime = managerRuntime;
+        const snapshot = await fetchSnapshot();
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        state.data = applyObservedToday(snapshot);
         collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
@@ -37,8 +48,10 @@
         state.retryDelayMs = 0;
         state.nextRetryAt = null;
         updateRuntimeState('refresh-success');
-        await persist();
-        await renderWidget(reason);
+        await persistRefreshState('refresh-success-persist');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        await renderRefreshWidget(reason, 'refresh-success-render');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (resumeVisibilityRefresh) {
           performanceRuntime.lastResumeRefreshMs = state.lastSyncDurationMs;
           performanceRuntime.lastResumeRenderMs = performanceRuntime.lastRenderMs;
@@ -47,6 +60,7 @@
         scheduleRefresh();
         schedulePanelRender(false);
       } catch (e) {
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last successful snapshot in state.data; only status changes.
         state.bridgeStatus = 'error';
         state.bridgeError = e?.message || String(e);
@@ -55,10 +69,13 @@
         state.retryDelayMs = retryDelayFor(state.consecutiveFailures);
         state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
         updateRuntimeState('refresh-error');
-        await persist();
+        await persistRefreshState('refresh-error-persist');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last good values, but immediately repaint the widget so
-        // LIVE changes to OFFLINE as soon as a refresh fails.
-        await renderWidget(reason);
+        // LIVE changes to OFFLINE as soon as a refresh fails. Local persist/render
+        // failures must not abort retry scheduling or masquerade as bridge errors.
+        await renderRefreshWidget(reason, 'refresh-error-render');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         scheduleRefresh();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
         schedulePanelRender(false);
@@ -70,10 +87,15 @@
         performanceRuntime.lastRefreshStartedPerf = startedPerf;
         performanceRuntime.lastRefreshEndedPerf = endedPerf;
       }
+      const attributionStatus = state.lastRefreshReason === reason
+        ? (state.bridgeStatus === 'connected' ? 'ok' : state.bridgeStatus === 'error' ? 'error' : String(state.bridgeStatus || 'unknown'))
+        : 'unknown';
+      const attributionDataDuration = attributionStatus === 'ok' && num(state.lastSyncDurationMs) ? Number(state.lastSyncDurationMs) : null;
+      finishRefreshAttribution(refreshAttribution, attributionStatus, Date.now() - started, attributionDataDuration);
       performanceRuntime.activeRefreshStartedPerf = 0;
       performanceRuntime.activeRefreshReason = '';
       refreshInFlight = null;
-      updateRuntimeState('refresh-complete');
+      if (runtimeIsCurrent(refreshEpoch)) updateRuntimeState('refresh-complete');
     }
   }
 

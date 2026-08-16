@@ -1,4 +1,5 @@
   function scheduleRefresh() {
+    if (runtimeDisposed) return;
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
     scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);

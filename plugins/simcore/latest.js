@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.26
+//@version 0.63.27
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.27 Response Envelope Scope:
+// - Restricts Structure validation, Knowledge scanning and state-commit judgement to the canonical # 응답 envelope instead of treating host/model preamble text as part of the response body
+// - Defines the first canonical timestamp immediately after the ordered response/Volume/Chapter/Chatindex frame as the single frame timestamp; later body/scene timestamps are intentionally allowed and no longer count as duplicate frame timestamps
+// - Preserves Recovery preamble telemetry while allowing a structurally complete canonical envelope to resolve independently, preventing valid multi-scene outputs from being quarantined solely because of later scene timestamps or pre-envelope tag noise
+// - Keeps Time first-timestamp semantics, Frame continuity, Evidence, Prompt, Lineage/Handoff, Recurrence, Reaction, reload safety, storage schema and host/API call sites frozen; no new timer, polling or background activity
 //
 // v0.63.25 Targeted Reload Hook Cleanup:
 // - Corrects the v0.63.23 reload-safety assumption exposed by the v0.63.24 identity probe: Risu V3 delegates beforeRequest replacers and output script handlers to the legacy Set-based API and does not automatically unregister those callbacks on targeted plugin unload
@@ -2328,6 +2334,93 @@ const CHAPTER_HEADER_MARKER_RE = /^[ \t]*###[ \t]+챕터[^\r\n]*$/mi;
 const CHATINDEX_HEADER_MARKER_RE = /^[ \t]*####[ \t]+Chatindex[^\r\n]*$/mi;
 const TIMESTAMP_MARKER_RE = /⏱️\[/i;
 
+function firstMatch(text, re) {
+  const m = String(text || '').match(re);
+  if (!m || !Number.isInteger(m.index)) return null;
+  return { index: m.index, end: m.index + m[0].length, text: m[0] };
+}
+
+function responseEnvelopeScope(content) {
+  const raw = String(content || '');
+  const responseInRaw = firstMatch(raw, RESPONSE_HEADER_MARKER_RE);
+  if (!responseInRaw) {
+    return {
+      envelope: raw,
+      responseStart: -1,
+      frameOk: false,
+      orderOk: false,
+      timestampMarkerFound: false,
+      timestampValid: false,
+      timestamp: null,
+    };
+  }
+
+  const envelope = raw.slice(responseInRaw.index);
+  const response = firstMatch(envelope, RESPONSE_HEADER_MARKER_RE);
+  const volume = firstMatch(envelope, VOLUME_HEADER_MARKER_RE);
+  const chapter = firstMatch(envelope, CHAPTER_HEADER_MARKER_RE);
+  const chatindex = firstMatch(envelope, CHATINDEX_HEADER_MARKER_RE);
+
+  let timestampMarker = null;
+  let timestamp = null;
+  if (chatindex) {
+    const afterChatindex = envelope.slice(chatindex.end);
+    const marker = firstMatch(afterChatindex, TIMESTAMP_MARKER_RE);
+    if (marker) {
+      timestampMarker = {
+        index: chatindex.end + marker.index,
+        end: chatindex.end + marker.end,
+        text: marker.text,
+      };
+      const fromMarker = envelope.slice(timestampMarker.index);
+      const parsed = firstMatch(fromMarker, TIMESTAMP_RE);
+      if (parsed && parsed.index === 0) {
+        timestamp = {
+          index: timestampMarker.index,
+          end: timestampMarker.index + parsed.end,
+          text: parsed.text,
+        };
+      }
+    }
+  }
+
+  const responseCount = kernel.regexCount(envelope, RESPONSE_HEADER_MARKER_RE);
+  const volumeCount = kernel.regexCount(envelope, VOLUME_HEADER_MARKER_RE);
+  const chapterCount = kernel.regexCount(envelope, CHAPTER_HEADER_MARKER_RE);
+  const chatindexCount = kernel.regexCount(envelope, CHATINDEX_HEADER_MARKER_RE);
+  const responseValidCount = kernel.regexCount(envelope, RESPONSE_HEADER_RE);
+  const volumeValidCount = kernel.regexCount(envelope, VOLUME_HEADER_RE);
+  const chapterValidCount = kernel.regexCount(envelope, CHAPTER_HEADER_RE);
+  const chatindexValidCount = kernel.regexCount(envelope, CHATINDEX_HEADER_RE);
+
+  const ordered = !!(response && volume && chapter && chatindex && timestamp
+    && response.index === 0
+    && response.end <= volume.index
+    && volume.end <= chapter.index
+    && chapter.end <= chatindex.index
+    && chatindex.end <= timestamp.index);
+  const cleanGaps = !!(ordered
+    && !envelope.slice(response.end, volume.index).trim()
+    && !envelope.slice(volume.end, chapter.index).trim()
+    && !envelope.slice(chapter.end, chatindex.index).trim()
+    && !envelope.slice(chatindex.end, timestamp.index).trim());
+  const orderOk = ordered && cleanGaps;
+  const headerCountsOk = responseCount === 1 && volumeCount === 1 && chapterCount === 1 && chatindexCount === 1;
+  const headerFormatsOk = responseValidCount === 1 && volumeValidCount === 1
+    && chapterValidCount === 1 && chatindexValidCount === 1;
+  const frameOk = headerCountsOk && headerFormatsOk && !!timestamp && orderOk;
+
+  return {
+    envelope,
+    responseStart: responseInRaw.index,
+    frameOk,
+    orderOk,
+    timestampMarkerFound: !!timestampMarker,
+    timestampValid: !!timestamp,
+    timestamp: timestamp?.text || null,
+  };
+}
+
 function validateHostFrameItem(text, issues, label, markerRe, validRe) {
   const markerCount = kernel.regexCount(text, markerRe);
   const validCount = kernel.regexCount(text, validRe);
@@ -2339,28 +2432,37 @@ function validateHostFrameItem(text, issues, label, markerRe, validRe) {
   if (validCount !== markerCount) issues.push(`공통 ${label} 형식 오류`);
 }
 
+function validateFrameEnvelope(scope, issues) {
+  const text = scope.envelope;
+  validateHostFrameItem(text, issues, '# 응답 헤더', RESPONSE_HEADER_MARKER_RE, RESPONSE_HEADER_RE);
+  validateHostFrameItem(text, issues, '볼륨 헤더', VOLUME_HEADER_MARKER_RE, VOLUME_HEADER_RE);
+  validateHostFrameItem(text, issues, '챕터 헤더', CHAPTER_HEADER_MARKER_RE, CHAPTER_HEADER_RE);
+  validateHostFrameItem(text, issues, 'Chatindex 헤더', CHATINDEX_HEADER_MARKER_RE, CHATINDEX_HEADER_RE);
+  if (!scope.timestampMarkerFound) issues.push('공통 timestamp 누락');
+  else if (!scope.timestampValid) issues.push('공통 timestamp 형식 오류');
+  if (scope.timestampValid && !scope.orderOk) issues.push('공통 frame 순서 오류');
+}
+
 function responseEnvelopeIntegrity(content, pending) {
-  const text = String(content || '').trim();
+  const scope = responseEnvelopeScope(content);
+  const text = String(scope.envelope || '').trim();
   const expected = lifecycle.expectedCommunityBlocks(pending?.mode);
   const knowledge = kernel.scanKnowledgeBlocks(text);
   const blocks = community.communityBlocks(text);
   const k = knowledge.blocks.length === 1 && !knowledge.malformed ? knowledge.blocks[0] : null;
-  const frameOk = kernel.regexCount(text, RESPONSE_HEADER_RE) === 1
-    && kernel.regexCount(text, VOLUME_HEADER_RE) === 1
-    && kernel.regexCount(text, CHAPTER_HEADER_RE) === 1
-    && kernel.regexCount(text, CHATINDEX_HEADER_RE) === 1
-    && kernel.regexCount(text, TIMESTAMP_RE) === 1;
+  const frameOk = scope.frameOk;
   const communityOk = blocks.length === expected;
   const knowledgeOk = !!k && !text.slice(k.end).trim();
-  return { safe: frameOk && communityOk && knowledgeOk, frameOk, communityOk, knowledgeOk, blocks, knowledge };
+  return { safe: frameOk && communityOk && knowledgeOk, frameOk, communityOk, knowledgeOk, blocks, knowledge, scope };
 }
 
 function stateCommitSafety(content, pending, envelopeResolved = true) {
-  const text = String(content || '');
+  const scope = responseEnvelopeScope(content);
+  const text = String(scope.envelope || '');
   const expected = lifecycle.expectedCommunityBlocks(pending?.mode);
   const blocks = community.communityBlocks(text);
   const responseCount = kernel.regexCount(text, RESPONSE_HEADER_MARKER_RE);
-  const communitySafe = envelopeResolved && responseCount === 1 && blocks.length === expected;
+  const communitySafe = envelopeResolved && scope.frameOk && responseCount === 1 && blocks.length === expected;
   return {
     communitySafe,
     expectedBlocks: expected,
@@ -2372,16 +2474,13 @@ function stateCommitSafety(content, pending, envelopeResolved = true) {
 function validateStructure(content, pending) {
   if (!pending?.active) return [];
   const issues = [];
-  const text = String(content || '');
+  const scope = responseEnvelopeScope(content);
+  const text = String(scope.envelope || '');
   const blocks = community.communityBlocks(text);
   const expected = lifecycle.expectedCommunityBlocks(pending.mode);
   if (blocks.length !== expected) issues.push(`COMMUNITY 블록 ${blocks.length}개 (필요 ${expected}개)`);
 
-  validateHostFrameItem(text, issues, '# 응답 헤더', RESPONSE_HEADER_MARKER_RE, RESPONSE_HEADER_RE);
-  validateHostFrameItem(text, issues, '볼륨 헤더', VOLUME_HEADER_MARKER_RE, VOLUME_HEADER_RE);
-  validateHostFrameItem(text, issues, '챕터 헤더', CHAPTER_HEADER_MARKER_RE, CHAPTER_HEADER_RE);
-  validateHostFrameItem(text, issues, 'Chatindex 헤더', CHATINDEX_HEADER_MARKER_RE, CHATINDEX_HEADER_RE);
-  validateHostFrameItem(text, issues, 'timestamp', TIMESTAMP_MARKER_RE, TIMESTAMP_RE);
+  validateFrameEnvelope(scope, issues);
 
   if (/^B_/.test(String(pending.mode || '')) && pending.broadcastAirtimePrevious) {
     const currentBroadcastTs = time.parseTimestamp(text);
@@ -2522,7 +2621,7 @@ function validateStructure(content, pending) {
   return issues;
 }
 
-module.exports = { TIMESTAMP_RE, responseEnvelopeIntegrity, stateCommitSafety, validateStructure };
+module.exports = { TIMESTAMP_RE, responseEnvelopeScope, responseEnvelopeIntegrity, stateCommitSafety, validateStructure };
 });
 
 SimCore.define("recovery", function (require, module, exports) {
@@ -4641,7 +4740,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.26',
+      'Version: 0.63.27',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -4871,7 +4970,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.26</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.27</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

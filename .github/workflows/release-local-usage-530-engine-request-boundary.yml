@@ -1,0 +1,157 @@
+name: Release Local Usage 5.30 Engine Request Boundary
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-530-engine-request-boundary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish 5.30 engine request boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin release-usage-dashboard
+          git checkout -B release-usage-dashboard origin/release-usage-dashboard
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          old_product = '3.0.0-alpha.5.29'
+          new_product = '3.0.0-alpha.5.30'
+          old_engine = '1.6.2'
+          new_engine = '1.6.3'
+          old_engine_sha = '48fb53490937d4507662bb42414e0a84b260bb18c6c7e259a12cf42fc8b6d524'
+
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+          engine_path = Path('plugins/usage-dashboard/runtime/bridge-engine.mjs')
+
+          plugin = plugin_path.read_text(encoding='utf-8')
+          if plugin.count(old_product) < 2:
+              raise SystemExit(f'plugin product markers missing: {plugin.count(old_product)}')
+          plugin_path.write_text(plugin.replace(old_product, new_product), encoding='utf-8')
+
+          engine = engine_path.read_text(encoding='utf-8')
+          version_anchor = "const VERSION = '1.6.2';"
+          if engine.count(version_anchor) != 1:
+              raise SystemExit(f'engine version anchor mismatch: {engine.count(version_anchor)}')
+          engine = engine.replace(version_anchor, "const VERSION = '1.6.3';", 1)
+
+          server_anchor = "await ensureToken();\nconst server = http.createServer((req, res) => void handle(req, res));\nserver.listen(PORT, HOST, () => {"
+          server_replacement = """await ensureToken();
+const server = http.createServer((req, res) => {
+  void handle(req, res).catch((error) => {
+    const route = String(req?.url || '/').split('?')[0].slice(0, 160) || '/';
+    const message = safeMessage(error);
+    logRateLimited('error', `request-boundary:${route}:${message.slice(0,120)}`, `Unhandled request error on ${route}: ${message}`, 30_000);
+    if (res.writableEnded) return;
+    if (res.headersSent) {
+      try { res.destroy(); } catch {}
+      return;
+    }
+    json(res, 500, {
+      error: 'Bridge internal request error',
+      code: 'BRIDGE_INTERNAL_ERROR',
+      retryable: true,
+    });
+  });
+});
+server.listen(PORT, HOST, () => {"""
+          if engine.count(server_anchor) != 1:
+              raise SystemExit(f'engine server anchor mismatch: {engine.count(server_anchor)}')
+          engine = engine.replace(server_anchor, server_replacement, 1)
+          engine_path.write_text(engine, encoding='utf-8')
+          engine_sha = hashlib.sha256(engine_path.read_bytes()).hexdigest()
+
+          manager = manager_path.read_text(encoding='utf-8')
+          if manager.count(old_product) < 1:
+              raise SystemExit('manager product marker missing')
+          manager = manager.replace(old_product, new_product)
+          manager_version_anchor = "const BUNDLED_ENGINE_VERSION = '1.6.2';"
+          manager_sha_anchor = f"const BUNDLED_ENGINE_SHA256 = '{old_engine_sha}';"
+          if manager.count(manager_version_anchor) != 1:
+              raise SystemExit('manager bundled engine version anchor mismatch')
+          if manager.count(manager_sha_anchor) != 1:
+              raise SystemExit('manager bundled engine sha anchor mismatch')
+          manager = manager.replace(manager_version_anchor, "const BUNDLED_ENGINE_VERSION = '1.6.3';", 1)
+          manager = manager.replace(manager_sha_anchor, f"const BUNDLED_ENGINE_SHA256 = '{engine_sha}';", 1)
+          manager_path.write_text(manager, encoding='utf-8')
+
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['productVersion'] = new_product
+          manifest['components']['plugin']['version'] = new_product
+          manifest['components']['bridge']['requiredVersion'] = new_engine
+          manifest['components']['bridge']['sha256'] = engine_sha
+          manifest['components']['bridgeManager']['productVersion'] = new_product
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          print('plugin_sha256=' + hashlib.sha256(plugin_path.read_bytes()).hexdigest())
+          print('manager_sha256=' + hashlib.sha256(manager_path.read_bytes()).hexdigest())
+          print('engine_sha256=' + engine_sha)
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+
+          grep -F '//@version 3.0.0-alpha.5.30' plugins/usage-dashboard/latest.js
+          grep -F "const VERSION = '3.0.0-alpha.5.30'" plugins/usage-dashboard/latest.js
+          grep -F "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const PRODUCT_VERSION = '3.0.0-alpha.5.30'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const BUNDLED_ENGINE_VERSION = '1.6.3'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const VERSION = '1.6.3'" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -F "code: 'BRIDGE_INTERNAL_ERROR'" plugins/usage-dashboard/runtime/bridge-engine.mjs
+
+          # Regression proof: a route-local filesystem error must return a
+          # bounded 500 and the engine must remain alive. Removing the fault
+          # must immediately restore a normal /health response.
+          tmp_home="$(mktemp -d)"
+          mkdir -p "$tmp_home/PocketRisu/bridge/update-ready/latest_dashboard.js"
+          port=39218
+          HOME="$tmp_home" DEVPASS_BRIDGE_PORT="$port" node plugins/usage-dashboard/runtime/bridge-engine.mjs >/tmp/engine-530.log 2>&1 &
+          pid=$!
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            rm -rf "$tmp_home"
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 40); do
+            if grep -q "URL   : http://127.0.0.1:$port" /tmp/engine-530.log 2>/dev/null; then break; fi
+            kill -0 "$pid" 2>/dev/null || { cat /tmp/engine-530.log; exit 1; }
+            sleep 0.1
+          done
+
+          code1="$(curl --silent --show-error --max-time 3 -o /tmp/health-530-fault -w '%{http_code}' "http://127.0.0.1:$port/health")"
+          test "$code1" = 500
+          kill -0 "$pid"
+          grep -F 'BRIDGE_INTERNAL_ERROR' /tmp/health-530-fault
+
+          rmdir "$tmp_home/PocketRisu/bridge/update-ready/latest_dashboard.js"
+          code2="$(curl --silent --show-error --max-time 3 -o /tmp/health-530-ok -w '%{http_code}' "http://127.0.0.1:$port/health")"
+          test "$code2" = 200
+          kill -0 "$pid"
+          grep -F '"status": "healthy"' /tmp/health-530-ok
+          echo "ENGINE_BOUNDARY_REGRESSION_PASS: 500-contained -> process alive -> 200-recovered"
+
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/bridge-engine.mjs plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          git commit -m "release: Local Usage Dashboard 3.0.0-alpha.5.30 engine request boundary"
+          git push origin HEAD:release-usage-dashboard

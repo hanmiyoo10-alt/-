@@ -50,12 +50,13 @@ jobs:
               core.write_text(text)
 
           diagnostics = ROOT / 'src/40-diagnostics.part.js'
-          replace_once(
-              diagnostics,
-              '`UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed`,',
-              '`UI layout: tabbed · overview/devpass/analytics/settings · view persisted`,',
-              'diagnostic layout marker'
-          )
+          text = diagnostics.read_text()
+          diag_anchor = '      `UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed`,\n'
+          nav_diag = '      `Navigation: tabbed · overview/devpass/analytics/settings · view ${state.dashboardView || \'overview\'} · persisted`,\n'
+          if nav_diag not in text:
+              if text.count(diag_anchor) != 1:
+                  raise SystemExit('diagnostic layout anchor missing')
+              diagnostics.write_text(text.replace(diag_anchor, diag_anchor + nav_diag, 1))
 
           ui = ROOT / 'src/50-settings-ui.part.js'
           text = ui.read_text()
@@ -100,23 +101,13 @@ jobs:
 
           test = ROOT / 'tests/p3-ui.cjs'
           text = test.read_text()
-          old_marker = "  'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed',\n"
-          new_markers = "  'UI layout: tabbed · overview/devpass/analytics/settings · view persisted',\n  \"dashboardView: 'overview'\",\n  'data-dashboard-view=\"${dashboardView}\"',\n  'data-dashboard-nav=\"${key}\"',\n  'state.dashboardView = next;',\n"
-          if old_marker in text:
-              text = text.replace(old_marker, new_markers, 1)
-          elif 'UI layout: tabbed · overview/devpass/analytics/settings · view persisted' not in text:
-              raise SystemExit('P3 UI layout test anchor missing')
-          test.write_text(text)
-
-          workflow = Path('.github/workflows/release-local-usage-dashboard.yml')
-          text = workflow.read_text()
-          old_grep = "          grep -q 'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed' plugins/usage-dashboard/latest.js\n"
-          new_grep = "          grep -q 'UI layout: tabbed · overview/devpass/analytics/settings · view persisted' plugins/usage-dashboard/latest.js\n          grep -q \"dashboardView: 'overview'\" plugins/usage-dashboard/latest.js\n          grep -q 'data-dashboard-nav=' plugins/usage-dashboard/latest.js\n"
-          if old_grep in text:
-              text = text.replace(old_grep, new_grep, 1)
-          elif 'UI layout: tabbed · overview/devpass/analytics/settings · view persisted' not in text:
-              raise SystemExit('release workflow UI layout anchor missing')
-          workflow.write_text(text)
+          marker_anchor = "  'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed',\n"
+          nav_markers = "  'Navigation: tabbed · overview/devpass/analytics/settings',\n  \"dashboardView: 'overview'\",\n  'data-dashboard-view=\"${dashboardView}\"',\n  'data-dashboard-nav=\"${key}\"',\n  'state.dashboardView = next;',\n"
+          if 'Navigation: tabbed · overview/devpass/analytics/settings' not in text:
+              if text.count(marker_anchor) != 1:
+                  raise SystemExit('P3 UI marker anchor missing')
+              text = text.replace(marker_anchor, marker_anchor + nav_markers, 1)
+              test.write_text(text)
 
           manager = ROOT / 'runtime/bridge-manager.cjs'
           manager_text = manager.read_text()
@@ -139,6 +130,8 @@ jobs:
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
           node plugins/usage-dashboard/tests/p2-build.cjs
           node plugins/usage-dashboard/tests/p3-ui.cjs
           node plugins/usage-dashboard/tests/p3-recent.cjs
@@ -156,7 +149,8 @@ jobs:
           grep -Fq '//@version 3.0.0-alpha.5.33' plugins/usage-dashboard/latest.js
           grep -Fq "dashboardView: 'overview'" plugins/usage-dashboard/latest.js
           grep -Fq 'data-dashboard-nav=' plugins/usage-dashboard/latest.js
-          grep -Fq 'UI layout: tabbed · overview/devpass/analytics/settings · view persisted' plugins/usage-dashboard/latest.js
+          grep -Fq 'Navigation: tabbed · overview/devpass/analytics/settings' plugins/usage-dashboard/latest.js
+          grep -Fq 'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed' plugins/usage-dashboard/latest.js
 
       - name: Commit validated 5.33 source
         shell: bash
@@ -173,8 +167,7 @@ jobs:
             plugins/usage-dashboard/latest.js \
             plugins/usage-dashboard/tests/p3-ui.cjs \
             plugins/usage-dashboard/runtime/bridge-manager.cjs \
-            plugins/usage-dashboard/runtime/product-manifest.json \
-            .github/workflows/release-local-usage-dashboard.yml
+            plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
           git commit -m 'release: Local Usage Dashboard 5.33 navigation UX restore'
           git push origin HEAD:main

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.20
+//@version 3.0.0-alpha.5.21
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.20';
+  const VERSION = '3.0.0-alpha.5.21';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -54,6 +54,7 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
   let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let panelRenderTimer = null, panelIdleHandle = null;
   let uiStallProbeTimer = null, resumeProbeTimer = null, resumeMeasureTimer = null, resumeRefreshTimer = null, resumeLongTaskObserver = null;
@@ -62,6 +63,9 @@
   let widgetRenderCache = {html:null,width:null,display:null,layout:null};
   const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,activeRefreshReason:'',lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,lastUiStallRenderOverlap:false,lastUiStallRenderReason:'',lastUiStallRenderMs:null,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeInputCaptured:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeFirstInputAfterMs:null,lastResumeInputDelayMs:null,lastResumeFrameDelayMs:null,lastResumeRefreshStartedAfterMs:null,lastResumeRefreshMs:null,lastResumeRenderMs:null,lastResumeHadRefreshAtEntry:false,lastResumeRequestedReason:'',lastResumeActualReason:'',lastResumeRefreshWasCoalesced:false,lastResumeCoalescedIntoReason:'',resumeRefreshSamples:[],lastResumeInputDuringRefresh:false,lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeInputDelaySamples:[],resumeFrameDelaySamples:[],resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0,panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,panelPartialRenders:0,panelFullRenders:0,panelSectionWrites:0,panelSectionSkips:0,hourlyDetailWrites:0,hourlyDetailSkips:0,hourlyDetailFallbacks:0,lastPanelRenderMode:'full',runtimeState:'active',runtimeStateChangedAt:Date.now(),runtimeTransitions:0,lastHealthySyncAt:null,degradedSince:null,lastRenderMs:null,lastPanelRenderMs:null,lastRenderReason:'',lastRenderStartedPerf:0,lastRenderEndedPerf:0,activeRenderStartedPerf:0,activeRenderReason:'',lastRenderBreakdown:null,renderSpikeCount:0,renderSpikeSamples:[],lastRenderSpikeMs:null,lastRenderSpikeAt:null,lastRenderSpikeReason:'',lastRenderSpikeRefreshOverlap:false,lastRenderSpikeBreakdown:null};
   const uiParts = [], remoteListeners = [], domListeners = [];
+
+  function runtimeIsCurrent(epoch = runtimeEpoch) { return !runtimeDisposed && epoch === runtimeEpoch; }
+  function dropStaleAsync() { staleAsyncDrops += 1; return undefined; }
 
   const num = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
   const money = (v, d = 2) => num(v) ? `$${Number(v).toFixed(d)}` : '—';
@@ -776,6 +780,7 @@
   }
 
   function enqueueRefresh(reason = 'scheduled', silent = false) {
+    if (runtimeDisposed) return;
     if (state?.schedulerEnabled === false) return refresh(reason, silent);
     const normalizedReason = String(reason || 'scheduled');
     const priority = REFRESH_PRIORITY[normalizedReason] ?? 50;
@@ -1531,7 +1536,10 @@ async function importLegacyTodayBaselines() {
     return out;
   }
 
-  async function persist() { await store.setItem(STATE_KEY, {...state}); }
+  async function persist() {
+    if (runtimeDisposed) return dropStaleAsync();
+    await store.setItem(STATE_KEY, {...state});
+  }
 
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
@@ -1701,6 +1709,8 @@ async function importLegacyTodayBaselines() {
   }
 }
   async function refresh(reason = 'manual', silent = false) {
+    if (runtimeDisposed) return;
+    const refreshEpoch = runtimeEpoch;
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
@@ -1722,10 +1732,17 @@ async function importLegacyTodayBaselines() {
     refreshInFlight = (async () => {
       try {
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
-        state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
-        state.data = applyObservedToday(await fetchSnapshot());
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        state.bridgeManagerRuntime = managerRuntime;
+        const snapshot = await fetchSnapshot();
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        state.data = applyObservedToday(snapshot);
         collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
@@ -2503,6 +2520,7 @@ function todayOverviewMetrics(d) {
   }
 
   async function renderWidget(reason = 'ui') {
+    if (runtimeDisposed) return;
     const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
     const startedPerf = nowPerf();
     const breakdown = {};
@@ -2600,6 +2618,7 @@ function scheduleResetSync() {
 }
 
   function scheduleRefresh() {
+    if (runtimeDisposed) return;
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
     scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);
@@ -2653,6 +2672,8 @@ function scheduleResetSync() {
     uiParts.push(await Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat',id:'local-usage-dashboard-button-v3'},openSettings));
     await renderWidget(); installLifecycle(); scheduleRefresh(); if(state.bridgeEnabled&&token)enqueueRefresh('init',true);
     await Risuai.onUnload(async()=>{
+      runtimeDisposed = true;
+      runtimeEpoch += 1;
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
       cancelPanelRender();

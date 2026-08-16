@@ -1,13 +1,13 @@
 {
   "format": 1,
   "product": "Local Usage Dashboard",
-  "productVersion": "3.0.0-alpha.5.33",
+  "productVersion": "3.0.0-alpha.5.34",
   "releaseBranch": "release-usage-dashboard",
   "architecture": "single-product-modular-sidecar",
   "components": {
     "plugin": {
       "mode": "bundled",
-      "version": "3.0.0-alpha.5.33",
+      "version": "3.0.0-alpha.5.34",
       "artifact": "plugins/usage-dashboard/latest.js"
     },
     "bridge": {
@@ -26,7 +26,7 @@
       "mode": "sidecar-manager",
       "state": "bundled-engine-ready",
       "version": "1.2.5",
-      "productVersion": "3.0.0-alpha.5.33",
+      "productVersion": "3.0.0-alpha.5.34",
       "managementProtocol": "bridge-manager-v1",
       "host": "127.0.0.1",
       "port": 39119,
@@ -34,7 +34,7 @@
       "selfUpdate": true,
       "engineManaged": true,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
-      "sha256": "e06fe06a3a3b4ed7a65913d1c3d223626c842ba480b13d2d0e590094a1c03e10",
+      "sha256": "a9946c1f7b1c937a0e827502d7ed7573e8278da7a448e889e3c8da861a350fcd",
       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
       "bootstrapSha256": "4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c",
       "service": "local-usage-runtime-manager",

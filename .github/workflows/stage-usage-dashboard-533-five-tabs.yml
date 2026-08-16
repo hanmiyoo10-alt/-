@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.33 Five Tabs
+name: Publish Usage Dashboard 5.33 Five Tabs
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-and-validate:
+  validate-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -19,90 +19,10 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Split DevPass and Credits tabs
+      - name: Validate five-tab 5.33 build
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          ROOT = Path('plugins/usage-dashboard')
-
-          def replace_once(path, old, new, label):
-              text = path.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected 1 match, got {count}')
-              path.write_text(text.replace(old, new, 1))
-
-          diagnostics = ROOT / 'src/40-diagnostics.part.js'
-          replace_once(
-              diagnostics,
-              'Navigation: tabbed · overview/devpass/analytics/settings',
-              'Navigation: tabbed · overview/devpass/credits/analytics/settings',
-              'diagnostic navigation marker'
-          )
-
-          ui = ROOT / 'src/50-settings-ui.part.js'
-          text = ui.read_text()
-
-          old = "    const dashboardView = ['overview','devpass','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';"
-          new = "    const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';"
-          if text.count(old) != 1:
-              raise SystemExit('dashboard view allowlist anchor missing')
-          text = text.replace(old, new, 1)
-
-          old = '.dashboard-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:-2px 0 12px;position:sticky;top:0;z-index:20;background:var(--b);padding:6px 0}.dashboard-nav button{min-width:0;padding:8px 6px;font-size:11px;white-space:nowrap}.dashboard-nav button.active{background:var(--g);border-color:var(--g);color:#15170f}.shell[data-dashboard-view="overview"] .grid>:nth-child(n+6){display:none}.shell[data-dashboard-view="devpass"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="analytics"] .grid>:not(:nth-child(7)){display:none}.shell[data-dashboard-view="settings"] .grid>:not(:nth-child(8)):not(:nth-child(9)){display:none}'
-          new = '.dashboard-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:-2px 0 12px;position:sticky;top:0;z-index:20;background:var(--b);padding:6px 0}.dashboard-nav button{min-width:0;padding:8px 3px;font-size:10px;white-space:nowrap}.dashboard-nav button.active{background:var(--g);border-color:var(--g);color:#15170f}.shell[data-dashboard-view="overview"] .grid>:nth-child(n+6){display:none}.shell[data-dashboard-view="devpass"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="credits"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="devpass"] .usage-primary .scope-tabs,.shell[data-dashboard-view="credits"] .usage-primary .scope-tabs{display:none}.shell[data-dashboard-view="analytics"] .grid>:not(:nth-child(7)){display:none}.shell[data-dashboard-view="settings"] .grid>:not(:nth-child(8)):not(:nth-child(9)){display:none}'
-          if text.count(old) != 1:
-              raise SystemExit('dashboard nav css anchor missing')
-          text = text.replace(old, new, 1)
-
-          old = "${[['overview','Overview'],['devpass','DevPass'],['analytics','Analytics'],['settings','Settings']].map(([key,label]) => `<button role=\"tab\" aria-selected=\"${dashboardView===key?'true':'false'}\" class=\"${dashboardView===key?'active':''}\" data-dashboard-nav=\"${key}\">${label}</button>`).join('')}"
-          new = "${[['overview','Overview'],['devpass','DevPass'],['credits','Credits'],['analytics','Analytics'],['settings','Settings']].map(([key,label]) => `<button role=\"tab\" aria-selected=\"${dashboardView===key?'true':'false'}\" class=\"${dashboardView===key?'active':''}\" data-dashboard-nav=\"${key}\">${label}</button>`).join('')}"
-          if text.count(old) != 1:
-              raise SystemExit('dashboard nav markup anchor missing')
-          text = text.replace(old, new, 1)
-
-          old = "    const scopeExtra = scopeKey === 'devpass'\n      ? `<div class=\"mini accent\"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class=\"mini\"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`"
-          new = "    const scopeExtra = scopeKey === 'devpass'\n      ? `<div class=\"mini accent\"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class=\"mini\"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div><div class=\"mini purple\"><span>프리미엄 남음</span><b>${money(d.weekly?.remaining)}</b></div><div class=\"mini purple\"><span>Reset Pass</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>`"
-          if text.count(old) != 1:
-              raise SystemExit('devpass summary anchor missing')
-          text = text.replace(old, new, 1)
-
-          old = '<div class="today-head"><div><b>24h Usage Scope</b><p style="margin:2px 0 0">${esc(scopeNames[scopeKey][1])}</p></div>'
-          new = '<div class="today-head"><div><b>${dashboardView === \'devpass\' ? \'DevPass Usage\' : dashboardView === \'credits\' ? \'Credits Usage\' : \'24h Usage Scope\'}</b><p style="margin:2px 0 0">${esc(scopeNames[scopeKey][1])}</p></div>'
-          if text.count(old) != 1:
-              raise SystemExit('usage panel title anchor missing')
-          text = text.replace(old, new, 1)
-
-          ui.write_text(text)
-
-          runtime = ROOT / 'src/60-settings-runtime.part.js'
-          text = runtime.read_text()
-          old = "        if (!['overview','devpass','analytics','settings'].includes(next)) return;\n        state.dashboardView = next;\n        const shell = q('.shell');"
-          new = "        if (!['overview','devpass','credits','analytics','settings'].includes(next)) return;\n        state.dashboardView = next;\n        const previousUsageScope = state.usageScopeView;\n        if (next === 'devpass' || next === 'credits') state.usageScopeView = next;\n        const shell = q('.shell');"
-          if text.count(old) != 1:
-              raise SystemExit('navigation click allowlist anchor missing')
-          text = text.replace(old, new, 1)
-
-          old = "        await persist();\n      };\n    });\n    if (q('#connect'))"
-          new = "        await persist();\n        if ((next === 'devpass' || next === 'credits') && previousUsageScope !== state.usageScopeView) renderSettings();\n      };\n    });\n    if (q('#connect'))"
-          if text.count(old) != 1:
-              raise SystemExit('navigation persist anchor missing')
-          text = text.replace(old, new, 1)
-          runtime.write_text(text)
-
-          test = ROOT / 'tests/p3-ui.cjs'
-          text = test.read_text()
-          old = "  'Navigation: tabbed · overview/devpass/analytics/settings',"
-          new = "  'Navigation: tabbed · overview/devpass/credits/analytics/settings',\n  \"['credits','Credits']\",\n  \"if (next === 'devpass' || next === 'credits') state.usageScopeView = next;\","
-          if text.count(old) != 1:
-              raise SystemExit('P3 navigation marker missing')
-          test.write_text(text.replace(old, new, 1))
-          PY
-
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
           node plugins/usage-dashboard/tests/foundation.cjs
@@ -120,26 +40,31 @@ jobs:
           node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
           node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
           git diff --check
-
+          grep -Fq '//@version 3.0.0-alpha.5.33' plugins/usage-dashboard/latest.js
           grep -Fq 'Navigation: tabbed · overview/devpass/credits/analytics/settings' plugins/usage-dashboard/latest.js
           grep -Fq "['credits','Credits']" plugins/usage-dashboard/latest.js
           grep -Fq ".shell[data-dashboard-view=\"credits\"]" plugins/usage-dashboard/latest.js
           grep -Fq "if (next === 'devpass' || next === 'credits') state.usageScopeView = next;" plugins/usage-dashboard/latest.js
           grep -Fq "dashboardView === 'devpass' ? 'DevPass Usage' : dashboardView === 'credits' ? 'Credits Usage'" plugins/usage-dashboard/latest.js
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
 
-      - name: Commit validated 5.33 five-tab source
+      - name: Publish five-tab 5.33 to release channel
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            plugins/usage-dashboard/src/40-diagnostics.part.js \
-            plugins/usage-dashboard/src/50-settings-ui.part.js \
-            plugins/usage-dashboard/src/60-settings-runtime.part.js \
-            plugins/usage-dashboard/src/manifest.json \
-            plugins/usage-dashboard/latest.js \
-            plugins/usage-dashboard/tests/p3-ui.cjs
-          git diff --cached --check
-          git commit -m 'fix: split DevPass and Credits navigation in 5.33'
-          git push origin HEAD:main
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.33' plugins/usage-dashboard/latest.js
+          grep -Fq 'Navigation: tabbed · overview/devpass/credits/analytics/settings' plugins/usage-dashboard/latest.js
+          git diff --check
+          git add plugins/usage-dashboard/latest.js
+          if git diff --cached --quiet; then
+            echo 'release channel already matches five-tab 5.33'
+            exit 0
+          fi
+          git commit -m 'release: refine Local Usage Dashboard 5.33 five-tab navigation'
+          git push origin HEAD:release-usage-dashboard

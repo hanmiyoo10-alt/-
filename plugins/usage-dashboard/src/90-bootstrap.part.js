@@ -25,8 +25,10 @@
       stopResumeLongTaskObserver();
       stopUiStallProbe();
       for(const [t,ty,id] of remoteListeners.splice(0)){try{await t.removeEventListener(ty,id);}catch(_){}}
+      widgetRemoteListeners.length=0;
       for(const [t,ty,fn] of domListeners.splice(0)){try{t.removeEventListener(ty,fn);}catch(_){}}
       if(widget){try{await widget.remove();}catch(_){}}
+      widget=null; rootBody=null; drag=null;
       for(const p of uiParts)if(p?.id){try{await Risuai.unregisterUIPart(p.id);}catch(_){}}
     });
   } catch(e) { console.log(`[Local Usage Dashboard] init failed: ${e?.message||e}`); }

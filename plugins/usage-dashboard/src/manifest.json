@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.34",
+  "version": "3.0.0-alpha.5.35",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "24928aa5d81f53ac7743440ad8ac8b2675df314372cafe8f98f8d1628248c86d",
+  "artifactSha256": "cf51bfd724fec6d4d775dca25ceb6dae7f38969e227dab1818ae60fae6d0cad1",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 55404,
-      "sha256": "24754d3ceacb4af59633a6214df66d66251d5780b860a2b072e101d4d779e4e2"
+      "bytes": 55432,
+      "sha256": "8f70ecee786508c3518452ccfedcdb3e86cffcef0fc40a3f31c0c51823449589"
     },
     {
       "file": "10-usage-data.part.js",
@@ -40,20 +40,20 @@
     {
       "file": "50-settings-ui.part.js",
       "label": "settings UI",
-      "bytes": 33240,
-      "sha256": "7722a1d827453fd5b21f3722d28434cea44cdd9fd98130f8420585fb4e263f92"
+      "bytes": 33318,
+      "sha256": "60dd34b8f70b8e12e67b8bc9ce194c5ddad9c131de9a063d9c570d9d534d9070"
     },
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
-      "bytes": 12890,
-      "sha256": "853ba1b44b92376ced7eaff60ad2c164f958ac93e0d5f89d79220634414b1655"
+      "bytes": 13543,
+      "sha256": "07e1435dc9dcf1f6e444667dc56e84df5e7531c5de34832b685c20d5af1909da"
     },
     {
       "file": "70-floating-widget.part.js",
       "label": "floating widget",
-      "bytes": 14901,
-      "sha256": "560b2e41adfa83cae2ef7792527ca41876101e4bdfbf76faa40c2b4e7688d977"
+      "bytes": 16047,
+      "sha256": "b4b285e2f9034eed10cc7ca1b8fee2f20055146333db813d55997816678602c4"
     },
     {
       "file": "80-lifecycle.part.js",
@@ -64,8 +64,8 @@
     {
       "file": "90-bootstrap.part.js",
       "label": "bootstrap/unload",
-      "bytes": 1942,
-      "sha256": "a33e4abba720b7b9f438c5bed81fb91b6fd1751a07dc207f4674d0dd5d2c5214"
+      "bytes": 2025,
+      "sha256": "8b88ce56899c4301c928a44f7c39ef28f8628c00dfa1898bd1d37743174fc0b8"
     }
   ]
 }

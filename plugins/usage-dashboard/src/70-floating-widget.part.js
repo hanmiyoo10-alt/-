@@ -110,6 +110,42 @@
     widgetRenderCache.layout = layout;
   }
 
+  async function detachWidgetRemoteListeners() {
+    const entries = widgetRemoteListeners.splice(0);
+    if (!entries.length) return;
+    const owned = new Set(entries);
+    for (const [target,type,id] of entries) {
+      try { await target.removeEventListener(type,id); } catch (_) {}
+    }
+    for (let index=remoteListeners.length-1; index>=0; index-=1) {
+      if (owned.has(remoteListeners[index])) remoteListeners.splice(index,1);
+    }
+  }
+
+  async function addWidgetRemoteListener(target,type,handler) {
+    const entry=[target,type,await target.addEventListener(type,handler)];
+    widgetRemoteListeners.push(entry);
+    remoteListeners.push(entry);
+    return entry;
+  }
+
+  async function recreateWidget() {
+    if (runtimeDisposed) return false;
+    await detachWidgetRemoteListeners();
+    if (widget) {
+      try { await widget.remove(); } catch (_) {}
+    }
+    widget=null;
+    rootBody=null;
+    drag=null;
+    widgetMobileExpanded=false;
+    widgetMobileViewport=false;
+    widgetMobileToggleBlockedUntil=Date.now()+400;
+    widgetRenderCache={html:null,width:null,display:null,layout:null,responsiveStyles:Object.create(null)};
+    await renderWidget('widget-recreate');
+    return !!widget;
+  }
+
   async function ensureWidget() {
     if (widget) return;
     if (!(await Risuai.requestPluginPermission('mainDom'))) return;
@@ -169,7 +205,11 @@
       widgetMobileExpanded = !widgetMobileExpanded;
       await renderWidget('mobile-widget-toggle');
     };
-    remoteListeners.push([widget,'pointerdown',await widget.addEventListener('pointerdown',down)],[widget,'click',await widget.addEventListener('click',toggleMobileWidget)],[root,'pointermove',await root.addEventListener('pointermove',move)],[root,'pointerup',await root.addEventListener('pointerup',up)],[root,'pointercancel',await root.addEventListener('pointercancel',up)]);
+    await addWidgetRemoteListener(widget,'pointerdown',down);
+    await addWidgetRemoteListener(widget,'click',toggleMobileWidget);
+    await addWidgetRemoteListener(root,'pointermove',move);
+    await addWidgetRemoteListener(root,'pointerup',up);
+    await addWidgetRemoteListener(root,'pointercancel',up);
   }
 
   async function renderWidget(reason = 'ui') {

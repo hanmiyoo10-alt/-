@@ -198,6 +198,20 @@
       await renderWidget();
       renderSettings();
     };
+    if (q('#recreate-widget')) q('#recreate-widget').onclick = async e => {
+      const button=e.currentTarget, old=button.textContent;
+      button.disabled=true;
+      button.textContent='다시 만드는 중…';
+      try {
+        const ok=await recreateWidget();
+        button.textContent=ok?'재생성 완료 ✓':'재생성 실패';
+      } catch (error) {
+        console.log(`[Local Usage Dashboard] widget recreate failed: ${error?.message||error}`);
+        button.textContent='재생성 실패';
+      } finally {
+        setTimeout(()=>{ if (button?.isConnected) { button.disabled=false; button.textContent=old; } },1200);
+      }
+    };
     if (q('#save-performance')) q('#save-performance').onclick = async () => {
       state.syncOnFocus = q('#sync-on-focus')?.checked !== false;
       state.performanceGuard = q('#performance-guard')?.checked !== false;

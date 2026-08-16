@@ -36,6 +36,12 @@ for (const marker of [
   'widgetMobileToggleBlockedUntil=Date.now()+800;',
   "await renderWidget('panel-open-settled');",
   'Date.now() < widgetMobileToggleBlockedUntil',
+  "[600000,'10분']",
+  'id=\"recreate-widget\"',
+  'async function detachWidgetRemoteListeners()',
+  'async function recreateWidget()',
+  "await addWidgetRemoteListener(widget,'pointerdown',down);",
+  'widgetRemoteListeners.length=0;',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

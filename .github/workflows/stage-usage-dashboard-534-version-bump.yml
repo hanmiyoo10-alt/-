@@ -1,0 +1,99 @@
+name: Stage Usage Dashboard 5.34 Version Bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-usage-dashboard-534-version-bump.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  bump-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Bump five-tab navigation build to 5.34
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          ROOT = Path('plugins/usage-dashboard')
+          OLD = '3.0.0-alpha.5.33'
+          NEW = '3.0.0-alpha.5.34'
+
+          core = ROOT / 'src/00-runtime-core.part.js'
+          text = core.read_text()
+          if text.count(f'//@version {OLD}') != 1 or text.count(f"const VERSION = '{OLD}';") != 1:
+              raise SystemExit('unexpected plugin version baseline')
+          text = text.replace(f'//@version {OLD}', f'//@version {NEW}', 1)
+          text = text.replace(f"const VERSION = '{OLD}';", f"const VERSION = '{NEW}';", 1)
+          core.write_text(text)
+
+          manager = ROOT / 'runtime/bridge-manager.cjs'
+          text = manager.read_text()
+          if text.count(f"const PRODUCT_VERSION = '{OLD}';") != 1:
+              raise SystemExit('unexpected manager product version baseline')
+          manager.write_text(text.replace(f"const PRODUCT_VERSION = '{OLD}';", f"const PRODUCT_VERSION = '{NEW}';", 1))
+
+          manifest_path = ROOT / 'runtime/product-manifest.json'
+          manifest = json.loads(manifest_path.read_text())
+          if manifest.get('productVersion') != OLD:
+              raise SystemExit(f"unexpected product manifest baseline: {manifest.get('productVersion')}")
+          manifest['productVersion'] = NEW
+          manifest['components']['plugin']['version'] = NEW
+          manifest['components']['bridgeManager']['productVersion'] = NEW
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
+          node plugins/usage-dashboard/tests/p2-build.cjs
+          node plugins/usage-dashboard/tests/p3-ui.cjs
+          node plugins/usage-dashboard/tests/p3-recent.cjs
+          node plugins/usage-dashboard/tests/p4-render.cjs
+          node plugins/usage-dashboard/tests/p4-partial.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
+          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
+          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
+          git diff --check
+
+          grep -Fq '//@version 3.0.0-alpha.5.34' plugins/usage-dashboard/latest.js
+          grep -Fq 'Navigation: tabbed · overview/devpass/credits/analytics/settings' plugins/usage-dashboard/latest.js
+          grep -Fq "['credits','Credits']" plugins/usage-dashboard/latest.js
+          grep -Fq "if (next === 'devpass' || next === 'credits') state.usageScopeView = next;" plugins/usage-dashboard/latest.js
+
+      - name: Commit validated 5.34 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            plugins/usage-dashboard/src/00-runtime-core.part.js \
+            plugins/usage-dashboard/src/manifest.json \
+            plugins/usage-dashboard/latest.js \
+            plugins/usage-dashboard/runtime/bridge-manager.cjs \
+            plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          git commit -m 'release: Local Usage Dashboard 5.34 five-tab navigation'
+          git push origin HEAD:main

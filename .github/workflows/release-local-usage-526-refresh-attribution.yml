@@ -1,0 +1,189 @@
+name: Release Local Usage 5.26 Refresh Attribution
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-526-refresh-attribution.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish 5.26 refresh attribution diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git switch release-usage-dashboard
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+
+          old = '3.0.0-alpha.5.25'
+          new = '3.0.0-alpha.5.26'
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+
+          s = plugin_path.read_text()
+          if s.count(old) != 2:
+              raise SystemExit(f'unexpected plugin version count: {s.count(old)}')
+          s = s.replace(old, new)
+
+          power_anchor = "  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};\n"
+          attribution_block = power_anchor + r'''  const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
+  const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
+
+  function refreshAttributionKey(reason) {
+    const key = String(reason || 'scheduled');
+    return REFRESH_ATTRIBUTION_KEYS.includes(key) ? key : 'other';
+  }
+
+  function noteRefreshRequested(reason) {
+    const key = refreshAttributionKey(reason);
+    refreshAttributionRuntime.requested[key] = Number(refreshAttributionRuntime.requested[key] || 0) + 1;
+  }
+
+  function beginRefreshAttribution(reason, startedAt) {
+    const key = refreshAttributionKey(reason);
+    const bucket = refreshAttributionRuntime.executed[key] || {
+      count:0,lastStatus:'none',lastStartedAt:null,lastCompletedAt:null,lastTotalDurationMs:null,lastDataDurationMs:null,
+      lastUiStallCount:0,lastUiStallMaxMs:null,lastRenderSpikeCount:0,lastRenderSpikeMaxMs:null
+    };
+    bucket.count += 1;
+    bucket.lastStartedAt = Number(startedAt || Date.now());
+    refreshAttributionRuntime.executed[key] = bucket;
+    const active = {key,startedAt:bucket.lastStartedAt,uiStallCount:0,uiStallMaxMs:0,renderSpikeCount:0,renderSpikeMaxMs:0};
+    refreshAttributionRuntime.active = active;
+    return active;
+  }
+
+  function noteAttributedUiStall(durationMs) {
+    const active = refreshAttributionRuntime.active;
+    const duration = roundPerfMs(durationMs);
+    if (!active || !Number.isFinite(duration)) return;
+    active.uiStallCount += 1;
+    active.uiStallMaxMs = Math.max(Number(active.uiStallMaxMs || 0), duration);
+  }
+
+  function noteAttributedRenderSpike(durationMs) {
+    const active = refreshAttributionRuntime.active;
+    const duration = roundPerfMs(durationMs);
+    if (!active || !Number.isFinite(duration)) return;
+    active.renderSpikeCount += 1;
+    active.renderSpikeMaxMs = Math.max(Number(active.renderSpikeMaxMs || 0), duration);
+  }
+
+  function finishRefreshAttribution(active, status, totalDurationMs, dataDurationMs = null) {
+    if (!active) return;
+    const bucket = refreshAttributionRuntime.executed[active.key];
+    if (bucket) {
+      bucket.lastStatus = String(status || 'unknown');
+      bucket.lastCompletedAt = Date.now();
+      bucket.lastTotalDurationMs = Math.max(0, Number(totalDurationMs) || 0);
+      bucket.lastDataDurationMs = num(dataDurationMs) ? Number(dataDurationMs) : null;
+      bucket.lastUiStallCount = Number(active.uiStallCount || 0);
+      bucket.lastUiStallMaxMs = active.uiStallCount > 0 ? roundPerfMs(active.uiStallMaxMs) : null;
+      bucket.lastRenderSpikeCount = Number(active.renderSpikeCount || 0);
+      bucket.lastRenderSpikeMaxMs = active.renderSpikeCount > 0 ? roundPerfMs(active.renderSpikeMaxMs) : null;
+    }
+    if (refreshAttributionRuntime.active === active) refreshAttributionRuntime.active = null;
+  }
+
+  function refreshAttributionDetail(reason) {
+    const key = refreshAttributionKey(reason);
+    const requested = Number(refreshAttributionRuntime.requested[key] || 0);
+    const bucket = refreshAttributionRuntime.executed[key];
+    if (!bucket) return `requested ${requested} · executed 0 · last none`;
+    return `requested ${requested} · executed ${Number(bucket.count || 0)} · status ${bucket.lastStatus || 'unknown'} · total ${num(bucket.lastTotalDurationMs) ? `${roundPerfMs(bucket.lastTotalDurationMs)}ms` : '—'} · data ${num(bucket.lastDataDurationMs) ? `${roundPerfMs(bucket.lastDataDurationMs)}ms` : '—'} · UI stalls ${Number(bucket.lastUiStallCount || 0)}${num(bucket.lastUiStallMaxMs) ? ` · max ${roundPerfMs(bucket.lastUiStallMaxMs)}ms` : ''} · render spikes ${Number(bucket.lastRenderSpikeCount || 0)}${num(bucket.lastRenderSpikeMaxMs) ? ` · max ${roundPerfMs(bucket.lastRenderSpikeMaxMs)}ms` : ''} · completed ${bucket.lastCompletedAt ? age(bucket.lastCompletedAt) : '—'}`;
+  }
+'''
+          if s.count(power_anchor) != 1:
+              raise SystemExit('power runtime anchor mismatch')
+          s = s.replace(power_anchor, attribution_block, 1)
+
+          render_spike_anchor = "    performanceRuntime.renderSpikeCount += 1;\n"
+          render_spike_new = render_spike_anchor + "    noteAttributedRenderSpike(duration);\n"
+          if s.count(render_spike_anchor) != 1:
+              raise SystemExit('render spike anchor mismatch')
+          s = s.replace(render_spike_anchor, render_spike_new, 1)
+
+          stall_anchor = "        const rounded = roundPerfMs(lag);\n        performanceRuntime.uiStallCount50 += 1;\n"
+          stall_new = "        const rounded = roundPerfMs(lag);\n        noteAttributedUiStall(rounded);\n        performanceRuntime.uiStallCount50 += 1;\n"
+          if s.count(stall_anchor) != 1:
+              raise SystemExit('ui stall attribution anchor mismatch')
+          s = s.replace(stall_anchor, stall_new, 1)
+
+          enqueue_anchor = "  function enqueueRefresh(reason = 'scheduled', silent = false) {\n    if (runtimeDisposed) return;\n"
+          enqueue_new = enqueue_anchor + "    noteRefreshRequested(reason);\n"
+          if s.count(enqueue_anchor) != 1:
+              raise SystemExit('enqueue attribution anchor mismatch')
+          s = s.replace(enqueue_anchor, enqueue_new, 1)
+
+          refresh_start_anchor = "    requestUiStallProbeBurst(reason === 'timer' ? UI_STALL_PROBE_TIMER_BURST_MS : UI_STALL_PROBE_ACTIVE_BURST_MS);\n    const started = Date.now();\n    const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;\n"
+          refresh_start_new = "    requestUiStallProbeBurst(reason === 'timer' ? UI_STALL_PROBE_TIMER_BURST_MS : UI_STALL_PROBE_ACTIVE_BURST_MS);\n    const started = Date.now();\n    const refreshAttribution = beginRefreshAttribution(reason, started);\n    const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;\n"
+          if s.count(refresh_start_anchor) != 1:
+              raise SystemExit('refresh start attribution anchor mismatch')
+          s = s.replace(refresh_start_anchor, refresh_start_new, 1)
+
+          refresh_final_anchor = "      performanceRuntime.activeRefreshStartedPerf = 0;\n      performanceRuntime.activeRefreshReason = '';\n      refreshInFlight = null;\n      updateRuntimeState('refresh-complete');\n"
+          refresh_final_new = "      const attributionStatus = state.lastRefreshReason === reason\n        ? (state.bridgeStatus === 'connected' ? 'ok' : state.bridgeStatus === 'error' ? 'error' : String(state.bridgeStatus || 'unknown'))\n        : 'unknown';\n      const attributionDataDuration = attributionStatus === 'ok' && num(state.lastSyncDurationMs) ? Number(state.lastSyncDurationMs) : null;\n      finishRefreshAttribution(refreshAttribution, attributionStatus, Date.now() - started, attributionDataDuration);\n      performanceRuntime.activeRefreshStartedPerf = 0;\n      performanceRuntime.activeRefreshReason = '';\n      refreshInFlight = null;\n      updateRuntimeState('refresh-complete');\n"
+          if s.count(refresh_final_anchor) != 1:
+              raise SystemExit('refresh final attribution anchor mismatch')
+          s = s.replace(refresh_final_anchor, refresh_final_new, 1)
+
+          diag_anchor = "      `Success count: ${Number(state.refreshCount || 0)}`,\n"
+          diag_new = diag_anchor + r'''      `Refresh requests: manual ${Number(refreshAttributionRuntime.requested.manual || 0)} · timer ${Number(refreshAttributionRuntime.requested.timer || 0)} · visibility ${Number(refreshAttributionRuntime.requested.visibility || 0)} · init ${Number(refreshAttributionRuntime.requested.init || 0)} · other ${Object.entries(refreshAttributionRuntime.requested).filter(([key]) => !['manual','timer','visibility','init'].includes(key)).reduce((sum,[,value]) => sum + Number(value || 0), 0)}`,
+      `Refresh executions: manual ${Number(refreshAttributionRuntime.executed.manual?.count || 0)} · timer ${Number(refreshAttributionRuntime.executed.timer?.count || 0)} · visibility ${Number(refreshAttributionRuntime.executed.visibility?.count || 0)} · init ${Number(refreshAttributionRuntime.executed.init?.count || 0)} · active ${refreshAttributionRuntime.active?.key || 'none'}`,
+      `Last manual refresh: ${refreshAttributionDetail('manual')}`,
+      `Last timer refresh: ${refreshAttributionDetail('timer')}`,
+      `Last visibility refresh: ${refreshAttributionDetail('visibility')}`,
+'''
+          if s.count(diag_anchor) != 1:
+              raise SystemExit('diagnostic attribution anchor mismatch')
+          s = s.replace(diag_anchor, diag_new, 1)
+
+          plugin_path.write_text(s)
+
+          manager = manager_path.read_text()
+          if manager.count(old) != 1:
+              raise SystemExit(f'unexpected manager version count: {manager.count(old)}')
+          manager = manager.replace(old, new)
+          manager_path.write_text(manager)
+
+          manifest = json.loads(manifest_path.read_text())
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git diff --check
+          grep -Fq '//@version 3.0.0-alpha.5.26' plugins/usage-dashboard/latest.js
+          grep -Fq 'Refresh requests:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Last manual refresh:' plugins/usage-dashboard/latest.js
+          grep -Fq 'function beginRefreshAttribution' plugins/usage-dashboard/latest.js
+          grep -Fq 'noteRefreshRequested(reason);' plugins/usage-dashboard/latest.js
+          grep -Fq "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.26'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.2'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m 'release: local usage dashboard 5.26 refresh attribution diagnostics'
+          git push origin release-usage-dashboard

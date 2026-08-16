@@ -1,0 +1,149 @@
+name: Release Local Usage 5.29 Error Boundary
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-529-error-boundary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish 5.29 local failure containment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin release-usage-dashboard
+          git checkout -B release-usage-dashboard origin/release-usage-dashboard
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          old = '3.0.0-alpha.5.28'
+          new = '3.0.0-alpha.5.29'
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+          engine_path = Path('plugins/usage-dashboard/runtime/bridge-engine.mjs')
+
+          plugin = plugin_path.read_text(encoding='utf-8')
+          if plugin.count(old) < 2:
+              raise SystemExit(f'expected >=2 plugin version markers, found {plugin.count(old)}')
+          plugin = plugin.replace(old, new)
+
+          anchor = "  const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};\n"
+          addition = anchor + "  const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};\n"
+          if plugin.count(anchor) != 1:
+              raise SystemExit('local runtime counter anchor mismatch')
+          plugin = plugin.replace(anchor, addition, 1)
+
+          persist_anchor = "  async function persist() {\n    if (runtimeDisposed) return dropStaleAsync();\n    await store.setItem(STATE_KEY, {...state});\n    powerRuntime.persistWrites += 1;\n  }\n"
+          helpers = persist_anchor + r'''
+
+  function noteLocalRuntimeError(stage, error) {
+    const key = String(stage || 'runtime');
+    const message = String(error?.message || error || 'unknown error')
+      .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
+      .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 180);
+    localRuntimeErrors.count += 1;
+    if (key.includes('persist')) localRuntimeErrors.persistFailures += 1;
+    if (key.includes('render')) localRuntimeErrors.renderFailures += 1;
+    localRuntimeErrors.lastStage = key;
+    localRuntimeErrors.lastMessage = message;
+    localRuntimeErrors.lastAt = Date.now();
+    console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
+  }
+
+  async function persistRefreshState(stage) {
+    try { await persist(); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
+  async function renderRefreshWidget(reason, stage) {
+    try { await renderWidget(reason); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+'''
+          if plugin.count(persist_anchor) != 1:
+              raise SystemExit('persist helper anchor mismatch')
+          plugin = plugin.replace(persist_anchor, helpers, 1)
+
+          success_old = "        await persist();\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        await renderWidget(reason);\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        if (resumeVisibilityRefresh) {"
+          success_new = "        await persistRefreshState('refresh-success-persist');\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        await renderRefreshWidget(reason, 'refresh-success-render');\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        if (resumeVisibilityRefresh) {"
+          if plugin.count(success_old) != 1:
+              raise SystemExit(f'success tail anchor mismatch: {plugin.count(success_old)}')
+          plugin = plugin.replace(success_old, success_new, 1)
+
+          error_old = "        await persist();\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        // Keep the last good values, but immediately repaint the widget so\n        // LIVE changes to OFFLINE as soon as a refresh fails.\n        await renderWidget(reason);\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        scheduleRefresh();"
+          error_new = "        await persistRefreshState('refresh-error-persist');\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        // Keep the last good values, but immediately repaint the widget so\n        // LIVE changes to OFFLINE as soon as a refresh fails. Local persist/render\n        // failures must not abort retry scheduling or masquerade as bridge errors.\n        await renderRefreshWidget(reason, 'refresh-error-render');\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        scheduleRefresh();"
+          if plugin.count(error_old) != 1:
+              raise SystemExit(f'error tail anchor mismatch: {plugin.count(error_old)}')
+          plugin = plugin.replace(error_old, error_new, 1)
+
+          panel_old = "      const run = () => {\n        panelIdleHandle = null;\n        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') renderSettingsPartial();\n      };"
+          panel_new = "      const run = () => {\n        panelIdleHandle = null;\n        if (document.body?.dataset?.panelOpen === '1' && document.visibilityState !== 'hidden') {\n          try { renderSettingsPartial(); }\n          catch (error) { noteLocalRuntimeError('panel-render', error); }\n        }\n      };"
+          if plugin.count(panel_old) != 1:
+              raise SystemExit(f'panel boundary anchor mismatch: {plugin.count(panel_old)}')
+          plugin = plugin.replace(panel_old, panel_new, 1)
+
+          diag_old = "      `P4 render: closed-panel skip · widget DOM dedup`,\n      `Effective refresh: ${effectiveRefreshMs()}ms`,"
+          diag_new = "      `P4 render: closed-panel skip · widget DOM dedup`,\n      `Local runtime errors: ${Number(localRuntimeErrors.count || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'}`,\n      `Effective refresh: ${effectiveRefreshMs()}ms`,"
+          if plugin.count(diag_old) != 1:
+              raise SystemExit(f'diagnostic anchor mismatch: {plugin.count(diag_old)}')
+          plugin = plugin.replace(diag_old, diag_new, 1)
+
+          plugin_path.write_text(plugin, encoding='utf-8')
+
+          manager = manager_path.read_text(encoding='utf-8')
+          if manager.count(old) < 1:
+              raise SystemExit('manager product version marker missing')
+          manager_path.write_text(manager.replace(old, new), encoding='utf-8')
+
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          expected_engine = '48fb53490937d4507662bb42414e0a84b260bb18c6c7e259a12cf42fc8b6d524'
+          actual_engine = hashlib.sha256(engine_path.read_bytes()).hexdigest()
+          if actual_engine != expected_engine:
+              raise SystemExit(f'engine changed unexpectedly: {actual_engine}')
+          manifest['components']['bridge']['sha256'] = expected_engine
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          print('plugin_sha256=' + hashlib.sha256(plugin_path.read_bytes()).hexdigest())
+          print('manager_sha256=' + hashlib.sha256(manager_path.read_bytes()).hexdigest())
+          print('engine_sha256=' + actual_engine)
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F '//@version 3.0.0-alpha.5.29' plugins/usage-dashboard/latest.js
+          grep -F "const VERSION = '3.0.0-alpha.5.29'" plugins/usage-dashboard/latest.js
+          grep -F "localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0" plugins/usage-dashboard/latest.js
+          grep -F "persistRefreshState('refresh-success-persist')" plugins/usage-dashboard/latest.js
+          grep -F "persistRefreshState('refresh-error-persist')" plugins/usage-dashboard/latest.js
+          grep -F "noteLocalRuntimeError('panel-render', error)" plugins/usage-dashboard/latest.js
+          grep -F 'Local runtime errors:' plugins/usage-dashboard/latest.js
+          grep -F "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const PRODUCT_VERSION = '3.0.0-alpha.5.29'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const BUNDLED_ENGINE_VERSION = '1.6.2'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          git commit -m "release: Local Usage Dashboard 3.0.0-alpha.5.29 local failure containment"
+          git push origin HEAD:release-usage-dashboard

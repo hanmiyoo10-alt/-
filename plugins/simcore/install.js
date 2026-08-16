@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.27
+//@version 0.63.28
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.28 Multi-scene Narrative Clock Commit:
+// - Promotes the final line-level scene timestamp to the persisted narrative clock only when every canonical timestamp in the current # 응답 envelope is valid and monotonically non-decreasing
+// - Falls back to the frame timestamp for malformed or non-monotonic timestamp sequences; no semantic inference about flashbacks/montages is attempted and no quarantine/warning is introduced for a skipped tail
+// - Keeps broadcast airtime semantics first-timestamp based; synchronizes worldYear/age offset to the safely committed narrative tail when that tail crosses a year boundary
+// - Keeps Structure v0.63.27, Frame, Evidence, Prompt, Lineage/Handoff, Recurrence, Reaction, reload safety, storage schema and host/API call sites frozen; only Time plus minimal Session commit/diagnostic wiring changes
 //
 // v0.63.27 Response Envelope Scope:
 // - Restricts Structure validation, Knowledge scanning and state-commit judgement to the canonical # 응답 envelope instead of treating host/model preamble text as part of the response body
@@ -1723,6 +1729,9 @@ function explicitWorldYear(userText) {
 
 const BROADCAST_TIMESTAMP_RE = /⏱️\[((?:19|20|21)\d{2})-(\d{2})-(\d{2})\s+\(([^)]+)\)\s+(\d{1,2}):(\d{2})\s+(AM|PM)\]/i;
 const ZERO_HOUR_TIMESTAMP_RE = /(⏱️\[(?:19|20|21)\d{2}-\d{2}-\d{2}\s+\([^)]+\)\s+)00:(\d{2})\s+(AM|PM)\]/gi;
+const NARRATIVE_RESPONSE_HEADER_RE = /^[ \t]*#[ \t]+응답[ \t]*$/mi;
+const NARRATIVE_TIMESTAMP_LINE_RE = /^[ \t]*(⏱️\[((?:19|20|21)\d{2})-(\d{2})-(\d{2})\s+\(([^)]+)\)\s+(\d{1,2}):(\d{2})\s+(AM|PM)\])[ \t]*$/gmi;
+const NARRATIVE_TIMESTAMP_LINE_MARKER_RE = /^[ \t]*⏱️\[[^\r\n]*$/gmi;
 
 function canonicalizeTimestampSyntax(content) {
   const text = String(content || '');
@@ -1774,6 +1783,87 @@ function elapsedMinutes(start, current) {
   const b = parseTimestamp(current);
   if (!a || !b) return null;
   return b.minuteKey - a.minuteKey;
+}
+
+function narrativeEnvelopeText(content) {
+  const text = String(content || '');
+  const header = text.match(NARRATIVE_RESPONSE_HEADER_RE);
+  return header && Number.isInteger(header.index) ? text.slice(header.index) : text;
+}
+
+function narrativeTimestampSequence(content) {
+  const text = narrativeEnvelopeText(content);
+  const markers = text.match(new RegExp(NARRATIVE_TIMESTAMP_LINE_MARKER_RE.source, NARRATIVE_TIMESTAMP_LINE_MARKER_RE.flags)) || [];
+  const parsed = [];
+  const lineRe = new RegExp(NARRATIVE_TIMESTAMP_LINE_RE.source, NARRATIVE_TIMESTAMP_LINE_RE.flags);
+  let m;
+  while ((m = lineRe.exec(text))) {
+    const ts = parseTimestamp(m[1]);
+    if (ts) parsed.push(ts);
+  }
+
+  if (!parsed.length) {
+    const fallback = parseTimestamp(text);
+    if (!fallback) {
+      return {
+        frameTimestamp: null,
+        candidate: null,
+        sequenceCount: 0,
+        sceneCount: 0,
+        markerCount: markers.length,
+        tailStatus: 'MISSING',
+        tailPromoted: false,
+      };
+    }
+    return {
+      frameTimestamp: fallback.raw,
+      candidate: fallback.raw,
+      sequenceCount: 1,
+      sceneCount: 0,
+      markerCount: markers.length || 1,
+      tailStatus: 'FRAME_ONLY_FALLBACK',
+      tailPromoted: false,
+    };
+  }
+
+  const frameTimestamp = parsed[0].raw;
+  const sceneCount = Math.max(0, parsed.length - 1);
+  if (markers.length !== parsed.length) {
+    return {
+      frameTimestamp,
+      candidate: frameTimestamp,
+      sequenceCount: parsed.length,
+      sceneCount,
+      markerCount: markers.length,
+      tailStatus: 'SKIPPED_MALFORMED',
+      tailPromoted: false,
+    };
+  }
+
+  for (let i = 1; i < parsed.length; i++) {
+    if (parsed[i].minuteKey < parsed[i - 1].minuteKey) {
+      return {
+        frameTimestamp,
+        candidate: frameTimestamp,
+        sequenceCount: parsed.length,
+        sceneCount,
+        markerCount: markers.length,
+        tailStatus: 'SKIPPED_NON_MONOTONIC',
+        tailPromoted: false,
+      };
+    }
+  }
+
+  const candidate = parsed[parsed.length - 1].raw;
+  return {
+    frameTimestamp,
+    candidate,
+    sequenceCount: parsed.length,
+    sceneCount,
+    markerCount: markers.length,
+    tailStatus: sceneCount > 0 ? 'MONOTONIC' : 'FRAME_ONLY',
+    tailPromoted: sceneCount > 0 && candidate !== frameTimestamp,
+  };
 }
 
 function resetBroadcastAirtime(state) {
@@ -1854,31 +1944,38 @@ function enforceNarrativeCurrentTimeFloor(content, previous) {
 }
 
 function commitNarrativeTimestamp(state, pending, content) {
-  if (/^B_/.test(String(pending?.mode || ''))) return { changed: false, reason: 'broadcast', timestamp: null };
-  const parsed = parseTimestamp(content);
-  if (!parsed) return { changed: false, reason: 'missing-or-invalid', timestamp: null };
-  const current = parsed.raw;
+  if (/^B_/.test(String(pending?.mode || ''))) {
+    return {
+      changed: false, reason: 'broadcast', timestamp: null, previous: null,
+      frameTimestamp: null, sequenceCount: 0, sceneCount: 0, markerCount: 0,
+      tailStatus: 'INELIGIBLE_BROADCAST', tailPromoted: false,
+    };
+  }
+  const sequence = narrativeTimestampSequence(content);
+  const current = sequence.candidate || sequence.frameTimestamp || null;
+  if (!current) return { changed: false, reason: 'missing-or-invalid', timestamp: null, previous: null, ...sequence };
   const previous = pending?.narrativeTimestampPrevious || state.narrativeTimestamp || null;
   if (previous) {
     const cmp = compareTimestamps(current, previous);
-    if (cmp != null && cmp < 0) return { changed: false, reason: 'backward', timestamp: current, previous };
+    if (cmp != null && cmp < 0) return { changed: false, reason: 'backward', timestamp: current, previous, ...sequence };
   }
   const changed = state.narrativeTimestamp !== current;
   state.narrativeTimestamp = current;
-  return { changed, reason: 'committed', timestamp: current, previous };
+  return { changed, reason: 'committed', timestamp: current, previous, ...sequence };
 }
 
 function syncNarrativeTimestamp(state, content, mode) {
   if (/^B_/.test(String(mode || ''))) return false;
-  const parsed = parseTimestamp(content);
-  if (!parsed) return false;
+  const sequence = narrativeTimestampSequence(content);
+  const current = sequence.candidate || sequence.frameTimestamp || null;
+  if (!current) return false;
   const previous = state.narrativeTimestamp || null;
   if (previous) {
-    const cmp = compareTimestamps(parsed.raw, previous);
+    const cmp = compareTimestamps(current, previous);
     if (cmp != null && cmp < 0) return false;
   }
-  const changed = state.narrativeTimestamp !== parsed.raw;
-  state.narrativeTimestamp = parsed.raw;
+  const changed = state.narrativeTimestamp !== current;
+  state.narrativeTimestamp = current;
   return changed;
 }
 
@@ -1893,6 +1990,7 @@ module.exports = {
   timestampYear,
   compareTimestamps,
   elapsedMinutes,
+  narrativeTimestampSequence,
   resetBroadcastAirtime,
   commitBroadcastAirtime,
   narrativeProgressionHint,
@@ -3118,6 +3216,7 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   let narrativeClockProbe = null;
   if (!/^B_/.test(String(p.mode || ''))) {
     const narrativeCommit = time.commitNarrativeTimestamp(state, p, finalText);
+    time.applyWorldYear(state, time.timestampYear(narrativeCommit.timestamp));
     const previousNarrative = narrativeCommit.previous || p.narrativeTimestampPrevious || null;
     const narrativeCmp = narrativeCommit.timestamp && previousNarrative
       ? time.compareTimestamps(narrativeCommit.timestamp, previousNarrative)
@@ -3138,8 +3237,13 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
       guardActive: !!p.narrativeClockGuard,
       trigger: p.narrativeProgressionReason || 'none',
       previousAnchor: previousNarrative,
-      observedTimestamp: narrativeFloor?.observed || narrativeCommit.timestamp || null,
+      observedTimestamp: narrativeFloor?.observed || narrativeCommit.frameTimestamp || narrativeCommit.timestamp || null,
+      frameTimestamp: narrativeCommit.frameTimestamp || narrativeFloor?.observed || narrativeCommit.timestamp || null,
       outputTimestamp: narrativeCommit.timestamp || null,
+      sceneCount: Number(narrativeCommit.sceneCount || 0),
+      sequenceCount: Number(narrativeCommit.sequenceCount || 0),
+      tailStatus: narrativeCommit.tailStatus || 'n/a',
+      tailPromoted: !!narrativeCommit.tailPromoted,
       floorApplied: !!narrativeFloor?.changed,
       floorTimestamp: narrativeFloor?.floor || null,
       commitStatus: narrativeCommitStatus,
@@ -3644,9 +3748,11 @@ class CoreRulesetSession {
   seedNarrativeTimestampFromVisible(content) {
     if (!this.current || this.current.narrativeTimestamp) return false;
     if (/^B_/.test(String(this.current.lastMode || ''))) return false;
-    const parsed = time.parseTimestamp(content);
+    const sequence = time.narrativeTimestampSequence(content);
+    const parsed = time.parseTimestamp(sequence.candidate || sequence.frameTimestamp || '');
     if (!parsed) return false;
     this.current.narrativeTimestamp = parsed.raw;
+    time.applyWorldYear(this.current, parsed.year);
     return true;
   }
 
@@ -4740,7 +4846,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.27',
+      'Version: 0.63.28',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -4771,7 +4877,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
       `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
       `Evidence fence: ${evidenceFence ? `${evidenceFence.status} · request @${evidenceFence.requestIndex >= 0 ? evidenceFence.requestIndex : 'n/a'} role ${evidenceFence.role || 'n/a'} · source ${evidenceFence.sourceShape || 'n/a'} · delta ${evidenceFence.normDelta == null ? 'n/a' : evidenceFence.normDelta} · ${evidenceFence.reason || 'n/a'}` : 'n/a'}`,
-      `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · output ${narrative.outputTimestamp || 'n/a'}` : 'n/a'}`,
+      `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
       'Warnings detail:',
@@ -4970,7 +5076,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.27</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.28</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

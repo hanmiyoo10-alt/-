@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.33 Navigation Restore
+name: Publish Usage Dashboard 5.33 Navigation Restore
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-and-validate:
+  validate-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -19,155 +19,72 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Restore tabbed dashboard navigation
+      - name: Revalidate 5.33 navigation build
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-          import hashlib, json
-
-          ROOT = Path('plugins/usage-dashboard')
-          OLD = '3.0.0-alpha.5.32'
-          NEW = '3.0.0-alpha.5.33'
-
-          def replace_once(path, old, new, label):
-              text = path.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected 1 match, got {count}')
-              path.write_text(text.replace(old, new, 1))
-
-          core = ROOT / 'src/00-runtime-core.part.js'
-          replace_once(core, f'//@version {OLD}', f'//@version {NEW}', 'metadata version')
-          replace_once(core, f"const VERSION = '{OLD}';", f"const VERSION = '{NEW}';", 'runtime version')
-          text = core.read_text()
-          anchor = "    analyticsScopeView: 'all',\n"
-          if "dashboardView: 'overview'" not in text:
-              if text.count(anchor) != 1:
-                  raise SystemExit('dashboard state anchor missing')
-              text = text.replace(anchor, anchor + "    dashboardView: 'overview',\n", 1)
-              core.write_text(text)
-
-          diagnostics = ROOT / 'src/40-diagnostics.part.js'
-          text = diagnostics.read_text()
-          diag_anchor = '      `UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed`,\n'
-          nav_diag = '      `Navigation: tabbed · overview/devpass/analytics/settings · view ${state.dashboardView || \'overview\'} · persisted`,\n'
-          if nav_diag not in text:
-              if text.count(diag_anchor) != 1:
-                  raise SystemExit('diagnostic layout anchor missing')
-              diagnostics.write_text(text.replace(diag_anchor, diag_anchor + nav_diag, 1))
-
-          ui = ROOT / 'src/50-settings-ui.part.js'
-          text = ui.read_text()
-          bridge_anchor = '    const bridgeDiag = bridgeStabilitySnapshot();\n'
-          dashboard_line = "    const dashboardView = ['overview','devpass','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';\n"
-          if dashboard_line not in text:
-              if text.count(bridge_anchor) != 1:
-                  raise SystemExit('settings dashboard state anchor missing')
-              text = text.replace(bridge_anchor, bridge_anchor + dashboard_line, 1)
-
-          css_anchor = 'h1{margin:0;font-size:23px}'
-          nav_css = ".dashboard-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:-2px 0 12px;position:sticky;top:0;z-index:20;background:var(--b);padding:6px 0}.dashboard-nav button{min-width:0;padding:8px 6px;font-size:11px;white-space:nowrap}.dashboard-nav button.active{background:var(--g);border-color:var(--g);color:#15170f}.shell[data-dashboard-view=\"overview\"] .grid>:nth-child(n+6){display:none}.shell[data-dashboard-view=\"devpass\"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view=\"analytics\"] .grid>:not(:nth-child(7)){display:none}.shell[data-dashboard-view=\"settings\"] .grid>:not(:nth-child(8)):not(:nth-child(9)){display:none}"
-          if '.dashboard-nav{' not in text:
-              if text.count(css_anchor) != 1:
-                  raise SystemExit('dashboard nav CSS anchor missing')
-              text = text.replace(css_anchor, css_anchor + nav_css, 1)
-
-          shell_anchor = '<div class="shell"><header>'
-          shell_replacement = '<div class="shell" data-dashboard-view="${dashboardView}"><header>'
-          if shell_replacement not in text:
-              if text.count(shell_anchor) != 1:
-                  raise SystemExit('dashboard shell anchor missing')
-              text = text.replace(shell_anchor, shell_replacement, 1)
-
-          main_anchor = '</header><main class="grid">'
-          nav_markup = '''</header><nav class="dashboard-nav" role="tablist" aria-label="Dashboard page">${[['overview','Overview'],['devpass','DevPass'],['analytics','Analytics'],['settings','Settings']].map(([key,label]) => `<button role="tab" aria-selected="${dashboardView===key?'true':'false'}" class="${dashboardView===key?'active':''}" data-dashboard-nav="${key}">${label}</button>`).join('')}</nav><main class="grid">'''
-          if 'data-dashboard-nav=' not in text:
-              if text.count(main_anchor) != 1:
-                  raise SystemExit('dashboard nav markup anchor missing')
-              text = text.replace(main_anchor, nav_markup, 1)
-          ui.write_text(text)
-
-          runtime = ROOT / 'src/60-settings-runtime.part.js'
-          text = runtime.read_text()
-          bind_anchor = "    if (q('#close')) q('#close').onclick = () => { document.body.dataset.panelOpen='0'; Risuai.hideContainer(); };\n"
-          nav_bind = '''    document.querySelectorAll('[data-dashboard-nav]').forEach(button => {\n      button.onclick = async () => {\n        const next = String(button.getAttribute('data-dashboard-nav') || 'overview');\n        if (!['overview','devpass','analytics','settings'].includes(next)) return;\n        state.dashboardView = next;\n        const shell = q('.shell');\n        if (shell) shell.dataset.dashboardView = next;\n        document.querySelectorAll('[data-dashboard-nav]').forEach(item => {\n          const active = String(item.getAttribute('data-dashboard-nav') || '') === next;\n          item.classList.toggle('active', active);\n          item.setAttribute('aria-selected', active ? 'true' : 'false');\n        });\n        await persist();\n      };\n    });\n'''
-          if "state.dashboardView = next;" not in text:
-              if text.count(bind_anchor) != 1:
-                  raise SystemExit('dashboard nav bind anchor missing')
-              text = text.replace(bind_anchor, bind_anchor + nav_bind, 1)
-          runtime.write_text(text)
-
-          test = ROOT / 'tests/p3-ui.cjs'
-          text = test.read_text()
-          marker_anchor = "  'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed',\n"
-          nav_markers = "  'Navigation: tabbed · overview/devpass/analytics/settings',\n  \"dashboardView: 'overview'\",\n  'data-dashboard-view=\"${dashboardView}\"',\n  'data-dashboard-nav=\"${key}\"',\n  'state.dashboardView = next;',\n"
-          if 'Navigation: tabbed · overview/devpass/analytics/settings' not in text:
-              if text.count(marker_anchor) != 1:
-                  raise SystemExit('P3 UI marker anchor missing')
-              text = text.replace(marker_anchor, marker_anchor + nav_markers, 1)
-              test.write_text(text)
-
-          manager = ROOT / 'runtime/bridge-manager.cjs'
-          manager_text = manager.read_text()
-          if OLD not in manager_text:
-              raise SystemExit('manager product version baseline missing')
-          manager.write_text(manager_text.replace(OLD, NEW))
-
-          manifest_path = ROOT / 'runtime/product-manifest.json'
-          manifest = json.loads(manifest_path.read_text())
-          if manifest.get('productVersion') != OLD:
-              raise SystemExit(f'unexpected product version: {manifest.get("productVersion")}')
-          manifest['productVersion'] = NEW
-          manifest['components']['plugin']['version'] = NEW
-          manifest['components']['bridgeManager']['productVersion'] = NEW
-          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager.read_bytes()).hexdigest()
-          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-          PY
-
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
-          node --check plugins/usage-dashboard/latest.js
-          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
-          node plugins/usage-dashboard/tests/foundation.cjs
-          node plugins/usage-dashboard/tests/p1-contract.cjs
-          node plugins/usage-dashboard/tests/p2-build.cjs
-          node plugins/usage-dashboard/tests/p3-ui.cjs
-          node plugins/usage-dashboard/tests/p3-recent.cjs
-          node plugins/usage-dashboard/tests/p4-render.cjs
-          node plugins/usage-dashboard/tests/p4-partial.cjs
-          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
-          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
-          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
-          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
-          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
-          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
-          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
+          ROOT='plugins/usage-dashboard'
+          VERSION='3.0.0-alpha.5.33'
+          node "$ROOT/tools/build_usage_dashboard.cjs" --check
+          node --check "$ROOT/latest.js"
+          node --check "$ROOT/runtime/bridge-manager.cjs"
+          node --check "$ROOT/runtime/bridge-engine.mjs"
+          bash -n "$ROOT/runtime/bootstrap-bridge-manager.sh"
+          node "$ROOT/tests/foundation.cjs"
+          node "$ROOT/tests/p1-contract.cjs"
+          node "$ROOT/tests/p2-build.cjs"
+          node "$ROOT/tests/p3-ui.cjs"
+          node "$ROOT/tests/p3-recent.cjs"
+          node "$ROOT/tests/p4-render.cjs"
+          node "$ROOT/tests/p4-partial.cjs"
+          node "$ROOT/tests/p4-hourly-drilldown.cjs"
+          node "$ROOT/tests/p4-hourly-detail.cjs"
+          node "$ROOT/tests/p4-request-fidelity.cjs"
+          node "$ROOT/tests/p5-unified-runtime.cjs"
+          node "$ROOT/tests/p5-bridge-manager.cjs"
+          node "$ROOT/tests/p5-engine-adoption.cjs"
+          node "$ROOT/tests/p5-bundled-engine.cjs"
+          grep -Fq "//@version $VERSION" "$ROOT/latest.js"
+          grep -Fq "dashboardView: 'overview'" "$ROOT/latest.js"
+          grep -Fq 'data-dashboard-nav=' "$ROOT/latest.js"
+          grep -Fq 'Navigation: tabbed · overview/devpass/analytics/settings' "$ROOT/latest.js"
+          grep -Fq "\"productVersion\": \"$VERSION\"" "$ROOT/runtime/product-manifest.json"
+          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' "$ROOT/runtime/product-manifest.json")"
+          test "$ENGINE_SHA" = "$(sha256sum "$ROOT/runtime/bridge-engine.mjs" | awk '{print $1}')"
+          MANAGER_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridgeManager?.sha256||""))' "$ROOT/runtime/product-manifest.json")"
+          test "$MANAGER_SHA" = "$(sha256sum "$ROOT/runtime/bridge-manager.cjs" | awk '{print $1}')"
           git diff --check
+          cp "$ROOT/latest.js" /tmp/usage-dashboard-533-latest.js
+          rm -rf /tmp/usage-dashboard-533-runtime
+          cp -R "$ROOT/runtime" /tmp/usage-dashboard-533-runtime
 
-          grep -Fq '//@version 3.0.0-alpha.5.33' plugins/usage-dashboard/latest.js
-          grep -Fq "dashboardView: 'overview'" plugins/usage-dashboard/latest.js
-          grep -Fq 'data-dashboard-nav=' plugins/usage-dashboard/latest.js
-          grep -Fq 'Navigation: tabbed · overview/devpass/analytics/settings' plugins/usage-dashboard/latest.js
-          grep -Fq 'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed' plugins/usage-dashboard/latest.js
-
-      - name: Commit validated 5.33 source
+      - name: Publish 5.33 to release channel
         shell: bash
         run: |
           set -euo pipefail
+          ROOT='plugins/usage-dashboard'
+          VERSION='3.0.0-alpha.5.33'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            plugins/usage-dashboard/src/00-runtime-core.part.js \
-            plugins/usage-dashboard/src/40-diagnostics.part.js \
-            plugins/usage-dashboard/src/50-settings-ui.part.js \
-            plugins/usage-dashboard/src/60-settings-runtime.part.js \
-            plugins/usage-dashboard/src/manifest.json \
-            plugins/usage-dashboard/latest.js \
-            plugins/usage-dashboard/tests/p3-ui.cjs \
-            plugins/usage-dashboard/runtime/bridge-manager.cjs \
-            plugins/usage-dashboard/runtime/product-manifest.json
-          git diff --cached --check
-          git commit -m 'release: Local Usage Dashboard 5.33 navigation UX restore'
-          git push origin HEAD:main
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf "$ROOT/runtime"
+          mkdir -p "$ROOT"
+          cp /tmp/usage-dashboard-533-latest.js "$ROOT/latest.js"
+          cp -R /tmp/usage-dashboard-533-runtime "$ROOT/runtime"
+          node --check "$ROOT/latest.js"
+          node --check "$ROOT/runtime/bridge-manager.cjs"
+          node --check "$ROOT/runtime/bridge-engine.mjs"
+          grep -Fq "//@version $VERSION" "$ROOT/latest.js"
+          grep -Fq 'data-dashboard-nav=' "$ROOT/latest.js"
+          grep -Fq "\"productVersion\": \"$VERSION\"" "$ROOT/runtime/product-manifest.json"
+          git diff --check
+          git add "$ROOT/latest.js" "$ROOT/runtime"
+          if git diff --cached --quiet; then
+            echo "release-usage-dashboard already matches $VERSION"
+            exit 0
+          fi
+          git commit -m "release: publish Local Usage Dashboard $VERSION product artifacts"
+          git push origin HEAD:release-usage-dashboard

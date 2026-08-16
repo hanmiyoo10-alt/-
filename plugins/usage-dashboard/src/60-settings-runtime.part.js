@@ -117,6 +117,21 @@
   function bindSettings() {
     const q = s => document.querySelector(s);
     if (q('#close')) q('#close').onclick = () => { document.body.dataset.panelOpen='0'; Risuai.hideContainer(); };
+    document.querySelectorAll('[data-dashboard-nav]').forEach(button => {
+      button.onclick = async () => {
+        const next = String(button.getAttribute('data-dashboard-nav') || 'overview');
+        if (!['overview','devpass','analytics','settings'].includes(next)) return;
+        state.dashboardView = next;
+        const shell = q('.shell');
+        if (shell) shell.dataset.dashboardView = next;
+        document.querySelectorAll('[data-dashboard-nav]').forEach(item => {
+          const active = String(item.getAttribute('data-dashboard-nav') || '') === next;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        await persist();
+      };
+    });
     if (q('#connect')) q('#connect').onclick = async () => {
       try {
         state.bridgeBase = normalizeBridgeBase(q('#bridge-base')?.value || DEFAULT_BRIDGE);

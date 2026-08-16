@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.32",
+  "version": "3.0.0-alpha.5.33",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "6e94545eb70aa2fd067d850b188af5467274bfddbb04674ce95cbf85b552b377",
+  "artifactSha256": "e33eb2387d0be6d89d2e91f2678a91856ce01ceb32fff9e9d6c553242974387a",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 55373,
-      "sha256": "0d65f06cae43502b2d71e6fd0f4805ee8e2dc9b11d2103ea6d11659661519e84"
+      "bytes": 55404,
+      "sha256": "d4aaa773c370d7b3d6cf4cc6a839b4db512adf166cb3dba4ca8f2117206b3b45"
     },
     {
       "file": "10-usage-data.part.js",
@@ -34,20 +34,20 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
-      "bytes": 20484,
-      "sha256": "06545e03ffcac3bf384a926e2c562bf1f939e5c3d5dc68a226249d9ad2b09420"
+      "bytes": 20609,
+      "sha256": "2799c1321ad6cab94ea9afe589fb2101d2a749e95825ab78db23460101dcacf3"
     },
     {
       "file": "50-settings-ui.part.js",
       "label": "settings UI",
-      "bytes": 31413,
-      "sha256": "768130b46215238a41d958f39906409b246485367e753d66a914ecdafd437fc6"
+      "bytes": 32641,
+      "sha256": "aef80a33e0eb6f7b77331b7221eed8f845b642de23a9197eaa0f5b3f7582e211"
     },
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
-      "bytes": 11870,
-      "sha256": "f1c1f85ed397717e296b212224b8dbb67404a18ade099bffda08742d751df14f"
+      "bytes": 12619,
+      "sha256": "9de7935cd92d63f28dd686b7a3b015ad08e5e10196a335b506058a862b6c7fd4"
     },
     {
       "file": "70-floating-widget.part.js",

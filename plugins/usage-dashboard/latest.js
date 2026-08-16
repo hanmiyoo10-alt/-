@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.32
+//@version 3.0.0-alpha.5.33
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.32';
+  const VERSION = '3.0.0-alpha.5.33';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -45,6 +45,7 @@
     requestLedger: [],
     requestLedgerStartedAt: null,
     analyticsScopeView: 'all',
+    dashboardView: 'overview',
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
@@ -1993,6 +1994,7 @@ async function importLegacyTodayBaselines() {
       `Bridge CLI/circuit: active ${bridgeDiag.cliActive ?? '—'} · queued ${bridgeDiag.cliQueued ?? '—'} · open ${bridgeDiag.openCircuits ?? '—'} · recoveries ${bridgeDiag.circuitRecoveries ?? '—'}`,
       `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)} · cache ${usageCacheText(diagUsage)}`,
       `UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed`,
+      `Navigation: tabbed · overview/devpass/analytics/settings · view ${state.dashboardView || 'overview'} · persisted`,
       `Recent UI: filter ${['all','success','error'].includes(String(state.recentRequestFilter)) ? state.recentRequestFilter : 'all'} · aggregate chips · mobile compact`,
       `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source ${diagUsage?.recentSourceKey || 'none'} · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
@@ -2115,6 +2117,7 @@ function todayOverviewMetrics(d) {
   function settingsHtml() {
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
+    const dashboardView = ['overview','devpass','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',
       num(runway?.avgDailySpend7d) ? `7일평균 ${money(runway.avgDailySpend7d,4)}/일` : '',
@@ -2156,7 +2159,7 @@ function todayOverviewMetrics(d) {
     return `<style>
       :root{color-scheme:dark;--b:#101114;--p:#191b20;--p2:#21242a;--l:#2c3037;--t:#f5f6f8;--m:#969da8;--g:#c5f277;--v:#b9a6f8;--c:#9fd7ee;--e:#ff9b95}
       *{box-sizing:border-box}body{margin:0;background:var(--b);color:var(--t);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(900px,100%);margin:auto;padding:14px}
-      header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}h1{margin:0;font-size:23px}.muted,p{color:var(--m);font-size:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+      header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}h1{margin:0;font-size:23px}.dashboard-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:-2px 0 12px;position:sticky;top:0;z-index:20;background:var(--b);padding:6px 0}.dashboard-nav button{min-width:0;padding:8px 6px;font-size:11px;white-space:nowrap}.dashboard-nav button.active{background:var(--g);border-color:var(--g);color:#15170f}.shell[data-dashboard-view="overview"] .grid>:nth-child(n+6){display:none}.shell[data-dashboard-view="devpass"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="analytics"] .grid>:not(:nth-child(7)){display:none}.shell[data-dashboard-view="settings"] .grid>:not(:nth-child(8)):not(:nth-child(9)){display:none}.muted,p{color:var(--m);font-size:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
       .panel{background:var(--p);border:1px solid var(--l);border-radius:13px;padding:13px}.metric{min-height:135px;display:flex;flex-direction:column}.metric small{color:var(--m);font-weight:700}.metric strong{font-size:24px;margin-top:9px}.metric em{font-style:normal;color:var(--m);font-size:12px}.metric p{margin-top:auto;margin-bottom:0}.bar{height:5px;background:#2d3138;border-radius:99px;overflow:hidden;margin:11px 0}.bar i{display:block;height:100%;background:var(--g)}.weekly .bar i{background:var(--v)}.wide{grid-column:1/-1}
       .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
@@ -2168,7 +2171,7 @@ function todayOverviewMetrics(d) {
       button{background:#25282f;color:var(--t);border:1px solid var(--l);border-radius:9px;padding:8px 11px;font-weight:650}button.primary{background:var(--g);border-color:var(--g);color:#15170f}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.warn{color:var(--e)}
       @media(max-width:680px){.shell{padding:10px}.grid{grid-template-columns:1fr;gap:8px}.wide{grid-column:auto}.panel{padding:11px}.minis,.today-grid{grid-template-columns:1fr 1fr;gap:6px}.usage-detail-grid{grid-template-columns:1fr;gap:6px}.usage-detail-box{padding:9px;margin-top:6px}.usage-detail-row{padding:6px 0}.request-detail-row{flex-direction:row;gap:8px;padding:7px 0}.request-main{max-width:58%}.request-detail-row b{font-size:12px}.request-detail-row .request-model{font-size:10px}.request-detail-row em{max-width:42%;font-size:10px;text-align:right;white-space:normal}.recent-filter{gap:4px}.recent-filter-btn{padding:5px 7px;font-size:10px}.aggregate-meta{gap:3px}.stat-chip{padding:2px 5px;font-size:8.5px!important}.hour-aggregate-grid{grid-template-columns:1fr}.hour-row em{white-space:normal;text-align:right;max-width:48%}.hour-detail>.recent-head{align-items:flex-start}.hour-detail>.recent-head span{max-width:58%}}
       .hourly-ledger{margin-top:8px}.hour-list{display:grid;gap:5px;margin-top:8px}.hour-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;background:#181a1f;padding:8px 9px}.hour-row.active{border-color:var(--g);background:#20251a}.hour-row span{min-width:0}.hour-row b{display:block}.hour-row small{display:block;color:var(--m);font-size:9px;margin-top:2px}.hour-row em{font-style:normal;color:var(--m);font-size:10px;white-space:nowrap}.hour-detail{margin-top:9px;padding-top:9px;border-top:1px solid var(--l)}.hour-detail>.recent-head span{white-space:normal;text-align:right}.hour-request-row:last-child{padding-bottom:0}.hour-aggregate-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}.hour-aggregate-box{background:#181a1f;border:1px solid var(--l);border-radius:8px;padding:8px}.hour-aggregate-box h4{margin:0 0 4px;color:var(--m);font-size:10px}.hour-aggregate-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:5px 0;border-top:1px solid var(--l)}.hour-aggregate-row:first-of-type{border-top:0}.hour-aggregate-row>div{min-width:0;flex:1}.hour-aggregate-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.hour-aggregate-row small{display:block;color:var(--m);font-size:8.5px;white-space:normal}.hour-aggregate-row>span{color:var(--m);font-size:9px;white-space:nowrap}.hour-request-list{margin-top:4px}
-    </style><div class="shell"><header><div><div class="muted">MODULAR CORE · v${VERSION}</div><h1>Local Usage Dashboard</h1></div><button id="close">닫기</button></header><main class="grid">
+    </style><div class="shell" data-dashboard-view="${dashboardView}"><header><div><div class="muted">MODULAR CORE · v${VERSION}</div><h1>Local Usage Dashboard</h1></div><button id="close">닫기</button></header><nav class="dashboard-nav" role="tablist" aria-label="Dashboard page">${[['overview','Overview'],['devpass','DevPass'],['analytics','Analytics'],['settings','Settings']].map(([key,label]) => `<button role="tab" aria-selected="${dashboardView===key?'true':'false'}" class="${dashboardView===key?'active':''}" data-dashboard-nav="${key}">${label}</button>`).join('')}</nav><main class="grid">
       ${card('월간',d.monthly)}${card('주간',d.weekly,'weekly')}
       <section class="panel metric"><small>${esc(c?.label || 'Credits')}</small><strong>${money(c?.balance)}</strong><p>${creditsMeta || '—'}</p></section>
       <section class="panel wide">
@@ -2409,6 +2412,21 @@ function todayOverviewMetrics(d) {
   function bindSettings() {
     const q = s => document.querySelector(s);
     if (q('#close')) q('#close').onclick = () => { document.body.dataset.panelOpen='0'; Risuai.hideContainer(); };
+    document.querySelectorAll('[data-dashboard-nav]').forEach(button => {
+      button.onclick = async () => {
+        const next = String(button.getAttribute('data-dashboard-nav') || 'overview');
+        if (!['overview','devpass','analytics','settings'].includes(next)) return;
+        state.dashboardView = next;
+        const shell = q('.shell');
+        if (shell) shell.dataset.dashboardView = next;
+        document.querySelectorAll('[data-dashboard-nav]').forEach(item => {
+          const active = String(item.getAttribute('data-dashboard-nav') || '') === next;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        await persist();
+      };
+    });
     if (q('#connect')) q('#connect').onclick = async () => {
       try {
         state.bridgeBase = normalizeBridgeBase(q('#bridge-base')?.value || DEFAULT_BRIDGE);

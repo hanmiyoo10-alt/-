@@ -47,31 +47,7 @@ jobs:
           s = s.replace(anchor, anchor + "  const RUNTIME_LOADED_AT = Date.now();\n", 1)
 
           helper_anchor = "  const pct = v => Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 0;\n"
-          helper = r'''
-
-  function diagnosticTimestamp(timestamp) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: KST_TIME_ZONE,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-    }).formatToParts(new Date(Number(timestamp)));
-    const value = type => parts.find(part => part.type === type)?.value || '00';
-    return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} KST`;
-  }
-
-  function diagnosticUptime(durationMs) {
-    let seconds = Math.max(0, Math.floor((Number(durationMs) || 0) / 1000));
-    const days = Math.floor(seconds / 86400); seconds %= 86400;
-    const hours = Math.floor(seconds / 3600); seconds %= 3600;
-    const minutes = Math.floor(seconds / 60); seconds %= 60;
-    const parts = [];
-    if (days) parts.push(`${days}일`);
-    if (hours || days) parts.push(`${hours}시간`);
-    if (minutes || hours || days) parts.push(`${minutes}분`);
-    parts.push(`${seconds}초`);
-    return parts.join(' ');
-  }
-'''
+          helper = "\n\n  function diagnosticTimestamp(timestamp) {\n    const parts = new Intl.DateTimeFormat('en-CA', {\n      timeZone: KST_TIME_ZONE,\n      year: 'numeric', month: '2-digit', day: '2-digit',\n      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false\n    }).formatToParts(new Date(Number(timestamp)));\n    const value = type => parts.find(part => part.type === type)?.value || '00';\n    return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} KST`;\n  }\n\n  function diagnosticUptime(durationMs) {\n    let seconds = Math.max(0, Math.floor((Number(durationMs) || 0) / 1000));\n    const days = Math.floor(seconds / 86400); seconds %= 86400;\n    const hours = Math.floor(seconds / 3600); seconds %= 3600;\n    const minutes = Math.floor(seconds / 60); seconds %= 60;\n    const parts = [];\n    if (days) parts.push(`${days}일`);\n    if (hours || days) parts.push(`${hours}시간`);\n    if (minutes || hours || days) parts.push(`${minutes}분`);\n    parts.push(`${seconds}초`);\n    return parts.join(' ');\n  }\n"
           if s.count(helper_anchor) != 1:
               raise SystemExit('helper anchor mismatch')
           s = s.replace(helper_anchor, helper_anchor + helper, 1)
@@ -93,8 +69,7 @@ jobs:
           m = manager_path.read_text()
           if m.count(old) != 1:
               raise SystemExit(f'unexpected manager version count: {m.count(old)}')
-          m = m.replace(old, new)
-          manager_path.write_text(m)
+          manager_path.write_text(m.replace(old, new))
 
           manifest = json.loads(manifest_path.read_text())
           manifest['productVersion'] = new

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.21
+//@version 0.63.22
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.22 Diagnostic Runtime Timing:
+// - Adds memory-only wall-clock telemetry for plugin boot, request hook entry, Core handshake resolution, Core preparation, beforeRequest completion, output-hook entry and output commit
+// - Reports the request-to-output gap, diagnostic age, hook invocation counts, >=50 ms slow-hook counts and per-hook maximum wall time without adding timers or polling
+// - Runtime timing is observational only: it does not label request-to-output gap as model latency and does not read battery, temperature or device sensors
+// - Generation behavior, runtime prompt text, state schema, storage, Frame/Evidence/Time/Lineage/Handoff/Recurrence/Structure semantics and host/API call sites remain frozen
 //
 // v0.63.21 Diagnostic Turn Binding:
 // - Binds manual/panel runtime diagnostics to the exact current user turn and chat location instead of treating any same-chat in-memory probe as current
@@ -3822,6 +3828,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
   let lastPerf = null;
   let lastOutputPerf = null;
+  const diagnosticRuntimeBootAt = Date.now();
+  const diagnosticRuntimeGeneration = `${diagnosticRuntimeBootAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const diagnosticActivity = { requestHooks: 0, outputHooks: 0, requestSlow50: 0, outputSlow50: 0, requestMaxMs: 0, outputMaxMs: 0 };
   let lastHistoryRestore = null;
   let lastFrameGuardProbe = null;
   let lastEvidenceMappingProbe = null;
@@ -4047,6 +4056,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       handshake: promptProbe.active ? 'FOUND' : 'NOT FOUND',
       promptProbeActive: !!promptProbe.active,
       status: 'INSPECTED',
+      handshakeAt: Date.now(),
     });
     if (perf) {
       perf.promptScanMs = perfMs(t);
@@ -4304,10 +4314,14 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   await Risuai.addRisuReplacer('beforeRequest', async (messages, type) => {
     if (type !== 'model') return messages;
+    diagnosticActivity.requestHooks += 1;
+    const requestHookAt = Date.now();
     lastDiagnosticRequestProbe = {
       locationKey: '', sendIndex: -1, requestType: String(type || ''), hookSeen: true,
       handshake: 'UNKNOWN', promptProbeActive: null, status: 'SEEN', active: null, mode: null,
-      outIndex: -1, outputStatus: 'PENDING', errorStage: null, at: Date.now(),
+      outIndex: -1, outputStatus: 'PENDING', errorStage: null, at: requestHookAt,
+      handshakeAt: null, preparedAt: null, requestDoneAt: null, outputSeenAt: null, outputAt: null,
+      runtimeGeneration: diagnosticRuntimeGeneration,
     };
     let requestSendIndex = -1;
     const totalStart = perfNow();
@@ -4341,11 +4355,17 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
+      diagnosticActivity.requestMaxMs = Math.max(diagnosticActivity.requestMaxMs, Number(perf.totalMs || 0));
+      if (Number(perf.totalMs || 0) >= 50) diagnosticActivity.requestSlow50 += 1;
+      markDiagnosticRequestProbe(requestSendIndex, { requestDoneAt: Date.now(), requestTotalMs: Number(perf.totalMs || 0) });
     }
     return messages;
   });
 
   await Risuai.addRisuScriptHandler('output', async (content) => {
+    diagnosticActivity.outputHooks += 1;
+    const outputHookAt = Date.now();
+    if (lastDiagnosticRequestProbe) lastDiagnosticRequestProbe.outputSeenAt = outputHookAt;
     const totalStart = perfNow();
     const perf = {
       totalMs: 0, indicesMs: 0, chatLoadMs: 0, sessionLoadMs: 0, sessionProcessMs: 0,
@@ -4369,6 +4389,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastOutputPerf = perf;
+      diagnosticActivity.outputMaxMs = Math.max(diagnosticActivity.outputMaxMs, Number(perf.totalMs || 0));
+      if (Number(perf.totalMs || 0) >= 50) diagnosticActivity.outputSlow50 += 1;
+      if (lastDiagnosticRequestProbe) lastDiagnosticRequestProbe.outputTotalMs = Number(perf.totalMs || 0);
     }
   });
 
@@ -4516,11 +4539,25 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     ].join('\n');
   }
 
+  function diagnosticTimingIso(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? new Date(n).toISOString() : 'n/a';
+  }
+
+  function diagnosticTimingDelta(from, to) {
+    const a = Number(from);
+    const b = Number(to);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b < a) return 'n/a';
+    const ms = b - a;
+    return ms >= 1000 ? `${(ms / 1000).toFixed(3)} s` : `${ms.toFixed(1)} ms`;
+  }
+
   function buildLastTurnDiagnosticReport(chat, state) {
     const messages = Array.isArray(chat?.message) ? chat.message : [];
     const latestAssistantIndex = diagnosticLastAssistantIndex(messages);
     const currentUserIndex = diagnosticUserBefore(messages, latestAssistantIndex >= 0 ? latestAssistantIndex : messages.length);
     const requestProbe = lastDiagnosticRequestProbe || null;
+    const capturedAt = Date.now();
     const probeFresh = diagnosticProbeFresh(currentUserIndex);
     const runtimeMode = diagnosticRuntimeMode(probeFresh, requestProbe);
     const runtimeActive = !!runtimeMode;
@@ -4556,8 +4593,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.21',
-      `Captured: ${new Date().toISOString()}`,
+      'Version: 0.63.22',
+      `Captured: ${new Date(capturedAt).toISOString()}`,
+      `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Probe context: ${probeFresh ? 'CURRENT TURN' : (requestProbe?.sendIndex >= 0 ? `STALE · probe user @${Number(requestProbe.sendIndex)} · current user @${currentUserIndex >= 0 ? currentUserIndex : 'n/a'}` : 'UNAVAILABLE')}`,
       `Request hook: ${probeFresh ? (requestProbe?.hookSeen ? 'SEEN' : 'n/a') : 'n/a'}`,
       `Core handshake: ${probeFresh ? (requestProbe?.handshake || 'UNKNOWN') : 'n/a'}`,
@@ -4565,6 +4603,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Mode: ${runtimeMode || 'n/a'}`,
       `Stored last mode: ${state?.lastMode || 'n/a'}`,
       `Turn binding: request user @${probeFresh ? Number(requestProbe?.sendIndex) : 'n/a'} · output assistant @${outputFresh ? Number(requestProbe?.outIndex) : 'n/a'}`,
+      `Request timing: ${probeFresh ? `hook ${diagnosticTimingIso(requestProbe?.at)} · handshake +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.handshakeAt)} · prepared +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.preparedAt)} · done +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.requestDoneAt)}` : 'n/a'}`,
+      `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
+      `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
+      `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
@@ -4780,7 +4822,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.21</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.22</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

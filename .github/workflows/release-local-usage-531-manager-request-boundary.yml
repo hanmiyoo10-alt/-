@@ -1,0 +1,160 @@
+name: Release Local Usage 5.31 Manager Request Boundary
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-531-manager-request-boundary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish 5.31 manager request boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin release-usage-dashboard
+          git checkout -B release-usage-dashboard origin/release-usage-dashboard
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          old_product = '3.0.0-alpha.5.30'
+          new_product = '3.0.0-alpha.5.31'
+          old_manager = '1.2.4'
+          new_manager = '1.2.5'
+          engine_version = '1.6.3'
+          expected_engine_sha = '16807420932bb5a8bbdb8f85ae3a998042067997c6e6afa788b79da3b3eb6c01'
+
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          engine_path = Path('plugins/usage-dashboard/runtime/bridge-engine.mjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+
+          plugin = plugin_path.read_text(encoding='utf-8')
+          if plugin.count(old_product) < 2:
+              raise SystemExit(f'plugin product markers missing: {plugin.count(old_product)}')
+          plugin_path.write_text(plugin.replace(old_product, new_product), encoding='utf-8')
+
+          manager = manager_path.read_text(encoding='utf-8')
+          manager_version_line = "const MANAGER_VERSION = '1.2.4';"
+          product_version_line = "const PRODUCT_VERSION = '3.0.0-alpha.5.30';"
+          if manager.count(manager_version_line) != 1:
+              raise SystemExit('manager version marker mismatch')
+          if manager.count(product_version_line) != 1:
+              raise SystemExit('manager product marker mismatch')
+          manager = manager.replace(manager_version_line, "const MANAGER_VERSION = '1.2.5';", 1)
+          manager = manager.replace(product_version_line, "const PRODUCT_VERSION = '3.0.0-alpha.5.31';", 1)
+
+          start_anchor = "const server = http.createServer(async (req, res) => {\n  if (!authorized(req)) return send(res, 401, {ok:false,error:'unauthorized'});"
+          start_replacement = "const server = http.createServer(async (req, res) => {\n  try {\n  if (!authorized(req)) return send(res, 401, {ok:false,error:'unauthorized'});"
+          if manager.count(start_anchor) != 1:
+              raise SystemExit(f'manager server start anchor mismatch: {manager.count(start_anchor)}')
+          manager = manager.replace(start_anchor, start_replacement, 1)
+
+          tail_anchor = "  return send(res, 404, {ok:false,error:'not found'});\n});\nserver.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });"
+          tail_replacement = """  return send(res, 404, {ok:false,error:'not found'});
+  } catch (error) {
+    const kind = String(error?.code || error?.name || 'ERROR').slice(0, 80);
+    console.error(`[Local Usage Runtime Manager] request boundary: ${kind}`);
+    if (res.writableEnded) return;
+    if (res.headersSent) {
+      try { res.destroy(); } catch (_) {}
+      return;
+    }
+    return send(res, 500, {ok:false,error:'manager internal request error',code:'MANAGER_INTERNAL_ERROR',retryable:true});
+  }
+});
+server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });"""
+          if manager.count(tail_anchor) != 1:
+              raise SystemExit(f'manager server tail anchor mismatch: {manager.count(tail_anchor)}')
+          manager = manager.replace(tail_anchor, tail_replacement, 1)
+          manager_path.write_text(manager, encoding='utf-8')
+
+          actual_engine_sha = hashlib.sha256(engine_path.read_bytes()).hexdigest()
+          if actual_engine_sha != expected_engine_sha:
+              raise SystemExit(f'engine changed unexpectedly: {actual_engine_sha}')
+          engine_text = engine_path.read_text(encoding='utf-8')
+          if f"const VERSION = '{engine_version}';" not in engine_text:
+              raise SystemExit('engine version changed unexpectedly')
+
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['productVersion'] = new_product
+          manifest['components']['plugin']['version'] = new_product
+          manifest['components']['bridge']['requiredVersion'] = engine_version
+          manifest['components']['bridge']['sha256'] = expected_engine_sha
+          manifest['components']['bridgeManager']['version'] = new_manager
+          manifest['components']['bridgeManager']['productVersion'] = new_product
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          print('plugin_sha256=' + hashlib.sha256(plugin_path.read_bytes()).hexdigest())
+          print('manager_sha256=' + hashlib.sha256(manager_path.read_bytes()).hexdigest())
+          print('engine_sha256=' + actual_engine_sha)
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -F '//@version 3.0.0-alpha.5.31' plugins/usage-dashboard/latest.js
+          grep -F "const VERSION = '3.0.0-alpha.5.31'" plugins/usage-dashboard/latest.js
+          grep -F "const MANAGER_VERSION = '1.2.5'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const PRODUCT_VERSION = '3.0.0-alpha.5.31'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "code:'MANAGER_INTERNAL_ERROR'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -F "const VERSION = '1.6.3'" plugins/usage-dashboard/runtime/bridge-engine.mjs
+
+          # Regression: malformed authenticated URL must be contained as 500,
+          # manager must survive, and a normal authenticated /status must work.
+          tmp_home="$(mktemp -d)"
+          mkdir -p "$tmp_home/.config/llmgateway-devpass-bridge"
+          printf '%s\n' 'audit-token' > "$tmp_home/.config/llmgateway-devpass-bridge/token"
+          chmod 600 "$tmp_home/.config/llmgateway-devpass-bridge/token"
+          port=39220
+          HOME="$tmp_home" LUD_MANAGER_PORT="$port" node plugins/usage-dashboard/runtime/bridge-manager.cjs >/tmp/manager-531.log 2>&1 &
+          pid=$!
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            rm -rf "$tmp_home"
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 40); do
+            if grep -q "127.0.0.1:$port" /tmp/manager-531.log 2>/dev/null; then break; fi
+            kill -0 "$pid" 2>/dev/null || { cat /tmp/manager-531.log; exit 1; }
+            sleep 0.1
+          done
+
+          code1="$(curl --path-as-is --silent --show-error --max-time 3 \
+            -H 'X-Local-Bridge-Key: audit-token' \
+            -o /tmp/manager-531-fault -w '%{http_code}' \
+            "http://127.0.0.1:$port//")"
+          test "$code1" = 500
+          kill -0 "$pid"
+          grep -F 'MANAGER_INTERNAL_ERROR' /tmp/manager-531-fault
+
+          code2="$(curl --silent --show-error --max-time 5 \
+            -H 'X-Local-Bridge-Key: audit-token' \
+            -o /tmp/manager-531-ok -w '%{http_code}' \
+            "http://127.0.0.1:$port/status")"
+          test "$code2" = 200
+          kill -0 "$pid"
+          grep -F '"protocol":"bridge-manager-v1"' /tmp/manager-531-ok
+          grep -F '"version":"1.2.5"' /tmp/manager-531-ok
+          echo "MANAGER_BOUNDARY_REGRESSION_PASS: 500-contained -> process alive -> 200-recovered"
+
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          git commit -m "release: Local Usage Dashboard 3.0.0-alpha.5.31 manager request boundary"
+          git push origin HEAD:release-usage-dashboard

@@ -1,0 +1,186 @@
+name: Release Local Usage 5.25 Mobile Style Diff
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-525-mobile-style-diff.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish 5.25 mobile style diff pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git switch release-usage-dashboard
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+
+          old = '3.0.0-alpha.5.24'
+          new = '3.0.0-alpha.5.25'
+          plugin_path = Path('plugins/usage-dashboard/latest.js')
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+
+          s = plugin_path.read_text()
+          if s.count(old) != 2:
+              raise SystemExit(f'unexpected plugin version count: {s.count(old)}')
+          s = s.replace(old, new)
+
+          cache_anchor = "  let widgetRenderCache = {html:null,width:null,display:null,layout:null};\n"
+          cache_new = "  let widgetRenderCache = {html:null,width:null,display:null,layout:null,responsiveStyles:Object.create(null)};\n"
+          if s.count(cache_anchor) != 1:
+              raise SystemExit('widget cache anchor mismatch')
+          s = s.replace(cache_anchor, cache_new, 1)
+
+          power_anchor = "  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0};\n"
+          power_new = "  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};\n"
+          if s.count(power_anchor) != 1:
+              raise SystemExit('power runtime anchor mismatch')
+          s = s.replace(power_anchor, power_new, 1)
+
+          layout_old = '''  async function applyWidgetResponsiveLayout(mobile, expanded) {
+    if (!widget) return;
+    const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
+    if (widgetRenderCache.layout === layout) return;
+    if (mobile) {
+      await widget.setStyle('left','auto');
+      await widget.setStyle('top','auto');
+      await widget.setStyle('right','8px');
+      await widget.setStyle('bottom','88px');
+      await widget.setStyle('border-radius',expanded?'11px':'999px');
+      await widget.setStyle('padding',expanded?'5px 10px 8px':'6px 9px');
+    } else {
+      if (num(state.widgetX)&&num(state.widgetY)) {
+        await widget.setStyle('left',`${state.widgetX}px`);
+        await widget.setStyle('top',`${state.widgetY}px`);
+        await widget.setStyle('right','auto');
+        await widget.setStyle('bottom','auto');
+      } else {
+        await widget.setStyle('left','auto');
+        await widget.setStyle('top','auto');
+        await widget.setStyle('right','12px');
+        await widget.setStyle('bottom','74px');
+      }
+      await widget.setStyle('border-radius','11px');
+      await widget.setStyle('padding','5px 10px 8px');
+    }
+    widgetRenderCache.layout = layout;
+  }
+'''
+          layout_new = '''  async function setResponsiveWidgetStyle(name, value) {
+    if (!widget) return false;
+    if (!widgetRenderCache.responsiveStyles || typeof widgetRenderCache.responsiveStyles !== 'object') {
+      widgetRenderCache.responsiveStyles = Object.create(null);
+    }
+    if (widgetRenderCache.responsiveStyles[name] === value) {
+      powerRuntime.responsiveStyleSkips += 1;
+      performanceRuntime.widgetStyleSkips += 1;
+      return false;
+    }
+    await widget.setStyle(name, value);
+    widgetRenderCache.responsiveStyles[name] = value;
+    powerRuntime.responsiveStyleWrites += 1;
+    performanceRuntime.widgetStyleWrites += 1;
+    return true;
+  }
+
+  async function applyWidgetResponsiveLayout(mobile, expanded) {
+    if (!widget) return;
+    const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
+    if (widgetRenderCache.layout === layout) return;
+    let desired;
+    if (mobile) {
+      desired = {
+        left:'auto', top:'auto', right:'8px', bottom:'88px',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 9px'
+      };
+    } else if (num(state.widgetX)&&num(state.widgetY)) {
+      desired = {
+        left:`${state.widgetX}px`, top:`${state.widgetY}px`, right:'auto', bottom:'auto',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
+    } else {
+      desired = {
+        left:'auto', top:'auto', right:'12px', bottom:'74px',
+        'border-radius':'11px', padding:'5px 10px 8px'
+      };
+    }
+    for (const [name, value] of Object.entries(desired)) {
+      await setResponsiveWidgetStyle(name, value);
+    }
+    widgetRenderCache.layout = layout;
+  }
+'''
+          if s.count(layout_old) != 1:
+              raise SystemExit('responsive layout body mismatch')
+          s = s.replace(layout_old, layout_new, 1)
+
+          move_anchor = '''      await widget.setStyle('left',`${state.widgetX}px`);
+      await widget.setStyle('top',`${state.widgetY}px`);
+      await widget.setStyle('right','auto');
+      await widget.setStyle('bottom','auto');
+'''
+          move_new = move_anchor + '''      if (widgetRenderCache.responsiveStyles && typeof widgetRenderCache.responsiveStyles === 'object') {
+        widgetRenderCache.responsiveStyles.left = `${state.widgetX}px`;
+        widgetRenderCache.responsiveStyles.top = `${state.widgetY}px`;
+        widgetRenderCache.responsiveStyles.right = 'auto';
+        widgetRenderCache.responsiveStyles.bottom = 'auto';
+      }
+'''
+          if s.count(move_anchor) != 1:
+              raise SystemExit('drag style anchor mismatch')
+          s = s.replace(move_anchor, move_new, 1)
+
+          diag_anchor = "      `Power activity: probe ${Date.now() < Number(powerRuntime.probeBurstUntil || 0) ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,\n"
+          diag_new = diag_anchor + "      `Mobile style cache: writes ${powerRuntime.responsiveStyleWrites} · skips ${powerRuntime.responsiveStyleSkips} · layout ${widgetRenderCache.layout || 'none'}`,\n"
+          if s.count(diag_anchor) != 1:
+              raise SystemExit('power diagnostic anchor mismatch')
+          s = s.replace(diag_anchor, diag_new, 1)
+
+          plugin_path.write_text(s)
+
+          manager = manager_path.read_text()
+          if manager.count(old) != 1:
+              raise SystemExit(f'unexpected manager version count: {manager.count(old)}')
+          manager = manager.replace(old, new)
+          manager_path.write_text(manager)
+
+          manifest = json.loads(manifest_path.read_text())
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          git diff --check
+          grep -Fq '//@version 3.0.0-alpha.5.25' plugins/usage-dashboard/latest.js
+          grep -Fq 'async function setResponsiveWidgetStyle' plugins/usage-dashboard/latest.js
+          grep -Fq 'Mobile style cache:' plugins/usage-dashboard/latest.js
+          grep -Fq "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.25'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.2'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m 'release: local usage dashboard 5.25 mobile style diff pack'
+          git push origin release-usage-dashboard

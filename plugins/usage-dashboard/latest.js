@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.26
+//@version 3.0.0-alpha.5.27
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.26';
+  const VERSION = '3.0.0-alpha.5.27';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1879,7 +1879,9 @@ async function importLegacyTodayBaselines() {
         state.nextRetryAt = null;
         updateRuntimeState('refresh-success');
         await persist();
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         await renderWidget(reason);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (resumeVisibilityRefresh) {
           performanceRuntime.lastResumeRefreshMs = state.lastSyncDurationMs;
           performanceRuntime.lastResumeRenderMs = performanceRuntime.lastRenderMs;
@@ -1888,6 +1890,7 @@ async function importLegacyTodayBaselines() {
         scheduleRefresh();
         schedulePanelRender(false);
       } catch (e) {
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last successful snapshot in state.data; only status changes.
         state.bridgeStatus = 'error';
         state.bridgeError = e?.message || String(e);
@@ -1897,9 +1900,11 @@ async function importLegacyTodayBaselines() {
         state.nextRetryAt = Number(state.refreshMs) > 0 ? Date.now() + state.retryDelayMs : null;
         updateRuntimeState('refresh-error');
         await persist();
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         // Keep the last good values, but immediately repaint the widget so
         // LIVE changes to OFFLINE as soon as a refresh fails.
         await renderWidget(reason);
+        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         scheduleRefresh();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
         schedulePanelRender(false);
@@ -1919,7 +1924,7 @@ async function importLegacyTodayBaselines() {
       performanceRuntime.activeRefreshStartedPerf = 0;
       performanceRuntime.activeRefreshReason = '';
       refreshInFlight = null;
-      updateRuntimeState('refresh-complete');
+      if (runtimeIsCurrent(refreshEpoch)) updateRuntimeState('refresh-complete');
     }
   }
 
@@ -2226,6 +2231,7 @@ function todayOverviewMetrics(d) {
   // DevPass 2.7.3 panel rendering policy: collapse automatic panel refreshes,
   // wait briefly while the user is interacting, then prefer an idle callback.
   function schedulePanelRender(force = false) {
+    if (runtimeDisposed) return;
     if (document.body?.dataset?.panelOpen !== '1') {
       performanceRuntime.panelRenderSkippedClosed += 1;
       return;

@@ -1,0 +1,201 @@
+name: Stage Usage Dashboard 5.35 Controls Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-usage-dashboard-535-controls-recovery.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch Controls & Recovery parity and bump to 5.35
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          ROOT = Path('plugins/usage-dashboard')
+          OLD = '3.0.0-alpha.5.34'
+          NEW = '3.0.0-alpha.5.35'
+
+          def replace_once(path, old, new, label):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, got {count}')
+              path.write_text(text.replace(old, new, 1))
+
+          core = ROOT / 'src/00-runtime-core.part.js'
+          replace_once(core, f'//@version {OLD}', f'//@version {NEW}', 'metadata version')
+          replace_once(core, f"const VERSION = '{OLD}';", f"const VERSION = '{NEW}';", 'runtime version')
+          replace_once(
+              core,
+              '  const uiParts = [], remoteListeners = [], domListeners = [];',
+              '  const uiParts = [], remoteListeners = [], widgetRemoteListeners = [], domListeners = [];',
+              'widget listener ownership state'
+          )
+
+          settings_ui = ROOT / 'src/50-settings-ui.part.js'
+          replace_once(
+              settings_ui,
+              "[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[0,'수동']]",
+              "[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[600000,'10분'],[0,'수동']]",
+              '10 minute refresh preset'
+          )
+          replace_once(
+              settings_ui,
+              '<button id="reset-position">위치 초기화</button></div>',
+              '<button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>',
+              'widget recreate action'
+          )
+
+          widget = ROOT / 'src/70-floating-widget.part.js'
+          helper = '''  async function detachWidgetRemoteListeners() {\n    const entries = widgetRemoteListeners.splice(0);\n    if (!entries.length) return;\n    const owned = new Set(entries);\n    for (const [target,type,id] of entries) {\n      try { await target.removeEventListener(type,id); } catch (_) {}\n    }\n    for (let index=remoteListeners.length-1; index>=0; index-=1) {\n      if (owned.has(remoteListeners[index])) remoteListeners.splice(index,1);\n    }\n  }\n\n  async function addWidgetRemoteListener(target,type,handler) {\n    const entry=[target,type,await target.addEventListener(type,handler)];\n    widgetRemoteListeners.push(entry);\n    remoteListeners.push(entry);\n    return entry;\n  }\n\n  async function recreateWidget() {\n    if (runtimeDisposed) return false;\n    await detachWidgetRemoteListeners();\n    if (widget) {\n      try { await widget.remove(); } catch (_) {}\n    }\n    widget=null;\n    rootBody=null;\n    drag=null;\n    widgetMobileExpanded=false;\n    widgetMobileViewport=false;\n    widgetMobileToggleBlockedUntil=Date.now()+400;\n    widgetRenderCache={html:null,width:null,display:null,layout:null,responsiveStyles:Object.create(null)};\n    await renderWidget('widget-recreate');\n    return !!widget;\n  }\n\n'''
+          replace_once(widget, '  async function ensureWidget() {\n', helper + '  async function ensureWidget() {\n', 'widget recovery helpers')
+          replace_once(
+              widget,
+              "    remoteListeners.push([widget,'pointerdown',await widget.addEventListener('pointerdown',down)],[widget,'click',await widget.addEventListener('click',toggleMobileWidget)],[root,'pointermove',await root.addEventListener('pointermove',move)],[root,'pointerup',await root.addEventListener('pointerup',up)],[root,'pointercancel',await root.addEventListener('pointercancel',up)]);",
+              "    await addWidgetRemoteListener(widget,'pointerdown',down);\n    await addWidgetRemoteListener(widget,'click',toggleMobileWidget);\n    await addWidgetRemoteListener(root,'pointermove',move);\n    await addWidgetRemoteListener(root,'pointerup',up);\n    await addWidgetRemoteListener(root,'pointercancel',up);",
+              'owned widget listeners'
+          )
+
+          settings_runtime = ROOT / 'src/60-settings-runtime.part.js'
+          recreate_handler = '''    if (q('#recreate-widget')) q('#recreate-widget').onclick = async e => {\n      const button=e.currentTarget, old=button.textContent;\n      button.disabled=true;\n      button.textContent='다시 만드는 중…';\n      try {\n        const ok=await recreateWidget();\n        button.textContent=ok?'재생성 완료 ✓':'재생성 실패';\n      } catch (error) {\n        console.log(`[Local Usage Dashboard] widget recreate failed: ${error?.message||error}`);\n        button.textContent='재생성 실패';\n      } finally {\n        setTimeout(()=>{ if (button?.isConnected) { button.disabled=false; button.textContent=old; } },1200);\n      }\n    };\n'''
+          replace_once(
+              settings_runtime,
+              "    if (q('#save-performance')) q('#save-performance').onclick = async () => {\n",
+              recreate_handler + "    if (q('#save-performance')) q('#save-performance').onclick = async () => {\n",
+              'widget recreate binding'
+          )
+
+          bootstrap = ROOT / 'src/90-bootstrap.part.js'
+          replace_once(
+              bootstrap,
+              "      for(const [t,ty,id] of remoteListeners.splice(0)){try{await t.removeEventListener(ty,id);}catch(_){}}\n      for(const [t,ty,fn] of domListeners.splice(0)){try{t.removeEventListener(ty,fn);}catch(_){}}\n      if(widget){try{await widget.remove();}catch(_){}}",
+              "      for(const [t,ty,id] of remoteListeners.splice(0)){try{await t.removeEventListener(ty,id);}catch(_){}}\n      widgetRemoteListeners.length=0;\n      for(const [t,ty,fn] of domListeners.splice(0)){try{t.removeEventListener(ty,fn);}catch(_){}}\n      if(widget){try{await widget.remove();}catch(_){}}\n      widget=null; rootBody=null; drag=null;",
+              'unload widget reference cleanup'
+          )
+
+          p3 = ROOT / 'tests/p3-ui.cjs'
+          replace_once(
+              p3,
+              "  'Date.now() < widgetMobileToggleBlockedUntil',\n",
+              "  'Date.now() < widgetMobileToggleBlockedUntil',\n  \"[600000,'10분']\",\n  'id=\\\"recreate-widget\\\"',\n  'async function detachWidgetRemoteListeners()',\n  'async function recreateWidget()',\n  \"await addWidgetRemoteListener(widget,'pointerdown',down);\",\n  'widgetRemoteListeners.length=0;',\n",
+              'P3 recovery regression markers'
+          )
+
+          manager = ROOT / 'runtime/bridge-manager.cjs'
+          replace_once(manager, f"const PRODUCT_VERSION = '{OLD}';", f"const PRODUCT_VERSION = '{NEW}';", 'manager product version')
+
+          product_manifest = ROOT / 'runtime/product-manifest.json'
+          manifest = json.loads(product_manifest.read_text())
+          if manifest.get('productVersion') != OLD:
+              raise SystemExit(f"unexpected product manifest baseline: {manifest.get('productVersion')}")
+          manifest['productVersion'] = NEW
+          manifest['components']['plugin']['version'] = NEW
+          manifest['components']['bridgeManager']['productVersion'] = NEW
+          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager.read_bytes()).hexdigest()
+          product_manifest.write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
+          node plugins/usage-dashboard/tests/p2-build.cjs
+          node plugins/usage-dashboard/tests/p3-ui.cjs
+          node plugins/usage-dashboard/tests/p3-recent.cjs
+          node plugins/usage-dashboard/tests/p4-render.cjs
+          node plugins/usage-dashboard/tests/p4-partial.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
+          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
+          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
+          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
+          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
+          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
+          git diff --check
+
+          grep -Fq '//@version 3.0.0-alpha.5.35' plugins/usage-dashboard/latest.js
+          grep -Fq "[600000,'10분']" plugins/usage-dashboard/latest.js
+          grep -Fq 'id="recreate-widget"' plugins/usage-dashboard/latest.js
+          grep -Fq 'async function detachWidgetRemoteListeners()' plugins/usage-dashboard/latest.js
+          grep -Fq 'async function recreateWidget()' plugins/usage-dashboard/latest.js
+          grep -Fq "await addWidgetRemoteListener(widget,'pointerdown',down);" plugins/usage-dashboard/latest.js
+          grep -Fq 'widgetRemoteListeners.length=0;' plugins/usage-dashboard/latest.js
+          grep -Fq '"productVersion": "3.0.0-alpha.5.35"' plugins/usage-dashboard/runtime/product-manifest.json
+
+      - name: Commit validated 5.35 modular source to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            plugins/usage-dashboard/src/00-runtime-core.part.js \
+            plugins/usage-dashboard/src/50-settings-ui.part.js \
+            plugins/usage-dashboard/src/60-settings-runtime.part.js \
+            plugins/usage-dashboard/src/70-floating-widget.part.js \
+            plugins/usage-dashboard/src/90-bootstrap.part.js \
+            plugins/usage-dashboard/src/manifest.json \
+            plugins/usage-dashboard/latest.js \
+            plugins/usage-dashboard/tests/p3-ui.cjs \
+            plugins/usage-dashboard/runtime/bridge-manager.cjs \
+            plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          STAGED="$(git diff --cached --name-only)"
+          test -n "$STAGED"
+          if echo "$STAGED" | grep -Ev '^plugins/usage-dashboard/(src/|latest\.js$|tests/p3-ui\.cjs$|runtime/(bridge-manager\.cjs|product-manifest\.json)$)'; then
+            echo 'unexpected staged file'; exit 1
+          fi
+          git commit -m 'release: Local Usage Dashboard 5.35 controls and recovery parity'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Publish 5.35 product artifacts to release channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq '//@version 3.0.0-alpha.5.35' plugins/usage-dashboard/latest.js
+          grep -Fq '"productVersion": "3.0.0-alpha.5.35"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          if git diff --cached --quiet; then
+            echo 'release-usage-dashboard already matches 5.35'
+            exit 0
+          fi
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.35 product artifacts'
+          git push origin HEAD:release-usage-dashboard

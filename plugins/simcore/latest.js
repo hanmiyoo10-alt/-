@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.23
+//@version 0.63.24
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -4633,7 +4633,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.23',
+      'Version: 0.63.24',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length}`,
@@ -4863,7 +4863,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.23</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.24</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

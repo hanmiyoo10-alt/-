@@ -86,7 +86,7 @@ assert.ok(!source.includes("if (String(state.bridgeManagerSyncedProductVersion |
 assert.ok(source.includes("state.bridgeManagerSyncedProductVersion = '';"), 'manager mismatch must clear stale sync marker');
 assert.ok(source.includes('for (const waitMs of [200, 350, 600, 900])'), 'manager restart re-probe loop missing');
 const refreshManagerIndex = source.indexOf("const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');");
-const refreshSnapshotIndex = source.indexOf('state.data = applyObservedToday(await fetchSnapshot());');
+const refreshSnapshotIndex = source.indexOf('const snapshot = await fetchSnapshot();');
 assert.ok(refreshManagerIndex >= 0 && refreshSnapshotIndex >= 0 && refreshManagerIndex < refreshSnapshotIndex, 'manager/engine recovery must run before snapshot fetch');
 
 const managerPostBodyCalls = (source.match(/body:'\{\}'/g) || []).length;

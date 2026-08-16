@@ -1,0 +1,48 @@
+name: Audit Local Usage 5.24 Power
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/audit-local-usage-524-power.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect 5.23 power-sensitive runtime paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git show origin/release-usage-dashboard:plugins/usage-dashboard/latest.js > /tmp/latest.js
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('/tmp/latest.js').read_text()
+          anchors = [
+              'async function persist()',
+              'function stopUiStallProbe()',
+              'function startUiStallProbe()',
+              'async function renderWidget(',
+              'function scheduleRefresh(',
+              'function diagText()',
+              'function recordInteraction(',
+              'function handleVisibility',
+          ]
+          for anchor in anchors:
+              i = s.find(anchor)
+              print('\n===== ' + anchor + ' =====')
+              if i < 0:
+                  print('NOT FOUND')
+                  continue
+              start = max(0, i - 500)
+              end = min(len(s), i + 4500)
+              print(s[start:end])
+          PY

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.23
+//@version 3.0.0-alpha.5.24
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.23';
+  const VERSION = '3.0.0-alpha.5.24';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -15,6 +15,9 @@
   const KST_TIME_ZONE = 'Asia/Seoul';
   const RUNTIME_LOADED_AT = Date.now();
   const UI_STALL_PROBE_INTERVAL_MS = 100;
+  const UI_STALL_PROBE_IDLE_INTERVAL_MS = 1000;
+  const UI_STALL_PROBE_TIMER_BURST_MS = 1500;
+  const UI_STALL_PROBE_ACTIVE_BURST_MS = 5000;
   const UI_STALL_THRESHOLD_MS = 50;
   const RENDER_SPIKE_THRESHOLD_MS = 50;
   const RESUME_GRACE_MS = 1200;
@@ -63,6 +66,7 @@
   let widgetMobileExpanded = false, widgetMobileViewport = false, widgetMobileToggleBlockedUntil = 0;
   let widgetRenderCache = {html:null,width:null,display:null,layout:null};
   const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,activeRefreshReason:'',lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,lastUiStallRenderOverlap:false,lastUiStallRenderReason:'',lastUiStallRenderMs:null,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeInputCaptured:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeFirstInputAfterMs:null,lastResumeInputDelayMs:null,lastResumeFrameDelayMs:null,lastResumeRefreshStartedAfterMs:null,lastResumeRefreshMs:null,lastResumeRenderMs:null,lastResumeHadRefreshAtEntry:false,lastResumeRequestedReason:'',lastResumeActualReason:'',lastResumeRefreshWasCoalesced:false,lastResumeCoalescedIntoReason:'',resumeRefreshSamples:[],lastResumeInputDuringRefresh:false,lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeInputDelaySamples:[],resumeFrameDelaySamples:[],resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0,panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,panelPartialRenders:0,panelFullRenders:0,panelSectionWrites:0,panelSectionSkips:0,hourlyDetailWrites:0,hourlyDetailSkips:0,hourlyDetailFallbacks:0,lastPanelRenderMode:'full',runtimeState:'active',runtimeStateChangedAt:Date.now(),runtimeTransitions:0,lastHealthySyncAt:null,degradedSince:null,lastRenderMs:null,lastPanelRenderMs:null,lastRenderReason:'',lastRenderStartedPerf:0,lastRenderEndedPerf:0,activeRenderStartedPerf:0,activeRenderReason:'',lastRenderBreakdown:null,renderSpikeCount:0,renderSpikeSamples:[],lastRenderSpikeMs:null,lastRenderSpikeAt:null,lastRenderSpikeReason:'',lastRenderSpikeRefreshOverlap:false,lastRenderSpikeBreakdown:null};
+  const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0};
   const uiParts = [], remoteListeners = [], domListeners = [];
 
   function runtimeIsCurrent(epoch = runtimeEpoch) { return !runtimeDisposed && epoch === runtimeEpoch; }
@@ -444,12 +448,28 @@
     performanceRuntime.uiStallProbeActive = false;
   }
 
+  function uiStallProbeInterval() {
+    return Date.now() < Number(powerRuntime.probeBurstUntil || 0)
+      ? UI_STALL_PROBE_INTERVAL_MS
+      : UI_STALL_PROBE_IDLE_INTERVAL_MS;
+  }
+
+  function requestUiStallProbeBurst(durationMs = UI_STALL_PROBE_TIMER_BURST_MS) {
+    if (runtimeDisposed) return;
+    const duration = Math.max(0, Number(durationMs) || 0);
+    powerRuntime.probeBurstUntil = Math.max(Number(powerRuntime.probeBurstUntil || 0), Date.now() + duration);
+    if (performanceRuntime.uiStallProbeActive && !(state?.backgroundPause !== false && document.visibilityState === 'hidden')) {
+      startUiStallProbe();
+    }
+  }
+
   function startUiStallProbe() {
     stopUiStallProbe();
     if (typeof performance?.now !== 'function') return;
     if (state?.backgroundPause !== false && document.visibilityState === 'hidden') return;
     performanceRuntime.uiStallProbeActive = true;
-    let expected = performance.now() + UI_STALL_PROBE_INTERVAL_MS;
+    let scheduledInterval = uiStallProbeInterval();
+    let expected = performance.now() + scheduledInterval;
     const tick = () => {
       uiStallProbeTimer = null;
       if (state?.backgroundPause !== false && document.visibilityState === 'hidden') {
@@ -458,6 +478,9 @@
       }
       const nowPerf = performance.now();
       const lag = Math.max(0, nowPerf - expected);
+      powerRuntime.probeWakeups += 1;
+      if (scheduledInterval <= UI_STALL_PROBE_INTERVAL_MS) powerRuntime.probeBurstWakeups += 1;
+      else powerRuntime.probeIdleWakeups += 1;
       if (lag >= UI_STALL_THRESHOLD_MS) {
         const rounded = roundPerfMs(lag);
         performanceRuntime.uiStallCount50 += 1;
@@ -478,10 +501,11 @@
           : null;
         pushPerformanceSample('uiStallSamples', lag);
       }
-      expected = nowPerf + UI_STALL_PROBE_INTERVAL_MS;
-      uiStallProbeTimer = setTimeout(tick, UI_STALL_PROBE_INTERVAL_MS);
+      scheduledInterval = uiStallProbeInterval();
+      expected = nowPerf + scheduledInterval;
+      uiStallProbeTimer = setTimeout(tick, scheduledInterval);
     };
-    uiStallProbeTimer = setTimeout(tick, UI_STALL_PROBE_INTERVAL_MS);
+    uiStallProbeTimer = setTimeout(tick, scheduledInterval);
   }
 
   function stopResumeMeasurement() {
@@ -494,6 +518,7 @@
 
   function beginResumeMeasurement(reason = 'visibility') {
     stopResumeMeasurement();
+    requestUiStallProbeBurst(UI_STALL_PROBE_ACTIVE_BURST_MS);
     performanceRuntime.resumeEvents += 1;
     performanceRuntime.lastResumeReason = String(reason || 'visibility');
     performanceRuntime.resumeMeasurePending = true;
@@ -1564,6 +1589,7 @@ async function importLegacyTodayBaselines() {
   async function persist() {
     if (runtimeDisposed) return dropStaleAsync();
     await store.setItem(STATE_KEY, {...state});
+    powerRuntime.persistWrites += 1;
   }
 
   async function fetchSnapshot() {
@@ -1739,6 +1765,7 @@ async function importLegacyTodayBaselines() {
     if (!state.bridgeEnabled) return;
     if (refreshInFlight) return refreshInFlight;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
+    requestUiStallProbeBurst(reason === 'timer' ? UI_STALL_PROBE_TIMER_BURST_MS : UI_STALL_PROBE_ACTIVE_BURST_MS);
     const started = Date.now();
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
     performanceRuntime.activeRefreshStartedPerf = startedPerf;
@@ -1870,6 +1897,8 @@ async function importLegacyTodayBaselines() {
       `Success count: ${Number(state.refreshCount || 0)}`,
       `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)} · timer-only`,
       `Performance settings: focus ${state.syncOnFocus === false ? 'off' : 'on'} · guard ${state.performanceGuard === false ? 'off' : 'on'} · adaptive ${state.adaptiveRefresh === false ? 'off' : 'on'} · background pause ${state.backgroundPause === false ? 'off' : 'on'}`,
+      `Power guard: adaptive-probe · idle ${UI_STALL_PROBE_IDLE_INTERVAL_MS}ms · burst ${UI_STALL_PROBE_INTERVAL_MS}ms · timer-burst ${UI_STALL_PROBE_TIMER_BURST_MS}ms · active-burst ${UI_STALL_PROBE_ACTIVE_BURST_MS}ms`,
+      `Power activity: probe ${Date.now() < Number(powerRuntime.probeBurstUntil || 0) ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,
       `Guard samples: timer ${Number(performanceRuntime.timerSamples || 0)} · ignored ${Number(performanceRuntime.ignoredSamples || 0)} · slow streak ${Number(performanceRuntime.slowRefreshes || 0)}`,
       `UI stall probe: ${performanceRuntime.uiStallProbeActive ? 'active' : 'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50 || 0)} · ≥100ms ${Number(performanceRuntime.uiStallCount100 || 0)} · ≥200ms ${Number(performanceRuntime.uiStallCount200 || 0)} · max ${roundPerfMs(performanceRuntime.uiStallMaxMs) || 0}ms`,
       `Last UI stall: ${num(performanceRuntime.lastUiStallMs) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · render overlap ${performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}${performanceRuntime.lastUiStallRenderOverlap ? ` (${performanceRuntime.lastUiStallRenderReason || 'unknown'} · ${num(performanceRuntime.lastUiStallRenderMs) ? `${roundPerfMs(performanceRuntime.lastUiStallRenderMs)}ms` : '—'})` : ''} · ${age(performanceRuntime.lastUiStallAt)}` : 'none'}`,
@@ -2550,6 +2579,7 @@ function todayOverviewMetrics(d) {
 
   async function renderWidget(reason = 'ui') {
     if (runtimeDisposed) return;
+    powerRuntime.widgetRenderCalls += 1;
     const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
     const startedPerf = nowPerf();
     const breakdown = {};

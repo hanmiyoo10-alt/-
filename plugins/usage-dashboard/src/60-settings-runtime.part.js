@@ -120,8 +120,10 @@
     document.querySelectorAll('[data-dashboard-nav]').forEach(button => {
       button.onclick = async () => {
         const next = String(button.getAttribute('data-dashboard-nav') || 'overview');
-        if (!['overview','devpass','analytics','settings'].includes(next)) return;
+        if (!['overview','devpass','credits','analytics','settings'].includes(next)) return;
         state.dashboardView = next;
+        const previousUsageScope = state.usageScopeView;
+        if (next === 'devpass' || next === 'credits') state.usageScopeView = next;
         const shell = q('.shell');
         if (shell) shell.dataset.dashboardView = next;
         document.querySelectorAll('[data-dashboard-nav]').forEach(item => {
@@ -130,6 +132,7 @@
           item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
         await persist();
+        if ((next === 'devpass' || next === 'credits') && previousUsageScope !== state.usageScopeView) renderSettings();
       };
     });
     if (q('#connect')) q('#connect').onclick = async () => {

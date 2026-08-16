@@ -1,18 +1,19 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.21
+//@version 3.0.0-alpha.5.22
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.21';
+  const VERSION = '3.0.0-alpha.5.22';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
   const LEGACY_DEVPASS_STATE_KEY = 'llmgateway-devpass-direct-v1';
   const KST_TIME_ZONE = 'Asia/Seoul';
+  const RUNTIME_LOADED_AT = Date.now();
   const UI_STALL_PROBE_INTERVAL_MS = 100;
   const UI_STALL_THRESHOLD_MS = 50;
   const RENDER_SPIKE_THRESHOLD_MS = 50;
@@ -71,6 +72,30 @@
   const money = (v, d = 2) => num(v) ? `$${Number(v).toFixed(d)}` : '—';
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const pct = v => Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 0;
+
+
+  function diagnosticTimestamp(timestamp) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: KST_TIME_ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(new Date(Number(timestamp)));
+    const value = type => parts.find(part => part.type === type)?.value || '00';
+    return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} KST`;
+  }
+
+  function diagnosticUptime(durationMs) {
+    let seconds = Math.max(0, Math.floor((Number(durationMs) || 0) / 1000));
+    const days = Math.floor(seconds / 86400); seconds %= 86400;
+    const hours = Math.floor(seconds / 3600); seconds %= 3600;
+    const minutes = Math.floor(seconds / 60); seconds %= 60;
+    const parts = [];
+    if (days) parts.push(`${days}일`);
+    if (hours || days) parts.push(`${hours}시간`);
+    if (minutes || hours || days) parts.push(`${minutes}분`);
+    parts.push(`${seconds}초`);
+    return parts.join(' ');
+  }
 
 
   function hydrateState(saved) {
@@ -1797,6 +1822,7 @@ async function importLegacyTodayBaselines() {
   }
 
   function diagText() {
+    const diagnosticCapturedAt = Date.now();
     const d = state.data || {}, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
     const runtimeBridge = bridgeRuntimeSnapshot();
@@ -1807,6 +1833,9 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     return [
       `Local Usage Dashboard v${VERSION}`,
+      `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
+      `Runtime loaded at: ${diagnosticTimestamp(RUNTIME_LOADED_AT)}`,
+      `Runtime uptime: ${diagnosticUptime(diagnosticCapturedAt - RUNTIME_LOADED_AT)}`,
       `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode} · manager ${runtimeBridge.managerInstalled ? 'installed' : 'absent'}`,
       `Bridge manager: protocol ${runtimeBridge.managerProtocol} · installed ${runtimeBridge.managerInstalled ? 'yes' : 'no'} · self-update ${runtimeBridge.selfUpdate ? 'yes' : 'no'} · engine-managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · ${runtimeBridge.managerVersion ? `v${runtimeBridge.managerVersion}` : 'v—'} · target ${BRIDGE_MANAGER_PROTOCOL}`,
       `Bridge manager probe: ${state.bridgeManagerRuntime?.connected ? 'connected' : 'unavailable'} · checked ${state.bridgeManagerRuntime?.checkedAt ? age(state.bridgeManagerRuntime.checkedAt) : '—'} · product ${state.bridgeManagerRuntime?.productVersion || '—'} · sync ${state.bridgeManagerSyncedProductVersion || 'none'}`,

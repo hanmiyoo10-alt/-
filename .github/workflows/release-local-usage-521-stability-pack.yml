@@ -1,0 +1,152 @@
+name: Release Local Usage 5.21 Stability Pack
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-local-usage-521-stability-pack.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish 5.21 runtime stability pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin release-usage-dashboard
+          git checkout -B release-usage-dashboard origin/release-usage-dashboard
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          old = '3.0.0-alpha.5.20'
+          new = '3.0.0-alpha.5.21'
+
+          latest_path = Path('plugins/usage-dashboard/latest.js')
+          s = latest_path.read_text()
+          if s.count(old) != 2:
+              raise SystemExit(f'latest.js version count mismatch: {s.count(old)}')
+          s = s.replace(old, new)
+
+          def replace_once(src, old_text, new_text, label):
+              count = src.count(old_text)
+              if count != 1:
+                  raise SystemExit(f'{label} anchor count mismatch: {count}')
+              return src.replace(old_text, new_text, 1)
+
+          s = replace_once(
+              s,
+              "  let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;\n",
+              "  let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;\n  let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;\n",
+              'lifecycle vars'
+          )
+
+          s = replace_once(
+              s,
+              "  const uiParts = [], remoteListeners = [], domListeners = [];\n",
+              "  const uiParts = [], remoteListeners = [], domListeners = [];\n\n  function runtimeIsCurrent(epoch = runtimeEpoch) { return !runtimeDisposed && epoch === runtimeEpoch; }\n  function dropStaleAsync() { staleAsyncDrops += 1; return undefined; }\n",
+              'lifecycle helpers'
+          )
+
+          s = replace_once(
+              s,
+              "  async function persist() { await store.setItem(STATE_KEY, {...state}); }",
+              "  async function persist() {\n    if (runtimeDisposed) return dropStaleAsync();\n    await store.setItem(STATE_KEY, {...state});\n  }",
+              'persist guard'
+          )
+
+          s = replace_once(
+              s,
+              "  function scheduleRefresh() {\n    if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;",
+              "  function scheduleRefresh() {\n    if (runtimeDisposed) return;\n    if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;",
+              'schedule guard'
+          )
+
+          s = replace_once(
+              s,
+              "  function enqueueRefresh(reason = 'scheduled', silent = false) {\n    if (state?.schedulerEnabled === false) return refresh(reason, silent);",
+              "  function enqueueRefresh(reason = 'scheduled', silent = false) {\n    if (runtimeDisposed) return;\n    if (state?.schedulerEnabled === false) return refresh(reason, silent);",
+              'enqueue guard'
+          )
+
+          s = replace_once(
+              s,
+              "  async function refresh(reason = 'manual', silent = false) {\n    if (!state.bridgeEnabled) return;",
+              "  async function refresh(reason = 'manual', silent = false) {\n    if (runtimeDisposed) return;\n    const refreshEpoch = runtimeEpoch;\n    if (!state.bridgeEnabled) return;",
+              'refresh entry guard'
+          )
+
+          for anchor, label in [
+              ("        const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');\n", 'manager status fence'),
+              ("        const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);\n", 'manager sync fence'),
+              ("        const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);\n", 'engine adopt fence'),
+          ]:
+              s = replace_once(s, anchor, anchor + "        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n", label)
+
+          s = replace_once(
+              s,
+              "        state.bridgeManagerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);\n        state.data = applyObservedToday(await fetchSnapshot());",
+              "        const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        state.bridgeManagerRuntime = managerRuntime;\n        const snapshot = await fetchSnapshot();\n        if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();\n        state.data = applyObservedToday(snapshot);",
+              'snapshot commit fence'
+          )
+
+          s = replace_once(
+              s,
+              "  async function renderWidget(reason = 'ui') {\n    const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();",
+              "  async function renderWidget(reason = 'ui') {\n    if (runtimeDisposed) return;\n    const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();",
+              'render guard'
+          )
+
+          s = replace_once(
+              s,
+              "    await Risuai.onUnload(async()=>{\n      if(refreshTimer)clearTimeout(refreshTimer);",
+              "    await Risuai.onUnload(async()=>{\n      runtimeDisposed = true;\n      runtimeEpoch += 1;\n      if(refreshTimer)clearTimeout(refreshTimer);",
+              'unload fence'
+          )
+
+          latest_path.write_text(s)
+
+          manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
+          manager = manager_path.read_text()
+          if manager.count(old) != 1:
+              raise SystemExit(f'bridge-manager version count mismatch: {manager.count(old)}')
+          manager_path.write_text(manager.replace(old, new))
+          manager_sha = hashlib.sha256(manager_path.read_bytes()).hexdigest()
+
+          manifest_path = Path('plugins/usage-dashboard/runtime/product-manifest.json')
+          manifest = json.loads(manifest_path.read_text())
+          if manifest.get('productVersion') != old:
+              raise SystemExit('manifest productVersion mismatch')
+          if manifest['components']['plugin'].get('version') != old:
+              raise SystemExit('manifest plugin version mismatch')
+          if manifest['components']['bridgeManager'].get('productVersion') != old:
+              raise SystemExit('manifest manager productVersion mismatch')
+          manifest['productVersion'] = new
+          manifest['components']['plugin']['version'] = new
+          manifest['components']['bridgeManager']['productVersion'] = new
+          manifest['components']['bridgeManager']['sha256'] = manager_sha
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+
+          print('5.21 runtime stability pack prepared')
+          print('manager sha256:', manager_sha)
+          PY
+
+          node --check plugins/usage-dashboard/latest.js
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime/bridge-manager.cjs plugins/usage-dashboard/runtime/product-manifest.json
+          git commit -m "release: usage dashboard 3.0.0-alpha.5.21 runtime stability pack"
+          git push origin release-usage-dashboard

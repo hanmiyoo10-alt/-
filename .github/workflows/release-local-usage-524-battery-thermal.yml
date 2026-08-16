@@ -28,7 +28,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          import json, hashlib, re
+          import json, hashlib, re, base64
 
           old = '3.0.0-alpha.5.23'
           new = '3.0.0-alpha.5.24'
@@ -61,74 +61,11 @@ jobs:
               raise SystemExit('power runtime anchor mismatch')
           s = s.replace(parts_anchor, power_runtime, 1)
 
-          start_pattern = re.compile(
-              r"  function startUiStallProbe\(\) \{\n.*?\n  \}\n\n  function stopResumeMeasurement\(\)",
-              re.S,
-          )
+          start_pattern = re.compile(r"  function startUiStallProbe\(\) \{\n.*?\n  \}\n\n  function stopResumeMeasurement\(\)", re.S)
           if len(start_pattern.findall(s)) != 1:
               raise SystemExit('startUiStallProbe body mismatch')
-          start_replacement = r'''  function uiStallProbeInterval() {
-    return Date.now() < Number(powerRuntime.probeBurstUntil || 0)
-      ? UI_STALL_PROBE_INTERVAL_MS
-      : UI_STALL_PROBE_IDLE_INTERVAL_MS;
-  }
-
-  function requestUiStallProbeBurst(durationMs = UI_STALL_PROBE_TIMER_BURST_MS) {
-    if (runtimeDisposed) return;
-    const duration = Math.max(0, Number(durationMs) || 0);
-    powerRuntime.probeBurstUntil = Math.max(Number(powerRuntime.probeBurstUntil || 0), Date.now() + duration);
-    if (performanceRuntime.uiStallProbeActive && !(state?.backgroundPause !== false && document.visibilityState === 'hidden')) {
-      startUiStallProbe();
-    }
-  }
-
-  function startUiStallProbe() {
-    stopUiStallProbe();
-    if (typeof performance?.now !== 'function') return;
-    if (state?.backgroundPause !== false && document.visibilityState === 'hidden') return;
-    performanceRuntime.uiStallProbeActive = true;
-    let scheduledInterval = uiStallProbeInterval();
-    let expected = performance.now() + scheduledInterval;
-    const tick = () => {
-      uiStallProbeTimer = null;
-      if (state?.backgroundPause !== false && document.visibilityState === 'hidden') {
-        performanceRuntime.uiStallProbeActive = false;
-        return;
-      }
-      const nowPerf = performance.now();
-      const lag = Math.max(0, nowPerf - expected);
-      powerRuntime.probeWakeups += 1;
-      if (scheduledInterval <= UI_STALL_PROBE_INTERVAL_MS) powerRuntime.probeBurstWakeups += 1;
-      else powerRuntime.probeIdleWakeups += 1;
-      if (lag >= UI_STALL_THRESHOLD_MS) {
-        const rounded = roundPerfMs(lag);
-        performanceRuntime.uiStallCount50 += 1;
-        if (lag >= 100) performanceRuntime.uiStallCount100 += 1;
-        if (lag >= 200) performanceRuntime.uiStallCount200 += 1;
-        performanceRuntime.uiStallMaxMs = Math.max(Number(performanceRuntime.uiStallMaxMs || 0), rounded || 0);
-        performanceRuntime.lastUiStallMs = rounded;
-        performanceRuntime.lastUiStallAt = Date.now();
-        performanceRuntime.lastUiStallRefreshOverlap = refreshOverlapsPerfWindow(expected, nowPerf);
-        performanceRuntime.lastUiStallRenderOverlap = renderOverlapsPerfWindow(expected, nowPerf);
-        performanceRuntime.lastUiStallRenderReason = performanceRuntime.lastUiStallRenderOverlap
-          ? String(performanceRuntime.activeRenderReason || performanceRuntime.lastRenderReason || '')
-          : '';
-        performanceRuntime.lastUiStallRenderMs = performanceRuntime.lastUiStallRenderOverlap
-          ? (Number(performanceRuntime.activeRenderStartedPerf || 0) > 0
-            ? roundPerfMs(nowPerf - Number(performanceRuntime.activeRenderStartedPerf || nowPerf))
-            : roundPerfMs(performanceRuntime.lastRenderMs))
-          : null;
-        pushPerformanceSample('uiStallSamples', lag);
-      }
-      scheduledInterval = uiStallProbeInterval();
-      expected = nowPerf + scheduledInterval;
-      uiStallProbeTimer = setTimeout(tick, scheduledInterval);
-    };
-    uiStallProbeTimer = setTimeout(tick, scheduledInterval);
-  }
-
-  function stopResumeMeasurement()'''
-          s = start_pattern.sub(start_replacement, s, count=1)
+          start_replacement = base64.b64decode('ICBmdW5jdGlvbiB1aVN0YWxsUHJvYmVJbnRlcnZhbCgpIHsKICAgIHJldHVybiBEYXRlLm5vdygpIDwgTnVtYmVyKHBvd2VyUnVudGltZS5wcm9iZUJ1cnN0VW50aWwgfHwgMCkKICAgICAgPyBVSV9TVEFMTF9QUk9CRV9JTlRFUlZBTF9NUwogICAgICA6IFVJX1NUQUxMX1BST0JFX0lETEVfSU5URVJWQUxfTVM7CiAgfQoKICBmdW5jdGlvbiByZXF1ZXN0VWlTdGFsbFByb2JlQnVyc3QoZHVyYXRpb25NcyA9IFVJX1NUQUxMX1BST0JFX1RJTUVSX0JVUlNUX01TKSB7CiAgICBpZiAocnVudGltZURpc3Bvc2VkKSByZXR1cm47CiAgICBjb25zdCBkdXJhdGlvbiA9IE1hdGgubWF4KDAsIE51bWJlcihkdXJhdGlvbk1zKSB8fCAwKTsKICAgIHBvd2VyUnVudGltZS5wcm9iZUJ1cnN0VW50aWwgPSBNYXRoLm1heChOdW1iZXIocG93ZXJSdW50aW1lLnByb2JlQnVyc3RVbnRpbCB8fCAwKSwgRGF0ZS5ub3coKSArIGR1cmF0aW9uKTsKICAgIGlmIChwZXJmb3JtYW5jZVJ1bnRpbWUudWlTdGFsbFByb2JlQWN0aXZlICYmICEoc3RhdGU/LmJhY2tncm91bmRQYXVzZSAhPT0gZmFsc2UgJiYgZG9jdW1lbnQudmlzaWJpbGl0eVN0YXRlID09PSAnaGlkZGVuJykpIHsKICAgICAgc3RhcnRVaVN0YWxsUHJvYmUoKTsKICAgIH0KICB9CgogIGZ1bmN0aW9uIHN0YXJ0VWlTdGFsbFByb2JlKCkgewogICAgc3RvcFVpU3RhbGxQcm9iZSgpOwogICAgaWYgKHR5cGVvZiBwZXJmb3JtYW5jZT8ubm93ICE9PSAnZnVuY3Rpb24nKSByZXR1cm47CiAgICBpZiAoc3RhdGU/LmJhY2tncm91bmRQYXVzZSAhPT0gZmFsc2UgJiYgZG9jdW1lbnQudmlzaWJpbGl0eVN0YXRlID09PSAnaGlkZGVuJykgcmV0dXJuOwogICAgcGVyZm9ybWFuY2VSdW50aW1lLnVpU3RhbGxQcm9iZUFjdGl2ZSA9IHRydWU7CiAgICBsZXQgc2NoZWR1bGVkSW50ZXJ2YWwgPSB1aVN0YWxsUHJvYmVJbnRlcnZhbCgpOwogICAgbGV0IGV4cGVjdGVkID0gcGVyZm9ybWFuY2Uubm93KCkgKyBzY2hlZHVsZWRJbnRlcnZhbDsKICAgIGNvbnN0IHRpY2sgPSAoKSA9PiB7CiAgICAgIHVpU3RhbGxQcm9iZVRpbWVyID0gbnVsbDsKICAgICAgaWYgKHN0YXRlPy5iYWNrZ3JvdW5kUGF1c2UgIT09IGZhbHNlICYmIGRvY3VtZW50LnZpc2liaWxpdHlTdGF0ZSA9PT0gJ2hpZGRlbicpIHsKICAgICAgICBwZXJmb3JtYW5jZVJ1bnRpbWUudWlTdGFsbFByb2JlQWN0aXZlID0gZmFsc2U7CiAgICAgICAgcmV0dXJuOwogICAgICB9CiAgICAgIGNvbnN0IG5vd1BlcmYgPSBwZXJmb3JtYW5jZS5ub3coKTsKICAgICAgY29uc3QgbGFnID0gTWF0aC5tYXgoMCwgbm93UGVyZiAtIGV4cGVjdGVkKTsKICAgICAgcG93ZXJSdW50aW1lLnByb2JlV2FrZXVwcyArPSAxOwogICAgICBpZiAoc2NoZWR1bGVkSW50ZXJ2YWwgPD0gVUlfU1RBTExfUFJPQkVfSU5URVJWQUxfTVMpIHBvd2VyUnVudGltZS5wcm9iZUJ1cnN0V2FrZXVwcyArPSAxOwogICAgICBlbHNlIHBvd2VyUnVudGltZS5wcm9iZUlkbGVXYWtldXBzICs9IDE7CiAgICAgIGlmIChsYWcgPj0gVUlfU1RBTExfVEhSRVNIT0xEX01TKSB7CiAgICAgICAgY29uc3Qgcm91bmRlZCA9IHJvdW5kUGVyZk1zKGxhZyk7CiAgICAgICAgcGVyZm9ybWFuY2VSdW50aW1lLnVpU3RhbGxDb3VudDUwICs9IDE7CiAgICAgICAgaWYgKGxhZyA+PSAxMDApIHBlcmZvcm1hbmNlUnVudGltZS51aVN0YWxsQ291bnQxMDAgKz0gMTsKICAgICAgICBpZiAobGFnID49IDIwMCkgcGVyZm9ybWFuY2VSdW50aW1lLnVpU3RhbGxDb3VudDIwMCArPSAxOwogICAgICAgIHBlcmZvcm1hbmNlUnVudGltZS51aVN0YWxsTWF4TXMgPSBNYXRoLm1heChOdW1iZXIocGVyZm9ybWFuY2VSdW50aW1lLnVpU3RhbGxNYXhNcyB8fCAwKSwgcm91bmRlZCB8fCAwKTsKICAgICAgICBwZXJmb3JtYW5jZVJ1bnRpbWUubGFzdFVpU3RhbGxNcyA9IHJvdW5kZWQ7CiAgICAgICAgcGVyZm9ybWFuY2VSdW50aW1lLmxhc3RVaVN0YWxsQXQgPSBEYXRlLm5vdygpOwogICAgICAgIHBlcmZvcm1hbmNlUnVudGltZS5sYXN0VWlTdGFsbFJlZnJlc2hPdmVybGFwID0gcmVmcmVzaE92ZXJsYXBzUGVyZldpbmRvdyhleHBlY3RlZCwgbm93UGVyZik7CiAgICAgICAgcGVyZm9ybWFuY2VSdW50aW1lLmxhc3RVaVN0YWxsUmVuZGVyT3ZlcmxhcCA9IHJlbmRlck92ZXJsYXBzUGVyZldpbmRvdyhleHBlY3RlZCwgbm93UGVyZik7CiAgICAgICAgcGVyZm9ybWFuY2VSdW50aW1lLmxhc3RVaVN0YWxsUmVuZGVyUmVhc29uID0gcGVyZm9ybWFuY2VSdW50aW1lLmxhc3RVaVN0YWxsUmVuZGVyT3ZlcmxhcAogICAgICAgICAgPyBTdHJpbmcocGVyZm9ybWFuY2VSdW50aW1lLmFjdGl2ZVJlbmRlclJlYXNvbiB8fCBwZXJmb3JtYW5jZVJ1bnRpbWUubGFzdFJlbmRlclJlYXNvbiB8fCAnJykKICAgICAgICAgIDogJyc7CiAgICAgICAgcGVyZm9ybWFuY2VSdW50aW1lLmxhc3RVaVN0YWxsUmVuZGVyTXMgPSBwZXJmb3JtYW5jZVJ1bnRpbWUubGFzdFVpU3RhbGxSZW5kZXJPdmVybGFwCiAgICAgICAgICA/IChOdW1iZXIocGVyZm9ybWFuY2VSdW50aW1lLmFjdGl2ZVJlbmRlclN0YXJ0ZWRQZXJmIHx8IDApID4gMAogICAgICAgICAgICA/IHJvdW5kUGVyZk1zKG5vd1BlcmYgLSBOdW1iZXIocGVyZm9ybWFuY2VSdW50aW1lLmFjdGl2ZVJlbmRlclN0YXJ0ZWRQZXJmIHx8IG5vd1BlcmYpKQogICAgICAgICAgICA6IHJvdW5kUGVyZk1zKHBlcmZvcm1hbmNlUnVudGltZS5sYXN0UmVuZGVyTXMpKQogICAgICAgICAgOiBudWxsOwogICAgICAgIHB1c2hQZXJmb3JtYW5jZVNhbXBsZSgndWlTdGFsbFNhbXBsZXMnLCBsYWcpOwogICAgICB9CiAgICAgIHNjaGVkdWxlZEludGVydmFsID0gdWlTdGFsbFByb2JlSW50ZXJ2YWwoKTsKICAgICAgZXhwZWN0ZWQgPSBub3dQZXJmICsgc2NoZWR1bGVkSW50ZXJ2YWw7CiAgICAgIHVpU3RhbGxQcm9iZVRpbWVyID0gc2V0VGltZW91dCh0aWNrLCBzY2hlZHVsZWRJbnRlcnZhbCk7CiAgICB9OwogICAgdWlTdGFsbFByb2JlVGltZXIgPSBzZXRUaW1lb3V0KHRpY2ssIHNjaGVkdWxlZEludGVydmFsKTsKICB9CgogIGZ1bmN0aW9uIHN0b3BSZXN1bWVNZWFzdXJlbWVudCgp').decode()
+          s = start_pattern.sub(lambda _: start_replacement, s, count=1)
 
           resume_anchor = "  function beginResumeMeasurement(reason = 'visibility') {\n    stopResumeMeasurement();\n"
           resume_replacement = resume_anchor + "    requestUiStallProbeBurst(UI_STALL_PROBE_ACTIVE_BURST_MS);\n"

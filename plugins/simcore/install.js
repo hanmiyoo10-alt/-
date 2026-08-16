@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.24
+//@version 0.63.25
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.25 Targeted Reload Hook Cleanup:
+// - Corrects the v0.63.23 reload-safety assumption exposed by the v0.63.24 identity probe: Risu V3 delegates beforeRequest replacers and output script handlers to the legacy Set-based API and does not automatically unregister those callbacks on targeted plugin unload
+// - Stores the exact beforeRequest/output callback references and removes them in SimCore onUnload before the old sandbox is terminated, matching the proven explicit-cleanup pattern used by other refresh-safe V3 plugins
+// - Keeps runtimeDisposed/epoch stale-work guards and UI cleanup as secondary safety; no timer, polling, storage/state-schema, request content retention or background activity is added
+// - Generation behavior, runtime prompt text and all 17 internal modules including Frame/Evidence/Time/Structure/Prompt remain byte-identical to v0.63.24
 //
 // v0.63.23 Refreshless Update Safety:
 // - Aligns SimCore unload behavior with the proven Local Usage refreshless-update lifecycle: mark the old runtime disposed immediately, reject stale in-flight work before Core state mutation, and explicitly unregister SimCore-owned UI parts
@@ -4344,7 +4350,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     return result.content;
   }
 
-  await Risuai.addRisuReplacer('beforeRequest', async (messages, type) => {
+  const beforeRequestHandler = async (messages, type) => {
     if (type !== 'model') return messages;
     const hookEpoch = runtimeEpoch;
     if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
@@ -4396,9 +4402,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       markDiagnosticRequestProbe(requestSendIndex, { requestDoneAt: Date.now(), requestTotalMs: Number(perf.totalMs || 0) });
     }
     return messages;
-  });
+  };
+  await Risuai.addRisuReplacer('beforeRequest', beforeRequestHandler);
 
-  await Risuai.addRisuScriptHandler('output', async (content) => {
+  const outputHandler = async (content) => {
     const hookEpoch = runtimeEpoch;
     if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
     diagnosticActivity.outputHooks += 1;
@@ -4433,7 +4440,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       if (Number(perf.totalMs || 0) >= 50) diagnosticActivity.outputSlow50 += 1;
       if (lastDiagnosticRequestProbe) lastDiagnosticRequestProbe.outputTotalMs = Number(perf.totalMs || 0);
     }
-  });
+  };
+  await Risuai.addRisuScriptHandler('output', outputHandler);
 
   function escapeHtml(v) {
     return String(v ?? '').replace(/[&<>\"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;' }[c]));
@@ -4633,10 +4641,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.24',
+      'Version: 0.63.25',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
-      `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length}`,
+      `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
       `Probe context: ${probeFresh ? 'CURRENT TURN' : (requestProbe?.sendIndex >= 0 ? `STALE · probe user @${Number(requestProbe.sendIndex)} · current user @${currentUserIndex >= 0 ? currentUserIndex : 'n/a'}` : 'UNAVAILABLE')}`,
       `Request hook: ${probeFresh ? (requestProbe?.hookSeen ? 'SEEN' : 'n/a') : 'n/a'}`,
       `Core handshake: ${probeFresh ? (requestProbe?.handshake || 'UNKNOWN') : 'n/a'}`,
@@ -4863,7 +4871,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.24</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.25</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
@@ -5031,6 +5039,8 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   await Risuai.onUnload(async () => {
     runtimeDisposed = true;
     runtimeEpoch += 1;
+    try { await Risuai.removeRisuReplacer('beforeRequest', beforeRequestHandler); } catch (_) {}
+    try { await Risuai.removeRisuScriptHandler('output', outputHandler); } catch (_) {}
     for (const part of simcoreUiParts.splice(0)) {
       if (!part?.id) continue;
       try { await Risuai.unregisterUIPart(part.id); } catch (_) {}

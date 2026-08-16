@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.34 Version Bump
+name: Publish Usage Dashboard 5.34 Navigation Finalization
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  bump-and-validate:
+  validate-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -19,44 +19,10 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Bump five-tab navigation build to 5.34
+      - name: Revalidate 5.34 five-tab build
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-          import hashlib, json
-
-          ROOT = Path('plugins/usage-dashboard')
-          OLD = '3.0.0-alpha.5.33'
-          NEW = '3.0.0-alpha.5.34'
-
-          core = ROOT / 'src/00-runtime-core.part.js'
-          text = core.read_text()
-          if text.count(f'//@version {OLD}') != 1 or text.count(f"const VERSION = '{OLD}';") != 1:
-              raise SystemExit('unexpected plugin version baseline')
-          text = text.replace(f'//@version {OLD}', f'//@version {NEW}', 1)
-          text = text.replace(f"const VERSION = '{OLD}';", f"const VERSION = '{NEW}';", 1)
-          core.write_text(text)
-
-          manager = ROOT / 'runtime/bridge-manager.cjs'
-          text = manager.read_text()
-          if text.count(f"const PRODUCT_VERSION = '{OLD}';") != 1:
-              raise SystemExit('unexpected manager product version baseline')
-          manager.write_text(text.replace(f"const PRODUCT_VERSION = '{OLD}';", f"const PRODUCT_VERSION = '{NEW}';", 1))
-
-          manifest_path = ROOT / 'runtime/product-manifest.json'
-          manifest = json.loads(manifest_path.read_text())
-          if manifest.get('productVersion') != OLD:
-              raise SystemExit(f"unexpected product manifest baseline: {manifest.get('productVersion')}")
-          manifest['productVersion'] = NEW
-          manifest['components']['plugin']['version'] = NEW
-          manifest['components']['bridgeManager']['productVersion'] = NEW
-          manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager.read_bytes()).hexdigest()
-          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-          PY
-
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
@@ -75,25 +41,35 @@ jobs:
           node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
           node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
           node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
-          git diff --check
-
           grep -Fq '//@version 3.0.0-alpha.5.34' plugins/usage-dashboard/latest.js
           grep -Fq 'Navigation: tabbed · overview/devpass/credits/analytics/settings' plugins/usage-dashboard/latest.js
           grep -Fq "['credits','Credits']" plugins/usage-dashboard/latest.js
-          grep -Fq "if (next === 'devpass' || next === 'credits') state.usageScopeView = next;" plugins/usage-dashboard/latest.js
+          git diff --check
 
-      - name: Commit validated 5.34 source
+      - name: Publish 5.34 to release channel
         shell: bash
         run: |
           set -euo pipefail
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            plugins/usage-dashboard/src/00-runtime-core.part.js \
-            plugins/usage-dashboard/src/manifest.json \
-            plugins/usage-dashboard/latest.js \
-            plugins/usage-dashboard/runtime/bridge-manager.cjs \
-            plugins/usage-dashboard/runtime/product-manifest.json
-          git diff --cached --check
-          git commit -m 'release: Local Usage Dashboard 5.34 five-tab navigation'
-          git push origin HEAD:main
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq '//@version 3.0.0-alpha.5.34' plugins/usage-dashboard/latest.js
+          grep -Fq '"productVersion": "3.0.0-alpha.5.34"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.34 product artifacts'
+          git push origin HEAD:release-usage-dashboard

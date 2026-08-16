@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.22
+//@version 0.63.23
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.23 Refreshless Update Safety:
+// - Aligns SimCore unload behavior with the proven Local Usage refreshless-update lifecycle: mark the old runtime disposed immediately, reject stale in-flight work before Core state mutation, and explicitly unregister SimCore-owned UI parts
+// - Relies on Risu API 3.0 plugin-unload auto-cleanup for replacer/script hooks rather than manually duplicating host hook-removal behavior
+// - Adds memory-only reload-safety diagnostics (runtime epoch, stale-drop count, tracked UI-part count); no storage/state schema, timer, polling, sensor read or background activity is added
+// - Generation behavior, runtime prompt text and all 17 internal modules including Frame/Evidence/Time/Structure/Prompt remain byte-identical to v0.63.22
 //
 // v0.63.22 Diagnostic Runtime Timing:
 // - Adds memory-only wall-clock telemetry for plugin boot, request hook entry, Core handshake resolution, Core preparation, beforeRequest completion, output-hook entry and output commit
@@ -3831,6 +3837,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   const diagnosticRuntimeBootAt = Date.now();
   const diagnosticRuntimeGeneration = `${diagnosticRuntimeBootAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const diagnosticActivity = { requestHooks: 0, outputHooks: 0, requestSlow50: 0, outputSlow50: 0, requestMaxMs: 0, outputMaxMs: 0 };
+  let runtimeDisposed = false;
+  let runtimeEpoch = 1;
+  let staleRuntimeDrops = 0;
+  const simcoreUiParts = [];
   let lastHistoryRestore = null;
   let lastFrameGuardProbe = null;
   let lastEvidenceMappingProbe = null;
@@ -3847,6 +3857,15 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastDiagnosticRequestProbe = null;
 
   const { perfNow, perfMs } = ops;
+
+  function runtimeIsCurrent(epoch = runtimeEpoch) {
+    return !runtimeDisposed && Number(epoch) === Number(runtimeEpoch);
+  }
+
+  function dropStaleRuntime() {
+    staleRuntimeDrops += 1;
+    return false;
+  }
 
   function textMessageContent(m) {
     if (!m) return '';
@@ -4048,6 +4067,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'session-load' });
       return { active: false };
     }
+    if (!runtimeIsCurrent()) {
+      dropStaleRuntime();
+      markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'runtime-unloaded' });
+      return { active: false };
+    }
 
     t = perfNow();
     const promptProbe = coreRules.inspectPromptMessages(messages, textMessageContent);
@@ -4097,6 +4121,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     if (perf) {
       perf.aliasRepairMs = perfMs(t);
       perf.aliasRepair = aliasRepair;
+    }
+
+    if (!runtimeIsCurrent()) {
+      dropStaleRuntime();
+      markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'runtime-unloaded' });
+      return { active: false };
     }
 
     t = perfNow();
@@ -4258,9 +4288,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const cs = await loadCoreForChat(chaIdx, chatIdx, chat);
     if (perf) perf.sessionLoadMs = perfMs(t);
     if (!cs) return content;
+    if (!runtimeIsCurrent()) { dropStaleRuntime(); return content; }
     const outIndex = cs.resolveOutputIndex(fallbackOutIndex);
 
     const outputDetail = perf ? {} : null;
+    if (!runtimeIsCurrent()) { dropStaleRuntime(); return content; }
     t = perfNow();
     const result = await cs.processOutput(outIndex, content, outputDetail);
     if (perf) {
@@ -4314,6 +4346,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   await Risuai.addRisuReplacer('beforeRequest', async (messages, type) => {
     if (type !== 'model') return messages;
+    const hookEpoch = runtimeEpoch;
+    if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
     diagnosticActivity.requestHooks += 1;
     const requestHookAt = Date.now();
     lastDiagnosticRequestProbe = {
@@ -4334,10 +4368,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       let t = perfNow();
       const { chaIdx, chatIdx } = await currentIndices();
       perf.indicesMs = perfMs(t);
+      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
 
       t = perfNow();
       const chat = await Risuai.getChatFromIndex(chaIdx, chatIdx);
       perf.chatLoadMs = perfMs(t);
+      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
 
       const detectedUserIndex = coreRules.latestUserIndex(chat);
       const sendIndex = detectedUserIndex >= 0
@@ -4363,6 +4399,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   });
 
   await Risuai.addRisuScriptHandler('output', async (content) => {
+    const hookEpoch = runtimeEpoch;
+    if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
     diagnosticActivity.outputHooks += 1;
     const outputHookAt = Date.now();
     if (lastDiagnosticRequestProbe) lastDiagnosticRequestProbe.outputSeenAt = outputHookAt;
@@ -4375,10 +4413,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       let t = perfNow();
       const { chaIdx, chatIdx } = await currentIndices();
       perf.indicesMs = perfMs(t);
+      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
 
       t = perfNow();
       const chat = await Risuai.getChatFromIndex(chaIdx, chatIdx);
       perf.chatLoadMs = perfMs(t);
+      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
 
       const fallbackOutIndex = chat?.message?.length ?? 0;
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
@@ -4593,9 +4633,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.22',
+      'Version: 0.63.23',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
+      `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length}`,
       `Probe context: ${probeFresh ? 'CURRENT TURN' : (requestProbe?.sendIndex >= 0 ? `STALE · probe user @${Number(requestProbe.sendIndex)} · current user @${currentUserIndex >= 0 ? currentUserIndex : 'n/a'}` : 'UNAVAILABLE')}`,
       `Request hook: ${probeFresh ? (requestProbe?.hookSeen ? 'SEEN' : 'n/a') : 'n/a'}`,
       `Core handshake: ${probeFresh ? (requestProbe?.handshake || 'UNKNOWN') : 'n/a'}`,
@@ -4822,7 +4863,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.22</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.23</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
@@ -4979,13 +5020,21 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   }
 
   try {
-    await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
-    await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
+    const buttonPart = await Risuai.registerButton({ name: 'SimCore', icon: '⚙️', iconType: 'html', location: 'chat' }, openPanel);
+    if (buttonPart?.id) simcoreUiParts.push(buttonPart);
+    const settingPart = await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
+    if (settingPart?.id) simcoreUiParts.push(settingPart);
   } catch (e) {
     console.log('[simcore/v0.63.4] UI registration failed:', e.message);
   }
 
-  await Risuai.onUnload(() => {
+  await Risuai.onUnload(async () => {
+    runtimeDisposed = true;
+    runtimeEpoch += 1;
+    for (const part of simcoreUiParts.splice(0)) {
+      if (!part?.id) continue;
+      try { await Risuai.unregisterUIPart(part.id); } catch (_) {}
+    }
     coreSession = null;
     coreKey = null;
     coreLocationKey = null;

@@ -29,13 +29,15 @@ jobs:
 
           python - <<'PY'
           from pathlib import Path
-          import hashlib, json
+          import base64, hashlib, json
 
           old_product = '3.0.0-alpha.5.29'
           new_product = '3.0.0-alpha.5.30'
-          old_engine = '1.6.2'
-          new_engine = '1.6.3'
           old_engine_sha = '48fb53490937d4507662bb42414e0a84b260bb18c6c7e259a12cf42fc8b6d524'
+          server_anchor_b64 = 'YXdhaXQgZW5zdXJlVG9rZW4oKTsKY29uc3Qgc2VydmVyID0gaHR0cC5jcmVhdGVTZXJ2ZXIoKHJlcSwgcmVzKSA9PiB2b2lkIGhhbmRsZShyZXEsIHJlcykpOwpzZXJ2ZXIubGlzdGVuKFBPUlQsIEhPU1QsICgpID0+IHs='
+          server_replacement_b64 = 'YXdhaXQgZW5zdXJlVG9rZW4oKTsKY29uc3Qgc2VydmVyID0gaHR0cC5jcmVhdGVTZXJ2ZXIoKHJlcSwgcmVzKSA9PiB7CiAgdm9pZCBoYW5kbGUocmVxLCByZXMpLmNhdGNoKChlcnJvcikgPT4gewogICAgY29uc3Qgcm91dGUgPSBTdHJpbmcocmVxPy51cmwgfHwgJy8nKS5zcGxpdCgnPycpWzBdLnNsaWNlKDAsIDE2MCkgfHwgJy8nOwogICAgY29uc3QgbWVzc2FnZSA9IHNhZmVNZXNzYWdlKGVycm9yKTsKICAgIGxvZ1JhdGVMaW1pdGVkKCdlcnJvcicsIGByZXF1ZXN0LWJvdW5kYXJ5OiR7cm91dGV9OiR7bWVzc2FnZS5zbGljZSgwLDEyMCl9YCwgYFVuaGFuZGxlZCByZXF1ZXN0IGVycm9yIG9uICR7cm91dGV9OiAke21lc3NhZ2V9YCwgMzBfMDAwKTsKICAgIGlmIChyZXMud3JpdGFibGVFbmRlZCkgcmV0dXJuOwogICAgaWYgKHJlcy5oZWFkZXJzU2VudCkgewogICAgICB0cnkgeyByZXMuZGVzdHJveSgpOyB9IGNhdGNoIHt9CiAgICAgIHJldHVybjsKICAgIH0KICAgIGpzb24ocmVzLCA1MDAsIHsKICAgICAgZXJyb3I6ICdCcmlkZ2UgaW50ZXJuYWwgcmVxdWVzdCBlcnJvcicsCiAgICAgIGNvZGU6ICdCUklER0VfSU5URVJOQUxfRVJST1InLAogICAgICByZXRyeWFibGU6IHRydWUsCiAgICB9KTsKICB9KTsKfSk7CnNlcnZlci5saXN0ZW4oUE9SVCwgSE9TVCwgKCkgPT4gew=='
+          server_anchor = base64.b64decode(server_anchor_b64).decode('utf-8')
+          server_replacement = base64.b64decode(server_replacement_b64).decode('utf-8')
 
           plugin_path = Path('plugins/usage-dashboard/latest.js')
           manager_path = Path('plugins/usage-dashboard/runtime/bridge-manager.cjs')
@@ -52,27 +54,6 @@ jobs:
           if engine.count(version_anchor) != 1:
               raise SystemExit(f'engine version anchor mismatch: {engine.count(version_anchor)}')
           engine = engine.replace(version_anchor, "const VERSION = '1.6.3';", 1)
-
-          server_anchor = "await ensureToken();\nconst server = http.createServer((req, res) => void handle(req, res));\nserver.listen(PORT, HOST, () => {"
-          server_replacement = """await ensureToken();
-const server = http.createServer((req, res) => {
-  void handle(req, res).catch((error) => {
-    const route = String(req?.url || '/').split('?')[0].slice(0, 160) || '/';
-    const message = safeMessage(error);
-    logRateLimited('error', `request-boundary:${route}:${message.slice(0,120)}`, `Unhandled request error on ${route}: ${message}`, 30_000);
-    if (res.writableEnded) return;
-    if (res.headersSent) {
-      try { res.destroy(); } catch {}
-      return;
-    }
-    json(res, 500, {
-      error: 'Bridge internal request error',
-      code: 'BRIDGE_INTERNAL_ERROR',
-      retryable: true,
-    });
-  });
-});
-server.listen(PORT, HOST, () => {"""
           if engine.count(server_anchor) != 1:
               raise SystemExit(f'engine server anchor mismatch: {engine.count(server_anchor)}')
           engine = engine.replace(server_anchor, server_replacement, 1)
@@ -83,20 +64,18 @@ server.listen(PORT, HOST, () => {"""
           if manager.count(old_product) < 1:
               raise SystemExit('manager product marker missing')
           manager = manager.replace(old_product, new_product)
-          manager_version_anchor = "const BUNDLED_ENGINE_VERSION = '1.6.2';"
-          manager_sha_anchor = f"const BUNDLED_ENGINE_SHA256 = '{old_engine_sha}';"
-          if manager.count(manager_version_anchor) != 1:
-              raise SystemExit('manager bundled engine version anchor mismatch')
-          if manager.count(manager_sha_anchor) != 1:
-              raise SystemExit('manager bundled engine sha anchor mismatch')
-          manager = manager.replace(manager_version_anchor, "const BUNDLED_ENGINE_VERSION = '1.6.3';", 1)
-          manager = manager.replace(manager_sha_anchor, f"const BUNDLED_ENGINE_SHA256 = '{engine_sha}';", 1)
+          version_line = "const BUNDLED_ENGINE_VERSION = '1.6.2';"
+          sha_line = f"const BUNDLED_ENGINE_SHA256 = '{old_engine_sha}';"
+          if manager.count(version_line) != 1 or manager.count(sha_line) != 1:
+              raise SystemExit('manager engine anchors mismatch')
+          manager = manager.replace(version_line, "const BUNDLED_ENGINE_VERSION = '1.6.3';", 1)
+          manager = manager.replace(sha_line, f"const BUNDLED_ENGINE_SHA256 = '{engine_sha}';", 1)
           manager_path.write_text(manager, encoding='utf-8')
 
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
           manifest['productVersion'] = new_product
           manifest['components']['plugin']['version'] = new_product
-          manifest['components']['bridge']['requiredVersion'] = new_engine
+          manifest['components']['bridge']['requiredVersion'] = '1.6.3'
           manifest['components']['bridge']['sha256'] = engine_sha
           manifest['components']['bridgeManager']['productVersion'] = new_product
           manifest['components']['bridgeManager']['sha256'] = hashlib.sha256(manager_path.read_bytes()).hexdigest()
@@ -110,7 +89,6 @@ server.listen(PORT, HOST, () => {"""
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-
           grep -F '//@version 3.0.0-alpha.5.30' plugins/usage-dashboard/latest.js
           grep -F "const VERSION = '3.0.0-alpha.5.30'" plugins/usage-dashboard/latest.js
           grep -F "const MANAGER_VERSION = '1.2.4'" plugins/usage-dashboard/runtime/bridge-manager.cjs
@@ -119,9 +97,6 @@ server.listen(PORT, HOST, () => {"""
           grep -F "const VERSION = '1.6.3'" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -F "code: 'BRIDGE_INTERNAL_ERROR'" plugins/usage-dashboard/runtime/bridge-engine.mjs
 
-          # Regression proof: a route-local filesystem error must return a
-          # bounded 500 and the engine must remain alive. Removing the fault
-          # must immediately restore a normal /health response.
           tmp_home="$(mktemp -d)"
           mkdir -p "$tmp_home/PocketRisu/bridge/update-ready/latest_dashboard.js"
           port=39218
@@ -143,7 +118,6 @@ server.listen(PORT, HOST, () => {"""
           test "$code1" = 500
           kill -0 "$pid"
           grep -F 'BRIDGE_INTERNAL_ERROR' /tmp/health-530-fault
-
           rmdir "$tmp_home/PocketRisu/bridge/update-ready/latest_dashboard.js"
           code2="$(curl --silent --show-error --max-time 3 -o /tmp/health-530-ok -w '%{http_code}' "http://127.0.0.1:$port/health")"
           test "$code2" = 200

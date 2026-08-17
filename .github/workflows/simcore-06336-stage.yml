@@ -21,7 +21,21 @@ jobs:
           grep -q '//@version 0.63.35' /tmp/simcore-before.js
 
       - name: Apply Runtime Boundary Modularization patch
-        run: python plugins/simcore/patch_simcore_06336.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/simcore/patch_simcore_06336.py')
+          s = p.read_text(encoding='utf-8')
+          old = "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n'\n"
+          new = "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n  function runtimeIsCurrent('\\n"
+          assert old in s
+          s = s.replace(old, new, 1)
+          old2 = "    src = replace_once(src, init_anchor, init_block, 'runtime init')\n"
+          new2 = "    src = replace_once(src, init_anchor, init_block + '  function runtimeIsCurrent(', 'runtime init')\n"
+          assert old2 in s
+          p.write_text(s.replace(old2, new2, 1), encoding='utf-8')
+          PY
+          python plugins/simcore/patch_simcore_06336.py
 
       - name: Syntax and artifact parity
         run: |
@@ -63,26 +77,21 @@ jobs:
           changed = [name for name in sorted(core) if b[name] != a[name]]
           assert changed == [], changed
 
-          # Generation semantics remain byte-for-byte anchored in the frozen Prompt/Session modules.
           assert b['prompt'] == a['prompt']
           assert b['session'] == a['session']
           assert "messages.push({ role: 'system', content: result.promptBlock });" in after
           assert after.count("messages.push({ role: 'system', content: result.promptBlock });") == before.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
           assert "await this.store.save('out', outIndex, result.state" in a['session']
 
-          # No new scheduler/background primitive; Deferred Mirror still owns the single zero-delay task.
           for token in ['setTimeout(', 'setInterval(', 'requestAnimationFrame(']:
               assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
 
-          # Storage API surface is centralized but not expanded.
           for token in ['pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(']:
               assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
 
-          # Named hooks remain one add + one remove for each event, now routed through runtime-hooks.
           for token in ["addRisuReplacer('beforeRequest'", "removeRisuReplacer('beforeRequest'", "addRisuScriptHandler('output'", "removeRisuScriptHandler('output'"]:
               assert after.count(token) == 1, (token, after.count(token))
 
-          # Cache posture is observational only: no provider directive and no message reordering.
           assert "runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER'" in after
           assert "runtimePromptPolicy: 'OBSERVE_ONLY'" in after
           assert "providerCache: 'UNVERIFIED'" in after

@@ -25,20 +25,20 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p = Path('plugins/simcore/patch_simcore_06336.py')
-          lines = p.read_text(encoding='utf-8').splitlines()
-          changed = 0
-          for i, line in enumerate(lines):
-              if line == "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n'":
-                  lines[i] = "    init_anchor = '  function runtimeIsCurrent(epoch = runtimeEpoch) {'"
-                  changed += 1
-              elif line.startswith("    init_block = '''  const { perfNow, perfMs } = ops;\\n  const host ="):
-                  lines[i] = line.replace("'''  const { perfNow, perfMs } = ops;\\n  const host =", "'''  const host =", 1)
-                  changed += 1
-              elif line == "    src = replace_once(src, init_anchor, init_block, 'runtime init')":
-                  lines[i] = "    src = replace_once(src, init_anchor, init_block + '  function runtimeIsCurrent(epoch = runtimeEpoch) {', 'runtime init')"
-                  changed += 1
-          assert changed == 3, changed
-          p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          s = p.read_text(encoding='utf-8')
+          old = """def between(text, start, end):
+    a = text.index(start)
+    b = text.index(end, a)
+    return a, b, text[a:b]
+"""
+          new = """def between(text, start, end):
+    floor = text.index('\\n\\n(async () => {')
+    a = text.index(start, floor)
+    b = text.index(end, a)
+    return a, b, text[a:b]
+"""
+          assert old in s
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
           PY
           python plugins/simcore/patch_simcore_06336.py
 

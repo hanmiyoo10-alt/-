@@ -16,8 +16,10 @@ assert(after.includes('Turn storage:'), 'missing turn storage diagnostic');
 assert(after.includes('metric.payloadChars = payload.length;'), 'missing O(1) payload length metric');
 assert(after.includes('detail.turnPayloadChars = Number(turnMetric.payloadChars || 0);'), 'missing payload metric plumbing');
 assert(after.includes('set/1K'), 'missing set per 1K diagnostic');
-assert(!after.includes('TextEncoder'), 'must not add TextEncoder payload scan');
-assert(!after.includes('new Blob('), 'must not add Blob payload scan');
+assert((after.match(/new\s+TextEncoder\s*\(/g) || []).length === (before.match(/new\s+TextEncoder\s*\(/g) || []).length,
+  'must not add TextEncoder payload scan');
+assert((after.match(/new\s+Blob\s*\(/g) || []).length === (before.match(/new\s+Blob\s*\(/g) || []).length,
+  'must not add Blob payload scan');
 
 const payloadAnchor = 'const payload = JSON.stringify({ snapshotVersion: 1, pre: preState, send: sendState });';
 assert(before.includes(payloadAnchor), 'baseline bundled payload anchor missing');

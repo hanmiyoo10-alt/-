@@ -134,7 +134,9 @@
   async function syncBridgeEngineBundleIfNeeded(status) {
   if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;
   if (String(status.productVersion || '') !== VERSION) return status;
-  if (status.engineBundled === true) {
+  const runningEngineVersion = String(status.engineVersion || '');
+  const bundledEngineVersion = String(status.engineBundleVersion || '');
+  if (status.engineBundled === true && bundledEngineVersion && runningEngineVersion === bundledEngineVersion) {
     state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
     return status;
   }

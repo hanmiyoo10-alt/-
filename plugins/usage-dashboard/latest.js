@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.36
+//@version 3.0.0-alpha.5.37
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.36';
+  const VERSION = '3.0.0-alpha.5.37';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1839,7 +1839,9 @@ async function importLegacyTodayBaselines() {
   async function syncBridgeEngineBundleIfNeeded(status) {
   if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;
   if (String(status.productVersion || '') !== VERSION) return status;
-  if (status.engineBundled === true) {
+  const runningEngineVersion = String(status.engineVersion || '');
+  const bundledEngineVersion = String(status.engineBundleVersion || '');
+  if (status.engineBundled === true && bundledEngineVersion && runningEngineVersion === bundledEngineVersion) {
     state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
     return status;
   }

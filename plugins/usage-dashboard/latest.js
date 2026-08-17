@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.39
+//@version 3.0.0-alpha.5.40
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.39';
+  const VERSION = '3.0.0-alpha.5.40';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -2325,7 +2325,7 @@ function todayOverviewMetrics(d) {
         ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
       </section>
       <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">
-        <label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
+        <div class="bridge-config-static"><label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
         <label><span>Bridge Token</span><textarea id="bridge-token" placeholder="저장된 값은 다시 표시하지 않음"></textarea></label>
         <label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[600000,'10분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
         <label><span>STALE 기준</span><select id="stale-ms">${[[0,'사용 안 함 · Local JSON 기본'],[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
@@ -2335,8 +2335,8 @@ function todayOverviewMetrics(d) {
         <label style="margin-top:8px"><span><input id="adaptive-refresh" type="checkbox" ${state.adaptiveRefresh !== false ? 'checked' : ''} style="width:auto;margin-right:7px">Adaptive refresh · 빠르게 회복되면 원래 주기로 복귀</span></label>
         <label style="margin-top:8px"><span><input id="background-pause" type="checkbox" ${state.backgroundPause !== false ? 'checked' : ''} style="width:auto;margin-right:7px">백그라운드에서는 자동 갱신 일시정지</span></label>
         <div class="actions"><button id="save-performance">성능 설정 저장</button></div>
-        <div class="actions"><button class="primary" id="connect">${state.bridgeEnabled?'저장하고 다시 연결':token?'동기화 다시 켜기':'저장하고 연결'}</button><button id="pause-sync" ${state.bridgeEnabled?'':'disabled'}>${state.bridgeEnabled?'동기화 끄기':'동기화 꺼짐'}</button><button id="forget-token" ${token?'':'disabled'}>${token?'저장된 토큰 지우기':'저장된 토큰 없음'}</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
-        <p>상태 ${esc(state.bridgeStatus)} · 토큰 ${token?'저장됨':'없음'} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
+        </div>
+        ${bridgeControlsHtml()}
       </div></details>
       <details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>성능 · 진단</span></summary><div class="advanced-body"><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Bridge Stability · ${bridgeDiag.version?`v${esc(bridgeDiag.version)}`:'—'} · required ≥${esc(REQUIRED_BRIDGE_VERSION)} · compatible ${bridgeDiag.compatible===null?'unknown':bridgeDiag.compatible?'yes':'no'} · modules ${bridgeDiag.moduleCount??'—'} · stale ${bridgeDiag.staleModules??'—'} · errors ${bridgeDiag.errorModules??'—'} · partial ${bridgeDiag.partialModules??'—'}</p><p>Bridge Modules · freshness ${esc(bridgeModuleFreshnessText(bridgeDiag.moduleDetails))} · duration ${esc(bridgeModuleDurationText(bridgeDiag.moduleDetails))}</p><p>Bridge Runtime · cache ${bridgeDiag.cacheHitRate===null?'—':bridgeDiag.cacheHitRate.toFixed(0)+'%'} · entries ${bridgeDiag.cacheEntries??'—'} · in-flight ${bridgeDiag.inFlight??'—'} · stale fallback ${bridgeDiag.staleFallbacks??'—'} · CLI ${bridgeDiag.cliActive??'—'}/${bridgeDiag.cliQueued??'—'} · circuit ${bridgeDiag.openCircuits??'—'} open / ${bridgeDiag.circuitRecoveries??'—'} recoveries</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Stall / Render · coincidence ${performanceRuntime.lastUiStallRenderOverlap?'yes':'no'}${performanceRuntime.lastUiStallRenderOverlap?` · ${esc(performanceRuntime.lastUiStallRenderReason||'unknown')} · ${num(performanceRuntime.lastUiStallRenderMs)?roundPerfMs(performanceRuntime.lastUiStallRenderMs)+'ms':'—'}`:''} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap?'yes':'no'}</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Input · first ${num(performanceRuntime.lastResumeFirstInputAfterMs)?roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)+'ms':'—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs)?roundPerfMs(performanceRuntime.lastResumeInputDelayMs)+'ms':'—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs)?roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)+'ms':'—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh?'yes':'no'}</p><p>Resume Refresh · started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs)?roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)+'ms after':'—'} · duration ${num(performanceRuntime.lastResumeRefreshMs)?roundPerfMs(performanceRuntime.lastResumeRefreshMs)+'ms':'—'} · render ${num(performanceRuntime.lastResumeRenderMs)?roundPerfMs(performanceRuntime.lastResumeRenderMs)+'ms':'—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry?'yes':'no'}</p><p>Resume Route · requested ${esc(performanceRuntime.lastResumeRequestedReason||'—')} · actual ${esc(performanceRuntime.lastResumeActualReason||'—')} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced?'yes':'no'}${performanceRuntime.lastResumeRefreshWasCoalesced?` · into ${esc(performanceRuntime.lastResumeCoalescedIntoReason||'unknown')}`:''}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><p>Render · widget ${num(performanceRuntime.lastRenderMs)?roundPerfMs(performanceRuntime.lastRenderMs)+'ms':'—'} · panel ${num(performanceRuntime.lastPanelRenderMs)?roundPerfMs(performanceRuntime.lastPanelRenderMs)+'ms':'—'} · spike ≥${RENDER_SPIKE_THRESHOLD_MS}ms ${Number(performanceRuntime.renderSpikeCount||0)}회</p><p>Panel Render · ${panelRenderTimer || panelIdleHandle !== null?'pending':'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced||0)}회 · interaction defer 750ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>
     </main></div>`;
@@ -2396,6 +2396,42 @@ function todayOverviewMetrics(d) {
     noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
   }
 
+  function bridgeControlsHtml() {
+    const lifecycle = bridgeLifecycleMode();
+    const connecting = lifecycle === 'connecting';
+    const refreshAllowed = canBridgeRefresh();
+    const forgetArmed = Boolean(token && Number(tokenForgetArmedUntil || 0) > Date.now());
+    const connectLabel = connecting
+      ? '연결 중…'
+      : state.bridgeEnabled
+        ? '저장하고 다시 연결'
+        : token
+          ? '동기화 다시 켜기'
+          : '저장하고 연결';
+    const forgetLabel = !token
+      ? '저장된 토큰 없음'
+      : forgetArmed
+        ? '정말 지우기?'
+        : '저장된 토큰 지우기';
+    const statusLabel = lifecycle === 'live' ? 'connected' : lifecycle;
+    return `<div class="bridge-control-live" data-bridge-lifecycle="${esc(lifecycle)}">
+      <div class="actions"><button class="primary" id="connect" ${connecting?'disabled':''}>${connectLabel}</button><button id="pause-sync" ${state.bridgeEnabled?'':'disabled'}>${state.bridgeEnabled?'동기화 끄기':'동기화 꺼짐'}</button><button id="forget-token" ${token?'':'disabled'}>${forgetLabel}</button><button id="refresh" ${refreshAllowed?'':'disabled'}>지금 새로고침</button><button id="retry-now" ${refreshAllowed?'':'disabled'}>백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
+      <p>상태 ${esc(statusLabel)} · 토큰 ${token?'저장됨':'없음'} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
+    </div>`;
+  }
+
+  function renderBridgeControls() {
+    const current = document.querySelector('.bridge-control-live');
+    if (!current || typeof document?.createElement !== 'function') return false;
+    const holder = document.createElement('div');
+    holder.innerHTML = bridgeControlsHtml();
+    const next = holder.firstElementChild;
+    if (!next) return false;
+    if (current.outerHTML !== next.outerHTML) current.replaceWith(next);
+    bindSettings();
+    return true;
+  }
+
   const PANEL_PARTIAL_SELECTORS = [
     '.grid > section.panel.metric',
     '.grid > section.panel.wide:not(.usage-primary):not(.activity-secondary):not(.analytics-panel)',
@@ -2419,10 +2455,15 @@ function todayOverviewMetrics(d) {
       for (let i = 0; i < currentNodes.length; i += 1) staged.push([currentNodes[i], nextNodes[i]]);
     }
 
-    // Runtime Diagnostics is safe to refresh live. Local Bridge settings are
-    // deliberately left untouched so typed-but-unsaved values are preserved.
+    // Keep Local Bridge config inputs untouched so typed-but-unsaved values survive,
+    // but live-patch the lifecycle control surface and Runtime Diagnostics.
     const currentAdvanced = Array.from(document.querySelectorAll('details.advanced-panel'));
     const nextAdvanced = Array.from(nextDoc.querySelectorAll('details.advanced-panel'));
+    const bridgeControlsCurrent = currentAdvanced[0]?.querySelector('.bridge-control-live');
+    const bridgeControlsNext = nextAdvanced[0]?.querySelector('.bridge-control-live');
+    if (currentAdvanced[0]?.open && bridgeControlsCurrent && bridgeControlsNext) {
+      staged.push([bridgeControlsCurrent, bridgeControlsNext]);
+    }
     const diagnosticsCurrent = currentAdvanced[1]?.querySelector('.advanced-body');
     const diagnosticsNext = nextAdvanced[1]?.querySelector('.advanced-body');
     if (currentAdvanced[1]?.open && diagnosticsCurrent && diagnosticsNext) {
@@ -2532,8 +2573,18 @@ function todayOverviewMetrics(d) {
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
         noteBridgeLifecycleTransition('connecting','connect');
-        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
-      } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
+        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now();
+        await persist();
+        renderBridgeControls();
+        await renderWidget('bridge-connecting');
+        scheduleRefresh();
+        await enqueueRefresh('connect');
+      } catch (e) {
+        state.bridgeStatus='error'; state.bridgeError=e?.message||String(e);
+        await persist();
+        await renderWidget('bridge-connect-error');
+        renderBridgeControls();
+      }
     };
     if (q('#pause-sync')) q('#pause-sync').onclick = async () => {
       if (!state.bridgeEnabled) return;
@@ -2548,8 +2599,8 @@ function todayOverviewMetrics(d) {
       cancelRefreshScheduler();
       updateRuntimeState('bridge-paused');
       await persist();
+      renderBridgeControls();
       await renderWidget('bridge-paused');
-      renderSettings();
     };
     if (q('#forget-token')) q('#forget-token').onclick = async e => {
       if (!token) return;
@@ -2557,12 +2608,11 @@ function todayOverviewMetrics(d) {
       const now = Date.now();
       if (now > Number(tokenForgetArmedUntil || 0)) {
         tokenForgetArmedUntil = now + 5000;
-        const old = button.textContent;
-        button.textContent = '정말 지우기?';
+        renderBridgeControls();
         setTimeout(() => {
-          if (button?.isConnected && tokenForgetArmedUntil > 0 && Date.now() >= tokenForgetArmedUntil) {
+          if (tokenForgetArmedUntil > 0 && Date.now() >= tokenForgetArmedUntil) {
             tokenForgetArmedUntil = 0;
-            button.textContent = old;
+            renderBridgeControls();
           }
         }, 5100);
         return;
@@ -2583,8 +2633,8 @@ function todayOverviewMetrics(d) {
       cancelRefreshScheduler();
       updateRuntimeState('bridge-token-forgotten');
       await persist();
+      renderBridgeControls();
       await renderWidget('bridge-token-forgotten');
-      renderSettings();
     };
     document.querySelectorAll('[data-usage-scope]').forEach(button => {
       button.onclick = async () => {

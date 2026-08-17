@@ -54,6 +54,20 @@ jobs:
       - name: Runtime boundary and cache fixtures
         run: node plugins/simcore/test_simcore_06336.js
 
+      - name: Replay v0.63 golden behavioral suite
+        run: |
+          git fetch --no-tags --depth=1 origin simcore-06335-runtime-stability
+          git show FETCH_HEAD:plugins/simcore/test_simcore_06335.js > /tmp/simcore-06335-golden.js
+          python - <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-06335-golden.js').read_text(encoding='utf-8')
+          body = old[old.index('function loadSimCore(text)'):]
+          prelude = "const fs = require('fs');\nconst assert = require('assert');\nconst src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');\nconst expectedModules = { size: 17 };\nconst frozenBytes = 0;\nconst moduleDigest = 'behavior-replay';\n\n"
+          body = body.replace('SimCore 0.63.35 golden behavioral contracts: PASS', 'SimCore 0.63.36 replay of v0.63 golden behavioral contracts: PASS')
+          Path('/tmp/simcore-06336-golden-replay.js').write_text(prelude + body, encoding='utf-8')
+          PY
+          node /tmp/simcore-06336-golden-replay.js
+
       - name: Frozen-core and ordering guard
         run: |
           python - <<'PY'

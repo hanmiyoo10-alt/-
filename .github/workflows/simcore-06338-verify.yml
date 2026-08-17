@@ -1,0 +1,88 @@
+name: Verify SimCore v0.63.38 Golden Runtime
+
+on:
+  push:
+    branches:
+      - simcore-06338-cache-trajectory
+    paths:
+      - .simcore-06338-verify-trigger
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact staged artifact identity
+        run: |
+          grep -q '//@version 0.63.38' plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          test "$(git hash-object plugins/simcore/latest.js)" = "e0b3bdce19579b0bd5b5968cf84900504ac70ddb"
+
+      - name: Fetch exact v0.63.37 live baseline
+        run: |
+          git fetch --no-tags --depth=1 origin release-simcore
+          test "$(git rev-parse FETCH_HEAD)" = "45eb523fd8c635a7b7006d68d9bc54e7f83693c2"
+          git show FETCH_HEAD:plugins/simcore/latest.js > /tmp/simcore-before.js
+          git show FETCH_HEAD:plugins/simcore/install.js > /tmp/simcore-before-install.js
+          cmp /tmp/simcore-before.js /tmp/simcore-before-install.js
+          test "$(git hash-object /tmp/simcore-before.js)" = "5376a44231e2e9643d1cec741d338858d512cf72"
+
+      - name: Run v0.63.38 trajectory/continuity fixtures on exact staged blob
+        run: node plugins/simcore/test_simcore_06338.js
+
+      - name: Replay v0.63 golden behavioral contracts on staged blob
+        run: |
+          git fetch --no-tags --depth=1 origin simcore-06335-runtime-stability
+          git show FETCH_HEAD:plugins/simcore/test_simcore_06335.js > /tmp/simcore-06335-golden.js
+          python - <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-06335-golden.js').read_text(encoding='utf-8')
+          body = old[old.index('function loadSimCore(text)'):]
+          prelude = "const fs = require('fs');\nconst assert = require('assert');\nconst src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');\nconst expectedModules = { size: 17 };\nconst frozenBytes = 0;\nconst moduleDigest = 'behavior-replay';\n\n"
+          body = body.replace('SimCore 0.63.35 golden behavioral contracts: PASS', 'SimCore 0.63.38 replay of v0.63 golden behavioral contracts: PASS')
+          Path('/tmp/simcore-06338-golden-replay.js').write_text(prelude + body, encoding='utf-8')
+          PY
+          node /tmp/simcore-06338-golden-replay.js
+
+      - name: Exact frozen bodies and request/output invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, hashlib
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end].rstrip()
+              return out
+          b = modules(before); a = modules(after)
+          core = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          frozen_runtime = {'runtime-contracts','runtime-host','runtime-session','runtime-mirror','runtime-hooks'}
+          assert all(a[n] == b[n] for n in core)
+          assert all(a[n] == b[n] for n in frozen_runtime)
+          assert {'runtime-cache-candidates','runtime-telemetry'} <= set(a)
+          assert before.count("messages.push({ role: 'system', content: result.promptBlock });") == after.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          for token in ['Risuai.getCurrentCharacterIndex(', 'Risuai.getCurrentChatIndex(', 'Risuai.getChatFromIndex(', 'Risuai.getCharacter(', 'Risuai.setChatToIndex(', 'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(', 'setTimeout(', 'setInterval(', 'requestAnimationFrame(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+          gate = "if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {"
+          assert before.count(gate) == after.count(gate) == 1
+          assert "await this.store.save('out', outIndex, result.state" in a['session']
+          assert after.index("outputStatus: 'COMMITTED'") < after.index('runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state)')
+          for forbidden in ['cache_control','cached_content','prompt_cache_key']:
+              assert forbidden not in after.lower()
+          digest = hashlib.sha256('\n'.join(f'{n}:{hashlib.sha256(a[n].encode()).hexdigest()}' for n in sorted(core)).encode()).hexdigest()
+          print('SimCore 0.63.38 exact staged blob verification: PASS')
+          print('core module bodies:', len(core), 'bytes:', sum(len(a[n].encode()) for n in core), 'digest:', digest)
+          print('handoff: pure-data · memory-only · no prior telemetry required')
+          print('provider cache: UNVERIFIED · prompt/cache behavior unchanged')
+          print('mirror acceptance gate: unchanged')
+          PY

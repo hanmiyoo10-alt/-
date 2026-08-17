@@ -53,10 +53,15 @@ for path in TESTS.glob('*.cjs'):
     )
     write(path, text)
 
-# P3 UI also checks the diagnostic panel label itself. RC deliberately productizes
-# that label while keeping the diagnostic body intact.
+# P3 UI uses an inline assert rather than the common `enabled` form.
 p3_ui_path = TESTS / 'p3-ui.cjs'
 p3_ui = read(p3_ui_path)
+p3_ui = replace_once(
+    p3_ui,
+    "assert.ok(alpha ? (Number(alpha[1]) > 4 || (Number(alpha[1]) === 4 && Number(alpha[2]) >= 3)) : /^(3\\.0\\.0-beta\\.|3\\.0\\.0$)/.test(version), `P3 UI requires alpha.4.3+; got ${version}`);",
+    "assert.ok(alpha ? (Number(alpha[1]) > 4 || (Number(alpha[1]) === 4 && Number(alpha[2]) >= 3)) : /^(3\\.0\\.0-beta\\.|3\\.0\\.0-rc\\.|3\\.0\\.0$)/.test(version), `P3 UI requires alpha.4.3+/RC/stable; got ${version}`);",
+    'P3 UI RC version gate',
+)
 p3_ui = p3_ui.replace(
     '<summary><b>Runtime Diagnostics</b><span>성능 · 진단</span></summary>',
     '<summary><b>Runtime Diagnostics</b><span>요약 · 전체 진단</span></summary>',

@@ -37,4 +37,32 @@ adoption = replace_once(
 )
 write(adoption_path, adoption)
 
-print('aligned RC architecture regressions with managed-bundled runtime')
+# Service-tier fidelity shipped during alpha but is a permanent product contract.
+# Keep its semantic checks while deriving productVersion from the artifact under test.
+tier_path = TESTS / 'p5-service-tier-fidelity.cjs'
+tier = read(tier_path)
+tier = replace_once(
+    tier,
+    "const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));\n",
+    "const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));\nconst version = (source.match(/^\\/\\/@version (.+)$/m) || [])[1] || '';\n",
+    'service tier current version',
+)
+tier = replace_once(
+    tier,
+    "assert.ok(manager.includes(\"const PRODUCT_VERSION = '3.0.0-alpha.5.44';\"));",
+    "assert.ok(manager.includes(`const PRODUCT_VERSION = '${version}';`));",
+    'service tier manager product version',
+)
+tier = replace_once(
+    tier,
+    "assert.equal(manifest.productVersion, '3.0.0-alpha.5.44');\nassert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.44');",
+    "assert.equal(manifest.productVersion, version);\nassert.equal(manifest.components.plugin.version, version);",
+    'service tier manifest product version',
+)
+tier = tier.replace(
+    "console.log('usage-dashboard P5 per-request service tier fidelity: OK · 3.0.0-alpha.5.44');",
+    "console.log(`usage-dashboard P5 per-request service tier fidelity: OK · ${version}`);",
+)
+write(tier_path, tier)
+
+print('aligned RC architecture and permanent feature regressions with current product version')

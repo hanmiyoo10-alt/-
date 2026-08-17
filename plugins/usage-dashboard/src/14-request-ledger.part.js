@@ -61,11 +61,30 @@
         requestedServiceTierSource,
         servedServiceTierSource,
         requestNumber,
+        requestStatus:status,
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
         errorType:success ? '' : String(errorTypeRaw ?? '')
       };
     }).filter(Boolean).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, Math.max(1, Number(limit) || 12));
+  }
+
+  function requestOutcomeCategory(row) {
+    const status = String(row?.requestStatus || '').trim().toLowerCase();
+    if (['cancelled','canceled','aborted','abort','cancel'].includes(status)) return 'cancelled';
+    if (['error','failed','failure','upstream_error','gateway_error','timeout'].includes(status) || row?.success === false) return 'error';
+    if (['success','ok','completed','complete','succeeded'].includes(status) || row?.success === true) return 'success';
+    return 'unknown';
+  }
+
+  function requestOutcomeStats(rows) {
+    const stats = {rows:0,success:0,error:0,cancelled:0,unknown:0};
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      const outcome = requestOutcomeCategory(row);
+      stats.rows += 1;
+      stats[outcome] += 1;
+    }
+    return stats;
   }
 
   function requestLedgerCapabilities(rows) {
@@ -122,6 +141,7 @@
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
+          requestStatus:String(row.requestStatus || current?.requestStatus || ''),
           errorCode:String(row.errorCode || current?.errorCode || ''),
           errorType:String(row.errorType || current?.errorType || ''),
           scopes:Array.from(scopes)

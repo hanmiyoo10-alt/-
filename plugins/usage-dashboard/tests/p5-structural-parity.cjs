@@ -10,7 +10,7 @@ if (version === '3.0.0-alpha.5.44') {
   const hash = crypto.createHash('sha256').update(normalized).digest('hex');
   assert.equal(hash, fixture.normalizedArtifactSha256, '5.44 changed runtime bytes beyond the product version');
 } else {
-  assert.ok(version === '3.0.0-alpha.5.45' || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0' || version === '3.0.1', `unexpected post-5.44 version: ${version}`);
+  assert.ok(version === '3.0.0-alpha.5.46' || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0' || version === '3.0.1', `unexpected post-5.44 version: ${version}`);
 }
 assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));

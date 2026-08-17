@@ -9,6 +9,13 @@
     const started = Date.now();
     const refreshAttribution = beginRefreshAttribution(reason, started);
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
+    const refreshPhaseDurations = Object.create(null);
+    const refreshPhaseNow = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const finishRefreshPhase = (name, phaseStarted) => {
+      const ended = refreshPhaseNow();
+      refreshPhaseDurations[String(name)] = Math.max(0, roundPerfMs(ended - Number(phaseStarted || ended)) || 0);
+      return ended;
+    };
     performanceRuntime.activeRefreshStartedPerf = startedPerf;
     performanceRuntime.activeRefreshReason = String(reason || 'manual');
     const resumeVisibilityRefresh = reason === 'visibility' && performanceRuntime.resumeMeasurePending;
@@ -24,25 +31,37 @@
     }
     refreshInFlight = (async () => {
       try {
+        let refreshPhaseStarted = refreshPhaseNow();
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
+        finishRefreshPhase('manager-probe', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        finishRefreshPhase('manager-sync', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
+        finishRefreshPhase('engine-adopt', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        finishRefreshPhase('engine-sync', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         state.bridgeManagerRuntime = managerRuntime;
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const snapshot = await fetchSnapshot();
+        finishRefreshPhase('snapshot', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         state.data = applyObservedToday(snapshot);
+        finishRefreshPhase('normalize-ledger', refreshPhaseStarted);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
           const to = String(state.data.creditsOrganizationId || '');
@@ -66,10 +85,14 @@
         state.retryDelayMs = 0;
         state.nextRetryAt = null;
         updateRuntimeState('refresh-success');
+        refreshPhaseStarted = refreshPhaseNow();
         await persistRefreshState('refresh-success-persist');
+        finishRefreshPhase('persist', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         await renderRefreshWidget(reason, 'refresh-success-render');
+        finishRefreshPhase('widget-render', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         if (resumeVisibilityRefresh) {
@@ -110,6 +133,10 @@
         performanceRuntime.lastRefreshStartedPerf = startedPerf;
         performanceRuntime.lastRefreshEndedPerf = endedPerf;
       }
+      performanceRuntime.lastRefreshPhases = {...refreshPhaseDurations};
+      const slowestRefreshPhase = Object.entries(refreshPhaseDurations).sort((a,b) => Number(b[1] || 0) - Number(a[1] || 0))[0] || null;
+      performanceRuntime.lastRefreshSlowestPhase = slowestRefreshPhase ? String(slowestRefreshPhase[0]) : '';
+      performanceRuntime.lastRefreshSlowestPhaseMs = slowestRefreshPhase ? Number(slowestRefreshPhase[1]) : null;
       const attributionStatus = state.lastRefreshReason === reason
         ? (state.bridgeStatus === 'connected' ? 'ok' : state.bridgeStatus === 'error' ? 'error' : String(state.bridgeStatus || 'unknown'))
         : 'unknown';

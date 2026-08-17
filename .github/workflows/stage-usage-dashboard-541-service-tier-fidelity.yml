@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.41 Service Tier Fidelity
+name: Stage Usage Dashboard 5.42 DevPass Account Parity
 
 on:
   push:
@@ -19,12 +19,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Patch per-request service tier fidelity and DevPass parity
+      - name: Patch DevPass account detail parity
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha541_patch.py
-          python3 plugins/usage-dashboard/tools/release_alpha541_patch.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha542_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha542_patch.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
@@ -47,40 +47,40 @@ jobs:
           node plugins/usage-dashboard/tests/p5-lifecycle-race.cjs
           node plugins/usage-dashboard/tests/p5-bridge-control-sync.cjs
           node plugins/usage-dashboard/tests/p5-service-tier-fidelity.cjs
+          node plugins/usage-dashboard/tests/p5-devpass-account-parity.cjs
           git diff --check
-          grep -Fq '//@version 3.0.0-alpha.5.41' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.42' plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
-          grep -Fq 'function requestServiceTierText(row)' plugins/usage-dashboard/latest.js
+          grep -Fq 'DevPass account' plugins/usage-dashboard/latest.js
+          grep -Fq 'Reset Pass · PAYG' plugins/usage-dashboard/latest.js
+          grep -Fq '구매/보유 패스' plugins/usage-dashboard/latest.js
+          grep -Fq 'PAYG overflow' plugins/usage-dashboard/latest.js
+          grep -Fq 'DevPass account detail:' plugins/usage-dashboard/latest.js
           grep -Fq 'Service tier fidelity:' plugins/usage-dashboard/latest.js
-          grep -Fq 'DevPass account tier:' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq 'requestedServiceTierSource' plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.41';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.42';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.41"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"productVersion": "3.0.0-alpha.5.42"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
 
-      - name: Commit validated 5.41 modular source to main
+      - name: Commit validated 5.42 modular source to main
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/usage-dashboard/src plugins/usage-dashboard/latest.js \
-            plugins/usage-dashboard/tests/p3-ui.cjs \
-            plugins/usage-dashboard/tests/p5-bundled-engine.cjs \
-            plugins/usage-dashboard/tests/p5-bridge-control-sync.cjs \
             plugins/usage-dashboard/tests/p5-service-tier-fidelity.cjs \
-            plugins/usage-dashboard/runtime/bridge-engine.mjs \
+            plugins/usage-dashboard/tests/p5-devpass-account-parity.cjs \
             plugins/usage-dashboard/runtime/bridge-manager.cjs \
             plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
-          git commit -m 'release: Local Usage Dashboard 5.41 per-request service tier fidelity'
+          git commit -m 'release: Local Usage Dashboard 5.42 DevPass account detail parity'
           git pull --rebase origin main
           git push origin HEAD:main
 
-      - name: Publish 5.41 product artifacts to release channel
+      - name: Publish 5.42 product artifacts to release channel
         shell: bash
         run: |
           set -euo pipefail
@@ -100,17 +100,18 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq '//@version 3.0.0-alpha.5.41' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.42' plugins/usage-dashboard/latest.js
+          grep -Fq 'Reset Pass · PAYG' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.41';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.41"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.42';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.42"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 5.41'
+            echo 'release-usage-dashboard already matches 5.42'
             exit 0
           fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.41 product artifacts'
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.42 product artifacts'
           git push origin HEAD:release-usage-dashboard

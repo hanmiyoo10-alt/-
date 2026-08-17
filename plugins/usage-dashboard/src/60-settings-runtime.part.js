@@ -10,6 +10,42 @@
     noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
   }
 
+  function bridgeControlsHtml() {
+    const lifecycle = bridgeLifecycleMode();
+    const connecting = lifecycle === 'connecting';
+    const refreshAllowed = canBridgeRefresh();
+    const forgetArmed = Boolean(token && Number(tokenForgetArmedUntil || 0) > Date.now());
+    const connectLabel = connecting
+      ? '연결 중…'
+      : state.bridgeEnabled
+        ? '저장하고 다시 연결'
+        : token
+          ? '동기화 다시 켜기'
+          : '저장하고 연결';
+    const forgetLabel = !token
+      ? '저장된 토큰 없음'
+      : forgetArmed
+        ? '정말 지우기?'
+        : '저장된 토큰 지우기';
+    const statusLabel = lifecycle === 'live' ? 'connected' : lifecycle;
+    return `<div class="bridge-control-live" data-bridge-lifecycle="${esc(lifecycle)}">
+      <div class="actions"><button class="primary" id="connect" ${connecting?'disabled':''}>${connectLabel}</button><button id="pause-sync" ${state.bridgeEnabled?'':'disabled'}>${state.bridgeEnabled?'동기화 끄기':'동기화 꺼짐'}</button><button id="forget-token" ${token?'':'disabled'}>${forgetLabel}</button><button id="refresh" ${refreshAllowed?'':'disabled'}>지금 새로고침</button><button id="retry-now" ${refreshAllowed?'':'disabled'}>백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
+      <p>상태 ${esc(statusLabel)} · 토큰 ${token?'저장됨':'없음'} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
+    </div>`;
+  }
+
+  function renderBridgeControls() {
+    const current = document.querySelector('.bridge-control-live');
+    if (!current || typeof document?.createElement !== 'function') return false;
+    const holder = document.createElement('div');
+    holder.innerHTML = bridgeControlsHtml();
+    const next = holder.firstElementChild;
+    if (!next) return false;
+    if (current.outerHTML !== next.outerHTML) current.replaceWith(next);
+    bindSettings();
+    return true;
+  }
+
   const PANEL_PARTIAL_SELECTORS = [
     '.grid > section.panel.metric',
     '.grid > section.panel.wide:not(.usage-primary):not(.activity-secondary):not(.analytics-panel)',
@@ -33,10 +69,15 @@
       for (let i = 0; i < currentNodes.length; i += 1) staged.push([currentNodes[i], nextNodes[i]]);
     }
 
-    // Runtime Diagnostics is safe to refresh live. Local Bridge settings are
-    // deliberately left untouched so typed-but-unsaved values are preserved.
+    // Keep Local Bridge config inputs untouched so typed-but-unsaved values survive,
+    // but live-patch the lifecycle control surface and Runtime Diagnostics.
     const currentAdvanced = Array.from(document.querySelectorAll('details.advanced-panel'));
     const nextAdvanced = Array.from(nextDoc.querySelectorAll('details.advanced-panel'));
+    const bridgeControlsCurrent = currentAdvanced[0]?.querySelector('.bridge-control-live');
+    const bridgeControlsNext = nextAdvanced[0]?.querySelector('.bridge-control-live');
+    if (currentAdvanced[0]?.open && bridgeControlsCurrent && bridgeControlsNext) {
+      staged.push([bridgeControlsCurrent, bridgeControlsNext]);
+    }
     const diagnosticsCurrent = currentAdvanced[1]?.querySelector('.advanced-body');
     const diagnosticsNext = nextAdvanced[1]?.querySelector('.advanced-body');
     if (currentAdvanced[1]?.open && diagnosticsCurrent && diagnosticsNext) {
@@ -146,8 +187,18 @@
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
         noteBridgeLifecycleTransition('connecting','connect');
-        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
-      } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
+        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now();
+        await persist();
+        renderBridgeControls();
+        await renderWidget('bridge-connecting');
+        scheduleRefresh();
+        await enqueueRefresh('connect');
+      } catch (e) {
+        state.bridgeStatus='error'; state.bridgeError=e?.message||String(e);
+        await persist();
+        await renderWidget('bridge-connect-error');
+        renderBridgeControls();
+      }
     };
     if (q('#pause-sync')) q('#pause-sync').onclick = async () => {
       if (!state.bridgeEnabled) return;
@@ -162,8 +213,8 @@
       cancelRefreshScheduler();
       updateRuntimeState('bridge-paused');
       await persist();
+      renderBridgeControls();
       await renderWidget('bridge-paused');
-      renderSettings();
     };
     if (q('#forget-token')) q('#forget-token').onclick = async e => {
       if (!token) return;
@@ -171,12 +222,11 @@
       const now = Date.now();
       if (now > Number(tokenForgetArmedUntil || 0)) {
         tokenForgetArmedUntil = now + 5000;
-        const old = button.textContent;
-        button.textContent = '정말 지우기?';
+        renderBridgeControls();
         setTimeout(() => {
-          if (button?.isConnected && tokenForgetArmedUntil > 0 && Date.now() >= tokenForgetArmedUntil) {
+          if (tokenForgetArmedUntil > 0 && Date.now() >= tokenForgetArmedUntil) {
             tokenForgetArmedUntil = 0;
-            button.textContent = old;
+            renderBridgeControls();
           }
         }, 5100);
         return;
@@ -197,8 +247,8 @@
       cancelRefreshScheduler();
       updateRuntimeState('bridge-token-forgotten');
       await persist();
+      renderBridgeControls();
       await renderWidget('bridge-token-forgotten');
-      renderSettings();
     };
     document.querySelectorAll('[data-usage-scope]').forEach(button => {
       button.onclick = async () => {

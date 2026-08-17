@@ -58,6 +58,10 @@ for (const marker of [
   'widgetRenderTail',
   'renderWidgetNow',
   'Lifecycle refresh:',
+  'bridge-config-static',
+  'bridge-control-live',
+  'bridgeControlsHtml',
+  'renderBridgeControls',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

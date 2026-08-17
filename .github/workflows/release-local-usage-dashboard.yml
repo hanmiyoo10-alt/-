@@ -59,7 +59,9 @@ jobs:
             p5-floating-widget-ux.cjs \
             p5-module-layout.cjs \
             p5-structural-parity.cjs \
-            p5-state-compatibility.cjs; do
+            p5-state-compatibility.cjs \
+            p6-rc-migration.cjs \
+            p6-rc-contract.cjs; do
             node "plugins/usage-dashboard/tests/$test"
           done
 
@@ -99,6 +101,8 @@ jobs:
           grep -Fq 'DevPass account detail:' plugins/usage-dashboard/latest.js
           grep -Fq 'Floating widget UX:' plugins/usage-dashboard/latest.js
           grep -Fq 'Lifecycle refresh:' plugins/usage-dashboard/latest.js
+          grep -Fq 'System Health' plugins/usage-dashboard/latest.js
+          grep -Fq 'Lifecycle & Recovery' plugins/usage-dashboard/latest.js
           grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
 
           printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt

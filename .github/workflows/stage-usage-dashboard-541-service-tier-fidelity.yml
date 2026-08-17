@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
       - 'plugins/usage-dashboard/tools/release_cache_observability_547.py'
+      - 'plugins/usage-dashboard/tests/p6-release-hardening.cjs'
 
 permissions:
   contents: write

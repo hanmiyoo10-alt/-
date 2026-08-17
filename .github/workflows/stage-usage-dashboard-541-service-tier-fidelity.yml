@@ -1,10 +1,12 @@
-name: Stage Usage Dashboard 3.0.0-rc.1 Stable Productization r5
+name: Stage Usage Dashboard 3.0.0-rc.1 Stable Productization r6
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
+      - 'plugins/usage-dashboard/tools/release_rc1_productization.py'
+      - 'plugins/usage-dashboard/tools/release_rc1_test_compat.py'
 
 permissions:
   contents: write

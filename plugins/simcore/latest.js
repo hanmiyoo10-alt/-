@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.31
+//@version 0.63.32
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.32 Snapshot Write Cost Attribution:
+// - Extends the existing request telemetry with the already-serialized bundled turn snapshot character length so pluginStorage set latency can be compared against payload size without another storage call or encoding pass
+// - Reports whether the pre snapshot recovery read was skipped/read-hit/read-miss, the restore reason, turn payload characters, serialize time, set time and set milliseconds per 1K serialized characters
+// - Uses payload string length rather than UTF-8 byte measurement deliberately: no TextEncoder/Blob/second stringify scan is added to the request-critical path
+// - Keeps snapshot keys, bundled {pre,send} payload shape, durability/await ordering, storage schema, host/API call counts and all generation/output semantics frozen; only Store/Session metric plumbing plus runtime diagnostic formatting changes
 //
 // v0.63.31 Request / Handshake Breakdown Diagnostics:
 // - Exposes the request timing measurements already collected on the hot path and adds read-only substage timing around loadCoreForChat so intermittent handshake latency can be attributed instead of guessed
@@ -456,7 +462,10 @@ class SnapshotStore {
     const metric = opts.metric && typeof opts.metric === 'object' ? opts.metric : null;
     let t = storeNow();
     const payload = JSON.stringify({ snapshotVersion: 1, pre: preState, send: sendState });
-    if (metric) metric.serializeMs = Math.max(0, storeNow() - t);
+    if (metric) {
+      metric.serializeMs = Math.max(0, storeNow() - t);
+      metric.payloadChars = payload.length;
+    }
     t = storeNow();
     await this.b.set(this._k('turn', index), payload);
     if (metric) metric.setMs = Math.max(0, storeNow() - t);
@@ -3651,6 +3660,7 @@ class CoreRulesetSession {
       detail.preLoadMs = 0;
       detail.turnSerializeMs = 0;
       detail.turnSetMs = 0;
+      detail.turnPayloadChars = 0;
       detail.lifecycleMs = 0;
       detail.runtimeRenderMs = 0;
       detail.mustRestorePre = false;
@@ -3706,6 +3716,7 @@ class CoreRulesetSession {
     if (detail) {
       detail.turnSerializeMs = Number(turnMetric.serializeMs || 0);
       detail.turnSetMs = Number(turnMetric.setMs || 0);
+      detail.turnPayloadChars = Number(turnMetric.payloadChars || 0);
     }
 
     this.current = state;
@@ -4975,6 +4986,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const onSendKnown = n(send.preLoadMs) + n(send.templateBootstrapMs) + n(send.lifecycleMs)
       + n(send.turnSerializeMs) + n(send.turnSetMs) + n(send.runtimeRenderMs);
     const onSendOther = Math.max(0, n(perf.onSendMs) - onSendKnown);
+    const turnPayloadChars = n(send.turnPayloadChars);
+    const turnSetPerKChars = turnPayloadChars > 0
+      ? n(send.turnSetMs) / (turnPayloadChars / 1000)
+      : null;
 
     const candidates = [
       ['INDICES', n(perf.indicesMs)], ['CHAT_LOAD', n(perf.chatLoadMs)],
@@ -4997,7 +5012,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       sessionChatFallbackMs: n(session.chatFallbackMs), characterLoadMs: n(session.characterLoadMs), initScanMs: n(session.initScanMs), initMs: n(session.initMs),
       bootstrapMs: n(perf.bootstrapMs), editReconcileMs: n(perf.editReconcileMs), aliasRepairMs: n(perf.aliasRepairMs), onSendMs: n(perf.onSendMs), postOnSendMs: n(perf.postOnSendMs),
       preLoadMs: n(send.preLoadMs), templateBootstrapMs: n(send.templateBootstrapMs), lifecycleMs: n(send.lifecycleMs),
-      turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), runtimeRenderMs: n(send.runtimeRenderMs),
+      turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), turnPayloadChars, turnSetPerKChars, runtimeRenderMs: n(send.runtimeRenderMs),
+      restoreReason: String(send.restoreReason || 'n/a'), preRead: !!send.mustRestorePre, preHit: !!send.existingPre,
     };
   }
 
@@ -5046,7 +5062,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.31',
+      'Version: 0.63.32',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5062,6 +5078,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
       `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
+      `Pre snapshot: ${requestBreakdown ? `${String(requestBreakdown.restoreReason || 'n/a').toUpperCase()} · ${requestBreakdown.preRead ? `READ ${requestBreakdown.preHit ? 'HIT' : 'MISS'}` : 'SKIPPED'} · ${diagnosticFormatMs(requestBreakdown.preLoadMs)}` : 'n/a'}`,
+      `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,
       `Request hotspot: ${requestBreakdown ? `${requestBreakdown.hotspot} · ${diagnosticFormatMs(requestBreakdown.hotspotMs)} · ${Number(requestBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
@@ -5282,7 +5300,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.31</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.32</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

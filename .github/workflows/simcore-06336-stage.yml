@@ -25,15 +25,17 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p = Path('plugins/simcore/patch_simcore_06336.py')
-          s = p.read_text(encoding='utf-8')
-          old = "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n'\n"
-          new = "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n  function runtimeIsCurrent('\\n"
-          assert old in s
-          s = s.replace(old, new, 1)
-          old2 = "    src = replace_once(src, init_anchor, init_block, 'runtime init')\n"
-          new2 = "    src = replace_once(src, init_anchor, init_block + '  function runtimeIsCurrent(', 'runtime init')\n"
-          assert old2 in s
-          p.write_text(s.replace(old2, new2, 1), encoding='utf-8')
+          lines = p.read_text(encoding='utf-8').splitlines()
+          changed = 0
+          for i, line in enumerate(lines):
+              if line == "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n'":
+                  lines[i] = "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n  function runtimeIsCurrent('"
+                  changed += 1
+              elif line == "    src = replace_once(src, init_anchor, init_block, 'runtime init')":
+                  lines[i] = "    src = replace_once(src, init_anchor, init_block + '  function runtimeIsCurrent(', 'runtime init')"
+                  changed += 1
+          assert changed == 2, changed
+          p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
           python plugins/simcore/patch_simcore_06336.py
 

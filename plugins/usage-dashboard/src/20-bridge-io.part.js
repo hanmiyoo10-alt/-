@@ -1,7 +1,9 @@
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
     const base = normalizeBridgeBase(state.bridgeBase);
-    const res = await Risuai.nativeFetch(`${base}/snapshot`, {
+    const selectedCreditsOrgId = String(state.selectedCreditsOrgId || '').trim();
+    const snapshotUrl = `${base}/snapshot${selectedCreditsOrgId ? `?creditsOrgId=${encodeURIComponent(selectedCreditsOrgId)}` : ''}`;
+    const res = await Risuai.nativeFetch(snapshotUrl, {
       method:'GET',
       headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
     });

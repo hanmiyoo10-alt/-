@@ -35,6 +35,16 @@
         const snapshot = await fetchSnapshot();
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         state.data = applyObservedToday(snapshot);
+        if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
+          const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
+          const to = String(state.data.creditsOrganizationId || '');
+          if (from && to && from !== to) {
+            state.creditsOrgFallbackCount = Number(state.creditsOrgFallbackCount || 0) + 1;
+            state.creditsOrgLastFallbackFrom = from;
+            state.creditsOrgLastFallbackTo = to;
+          }
+          state.selectedCreditsOrgId = to;
+        }
         collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';

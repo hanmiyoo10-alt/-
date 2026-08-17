@@ -481,7 +481,12 @@
         : (Array.isArray(r.orgs?.organizations)
           ? r.orgs.organizations
           : (Array.isArray(r.orgs?.data?.organizations) ? r.orgs.data.organizations : []));
+      const selectedCreditsOrgId = String(r.creditsOrganizationId || '').trim();
       const creditOrg = orgRows.find(org =>
+        selectedCreditsOrgId && String(org?.id || '') === selectedCreditsOrgId &&
+        String(org?.kind || 'default') === 'default' &&
+        String(org?.status || 'active') !== 'deleted'
+      ) || orgRows.find(org =>
         String(org?.kind || 'default') === 'default' &&
         String(org?.status || 'active') !== 'deleted' &&
         num(org?.credits)
@@ -512,7 +517,12 @@
         source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
         health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
         bridge:normalizeBridgeMetadata(r),
-        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes
+        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes,
+        organizations:orgRows.filter(org => String(org?.id || '') && String(org?.status || 'active') !== 'deleted').map(org => ({id:String(org.id),name:String(org?.name || org.id),kind:String(org?.kind || 'default'),status:String(org?.status || 'active'),credits:num(org?.credits)?Number(org.credits):null})),
+        creditsOrganizationId:String(r.creditsOrganizationId || creditOrg?.id || ''),
+        requestedCreditsOrganizationId:String(r.requestedCreditsOrganizationId || ''),
+        creditsOrganizationFallback:r.creditsOrganizationFallback === true,
+        creditsOrganizationFallbackReason:String(r.creditsOrganizationFallbackReason || '')
       };
       if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('DevPass Bridge에 표시할 데이터가 없어.');
       return out;

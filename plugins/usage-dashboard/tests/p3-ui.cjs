@@ -42,6 +42,9 @@ for (const marker of [
   'async function recreateWidget()',
   "await addWidgetRemoteListener(widget,'pointerdown',down);",
   'widgetRemoteListeners.length=0;',
+  'id=\"credits-org-id\"',
+  'selectedCreditsOrgId',
+  'creditsOrganizationFallback',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

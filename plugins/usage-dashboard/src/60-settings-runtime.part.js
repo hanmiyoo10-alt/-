@@ -156,6 +156,15 @@
         renderSettings();
       };
     });
+    if (q('#credits-org-id')) q('#credits-org-id').onchange = async e => {
+      const next = String(e.target.value || '').trim();
+      if (!next || next === String(state.selectedCreditsOrgId || '')) return;
+      state.selectedCreditsOrgId = next;
+      state.selectedHourKey = '';
+      await persist();
+      await enqueueRefresh('manual');
+      renderSettings();
+    };
     document.querySelectorAll('[data-recent-filter]').forEach(button => {
       button.onclick = async () => {
         const next = String(button.getAttribute('data-recent-filter') || 'all');

@@ -1,12 +1,11 @@
-name: Stage Usage Dashboard 3.0.0-alpha.5.46 Release Hardening
+name: Stage Usage Dashboard 3.0.0-alpha.5.47 Cache Observability
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
-      - 'plugins/usage-dashboard/tools/release_hardening_546.py'
-      - 'plugins/usage-dashboard/tools/release_hardening_546_boundary_fix.py'
+      - 'plugins/usage-dashboard/tools/release_cache_observability_547.py'
 
 permissions:
   contents: write
@@ -21,14 +20,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Patch release hardening candidate
+      - name: Patch cache observability candidate
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile plugins/usage-dashboard/tools/release_hardening_546.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_hardening_546_boundary_fix.py
-          python3 plugins/usage-dashboard/tools/release_hardening_546.py
-          python3 plugins/usage-dashboard/tools/release_hardening_546_boundary_fix.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_cache_observability_547.py
+          python3 plugins/usage-dashboard/tools/release_cache_observability_547.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
@@ -61,27 +58,32 @@ jobs:
             p5-state-compatibility.cjs \
             p6-rc-migration.cjs \
             p6-rc-contract.cjs \
-            p6-release-hardening.cjs; do
+            p6-release-hardening.cjs \
+            p7-cache-observability.cjs; do
             node "plugins/usage-dashboard/tests/$test"
           done
 
           git diff --check
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
-          grep -Fq '//@version 3.0.0-alpha.5.46' plugins/usage-dashboard/latest.js
-          grep -Fq "const VERSION = '3.0.0-alpha.5.46';" plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.47' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.47';" plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.46';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.46"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.47';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.47"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq 'Stable readiness:' plugins/usage-dashboard/latest.js
           grep -Fq 'Refresh phase duration:' plugins/usage-dashboard/latest.js
           grep -Fq 'Request outcome taxonomy:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache observability:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache Read' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache Write' plugins/usage-dashboard/latest.js
+          grep -Fq 'Token Read Ratio' plugins/usage-dashboard/latest.js
           grep -Fq "const STATE_KEY = 'local-usage-dashboard-v3';" plugins/usage-dashboard/latest.js
           grep -Fq "const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';" plugins/usage-dashboard/latest.js
 
-      - name: Commit validated hardening candidate to main
+      - name: Commit validated cache candidate to main
         shell: bash
         run: |
           set -euo pipefail
@@ -94,14 +96,14 @@ jobs:
             plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo 'main already matches 3.0.0-alpha.5.46'
+            echo 'main already matches 3.0.0-alpha.5.47'
           else
-            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.46 release hardening candidate'
+            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.47 cache observability candidate'
             git pull --rebase origin main
             git push origin HEAD:main
           fi
 
-      - name: Publish hardening candidate to release channel
+      - name: Publish cache candidate to release channel
         shell: bash
         run: |
           set -euo pipefail
@@ -121,18 +123,19 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq '//@version 3.0.0-alpha.5.46' plugins/usage-dashboard/latest.js
-          grep -Fq 'Stable readiness:' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.47' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache observability:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Token Read Ratio' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.46';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.46"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.47';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.47"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.46'
+            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.47'
             exit 0
           fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.46 product artifacts'
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.47 product artifacts'
           git push origin HEAD:release-usage-dashboard

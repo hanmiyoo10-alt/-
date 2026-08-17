@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
-const usage = fs.readFileSync(`${root}/src/10-usage-data.part.js`, 'utf8');
-const ui = fs.readFileSync(`${root}/src/50-settings-ui.part.js`, 'utf8');
+const usage = ['10-request-normalize.part.js','12-service-tier.part.js','14-request-ledger.part.js','16-usage-analytics.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('');
+const ui = ['50-dashboard-context.part.js','52-analytics-context.part.js','54-dashboard-markup.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('');
 const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.43'));
+assert.ok(source.includes('//@version 3.0.0-alpha.5.44'));
 for (const marker of [
   'cycle:ds.cycle',
   'billingCycleStart:ds.billingCycleStart',
@@ -52,4 +52,4 @@ assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-console.log('usage-dashboard P5 DevPass account detail parity: OK · 3.0.0-alpha.5.43');
+console.log('usage-dashboard P5 DevPass account detail parity: OK · 3.0.0-alpha.5.44');

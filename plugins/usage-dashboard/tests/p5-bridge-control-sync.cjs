@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
-const ui = fs.readFileSync(`${root}/src/50-settings-ui.part.js`, 'utf8');
+const ui = ['50-dashboard-context.part.js','52-analytics-context.part.js','54-dashboard-markup.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('');
 const runtime = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf8');
 
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
@@ -31,6 +31,6 @@ for (const marker of [
 assert.ok(!runtime.includes("button.textContent = '정말 지우기?'"), 'token confirmation must render from state, not mutate stale button text');
 assert.ok(runtime.includes("currentAdvanced[0]?.querySelector('.bridge-control-live')"), 'Local Bridge live control partial patch missing');
 assert.ok(!runtime.includes("currentAdvanced[0]?.querySelector('.advanced-body')"), 'typed Local Bridge config body must not be live-patched');
-assert.ok(ui.startsWith('  function settingsHtml() {'), 'settings UI modular boundary drifted');
-assert.ok(runtime.startsWith('  function renderSettings() {'), 'settings runtime modular boundary drifted');
+assert.ok(ui.trimStart().startsWith('function settingsHtml() {'), 'settings UI modular boundary drifted');
+assert.ok(runtime.trimStart().startsWith('function renderSettings() {'), 'settings runtime modular boundary drifted');
 console.log(`usage-dashboard P5 bridge control surface sync: OK · ${version}`);

@@ -1,3 +1,4 @@
+
   function diagText() {
     const diagnosticCapturedAt = Date.now();
     const d = state.data || {}, h = d.health || {};
@@ -165,4 +166,3 @@ function todayOverviewMetrics(d) {
   }
   return {devToday,premiumToday,creditsToday,observedDailyTotal,monthEnd,monthlyLeft,weeklyLeft,projected,projectedPercent,cost24h:num(a?.cost24h)?Number(a.cost24h):null,resetPasses:num(w?.resetPasses)?Number(w.resetPasses):null,resetPassesExact:w?.resetPassesExact===true};
 }
-

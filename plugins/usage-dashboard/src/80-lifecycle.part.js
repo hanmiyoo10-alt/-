@@ -1,3 +1,4 @@
+
   function scheduleRefresh() {
     if (runtimeDisposed) return;
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
@@ -35,4 +36,3 @@
     }
     startUiStallProbe();
   }
-

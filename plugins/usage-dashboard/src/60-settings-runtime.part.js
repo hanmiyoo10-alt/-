@@ -1,3 +1,4 @@
+
   function renderSettings() {
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
     document.body.innerHTML = settingsHtml();
@@ -395,4 +396,3 @@
     widgetMobileToggleBlockedUntil=Math.max(widgetMobileToggleBlockedUntil,Date.now()+250);
     await renderWidget('panel-open-settled');
   }
-

@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
-const core = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
+const core = ['00-runtime-core.part.js','02-runtime-state.part.js','04-runtime-bridge-normalize.part.js','06-runtime-stability.part.js','08-runtime-product.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('');
 const refresh = fs.readFileSync(`${root}/src/30-refresh-runtime.part.js`, 'utf8');
 const settings = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf8');
-const widget = fs.readFileSync(`${root}/src/70-floating-widget.part.js`, 'utf8');
+const widget = ['70-widget-render.part.js','72-widget-layout.part.js','74-widget-gestures.part.js','76-widget-runtime.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('');
 const lifecycle = fs.readFileSync(`${root}/src/80-lifecycle.part.js`, 'utf8');
 
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';

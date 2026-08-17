@@ -1,71 +1,143 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.43",
+  "version": "3.0.0-alpha.5.44",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "0c3a1c951cd3cbdb96bab00bce544fa010bc937abee93d4669dc77b99a37e972",
+  "artifactSha256": "7be87227928dc7fdb80f9ffaa7373e94ef08c31175c01d0778fec69115c3efce",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 57384,
-      "sha256": "9274ddc99ce1086b6e5fb3e3869190216bd7ba90afb1c9ea10afeec87b4991f3"
+      "bytes": 13491,
+      "sha256": "ef97bfc942b8f3e705a80d1896d2479381af926663dff8feb7a4275c4299d481"
     },
     {
-      "file": "10-usage-data.part.js",
-      "label": "usage normalization",
-      "bytes": 43729,
-      "sha256": "ff982c2667d52272cd9df88eeec158fffdbca39b353b0678662d016e55e5fdfb"
+      "file": "02-runtime-state.part.js",
+      "label": "runtime/state + helpers",
+      "bytes": 2278,
+      "sha256": "9555b386c14bc0fd65989cc3ce95ac7d4170bdd2af8f88bf39ad9b2c38252ed8"
+    },
+    {
+      "file": "04-runtime-bridge-normalize.part.js",
+      "label": "runtime/bridge normalization",
+      "bytes": 3838,
+      "sha256": "092c810728e5c106b6fef57aa72632051f152bbfbd6a15f972ddeb6b57d1801a"
+    },
+    {
+      "file": "06-runtime-stability.part.js",
+      "label": "runtime/stability snapshots",
+      "bytes": 2461,
+      "sha256": "9a491e0332e56441986eb32cac2e55ca483c74ff1de21ef8771988564b2b5644"
+    },
+    {
+      "file": "08-runtime-product.part.js",
+      "label": "runtime/product snapshots",
+      "bytes": 35315,
+      "sha256": "fe7766eb4349f36f60213184dede26c3fdcb2173c6f9c1660cfb7e41df47d7e0"
+    },
+    {
+      "file": "10-request-normalize.part.js",
+      "label": "request normalization",
+      "bytes": 1709,
+      "sha256": "157399d89c011154c9b1d4eed7613f1a8fb8366a099bfbae661e78b04737004a"
+    },
+    {
+      "file": "12-service-tier.part.js",
+      "label": "request/service tier fidelity",
+      "bytes": 2790,
+      "sha256": "1f000b97b2d89fbd74a9ce0079f0d94e090200e2599257943639538347ea743f"
+    },
+    {
+      "file": "14-request-ledger.part.js",
+      "label": "request ledger + drilldown",
+      "bytes": 24039,
+      "sha256": "09cf958a88ba25341cb1e0ed81c6b315ac25ef17696031c78b6df4ada21dc13a"
+    },
+    {
+      "file": "16-usage-analytics.part.js",
+      "label": "usage + analytics normalization",
+      "bytes": 15191,
+      "sha256": "06f5e87376ea094d028129fcf45be22dda25a8ef64df4291de6bf997452d6d73"
     },
     {
       "file": "20-bridge-io.part.js",
       "label": "bridge I/O",
-      "bytes": 10000,
-      "sha256": "61db5d643069af70f7ab3bc5e4717ff6218a520d7357ea97c44d3a6e696e04f4"
+      "bytes": 10001,
+      "sha256": "53a27be0b88bcfccc35b34d16620072abe486b35f36ac0aec807da00bf9bbe86"
     },
     {
       "file": "30-refresh-runtime.part.js",
       "label": "refresh runtime",
-      "bytes": 7703,
-      "sha256": "92a42d8b1c9932eea99c87f8538fa0c961017433a792a3a5c70d74bfc15d3c69"
+      "bytes": 7702,
+      "sha256": "26dc20ca5bb2e9bc209ded8abe8411bc1e153c0d6e28e8baeb9e9e3520687abc"
     },
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
       "bytes": 24175,
-      "sha256": "a46e4c1a619adc070942cccc2017ed90d75af027ac9acc22ac4c35d98ad9c98c"
+      "sha256": "7b3f757d8ee1860ce442e6fc21ba17d59a8d7827a4b7c5feeda61c0822f82ff9"
     },
     {
-      "file": "50-settings-ui.part.js",
-      "label": "settings UI",
-      "bytes": 37209,
-      "sha256": "7db3162517ad6214162811dba039745f414658f87f62482a987c8c52f9273ba5"
+      "file": "50-dashboard-context.part.js",
+      "label": "dashboard/context",
+      "bytes": 7059,
+      "sha256": "ecb59449518bba2f5a1f8fedc179777d4084ed91e8664efed6077522adaa1bda"
+    },
+    {
+      "file": "52-analytics-context.part.js",
+      "label": "dashboard/analytics context",
+      "bytes": 2107,
+      "sha256": "ca57396414484e74c6a12121f530837c1a285e560f8fd81287a08c72584b12e0"
+    },
+    {
+      "file": "54-dashboard-markup.part.js",
+      "label": "dashboard/markup",
+      "bytes": 28043,
+      "sha256": "14908cee4fdb7bc346c8eb18c788e9b754606b2fd01a23225908955b4b7263ba"
     },
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
       "bytes": 18758,
-      "sha256": "70cdbba2a3729d78fe2fb72f8749a4fa67877fa221857de829db1478279f9931"
+      "sha256": "db7773f6f4a3d7fb510211e3f6f4729143c900e7efedbda84853a33d7f4c0bca"
     },
     {
-      "file": "70-floating-widget.part.js",
-      "label": "floating widget",
-      "bytes": 22236,
-      "sha256": "99549591d2c1dcbc8c7e90a1952488834fa41477d252b2e2380f853f1b99c2fe"
+      "file": "70-widget-render.part.js",
+      "label": "floating widget/render",
+      "bytes": 6896,
+      "sha256": "4761ea6748d5cb18bbd55c6a6eacc545e006f1766080178e211fc1aa9c9c158c"
+    },
+    {
+      "file": "72-widget-layout.part.js",
+      "label": "floating widget/layout",
+      "bytes": 6170,
+      "sha256": "9ae3856c3ae856df98e444b664a9412d606958b29f5322cb3fefa143d2f2d21e"
+    },
+    {
+      "file": "74-widget-gestures.part.js",
+      "label": "floating widget/gestures",
+      "bytes": 4728,
+      "sha256": "23900334524682d653e1e5be83a2773b20f9cbbbb1df86d2162894c16210cd54"
+    },
+    {
+      "file": "76-widget-runtime.part.js",
+      "label": "floating widget/runtime",
+      "bytes": 4442,
+      "sha256": "37e4349e162ae047c155b8d9efa58db3a2570faa61d91e9dc0ec2bf035496922"
     },
     {
       "file": "80-lifecycle.part.js",
       "label": "lifecycle/scheduling",
       "bytes": 1722,
-      "sha256": "e2a4e21cb4025c30f2c54735a76932d46ba7e42301442831447deaf545ccaca3"
+      "sha256": "49668d30e8385b2349e98dfd3b5392ed65b3b909b572bedf030d22d2986c22d3"
     },
     {
       "file": "90-bootstrap.part.js",
       "label": "bootstrap/unload",
-      "bytes": 2025,
-      "sha256": "8b88ce56899c4301c928a44f7c39ef28f8628c00dfa1898bd1d37743174fc0b8"
+      "bytes": 2026,
+      "sha256": "31e4c180dd55705077b8cef5c8daf280b4a854c5961b34294a5aa57a18cf9248"
     }
   ]
 }

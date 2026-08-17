@@ -121,4 +121,3 @@
       if (runtimeIsCurrent(refreshEpoch)) updateRuntimeState('refresh-complete');
     }
   }
-

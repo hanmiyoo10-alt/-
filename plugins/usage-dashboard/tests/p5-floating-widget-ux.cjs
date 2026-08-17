@@ -3,12 +3,12 @@ const assert = require('node:assert/strict');
 
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
-const widget = fs.readFileSync(`${root}/src/70-floating-widget.part.js`, 'utf8');
+const widget = ['70-widget-render.part.js','72-widget-layout.part.js','74-widget-gestures.part.js','76-widget-runtime.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('');
 const runtime = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.43'));
+assert.ok(source.includes('//@version 3.0.0-alpha.5.44'));
 for (const marker of [
   'data-drag-handle="1"',
   'data-widget-toggle="1"',
@@ -35,4 +35,4 @@ assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-console.log('usage-dashboard P5 floating widget UX redesign: OK · 3.0.0-alpha.5.43');
+console.log('usage-dashboard P5 floating widget UX redesign: OK · 3.0.0-alpha.5.44');

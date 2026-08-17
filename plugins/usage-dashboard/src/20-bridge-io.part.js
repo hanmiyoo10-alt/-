@@ -1,3 +1,4 @@
+
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
     const base = normalizeBridgeBase(state.bridgeBase);

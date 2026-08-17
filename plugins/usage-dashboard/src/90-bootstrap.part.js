@@ -1,3 +1,4 @@
+
   try {
     store=await Risuai.getLocalPluginStorage();
     state=hydrateState(await store.getItem(STATE_KEY));

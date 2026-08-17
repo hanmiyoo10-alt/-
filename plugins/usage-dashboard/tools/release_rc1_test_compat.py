@@ -68,6 +68,25 @@ p3_ui = p3_ui.replace(
 )
 write(p3_ui_path, p3_ui)
 
+# Unified runtime first shipped before the bundled-engine architecture. RC/stable
+# inherit the current managed-bundled contract instead of falling through to the
+# historical managed-adoption expectation.
+unified_path = TESTS / 'p5-unified-runtime.cjs'
+unified = read(unified_path)
+unified = replace_once(
+    unified,
+    "else if (/^3\\.0\\.0-alpha\\.5\\.(?:[3-9]|\\d{2,})$/.test(version)) assert.equal(manifest.components.bridge.state, 'managed-bundled');",
+    "else if (/^3\\.0\\.0-alpha\\.5\\.(?:[3-9]|\\d{2,})$/.test(version) || /^3\\.0\\.0-rc\\.\\d+$/.test(version) || version === '3.0.0') assert.equal(manifest.components.bridge.state, 'managed-bundled');",
+    'unified runtime bundled state for RC',
+)
+unified = replace_once(
+    unified,
+    "if (/^3\\.0\\.0-alpha\\.5\\.(?:[3-9]|\\d{2,})$/.test(version)) {\n  assert.ok(String(manifest.components.bridge.artifact || '').endsWith('/runtime/bridge-engine.mjs'));\n  assert.equal(manifest.components.bridge.sourceBundled, true);\n} else assert.equal(manifest.components.bridge.artifact, null);",
+    "if (/^3\\.0\\.0-alpha\\.5\\.(?:[3-9]|\\d{2,})$/.test(version) || /^3\\.0\\.0-rc\\.\\d+$/.test(version) || version === '3.0.0') {\n  assert.ok(String(manifest.components.bridge.artifact || '').endsWith('/runtime/bridge-engine.mjs'));\n  assert.equal(manifest.components.bridge.sourceBundled, true);\n} else assert.equal(manifest.components.bridge.artifact, null);",
+    'unified runtime bundled artifact for RC',
+)
+write(unified_path, unified)
+
 # Two newer guards encode a minimum alpha build numerically instead of the common
 # enabled expression. Preserve the minimum-alpha rule while treating RC/stable as newer.
 lifecycle_path = TESTS / 'p5-lifecycle-race.cjs'

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.34
+//@version 0.63.35
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.35 Runtime Stability Consolidation:
+// - Promotes the proven v0.63.34 runtime into the 0.63 golden baseline: generation/state semantics stay frozen while CI now executes behavioral regression fixtures across lifecycle modes, Frame, Time, Recovery, Evidence, persistence, manual-edit repair, repeat-send/rewind and deferred-mirror ordering
+// - Exposes the already-collected manual-edit reconcile path in the two-turn diagnostic so SAME_FAST, snapshot recovery and MANUAL_EDIT_REBUILT costs are distinguishable without inferring from elapsed time alone
+// - Adds a compact runtime Stability summary derived only from existing in-memory turn binding, authoritative output commit, deferred-mirror status, stale-drop count and named-hook lifecycle telemetry
+// - Adds no host/storage/API call, timer, polling, history scan, prompt/state field or output work; all 17 internal modules, request/output handlers, authoritative snapshot sequencing and Deferred Chat Mirror behavior remain byte-identical to v0.63.34
 //
 // v0.63.34 Deferred Chat Mirror:
 // - Moves the secondary scriptstate mirror write out of the output-handler critical path while keeping the authoritative out snapshot fully awaited before COMMITTED
@@ -5083,6 +5089,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const postHandshakeOther = Math.max(0, postHandshakeTotal - postKnown);
 
     const session = perf.sessionDetail || {};
+    const edit = perf.editDetail || {};
     const sessionKnown = n(session.chatFallbackMs) + n(session.characterLoadMs) + n(session.initScanMs) + n(session.initMs);
     const sessionOther = Math.max(0, n(perf.sessionLoadMs) - sessionKnown);
 
@@ -5118,6 +5125,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       preLoadMs: n(send.preLoadMs), templateBootstrapMs: n(send.templateBootstrapMs), lifecycleMs: n(send.lifecycleMs),
       turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), turnPayloadChars, turnSetPerKChars, runtimeRenderMs: n(send.runtimeRenderMs),
       restoreReason: String(send.restoreReason || 'n/a'), preRead: !!send.mustRestorePre, preHit: !!send.existingPre,
+      editPath: String(edit.path || 'n/a'), editDidSave: !!edit.didSave,
     };
   }
 
@@ -5191,6 +5199,17 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       && Number(lastDeferredMirrorProbe.outIndex) === Number(latestAssistantIndex)
       && String(lastDeferredMirrorProbe.locationKey || '') === String(requestProbe?.locationKey || '')
       ? lastDeferredMirrorProbe : null;
+    const editPathRaw = requestBreakdown ? String(requestBreakdown.editPath || 'n/a') : 'n/a';
+    const editPathLabel = editPathRaw === 'n/a'
+      ? 'n/a'
+      : editPathRaw.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const mirrorStatus = deferredMirror?.status || (outputFresh ? 'PENDING' : 'NOT_EXERCISED');
+    const bindingStatus = outputFresh ? 'BOUND' : (probeFresh ? 'REQUEST_ONLY' : 'NOT_EXERCISED');
+    const stabilityStatus = runtimeDisposed || requestProbe?.status === 'ERROR' || requestProbe?.outputStatus === 'ERROR'
+      ? 'FAIL'
+      : (outputFresh && mirrorStatus === 'COMMITTED' && staleRuntimeDrops === 0
+        ? 'PASS'
+        : (probeFresh ? 'OBSERVED' : 'NOT_EXERCISED'));
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
@@ -5213,7 +5232,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.34',
+      'Version: 0.63.35',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5224,10 +5243,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Mode: ${runtimeMode || 'n/a'}`,
       `Stored last mode: ${state?.lastMode || 'n/a'}`,
       `Turn binding: request user @${probeFresh ? Number(requestProbe?.sendIndex) : 'n/a'} · output assistant @${outputFresh ? Number(requestProbe?.outIndex) : 'n/a'}`,
+      `Stability: ${stabilityStatus} · binding ${bindingStatus} · out ${outputFresh ? 'COMMITTED' : (probeFresh ? String(requestProbe?.outputStatus || 'n/a') : 'NOT_EXERCISED')} · mirror ${mirrorStatus} · stale ${staleRuntimeDrops} · hooks NAMED`,
       `Request timing: ${probeFresh ? `hook ${diagnosticTimingIso(requestProbe?.at)} · handshake +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.handshakeAt)} · prepared +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.preparedAt)} · done +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.requestDoneAt)}` : 'n/a'}`,
       `Handshake breakdown: ${requestBreakdown ? `indices ${diagnosticFormatMs(requestBreakdown.indicesMs)} · chat ${diagnosticFormatMs(requestBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(requestBreakdown.sessionLoadMs)} · prompt scan ${diagnosticFormatMs(requestBreakdown.promptScanMs)} · other ${diagnosticFormatMs(requestBreakdown.handshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.handshakeTotal)}` : 'n/a'}`,
       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
+      `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'}` : 'n/a'}`,
       `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
       `Pre snapshot: ${requestBreakdown ? `${String(requestBreakdown.restoreReason || 'n/a').toUpperCase()} · ${requestBreakdown.preRead ? `READ ${requestBreakdown.preHit ? 'HIT' : 'MISS'}` : 'SKIPPED'} · ${diagnosticFormatMs(requestBreakdown.preLoadMs)}` : 'n/a'}`,
       `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,
@@ -5456,7 +5477,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.34</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.35</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

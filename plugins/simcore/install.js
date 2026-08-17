@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.30
+//@version 0.63.31
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.31 Request / Handshake Breakdown Diagnostics:
+// - Exposes the request timing measurements already collected on the hot path and adds read-only substage timing around loadCoreForChat so intermittent handshake latency can be attributed instead of guessed
+// - Reports handshake, session-load, post-handshake and onSend breakdowns plus one largest request hotspot; all values are memory-only telemetry and do not alter request prompts, state transitions or output semantics
+// - Distinguishes LOCATION_REUSE, KEY_REUSE and COLD_INIT session paths, including character fetch and session init timing, while preserving the exact existing load/reuse decisions
+// - Keeps every SimCore internal module byte-identical to v0.63.30; Recovery/Thoughts, Time, Structure, Frame, Evidence, Prompt, Session semantics, storage schema, reload safety and host/API call counts are frozen
 //
 // v0.63.30 Thoughts Compatibility Finalization:
 // - Consolidates complete/partial Thoughts preamble detection into one Recovery classifier with explicit policy labels while preserving v0.63.29 output-selection and warning behavior
@@ -4271,22 +4277,44 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     return { chaIdx, chatIdx };
   }
 
-  async function loadCoreForChat(chaIdx, chatIdx, chatArg = null) {
+  async function loadCoreForChat(chaIdx, chatIdx, chatArg = null, perfDetail = null) {
+    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
+    if (detail) {
+      detail.path = 'UNKNOWN';
+      detail.chatFallbackMs = 0;
+      detail.characterLoadMs = 0;
+      detail.initScanMs = 0;
+      detail.initMs = 0;
+    }
+    let t = perfNow();
     const chat = chatArg || await Risuai.getChatFromIndex(chaIdx, chatIdx);
-    if (!chat) { coreSession = null; coreKey = null; coreLocationKey = null; return null; }
+    if (detail) detail.chatFallbackMs = chatArg ? 0 : perfMs(t);
+    if (!chat) {
+      if (detail) detail.path = 'NO_CHAT';
+      coreSession = null; coreKey = null; coreLocationKey = null; return null;
+    }
 
     // The current indices + chat id are sufficient to prove that the already-loaded session still
     // belongs to this location. Avoid an extra getCharacter() round-trip on every request.
     const locationKey = `${chaIdx}:${chatIdx}:${chat.id ?? ''}`;
-    if (coreSession && coreLocationKey === locationKey) return coreSession;
+    if (coreSession && coreLocationKey === locationKey) {
+      if (detail) detail.path = 'LOCATION_REUSE';
+      return coreSession;
+    }
 
+    t = perfNow();
     const char = await Risuai.getCharacter();
-    if (!char) { coreSession = null; coreKey = null; coreLocationKey = null; return null; }
+    if (detail) detail.characterLoadMs = perfMs(t);
+    if (!char) {
+      if (detail) detail.path = 'NO_CHARACTER';
+      coreSession = null; coreKey = null; coreLocationKey = null; return null;
+    }
     const charId = char.chaId ?? char.name;
     const chatId = chat.id ?? `${charId}:${chatIdx}`;
     const key = `${charId}:${chatId}`;
     if (coreSession && coreKey === key) {
       coreLocationKey = locationKey;
+      if (detail) detail.path = 'KEY_REUSE';
       return coreSession;
     }
 
@@ -4304,6 +4332,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     coreKey = key;
     coreLocationKey = locationKey;
 
+    if (detail) detail.path = 'COLD_INIT';
+    t = perfNow();
     const msgs = chat.message || [];
     let lastAssistant = -1;
     for (let i = msgs.length - 1; i >= 0; i--) {
@@ -4312,7 +4342,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const latestOutputFingerprint = lastAssistant >= 0
       ? coreRules.fingerprintText(textMessageContent(msgs[lastAssistant]))
       : null;
+    if (detail) detail.initScanMs = perfMs(t);
+    t = perfNow();
     await coreSession.init(lastAssistant, chat.scriptstate?.['$simcore_core_state'] || null, latestOutputFingerprint);
+    if (detail) detail.initMs = perfMs(t);
     return coreSession;
   }
 
@@ -4364,8 +4397,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
     let t = perfNow();
-    const cs = await loadCoreForChat(chaIdx, chatIdx, chat);
-    if (perf) perf.sessionLoadMs = perfMs(t);
+    const sessionDetail = perf ? {} : null;
+    const cs = await loadCoreForChat(chaIdx, chatIdx, chat, sessionDetail);
+    if (perf) {
+      perf.sessionLoadMs = perfMs(t);
+      perf.sessionDetail = sessionDetail;
+    }
     if (!cs) {
       markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'session-load' });
       return { active: false };
@@ -4455,6 +4492,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       };
     }
 
+    const postOnSendStart = perfNow();
     if (result.active && result.promptBlock) {
       const runtimeBudgetText = String(result.promptBlock || '');
       const runtimeBudgetLines = runtimeBudgetText ? runtimeBudgetText.split('\n') : [];
@@ -4581,6 +4619,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       lastEvidenceFenceProbe = null;
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
     }
+    if (perf) perf.postOnSendMs = perfMs(postOnSendStart);
     // v0.62: do not call setChatToIndex on the request-critical path. The authoritative
     // pre/send snapshots are already persisted; scriptstate mirror is refreshed after output.
     return result;
@@ -4664,8 +4703,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     let requestSendIndex = -1;
     const totalStart = perfNow();
     const perf = {
-      totalMs: 0, indicesMs: 0, chatLoadMs: 0, sessionLoadMs: 0, promptScanMs: 0,
-      bootstrapMs: 0, editReconcileMs: 0, editDetail: null, aliasRepairMs: 0, aliasRepair: null, onSendMs: 0, snapshotDetail: null,
+      totalMs: 0, indicesMs: 0, chatLoadMs: 0, sessionLoadMs: 0, sessionDetail: null, promptScanMs: 0,
+      bootstrapMs: 0, editReconcileMs: 0, editDetail: null, aliasRepairMs: 0, aliasRepair: null, onSendMs: 0, snapshotDetail: null, postOnSendMs: 0,
+      sendIndex: -1, locationKey: '',
       promptScannedMessages: 0, promptTotalMessages: Array.isArray(messages) ? messages.length : 0, promptScannedChars: 0,
     };
     try {
@@ -4684,10 +4724,13 @@ module.exports = { perfNow, perfMs, normalizationIssues };
         ? detectedUserIndex
         : Math.max(0, (chat?.message?.length ?? 1) - 1);
       requestSendIndex = sendIndex;
+      const requestLocationKey = diagnosticLocationKey(chaIdx, chatIdx, chat);
       Object.assign(lastDiagnosticRequestProbe, {
-        locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
+        locationKey: requestLocationKey,
         sendIndex,
       });
+      perf.sendIndex = sendIndex;
+      perf.locationKey = requestLocationKey;
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
       markDiagnosticRequestProbe(requestSendIndex, { status: 'ERROR', active: false, mode: null, errorStage: 'beforeRequest', errorName: e?.name || 'Error' });
@@ -4898,6 +4941,66 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     return ms >= 1000 ? `${(ms / 1000).toFixed(3)} s` : `${ms.toFixed(1)} ms`;
   }
 
+  function diagnosticNumericDelta(from, to) {
+    const a = Number(from);
+    const b = Number(to);
+    return Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a ? b - a : null;
+  }
+
+  function diagnosticFormatMs(value) {
+    const ms = Number(value);
+    if (!Number.isFinite(ms) || ms < 0) return 'n/a';
+    return ms >= 1000 ? `${(ms / 1000).toFixed(3)} s` : `${ms.toFixed(1)} ms`;
+  }
+
+  function diagnosticRequestBreakdown(probe, perf) {
+    if (!probe || !perf) return null;
+    const n = (v) => Math.max(0, Number(v) || 0);
+    const total = n(probe.requestTotalMs || perf.totalMs);
+    const handshakeMeasured = diagnosticNumericDelta(probe.at, probe.handshakeAt);
+    const handshakeTotal = handshakeMeasured == null
+      ? n(perf.indicesMs) + n(perf.chatLoadMs) + n(perf.sessionLoadMs) + n(perf.promptScanMs)
+      : handshakeMeasured;
+    const handshakeKnown = n(perf.indicesMs) + n(perf.chatLoadMs) + n(perf.sessionLoadMs) + n(perf.promptScanMs);
+    const handshakeOther = Math.max(0, handshakeTotal - handshakeKnown);
+    const postHandshakeTotal = Math.max(0, total - handshakeTotal);
+    const postKnown = n(perf.bootstrapMs) + n(perf.editReconcileMs) + n(perf.aliasRepairMs) + n(perf.onSendMs) + n(perf.postOnSendMs);
+    const postHandshakeOther = Math.max(0, postHandshakeTotal - postKnown);
+
+    const session = perf.sessionDetail || {};
+    const sessionKnown = n(session.chatFallbackMs) + n(session.characterLoadMs) + n(session.initScanMs) + n(session.initMs);
+    const sessionOther = Math.max(0, n(perf.sessionLoadMs) - sessionKnown);
+
+    const send = perf.snapshotDetail || {};
+    const onSendKnown = n(send.preLoadMs) + n(send.templateBootstrapMs) + n(send.lifecycleMs)
+      + n(send.turnSerializeMs) + n(send.turnSetMs) + n(send.runtimeRenderMs);
+    const onSendOther = Math.max(0, n(perf.onSendMs) - onSendKnown);
+
+    const candidates = [
+      ['INDICES', n(perf.indicesMs)], ['CHAT_LOAD', n(perf.chatLoadMs)],
+      ['SESSION_CHAT_FALLBACK', n(session.chatFallbackMs)], ['CHARACTER_FETCH', n(session.characterLoadMs)],
+      ['SESSION_INIT_SCAN', n(session.initScanMs)], ['SESSION_INIT', n(session.initMs)], ['SESSION_OTHER', sessionOther],
+      ['PROMPT_SCAN', n(perf.promptScanMs)], ['HANDSHAKE_OTHER', handshakeOther],
+      ['BOOTSTRAP', n(perf.bootstrapMs)], ['EDIT_RECONCILE', n(perf.editReconcileMs)], ['ALIAS_REPAIR', n(perf.aliasRepairMs)],
+      ['PRE_LOAD', n(send.preLoadMs)], ['TEMPLATE_BOOTSTRAP', n(send.templateBootstrapMs)], ['LIFECYCLE', n(send.lifecycleMs)],
+      ['TURN_SERIALIZE', n(send.turnSerializeMs)], ['TURN_STORAGE', n(send.turnSetMs)], ['PROMPT_RENDER', n(send.runtimeRenderMs)],
+      ['ONSEND_OTHER', onSendOther], ['POST_ONSEND', n(perf.postOnSendMs)], ['POST_HANDSHAKE_OTHER', postHandshakeOther],
+    ];
+    candidates.sort((a, b) => b[1] - a[1]);
+    const hotspot = candidates[0] || ['n/a', 0];
+
+    return {
+      total, handshakeTotal, handshakeOther, postHandshakeTotal, postHandshakeOther,
+      sessionPath: String(session.path || 'n/a'), sessionOther, onSendOther, hotspot: hotspot[0], hotspotMs: hotspot[1],
+      hotspotPercent: total > 0 ? (hotspot[1] / total) * 100 : 0,
+      indicesMs: n(perf.indicesMs), chatLoadMs: n(perf.chatLoadMs), sessionLoadMs: n(perf.sessionLoadMs), promptScanMs: n(perf.promptScanMs),
+      sessionChatFallbackMs: n(session.chatFallbackMs), characterLoadMs: n(session.characterLoadMs), initScanMs: n(session.initScanMs), initMs: n(session.initMs),
+      bootstrapMs: n(perf.bootstrapMs), editReconcileMs: n(perf.editReconcileMs), aliasRepairMs: n(perf.aliasRepairMs), onSendMs: n(perf.onSendMs), postOnSendMs: n(perf.postOnSendMs),
+      preLoadMs: n(send.preLoadMs), templateBootstrapMs: n(send.templateBootstrapMs), lifecycleMs: n(send.lifecycleMs),
+      turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), runtimeRenderMs: n(send.runtimeRenderMs),
+    };
+  }
+
   function buildLastTurnDiagnosticReport(chat, state) {
     const messages = Array.isArray(chat?.message) ? chat.message : [];
     const latestAssistantIndex = diagnosticLastAssistantIndex(messages);
@@ -4918,6 +5021,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const evidenceFence = runtimeActive ? (lastEvidenceFenceProbe || null) : null;
     const narrative = outputFresh ? (lastNarrativeClockProbe || null) : null;
     const preamble = outputFresh ? (lastPreambleProvenance || null) : null;
+    const requestPerf = probeFresh && lastPerf && Number(lastPerf.sendIndex) === Number(currentUserIndex)
+      && String(lastPerf.locationKey || '') === String(requestProbe?.locationKey || '') ? lastPerf : null;
+    const requestBreakdown = requestPerf ? diagnosticRequestBreakdown(requestProbe, requestPerf) : null;
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
@@ -4940,7 +5046,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.30',
+      'Version: 0.63.31',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -4952,6 +5058,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Stored last mode: ${state?.lastMode || 'n/a'}`,
       `Turn binding: request user @${probeFresh ? Number(requestProbe?.sendIndex) : 'n/a'} · output assistant @${outputFresh ? Number(requestProbe?.outIndex) : 'n/a'}`,
       `Request timing: ${probeFresh ? `hook ${diagnosticTimingIso(requestProbe?.at)} · handshake +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.handshakeAt)} · prepared +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.preparedAt)} · done +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.requestDoneAt)}` : 'n/a'}`,
+      `Handshake breakdown: ${requestBreakdown ? `indices ${diagnosticFormatMs(requestBreakdown.indicesMs)} · chat ${diagnosticFormatMs(requestBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(requestBreakdown.sessionLoadMs)} · prompt scan ${diagnosticFormatMs(requestBreakdown.promptScanMs)} · other ${diagnosticFormatMs(requestBreakdown.handshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.handshakeTotal)}` : 'n/a'}`,
+      `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
+      `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
+      `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
+      `Request hotspot: ${requestBreakdown ? `${requestBreakdown.hotspot} · ${diagnosticFormatMs(requestBreakdown.hotspotMs)} · ${Number(requestBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
@@ -5171,7 +5282,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.30</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.31</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

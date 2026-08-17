@@ -1,7 +1,6 @@
 from pathlib import Path
 import hashlib
 import json
-import re
 
 ROOT = Path('plugins/usage-dashboard')
 SRC = ROOT / 'src'
@@ -57,9 +56,6 @@ def split_exact(text, markers, label):
     return chunks
 
 
-# Capture a byte-level 5.43 baseline before moving any source boundaries. 5.44 is
-# structural only, so after normalizing the product version the built artifact must
-# remain byte-identical to this baseline.
 latest_path = ROOT / 'latest.js'
 baseline = read(latest_path)
 if f'//@version {OLD_VERSION}' not in baseline:
@@ -80,7 +76,6 @@ baseline_fixture = {
 write(TESTS / 'fixtures' / 'alpha543-structural-baseline.json', json.dumps(baseline_fixture, ensure_ascii=False, indent=2) + '\n')
 
 
-# ---- 00 runtime/core -> 3 ordered structural parts -------------------------
 old_core_path = SRC / '00-runtime-core.part.js'
 old_core = read(old_core_path)
 core_chunks = split_exact(old_core, [
@@ -94,7 +89,6 @@ write(SRC / '02-runtime-state.part.js', core_chunks[1])
 write(SRC / '04-runtime-bridge-normalize.part.js', core_chunks[2])
 
 
-# ---- 10 usage/request data -> 4 ordered structural parts ------------------
 old_usage_path = SRC / '10-usage-data.part.js'
 old_usage = read(old_usage_path)
 usage_chunks = split_exact(old_usage, [
@@ -109,10 +103,6 @@ write(SRC / '16-usage-analytics.part.js', usage_chunks[3])
 old_usage_path.unlink()
 
 
-# ---- 50 dashboard UI -> 3 ordered fragments -------------------------------
-# settingsHtml is intentionally kept byte-identical. These are source fragments,
-# not independently executable modules; build_usage_dashboard.cjs concatenates them
-# with no separator, preserving the exact function/template bytes.
 old_ui_path = SRC / '50-settings-ui.part.js'
 old_ui = read(old_ui_path)
 ui_chunks = split_exact(old_ui, [
@@ -125,7 +115,6 @@ write(SRC / '54-dashboard-markup.part.js', ui_chunks[2])
 old_ui_path.unlink()
 
 
-# ---- 70 floating widget -> render/layout/gestures/runtime -----------------
 old_widget_path = SRC / '70-floating-widget.part.js'
 old_widget = read(old_widget_path)
 widget_chunks = split_exact(old_widget, [
@@ -140,8 +129,6 @@ write(SRC / '76-widget-runtime.part.js', widget_chunks[3])
 old_widget_path.unlink()
 
 
-# The deterministic bundle order is now explicit at the finer responsibility
-# boundaries. Markers continue to make split/recovery drift fail loudly.
 parts_cjs = """'use strict';
 
 const PARTS = Object.freeze([
@@ -172,13 +159,13 @@ module.exports = {PARTS};
 write(SRC / 'parts.cjs', parts_cjs)
 
 
-# Update tests that intentionally inspect source fragments. They now concatenate the
-# relevant responsibility group, which is exactly how the product bundle sees it.
+runtime_join = "['00-runtime-core.part.js','02-runtime-state.part.js','04-runtime-bridge-normalize.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('')"
 usage_join = "['10-request-normalize.part.js','12-service-tier.part.js','14-request-ledger.part.js','16-usage-analytics.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('')"
 ui_join = "['50-dashboard-context.part.js','52-analytics-context.part.js','54-dashboard-markup.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('')"
 widget_join = "['70-widget-render.part.js','72-widget-layout.part.js','74-widget-gestures.part.js','76-widget-runtime.part.js'].map(file => fs.readFileSync(`${root}/src/${file}`, 'utf8')).join('')"
 for path in TESTS.glob('*.cjs'):
     text = read(path)
+    text = text.replace(f"fs.readFileSync(`${{root}}/src/00-runtime-core.part.js`, 'utf8')", runtime_join)
     text = text.replace(f"fs.readFileSync(`${{root}}/src/10-usage-data.part.js`, 'utf8')", usage_join)
     text = text.replace(f"fs.readFileSync(`${{root}}/src/50-settings-ui.part.js`, 'utf8')", ui_join)
     text = text.replace(f"fs.readFileSync(`${{root}}/src/70-floating-widget.part.js`, 'utf8')", widget_join)
@@ -186,13 +173,10 @@ for path in TESTS.glob('*.cjs'):
     write(path, text)
 
 
-# Dedicated module layout regression: deterministic order, no orphan *.part.js files,
-# and the newly split responsibility groups stay below the 35 KiB review threshold.
 module_layout_test = r'''const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const {PARTS} = require('../src/parts.cjs');
-
 const root = path.resolve(__dirname, '..');
 const src = path.join(root, 'src');
 const expected = [
@@ -217,8 +201,6 @@ console.log(`usage-dashboard P5 module layout: OK · ${PARTS.length} parts`);
 write(TESTS / 'p5-module-layout.cjs', module_layout_test)
 
 
-# Strong structural parity: after replacing only the product version, 5.44's final
-# latest.js must be byte-identical to the validated 5.43 artifact.
 structural_test = r'''const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
@@ -237,9 +219,6 @@ console.log('usage-dashboard P5 structural artifact parity: OK · 5.43 → 5.44'
 write(TESTS / 'p5-structural-parity.cjs', structural_test)
 
 
-# State migration compatibility test. This evaluates the actual DEFAULTS + hydrateState
-# function from the bundle and proves the state fields introduced throughout alpha 5.x
-# survive a 5.43 -> 5.44 load unchanged.
 state_test = r'''const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
@@ -273,8 +252,6 @@ console.log('usage-dashboard P5 state compatibility: OK · alpha.5.43 state surv
 write(TESTS / 'p5-state-compatibility.cjs', state_test)
 
 
-# Manager product metadata follows the product version, while semantic Manager/Engine
-# versions stay frozen.
 manager_path = RUNTIME / 'bridge-manager.cjs'
 manager = read(manager_path)
 manager = replace_once(manager, f"const PRODUCT_VERSION = '{OLD_VERSION}';", f"const PRODUCT_VERSION = '{NEW_VERSION}';", 'manager product version')
@@ -300,8 +277,6 @@ manifest['components']['bridgeManager']['sha256'] = manager_sha
 write(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
 
 
-# Keep the generic release workflow future-proof now that sourceOfTruth has >10 parts,
-# and make it run every feature regression added during alpha.5.38-5.44.
 release_workflow_path = REPO / '.github/workflows/release-local-usage-dashboard.yml'
 workflow = read(release_workflow_path)
 old_tests = """          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
@@ -325,8 +300,6 @@ workflow = replace_once(workflow, old_count, new_count, 'generic release dynamic
 write(release_workflow_path, workflow)
 
 
-# Pre-build structural invariant: concatenating the new source parts in the declared
-# order should equal the old artifact with only the version bumped.
 ordered = [
   '00-runtime-core.part.js','02-runtime-state.part.js','04-runtime-bridge-normalize.part.js',
   '10-request-normalize.part.js','12-service-tier.part.js','14-request-ledger.part.js','16-usage-analytics.part.js',

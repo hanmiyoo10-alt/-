@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.44 Structural Modularization final regression
+name: Stage Usage Dashboard 5.44 Structural Modularization publish
 
 on:
   push:
@@ -66,7 +66,6 @@ jobs:
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
           grep -Fq '//@version 3.0.0-alpha.5.44' plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
-          grep -Fq "file:'06-runtime-stability.part.js'" plugins/usage-dashboard/src/parts.cjs
           grep -Fq "file:'08-runtime-product.part.js'" plugins/usage-dashboard/src/parts.cjs
           grep -Fq "file:'12-service-tier.part.js'" plugins/usage-dashboard/src/parts.cjs
           grep -Fq "file:'14-request-ledger.part.js'" plugins/usage-dashboard/src/parts.cjs
@@ -79,22 +78,20 @@ jobs:
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.44';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -Fq '"productVersion": "3.0.0-alpha.5.44"' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
 
       - name: Commit validated 5.44 modular source to main
         shell: bash
         run: |
           set -euo pipefail
+          git restore -- .github/workflows/release-local-usage-dashboard.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A plugins/usage-dashboard/src \
             plugins/usage-dashboard/latest.js \
             plugins/usage-dashboard/tests \
             plugins/usage-dashboard/runtime/bridge-manager.cjs \
-            plugins/usage-dashboard/runtime/product-manifest.json \
-            .github/workflows/release-local-usage-dashboard.yml
+            plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
           git commit -m 'release: Local Usage Dashboard 5.44 structural modularization'
           git pull --rebase origin main

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.38
+//@version 3.0.0-alpha.5.39
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.38';
+  const VERSION = '3.0.0-alpha.5.39';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -65,6 +65,7 @@
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let tokenForgetArmedUntil = 0;
+  let widgetRenderTail = Promise.resolve(), widgetRenderRequestId = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
   let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let panelRenderTimer = null, panelIdleHandle = null;
@@ -77,6 +78,40 @@
   const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
   const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
+  const bridgeLifecycleRuntime = {generation:1,refreshDrops:0,blockedRefreshes:0,lastTransitionFrom:'',lastTransitionTo:'',lastTransitionAt:null,lastTransitionReason:''};
+
+  function bridgeLifecycleMode() {
+    if (!state) return 'off';
+    if (!state.bridgeEnabled) return state.bridgeStatus === 'paused' ? 'paused' : 'off';
+    if (state.bridgeStatus === 'error') return 'error';
+    if (state.bridgeStatus === 'connected') return 'live';
+    return 'connecting';
+  }
+
+  function noteBridgeLifecycleTransition(next, reason = '') {
+    const previous = bridgeLifecycleMode();
+    bridgeLifecycleRuntime.generation += 1;
+    bridgeLifecycleRuntime.lastTransitionFrom = previous;
+    bridgeLifecycleRuntime.lastTransitionTo = String(next || '');
+    bridgeLifecycleRuntime.lastTransitionAt = Date.now();
+    bridgeLifecycleRuntime.lastTransitionReason = String(reason || '');
+    return bridgeLifecycleRuntime.generation;
+  }
+
+  function canBridgeRefresh() {
+    if (runtimeDisposed || !state?.bridgeEnabled || !token) return false;
+    const mode = bridgeLifecycleMode();
+    return mode !== 'paused' && mode !== 'off';
+  }
+
+  function lifecycleRefreshIsCurrent(generation) {
+    return canBridgeRefresh() && Number(generation) === Number(bridgeLifecycleRuntime.generation);
+  }
+
+  function dropLifecycleRefresh() {
+    bridgeLifecycleRuntime.refreshDrops += 1;
+    return undefined;
+  }
 
   function refreshAttributionKey(reason) {
     const key = String(reason || 'scheduled');
@@ -747,7 +782,7 @@
   }
 
   function requestResumeRefresh(reason = 'visibility') {
-    if (!state?.syncOnFocus || !state?.bridgeEnabled || !token) return;
+    if (!state?.syncOnFocus || !canBridgeRefresh()) return;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
     performanceRuntime.lastResumeReason = String(reason || 'visibility');
     if (resumeRefreshTimer || performanceRuntime.resumePending) { performanceRuntime.resumeCoalesced += 1; return; }
@@ -907,6 +942,7 @@
 
   function enqueueRefresh(reason = 'scheduled', silent = false) {
     if (runtimeDisposed) return;
+    if (!canBridgeRefresh()) { bridgeLifecycleRuntime.blockedRefreshes += 1; return; }
     noteRefreshRequested(reason);
     if (state?.schedulerEnabled === false) return refresh(reason, silent);
     const normalizedReason = String(reason || 'scheduled');
@@ -985,11 +1021,12 @@
   }
 
   function connectionBadge() {
-    if (state.bridgeStatus === 'paused') return {label:'PAUSED', color:'#b9a6f8'};
-    if (state.bridgeStatus === 'off') return {label:'OFF', color:'#aeb5c0'};
-    if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
-    if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
-    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
+    const lifecycle = bridgeLifecycleMode();
+    if (lifecycle === 'paused') return {label:'PAUSED', color:'#b9a6f8'};
+    if (lifecycle === 'off') return {label:'OFF', color:'#aeb5c0'};
+    if (lifecycle === 'error') return {label:'OFFLINE', color:'#ff9b95'};
+    if (lifecycle === 'live' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
+    if (lifecycle === 'live') return {label:'LIVE', color:'#c5f277'};
     return {label:'WAIT', color:'#ffd27d'};
   }
 
@@ -1881,7 +1918,8 @@ async function importLegacyTodayBaselines() {
   async function refresh(reason = 'manual', silent = false) {
     if (runtimeDisposed) return;
     const refreshEpoch = runtimeEpoch;
-    if (!state.bridgeEnabled) return;
+    if (!canBridgeRefresh()) { bridgeLifecycleRuntime.blockedRefreshes += 1; return; }
+    const refreshLifecycleGeneration = bridgeLifecycleRuntime.generation;
     if (refreshInFlight) return refreshInFlight;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
     requestUiStallProbeBurst(reason === 'timer' ? UI_STALL_PROBE_TIMER_BURST_MS : UI_STALL_PROBE_ACTIVE_BURST_MS);
@@ -1905,17 +1943,22 @@ async function importLegacyTodayBaselines() {
       try {
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         state.bridgeManagerRuntime = managerRuntime;
-        if (!state.bridgeEnabled) return;
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         const snapshot = await fetchSnapshot();
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
-        if (!state.bridgeEnabled) return;
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         state.data = applyObservedToday(snapshot);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -1942,8 +1985,10 @@ async function importLegacyTodayBaselines() {
         updateRuntimeState('refresh-success');
         await persistRefreshState('refresh-success-persist');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         await renderRefreshWidget(reason, 'refresh-success-render');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         if (resumeVisibilityRefresh) {
           performanceRuntime.lastResumeRefreshMs = state.lastSyncDurationMs;
           performanceRuntime.lastResumeRenderMs = performanceRuntime.lastRenderMs;
@@ -1953,6 +1998,7 @@ async function importLegacyTodayBaselines() {
         schedulePanelRender(false);
       } catch (e) {
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         // Keep the last successful snapshot in state.data; only status changes.
         state.bridgeStatus = 'error';
         state.bridgeError = e?.message || String(e);
@@ -1963,11 +2009,13 @@ async function importLegacyTodayBaselines() {
         updateRuntimeState('refresh-error');
         await persistRefreshState('refresh-error-persist');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         // Keep the last good values, but immediately repaint the widget so
         // LIVE changes to OFFLINE as soon as a refresh fails. Local persist/render
         // failures must not abort retry scheduling or masquerade as bridge errors.
         await renderRefreshWidget(reason, 'refresh-error-render');
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         scheduleRefresh();
         if (!silent) console.log(`[Local Usage Dashboard] ${state.bridgeError}`);
         schedulePanelRender(false);
@@ -2014,7 +2062,8 @@ async function importLegacyTodayBaselines() {
       `Bridge engine: mode ${runtimeBridge.engineMode} · managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · adoption ${runtimeBridge.engineAdoption ? 'ready' : 'no'} · service ${runtimeBridge.engineService || '—'} · candidate ${runtimeBridge.candidateSafe === null ? 'unknown' : runtimeBridge.candidateSafe ? 'safe' : 'unsafe'} · state ${state.bridgeManagerRuntime?.adoptionState || '—'}`,
       `Runtime manifest: ${RUNTIME_MANIFEST_URL}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
-      `Bridge lifecycle: ${state.bridgeEnabled ? 'enabled' : state.bridgeStatus === 'paused' ? 'paused' : 'off'} · token ${token ? 'yes' : 'no'} · paused ${state.bridgePausedAt ? age(state.bridgePausedAt) : 'none'} · last reconnect ${state.bridgeLastReconnectAt ? age(state.bridgeLastReconnectAt) : '—'} · token cleared ${state.bridgeTokenClearedAt ? age(state.bridgeTokenClearedAt) : 'never'}`,
+      `Bridge lifecycle: ${bridgeLifecycleMode()} · generation ${Number(bridgeLifecycleRuntime.generation || 0)} · token ${token ? 'yes' : 'no'} · paused ${state.bridgePausedAt ? age(state.bridgePausedAt) : 'none'} · last reconnect ${state.bridgeLastReconnectAt ? age(state.bridgeLastReconnectAt) : '—'} · token cleared ${state.bridgeTokenClearedAt ? age(state.bridgeTokenClearedAt) : 'never'}`,
+      `Lifecycle refresh: drops ${Number(bridgeLifecycleRuntime.refreshDrops || 0)} · blocked ${Number(bridgeLifecycleRuntime.blockedRefreshes || 0)} · last transition ${bridgeLifecycleRuntime.lastTransitionFrom || '—'} → ${bridgeLifecycleRuntime.lastTransitionTo || '—'} · reason ${bridgeLifecycleRuntime.lastTransitionReason || '—'} · ${bridgeLifecycleRuntime.lastTransitionAt ? age(bridgeLifecycleRuntime.lastTransitionAt) : '—'}`,
       `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}` ,
       `Source: ${d.source || '—'}`,
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
@@ -2482,11 +2531,13 @@ function todayOverviewMetrics(d) {
         const entered = String(q('#bridge-token')?.value || '').trim();
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
+        noteBridgeLifecycleTransition('connecting','connect');
         state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
     };
     if (q('#pause-sync')) q('#pause-sync').onclick = async () => {
       if (!state.bridgeEnabled) return;
+      noteBridgeLifecycleTransition('paused','pause-sync');
       state.bridgeEnabled = false;
       state.bridgeStatus = 'paused';
       state.bridgeError = '';
@@ -2517,6 +2568,7 @@ function todayOverviewMetrics(d) {
         return;
       }
       tokenForgetArmedUntil = 0;
+      noteBridgeLifecycleTransition('off','forget-token');
       token = '';
       if (typeof store.removeItem === 'function') await store.removeItem(TOKEN_KEY);
       else await store.setItem(TOKEN_KEY, '');
@@ -2894,6 +2946,13 @@ function todayOverviewMetrics(d) {
   }
 
   async function renderWidget(reason = 'ui') {
+    const requestId = ++widgetRenderRequestId;
+    const task = widgetRenderTail.catch(() => undefined).then(() => renderWidgetNow(reason, requestId));
+    widgetRenderTail = task;
+    return task;
+  }
+
+  async function renderWidgetNow(reason = 'ui', requestId = widgetRenderRequestId) {
     if (runtimeDisposed) return;
     powerRuntime.widgetRenderCalls += 1;
     const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
@@ -2907,7 +2966,7 @@ function todayOverviewMetrics(d) {
       let phaseStarted = nowPerf();
       await ensureWidget();
       breakdown.ensure = roundPerfMs(nowPerf() - phaseStarted);
-      if (!widget) return;
+      if (!widget || requestId !== widgetRenderRequestId) return;
       phaseStarted = nowPerf();
       const nextMobileViewport = await widgetMobileMode();
       if (widgetMobileViewport !== nextMobileViewport) {
@@ -2937,6 +2996,7 @@ function todayOverviewMetrics(d) {
       breakdown.style = roundPerfMs(nowPerf() - phaseStarted);
       if (state.widgetVisible!==false) {
         phaseStarted = nowPerf();
+        if (requestId !== widgetRenderRequestId) return;
         const nextHtml = widgetHtml();
         if (widgetRenderCache.html !== nextHtml) {
           await widget.setInnerHTML(nextHtml);
@@ -2997,7 +3057,7 @@ function scheduleResetSync() {
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
     scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);
-    if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    if (!baseMs||!canBridgeRefresh()||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
     const adaptiveMs=effectiveRefreshMs();
     const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
       ? Math.max(adaptiveMs, Number(state.retryDelayMs)||adaptiveMs)
@@ -3013,7 +3073,7 @@ function scheduleResetSync() {
         beginResumeMeasurement('visibility');
         startUiStallProbe();
         scheduleRefresh();
-        if(state.syncOnFocus&&state.bridgeEnabled)requestResumeRefresh('visibility');
+        if(state.syncOnFocus&&canBridgeRefresh())requestResumeRefresh('visibility');
       }else if(state.backgroundPause!==false){
         cancelResumeRefresh();
         setRuntimeState('background','hidden');

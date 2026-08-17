@@ -145,11 +145,13 @@
         const entered = String(q('#bridge-token')?.value || '').trim();
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
+        noteBridgeLifecycleTransition('connecting','connect');
         state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
     };
     if (q('#pause-sync')) q('#pause-sync').onclick = async () => {
       if (!state.bridgeEnabled) return;
+      noteBridgeLifecycleTransition('paused','pause-sync');
       state.bridgeEnabled = false;
       state.bridgeStatus = 'paused';
       state.bridgeError = '';
@@ -180,6 +182,7 @@
         return;
       }
       tokenForgetArmedUntil = 0;
+      noteBridgeLifecycleTransition('off','forget-token');
       token = '';
       if (typeof store.removeItem === 'function') await store.removeItem(TOKEN_KEY);
       else await store.setItem(TOKEN_KEY, '');

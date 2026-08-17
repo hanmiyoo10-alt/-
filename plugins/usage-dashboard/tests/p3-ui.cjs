@@ -51,6 +51,13 @@ for (const marker of [
   "state.bridgeTokenClearedAt = Date.now();",
   "return {label:'PAUSED', color:'#b9a6f8'};",
   'Bridge lifecycle:',
+  'bridgeLifecycleRuntime',
+  'canBridgeRefresh()',
+  'lifecycleRefreshIsCurrent',
+  'dropLifecycleRefresh',
+  'widgetRenderTail',
+  'renderWidgetNow',
+  'Lifecycle refresh:',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

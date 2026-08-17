@@ -213,6 +213,13 @@
   }
 
   async function renderWidget(reason = 'ui') {
+    const requestId = ++widgetRenderRequestId;
+    const task = widgetRenderTail.catch(() => undefined).then(() => renderWidgetNow(reason, requestId));
+    widgetRenderTail = task;
+    return task;
+  }
+
+  async function renderWidgetNow(reason = 'ui', requestId = widgetRenderRequestId) {
     if (runtimeDisposed) return;
     powerRuntime.widgetRenderCalls += 1;
     const nowPerf = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
@@ -226,7 +233,7 @@
       let phaseStarted = nowPerf();
       await ensureWidget();
       breakdown.ensure = roundPerfMs(nowPerf() - phaseStarted);
-      if (!widget) return;
+      if (!widget || requestId !== widgetRenderRequestId) return;
       phaseStarted = nowPerf();
       const nextMobileViewport = await widgetMobileMode();
       if (widgetMobileViewport !== nextMobileViewport) {
@@ -256,6 +263,7 @@
       breakdown.style = roundPerfMs(nowPerf() - phaseStarted);
       if (state.widgetVisible!==false) {
         phaseStarted = nowPerf();
+        if (requestId !== widgetRenderRequestId) return;
         const nextHtml = widgetHtml();
         if (widgetRenderCache.html !== nextHtml) {
           await widget.setInnerHTML(nextHtml);

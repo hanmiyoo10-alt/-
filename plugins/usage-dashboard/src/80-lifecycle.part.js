@@ -3,7 +3,7 @@
     if (refreshTimer) clearTimeout(refreshTimer); refreshTimer=null;
     scheduleResetSync();
     const baseMs=Math.max(0,Number(state.refreshMs)||0);
-    if (!baseMs||!state.bridgeEnabled||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
+    if (!baseMs||!canBridgeRefresh()||(state.backgroundPause!==false&&document.visibilityState==='hidden')) return;
     const adaptiveMs=effectiveRefreshMs();
     const ms = state.bridgeStatus === 'error' && Number(state.consecutiveFailures||0) > 0
       ? Math.max(adaptiveMs, Number(state.retryDelayMs)||adaptiveMs)
@@ -19,7 +19,7 @@
         beginResumeMeasurement('visibility');
         startUiStallProbe();
         scheduleRefresh();
-        if(state.syncOnFocus&&state.bridgeEnabled)requestResumeRefresh('visibility');
+        if(state.syncOnFocus&&canBridgeRefresh())requestResumeRefresh('visibility');
       }else if(state.backgroundPause!==false){
         cancelResumeRefresh();
         setRuntimeState('background','hidden');

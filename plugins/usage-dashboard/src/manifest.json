@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.38",
+  "version": "3.0.0-alpha.5.39",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "f6c7a766919014e537b893d63a4d1e1c8bb77d9a8a236c0c3d71e9ae7f915c0a",
+  "artifactSha256": "7f270d6503801ab092d2159eae0f484ebb7c64164877a68eb26b7e008b2faf03",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 55840,
-      "sha256": "3ca9a45745b0d8192d3c1570839438023a8fafb4167a368255a9b57d098b2d09"
+      "bytes": 57364,
+      "sha256": "098fe0cf928b5f9434136f141478b1c8f036f85799190bfd1d612786005a3f1f"
     },
     {
       "file": "10-usage-data.part.js",
@@ -28,14 +28,14 @@
     {
       "file": "30-refresh-runtime.part.js",
       "label": "refresh runtime",
-      "bytes": 6476,
-      "sha256": "88e5d2e72edeff299fd5dbb0ed5743f1bc4f02047bb842abbe8823d4edec3858"
+      "bytes": 7703,
+      "sha256": "92a42d8b1c9932eea99c87f8538fa0c961017433a792a3a5c70d74bfc15d3c69"
     },
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
-      "bytes": 21531,
-      "sha256": "32f4ed70f152de413a7a7236107107f52639682feea880cc38cef4cee16dcfdb"
+      "bytes": 21981,
+      "sha256": "a67cbf9cdff95ae96cbe43d80172f60898973efeea63b20b847d480f547764a5"
     },
     {
       "file": "50-settings-ui.part.js",
@@ -46,20 +46,20 @@
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
-      "bytes": 15857,
-      "sha256": "eedc6336e4cdc848d9c6d4b98dd9d90c68faa09947902801d25722364f7852d8"
+      "bytes": 16039,
+      "sha256": "42861faca77a2d760865d4c6613e7c2809c400c6cecfcf99f17646eafccec500"
     },
     {
       "file": "70-floating-widget.part.js",
       "label": "floating widget",
-      "bytes": 16241,
-      "sha256": "3b51edc2d138e5b65c0c4fe7aa26ee77b4bafba900b03ef001967962789a4aeb"
+      "bytes": 16625,
+      "sha256": "8dfb6e1421141aa4b2a6c2c9dd96bc596d8168649625bfe51f597d098d3c2b14"
     },
     {
       "file": "80-lifecycle.part.js",
       "label": "lifecycle/scheduling",
-      "bytes": 1724,
-      "sha256": "c0d756023c4b7a0d05f585e7f3f67e734cdf07fab7667fd36e45fc518624aaf8"
+      "bytes": 1722,
+      "sha256": "e2a4e21cb4025c30f2c54735a76932d46ba7e42301442831447deaf545ccaca3"
     },
     {
       "file": "90-bootstrap.part.js",

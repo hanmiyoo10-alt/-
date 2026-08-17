@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.38
+//@version 3.0.0-alpha.5.39
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.38';
+  const VERSION = '3.0.0-alpha.5.39';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -65,6 +65,7 @@
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let tokenForgetArmedUntil = 0;
+  let widgetRenderTail = Promise.resolve(), widgetRenderRequestId = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
   let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let panelRenderTimer = null, panelIdleHandle = null;
@@ -77,6 +78,40 @@
   const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
   const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
+  const bridgeLifecycleRuntime = {generation:1,refreshDrops:0,blockedRefreshes:0,lastTransitionFrom:'',lastTransitionTo:'',lastTransitionAt:null,lastTransitionReason:''};
+
+  function bridgeLifecycleMode() {
+    if (!state) return 'off';
+    if (!state.bridgeEnabled) return state.bridgeStatus === 'paused' ? 'paused' : 'off';
+    if (state.bridgeStatus === 'error') return 'error';
+    if (state.bridgeStatus === 'connected') return 'live';
+    return 'connecting';
+  }
+
+  function noteBridgeLifecycleTransition(next, reason = '') {
+    const previous = bridgeLifecycleMode();
+    bridgeLifecycleRuntime.generation += 1;
+    bridgeLifecycleRuntime.lastTransitionFrom = previous;
+    bridgeLifecycleRuntime.lastTransitionTo = String(next || '');
+    bridgeLifecycleRuntime.lastTransitionAt = Date.now();
+    bridgeLifecycleRuntime.lastTransitionReason = String(reason || '');
+    return bridgeLifecycleRuntime.generation;
+  }
+
+  function canBridgeRefresh() {
+    if (runtimeDisposed || !state?.bridgeEnabled || !token) return false;
+    const mode = bridgeLifecycleMode();
+    return mode !== 'paused' && mode !== 'off';
+  }
+
+  function lifecycleRefreshIsCurrent(generation) {
+    return canBridgeRefresh() && Number(generation) === Number(bridgeLifecycleRuntime.generation);
+  }
+
+  function dropLifecycleRefresh() {
+    bridgeLifecycleRuntime.refreshDrops += 1;
+    return undefined;
+  }
 
   function refreshAttributionKey(reason) {
     const key = String(reason || 'scheduled');
@@ -747,7 +782,7 @@
   }
 
   function requestResumeRefresh(reason = 'visibility') {
-    if (!state?.syncOnFocus || !state?.bridgeEnabled || !token) return;
+    if (!state?.syncOnFocus || !canBridgeRefresh()) return;
     if (state.backgroundPause !== false && document.visibilityState === 'hidden') return;
     performanceRuntime.lastResumeReason = String(reason || 'visibility');
     if (resumeRefreshTimer || performanceRuntime.resumePending) { performanceRuntime.resumeCoalesced += 1; return; }
@@ -907,6 +942,7 @@
 
   function enqueueRefresh(reason = 'scheduled', silent = false) {
     if (runtimeDisposed) return;
+    if (!canBridgeRefresh()) { bridgeLifecycleRuntime.blockedRefreshes += 1; return; }
     noteRefreshRequested(reason);
     if (state?.schedulerEnabled === false) return refresh(reason, silent);
     const normalizedReason = String(reason || 'scheduled');
@@ -985,11 +1021,12 @@
   }
 
   function connectionBadge() {
-    if (state.bridgeStatus === 'paused') return {label:'PAUSED', color:'#b9a6f8'};
-    if (state.bridgeStatus === 'off') return {label:'OFF', color:'#aeb5c0'};
-    if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
-    if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
-    if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
+    const lifecycle = bridgeLifecycleMode();
+    if (lifecycle === 'paused') return {label:'PAUSED', color:'#b9a6f8'};
+    if (lifecycle === 'off') return {label:'OFF', color:'#aeb5c0'};
+    if (lifecycle === 'error') return {label:'OFFLINE', color:'#ff9b95'};
+    if (lifecycle === 'live' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
+    if (lifecycle === 'live') return {label:'LIVE', color:'#c5f277'};
     return {label:'WAIT', color:'#ffd27d'};
   }
 

@@ -10,7 +10,7 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.44'));
+assert.match(source, /^\/\/@version 3\.0\.0(?:-alpha\.[^\s]+|-beta\.[^\s]+|-rc\.\d+)?$/m);
 for (const marker of [
   'cycle:ds.cycle',
   'billingCycleStart:ds.billingCycleStart',

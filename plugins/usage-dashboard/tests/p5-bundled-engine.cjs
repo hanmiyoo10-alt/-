@@ -7,7 +7,7 @@ const enginePath = 'plugins/usage-dashboard/runtime/bridge-engine.mjs';
 const engine = fs.readFileSync(enginePath,'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json','utf8'));
 const version = (source.match(/^\/\/@version (.+)$/m)||[])[1]||'';
-if (!/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) { console.log(`usage-dashboard P5 bundled engine regression: skipped · ${version}`); process.exit(0); }
+if (!( /^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0' )) { console.log(`usage-dashboard P5 bundled engine regression: skipped · ${version}`); process.exit(0); }
 const hash = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 assert.equal(hash(enginePath),manifest.components.bridge.sha256);
 assert.ok(engine.includes("const VERSION = '1.6.5';"));

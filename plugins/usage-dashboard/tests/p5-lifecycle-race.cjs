@@ -11,7 +11,8 @@ const lifecycle = fs.readFileSync(`${root}/src/80-lifecycle.part.js`, 'utf8');
 
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const alpha539Plus = version.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
-assert.ok(alpha539Plus && Number(alpha539Plus[1]) >= 39, `lifecycle race guard requires alpha.5.39+, got ${version}`);
+const lifecycleVersionOk = Boolean(alpha539Plus && Number(alpha539Plus[1]) >= 39) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0';
+assert.ok(lifecycleVersionOk, `lifecycle race guard requires alpha.5.39+/RC/stable, got ${version}`);
 for (const marker of [
   'const bridgeLifecycleRuntime = {generation:1',
   'function canBridgeRefresh()',

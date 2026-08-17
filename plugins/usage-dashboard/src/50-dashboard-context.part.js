@@ -2,6 +2,11 @@
   function settingsHtml() {
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
+    const productRuntime = bridgeRuntimeSnapshot();
+    const lifecycleMode = bridgeLifecycleMode();
+    const stableHealth = lifecycleMode === 'live' && String(h.status || '').toLowerCase() === 'ok' && bridgeDiag.compatible !== false && Number(localRuntimeErrors.count || 0) === 0;
+    const systemHealthStatus = stableHealth ? 'STABLE' : lifecycleMode === 'paused' ? 'PAUSED' : lifecycleMode === 'off' ? 'OFF' : 'CHECK';
+    const systemHealthText = `${String(lifecycleMode || 'off').toUpperCase()} · Engine ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · Manager ${productRuntime.managerVersion ? `v${productRuntime.managerVersion}` : '—'} · ${state.lastSyncAt ? age(state.lastSyncAt) : '대기'}`;
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');

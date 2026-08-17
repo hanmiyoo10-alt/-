@@ -8,8 +8,8 @@ const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const json = rel => JSON.parse(read(rel));
 const source = read('latest.js');
 
-assert.match(source, /^\/\/@version 3\.0\.0-alpha\./m);
-assert.match(source, /const VERSION = '3\.0\.0-alpha\.[^']+';/);
+assert.match(source, /^\/\/@version 3\.0\.0(?:-alpha\.[^\s]+|-beta\.[^\s]+|-rc\.\d+)?$/m);
+assert.match(source, /const VERSION = '3\.0\.0(?:-alpha\.[^']+|-beta\.[^']+|-rc\.\d+)?';/);
 assert.match(source, /const SNAPSHOT_SCHEMA_VERSION = 1;/);
 assert.match(source, /const RECENT_REQUEST_SCHEMA_VERSION = 1;/);
 assert.match(source, /const STATE_KEY = 'local-usage-dashboard-v3';/);

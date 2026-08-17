@@ -1,0 +1,38 @@
+{
+  "bridgeBase": "http://127.0.0.1:39117",
+  "bridgeEnabled": true,
+  "bridgeStatus": "connected",
+  "refreshMs": 600000,
+  "backgroundPause": true,
+  "syncOnFocus": true,
+  "performanceGuard": true,
+  "adaptiveRefresh": true,
+  "staleAfterMs": 0,
+  "widgetVisible": true,
+  "widgetMode": "detailed",
+  "widgetX": 294,
+  "widgetY": 41,
+  "widgetDockSide": "right",
+  "usageScopeView": "devpass",
+  "recentRequestFilter": "all",
+  "selectedHourKey": "2026-08-17T16",
+  "analyticsScopeView": "all",
+  "dashboardView": "settings",
+  "selectedCreditsOrgId": "org-rc-migration",
+  "requestLedger": [
+    {
+      "timestamp": 1786940000000,
+      "requestNumber": "84",
+      "requestedServiceTier": "flex",
+      "servedServiceTier": "flex",
+      "requestedServiceTierSource": "requestedServiceTier",
+      "servedServiceTierSource": "usedServiceTier",
+      "scopes": [
+        "devpass"
+      ]
+    }
+  ],
+  "bridgePausedAt": null,
+  "bridgeLastReconnectAt": 1786920000000,
+  "bridgeTokenClearedAt": 1786920000000
+}

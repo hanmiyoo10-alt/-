@@ -4,7 +4,7 @@ const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
-const enabled = /^3\.0\.0-alpha\.5\.(?:[2-9]|\d{2,})$/.test(version) || /^3\.0\.0-beta\./.test(version) || version === '3.0.0';
+const enabled = /^3\.0\.0-alpha\.5\.(?:[2-9]|\d{2,})$/.test(version) || /^3\.0\.0-beta\./.test(version) || /^3\.0\.0-rc\./.test(version) || version === '3.0.0';
 if (!enabled) { console.log(`usage-dashboard P5 engine adoption regression: skipped · ${version}`); process.exit(0); }
 for (const marker of [
   'async function adoptBridgeEngineIfNeeded(status)',
@@ -26,7 +26,7 @@ for (const marker of [
 assert.ok(!manager.includes("process.kill(candidate.pid, 'SIGKILL')"), 'automatic adoption must not force-kill legacy bridge');
 assert.ok(!source.includes("if (String(state.bridgeEngineAdoptionAttemptedVersion || '') === VERSION) return status;"), 'persisted adoption marker must not suppress live reconciliation');
 assert.equal(manifest.productVersion, version);
-const bundled = /^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version);
+const bundled = /^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0';
 assert.equal(manifest.components.bridge.state, bundled ? 'managed-bundled' : 'managed-adoption');
 assert.equal(manifest.components.bridge.lifecycleManaged, true);
 assert.equal(manifest.components.bridge.sourceBundled, bundled);

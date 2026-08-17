@@ -8,7 +8,8 @@ const runtime = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf8
 
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const alpha540Plus = version.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
-assert.ok(alpha540Plus && Number(alpha540Plus[1]) >= 40, `bridge control sync requires alpha.5.40+, got ${version}`);
+const bridgeControlVersionOk = Boolean(alpha540Plus && Number(alpha540Plus[1]) >= 40) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0';
+assert.ok(bridgeControlVersionOk, `bridge control sync requires alpha.5.40+/RC/stable, got ${version}`);
 for (const marker of [
   'class="bridge-config-static"',
   '${bridgeControlsHtml()}',

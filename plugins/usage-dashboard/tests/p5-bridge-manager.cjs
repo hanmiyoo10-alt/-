@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 
 const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
-const enabled = /^3\.0\.0-alpha\.5\.(?:[1-9]|\d{2,})$/.test(version) || /^3\.0\.0-beta\./.test(version) || version === '3.0.0';
+const enabled = /^3\.0\.0-alpha\.5\.(?:[1-9]|\d{2,})$/.test(version) || /^3\.0\.0-beta\./.test(version) || /^3\.0\.0-rc\./.test(version) || version === '3.0.0';
 if (!enabled) {
   console.log(`usage-dashboard P5 bridge manager regression: skipped · ${version}`);
   process.exit(0);
@@ -50,10 +50,10 @@ assert.ok(bootstrap.includes('sv-enable'), 'termux-services enable missing');
 assert.ok(bootstrap.includes('기존 39117 Bridge와 토큰은 변경하지 않았어.'), 'legacy bridge preservation marker missing');
 assert.equal(manifest.productVersion, version);
 if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridge.state, 'legacy-external');
-else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) assert.equal(manifest.components.bridge.state, 'managed-bundled');
+else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0') assert.equal(manifest.components.bridge.state, 'managed-bundled');
 else assert.equal(manifest.components.bridge.state, 'managed-adoption');
 if (/^3\.0\.0-alpha\.5\.1$/.test(version)) assert.equal(manifest.components.bridgeManager.state, 'bootstrap-ready');
-else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version)) assert.equal(manifest.components.bridgeManager.state, 'bundled-engine-ready');
+else if (/^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0') assert.equal(manifest.components.bridgeManager.state, 'bundled-engine-ready');
 else assert.equal(manifest.components.bridgeManager.state, 'engine-adoption-ready');
 assert.equal(manifest.components.bridgeManager.managementProtocol, 'bridge-manager-v1');
 assert.equal(manifest.components.bridgeManager.port, 39119);

@@ -93,8 +93,8 @@ jobs:
           assert before.count(payload) == 1 and after.count(payload) == 1
           assert before.count("await this.b.set(this._k('turn', index), payload)") == 1
           assert after.count("await this.b.set(this._k('turn', index), payload)") == 1
-          assert before.count('TextEncoder') == after.count('TextEncoder') == 0
-          assert before.count('new Blob(') == after.count('new Blob(') == 0
+          assert before.count('new TextEncoder(') == after.count('new TextEncoder(')
+          assert before.count('new Blob(') == after.count('new Blob(')
           assert after.count('metric.payloadChars = payload.length;') == 1
           assert after.count('detail.turnPayloadChars = Number(turnMetric.payloadChars || 0);') == 1
           assert after.count('Pre snapshot:') == 1

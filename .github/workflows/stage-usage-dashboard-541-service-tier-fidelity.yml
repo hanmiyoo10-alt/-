@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.44 Structural Modularization r3
+name: Stage Usage Dashboard 5.44 Structural Modularization r4
 
 on:
   push:
@@ -25,8 +25,10 @@ jobs:
           set -euo pipefail
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch.py
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r3.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r4.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch_r3.py
+          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r4.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
@@ -55,10 +57,11 @@ jobs:
           node plugins/usage-dashboard/tests/p5-structural-parity.cjs
           node plugins/usage-dashboard/tests/p5-state-compatibility.cjs
           git diff --check
-          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 21
+          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
           grep -Fq '//@version 3.0.0-alpha.5.44' plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
           grep -Fq "file:'06-runtime-stability.part.js'" plugins/usage-dashboard/src/parts.cjs
+          grep -Fq "file:'08-runtime-product.part.js'" plugins/usage-dashboard/src/parts.cjs
           grep -Fq "file:'12-service-tier.part.js'" plugins/usage-dashboard/src/parts.cjs
           grep -Fq "file:'14-request-ledger.part.js'" plugins/usage-dashboard/src/parts.cjs
           grep -Fq "file:'52-analytics-context.part.js'" plugins/usage-dashboard/src/parts.cjs

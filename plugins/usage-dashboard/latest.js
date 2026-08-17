@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.45
+//@version 3.0.0-alpha.5.46
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.45';
+  const VERSION = '3.0.0-alpha.5.46';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -73,7 +73,7 @@
   let widget = null, rootBody = null, drag = null;
   let widgetMobileExpanded = false, widgetMobileViewport = false, widgetMobileToggleBlockedUntil = 0;
   let widgetRenderCache = {html:null,width:null,display:null,layout:null,responsiveStyles:Object.create(null)};
-  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,activeRefreshReason:'',lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,lastUiStallRenderOverlap:false,lastUiStallRenderReason:'',lastUiStallRenderMs:null,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeInputCaptured:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeFirstInputAfterMs:null,lastResumeInputDelayMs:null,lastResumeFrameDelayMs:null,lastResumeRefreshStartedAfterMs:null,lastResumeRefreshMs:null,lastResumeRenderMs:null,lastResumeHadRefreshAtEntry:false,lastResumeRequestedReason:'',lastResumeActualReason:'',lastResumeRefreshWasCoalesced:false,lastResumeCoalescedIntoReason:'',resumeRefreshSamples:[],lastResumeInputDuringRefresh:false,lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeInputDelaySamples:[],resumeFrameDelaySamples:[],resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0,panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,panelPartialRenders:0,panelFullRenders:0,panelSectionWrites:0,panelSectionSkips:0,hourlyDetailWrites:0,hourlyDetailSkips:0,hourlyDetailFallbacks:0,lastPanelRenderMode:'full',runtimeState:'active',runtimeStateChangedAt:Date.now(),runtimeTransitions:0,lastHealthySyncAt:null,degradedSince:null,lastRenderMs:null,lastPanelRenderMs:null,lastRenderReason:'',lastRenderStartedPerf:0,lastRenderEndedPerf:0,activeRenderStartedPerf:0,activeRenderReason:'',lastRenderBreakdown:null,renderSpikeCount:0,renderSpikeSamples:[],lastRenderSpikeMs:null,lastRenderSpikeAt:null,lastRenderSpikeReason:'',lastRenderSpikeRefreshOverlap:false,lastRenderSpikeBreakdown:null};
+  const performanceRuntime = {adaptiveMultiplier:1,slowRefreshes:0,fastRefreshes:0,mode:'normal',timerSamples:0,ignoredSamples:0,lastSampleReason:'',lastSampleDurationMs:null,activeRefreshStartedPerf:0,activeRefreshReason:'',lastRefreshStartedPerf:0,lastRefreshEndedPerf:0,uiStallCount50:0,uiStallCount100:0,uiStallCount200:0,uiStallMaxMs:0,uiStallSamples:[],lastUiStallMs:null,lastUiStallAt:null,lastUiStallRefreshOverlap:false,lastUiStallRenderOverlap:false,lastUiStallRenderReason:'',lastUiStallRenderMs:null,uiStallProbeActive:false,lastInteractionAt:0,resumeEvents:0,resumeCoalesced:0,resumeDeferred:0,resumePending:false,resumeStartedAt:0,lastResumeDelayMs:null,resumeMeasurePending:false,resumeInputCaptured:false,resumeVisiblePerf:0,lastResumeVisibleAt:null,lastResumeReason:'',lastResumeFirstInputAfterMs:null,lastResumeInputDelayMs:null,lastResumeFrameDelayMs:null,lastResumeRefreshStartedAfterMs:null,lastResumeRefreshMs:null,lastResumeRenderMs:null,lastResumeHadRefreshAtEntry:false,lastResumeRequestedReason:'',lastResumeActualReason:'',lastResumeRefreshWasCoalesced:false,lastResumeCoalescedIntoReason:'',resumeRefreshSamples:[],lastResumeInputDuringRefresh:false,lastResumeMainThreadLagMs:null,lastResumeProbeAfterMs:null,lastResumeProbeDuringRefresh:false,longTaskSupported:false,lastResumeLongTaskMs:null,lastResumeLongTaskStartedAfterMs:null,lastResumeLongTaskDuringRefresh:false,resumeLongTaskCount:0,resumeInputDelaySamples:[],resumeFrameDelaySamples:[],resumeMainThreadLagSamples:[],resumeLongTaskSamples:[],schedulerQueued:0,schedulerMerged:0,schedulerExecuted:0,schedulerDeferredForInteraction:0,panelRenderCoalesced:0,panelRenderSkippedClosed:0,widgetHtmlWrites:0,widgetHtmlSkips:0,widgetStyleWrites:0,widgetStyleSkips:0,panelPartialRenders:0,panelFullRenders:0,panelSectionWrites:0,panelSectionSkips:0,hourlyDetailWrites:0,hourlyDetailSkips:0,hourlyDetailFallbacks:0,lastPanelRenderMode:'full',runtimeState:'active',runtimeStateChangedAt:Date.now(),runtimeTransitions:0,lastHealthySyncAt:null,degradedSince:null,lastRenderMs:null,lastPanelRenderMs:null,lastRenderReason:'',lastRenderStartedPerf:0,lastRenderEndedPerf:0,activeRenderStartedPerf:0,activeRenderReason:'',lastRenderBreakdown:null,renderSpikeCount:0,renderSpikeSamples:[],lastRenderSpikeMs:null,lastRenderSpikeAt:null,lastRenderSpikeReason:'',lastRenderSpikeRefreshOverlap:false,lastRenderSpikeBreakdown:null,lastRefreshPhases:null,lastRefreshSlowestPhase:'',lastRefreshSlowestPhaseMs:null};
   const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};
   const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
@@ -1318,11 +1318,30 @@ async function importLegacyTodayBaselines() {
         requestedServiceTierSource,
         servedServiceTierSource,
         requestNumber,
+        requestStatus:status,
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
         errorType:success ? '' : String(errorTypeRaw ?? '')
       };
     }).filter(Boolean).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, Math.max(1, Number(limit) || 12));
+  }
+
+  function requestOutcomeCategory(row) {
+    const status = String(row?.requestStatus || '').trim().toLowerCase();
+    if (['cancelled','canceled','aborted','abort','cancel'].includes(status)) return 'cancelled';
+    if (['error','failed','failure','upstream_error','gateway_error','timeout'].includes(status) || row?.success === false) return 'error';
+    if (['success','ok','completed','complete','succeeded'].includes(status) || row?.success === true) return 'success';
+    return 'unknown';
+  }
+
+  function requestOutcomeStats(rows) {
+    const stats = {rows:0,success:0,error:0,cancelled:0,unknown:0};
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      const outcome = requestOutcomeCategory(row);
+      stats.rows += 1;
+      stats[outcome] += 1;
+    }
+    return stats;
   }
 
   function requestLedgerCapabilities(rows) {
@@ -1379,6 +1398,7 @@ async function importLegacyTodayBaselines() {
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
+          requestStatus:String(row.requestStatus || current?.requestStatus || ''),
           errorCode:String(row.errorCode || current?.errorCode || ''),
           errorType:String(row.errorType || current?.errorType || ''),
           scopes:Array.from(scopes)
@@ -2033,6 +2053,13 @@ async function importLegacyTodayBaselines() {
     const started = Date.now();
     const refreshAttribution = beginRefreshAttribution(reason, started);
     const startedPerf = typeof performance?.now === 'function' ? performance.now() : 0;
+    const refreshPhaseDurations = Object.create(null);
+    const refreshPhaseNow = () => typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const finishRefreshPhase = (name, phaseStarted) => {
+      const ended = refreshPhaseNow();
+      refreshPhaseDurations[String(name)] = Math.max(0, roundPerfMs(ended - Number(phaseStarted || ended)) || 0);
+      return ended;
+    };
     performanceRuntime.activeRefreshStartedPerf = startedPerf;
     performanceRuntime.activeRefreshReason = String(reason || 'manual');
     const resumeVisibilityRefresh = reason === 'visibility' && performanceRuntime.resumeMeasurePending;
@@ -2048,25 +2075,37 @@ async function importLegacyTodayBaselines() {
     }
     refreshInFlight = (async () => {
       try {
+        let refreshPhaseStarted = refreshPhaseNow();
         const managerStatus = await fetchBridgeManagerStatus(reason !== 'timer');
+        finishRefreshPhase('manager-probe', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const managerSynced = await syncBridgeManagerIfNeeded(managerStatus);
+        finishRefreshPhase('manager-sync', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const managerAdopted = await adoptBridgeEngineIfNeeded(managerSynced);
+        finishRefreshPhase('engine-adopt', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
+        finishRefreshPhase('engine-sync', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         state.bridgeManagerRuntime = managerRuntime;
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         const snapshot = await fetchSnapshot();
+        finishRefreshPhase('snapshot', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         state.data = applyObservedToday(snapshot);
+        finishRefreshPhase('normalize-ledger', refreshPhaseStarted);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
           const to = String(state.data.creditsOrganizationId || '');
@@ -2090,10 +2129,14 @@ async function importLegacyTodayBaselines() {
         state.retryDelayMs = 0;
         state.nextRetryAt = null;
         updateRuntimeState('refresh-success');
+        refreshPhaseStarted = refreshPhaseNow();
         await persistRefreshState('refresh-success-persist');
+        finishRefreshPhase('persist', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
+        refreshPhaseStarted = refreshPhaseNow();
         await renderRefreshWidget(reason, 'refresh-success-render');
+        finishRefreshPhase('widget-render', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         if (resumeVisibilityRefresh) {
@@ -2134,6 +2177,10 @@ async function importLegacyTodayBaselines() {
         performanceRuntime.lastRefreshStartedPerf = startedPerf;
         performanceRuntime.lastRefreshEndedPerf = endedPerf;
       }
+      performanceRuntime.lastRefreshPhases = {...refreshPhaseDurations};
+      const slowestRefreshPhase = Object.entries(refreshPhaseDurations).sort((a,b) => Number(b[1] || 0) - Number(a[1] || 0))[0] || null;
+      performanceRuntime.lastRefreshSlowestPhase = slowestRefreshPhase ? String(slowestRefreshPhase[0]) : '';
+      performanceRuntime.lastRefreshSlowestPhaseMs = slowestRefreshPhase ? Number(slowestRefreshPhase[1]) : null;
       const attributionStatus = state.lastRefreshReason === reason
         ? (state.bridgeStatus === 'connected' ? 'ok' : state.bridgeStatus === 'error' ? 'error' : String(state.bridgeStatus || 'unknown'))
         : 'unknown';
@@ -2144,6 +2191,32 @@ async function importLegacyTodayBaselines() {
       refreshInFlight = null;
       if (runtimeIsCurrent(refreshEpoch)) updateRuntimeState('refresh-complete');
     }
+  }
+
+  function refreshPhaseTimingText(phases = performanceRuntime.lastRefreshPhases) {
+    const rows = Object.entries(phases && typeof phases === 'object' ? phases : {})
+      .filter(([,value]) => num(value))
+      .sort((a,b) => Number(b[1]) - Number(a[1]));
+    return rows.length ? rows.map(([name,value]) => `${name} ${roundPerfMs(value)}ms`).join(' · ') : '—';
+  }
+
+  function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {
+    const blockers = [];
+    const lifecycle = bridgeLifecycleMode();
+    if (lifecycle !== 'live') blockers.push(`lifecycle ${lifecycle}`);
+    if (bridgeDiag?.compatible !== true) blockers.push(`bridge compatibility ${bridgeDiag?.compatible === false ? 'no' : 'unknown'}`);
+    if (String(bridgeDiag?.version || '') !== REQUIRED_BRIDGE_VERSION) blockers.push(`engine ${bridgeDiag?.version || '—'}`);
+    if (!runtimeBridge?.managerInstalled) blockers.push('manager absent');
+    if (String(runtimeBridge?.managerVersion || '') !== '1.2.6') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
+    const managerProduct = String(state.bridgeManagerRuntime?.productVersion || '');
+    const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
+    if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);
+    if (managerSync && managerSync !== VERSION) blockers.push(`manager sync ${managerSync}`);
+    if (Number(localRuntimeErrors.count || 0) > 0) blockers.push(`local errors ${Number(localRuntimeErrors.count || 0)}`);
+    if (Number(state.consecutiveFailures || 0) > 0) blockers.push(`refresh failures ${Number(state.consecutiveFailures || 0)}`);
+    const updaterCompatible = /^3\.0\.0-alpha\.5\.(?:4[6-9]|[5-9]\d|\d{3,})$/.test(VERSION) || /^3\.[1-9]\d*\.\d+$/.test(VERSION);
+    if (!updaterCompatible) blockers.push('updater version ordering');
+    return {ready:blockers.length === 0, blockers, updaterCompatible};
   }
 
   function diagText() {
@@ -2158,6 +2231,8 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     const diagDevpassRows = requestLedgerRowsForScope('devpass');
     const diagTierFidelity = requestServiceTierStats(diagDevpassRows);
+    const diagOutcome = requestOutcomeStats(diagDevpassRows);
+    const stableReadiness = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const diagAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     return [
       `Local Usage Dashboard v${VERSION}`,
@@ -2178,6 +2253,8 @@ async function importLegacyTodayBaselines() {
       `Source: ${d.source || '—'}`,
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
+      `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'}`,
+      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.2.6 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
       `Health: ${h.status || '—'}`,
       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
@@ -2194,6 +2271,7 @@ async function importLegacyTodayBaselines() {
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
+      `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${money(diagAccount?.regularCredits)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
@@ -2201,6 +2279,8 @@ async function importLegacyTodayBaselines() {
       `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
       `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
       `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
+      `Refresh phase duration: ${refreshPhaseTimingText()}`,
+      `Refresh slowest phase: ${performanceRuntime.lastRefreshSlowestPhase || '—'} · ${num(performanceRuntime.lastRefreshSlowestPhaseMs) ? `${roundPerfMs(performanceRuntime.lastRefreshSlowestPhaseMs)}ms` : '—'}`,
       `Reason: ${state.lastRefreshReason || '—'}`,
       `Success count: ${Number(state.refreshCount || 0)}`,
       `Refresh requests: manual ${Number(refreshAttributionRuntime.requested.manual || 0)} · timer ${Number(refreshAttributionRuntime.requested.timer || 0)} · visibility ${Number(refreshAttributionRuntime.requested.visibility || 0)} · init ${Number(refreshAttributionRuntime.requested.init || 0)} · other ${Object.entries(refreshAttributionRuntime.requested).filter(([key]) => !['manual','timer','visibility','init'].includes(key)).reduce((sum,[,value]) => sum + Number(value || 0), 0)}`,

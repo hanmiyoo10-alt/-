@@ -26,17 +26,8 @@ jobs:
           from pathlib import Path
           p = Path('plugins/simcore/patch_simcore_06336.py')
           s = p.read_text(encoding='utf-8')
-          old = """def between(text, start, end):
-    a = text.index(start)
-    b = text.index(end, a)
-    return a, b, text[a:b]
-"""
-          new = """def between(text, start, end):
-    floor = text.index('\\n\\n(async () => {')
-    a = text.index(start, floor)
-    b = text.index(end, a)
-    return a, b, text[a:b]
-"""
+          old = "def between(text, start, end):\n    a = text.index(start)\n    b = text.index(end, a)\n    return a, b, text[a:b]\n"
+          new = "def between(text, start, end):\n    floor = text.index('\\n\\n(async () => {')\n    a = text.index(start, floor)\n    b = text.index(end, a)\n    return a, b, text[a:b]\n"
           assert old in s
           p.write_text(s.replace(old, new, 1), encoding='utf-8')
           PY

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.42
+//@version 3.0.0-alpha.5.43
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.42';
+  const VERSION = '3.0.0-alpha.5.43';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -38,7 +38,7 @@
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
     staleAfterMs: 0, stalePolicyV37Migrated: false,
-    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null,
+    widgetVisible: true, widgetMode: 'compact', widgetX: null, widgetY: null, widgetDockSide: '',
     usageScopeView: 'all',
     recentRequestFilter: 'all',
     selectedHourKey: '',
@@ -2231,6 +2231,7 @@ async function importLegacyTodayBaselines() {
       `P4 partial: auto section patch · diagnostics live · settings preserved`,
       `Render cache: widget html writes ${Number(performanceRuntime.widgetHtmlWrites || 0)} · skips ${Number(performanceRuntime.widgetHtmlSkips || 0)} · style writes ${Number(performanceRuntime.widgetStyleWrites || 0)} · skips ${Number(performanceRuntime.widgetStyleSkips || 0)} · closed panel skips ${Number(performanceRuntime.panelRenderSkippedClosed || 0)}`,
       `P4 render: closed-panel skip · widget DOM dedup`,
+      `Floating widget UX: ${state.widgetVisible===false?'hidden':'visible'} · mobile ${widgetMobileViewport?'yes':'no'} · expanded ${widgetMobileExpanded?'yes':'no'} · dock ${state.widgetDockSide || 'none'} · position ${num(state.widgetX)&&num(state.widgetY)?`${Math.round(Number(state.widgetX))},${Math.round(Number(state.widgetY))}`:'default'} · gesture handle-drag/arrow-toggle`,
       `Credits organization: selected ${state.data?.creditsOrganizationId || state.selectedCreditsOrgId || 'default'} · available ${Array.isArray(state.data?.organizations) ? state.data.organizations.filter(org=>String(org?.kind||'default')==='default'&&String(org?.status||'active')!=='deleted').length : 0} · fallbacks ${Number(state.creditsOrgFallbackCount || 0)}${state.creditsOrgLastFallbackFrom ? ` · last ${state.creditsOrgLastFallbackFrom} → ${state.creditsOrgLastFallbackTo || 'default'}` : ''}`,
       `Local runtime errors: ${Number(localRuntimeErrors.count || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
@@ -2832,6 +2833,7 @@ function todayOverviewMetrics(d) {
     if (q('#reset-position')) q('#reset-position').onclick = async () => {
       state.widgetX = null;
       state.widgetY = null;
+      state.widgetDockSide = '';
       drag = null;
       widgetRenderCache.layout = null;
       await persist();
@@ -2936,7 +2938,12 @@ function todayOverviewMetrics(d) {
     const mobileCollapsed = widgetMobileViewport && !widgetMobileExpanded;
     if (mobileCollapsed) {
       const monthlyValue = num(m?.remaining) ? money(m.remaining) : (num(m?.todayUsed) ? money(m.todayUsed,4) : '—');
-      return `<div data-mobile-widget-summary="1" title="탭해서 사용량 펼치기" style="display:flex;align-items:center;justify-content:flex-end;gap:7px;min-height:24px;font:11px/1 system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#f5f7fa;white-space:nowrap;cursor:pointer"><span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:2px 5px">${badge.label}</span><span style="color:#aeb5c0;font-weight:650">월간</span><b>${monthlyValue}</b><span style="color:#7f8792;font-size:10px">▾</span></div>`;
+      return `<div data-mobile-widget-summary="1" title="≡로 이동 · ▾로 펼치기" style="display:grid;grid-template-columns:20px auto 1fr 24px;align-items:center;gap:5px;min-height:24px;font:11px/1 system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#f5f7fa;white-space:nowrap;cursor:default">
+        <span data-drag-handle="1" aria-label="위젯 이동" style="display:grid;place-items:center;height:22px;color:#8e96a2;font-size:14px;font-weight:900;cursor:grab;touch-action:none">≡</span>
+        <span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:2px 5px">${badge.label}</span>
+        <b style="overflow:hidden;text-overflow:ellipsis">${monthlyValue}</b>
+        <span data-widget-toggle="1" aria-label="위젯 펼치기" style="display:grid;place-items:center;height:22px;border-left:1px solid rgba(255,255,255,.08);color:#aeb5c0;font-size:12px;font-weight:900;cursor:pointer">▾</span>
+      </div>`;
     }
     const main = b => detailed ? money(b?.remaining) : (num(b?.todayUsed) ? money(b.todayUsed,4) : money(b?.remaining));
     const row = (label,value,color) => `<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:${color}">${esc(label)}</span><b>${value}</b></div>`;
@@ -2970,11 +2977,16 @@ function todayOverviewMetrics(d) {
     const creditsSub = detailed
       ? `오늘 ${money(c?.todayUsed,4)}${num(c?.balance) ? ` · 잔액 ${money(c.balance)}` : ''}`
       : '';
+    const topControls = widgetMobileViewport
+      ? `<div data-widget-controlbar="1" style="display:grid;grid-template-columns:28px 1fr 30px;align-items:center;gap:6px;min-height:27px;margin:-1px 0 4px">
+          <span data-drag-handle="1" aria-label="위젯 이동" style="display:grid;place-items:center;height:25px;color:#8e96a2;font-size:16px;font-weight:900;cursor:grab;touch-action:none">≡</span>
+          <span style="justify-self:end;font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:1px 5px">${badge.label}</span>
+          <span data-widget-toggle="1" aria-label="위젯 접기" style="display:grid;place-items:center;height:25px;border-left:1px solid rgba(255,255,255,.08);color:#aeb5c0;font-size:12px;font-weight:900;cursor:pointer">▴</span>
+        </div>`
+      : `<div data-drag-handle="1" style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab;touch-action:none"></div>
+        <div style="display:flex;justify-content:flex-end;margin:-2px 0 4px"><span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:1px 5px">${badge.label}</span></div>`;
     return `<div style="font:12px/1.35 system-ui,-apple-system,'Segoe UI',sans-serif;color:#f5f7fa">
-      <div data-drag-handle="1" style="height:12px;background:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,.25)) center/28px 3px no-repeat;cursor:grab"></div>
-      <div style="display:flex;justify-content:flex-end;margin:-2px 0 4px">
-        <span style="font-size:9px;font-weight:800;letter-spacing:.05em;color:${badge.color};border:1px solid ${badge.color};border-radius:99px;padding:1px 5px">${badge.label}</span>
-      </div>
+      ${topControls}
       ${row(detailed?'월간 남음':(m?.label||'월간'),main(m),'#aeb5c0')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${monthlySub}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${m?pct(100-Number(m.percent||0)):0}%;background:#c5f277"></i></div>
       ${row(detailed?'프리미엄 남음':(w?.label||'주간'),main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${premiumSub}</div>`:''}
@@ -2989,7 +3001,7 @@ function todayOverviewMetrics(d) {
   }
 
   const widgetWidth = (mobile = false, expanded = false) => mobile
-    ? (expanded ? 'min(220px,calc(100vw - 16px))' : 'min(176px,calc(100vw - 16px))')
+    ? (expanded ? 'min(220px,calc(100vw - 16px))' : 'min(152px,calc(100vw - 16px))')
     : (state.widgetMode === 'detailed' ? 'clamp(196px,52vw,220px)' : 'clamp(166px,44vw,184px)');
 
   async function widgetMobileMode() {
@@ -3016,14 +3028,37 @@ function todayOverviewMetrics(d) {
 
   async function applyWidgetResponsiveLayout(mobile, expanded) {
     if (!widget) return;
-    const layout = mobile ? (expanded ? 'mobile-expanded' : 'mobile-collapsed') : 'desktop';
+    const dockSide = ['left','right'].includes(String(state.widgetDockSide || '')) ? String(state.widgetDockSide) : '';
+    const hasSavedY = num(state.widgetY);
+    const hasSavedX = num(state.widgetX);
+    const layout = mobile
+      ? `${expanded ? 'mobile-expanded' : 'mobile-collapsed'}:${dockSide || (hasSavedX && hasSavedY ? 'free' : 'default')}`
+      : 'desktop';
     if (widgetRenderCache.layout === layout) return;
     let desired;
-    if (mobile) {
+    if (mobile && hasSavedY && dockSide === 'left') {
+      desired = {
+        left:'8px', top:`${state.widgetY}px`, right:'auto', bottom:'auto',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 8px'
+      };
+    } else if (mobile && hasSavedY && dockSide === 'right') {
+      desired = {
+        left:'auto', top:`${state.widgetY}px`, right:'8px', bottom:'auto',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 8px'
+      };
+    } else if (mobile && hasSavedX && hasSavedY) {
+      desired = {
+        left:`${state.widgetX}px`, top:`${state.widgetY}px`, right:'auto', bottom:'auto',
+        'border-radius':expanded?'11px':'999px',
+        padding:expanded?'5px 10px 8px':'6px 8px'
+      };
+    } else if (mobile) {
       desired = {
         left:'auto', top:'auto', right:'8px', bottom:'88px',
         'border-radius':expanded?'11px':'999px',
-        padding:expanded?'5px 10px 8px':'6px 9px'
+        padding:expanded?'5px 10px 8px':'6px 8px'
       };
     } else if (num(state.widgetX)&&num(state.widgetY)) {
       desired = {
@@ -3040,6 +3075,39 @@ function todayOverviewMetrics(d) {
       await setResponsiveWidgetStyle(name, value);
     }
     widgetRenderCache.layout = layout;
+  }
+
+  async function clampWidgetToViewport() {
+    if (!widget || !rootBody || (!num(state.widgetX) && !num(state.widgetY))) return false;
+    const rect = await widget.getBoundingClientRect();
+    const bodyWidth = Number(await rootBody.clientWidth());
+    const bodyHeight = Number(await rootBody.clientHeight());
+    const maxX = Math.max(8, bodyWidth - Number(rect.width || 0) - 8);
+    const maxY = Math.max(8, bodyHeight - Number(rect.height || 0) - 8);
+    const nextY = Math.max(8, Math.min(maxY, num(state.widgetY) ? Number(state.widgetY) : Number(rect.top || 8)));
+    const dockSide = ['left','right'].includes(String(state.widgetDockSide || '')) ? String(state.widgetDockSide) : '';
+    state.widgetY = nextY;
+    await widget.setStyle('top',`${nextY}px`);
+    await widget.setStyle('bottom','auto');
+    if (widgetMobileViewport && dockSide === 'right') {
+      state.widgetX = maxX;
+      await widget.setStyle('left','auto');
+      await widget.setStyle('right','8px');
+    } else {
+      const nextX = widgetMobileViewport && dockSide === 'left'
+        ? 8
+        : Math.max(8, Math.min(maxX, num(state.widgetX) ? Number(state.widgetX) : Number(rect.left || 8)));
+      state.widgetX = nextX;
+      await widget.setStyle('left',`${nextX}px`);
+      await widget.setStyle('right','auto');
+    }
+    if (widgetRenderCache.responsiveStyles && typeof widgetRenderCache.responsiveStyles === 'object') {
+      widgetRenderCache.responsiveStyles.top = `${state.widgetY}px`;
+      widgetRenderCache.responsiveStyles.bottom = 'auto';
+      widgetRenderCache.responsiveStyles.left = widgetMobileViewport && dockSide === 'right' ? 'auto' : `${state.widgetX}px`;
+      widgetRenderCache.responsiveStyles.right = widgetMobileViewport && dockSide === 'right' ? '8px' : 'auto';
+    }
+    return true;
   }
 
   async function detachWidgetRemoteListeners() {
@@ -3085,26 +3153,27 @@ function todayOverviewMetrics(d) {
     rootBody = await root.querySelector('body');
     widget = await root.createElement('div');
     const pos = num(state.widgetX)&&num(state.widgetY)?`left:${state.widgetX}px;top:${state.widgetY}px;`:'right:12px;bottom:74px;';
-    await widget.setStyleAttribute(`position:fixed;${pos}width:${widgetWidth()};max-width:calc(100vw - 16px);z-index:2147483000;background:#191b20;color:#f5f7fa;border:1px solid rgba(255,255,255,.12);border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.24);padding:5px 10px 8px;box-sizing:border-box;user-select:none;touch-action:none;`);
+    await widget.setStyleAttribute(`position:fixed;${pos}width:${widgetWidth()};max-width:calc(100vw - 16px);z-index:2147483000;background:#191b20;color:#f5f7fa;border:1px solid rgba(255,255,255,.12);border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.24);padding:5px 10px 8px;box-sizing:border-box;user-select:none;touch-action:manipulation;`);
     await rootBody.appendChild(widget);
     const down = async e => {
-      if (widgetMobileViewport) { drag = null; return; }
       if (!num(e.clientX)||!num(e.clientY)) return;
       const r=await widget.getBoundingClientRect();
-
-      // Drag can begin only from the thin handle at the top of the widget.
-      // This prevents normal taps/clicks on the widget or surrounding UI from
-      // accidentally starting a drag session.
+      const localX = Number(e.clientX) - r.left;
       const localY = Number(e.clientY) - r.top;
-      if (localY < 0 || localY > 18) {
+      const inHandle = widgetMobileViewport
+        ? localX >= 0 && localX <= 38 && localY >= 0 && localY <= 42
+        : localY >= 0 && localY <= 18;
+      if (!inHandle) {
         drag = null;
         return;
       }
-
       drag={
         pointerId: e.pointerId ?? null,
+        startX:Number(e.clientX),
+        startY:Number(e.clientY),
         ox:Number(e.clientX)-r.left,
         oy:Number(e.clientY)-r.top,
+        moved:false,
         maxX:Math.max(8,(await rootBody.clientWidth())-r.width-8),
         maxY:Math.max(8,(await rootBody.clientHeight())-r.height-8)
       };
@@ -3112,6 +3181,9 @@ function todayOverviewMetrics(d) {
     const move = async e => {
       if (!drag||!num(e.clientX)||!num(e.clientY)) return;
       if (drag.pointerId !== null && e.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
+      const distance = Math.hypot(Number(e.clientX)-drag.startX, Number(e.clientY)-drag.startY);
+      if (!drag.moved && distance < 6) return;
+      drag.moved = true;
       state.widgetX=Math.max(8,Math.min(drag.maxX,Number(e.clientX)-drag.ox));
       state.widgetY=Math.max(8,Math.min(drag.maxY,Number(e.clientY)-drag.oy));
       await widget.setStyle('left',`${state.widgetX}px`);
@@ -3128,13 +3200,40 @@ function todayOverviewMetrics(d) {
     const up = async e => {
       if (!drag) return;
       if (drag.pointerId !== null && e?.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
+      const finished = drag;
       drag=null;
+      if (!finished.moved) return;
+      if (widgetMobileViewport) {
+        const dockSide = Number(state.widgetX || 0) <= finished.maxX / 2 ? 'left' : 'right';
+        state.widgetDockSide = dockSide;
+        state.widgetX = dockSide === 'left' ? 8 : finished.maxX;
+        if (dockSide === 'left') {
+          await widget.setStyle('left','8px');
+          await widget.setStyle('right','auto');
+        } else {
+          await widget.setStyle('left','auto');
+          await widget.setStyle('right','8px');
+        }
+        widgetRenderCache.layout = null;
+      } else {
+        state.widgetDockSide = '';
+      }
+      widgetMobileToggleBlockedUntil=Date.now()+500;
       await persist();
     };
-    const toggleMobileWidget = async () => {
+    const toggleMobileWidget = async e => {
       if (!widgetMobileViewport) return;
-      if (Date.now() < widgetMobileToggleBlockedUntil) { widgetMobileExpanded = false; return; }
+      if (Date.now() < widgetMobileToggleBlockedUntil) return;
+      if (!num(e.clientX)||!num(e.clientY)) return;
+      const r = await widget.getBoundingClientRect();
+      const localX = Number(e.clientX) - r.left;
+      const localY = Number(e.clientY) - r.top;
+      const toggleWidth = widgetMobileExpanded ? 40 : 34;
+      const toggleHeight = widgetMobileExpanded ? 42 : Math.max(32, Number(r.height || 0));
+      const inToggle = localX >= Number(r.width || 0) - toggleWidth && localY >= 0 && localY <= toggleHeight;
+      if (!inToggle) return;
       widgetMobileExpanded = !widgetMobileExpanded;
+      widgetRenderCache.layout = null;
       await renderWidget('mobile-widget-toggle');
     };
     await addWidgetRemoteListener(widget,'pointerdown',down);
@@ -3199,6 +3298,7 @@ function todayOverviewMetrics(d) {
         const nextHtml = widgetHtml();
         if (widgetRenderCache.html !== nextHtml) {
           await widget.setInnerHTML(nextHtml);
+          await clampWidgetToViewport();
           widgetRenderCache.html = nextHtml;
           performanceRuntime.widgetHtmlWrites += 1;
         } else {

@@ -10,7 +10,7 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.42'));
+assert.ok(source.includes('//@version 3.0.0-alpha.5.43'));
 for (const marker of [
   'cycle:ds.cycle',
   'billingCycleStart:ds.billingCycleStart',
@@ -52,4 +52,4 @@ assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-console.log('usage-dashboard P5 DevPass account detail parity: OK · 3.0.0-alpha.5.42');
+console.log('usage-dashboard P5 DevPass account detail parity: OK · 3.0.0-alpha.5.43');

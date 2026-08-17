@@ -297,6 +297,7 @@
     if (q('#reset-position')) q('#reset-position').onclick = async () => {
       state.widgetX = null;
       state.widgetY = null;
+      state.widgetDockSide = '';
       drag = null;
       widgetRenderCache.layout = null;
       await persist();

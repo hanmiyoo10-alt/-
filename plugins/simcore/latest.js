@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.33
+//@version 0.63.34
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.34 Deferred Chat Mirror:
+// - Moves the secondary scriptstate mirror write out of the output-handler critical path while keeping the authoritative out snapshot fully awaited before COMMITTED
+// - Captures the committed portable state, defers mirror work by one task, fresh-reads the exact target chat, and writes only when chat identity plus canonical/raw output fingerprint still match the committed output
+// - Guards deferred work with runtime epoch and per-location latest-wins tokens; unload, targeted reload, superseded output, chat replacement and output-not-ready/mismatch paths fail open without touching chat state
+// - Adds no new pluginStorage work and keeps all 17 internal SimCore modules, request path, Recovery/Thoughts, Time, Structure, Frame, Evidence, Prompt and snapshot schemas byte-identical to v0.63.33; one fresh chat read is intentionally moved off-path to make deferred full-chat mirroring safe
 //
 // v0.63.33 Output Commit Breakdown Diagnostics:
 // - Exposes the output timing measurements already collected by the existing output pipeline so core commit, mirror write and diagnostic overhead can be attributed instead of inferred from the single committed delta
@@ -4181,6 +4187,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastTimestampCanonicalization = null;
   let lastPreambleProvenance = null;
   let lastDiagnosticRequestProbe = null;
+  let deferredMirrorSequence = 0;
+  const deferredMirrorLatestByLocation = new Map();
+  let lastDeferredMirrorProbe = null;
 
   const { perfNow, perfMs } = ops;
 
@@ -4366,36 +4375,127 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     return coreSession;
   }
 
-  async function mirrorCoreState(chaIdx, chatIdx, chatArg = null, perfDetail = null) {
+  function captureCoreMirrorSnapshot(chaIdx, chatIdx, chat, outIndex, state = null) {
+    if (!coreSession) return null;
+    const committed = state && typeof state === 'object' ? state : coreSession.current;
+    if (!committed) return null;
+    return {
+      outIndex: Number(outIndex),
+      locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
+      portableState: coreSession.portableState(),
+      mode: committed.lastMode || 'A',
+      broadcastLocked: committed.broadcastLocked ? '1' : '0',
+      communityCount: String(committed.community?.activationCount || 0),
+      ageOffset: String(committed.koreanAgeOffset || 0),
+      outputFingerprint: committed.outputFingerprint || null,
+      hostOutputFingerprint: committed.hostOutputFingerprint || null,
+    };
+  }
+
+  async function mirrorCoreState(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
       detail.chatLoadMs = 0;
       detail.prepareMs = 0;
       detail.setChatMs = 0;
+      detail.status = 'PENDING';
     }
-    if (!coreSession) return;
+    const snapshot = mirrorSnapshot || captureCoreMirrorSnapshot(chaIdx, chatIdx, chatArg, coreSession?.currentOutputIndex, coreSession?.current);
+    if (!snapshot) { if (detail) detail.status = 'NO_SNAPSHOT'; return false; }
+    const guard = typeof shouldApply === 'function' ? shouldApply : () => true;
+    if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
     try {
       let t = perfNow();
       const chat = chatArg || await Risuai.getChatFromIndex(chaIdx, chatIdx);
       if (detail) detail.chatLoadMs = perfMs(t);
-      if (!chat) return;
+      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
+      if (!chat) { if (detail) detail.status = 'NO_CHAT'; return false; }
+      if (diagnosticLocationKey(chaIdx, chatIdx, chat) !== String(snapshot.locationKey || '')) {
+        if (detail) detail.status = 'LOCATION_MISMATCH';
+        return false;
+      }
+
+      const expectedOutIndex = Number(snapshot.outIndex);
+      if (Number.isInteger(expectedOutIndex) && expectedOutIndex >= 0) {
+        const message = Array.isArray(chat.message) ? chat.message[expectedOutIndex] : null;
+        if (!message || (message.role !== 'char' && message.role !== 'assistant')) {
+          if (detail) detail.status = 'OUTPUT_NOT_READY';
+          return false;
+        }
+        const actualFingerprint = coreRules.fingerprintText(textMessageContent(message));
+        const canonical = String(snapshot.outputFingerprint || '');
+        const hostRaw = String(snapshot.hostOutputFingerprint || '');
+        if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {
+          if (detail) detail.status = 'OUTPUT_MISMATCH';
+          return false;
+        }
+      }
+      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
 
       t = perfNow();
       chat.scriptstate = chat.scriptstate || {};
-      chat.scriptstate['$simcore_core_state'] = coreSession.portableState();
-      chat.scriptstate['$simcore_core_mode'] = coreSession.current?.lastMode || 'A';
-      chat.scriptstate['$simcore_core_broadcast_locked'] = coreSession.current?.broadcastLocked ? '1' : '0';
-      chat.scriptstate['$simcore_core_community_count'] = String(coreSession.current?.community?.activationCount || 0);
-      chat.scriptstate['$simcore_core_age_offset'] = String(coreSession.current?.koreanAgeOffset || 0);
+      chat.scriptstate['$simcore_core_state'] = snapshot.portableState;
+      chat.scriptstate['$simcore_core_mode'] = snapshot.mode || 'A';
+      chat.scriptstate['$simcore_core_broadcast_locked'] = snapshot.broadcastLocked || '0';
+      chat.scriptstate['$simcore_core_community_count'] = snapshot.communityCount || '0';
+      chat.scriptstate['$simcore_core_age_offset'] = snapshot.ageOffset || '0';
       delete chat.scriptstate['$simcore_core_reaction_global_max'];
       if (detail) detail.prepareMs = perfMs(t);
+      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
 
       t = perfNow();
       await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
-      if (detail) detail.setChatMs = perfMs(t);
+      if (detail) { detail.setChatMs = perfMs(t); detail.status = 'COMMITTED'; }
+      return true;
     } catch (e) {
+      if (detail) { detail.status = 'ERROR'; detail.errorName = e?.name || 'Error'; }
       console.log('[simcore/v0.63.4] state mirror failed:', e.message);
+      return false;
     }
+  }
+
+  function scheduleDeferredCoreMirror(chaIdx, chatIdx, chat, outIndex, state) {
+    const snapshot = captureCoreMirrorSnapshot(chaIdx, chatIdx, chat, outIndex, state);
+    if (!snapshot) return false;
+    const epoch = runtimeEpoch;
+    const locationKey = String(snapshot.locationKey || '');
+    const sequence = ++deferredMirrorSequence;
+    deferredMirrorLatestByLocation.set(locationKey, sequence);
+    const probe = {
+      outIndex: Number(outIndex), locationKey, sequence, status: 'SCHEDULED',
+      scheduledAt: Date.now(), startedAt: null, finishedAt: null,
+      chatLoadMs: 0, prepareMs: 0, setChatMs: 0, totalMs: 0,
+    };
+    lastDeferredMirrorProbe = probe;
+    const shouldApply = () => runtimeIsCurrent(epoch) && deferredMirrorLatestByLocation.get(locationKey) === sequence;
+
+    const runDeferredMirror = async () => {
+      if (!shouldApply()) {
+        probe.status = runtimeIsCurrent(epoch) ? 'SUPERSEDED' : 'STALE_DROPPED';
+        probe.finishedAt = Date.now();
+        return;
+      }
+      probe.startedAt = Date.now();
+      const detail = {};
+      const started = perfNow();
+      const ok = await mirrorCoreState(chaIdx, chatIdx, null, detail, snapshot, shouldApply);
+      probe.totalMs = perfMs(started);
+      probe.chatLoadMs = Number(detail.chatLoadMs || 0);
+      probe.prepareMs = Number(detail.prepareMs || 0);
+      probe.setChatMs = Number(detail.setChatMs || 0);
+      if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
+      else if (deferredMirrorLatestByLocation.get(locationKey) !== sequence) probe.status = 'SUPERSEDED';
+      else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
+      probe.finishedAt = Date.now();
+    };
+
+    if (typeof setTimeout === 'function') {
+      const timer = setTimeout(() => { void runDeferredMirror(); }, 0);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+    } else {
+      void runDeferredMirror();
+    }
+    return true;
   }
 
   async function reconcileManualEdit(cs, chat, perfDetail = null) {
@@ -4671,12 +4771,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
     lastPreambleProvenance = result.preambleProvenance || null;
 
-    const mirrorDetail = perf ? {} : null;
-    t = perfNow();
-    await mirrorCoreState(chaIdx, chatIdx, chat, mirrorDetail);
+    const mirrorScheduled = scheduleDeferredCoreMirror(chaIdx, chatIdx, chat, outIndex, result.state);
     if (perf) {
-      perf.mirrorMs = perfMs(t);
-      perf.mirrorDetail = mirrorDetail;
+      perf.mirrorMs = 0;
+      perf.mirrorDetail = { deferred: true, scheduled: mirrorScheduled };
     }
 
     t = perfNow();
@@ -5089,6 +5187,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       && String(lastPerf.locationKey || '') === String(requestProbe?.locationKey || '') ? lastPerf : null;
     const requestBreakdown = requestPerf ? diagnosticRequestBreakdown(requestProbe, requestPerf) : null;
     const outputBreakdown = outputFresh && lastOutputPerf ? diagnosticOutputBreakdown(lastOutputPerf) : null;
+    const deferredMirror = outputFresh && lastDeferredMirrorProbe
+      && Number(lastDeferredMirrorProbe.outIndex) === Number(latestAssistantIndex)
+      && String(lastDeferredMirrorProbe.locationKey || '') === String(requestProbe?.locationKey || '')
+      ? lastDeferredMirrorProbe : null;
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
@@ -5111,7 +5213,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.33',
+      'Version: 0.63.34',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5133,7 +5235,8 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
       `Output handler breakdown: ${outputBreakdown ? `indices ${diagnosticFormatMs(outputBreakdown.indicesMs)} · chat ${diagnosticFormatMs(outputBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(outputBreakdown.sessionLoadMs)} · process ${diagnosticFormatMs(outputBreakdown.processTotal)} · mirror ${diagnosticFormatMs(outputBreakdown.mirrorTotal)} · diagnostics ${diagnosticFormatMs(outputBreakdown.diagnosticsMs)} · other ${diagnosticFormatMs(outputBreakdown.handlerOther)} · total ${diagnosticFormatMs(outputBreakdown.total)}` : 'n/a'}`,
       `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,
-      `Output mirror: ${outputBreakdown ? `chat ${diagnosticFormatMs(outputBreakdown.mirrorChatLoadMs)} · prepare ${diagnosticFormatMs(outputBreakdown.mirrorPrepareMs)} · setChat ${diagnosticFormatMs(outputBreakdown.mirrorSetChatMs)} · other ${diagnosticFormatMs(outputBreakdown.mirrorOther)} · total ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
+      `Output mirror: ${outputBreakdown ? `DEFERRED · critical path ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
+      `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
@@ -5353,7 +5456,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.33</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.34</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
@@ -5536,6 +5639,8 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     lastEvidenceMappingProbe = null;
     lastEvidenceFenceProbe = null;
     lastDiagnosticRequestProbe = null;
+    deferredMirrorLatestByLocation.clear();
+    lastDeferredMirrorProbe = null;
   });
   console.log('[simcore/v0.63.4] initialized');
 })();

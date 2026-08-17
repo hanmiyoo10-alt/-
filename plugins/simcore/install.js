@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.36
+//@version 0.63.37
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.37 Cache Topology, Cadence & Output Provenance Diagnostics:
+// - Adds a memory-only signature pass over the final already-built beforeRequest message array to measure full-request common-prefix topology without retaining message bodies or changing request ordering/content
+// - Reports same-chat request cadence, first divergent message slot/role, current-user/runtime-prompt placement relative to the prefix break, and keeps provider cache status explicitly UNVERIFIED for correlation with external LLM Gateway / Gemini usage data
+// - Extends Deferred Chat Mirror diagnostics with the already-computed canonical, host-raw and fresh-chat output fingerprints plus exact match kind; mirror acceptance/fail-open behavior is unchanged
+// - Exposes existing manual-edit representation provenance (canonical/host-raw/etc.) and measures topology scan cost so observability overhead is attributable
+// - Adds no provider-cache directive, session/routing mutation, prompt relocation, storage/API/network call, polling, output repair or fingerprint acceptance relaxation; all 17 Core modules and generation semantics remain frozen
 //
 // v0.63.36 Runtime Boundary Modularization + Cache Contract:
 // - Extracts host access, session loading, runtime-prompt cache observation, deferred mirroring, named-hook registration and cache-posture formatting from the outer runtime shell into explicit internal modules while keeping the proven v0.63.35 Core modules byte-identical
@@ -4177,6 +4184,7 @@ const ownership = Object.freeze({
   host: 'runtime-host',
   session: 'runtime-session',
   cache: 'runtime-cache',
+  topology: 'runtime-topology',
   mirror: 'runtime-mirror',
   hooks: 'runtime-hooks',
   probe: 'runtime-probe',
@@ -4298,6 +4306,106 @@ function createRuntimePromptCacheTracker(contract = null) {
   });
 }
 module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, createRuntimePromptCacheTracker };
+});
+
+SimCore.define("runtime-topology", function (require, module, exports) {
+function exactHash(text) {
+  const value = String(text == null ? '' : text);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function messageSignature(message) {
+  const role = String(message?.role || '');
+  const content = message?.content;
+  let text = '';
+  let kind = 'text';
+  if (typeof content === 'string') {
+    text = content;
+  } else {
+    kind = Array.isArray(content) ? 'array' : typeof content;
+    try { text = JSON.stringify(content == null ? '' : content); }
+    catch (_) { text = String(content == null ? '' : content); }
+  }
+  return Object.freeze({ role, kind, chars: text.length, hash: exactHash(text) });
+}
+
+function sameSignature(a, b) {
+  return !!a && !!b && a.role === b.role && a.kind === b.kind && a.chars === b.chars && a.hash === b.hash;
+}
+
+function relativePosition(index, firstChangeIndex, baseline, stable) {
+  if (!Number.isInteger(index) || index < 0) return 'ABSENT';
+  if (baseline) return 'BASELINE';
+  if (stable || firstChangeIndex == null) return 'WITHIN_COMMON_PREFIX';
+  if (index < firstChangeIndex) return 'WITHIN_COMMON_PREFIX';
+  if (index === firstChangeIndex) return 'AT_PREFIX_BREAK';
+  return 'AFTER_PREFIX_BREAK';
+}
+
+function createRequestTopologyTracker() {
+  let previousKey = null;
+  let previous = null;
+  return Object.freeze({
+    observe(key, messages, extra = null) {
+      const currentKey = String(key || '');
+      const list = Array.isArray(messages) ? messages : [];
+      const signatures = new Array(list.length);
+      let totalChars = 0;
+      let currentUserIndex = -1;
+      for (let i = 0; i < list.length; i++) {
+        const sig = messageSignature(list[i]);
+        signatures[i] = sig;
+        totalChars += sig.chars;
+        if (sig.role === 'user') currentUserIndex = i;
+      }
+      const runtimeIndex = Number.isInteger(Number(extra?.runtimeIndex)) ? Number(extra.runtimeIndex) : (list.length ? list.length - 1 : -1);
+      const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
+      const prior = previousKey === currentKey ? previous : null;
+      const baseline = !prior;
+      let commonMessages = 0;
+      let commonChars = 0;
+      let firstChangeIndex = null;
+      let previousRole = null;
+      let currentRole = null;
+      if (prior) {
+        const limit = Math.min(prior.signatures.length, signatures.length);
+        while (commonMessages < limit && sameSignature(prior.signatures[commonMessages], signatures[commonMessages])) {
+          commonChars += signatures[commonMessages].chars;
+          commonMessages += 1;
+        }
+        if (commonMessages < limit || prior.signatures.length !== signatures.length) {
+          firstChangeIndex = commonMessages;
+          previousRole = prior.signatures[firstChangeIndex]?.role || 'END';
+          currentRole = signatures[firstChangeIndex]?.role || 'END';
+        }
+      }
+      const stable = !!prior && firstChangeIndex == null;
+      const cadenceMs = prior ? Math.max(0, at - prior.at) : null;
+      const ratio = baseline ? null : (totalChars > 0 ? Math.max(0, Math.min(100, (commonChars / totalChars) * 100)) : 100);
+      const probe = Object.freeze({
+        baseline, stable, at, cadenceMs,
+        messages: signatures.length, previousMessages: prior?.signatures?.length ?? null,
+        totalChars, previousChars: prior?.totalChars ?? null,
+        commonMessages, commonChars, commonRatio: ratio, firstChangeIndex, previousRole, currentRole,
+        currentUserIndex, runtimeIndex,
+        currentUserPosition: relativePosition(currentUserIndex, firstChangeIndex, baseline, stable),
+        runtimePosition: relativePosition(runtimeIndex, firstChangeIndex, baseline, stable),
+        retainedBodies: false, signatureKind: 'role+kind+chars+fnv1a32',
+      });
+      previousKey = currentKey;
+      previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex };
+      return probe;
+    },
+    reset() { previousKey = null; previous = null; },
+  });
+}
+
+module.exports = { exactHash, messageSignature, createRequestTopologyTracker };
 });
 
 SimCore.define("runtime-session", function (require, module, exports) {
@@ -4434,6 +4542,12 @@ function createMirrorRuntime(deps) {
         const actualFingerprint = coreRules.fingerprintText(textMessageContent(message));
         const canonical = String(snapshot.outputFingerprint || '');
         const hostRaw = String(snapshot.hostOutputFingerprint || '');
+        if (detail) {
+          detail.canonicalFingerprint = canonical.slice(0, 12);
+          detail.hostRawFingerprint = hostRaw.slice(0, 12);
+          detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
+          detail.fingerprintMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
+        }
         if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {
           if (detail) detail.status = 'OUTPUT_MISMATCH';
           return false;
@@ -4474,6 +4588,9 @@ function createMirrorRuntime(deps) {
       outIndex: Number(outIndex), locationKey, sequence: currentSequence, status: 'SCHEDULED',
       scheduledAt: Date.now(), startedAt: null, finishedAt: null,
       chatLoadMs: 0, prepareMs: 0, setChatMs: 0, totalMs: 0,
+      canonicalFingerprint: String(snapshot.outputFingerprint || '').slice(0, 12),
+      hostRawFingerprint: String(snapshot.hostOutputFingerprint || '').slice(0, 12),
+      freshFingerprint: null, fingerprintMatch: 'PENDING',
     };
     lastProbe = probe;
     const shouldApply = () => runtimeIsCurrent(epoch) && latestByLocation.get(locationKey) === currentSequence;
@@ -4492,6 +4609,10 @@ function createMirrorRuntime(deps) {
       probe.chatLoadMs = Number(detail.chatLoadMs || 0);
       probe.prepareMs = Number(detail.prepareMs || 0);
       probe.setChatMs = Number(detail.setChatMs || 0);
+      probe.canonicalFingerprint = detail.canonicalFingerprint ?? probe.canonicalFingerprint;
+      probe.hostRawFingerprint = detail.hostRawFingerprint ?? probe.hostRawFingerprint;
+      probe.freshFingerprint = detail.freshFingerprint ?? probe.freshFingerprint;
+      probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
@@ -4533,7 +4654,22 @@ function cachePosture(probe, contract) {
   const prefix = probe.baseline ? 'BASELINE' : `${Number(probe.stablePrefixPercent || 0).toFixed(1)}%`;
   return `${probe.requestOrder || contract?.requestOrder || 'FROZEN'} · runtime ${probe.placement || contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER'} · runtime-prefix ${prefix} · provider cache ${probe.providerCache || contract?.providerCache || 'UNVERIFIED'}`;
 }
-module.exports = { cachePosture };
+function cadence(ms) {
+  if (!Number.isFinite(Number(ms))) return 'BASELINE';
+  const value = Math.max(0, Number(ms));
+  if (value < 1000) return `${value.toFixed(0)} ms`;
+  if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(value / 60000);
+  const seconds = (value - minutes * 60000) / 1000;
+  return `${minutes}m ${seconds.toFixed(1)}s`;
+}
+function topology(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return `BASELINE · messages ${Number(probe.messages || 0)} · chars ${Number(probe.totalChars || 0).toLocaleString('en-US')}`;
+  const first = probe.firstChangeIndex == null ? 'none' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
+  return `${probe.stable ? 'STABLE' : 'COMMON_PREFIX'} · messages ${Number(probe.commonMessages || 0)}/${Number(probe.messages || 0)} · chars ${Number(probe.commonChars || 0).toLocaleString('en-US')}/${Number(probe.totalChars || 0).toLocaleString('en-US')} · ratio ${Number(probe.commonRatio || 0).toFixed(1)}% · first change ${first}`;
+}
+module.exports = { cachePosture, cadence, topology };
 });
 
 (async () => {
@@ -4544,6 +4680,7 @@ module.exports = { cachePosture };
   const runtimeContracts = SimCore.require('runtime-contracts');
   const runtimeHostRules = SimCore.require('runtime-host');
   const runtimeCacheRules = SimCore.require('runtime-cache');
+  const runtimeTopologyRules = SimCore.require('runtime-topology');
   const runtimeSessionRules = SimCore.require('runtime-session');
   const runtimeMirrorRules = SimCore.require('runtime-mirror');
   const runtimeHooks = SimCore.require('runtime-hooks');
@@ -4571,6 +4708,7 @@ module.exports = { cachePosture };
   let lastCommunitySourceHandoffProbe = null;
   let lastRuntimePromptBudget = null;
   let lastRuntimePromptCacheProbe = null;
+  let lastRequestTopologyProbe = null;
   let lastTimestampCanonicalization = null;
   let lastPreambleProvenance = null;
   let lastDiagnosticRequestProbe = null;
@@ -4578,6 +4716,7 @@ module.exports = { cachePosture };
   const { perfNow, perfMs } = ops;
   const host = runtimeHostRules.createHostAdapter(Risuai);
   const runtimePromptCache = runtimeCacheRules.createRuntimePromptCacheTracker(runtimeContracts.cache);
+  const requestTopology = runtimeTopologyRules.createRequestTopologyTracker();
   const runtimeSession = runtimeSessionRules.createSessionRuntime({
     coreRules, host, perfNow, perfMs, textMessageContent,
     readState: () => ({ coreSession, coreKey, coreLocationKey }),
@@ -4780,6 +4919,12 @@ module.exports = { cachePosture };
         at: Date.now(),
       });
       messages.push({ role: 'system', content: result.promptBlock });
+      const topologyStarted = perfNow();
+      lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
+        runtimeIndex: messages.length - 1,
+        at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
+      });
+      if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
       const pendingProbe = result.state.pending || null;
       if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
         lastNarrativeClockProbe = {
@@ -4862,7 +5007,9 @@ module.exports = { cachePosture };
     } else {
       lastRuntimePromptBudget = null;
       lastRuntimePromptCacheProbe = null;
+      lastRequestTopologyProbe = null;
       runtimePromptCache.reset();
+      requestTopology.reset();
       lastEvidenceMappingProbe = null;
       lastEvidenceFenceProbe = null;
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
@@ -5210,7 +5357,7 @@ module.exports = { cachePosture };
     const handshakeKnown = n(perf.indicesMs) + n(perf.chatLoadMs) + n(perf.sessionLoadMs) + n(perf.promptScanMs);
     const handshakeOther = Math.max(0, handshakeTotal - handshakeKnown);
     const postHandshakeTotal = Math.max(0, total - handshakeTotal);
-    const postKnown = n(perf.bootstrapMs) + n(perf.editReconcileMs) + n(perf.aliasRepairMs) + n(perf.onSendMs) + n(perf.postOnSendMs);
+    const postKnown = n(perf.bootstrapMs) + n(perf.editReconcileMs) + n(perf.aliasRepairMs) + n(perf.onSendMs) + n(perf.postOnSendMs) + n(perf.cacheTopologyMs);
     const postHandshakeOther = Math.max(0, postHandshakeTotal - postKnown);
 
     const session = perf.sessionDetail || {};
@@ -5235,7 +5382,7 @@ module.exports = { cachePosture };
       ['BOOTSTRAP', n(perf.bootstrapMs)], ['EDIT_RECONCILE', n(perf.editReconcileMs)], ['ALIAS_REPAIR', n(perf.aliasRepairMs)],
       ['PRE_LOAD', n(send.preLoadMs)], ['TEMPLATE_BOOTSTRAP', n(send.templateBootstrapMs)], ['LIFECYCLE', n(send.lifecycleMs)],
       ['TURN_SERIALIZE', n(send.turnSerializeMs)], ['TURN_STORAGE', n(send.turnSetMs)], ['PROMPT_RENDER', n(send.runtimeRenderMs)],
-      ['ONSEND_OTHER', onSendOther], ['POST_ONSEND', n(perf.postOnSendMs)], ['POST_HANDSHAKE_OTHER', postHandshakeOther],
+      ['ONSEND_OTHER', onSendOther], ['POST_ONSEND', n(perf.postOnSendMs)], ['CACHE_TOPOLOGY', n(perf.cacheTopologyMs)], ['POST_HANDSHAKE_OTHER', postHandshakeOther],
     ];
     candidates.sort((a, b) => b[1] - a[1]);
     const hotspot = candidates[0] || ['n/a', 0];
@@ -5246,11 +5393,11 @@ module.exports = { cachePosture };
       hotspotPercent: total > 0 ? (hotspot[1] / total) * 100 : 0,
       indicesMs: n(perf.indicesMs), chatLoadMs: n(perf.chatLoadMs), sessionLoadMs: n(perf.sessionLoadMs), promptScanMs: n(perf.promptScanMs),
       sessionChatFallbackMs: n(session.chatFallbackMs), characterLoadMs: n(session.characterLoadMs), initScanMs: n(session.initScanMs), initMs: n(session.initMs),
-      bootstrapMs: n(perf.bootstrapMs), editReconcileMs: n(perf.editReconcileMs), aliasRepairMs: n(perf.aliasRepairMs), onSendMs: n(perf.onSendMs), postOnSendMs: n(perf.postOnSendMs),
+      bootstrapMs: n(perf.bootstrapMs), editReconcileMs: n(perf.editReconcileMs), aliasRepairMs: n(perf.aliasRepairMs), onSendMs: n(perf.onSendMs), postOnSendMs: n(perf.postOnSendMs), cacheTopologyMs: n(perf.cacheTopologyMs),
       preLoadMs: n(send.preLoadMs), templateBootstrapMs: n(send.templateBootstrapMs), lifecycleMs: n(send.lifecycleMs),
       turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), turnPayloadChars, turnSetPerKChars, runtimeRenderMs: n(send.runtimeRenderMs),
       restoreReason: String(send.restoreReason || 'n/a'), preRead: !!send.mustRestorePre, preHit: !!send.existingPre,
-      editPath: String(edit.path || 'n/a'), editDidSave: !!edit.didSave,
+      editPath: String(edit.path || 'n/a'), editDidSave: !!edit.didSave, editCompatibilitySource: String(edit.compatibilitySource || 'n/a'),
     };
   }
 
@@ -5337,6 +5484,7 @@ module.exports = { cachePosture };
         ? 'PASS'
         : (probeFresh ? 'OBSERVED' : 'NOT_EXERCISED'));
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
+    const topologyProbe = runtimeActive ? (lastRequestTopologyProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
     const parentIndex = probeFresh && lineage ? Number(lineage.parentIndex) : -1;
@@ -5374,7 +5522,7 @@ module.exports = { cachePosture };
       `Handshake breakdown: ${requestBreakdown ? `indices ${diagnosticFormatMs(requestBreakdown.indicesMs)} · chat ${diagnosticFormatMs(requestBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(requestBreakdown.sessionLoadMs)} · prompt scan ${diagnosticFormatMs(requestBreakdown.promptScanMs)} · other ${diagnosticFormatMs(requestBreakdown.handshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.handshakeTotal)}` : 'n/a'}`,
       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
-      `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'}` : 'n/a'}`,
+      `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,
       `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
       `Pre snapshot: ${requestBreakdown ? `${String(requestBreakdown.restoreReason || 'n/a').toUpperCase()} · ${requestBreakdown.preRead ? `READ ${requestBreakdown.preHit ? 'HIT' : 'MISS'}` : 'SKIPPED'} · ${diagnosticFormatMs(requestBreakdown.preLoadMs)}` : 'n/a'}`,
       `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,
@@ -5384,6 +5532,7 @@ module.exports = { cachePosture };
       `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,
       `Output mirror: ${outputBreakdown ? `DEFERRED · critical path ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
+      `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
@@ -5392,6 +5541,10 @@ module.exports = { cachePosture };
       `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · policy ${preamble.policy || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
       `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
+      `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
+      `Cache placement: ${probeFresh && topologyProbe ? `current user @${topologyProbe.currentUserIndex >= 0 ? Number(topologyProbe.currentUserIndex) : 'n/a'} · ${topologyProbe.currentUserPosition || 'n/a'} · runtime @${topologyProbe.runtimeIndex >= 0 ? Number(topologyProbe.runtimeIndex) : 'n/a'} · ${topologyProbe.runtimePosition || 'n/a'}` : 'n/a'}`,
+      `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
+      `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
@@ -5781,7 +5934,9 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
     lastRuntimePromptCacheProbe = null;
+    lastRequestTopologyProbe = null;
     runtimePromptCache.reset();
+    requestTopology.reset();
     lastEvidenceMappingProbe = null;
     lastEvidenceFenceProbe = null;
     lastDiagnosticRequestProbe = null;

@@ -23,6 +23,17 @@ foundation = replace_once(
 )
 write(foundation_path, foundation)
 
+# P1 is the long-lived contract gate and must understand the RC stage too.
+p1_path = TESTS / 'p1-contract.cjs'
+p1 = read(p1_path)
+p1 = replace_once(
+    p1,
+    "assert.match(source, /^\\/\\/@version (?:3\\.0\\.0-alpha\\.\\d+\\.\\d+|3\\.0\\.0-beta\\.\\d+|3\\.0\\.0)$/m);",
+    "assert.match(source, /^\\/\\/@version (?:3\\.0\\.0-alpha\\.\\d+\\.\\d+|3\\.0\\.0-beta\\.\\d+|3\\.0\\.0-rc\\.\\d+|3\\.0\\.0)$/m);",
+    'P1 RC version acceptance',
+)
+write(p1_path, p1)
+
 # Feature regressions that were introduced during alpha must continue to run in RC
 # and stable. Replace only the exact historical version assertion where present.
 generic_version_assert = "assert.match(source, /^\\/\\/@version 3\\.0\\.0(?:-alpha\\.[^\\s]+|-beta\\.[^\\s]+|-rc\\.\\d+)?$/m);"

@@ -1,0 +1,89 @@
+name: Stage SimCore v0.63.37 Cache Topology Diagnostics v3
+
+on:
+  push:
+    paths:
+      - '.simcore-06337-trigger-v3'
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture exact v0.63.36 baseline
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.36' /tmp/simcore-before.js
+
+      - name: Apply v0.63.37 diagnostics patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/simcore/patch_simcore_06337.py')
+          s = p.read_text(encoding='utf-8')
+          old = "runtime_topology = r'''"
+          new = "runtime_topology = '''"
+          assert s.count(old) == 1
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          python plugins/simcore/patch_simcore_06337.py
+          python plugins/simcore/patch_simcore_06337_followup.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.37' plugins/simcore/latest.js
+          grep -q 'SimCore.define("runtime-topology"' plugins/simcore/latest.js
+          grep -q 'Cache topology:' plugins/simcore/latest.js
+          grep -q 'Output provenance:' plugins/simcore/latest.js
+
+      - name: Cache topology and provenance fixtures
+        run: node plugins/simcore/test_simcore_06337.js
+
+      - name: Frozen semantics and call-surface guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end].rstrip()
+              return out
+          b = modules(before); a = modules(after)
+          core = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          frozen_runtime = {'runtime-host','runtime-cache','runtime-session','runtime-hooks'}
+          assert all(a[n] == b[n] for n in core), 'Core module changed'
+          assert all(a[n] == b[n] for n in frozen_runtime), 'frozen runtime module changed'
+          assert 'runtime-topology' in a
+          assert before.count("messages.push({ role: 'system', content: result.promptBlock });") == after.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          assert b['prompt'] == a['prompt'] and b['session'] == a['session']
+          for token in ['Risuai.getCurrentCharacterIndex(', 'Risuai.getCurrentChatIndex(', 'Risuai.getChatFromIndex(', 'Risuai.getCharacter(', 'Risuai.setChatToIndex(', 'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(', 'setTimeout(', 'setInterval(', 'requestAnimationFrame(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+          gate = "if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {"
+          assert before.count(gate) == after.count(gate) == 1
+          for token in ["runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER'", "runtimePromptPolicy: 'OBSERVE_ONLY'", "providerCache: 'UNVERIFIED'"]:
+              assert token in after
+          assert 'cache_control' not in after.lower() and 'cached_content' not in after and 'prompt_cache_key' not in after
+          print('Frozen semantics/call surface: PASS')
+          PY
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --quiet && { echo 'No plugin changes produced'; exit 1; }
+          git commit -m 'Stage SimCore v0.63.37 cache topology diagnostics'
+          git push origin HEAD:${GITHUB_REF_NAME}

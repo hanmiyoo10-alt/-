@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.4';
+const VERSION = '1.6.5';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -476,6 +476,16 @@ if (output && !globalThis[marker]) {
   // The official Activity UI uses /logs for per-request rows. Keep only the
   // non-content metadata needed by the local dashboard. Prompt/response bodies,
   // messages, custom headers, cookies, and auth material are never persisted.
+  const logField = (row, candidates) => {
+    for (const candidate of candidates) {
+      const parts = String(candidate).split('.');
+      let value = row;
+      for (const part of parts) value = value?.[part];
+      if (value !== undefined && value !== null && value !== '') return { value, source: String(candidate) };
+    }
+    return { value: null, source: '' };
+  };
+
   const sanitizeLogs = (value) => {
     if (!value || typeof value !== 'object') return null;
     const raw = value.data && typeof value.data === 'object' ? value.data : value;
@@ -485,6 +495,17 @@ if (output && !globalThis[marker]) {
       const requestNumber = row.requestId ?? row.request_id ?? row.id ?? '';
       const timestamp = row.createdAt ?? row.created_at ?? null;
       if (!requestNumber || !timestamp) return null;
+      const requestedTier = logField(row, [
+        'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
+        'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
+        'request.serviceTier','request.service_tier'
+      ]);
+      const servedTier = logField(row, [
+        'servedServiceTier','served_service_tier','usedServiceTier','used_service_tier',
+        'actualServiceTier','actual_service_tier','billingServiceTier','billing_service_tier',
+        'metadata.servedServiceTier','metadata.served_service_tier','metadata.usedServiceTier','metadata.used_service_tier',
+        'response.serviceTier','response.service_tier','serviceTier','service_tier'
+      ]);
       return {
         timestamp,
         requestNumber: String(requestNumber),
@@ -493,6 +514,10 @@ if (output && !globalThis[marker]) {
         cost: row.cost ?? null,
         totalTokens: row.totalTokens ?? row.total_tokens ?? null,
         cacheHit: typeof row.cached === 'boolean' ? row.cached : null,
+        requestedServiceTier: requestedTier.value,
+        servedServiceTier: servedTier.value,
+        requestedServiceTierSource: requestedTier.source,
+        servedServiceTierSource: servedTier.source,
         success: row.hasError === true ? false : true,
       };
     }).filter(Boolean);
@@ -1353,6 +1378,10 @@ function normalizeCapturedRecentLogs(root) {
       cost: finite(row.cost),
       totalTokens: finite(row.totalTokens),
       cacheHit: typeof row.cacheHit === 'boolean' ? row.cacheHit : null,
+      requestedServiceTier: row.requestedServiceTier ?? null,
+      servedServiceTier: row.servedServiceTier ?? null,
+      requestedServiceTierSource: String(row.requestedServiceTierSource || ''),
+      servedServiceTierSource: String(row.servedServiceTierSource || ''),
       requestNumber,
       success: row.success !== false,
     };

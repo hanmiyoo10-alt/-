@@ -33,6 +33,65 @@
     return num(cachedTokens) ? Number(cachedTokens) > 0 : null;
   }
 
+  function normalizeServiceTierValue(value) {
+    const text = String(value ?? '').trim().toLowerCase().replace(/_/g, '-');
+    if (!text) return '';
+    if (['flex','flexible'].includes(text)) return 'flex';
+    if (['priority','fast'].includes(text)) return 'priority';
+    if (['standard','default','auto','on-demand','ondemand','on demand'].includes(text)) return 'standard';
+    return 'unknown';
+  }
+
+  function serviceTierKnown(value) {
+    return ['flex','standard','priority'].includes(normalizeServiceTierValue(value));
+  }
+
+  function preferKnownServiceTier(next, current) {
+    const nextTier = normalizeServiceTierValue(next);
+    const currentTier = normalizeServiceTierValue(current);
+    if (serviceTierKnown(nextTier)) return nextTier;
+    if (serviceTierKnown(currentTier)) return currentTier;
+    return nextTier || currentTier || '';
+  }
+
+  function requestServiceTierText(row) {
+    const requested = normalizeServiceTierValue(row?.requestedServiceTier);
+    const served = normalizeServiceTierValue(row?.servedServiceTier);
+    const label = value => value === 'flex' ? 'FLEX' : value === 'priority' ? 'PRIORITY' : value === 'standard' ? 'STANDARD' : '?';
+    if (serviceTierKnown(requested) && serviceTierKnown(served)) {
+      return requested === served ? label(served) : `요청 ${label(requested)} → 실제 ${label(served)}`;
+    }
+    if (serviceTierKnown(served)) return `실제 ${label(served)}`;
+    if (serviceTierKnown(requested)) return `요청 ${label(requested)} · 실제 ?`;
+    return 'TIER ?';
+  }
+
+  function requestServiceTierStats(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const stats = {rows:list.length, requestedKnown:0, servedKnown:0, flex:0, standard:0, priority:0, unknown:0, requestedSources:[], servedSources:[]};
+    const requestedSources = new Set();
+    const servedSources = new Set();
+    for (const row of list) {
+      const requested = normalizeServiceTierValue(row?.requestedServiceTier);
+      const served = normalizeServiceTierValue(row?.servedServiceTier);
+      if (serviceTierKnown(requested)) stats.requestedKnown += 1;
+      if (serviceTierKnown(served)) {
+        stats.servedKnown += 1;
+        stats[served] += 1;
+      } else stats.unknown += 1;
+      if (row?.requestedServiceTierSource) requestedSources.add(String(row.requestedServiceTierSource));
+      if (row?.servedServiceTierSource) servedSources.add(String(row.servedServiceTierSource));
+    }
+    stats.requestedSources = Array.from(requestedSources).sort();
+    stats.servedSources = Array.from(servedSources).sort();
+    return stats;
+  }
+
+  function requestServiceTierSummary(rows) {
+    const stats = requestServiceTierStats(rows);
+    return `TIER F/S/P/? ${stats.flex}/${stats.standard}/${stats.priority}/${stats.unknown}`;
+  }
+
   function requestTimestampPrecision(timestamp, sourceKey, requestNumber) {
     const bucketKeys = new Set(['hour','hourStart','hour_start','bucketStart','bucket_start','windowStart','window_start']);
     if (bucketKeys.has(String(sourceKey || ''))) return 'hour';
@@ -55,6 +114,21 @@
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
+      const requestedTierField = recentRequestField(row, [
+        'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
+        'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
+        'request.serviceTier','request.service_tier'
+      ]);
+      const servedTierField = recentRequestField(row, [
+        'servedServiceTier','served_service_tier','usedServiceTier','used_service_tier',
+        'actualServiceTier','actual_service_tier','billingServiceTier','billing_service_tier',
+        'metadata.servedServiceTier','metadata.served_service_tier','metadata.usedServiceTier','metadata.used_service_tier',
+        'response.serviceTier','response.service_tier','serviceTier','service_tier'
+      ]);
+      const requestedServiceTier = normalizeServiceTierValue(requestedTierField.value);
+      const servedServiceTier = normalizeServiceTierValue(servedTierField.value);
+      const requestedServiceTierSource = String(recentRequestValue(row, ['requestedServiceTierSource','requested_service_tier_source'], requestedTierField.key) || requestedTierField.key || '');
+      const servedServiceTierSource = String(recentRequestValue(row, ['servedServiceTierSource','served_service_tier_source'], servedTierField.key) || servedTierField.key || '');
       const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
       const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
       const status = String(recentRequestValue(row, ['status','state'], '') || '').toLowerCase();
@@ -75,6 +149,10 @@
         cost:num(costRaw) ? Number(costRaw) : null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
         cacheHit:requestCacheSignal(row),
+        requestedServiceTier,
+        servedServiceTier,
+        requestedServiceTierSource,
+        servedServiceTierSource,
         requestNumber,
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
@@ -90,7 +168,8 @@
     const bucket = list.filter(row => ['hour','hour-estimated'].includes(precisionOf(row))).length;
     const cacheKnown = list.filter(row => typeof row?.cacheHit === 'boolean').length;
     const ids = list.filter(row => String(row?.requestNumber || '')).length;
-    return {rows:list.length, exact, bucket, cacheKnown, ids};
+    const tier = requestServiceTierStats(list);
+    return {rows:list.length, exact, bucket, cacheKnown, ids, tier};
   }
 
   function requestLedgerKey(row) {
@@ -129,6 +208,10 @@
           cost:num(row.cost) ? Number(row.cost) : (num(current?.cost) ? Number(current.cost) : null),
           totalTokens:num(row.totalTokens) ? Number(row.totalTokens) : (num(current?.totalTokens) ? Number(current.totalTokens) : null),
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
+          requestedServiceTier:preferKnownServiceTier(row.requestedServiceTier, current?.requestedServiceTier),
+          servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
+          requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
+          servedServiceTierSource:String(row.servedServiceTierSource || current?.servedServiceTierSource || ''),
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
@@ -257,7 +340,8 @@
         ? `캐시 정보 0/${hour.length}`
         : `캐시 ${cacheRate.toFixed(1)}% · 정보 ${cacheRows.length}/${hour.length}`;
       const errorText = errors ? ` · 오류 ${errors}` : '';
-      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText}${errorText}</em></button>`;
+      const tierText = requestServiceTierSummary(hour);
+      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText} · ${tierText}${errorText}</em></button>`;
     }).join('');
 
     let selectedHtml = '';
@@ -271,6 +355,7 @@
       const cacheHits = cacheRows.filter(row => row.cacheHit).length;
       const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
       const errors = selected.filter(row => row.success === false).length;
+      const tierSummary = requestServiceTierSummary(selected);
       const cacheSummary = cacheRate === null
         ? `캐시 정보 0/${selected.length} · 비율 —`
         : `캐시 ${cacheRate.toFixed(1)}% · HIT ${cacheHits}/${cacheRows.length} · 정보 ${cacheRows.length}/${selected.length}`;
@@ -279,6 +364,7 @@
         costRows.length ? money(totalCost,4) : '비용 —',
         tokenRows.length ? `${totalTokens.toLocaleString()} tok` : '토큰 —',
         cacheSummary,
+        tierSummary,
         errors ? `오류 ${errors}` : '오류 0'
       ].join(' · ');
       const providerSummary = aggregateSelectedHour(selected, 'provider');
@@ -291,14 +377,15 @@
           ? ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ')
           : '성공';
         const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '캐시 정보 없음';
-        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
+        const tierText = requestServiceTierText(row);
+        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
       selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${aggregates}<div class="hour-request-list">${detailRows}</div>${truncated}</div>`;
     }
 
-    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
+    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · tier 실제 ${fidelity.tier.servedKnown}/${fidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
   }
 
   function scopeUsageDetailsHtml(scopeActivity) {
@@ -332,7 +419,8 @@
         ? '성공'
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
       const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '';
-      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', cacheText].filter(Boolean).join(' · ');
+      const tierText = requestServiceTierText(row);
+      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
@@ -511,13 +599,22 @@
         avgDailySpend7d:num(runwayRaw.avgDailySpend7d)?Number(runwayRaw.avgDailySpend7d):null,
         fetchedAt:runwayRaw.fetchedAt || r.fetchedAt || Date.now()
       } : null;
+      const devpassAccount = ds ? {
+        plan:String(ds.plan || 'none'),
+        pendingTier:ds.pendingTier === null || ds.pendingTier === undefined ? '' : String(ds.pendingTier),
+        serviceTier:String(ds.serviceTier || 'default'),
+        routingStrategy:String(ds.routingStrategy || 'auto'),
+        paygEnabled:ds.paygEnabled === true,
+        hasPersonalOrg:typeof ds.hasPersonalOrg === 'boolean' ? ds.hasPersonalOrg : null,
+        source:String(ds.source || '')
+      } : null;
       const out = {
         protocolVersion:Number(r.protocolVersion || 1),
         fetchedAt:r.fetchedAt || ds?.fetchedAt || ba?.fetchedAt || Date.now(),
         source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
         health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
         bridge:normalizeBridgeMetadata(r),
-        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes,
+        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes, devpassAccount,
         organizations:orgRows.filter(org => String(org?.id || '') && String(org?.status || 'active') !== 'deleted').map(org => ({id:String(org.id),name:String(org?.name || org.id),kind:String(org?.kind || 'default'),status:String(org?.status || 'active'),credits:num(org?.credits)?Number(org.credits):null})),
         creditsOrganizationId:String(r.creditsOrganizationId || creditOrg?.id || ''),
         requestedCreditsOrganizationId:String(r.requestedCreditsOrganizationId || ''),

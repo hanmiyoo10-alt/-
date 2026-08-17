@@ -6,7 +6,9 @@ const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const ui = fs.readFileSync(`${root}/src/50-settings-ui.part.js`, 'utf8');
 const runtime = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf8');
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.40'));
+const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
+const alpha540Plus = version.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
+assert.ok(alpha540Plus && Number(alpha540Plus[1]) >= 40, `bridge control sync requires alpha.5.40+, got ${version}`);
 for (const marker of [
   'class="bridge-config-static"',
   '${bridgeControlsHtml()}',
@@ -31,4 +33,4 @@ assert.ok(runtime.includes("currentAdvanced[0]?.querySelector('.bridge-control-l
 assert.ok(!runtime.includes("currentAdvanced[0]?.querySelector('.advanced-body')"), 'typed Local Bridge config body must not be live-patched');
 assert.ok(ui.startsWith('  function settingsHtml() {'), 'settings UI modular boundary drifted');
 assert.ok(runtime.startsWith('  function renderSettings() {'), 'settings runtime modular boundary drifted');
-console.log('usage-dashboard P5 bridge control surface sync: OK · 3.0.0-alpha.5.40');
+console.log(`usage-dashboard P5 bridge control surface sync: OK · ${version}`);

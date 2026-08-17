@@ -62,6 +62,12 @@ for (const marker of [
   'bridge-control-live',
   'bridgeControlsHtml',
   'renderBridgeControls',
+  'requestServiceTierText',
+  'Service tier fidelity:',
+  '<span>Service tier</span>',
+  '<span>Routing</span>',
+  '<span>Pending tier</span>',
+  '<span>Personal org</span>',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

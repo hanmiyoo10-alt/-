@@ -27,7 +27,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Validate Usage Dashboard artifact and contracts
+      - name: Validate product and regression suite
         shell: bash
         run: |
           set -euo pipefail
@@ -36,31 +36,50 @@ jobs:
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
           bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
-          node plugins/usage-dashboard/tests/foundation.cjs
-          node plugins/usage-dashboard/tests/p1-contract.cjs
-          node plugins/usage-dashboard/tests/p2-build.cjs
-          node plugins/usage-dashboard/tests/p3-ui.cjs
-          node plugins/usage-dashboard/tests/p3-recent.cjs
-          node plugins/usage-dashboard/tests/p4-render.cjs
-          node plugins/usage-dashboard/tests/p4-partial.cjs
-          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
-          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
-          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
-          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
-          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
-          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
-          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
+
+          for test in \
+            foundation.cjs \
+            p1-contract.cjs \
+            p2-build.cjs \
+            p3-ui.cjs \
+            p3-recent.cjs \
+            p4-render.cjs \
+            p4-partial.cjs \
+            p4-hourly-drilldown.cjs \
+            p4-hourly-detail.cjs \
+            p4-request-fidelity.cjs \
+            p5-unified-runtime.cjs \
+            p5-bridge-manager.cjs \
+            p5-engine-adoption.cjs \
+            p5-bundled-engine.cjs \
+            p5-lifecycle-race.cjs \
+            p5-bridge-control-sync.cjs \
+            p5-service-tier-fidelity.cjs \
+            p5-devpass-account-parity.cjs \
+            p5-floating-widget-ux.cjs \
+            p5-module-layout.cjs \
+            p5-structural-parity.cjs \
+            p5-state-compatibility.cjs; do
+            node "plugins/usage-dashboard/tests/$test"
+          done
+
           python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
-          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
-          test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
           python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
-          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/foundation-snapshot.json >/dev/null
-          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/cache-zero.json >/dev/null
-          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/state-v3.json >/dev/null
-          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/p1-bridge-contract.json >/dev/null
-          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 10
+
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const {PARTS} = require('./plugins/usage-dashboard/src/parts.cjs');
+          const src = 'plugins/usage-dashboard/src';
+          const count = fs.readdirSync(src).filter(name => name.endsWith('.part.js')).length;
+          if (count !== PARTS.length) throw new Error(`source part count ${count} != PARTS ${PARTS.length}`);
+          const manifest = JSON.parse(fs.readFileSync(`${src}/manifest.json`, 'utf8'));
+          if (manifest.parts.length !== PARTS.length) throw new Error(`manifest part count ${manifest.parts.length} != PARTS ${PARTS.length}`);
+          NODE
+
+          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
+          test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           git diff --check
 
           VERSION="$(sed -n 's#^//@version ##p' plugins/usage-dashboard/latest.js | head -n1)"
@@ -69,105 +88,25 @@ jobs:
           grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/src/manifest.json
           grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
           case "$VERSION" in
-            3.0.0-alpha.*|3.0.0-beta.*|3.0.0) ;;
+            3.0.0-alpha.*|3.0.0-beta.*|3.0.0-rc.*|3.0.0) ;;
             *) echo "unexpected Usage Dashboard version: $VERSION"; exit 1 ;;
           esac
 
-          grep -q 'const SNAPSHOT_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
-          grep -q 'const RECENT_REQUEST_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
-          grep -q 'function hydrateState(saved)' plugins/usage-dashboard/latest.js
-          grep -q 'function normalizeBridgeModule(name, row)' plugins/usage-dashboard/latest.js
-          grep -q 'function normalizeErrorMap(raw)' plugins/usage-dashboard/latest.js
-          grep -q 'function usageCacheText(scope)' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge module freshness:' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge module duration:' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge partial:' plugins/usage-dashboard/latest.js
-          grep -q 'Schema: snapshot v' plugins/usage-dashboard/latest.js
-          grep -q 'Usage detail:' plugins/usage-dashboard/latest.js
-          grep -q 'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed' plugins/usage-dashboard/latest.js
-          grep -q 'Recent UI: filter' plugins/usage-dashboard/latest.js
-          grep -q "recentRequestFilter: 'all'" plugins/usage-dashboard/latest.js
-          grep -q 'data-recent-filter=' plugins/usage-dashboard/latest.js
-          grep -q 'class="stat-chip"' plugins/usage-dashboard/latest.js
-          grep -q 'Provider · 요청 / 비용 / 효율' plugins/usage-dashboard/latest.js
-          grep -q '최근 요청 · 메타데이터' plugins/usage-dashboard/latest.js
-          grep -q 'class="panel wide advanced-panel"' plugins/usage-dashboard/latest.js
-          grep -q 'Render cache: widget html writes' plugins/usage-dashboard/latest.js
-          grep -q 'P4 render: closed-panel skip · widget DOM dedup' plugins/usage-dashboard/latest.js
-          grep -q 'function patchPanelSections(nextHtml)' plugins/usage-dashboard/latest.js
-          grep -q 'function renderSettingsPartial()' plugins/usage-dashboard/latest.js
-          grep -q 'Panel partial: mode' plugins/usage-dashboard/latest.js
-          grep -q 'P4 partial: auto section patch · diagnostics live · settings preserved' plugins/usage-dashboard/latest.js
-          grep -q 'function collectRecentRequestLedger(data)' plugins/usage-dashboard/latest.js
-          grep -q 'function hourlyRequestDrilldownHtml(scopeKey)' plugins/usage-dashboard/latest.js
-          grep -q '시간별 요청 · 24h 로컬 관측' plugins/usage-dashboard/latest.js
-          grep -q 'Request ledger: rows' plugins/usage-dashboard/latest.js
-          grep -q 'Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS' plugins/usage-dashboard/latest.js
-          grep -q 'function aggregateSelectedHour(rows, key)' plugins/usage-dashboard/latest.js
-          grep -q 'Provider 합계' plugins/usage-dashboard/latest.js
-          grep -q 'Model 합계' plugins/usage-dashboard/latest.js
-          grep -q 'function requestLedgerCoverageText()' plugins/usage-dashboard/latest.js
-          grep -q 'function renderHourlyDrilldownOnly()' plugins/usage-dashboard/latest.js
-          grep -q 'Hourly detail: provider/model summary · cache coverage · click-only partial render' plugins/usage-dashboard/latest.js
-          grep -q 'function recentRequestField(row, keys)' plugins/usage-dashboard/latest.js
-          grep -q 'function requestCacheSignal(row)' plugins/usage-dashboard/latest.js
-          grep -q 'function requestTimestampPrecision(timestamp, sourceKey, requestNumber)' plugins/usage-dashboard/latest.js
-          grep -q 'function requestLedgerCapabilities(rows)' plugins/usage-dashboard/latest.js
-          grep -q 'Request fidelity: exact' plugins/usage-dashboard/latest.js
-          grep -q '버킷 · 정확 시각 미제공' plugins/usage-dashboard/latest.js
-          grep -Fq "['requestLedger', raw.requestLedger]" plugins/usage-dashboard/latest.js
-          grep -q 'usage.input_tokens_details.cached_tokens' plugins/usage-dashboard/latest.js
-          grep -q 'const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
-          grep -q "const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';" plugins/usage-dashboard/latest.js
-          grep -q "const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';" plugins/usage-dashboard/latest.js
-          grep -q 'function bridgeRuntimeSnapshot()' plugins/usage-dashboard/latest.js
-          grep -q 'async function fetchBridgeManagerStatus(force = false)' plugins/usage-dashboard/latest.js
-          grep -q 'async function syncBridgeManagerIfNeeded(status)' plugins/usage-dashboard/latest.js
-          grep -q 'async function adoptBridgeEngineIfNeeded(status)' plugins/usage-dashboard/latest.js
-          grep -q 'async function syncBridgeEngineBundleIfNeeded(status)' plugins/usage-dashboard/latest.js
-          grep -q 'Unified runtime: schema v' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge manager: protocol' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge manager probe:' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge engine: mode' plugins/usage-dashboard/latest.js
-          grep -q 'Runtime manifest:' plugins/usage-dashboard/latest.js
-          grep -q 'single-product-modular-sidecar' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q 'managed-bundled' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q 'bundled-engine-ready' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q '"engineAdoption": true' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q '"sourceBundled": true' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q 'bridge-manager-v1' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q "const HOST = '127.0.0.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -q "url.pathname === '/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -q "url.pathname === '/engine/adopt'" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -q "url.pathname === '/engine/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -q "url.pathname === '/rollback'" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -q "const ENGINE_SERVICE = 'local-usage-runtime-engine';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -q 'start-services.sh' plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
-          grep -q 'sv-enable' plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
-          grep -q "document.body.dataset.panelOpen='0'" plugins/usage-dashboard/latest.js
-          grep -q 'widgetRenderCache.html !== nextHtml' plugins/usage-dashboard/latest.js
-          grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
-          grep -q 'Stall/render coincidence:' plugins/usage-dashboard/latest.js
-          grep -q 'Bridge detail:' plugins/usage-dashboard/latest.js
-          grep -q 'Performance settings:' plugins/usage-dashboard/latest.js
-          grep -q 'Runtime state:' plugins/usage-dashboard/latest.js
-          grep -q 'Resume input:' plugins/usage-dashboard/latest.js
-          grep -q 'Panel render scheduler:' plugins/usage-dashboard/latest.js
-          grep -q 'Render spike:' plugins/usage-dashboard/latest.js
-          grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
-          grep -q 'Resume grace:' plugins/usage-dashboard/latest.js
-          grep -q 'UI stall probe:' plugins/usage-dashboard/latest.js
-          grep -q "Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'" plugins/usage-dashboard/latest.js
-          grep -q 'Analytics · 24h / 7d / 30d' plugins/usage-dashboard/latest.js
-          grep -q '24h Usage Scope' plugins/usage-dashboard/latest.js
-          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          grep -Fq 'const SNAPSHOT_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -Fq 'const RECENT_REQUEST_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -Fq "const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';" plugins/usage-dashboard/latest.js
+          grep -Fq 'Service tier fidelity:' plugins/usage-dashboard/latest.js
+          grep -Fq 'DevPass account detail:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Floating widget UX:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Lifecycle refresh:' plugins/usage-dashboard/latest.js
+          grep -Fq '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
 
           printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt
           cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
           rm -rf /tmp/usage-dashboard-runtime
           cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
 
-      - name: Publish validated product artifacts to release-usage-dashboard
+      - name: Publish validated product artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -185,13 +124,9 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
-          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
-          test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
           grep -Fq "//@version $VERSION" plugins/usage-dashboard/latest.js
           grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
-          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then

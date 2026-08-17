@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.44 Structural Modularization publish
+name: Stage Usage Dashboard 3.0.0-rc.1 Stable Productization
 
 on:
   push:
@@ -19,72 +19,66 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Patch structural modularization
+      - name: Patch RC productization
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r3.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r4.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r5.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r6.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r7.py
-          python3 plugins/usage-dashboard/tools/release_alpha544_patch.py
-          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r3.py
-          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r4.py
-          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r5.py
-          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r6.py
-          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r7.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_productization.py
+          python3 plugins/usage-dashboard/tools/release_rc1_productization.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          node plugins/usage-dashboard/tests/foundation.cjs
-          node plugins/usage-dashboard/tests/p1-contract.cjs
-          node plugins/usage-dashboard/tests/p2-build.cjs
-          node plugins/usage-dashboard/tests/p3-ui.cjs
-          node plugins/usage-dashboard/tests/p3-recent.cjs
-          node plugins/usage-dashboard/tests/p4-render.cjs
-          node plugins/usage-dashboard/tests/p4-partial.cjs
-          node plugins/usage-dashboard/tests/p4-hourly-drilldown.cjs
-          node plugins/usage-dashboard/tests/p4-hourly-detail.cjs
-          node plugins/usage-dashboard/tests/p4-request-fidelity.cjs
-          node plugins/usage-dashboard/tests/p5-unified-runtime.cjs
-          node plugins/usage-dashboard/tests/p5-bridge-manager.cjs
-          node plugins/usage-dashboard/tests/p5-engine-adoption.cjs
-          node plugins/usage-dashboard/tests/p5-bundled-engine.cjs
-          node plugins/usage-dashboard/tests/p5-lifecycle-race.cjs
-          node plugins/usage-dashboard/tests/p5-bridge-control-sync.cjs
-          node plugins/usage-dashboard/tests/p5-service-tier-fidelity.cjs
-          node plugins/usage-dashboard/tests/p5-devpass-account-parity.cjs
-          node plugins/usage-dashboard/tests/p5-floating-widget-ux.cjs
-          node plugins/usage-dashboard/tests/p5-module-layout.cjs
-          node plugins/usage-dashboard/tests/p5-structural-parity.cjs
-          node plugins/usage-dashboard/tests/p5-state-compatibility.cjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+
+          for test in \
+            foundation.cjs \
+            p1-contract.cjs \
+            p2-build.cjs \
+            p3-ui.cjs \
+            p3-recent.cjs \
+            p4-render.cjs \
+            p4-partial.cjs \
+            p4-hourly-drilldown.cjs \
+            p4-hourly-detail.cjs \
+            p4-request-fidelity.cjs \
+            p5-unified-runtime.cjs \
+            p5-bridge-manager.cjs \
+            p5-engine-adoption.cjs \
+            p5-bundled-engine.cjs \
+            p5-lifecycle-race.cjs \
+            p5-bridge-control-sync.cjs \
+            p5-service-tier-fidelity.cjs \
+            p5-devpass-account-parity.cjs \
+            p5-floating-widget-ux.cjs \
+            p5-module-layout.cjs \
+            p5-structural-parity.cjs \
+            p5-state-compatibility.cjs \
+            p6-rc-migration.cjs \
+            p6-rc-contract.cjs; do
+            node "plugins/usage-dashboard/tests/$test"
+          done
+
           git diff --check
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
-          grep -Fq '//@version 3.0.0-alpha.5.44' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-rc.1' plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
-          grep -Fq "file:'08-runtime-product.part.js'" plugins/usage-dashboard/src/parts.cjs
-          grep -Fq "file:'12-service-tier.part.js'" plugins/usage-dashboard/src/parts.cjs
-          grep -Fq "file:'14-request-ledger.part.js'" plugins/usage-dashboard/src/parts.cjs
-          grep -Fq "file:'52-analytics-context.part.js'" plugins/usage-dashboard/src/parts.cjs
-          grep -Fq "file:'74-widget-gestures.part.js'" plugins/usage-dashboard/src/parts.cjs
-          grep -Fq 'data-widget-toggle="1"' plugins/usage-dashboard/latest.js
-          grep -Fq 'Floating widget UX:' plugins/usage-dashboard/latest.js
-          grep -Fq 'Service tier fidelity:' plugins/usage-dashboard/latest.js
-          grep -Fq 'DevPass account detail:' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.44';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.44"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-rc.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-rc.1"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq 'System Health' plugins/usage-dashboard/latest.js
+          grep -Fq 'Lifecycle & Recovery' plugins/usage-dashboard/latest.js
+          grep -Fq '요약 · 전체 진단' plugins/usage-dashboard/latest.js
+          grep -Fq "const STATE_KEY = 'local-usage-dashboard-v3';" plugins/usage-dashboard/latest.js
+          grep -Fq "const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';" plugins/usage-dashboard/latest.js
 
-      - name: Commit validated 5.44 modular source to main
+      - name: Commit validated RC source to main
         shell: bash
         run: |
           set -euo pipefail
-          git restore -- .github/workflows/release-local-usage-dashboard.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A plugins/usage-dashboard/src \
@@ -93,11 +87,11 @@ jobs:
             plugins/usage-dashboard/runtime/bridge-manager.cjs \
             plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
-          git commit -m 'release: Local Usage Dashboard 5.44 structural modularization'
+          git commit -m 'release: Local Usage Dashboard 3.0.0-rc.1 stable productization'
           git pull --rebase origin main
           git push origin HEAD:main
 
-      - name: Publish 5.44 product artifacts to release channel
+      - name: Publish RC product artifacts to release channel
         shell: bash
         run: |
           set -euo pipefail
@@ -117,18 +111,18 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq '//@version 3.0.0-alpha.5.44' plugins/usage-dashboard/latest.js
-          grep -Fq 'data-widget-toggle="1"' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-rc.1' plugins/usage-dashboard/latest.js
+          grep -Fq 'System Health' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.44';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.44"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-rc.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-rc.1"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 5.44'
+            echo 'release-usage-dashboard already matches 3.0.0-rc.1'
             exit 0
           fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.44 product artifacts'
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-rc.1 product artifacts'
           git push origin HEAD:release-usage-dashboard

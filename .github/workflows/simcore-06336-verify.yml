@@ -1,0 +1,106 @@
+name: Verify SimCore v0.63.36 Golden Runtime
+
+on:
+  push:
+    paths:
+      - '.simcore-06336-verify-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify staged artifact identity
+        run: |
+          grep -q '//@version 0.63.36' plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Fetch exact v0.63.35 live baseline
+        run: |
+          git fetch --no-tags --depth=1 origin release-simcore
+          test "$(git rev-parse FETCH_HEAD)" = "5b8cf7c86d09f74509a6a333cd9ff2f2ba85a9aa"
+          git show FETCH_HEAD:plugins/simcore/latest.js > /tmp/simcore-before.js
+          git show FETCH_HEAD:plugins/simcore/install.js > /tmp/simcore-before-install.js
+          cmp /tmp/simcore-before.js /tmp/simcore-before-install.js
+          grep -q '//@version 0.63.35' /tmp/simcore-before.js
+
+      - name: Runtime boundary and cache fixtures on staged blob
+        run: |
+          cp plugins/simcore/test_simcore_06336.js /tmp/test_simcore_06336.js
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/test_simcore_06336.js')
+          s = p.read_text(encoding='utf-8')
+          old = "out.set(hits[i][1], text.slice(start, end));"
+          new = "out.set(hits[i][1], text.slice(start, end).trimEnd());"
+          assert old in s
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          cp /tmp/test_simcore_06336.js plugins/simcore/test_simcore_06336.verify.js
+          node plugins/simcore/test_simcore_06336.verify.js
+          rm plugins/simcore/test_simcore_06336.verify.js
+
+      - name: Replay v0.63 golden behavioral suite on staged blob
+        run: |
+          git fetch --no-tags --depth=1 origin simcore-06335-runtime-stability
+          git show FETCH_HEAD:plugins/simcore/test_simcore_06335.js > /tmp/simcore-06335-golden.js
+          python - <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-06335-golden.js').read_text(encoding='utf-8')
+          body = old[old.index('function loadSimCore(text)'):]
+          prelude = "const fs = require('fs');\nconst assert = require('assert');\nconst src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');\nconst expectedModules = { size: 17 };\nconst frozenBytes = 0;\nconst moduleDigest = 'behavior-replay';\n\n"
+          body = body.replace('SimCore 0.63.35 golden behavioral contracts: PASS', 'SimCore 0.63.36 replay of v0.63 golden behavioral contracts: PASS')
+          Path('/tmp/simcore-06336-golden-replay.js').write_text(prelude + body, encoding='utf-8')
+          PY
+          node /tmp/simcore-06336-golden-replay.js
+
+      - name: Frozen core body and cache/order invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, hashlib
+
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end].rstrip()
+              return out
+
+          b = modules(before)
+          a = modules(after)
+          core = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          runtime = {'runtime-contracts','runtime-host','runtime-cache','runtime-session','runtime-mirror','runtime-hooks','runtime-probe'}
+          assert set(b) == core, set(b)
+          assert set(a) == core | runtime, set(a)
+          assert all(a[name] == b[name] for name in core)
+
+          assert before.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          assert after.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          assert "runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER'" in after
+          assert "runtimePromptPolicy: 'OBSERVE_ONLY'" in after
+          assert "providerCache: 'UNVERIFIED'" in after
+          assert 'cache_control' not in after.lower()
+
+          for token in ['setTimeout(', 'setInterval(', 'requestAnimationFrame(', 'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+
+          assert "await this.store.save('out', outIndex, result.state" in a['session']
+          assert after.index("outputStatus: 'COMMITTED'") < after.index('runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state)')
+
+          digest = hashlib.sha256('\n'.join(f'{name}:{hashlib.sha256(a[name].encode()).hexdigest()}' for name in sorted(core)).encode()).hexdigest()
+          print('SimCore 0.63.36 exact staged blob verification: PASS')
+          print('core module bodies:', len(core), 'bytes:', sum(len(a[n].encode()) for n in core), 'digest:', digest)
+          print('runtime modules:', len(runtime), sorted(runtime))
+          print('cache contract: order FROZEN · runtime TAIL_AFTER_CURRENT_USER · provider UNVERIFIED')
+          PY

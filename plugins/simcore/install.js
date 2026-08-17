@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.37
+//@version 0.63.38
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.38 Cache Trajectory & Refreshless Telemetry Continuity:
+// - Extends v0.63.37 request-topology telemetry into a memory-only same-chat trajectory: cache-family id, distinct observations versus retry attempts, rolling stable floor, moving frontier, frontier streak, divergence count and cadence EMA
+// - Adds a pure-data refreshless telemetry handoff capsule so v0.63.38 and later targeted reloads can preserve runtime-prefix sketch, prior request signatures and cache trajectory without retaining raw request bodies or adding pluginStorage/network/timer work
+// - The first upgrade from v0.63.37-or-earlier intentionally starts FRESH because those older runtimes cannot publish a handoff capsule retroactively; no prior telemetry is required
+// - Handoff is schema/location/age checked and fail-open; functions, hooks, sessions, mirror work, Core state, raw chat messages and provider cache controls are never transferred
+// - Keeps request ordering, runtime prompt bytes, provider routing/cache policy, mirror acceptance gate, host/storage/API call surface and all 17 Core generation modules frozen
 //
 // v0.63.37 Cache Topology, Cadence & Output Provenance Diagnostics:
 // - Adds a memory-only signature pass over the final already-built beforeRequest message array to measure full-request common-prefix topology without retaining message bodies or changing request ordering/content
@@ -4281,27 +4288,122 @@ function buildRuntimePromptCacheProbe(previousText, currentText) {
   };
 }
 
+function cacheSketch(text) {
+  const value = String(text == null ? '' : text);
+  const prefixHashes = new Array(value.length);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+    prefixHashes[i] = h >>> 0;
+  }
+  const lines = value ? value.split('\n') : [];
+  const lineHashes = lines.map((line) => {
+    let x = 0x811c9dc5;
+    for (let i = 0; i < line.length; i++) {
+      x ^= line.charCodeAt(i);
+      x = Math.imul(x, 0x01000193);
+    }
+    return x >>> 0;
+  });
+  const lineReasons = lines.map((line) => promptChangeReason('', line));
+  return Object.freeze({ version: 1, chars: value.length, prefixHashes, lineHashes, lineReasons });
+}
+
+function buildRuntimePromptCacheProbeFromSketch(sketch, currentText) {
+  const current = String(currentText || '');
+  if (!sketch || Number(sketch.version) !== 1 || !Array.isArray(sketch.prefixHashes)) {
+    return buildRuntimePromptCacheProbe(null, current);
+  }
+  const previousChars = Math.max(0, Number(sketch.chars || 0));
+  const limit = Math.min(previousChars, current.length, sketch.prefixHashes.length);
+  let h = 0x811c9dc5;
+  let prefixChars = 0;
+  for (let i = 0; i < limit; i++) {
+    h ^= current.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+    if ((h >>> 0) !== Number(sketch.prefixHashes[i])) break;
+    prefixChars = i + 1;
+  }
+  const stable = previousChars === current.length && prefixChars === current.length;
+  const denominator = Math.max(previousChars, current.length, 1);
+  const currentLines = current ? current.split('\n') : [];
+  const currentLineHashes = currentLines.map((line) => {
+    let x = 0x811c9dc5;
+    for (let i = 0; i < line.length; i++) {
+      x ^= line.charCodeAt(i);
+      x = Math.imul(x, 0x01000193);
+    }
+    return x >>> 0;
+  });
+  const previousLineHashes = Array.isArray(sketch.lineHashes) ? sketch.lineHashes : [];
+  let prefixLines = 0;
+  const lineLimit = Math.min(previousLineHashes.length, currentLineHashes.length);
+  while (prefixLines < lineLimit && Number(previousLineHashes[prefixLines]) === Number(currentLineHashes[prefixLines])) prefixLines += 1;
+  let changedLineSlots = 0;
+  const maxLines = Math.max(previousLineHashes.length, currentLineHashes.length);
+  for (let i = 0; i < maxLines; i++) {
+    if (Number(previousLineHashes[i]) !== Number(currentLineHashes[i])) changedLineSlots += 1;
+  }
+  const firstChangedLine = stable ? null : prefixLines + 1;
+  const previousReason = Array.isArray(sketch.lineReasons) ? sketch.lineReasons[prefixLines] : null;
+  const currentReason = currentLines[prefixLines] == null ? null : promptChangeReason('', currentLines[prefixLines]);
+  return {
+    baseline: false,
+    stable,
+    previousChars,
+    currentChars: current.length,
+    stablePrefixChars: prefixChars,
+    stablePrefixPercent: stable ? 100 : (prefixChars / denominator) * 100,
+    stablePrefixLines: prefixLines,
+    firstChangedLine,
+    changedLineSlots,
+    reason: stable ? 'stable' : (currentReason || previousReason || 'other'),
+    continuitySource: 'HANDOFF_SKETCH',
+  };
+}
+
 function createRuntimePromptCacheTracker(contract = null) {
   let previousText = null;
   let previousKey = null;
+  let previousSketch = null;
   return Object.freeze({
     observe(key, currentText, extra = null) {
       const currentKey = String(key || '');
-      const prior = previousKey === currentKey ? previousText : null;
-      const probe = {
-        ...buildRuntimePromptCacheProbe(prior, currentText),
-        placement: contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER',
+      let probe;
+      if (previousKey === currentKey && previousText != null) probe = buildRuntimePromptCacheProbe(previousText, currentText);
+      else if (previousKey === currentKey && previousSketch) probe = buildRuntimePromptCacheProbeFromSketch(previousSketch, currentText);
+      else probe = buildRuntimePromptCacheProbe(null, currentText);
+      probe = Object.freeze({
+        ...probe,
         requestOrder: contract?.requestOrder || 'FROZEN',
+        placement: contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER',
         providerCache: contract?.providerCache || 'UNVERIFIED',
-        ...(extra && typeof extra === 'object' ? extra : {}),
-      };
+        key: currentKey,
+        sendIndex: Number.isInteger(Number(extra?.sendIndex)) ? Number(extra.sendIndex) : -1,
+        mode: String(extra?.mode || ''),
+        at: Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now(),
+      });
       previousText = String(currentText || '');
+      previousSketch = cacheSketch(previousText);
       previousKey = currentKey;
       return probe;
+    },
+    exportState() {
+      if (!previousKey || !previousSketch) return null;
+      return { version: 1, key: previousKey, sketch: previousSketch };
+    },
+    importState(state) {
+      if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key || !state.sketch) return false;
+      previousKey = state.key;
+      previousText = null;
+      previousSketch = state.sketch;
+      return true;
     },
     reset() {
       previousText = null;
       previousKey = null;
+      previousSketch = null;
     },
   });
 }
@@ -4345,6 +4447,34 @@ function relativePosition(index, firstChangeIndex, baseline, stable) {
   if (index < firstChangeIndex) return 'WITHIN_COMMON_PREFIX';
   if (index === firstChangeIndex) return 'AT_PREFIX_BREAK';
   return 'AFTER_PREFIX_BREAK';
+}
+
+function signatureKey(sig) {
+  return `${sig.role}|${sig.kind}|${sig.chars}|${sig.hash}`;
+}
+
+function requestFingerprint(signatures) {
+  return exactHash(signatures.map(signatureKey).join('\u001f'));
+}
+
+function familyFingerprint(signatures) {
+  const leading = [];
+  for (const sig of signatures) {
+    if (sig.role !== 'system') break;
+    leading.push(signatureKey(sig));
+  }
+  return exactHash((leading.length ? leading : signatures.slice(0, Math.min(2, signatures.length)).map(signatureKey)).join('\u001f'));
+}
+
+function clonePrevious(previous) {
+  if (!previous || !Array.isArray(previous.signatures)) return null;
+  return {
+    at: Number(previous.at || 0),
+    signatures: previous.signatures.map((sig) => ({ role: String(sig.role || ''), kind: String(sig.kind || ''), chars: Number(sig.chars || 0), hash: String(sig.hash || '') })),
+    totalChars: Number(previous.totalChars || 0),
+    currentUserIndex: Number(previous.currentUserIndex ?? -1),
+    runtimeIndex: Number(previous.runtimeIndex ?? -1),
+  };
 }
 
 function createRequestTopologyTracker() {
@@ -4396,16 +4526,209 @@ function createRequestTopologyTracker() {
         currentUserPosition: relativePosition(currentUserIndex, firstChangeIndex, baseline, stable),
         runtimePosition: relativePosition(runtimeIndex, firstChangeIndex, baseline, stable),
         retainedBodies: false, signatureKind: 'role+kind+chars+fnv1a32',
+        requestFingerprint: requestFingerprint(signatures),
+        familyId: familyFingerprint(signatures),
       });
       previousKey = currentKey;
       previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex };
       return probe;
+    },
+    exportState() {
+      if (!previousKey || !previous) return null;
+      return { version: 1, key: previousKey, previous: clonePrevious(previous) };
+    },
+    importState(state) {
+      if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key) return false;
+      const restored = clonePrevious(state.previous);
+      if (!restored) return false;
+      previousKey = state.key;
+      previous = restored;
+      return true;
     },
     reset() { previousKey = null; previous = null; },
   });
 }
 
 module.exports = { exactHash, messageSignature, createRequestTopologyTracker };
+});
+
+SimCore.define("runtime-cache-candidates", function (require, module, exports) {
+const WINDOW = 3;
+const EMA_ALPHA = 0.35;
+
+function freshState(key, familyId) {
+  return {
+    version: 1,
+    key, familyId,
+    attempts: 0, distinct: 0,
+    lastDistinctToken: null,
+    status: 'BASELINE',
+    window: [],
+    stableFloorChars: null,
+    stableFloorMessages: null,
+    movingFrontierChars: 0,
+    movingFrontierMessages: 0,
+    frontierStreak: 0,
+    divergenceCount: 0,
+    regressionStreak: 0,
+    cadenceEmaMs: null,
+    lastAt: null,
+  };
+}
+
+function cloneState(state) {
+  if (!state) return null;
+  return {
+    version: 1,
+    key: String(state.key || ''), familyId: String(state.familyId || ''),
+    attempts: Number(state.attempts || 0), distinct: Number(state.distinct || 0),
+    lastDistinctToken: state.lastDistinctToken == null ? null : String(state.lastDistinctToken),
+    status: String(state.status || 'BASELINE'),
+    window: Array.isArray(state.window) ? state.window.slice(-WINDOW).map((x) => ({ chars: Number(x.chars || 0), messages: Number(x.messages || 0) })) : [],
+    stableFloorChars: state.stableFloorChars == null ? null : Number(state.stableFloorChars),
+    stableFloorMessages: state.stableFloorMessages == null ? null : Number(state.stableFloorMessages),
+    movingFrontierChars: Number(state.movingFrontierChars || 0),
+    movingFrontierMessages: Number(state.movingFrontierMessages || 0),
+    frontierStreak: Number(state.frontierStreak || 0),
+    divergenceCount: Number(state.divergenceCount || 0),
+    regressionStreak: Number(state.regressionStreak || 0),
+    cadenceEmaMs: state.cadenceEmaMs == null ? null : Number(state.cadenceEmaMs),
+    lastAt: state.lastAt == null ? null : Number(state.lastAt),
+  };
+}
+
+function summarize(state, familyReset, distinctObservation) {
+  return Object.freeze({
+    status: state.status,
+    familyId: state.familyId,
+    familyReset: !!familyReset,
+    attempts: state.attempts,
+    distinct: state.distinct,
+    distinctObservation: !!distinctObservation,
+    window: WINDOW,
+    stableFloorChars: state.stableFloorChars,
+    stableFloorMessages: state.stableFloorMessages,
+    movingFrontierChars: state.movingFrontierChars,
+    movingFrontierMessages: state.movingFrontierMessages,
+    frontierStreak: state.frontierStreak,
+    divergenceCount: state.divergenceCount,
+    regressionStreak: state.regressionStreak,
+    cadenceEmaMs: state.cadenceEmaMs,
+  });
+}
+
+function createCacheCandidateTracker() {
+  let state = null;
+  return Object.freeze({
+    observe(key, topology, extra = null) {
+      const currentKey = String(key || '');
+      const familyId = String(topology?.familyId || 'none');
+      let familyReset = false;
+      if (!state || state.key !== currentKey || state.familyId !== familyId) {
+        familyReset = !!state;
+        state = freshState(currentKey, familyId);
+      }
+      state.attempts += 1;
+      const sendIndex = Number.isInteger(Number(extra?.sendIndex)) ? Number(extra.sendIndex) : -1;
+      const distinctToken = `${sendIndex}:${String(topology?.requestFingerprint || '')}`;
+      const distinctObservation = state.lastDistinctToken !== distinctToken;
+      if (!distinctObservation) return summarize(state, familyReset, false);
+      state.lastDistinctToken = distinctToken;
+      state.distinct += 1;
+      const cadence = Number(topology?.cadenceMs);
+      if (Number.isFinite(cadence) && cadence >= 0) {
+        state.cadenceEmaMs = state.cadenceEmaMs == null ? cadence : (EMA_ALPHA * cadence) + ((1 - EMA_ALPHA) * state.cadenceEmaMs);
+      }
+      if (topology?.baseline || familyReset) {
+        state.status = 'BASELINE';
+        state.lastAt = Number(extra?.at || topology?.at || Date.now());
+        return summarize(state, familyReset, true);
+      }
+      const chars = Math.max(0, Number(topology?.commonChars || 0));
+      const messages = Math.max(0, Number(topology?.commonMessages || 0));
+      const priorFrontier = state.movingFrontierChars;
+      const priorFloor = state.stableFloorChars;
+      const wasEstablished = state.status === 'ESTABLISHED' || state.status === 'REGRESSED' || state.status === 'VOLATILE';
+      if (wasEstablished && priorFloor != null && chars < priorFloor) {
+        state.regressionStreak += 1;
+        state.divergenceCount += 1;
+      } else {
+        state.regressionStreak = 0;
+      }
+      state.window.push({ chars, messages });
+      if (state.window.length > WINDOW) state.window.shift();
+      state.movingFrontierChars = chars;
+      state.movingFrontierMessages = messages;
+      state.frontierStreak = priorFrontier > 0 && chars >= priorFrontier ? state.frontierStreak + 1 : 1;
+      if (state.distinct < 3) {
+        state.status = 'OBSERVING';
+      } else if (state.regressionStreak >= 2) {
+        state.status = 'VOLATILE';
+      } else if (state.regressionStreak === 1) {
+        state.status = 'REGRESSED';
+      } else {
+        state.status = 'ESTABLISHED';
+        state.stableFloorChars = Math.min(...state.window.map((x) => x.chars));
+        state.stableFloorMessages = Math.min(...state.window.map((x) => x.messages));
+      }
+      state.lastAt = Number(extra?.at || topology?.at || Date.now());
+      return summarize(state, familyReset, true);
+    },
+    exportState() { return state ? { version: 1, state: cloneState(state) } : null; },
+    importState(saved) {
+      if (!saved || Number(saved.version) !== 1) return false;
+      const restored = cloneState(saved.state);
+      if (!restored || !restored.key || !restored.familyId) return false;
+      state = restored;
+      return true;
+    },
+    reset() { state = null; },
+  });
+}
+module.exports = { createCacheCandidateTracker };
+});
+
+SimCore.define("runtime-telemetry", function (require, module, exports) {
+const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
+const MAX_AGE_MS = 10 * 60 * 1000;
+
+function capture(input) {
+  const locationKey = String(input?.locationKey || '');
+  if (!locationKey) return null;
+  return Object.freeze({
+    schema: 1,
+    sourceVersion: String(input?.sourceVersion || ''),
+    locationKey,
+    capturedAt: Number(input?.capturedAt || Date.now()),
+    runtimePromptCache: input?.runtimePromptCache || null,
+    requestTopology: input?.requestTopology || null,
+    cacheCandidates: input?.cacheCandidates || null,
+  });
+}
+
+function publish(root, capsule) {
+  if (!root || !capsule) return false;
+  try { root[KEY] = capsule; return true; } catch (_) { return false; }
+}
+
+function claim(root) {
+  if (!root) return null;
+  try {
+    const capsule = root[KEY] || null;
+    try { delete root[KEY]; } catch (_) { root[KEY] = undefined; }
+    return capsule;
+  } catch (_) { return null; }
+}
+
+function validate(capsule, locationKey, now = Date.now()) {
+  if (!capsule) return { accepted: false, reason: 'no-compatible-handoff', capsule: null };
+  if (Number(capsule.schema) !== 1) return { accepted: false, reason: 'schema-mismatch', capsule: null };
+  if (String(capsule.locationKey || '') !== String(locationKey || '')) return { accepted: false, reason: 'location-mismatch', capsule: null };
+  const ageMs = Math.max(0, Number(now) - Number(capsule.capturedAt || 0));
+  if (!Number.isFinite(ageMs) || ageMs > MAX_AGE_MS) return { accepted: false, reason: 'expired', ageMs, capsule: null };
+  return { accepted: true, reason: 'adopted', ageMs, capsule };
+}
+module.exports = { capture, publish, claim, validate };
 });
 
 SimCore.define("runtime-session", function (require, module, exports) {
@@ -4669,7 +4992,21 @@ function topology(probe) {
   const first = probe.firstChangeIndex == null ? 'none' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
   return `${probe.stable ? 'STABLE' : 'COMMON_PREFIX'} · messages ${Number(probe.commonMessages || 0)}/${Number(probe.messages || 0)} · chars ${Number(probe.commonChars || 0).toLocaleString('en-US')}/${Number(probe.totalChars || 0).toLocaleString('en-US')} · ratio ${Number(probe.commonRatio || 0).toFixed(1)}% · first change ${first}`;
 }
-module.exports = { cachePosture, cadence, topology };
+function trajectory(probe) {
+  if (!probe) return 'n/a';
+  const family = probe.familyId ? String(probe.familyId).slice(0, 8) : 'n/a';
+  const floor = probe.stableFloorChars == null ? 'n/a' : `${Number(probe.stableFloorMessages || 0)} msgs / ${Number(probe.stableFloorChars || 0).toLocaleString('en-US')} chars`;
+  const frontier = `${Number(probe.movingFrontierMessages || 0)} msgs / ${Number(probe.movingFrontierChars || 0).toLocaleString('en-US')} chars`;
+  const ema = probe.cadenceEmaMs == null ? 'BASELINE' : cadence(probe.cadenceEmaMs);
+  return `${probe.status || 'n/a'} · family ${family}${probe.familyReset ? ' · FAMILY_RESET' : ''} · distinct ${Number(probe.distinct || 0)} · attempts ${Number(probe.attempts || 0)} · floor ${floor} · frontier ${frontier} · streak ${Number(probe.frontierStreak || 0)} · divergence ${Number(probe.divergenceCount || 0)} · cadence EMA ${ema}`;
+}
+
+function continuity(probe) {
+  if (!probe) return 'FRESH · no compatible handoff';
+  if (!probe.accepted) return `FRESH · ${probe.reason || 'no-compatible-handoff'}`;
+  return `ADOPTED · from ${probe.sourceVersion || '?'} · age ${cadence(probe.ageMs)} · topology ${probe.topology ? 'RESTORED' : 'FRESH'} · runtime-prefix ${probe.runtimePrefix ? 'RESTORED' : 'FRESH'} · trajectory ${probe.trajectory ? 'RESTORED' : 'FRESH'}`;
+}
+module.exports = { cachePosture, cadence, topology, trajectory, continuity };
 });
 
 (async () => {
@@ -4681,6 +5018,8 @@ module.exports = { cachePosture, cadence, topology };
   const runtimeHostRules = SimCore.require('runtime-host');
   const runtimeCacheRules = SimCore.require('runtime-cache');
   const runtimeTopologyRules = SimCore.require('runtime-topology');
+  const runtimeCacheCandidateRules = SimCore.require('runtime-cache-candidates');
+  const runtimeTelemetryRules = SimCore.require('runtime-telemetry');
   const runtimeSessionRules = SimCore.require('runtime-session');
   const runtimeMirrorRules = SimCore.require('runtime-mirror');
   const runtimeHooks = SimCore.require('runtime-hooks');
@@ -4709,6 +5048,9 @@ module.exports = { cachePosture, cadence, topology };
   let lastRuntimePromptBudget = null;
   let lastRuntimePromptCacheProbe = null;
   let lastRequestTopologyProbe = null;
+  let lastCacheTrajectoryProbe = null;
+  let lastCacheCandidateCostMs = null;
+  let lastTelemetryContinuityProbe = null;
   let lastTimestampCanonicalization = null;
   let lastPreambleProvenance = null;
   let lastDiagnosticRequestProbe = null;
@@ -4717,6 +5059,9 @@ module.exports = { cachePosture, cadence, topology };
   const host = runtimeHostRules.createHostAdapter(Risuai);
   const runtimePromptCache = runtimeCacheRules.createRuntimePromptCacheTracker(runtimeContracts.cache);
   const requestTopology = runtimeTopologyRules.createRequestTopologyTracker();
+  const cacheCandidates = runtimeCacheCandidateRules.createCacheCandidateTracker();
+  let pendingTelemetryHandoff = runtimeTelemetryRules.claim(globalThis);
+  let telemetryAdoptionAttempted = false;
   const runtimeSession = runtimeSessionRules.createSessionRuntime({
     coreRules, host, perfNow, perfMs, textMessageContent,
     readState: () => ({ coreSession, coreKey, coreLocationKey }),
@@ -4913,6 +5258,24 @@ module.exports = { cachePosture, cadence, topology };
       lastEvidenceMappingProbe = evidenceResult?.mapping || null;
       lastEvidenceFenceProbe = evidenceResult?.fence || null;
       const runtimePromptKey = String(coreKey || coreLocationKey || '');
+      if (!telemetryAdoptionAttempted) {
+        telemetryAdoptionAttempted = true;
+        const adoption = runtimeTelemetryRules.validate(pendingTelemetryHandoff, runtimePromptKey, Date.now());
+        let restoredRuntimePrefix = false;
+        let restoredTopology = false;
+        let restoredTrajectory = false;
+        if (adoption.accepted && adoption.capsule) {
+          restoredRuntimePrefix = runtimePromptCache.importState(adoption.capsule.runtimePromptCache);
+          restoredTopology = requestTopology.importState(adoption.capsule.requestTopology);
+          restoredTrajectory = cacheCandidates.importState(adoption.capsule.cacheCandidates);
+        }
+        lastTelemetryContinuityProbe = Object.freeze({
+          accepted: !!adoption.accepted, reason: adoption.reason || 'no-compatible-handoff',
+          sourceVersion: adoption.capsule?.sourceVersion || null, ageMs: adoption.ageMs ?? null,
+          runtimePrefix: restoredRuntimePrefix, topology: restoredTopology, trajectory: restoredTrajectory,
+        });
+        pendingTelemetryHandoff = null;
+      }
       lastRuntimePromptCacheProbe = runtimePromptCache.observe(runtimePromptKey, runtimeBudgetText, {
         sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
         mode: runtimeBudgetMode,
@@ -4925,6 +5288,12 @@ module.exports = { cachePosture, cadence, topology };
         at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
       });
       if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
+      const candidateStarted = perfNow();
+      lastCacheTrajectoryProbe = cacheCandidates.observe(runtimePromptKey, lastRequestTopologyProbe, {
+        sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
+        at: Number(lastRequestTopologyProbe?.at || Date.now()),
+      });
+      lastCacheCandidateCostMs = perfMs(candidateStarted);
       const pendingProbe = result.state.pending || null;
       if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
         lastNarrativeClockProbe = {
@@ -5008,8 +5377,11 @@ module.exports = { cachePosture, cadence, topology };
       lastRuntimePromptBudget = null;
       lastRuntimePromptCacheProbe = null;
       lastRequestTopologyProbe = null;
+      lastCacheTrajectoryProbe = null;
+      lastCacheCandidateCostMs = null;
       runtimePromptCache.reset();
       requestTopology.reset();
+      cacheCandidates.reset();
       lastEvidenceMappingProbe = null;
       lastEvidenceFenceProbe = null;
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
@@ -5485,6 +5857,7 @@ module.exports = { cachePosture, cadence, topology };
         : (probeFresh ? 'OBSERVED' : 'NOT_EXERCISED'));
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
     const topologyProbe = runtimeActive ? (lastRequestTopologyProbe || null) : null;
+    const trajectoryProbe = runtimeActive ? (lastCacheTrajectoryProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
     const parentIndex = probeFresh && lineage ? Number(lineage.parentIndex) : -1;
@@ -5544,7 +5917,9 @@ module.exports = { cachePosture, cadence, topology };
       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
       `Cache placement: ${probeFresh && topologyProbe ? `current user @${topologyProbe.currentUserIndex >= 0 ? Number(topologyProbe.currentUserIndex) : 'n/a'} · ${topologyProbe.currentUserPosition || 'n/a'} · runtime @${topologyProbe.runtimeIndex >= 0 ? Number(topologyProbe.runtimeIndex) : 'n/a'} · ${topologyProbe.runtimePosition || 'n/a'}` : 'n/a'}`,
       `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
-      `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · provider cache UNVERIFIED`,
+      `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,
+      `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
+      `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
@@ -5925,6 +6300,16 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   await Risuai.onUnload(async () => {
     runtimeDisposed = true;
     runtimeEpoch += 1;
+    try {
+      runtimeTelemetryRules.publish(globalThis, runtimeTelemetryRules.capture({
+        sourceVersion: '0.63.38',
+        locationKey: String(coreKey || coreLocationKey || ''),
+        capturedAt: Date.now(),
+        runtimePromptCache: runtimePromptCache.exportState(),
+        requestTopology: requestTopology.exportState(),
+        cacheCandidates: cacheCandidates.exportState(),
+      }));
+    } catch (_) {}
     await runtimeHooks.remove(Risuai, beforeRequestHandler, outputHandler);
     for (const part of simcoreUiParts.splice(0)) {
       if (!part?.id) continue;
@@ -5935,8 +6320,11 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreLocationKey = null;
     lastRuntimePromptCacheProbe = null;
     lastRequestTopologyProbe = null;
+    lastCacheTrajectoryProbe = null;
+    lastCacheCandidateCostMs = null;
     runtimePromptCache.reset();
     requestTopology.reset();
+    cacheCandidates.reset();
     lastEvidenceMappingProbe = null;
     lastEvidenceFenceProbe = null;
     lastDiagnosticRequestProbe = null;

@@ -21,6 +21,7 @@
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
+      const cacheMetrics = requestCacheMetrics(row);
       const requestedTierField = recentRequestField(row, [
         'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
         'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
@@ -55,7 +56,15 @@
         model,
         cost:num(costRaw) ? Number(costRaw) : null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
+        inputTokens:cacheMetrics.inputTokens,
+        outputTokens:cacheMetrics.outputTokens,
         cacheHit:requestCacheSignal(row),
+        cachedInputTokens:cacheMetrics.cachedInputTokens,
+        cacheReadInputTokens:cacheMetrics.cacheReadInputTokens,
+        cacheCreationInputTokens:cacheMetrics.cacheCreationInputTokens,
+        cacheCreation5mTokens:cacheMetrics.cacheCreation5mTokens,
+        cacheCreation1hTokens:cacheMetrics.cacheCreation1hTokens,
+        cacheReadRatio:cacheMetrics.cacheReadRatio,
         requestedServiceTier,
         servedServiceTier,
         requestedServiceTierSource,
@@ -87,15 +96,54 @@
     return stats;
   }
 
+  function requestCacheObservabilityStats(rows) {
+    const stats = {
+      rows:0, hitKnown:0, hits:0, tokenKnown:0, readKnown:0, writeKnown:0,
+      inputTokens:0, cachedInputTokens:0, cacheReadInputTokens:0, cacheCreationInputTokens:0,
+      cacheCreation5mTokens:0, cacheCreation1hTokens:0, readDenominator:0, readRatio:null
+    };
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      stats.rows += 1;
+      if (typeof row?.cacheHit === 'boolean') { stats.hitKnown += 1; if (row.cacheHit) stats.hits += 1; }
+      const hasTokenMetric = [row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num);
+      if (hasTokenMetric) stats.tokenKnown += 1;
+      if (num(row?.cacheReadInputTokens)) stats.readKnown += 1;
+      if (num(row?.cacheCreationInputTokens)) stats.writeKnown += 1;
+      stats.inputTokens += num(row?.inputTokens) ? Number(row.inputTokens) : 0;
+      stats.cachedInputTokens += num(row?.cachedInputTokens) ? Number(row.cachedInputTokens) : 0;
+      stats.cacheReadInputTokens += num(row?.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : 0;
+      stats.cacheCreationInputTokens += num(row?.cacheCreationInputTokens) ? Number(row.cacheCreationInputTokens) : 0;
+      stats.cacheCreation5mTokens += num(row?.cacheCreation5mTokens) ? Number(row.cacheCreation5mTokens) : 0;
+      stats.cacheCreation1hTokens += num(row?.cacheCreation1hTokens) ? Number(row.cacheCreation1hTokens) : 0;
+      if ([row?.inputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num)) {
+        stats.readDenominator += Number(row?.inputTokens || 0) + Number(row?.cacheReadInputTokens || 0) + Number(row?.cacheCreationInputTokens || 0);
+      }
+    }
+    stats.readRatio = stats.readDenominator > 0 && stats.cacheReadInputTokens > 0
+      ? Math.max(0, Math.min(100, stats.cacheReadInputTokens / stats.readDenominator * 100))
+      : null;
+    return stats;
+  }
+
+  function cacheObservabilitySummaryText(stats) {
+    const s = stats || requestCacheObservabilityStats([]);
+    const hitRate = s.hitKnown > 0 ? `${(s.hits / s.hitKnown * 100).toFixed(1)}% (${s.hits}/${s.hitKnown})` : '—';
+    const read = s.readKnown > 0 || s.cacheReadInputTokens > 0 ? Number(s.cacheReadInputTokens).toLocaleString() : '—';
+    const write = s.writeKnown > 0 || s.cacheCreationInputTokens > 0 ? Number(s.cacheCreationInputTokens).toLocaleString() : '—';
+    const ratio = num(s.readRatio) ? `${Number(s.readRatio).toFixed(1)}%` : '—';
+    return `HIT ${hitRate} · Read ${read} · Write ${write} · Read ratio ${ratio}`;
+  }
+
   function requestLedgerCapabilities(rows) {
     const list = Array.isArray(rows) ? rows : [];
     const precisionOf = row => row?.timestampPrecision && row.timestampPrecision !== 'unknown' ? row.timestampPrecision : requestTimestampPrecision(row?.timestamp, row?.timestampSource, row?.requestNumber);
     const exact = list.filter(row => precisionOf(row) === 'exact').length;
     const bucket = list.filter(row => ['hour','hour-estimated'].includes(precisionOf(row))).length;
     const cacheKnown = list.filter(row => typeof row?.cacheHit === 'boolean').length;
+    const cacheTokenKnown = list.filter(row => [row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num)).length;
     const ids = list.filter(row => String(row?.requestNumber || '')).length;
     const tier = requestServiceTierStats(list);
-    return {rows:list.length, exact, bucket, cacheKnown, ids, tier};
+    return {rows:list.length, exact, bucket, cacheKnown, cacheTokenKnown, ids, tier};
   }
 
   function requestLedgerKey(row) {
@@ -133,7 +181,15 @@
           ...row,
           cost:num(row.cost) ? Number(row.cost) : (num(current?.cost) ? Number(current.cost) : null),
           totalTokens:num(row.totalTokens) ? Number(row.totalTokens) : (num(current?.totalTokens) ? Number(current.totalTokens) : null),
+          inputTokens:num(row.inputTokens) ? Number(row.inputTokens) : (num(current?.inputTokens) ? Number(current.inputTokens) : null),
+          outputTokens:num(row.outputTokens) ? Number(row.outputTokens) : (num(current?.outputTokens) ? Number(current.outputTokens) : null),
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
+          cachedInputTokens:num(row.cachedInputTokens) ? Number(row.cachedInputTokens) : (num(current?.cachedInputTokens) ? Number(current.cachedInputTokens) : null),
+          cacheReadInputTokens:num(row.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : (num(current?.cacheReadInputTokens) ? Number(current.cacheReadInputTokens) : null),
+          cacheCreationInputTokens:num(row.cacheCreationInputTokens) ? Number(row.cacheCreationInputTokens) : (num(current?.cacheCreationInputTokens) ? Number(current.cacheCreationInputTokens) : null),
+          cacheCreation5mTokens:num(row.cacheCreation5mTokens) ? Number(row.cacheCreation5mTokens) : (num(current?.cacheCreation5mTokens) ? Number(current.cacheCreation5mTokens) : null),
+          cacheCreation1hTokens:num(row.cacheCreation1hTokens) ? Number(row.cacheCreation1hTokens) : (num(current?.cacheCreation1hTokens) ? Number(current.cacheCreation1hTokens) : null),
+          cacheReadRatio:num(row.cacheReadRatio) ? Number(row.cacheReadRatio) : (num(current?.cacheReadRatio) ? Number(current.cacheReadRatio) : null),
           requestedServiceTier:preferKnownServiceTier(row.requestedServiceTier, current?.requestedServiceTier),
           servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
@@ -215,12 +271,16 @@
     const groups = new Map();
     for (const row of (Array.isArray(rows) ? rows : [])) {
       const name = String(row?.[key] || 'Unknown');
-      if (!groups.has(name)) groups.set(name, {name, requests:0, cost:0, costKnown:0, tokens:0, tokenKnown:0, cacheKnown:0, cacheHits:0, errors:0});
+      if (!groups.has(name)) groups.set(name, {name, requests:0, cost:0, costKnown:0, tokens:0, tokenKnown:0, cacheKnown:0, cacheHits:0, inputTokens:0, cacheReadTokens:0, cacheWriteTokens:0, cacheTokenKnown:0, errors:0});
       const item = groups.get(name);
       item.requests += 1;
       if (num(row?.cost)) { item.cost += Number(row.cost); item.costKnown += 1; }
       if (num(row?.totalTokens)) { item.tokens += Number(row.totalTokens); item.tokenKnown += 1; }
       if (typeof row?.cacheHit === 'boolean') { item.cacheKnown += 1; if (row.cacheHit) item.cacheHits += 1; }
+      if ([row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num)) item.cacheTokenKnown += 1;
+      item.inputTokens += num(row?.inputTokens) ? Number(row.inputTokens) : 0;
+      item.cacheReadTokens += num(row?.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : 0;
+      item.cacheWriteTokens += num(row?.cacheCreationInputTokens) ? Number(row.cacheCreationInputTokens) : 0;
       if (row?.success === false) item.errors += 1;
     }
     return Array.from(groups.values()).sort((a,b) => b.cost - a.cost || b.requests - a.requests || a.name.localeCompare(b.name));
@@ -231,9 +291,14 @@
       const cacheText = row.cacheKnown
         ? `캐시 ${(row.cacheHits / row.cacheKnown * 100).toFixed(1)}% · 정보 ${row.cacheKnown}/${row.requests}`
         : `캐시 정보 0/${row.requests}`;
+      const readDenominator = row.inputTokens + row.cacheReadTokens + row.cacheWriteTokens;
+      const cacheTokenText = row.cacheTokenKnown
+        ? `Read ${row.cacheReadTokens.toLocaleString()} · Write ${row.cacheWriteTokens.toLocaleString()}${readDenominator > 0 && row.cacheReadTokens > 0 ? ` · Read ratio ${(row.cacheReadTokens / readDenominator * 100).toFixed(1)}%` : ''}`
+        : '';
       const meta = [
         row.tokenKnown ? `${row.tokens.toLocaleString()} tok` : '',
         cacheText,
+        cacheTokenText,
         row.errors ? `오류 ${row.errors}` : ''
       ].filter(Boolean).join(' · ');
       return `<div class="hour-aggregate-row"><div><b>${esc(row.name)}</b><small>${esc(meta)}</small></div><span>${row.requests}회 · ${row.costKnown ? money(row.cost,4) : '비용 —'}</span></div>`;
@@ -303,7 +368,7 @@
         const resultText = row.success === false
           ? ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ')
           : '성공';
-        const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '캐시 정보 없음';
+        const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
         const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
@@ -345,7 +410,7 @@
       const resultText = row.success
         ? '성공'
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
-      const cacheText = typeof row.cacheHit === 'boolean' ? `캐시 ${row.cacheHit ? 'HIT' : 'MISS'}` : '';
+      const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
       const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;

@@ -65,7 +65,10 @@
           <div class="mini"><span>총 토큰</span><b>${num(analyticsW24.totalTokens) ? Number(analyticsW24.totalTokens).toLocaleString() : '—'}</b></div>
           <div class="mini"><span>입력 / 출력</span><b>${num(analyticsW24.inputTokens) || num(analyticsW24.outputTokens) ? `${num(analyticsW24.inputTokens)?Number(analyticsW24.inputTokens).toLocaleString():'—'} / ${num(analyticsW24.outputTokens)?Number(analyticsW24.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
           <div class="mini"><span>오류</span><b>${num(analyticsW24.errorCount) ? `${Number(analyticsW24.errorCount).toLocaleString()}회 · ${num(analyticsW24.errorRate)?Number(analyticsW24.errorRate).toFixed(1):'0.0'}%` : (num(analyticsW24.errorRate) ? `${Number(analyticsW24.errorRate).toFixed(1)}%` : '0회 · 0.0%')}</b></div>
-          <div class="mini"><span>캐시</span><b>${usageCacheText(analyticsW24)}</b></div>
+          <div class="mini"><span>요청 캐시 HIT</span><b>${usageCacheText(analyticsW24)}</b></div>
+          <div class="mini"><span>Cache Read</span><b>${num(analyticsW24.cacheReadInputTokens) ? `${Number(analyticsW24.cacheReadInputTokens).toLocaleString()} tok` : '—'}</b></div>
+          <div class="mini"><span>Cache Write</span><b>${num(analyticsW24.cacheCreationInputTokens) ? `${Number(analyticsW24.cacheCreationInputTokens).toLocaleString()} tok` : '—'}</b></div>
+          <div class="mini"><span>Token Read Ratio</span><b>${num(analyticsW24.cacheReadInputTokens) && (Number(analyticsW24.inputTokens || 0) + Number(analyticsW24.cacheReadInputTokens || 0) + Number(analyticsW24.cacheCreationInputTokens || 0)) > 0 ? `${(Number(analyticsW24.cacheReadInputTokens) / (Number(analyticsW24.inputTokens || 0) + Number(analyticsW24.cacheReadInputTokens || 0) + Number(analyticsW24.cacheCreationInputTokens || 0)) * 100).toFixed(1)}%` : '—'}</b></div>
           <div class="mini"><span>7일 총 비용</span><b>${money(analyticsW7?.totalCost,4)}</b></div>
           <div class="mini"><span>7일 일평균</span><b>${num(analyticsAverages.dailyCost7d) ? `${money(analyticsAverages.dailyCost7d,4)}/일` : '—'}</b></div>
           <div class="mini"><span>30일 총 비용</span><b>${money(analyticsW30?.totalCost,4)}</b></div>

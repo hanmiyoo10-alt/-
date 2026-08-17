@@ -99,7 +99,7 @@ jobs:
           grep -Fq 'DevPass account detail:' plugins/usage-dashboard/latest.js
           grep -Fq 'Floating widget UX:' plugins/usage-dashboard/latest.js
           grep -Fq 'Lifecycle refresh:' plugins/usage-dashboard/latest.js
-          grep -Fq '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
 
           printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt
           cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js

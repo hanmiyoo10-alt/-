@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.29
+//@version 0.63.30
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.30 Thoughts Compatibility Finalization:
+// - Consolidates complete/partial Thoughts preamble detection into one Recovery classifier with explicit policy labels while preserving v0.63.29 output-selection and warning behavior
+// - Complete standalone <Thoughts> wrappers are SILENT_COMPAT; partial Thoughts are SAFE_ENVELOPE_COMPAT only after a safe canonical # 응답 is selected; unknown prefixes remain WARNING and unresolved envelopes remain FAIL_OPEN
+// - Extends memory-only preamble provenance with the applied policy label; no preamble text is retained and no model/host generation behavior is modified
+// - Keeps Time v0.63.28, Structure v0.63.27, Frame, Evidence, Prompt, Session semantics, Lineage/Handoff, Recurrence, Reaction, reload safety, storage schema and host/API call sites frozen; only Recovery classification plus runtime diagnostic formatting changes
 //
 // v0.63.29 Preamble Provenance Diagnostics:
 // - Adds memory-only classification for text before the canonical # 응답 envelope: NONE, WHITESPACE_ONLY, THOUGHTS_COMPAT, DUPLICATE_ENVELOPE, UNKNOWN_TEXT or UNRESOLVED
@@ -2736,25 +2742,55 @@ const community = require('./community');
 const reaction = require('./reaction');
 const structure = require('./structure');
 
-// Known host/model metadata compatibility. A complete standalone Thoughts wrapper is silent.
-// A partial Thoughts-shaped prefix is downgraded to compatibility telemetry only when a safe
-// canonical # 응답 envelope is successfully selected; otherwise it stays a warning.
-function isKnownThoughtsPreamble(rawPrefix) {
-  const trimmed = String(rawPrefix || '').trim();
-  if (!trimmed) return false;
-  const open = trimmed.match(/^<Thoughts>/i);
-  if (!open) return false;
-  const close = trimmed.match(/<\/Thoughts>$/i);
-  if (!close) return false;
-  const body = trimmed.slice(open[0].length, trimmed.length - close[0].length);
-  return !/<\/?Thoughts>/i.test(body);
-}
+// Host/model preamble compatibility is classified once, then Recovery applies the
+// resulting prefix policy without inferring or retaining the preamble body.
+function classifyPreamble(rawPrefix, candidateCount = 1, resolved = false) {
+  const prefixText = String(rawPrefix || '');
+  const trimmed = prefixText.trim();
+  let prefixKind = 'NONE';
+  let prefixPolicy = 'NONE';
+  let thoughtsShape = 'NONE';
 
-// PocketRisu/model gateways can expose a partial reasoning wrapper before the real # 응답
-// envelope. If the canonical envelope itself is safe, treat a Thoughts-shaped prefix as
-// host/model compatibility telemetry rather than a structural failure.
-function isThoughtsCompatibilityPreamble(rawPrefix) {
-  return /^<Thoughts\b[^>]*>/i.test(String(rawPrefix || '').trim());
+  if (prefixText.length && !trimmed) {
+    prefixKind = 'WHITESPACE_ONLY';
+    prefixPolicy = 'IGNORE_WHITESPACE';
+  } else if (trimmed) {
+    let completeThoughts = false;
+    const open = trimmed.match(/^<Thoughts>/i);
+    if (open) {
+      const close = trimmed.match(/<\/Thoughts>$/i);
+      if (close) {
+        const body = trimmed.slice(open[0].length, trimmed.length - close[0].length);
+        completeThoughts = !/<\/?Thoughts>/i.test(body);
+      }
+    }
+
+    if (completeThoughts) {
+      prefixKind = 'THOUGHTS_COMPAT';
+      prefixPolicy = 'SILENT_COMPAT';
+      thoughtsShape = 'COMPLETE';
+    } else if (/^<Thoughts\b[^>]*>/i.test(trimmed)) {
+      prefixKind = 'THOUGHTS_COMPAT';
+      prefixPolicy = resolved ? 'SAFE_ENVELOPE_COMPAT' : 'WARNING';
+      thoughtsShape = 'PARTIAL';
+    } else {
+      prefixKind = 'UNKNOWN_TEXT';
+      prefixPolicy = 'WARNING';
+    }
+  }
+
+  const count = Math.max(0, Number(candidateCount || 0));
+  let kind = prefixKind;
+  let policy = prefixPolicy;
+  if (count === 0) {
+    kind = 'UNRESOLVED';
+    policy = 'FAIL_OPEN';
+  } else if (count > 1) {
+    kind = 'DUPLICATE_ENVELOPE';
+    policy = resolved ? 'SELECT_SAFE_CANDIDATE' : 'FAIL_OPEN';
+  }
+
+  return { kind, policy, prefixKind, prefixPolicy, thoughtsShape };
 }
 
 function preambleIssue(action) {
@@ -2765,7 +2801,22 @@ function preambleDiagnostic(action) {
   return `Thoughts 호환 preamble ${action}`;
 }
 
-function buildPreambleProvenance(raw, matches, selectedIndex = -1, resolved = false) {
+function applyPreamblePolicy(classification, action, issues, diagnostics) {
+  const c = classification || {};
+  if (c.prefixKind === 'NONE' || c.prefixKind === 'WHITESPACE_ONLY') return;
+  if (c.prefixKind === 'THOUGHTS_COMPAT') {
+    if (c.prefixPolicy === 'SILENT_COMPAT') return;
+    if (c.prefixPolicy === 'SAFE_ENVELOPE_COMPAT') {
+      diagnostics.push(preambleDiagnostic(action));
+      return;
+    }
+    issues.push(preambleIssue(action));
+    return;
+  }
+  if (c.prefixKind === 'UNKNOWN_TEXT') issues.push(preambleIssue(action));
+}
+
+function buildPreambleProvenance(raw, matches, selectedIndex = -1, resolved = false, classification = null) {
   const text = String(raw || '');
   const candidates = Array.isArray(matches) ? matches : [];
   const firstOffset = candidates.length && Number.isInteger(candidates[0]?.index) ? Number(candidates[0].index) : -1;
@@ -2773,35 +2824,21 @@ function buildPreambleProvenance(raw, matches, selectedIndex = -1, resolved = fa
     ? Number(candidates[selectedIndex].index)
     : firstOffset;
   const rawPrefix = firstOffset >= 0 ? text.slice(0, firstOffset) : text;
-  const trimmed = rawPrefix.trim();
-  let kind = 'NONE';
+  const classified = classification || classifyPreamble(rawPrefix, candidates.length, resolved);
   let action = 'NONE';
 
-  if (!candidates.length) {
-    kind = 'UNRESOLVED';
-    action = 'UNRESOLVED';
-  } else if (candidates.length > 1) {
-    kind = 'DUPLICATE_ENVELOPE';
-    action = resolved ? 'SELECTED' : 'UNRESOLVED';
-  } else if (!rawPrefix.length) {
-    kind = 'NONE';
-    action = 'NONE';
-  } else if (!trimmed) {
-    kind = 'WHITESPACE_ONLY';
-    action = 'IGNORED';
-  } else if (isThoughtsCompatibilityPreamble(trimmed) || isKnownThoughtsPreamble(trimmed)) {
-    kind = 'THOUGHTS_COMPAT';
-    action = resolved ? 'STRIPPED' : 'UNRESOLVED';
-  } else {
-    kind = 'UNKNOWN_TEXT';
-    action = resolved ? 'STRIPPED' : 'UNRESOLVED';
-  }
+  if (!candidates.length) action = 'UNRESOLVED';
+  else if (candidates.length > 1) action = resolved ? 'SELECTED' : 'UNRESOLVED';
+  else if (!rawPrefix.length) action = 'NONE';
+  else if (!rawPrefix.trim()) action = 'IGNORED';
+  else action = resolved ? 'STRIPPED' : 'UNRESOLVED';
 
   return {
-    kind,
+    kind: classified.kind,
     chars: rawPrefix.length,
     lines: rawPrefix.length ? rawPrefix.split(/\r?\n/).length : 0,
     action,
+    policy: classified.policy,
     envelopeOffset: selectedOffset >= 0 ? selectedOffset : null,
     candidateCount: candidates.length,
     selectedCandidate: selectedIndex >= 0 ? selectedIndex + 1 : null,
@@ -2820,8 +2857,8 @@ function canonicalizeResponseEnvelope(content, pending) {
     return { content: raw.trim(), repaired: false, issues: ['응답 envelope: # 응답 시작점 없음'], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: false, preambleProvenance };
   }
 
-  const prefix = raw.slice(0, matches[0].index).trim();
-  const knownThoughtsPrefix = !!prefix && isKnownThoughtsPreamble(prefix);
+  const rawPrefix = raw.slice(0, matches[0].index);
+  const prefix = rawPrefix.trim();
   const candidates = matches.map((m, i) => {
     const end = i + 1 < matches.length ? matches[i + 1].index : raw.length;
     const text = raw.slice(m.index, end).trim();
@@ -2848,9 +2885,10 @@ function canonicalizeResponseEnvelope(content, pending) {
     const issues = [];
     const diagnostics = [];
     if (matches.length > 1) issues.push(`응답 envelope 중복 ${matches.length}개 - 안전한 후보를 확정하지 못해 자동 병합하지 않음`);
-    if (prefix && !knownThoughtsPrefix) issues.push(preambleIssue('감지'));
     const resolved = matches.length === 1 && !prefix;
-    const preambleProvenance = buildPreambleProvenance(raw, matches, -1, resolved);
+    const classification = classifyPreamble(rawPrefix, matches.length, resolved);
+    if (prefix) applyPreamblePolicy(classification, '감지', issues, diagnostics);
+    const preambleProvenance = buildPreambleProvenance(raw, matches, -1, resolved, classification);
     return { content: raw.trim(), repaired: false, issues, diagnostics, candidateCount: matches.length, selectedIndex: -1, resolved, preambleProvenance };
   }
 
@@ -2859,11 +2897,9 @@ function canonicalizeResponseEnvelope(content, pending) {
   const issues = [];
   const diagnostics = [];
   if (matches.length > 1) issues.push(`응답 envelope 중복 ${matches.length}개 → 완전한 후보 ${selected.index + 1}번만 유지`);
-  if (prefix && !knownThoughtsPrefix) {
-    if (isThoughtsCompatibilityPreamble(prefix)) diagnostics.push(preambleDiagnostic('제거'));
-    else issues.push(preambleIssue('제거'));
-  }
-  const preambleProvenance = buildPreambleProvenance(raw, matches, selected.index, true);
+  const classification = classifyPreamble(rawPrefix, matches.length, true);
+  if (prefix) applyPreamblePolicy(classification, '제거', issues, diagnostics);
+  const preambleProvenance = buildPreambleProvenance(raw, matches, selected.index, true, classification);
   return { content: selected.text, repaired, issues, diagnostics, candidateCount: matches.length, selectedIndex: selected.index, resolved: true, preambleProvenance };
 }
 
@@ -3046,6 +3082,7 @@ async function repairLatestGlobalFloorContamination(store, current, outIndex, ra
 }
 
 module.exports = {
+  classifyPreamble,
   canonicalizeResponseEnvelope,
   normalizeTailPlacement,
   prepareOutput,
@@ -4903,7 +4940,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.29',
+      'Version: 0.63.30',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -4920,7 +4957,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
-      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
+      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · policy ${preamble.policy || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
@@ -5134,7 +5171,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.29</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.30</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

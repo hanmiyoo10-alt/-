@@ -1,0 +1,93 @@
+name: Stage SimCore v0.63.35 Runtime Stability Consolidation
+
+on:
+  push:
+    paths:
+      - '.simcore-06335-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture v0.63.34 golden baseline
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.34' /tmp/simcore-before.js
+
+      - name: Apply Runtime Stability Consolidation patch
+        run: python plugins/simcore/patch_simcore_06335.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.35' plugins/simcore/latest.js
+          grep -q 'Stability:' plugins/simcore/latest.js
+          grep -q 'Edit reconcile:' plugins/simcore/latest.js
+          grep -q 'Output mirror:.*DEFERRED' plugins/simcore/latest.js
+          grep -q 'Deferred mirror:' plugins/simcore/latest.js
+          grep -q 'hook cleanup NAMED' plugins/simcore/latest.js
+
+      - name: Golden behavioral contracts
+        run: node plugins/simcore/test_simcore_06335.js
+
+      - name: Release differential guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end]
+              return out
+
+          bmods, amods = modules(before), modules(after)
+          expected = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          assert set(bmods) == expected
+          assert set(amods) == expected
+          changed = [name for name in sorted(expected) if bmods[name] != amods[name]]
+          assert changed == [], changed
+
+          call_tokens = [
+              'Risuai.getCurrentCharacterIndex(', 'Risuai.getCurrentChatIndex(', 'Risuai.getChatFromIndex(',
+              'Risuai.getCharacter(', 'Risuai.setChatToIndex(', "Risuai.addRisuReplacer('beforeRequest'",
+              "Risuai.removeRisuReplacer('beforeRequest'", "Risuai.addRisuScriptHandler('output'",
+              "Risuai.removeRisuScriptHandler('output'", 'Risuai.registerButton(', 'Risuai.registerSetting(',
+              'Risuai.unregisterUIPart(', 'pluginStorage.getItem(', 'pluginStorage.setItem(',
+              'pluginStorage.removeItem(', 'pluginStorage.keys(', 'setTimeout(', 'setInterval(', 'requestAnimationFrame(',
+          ]
+          for token in call_tokens:
+              assert before.count(token) == after.count(token), (token, before.count(token), after.count(token))
+
+          assert after.count('//@version 0.63.35') == 1
+          assert after.count("'Version: 0.63.35'") == 1
+          assert after.count('⚙️ SimCore v0.63.35') == 1
+          assert "await this.store.save('out', outIndex, result.state" in after
+          assert 'scheduleDeferredCoreMirror(chaIdx, chatIdx, chat, outIndex, result.state)' in after
+          assert "setTimeout(() => { void runDeferredMirror(); }, 0)" in after
+          print('release differential guard: PASS')
+          print('frozen modules:', len(expected), 'bytes:', sum(len(amods[n].encode('utf-8')) for n in expected))
+          PY
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --quiet && { echo 'No plugin changes produced'; exit 1; }
+          git commit -m 'Stage SimCore v0.63.35 runtime stability consolidation'
+          git push origin HEAD:${GITHUB_REF_NAME}

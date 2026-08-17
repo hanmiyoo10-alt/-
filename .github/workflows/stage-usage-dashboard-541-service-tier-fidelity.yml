@@ -1,13 +1,11 @@
-name: Stage Usage Dashboard 3.0.0-rc.1 Stable Productization r7
+name: Stage Usage Dashboard 3.0.0-alpha.5.45 Updater Compatibility
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
-      - 'plugins/usage-dashboard/tools/release_rc1_productization.py'
-      - 'plugins/usage-dashboard/tools/release_rc1_test_compat.py'
-      - 'plugins/usage-dashboard/tools/release_rc1_architecture_test_compat.py'
+      - 'plugins/usage-dashboard/tools/release_updater_compat_545.py'
 
 permissions:
   contents: write
@@ -22,16 +20,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Patch RC productization
+      - name: Patch updater-compatible candidate
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_productization.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_test_compat.py
-          python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_architecture_test_compat.py
-          python3 plugins/usage-dashboard/tools/release_rc1_productization.py
-          python3 plugins/usage-dashboard/tools/release_rc1_test_compat.py
-          python3 plugins/usage-dashboard/tools/release_rc1_architecture_test_compat.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_updater_compat_545.py
+          python3 plugins/usage-dashboard/tools/release_updater_compat_545.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
@@ -69,12 +63,13 @@ jobs:
 
           git diff --check
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
-          grep -Fq '//@version 3.0.0-rc.1' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.45' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.45';" plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-rc.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-rc.1"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.45';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.45"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq 'System Health' plugins/usage-dashboard/latest.js
           grep -Fq 'Lifecycle & Recovery' plugins/usage-dashboard/latest.js
@@ -82,7 +77,7 @@ jobs:
           grep -Fq "const STATE_KEY = 'local-usage-dashboard-v3';" plugins/usage-dashboard/latest.js
           grep -Fq "const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';" plugins/usage-dashboard/latest.js
 
-      - name: Commit validated RC source to main
+      - name: Commit validated compatibility candidate to main
         shell: bash
         run: |
           set -euo pipefail
@@ -94,11 +89,15 @@ jobs:
             plugins/usage-dashboard/runtime/bridge-manager.cjs \
             plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
-          git commit -m 'release: Local Usage Dashboard 3.0.0-rc.1 stable productization'
-          git pull --rebase origin main
-          git push origin HEAD:main
+          if git diff --cached --quiet; then
+            echo 'main already matches 3.0.0-alpha.5.45'
+          else
+            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.45 updater compatibility candidate'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
 
-      - name: Publish RC product artifacts to release channel
+      - name: Publish compatibility candidate to release channel
         shell: bash
         run: |
           set -euo pipefail
@@ -118,18 +117,18 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq '//@version 3.0.0-rc.1' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.45' plugins/usage-dashboard/latest.js
           grep -Fq 'System Health' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-rc.1';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-rc.1"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.45';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.45"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 3.0.0-rc.1'
+            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.45'
             exit 0
           fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-rc.1 product artifacts'
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.45 product artifacts'
           git push origin HEAD:release-usage-dashboard

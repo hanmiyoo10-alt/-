@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.28
+//@version 0.63.29
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.29 Preamble Provenance Diagnostics:
+// - Adds memory-only classification for text before the canonical # 응답 envelope: NONE, WHITESPACE_ONLY, THOUGHTS_COMPAT, DUPLICATE_ENVELOPE, UNKNOWN_TEXT or UNRESOLVED
+// - Records only kind, character/line counts, action, selected envelope offset and candidate count; preamble text itself is never retained in diagnostic provenance
+// - Preserves existing Recovery selection/removal/warning/compatibility behavior and state-commit semantics; this update observes provenance rather than changing repair policy
+// - Keeps Time v0.63.28, Structure v0.63.27, Frame, Evidence, Prompt, Lineage/Handoff, Recurrence, Reaction, reload safety, storage schema and host/API call sites frozen; only Recovery metadata plus minimal Session/runtime diagnostic wiring changes
 //
 // v0.63.28 Multi-scene Narrative Clock Commit:
 // - Promotes the final line-level scene timestamp to the persisted narrative clock only when every canonical timestamp in the current # 응답 envelope is valid and monotonically non-decreasing
@@ -2759,15 +2765,59 @@ function preambleDiagnostic(action) {
   return `Thoughts 호환 preamble ${action}`;
 }
 
+function buildPreambleProvenance(raw, matches, selectedIndex = -1, resolved = false) {
+  const text = String(raw || '');
+  const candidates = Array.isArray(matches) ? matches : [];
+  const firstOffset = candidates.length && Number.isInteger(candidates[0]?.index) ? Number(candidates[0].index) : -1;
+  const selectedOffset = selectedIndex >= 0 && Number.isInteger(candidates[selectedIndex]?.index)
+    ? Number(candidates[selectedIndex].index)
+    : firstOffset;
+  const rawPrefix = firstOffset >= 0 ? text.slice(0, firstOffset) : text;
+  const trimmed = rawPrefix.trim();
+  let kind = 'NONE';
+  let action = 'NONE';
+
+  if (!candidates.length) {
+    kind = 'UNRESOLVED';
+    action = 'UNRESOLVED';
+  } else if (candidates.length > 1) {
+    kind = 'DUPLICATE_ENVELOPE';
+    action = resolved ? 'SELECTED' : 'UNRESOLVED';
+  } else if (!rawPrefix.length) {
+    kind = 'NONE';
+    action = 'NONE';
+  } else if (!trimmed) {
+    kind = 'WHITESPACE_ONLY';
+    action = 'IGNORED';
+  } else if (isThoughtsCompatibilityPreamble(trimmed) || isKnownThoughtsPreamble(trimmed)) {
+    kind = 'THOUGHTS_COMPAT';
+    action = resolved ? 'STRIPPED' : 'UNRESOLVED';
+  } else {
+    kind = 'UNKNOWN_TEXT';
+    action = resolved ? 'STRIPPED' : 'UNRESOLVED';
+  }
+
+  return {
+    kind,
+    chars: rawPrefix.length,
+    lines: rawPrefix.length ? rawPrefix.split(/\r?\n/).length : 0,
+    action,
+    envelopeOffset: selectedOffset >= 0 ? selectedOffset : null,
+    candidateCount: candidates.length,
+    selectedCandidate: selectedIndex >= 0 ? selectedIndex + 1 : null,
+  };
+}
+
 // Whole-response restart recovery. Structure judges candidate integrity; Recovery chooses/moves content.
 function canonicalizeResponseEnvelope(content, pending) {
   const raw = String(content || '');
-  if (!pending?.active) return { content: raw, repaired: false, issues: [], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: true };
+  if (!pending?.active) return { content: raw, repaired: false, issues: [], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: true, preambleProvenance: null };
 
   const markerRe = /^[ \t]*#[ \t]+응답[^\r\n]*$/gmi;
   const matches = [...raw.matchAll(markerRe)];
   if (!matches.length) {
-    return { content: raw.trim(), repaired: false, issues: ['응답 envelope: # 응답 시작점 없음'], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: false };
+    const preambleProvenance = buildPreambleProvenance(raw, [], -1, false);
+    return { content: raw.trim(), repaired: false, issues: ['응답 envelope: # 응답 시작점 없음'], diagnostics: [], candidateCount: 0, selectedIndex: -1, resolved: false, preambleProvenance };
   }
 
   const prefix = raw.slice(0, matches[0].index).trim();
@@ -2799,7 +2849,9 @@ function canonicalizeResponseEnvelope(content, pending) {
     const diagnostics = [];
     if (matches.length > 1) issues.push(`응답 envelope 중복 ${matches.length}개 - 안전한 후보를 확정하지 못해 자동 병합하지 않음`);
     if (prefix && !knownThoughtsPrefix) issues.push(preambleIssue('감지'));
-    return { content: raw.trim(), repaired: false, issues, diagnostics, candidateCount: matches.length, selectedIndex: -1, resolved: matches.length === 1 && !prefix };
+    const resolved = matches.length === 1 && !prefix;
+    const preambleProvenance = buildPreambleProvenance(raw, matches, -1, resolved);
+    return { content: raw.trim(), repaired: false, issues, diagnostics, candidateCount: matches.length, selectedIndex: -1, resolved, preambleProvenance };
   }
 
   const selected = safe[0];
@@ -2811,7 +2863,8 @@ function canonicalizeResponseEnvelope(content, pending) {
     if (isThoughtsCompatibilityPreamble(prefix)) diagnostics.push(preambleDiagnostic('제거'));
     else issues.push(preambleIssue('제거'));
   }
-  return { content: selected.text, repaired, issues, diagnostics, candidateCount: matches.length, selectedIndex: selected.index, resolved: true };
+  const preambleProvenance = buildPreambleProvenance(raw, matches, selected.index, true);
+  return { content: selected.text, repaired, issues, diagnostics, candidateCount: matches.length, selectedIndex: selected.index, resolved: true, preambleProvenance };
 }
 
 // Deterministic opaque-block tail repair.
@@ -3729,6 +3782,7 @@ class CoreRulesetSession {
     else this.scheduleDeferredPrune(outIndex);
     result.issues = issues;
     result.envelopeDiagnostics = prepared.envelope.diagnostics || [];
+    result.preambleProvenance = prepared.envelope.preambleProvenance || null;
     return result;
   }
 
@@ -4065,6 +4119,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let previousRuntimePromptText = null;
   let previousRuntimePromptKey = null;
   let lastTimestampCanonicalization = null;
+  let lastPreambleProvenance = null;
   let lastDiagnosticRequestProbe = null;
 
   const { perfNow, perfMs } = ops;
@@ -4521,6 +4576,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     if (issues.length) console.log('[simcore/v0.63.4] structure warnings:', issues.join(' / '));
     if (diagnostics.length) console.log('[simcore/v0.63.4] compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
+    lastPreambleProvenance = result.preambleProvenance || null;
 
     const mirrorDetail = perf ? {} : null;
     t = perfNow();
@@ -4824,6 +4880,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const evidenceMap = runtimeActive ? (lastEvidenceMappingProbe || null) : null;
     const evidenceFence = runtimeActive ? (lastEvidenceFenceProbe || null) : null;
     const narrative = outputFresh ? (lastNarrativeClockProbe || null) : null;
+    const preamble = outputFresh ? (lastPreambleProvenance || null) : null;
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
@@ -4846,7 +4903,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.28',
+      'Version: 0.63.29',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -4863,6 +4920,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
+      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
@@ -5076,7 +5134,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.28</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.29</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

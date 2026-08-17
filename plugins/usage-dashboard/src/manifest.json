@@ -1,23 +1,23 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.41",
+  "version": "3.0.0-alpha.5.42",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "1312e3f86753977a72b4b4c6a447d0fe0fe54bf9814b84ce770ca3fa7b84b11f",
+  "artifactSha256": "f666cc1de26bb5ae4ee3c917c5b117c8e05b078e7b611f2be129e412e5d84bf3",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 57364,
-      "sha256": "febe53e112286e9f9ac67536e79e8e53a98373167a985298260e5903e8f1b19f"
+      "sha256": "4d5eb939ccd6edc592ff5e14d2d9c862d98a8dbf2d16da611ddc9e3cb46f6a0d"
     },
     {
       "file": "10-usage-data.part.js",
       "label": "usage normalization",
-      "bytes": 42952,
-      "sha256": "3b3569439da7c9c073aac600f5b7cb9b03052e6f5fd9e55124185c245c1abe89"
+      "bytes": 43729,
+      "sha256": "ff982c2667d52272cd9df88eeec158fffdbca39b353b0678662d016e55e5fdfb"
     },
     {
       "file": "20-bridge-io.part.js",
@@ -34,14 +34,14 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
-      "bytes": 23081,
-      "sha256": "41b9e77b37596f502801de061e20048c1f58115bcc2448757fd3c7fb18aca45e"
+      "bytes": 23786,
+      "sha256": "1683bf021928e962463e948a0c8ec5ca85b7dd2a5a969bf689c124fc5aa3810e"
     },
     {
       "file": "50-settings-ui.part.js",
       "label": "settings UI",
-      "bytes": 34792,
-      "sha256": "ce66ebab6c2f48abc0542d76ed8a3d6ad9252dd6666ce8c7c61cbcffc439a83a"
+      "bytes": 37209,
+      "sha256": "7db3162517ad6214162811dba039745f414658f87f62482a987c8c52f9273ba5"
     },
     {
       "file": "60-settings-runtime.part.js",

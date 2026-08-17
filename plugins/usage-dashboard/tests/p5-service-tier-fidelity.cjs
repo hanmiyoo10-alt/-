@@ -8,7 +8,7 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.41'));
+assert.ok(source.includes('//@version 3.0.0-alpha.5.42'));
 assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
 assert.ok(engine.includes("const VERSION = '1.6.5';"));
 for (const marker of [
@@ -66,12 +66,12 @@ assert.equal(stats.standard, 1);
 assert.equal(stats.unknown, 1);
 
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.41';"));
+assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.42';"));
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.5';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.41');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.41');
+assert.equal(manifest.productVersion, '3.0.0-alpha.5.42');
+assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.42');
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-console.log('usage-dashboard P5 per-request service tier fidelity: OK · 3.0.0-alpha.5.41');
+console.log('usage-dashboard P5 per-request service tier fidelity: OK · 3.0.0-alpha.5.42');

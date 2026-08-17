@@ -601,11 +601,21 @@
       } : null;
       const devpassAccount = ds ? {
         plan:String(ds.plan || 'none'),
+        cycle:ds.cycle === null || ds.cycle === undefined ? '' : String(ds.cycle),
+        billingCycleStart:ds.billingCycleStart || null,
+        expiresAt:ds.expiresAt || null,
+        cancelled:ds.cancelled === true,
         pendingTier:ds.pendingTier === null || ds.pendingTier === undefined ? '' : String(ds.pendingTier),
         serviceTier:String(ds.serviceTier || 'default'),
         routingStrategy:String(ds.routingStrategy || 'auto'),
         paygEnabled:ds.paygEnabled === true,
         hasPersonalOrg:typeof ds.hasPersonalOrg === 'boolean' ? ds.hasPersonalOrg : null,
+        hasBillingHistory:typeof ds.hasBillingHistory === 'boolean' ? ds.hasBillingHistory : null,
+        resetPasses:num(ds.resetPasses) ? Number(ds.resetPasses) : null,
+        includedResetPasses:num(ds.includedResetPasses) ? Number(ds.includedResetPasses) : null,
+        includedResetPassesRemaining:num(ds.includedResetPassesRemaining) ? Number(ds.includedResetPassesRemaining) : null,
+        resetPassPrice:num(ds.resetPassPrice) ? Number(ds.resetPassPrice) : null,
+        regularCredits:num(ds.regularCredits) ? Number(ds.regularCredits) : null,
         source:String(ds.source || '')
       } : null;
       const out = {

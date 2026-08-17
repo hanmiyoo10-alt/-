@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.35
+//@version 3.0.0-alpha.5.36
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.35';
+  const VERSION = '3.0.0-alpha.5.36';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.1';
+  const REQUIRED_BRIDGE_VERSION = '1.6.4';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -46,6 +46,10 @@
     requestLedgerStartedAt: null,
     analyticsScopeView: 'all',
     dashboardView: 'overview',
+    selectedCreditsOrgId: '',
+    creditsOrgFallbackCount: 0,
+    creditsOrgLastFallbackFrom: '',
+    creditsOrgLastFallbackTo: '',
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
@@ -1600,7 +1604,12 @@ async function importLegacyTodayBaselines() {
         : (Array.isArray(r.orgs?.organizations)
           ? r.orgs.organizations
           : (Array.isArray(r.orgs?.data?.organizations) ? r.orgs.data.organizations : []));
+      const selectedCreditsOrgId = String(r.creditsOrganizationId || '').trim();
       const creditOrg = orgRows.find(org =>
+        selectedCreditsOrgId && String(org?.id || '') === selectedCreditsOrgId &&
+        String(org?.kind || 'default') === 'default' &&
+        String(org?.status || 'active') !== 'deleted'
+      ) || orgRows.find(org =>
         String(org?.kind || 'default') === 'default' &&
         String(org?.status || 'active') !== 'deleted' &&
         num(org?.credits)
@@ -1631,7 +1640,12 @@ async function importLegacyTodayBaselines() {
         source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
         health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
         bridge:normalizeBridgeMetadata(r),
-        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes
+        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes,
+        organizations:orgRows.filter(org => String(org?.id || '') && String(org?.status || 'active') !== 'deleted').map(org => ({id:String(org.id),name:String(org?.name || org.id),kind:String(org?.kind || 'default'),status:String(org?.status || 'active'),credits:num(org?.credits)?Number(org.credits):null})),
+        creditsOrganizationId:String(r.creditsOrganizationId || creditOrg?.id || ''),
+        requestedCreditsOrganizationId:String(r.requestedCreditsOrganizationId || ''),
+        creditsOrganizationFallback:r.creditsOrganizationFallback === true,
+        creditsOrganizationFallbackReason:String(r.creditsOrganizationFallbackReason || '')
       };
       if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('DevPass Bridge에 표시할 데이터가 없어.');
       return out;
@@ -1692,7 +1706,9 @@ async function importLegacyTodayBaselines() {
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
     const base = normalizeBridgeBase(state.bridgeBase);
-    const res = await Risuai.nativeFetch(`${base}/snapshot`, {
+    const selectedCreditsOrgId = String(state.selectedCreditsOrgId || '').trim();
+    const snapshotUrl = `${base}/snapshot${selectedCreditsOrgId ? `?creditsOrgId=${encodeURIComponent(selectedCreditsOrgId)}` : ''}`;
+    const res = await Risuai.nativeFetch(snapshotUrl, {
       method:'GET',
       headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
     });
@@ -1893,6 +1909,16 @@ async function importLegacyTodayBaselines() {
         const snapshot = await fetchSnapshot();
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         state.data = applyObservedToday(snapshot);
+        if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
+          const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
+          const to = String(state.data.creditsOrganizationId || '');
+          if (from && to && from !== to) {
+            state.creditsOrgFallbackCount = Number(state.creditsOrgFallbackCount || 0) + 1;
+            state.creditsOrgLastFallbackFrom = from;
+            state.creditsOrgLastFallbackTo = to;
+          }
+          state.selectedCreditsOrgId = to;
+        }
         collectRecentRequestLedger(state.data);
         state.bridgeStatus = 'connected';
         state.bridgeError = '';
@@ -2033,6 +2059,7 @@ async function importLegacyTodayBaselines() {
       `P4 partial: auto section patch · diagnostics live · settings preserved`,
       `Render cache: widget html writes ${Number(performanceRuntime.widgetHtmlWrites || 0)} · skips ${Number(performanceRuntime.widgetHtmlSkips || 0)} · style writes ${Number(performanceRuntime.widgetStyleWrites || 0)} · skips ${Number(performanceRuntime.widgetStyleSkips || 0)} · closed panel skips ${Number(performanceRuntime.panelRenderSkippedClosed || 0)}`,
       `P4 render: closed-panel skip · widget DOM dedup`,
+      `Credits organization: selected ${state.data?.creditsOrganizationId || state.selectedCreditsOrgId || 'default'} · available ${Array.isArray(state.data?.organizations) ? state.data.organizations.filter(org=>String(org?.kind||'default')==='default'&&String(org?.status||'active')!=='deleted').length : 0} · fallbacks ${Number(state.creditsOrgFallbackCount || 0)}${state.creditsOrgLastFallbackFrom ? ` · last ${state.creditsOrgLastFallbackFrom} → ${state.creditsOrgLastFallbackTo || 'default'}` : ''}`,
       `Local runtime errors: ${Number(localRuntimeErrors.count || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
@@ -2118,6 +2145,11 @@ function todayOverviewMetrics(d) {
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
+    const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
+    const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
+    const selectedCreditsOrg = creditsOrganizations.find(org => String(org?.id || '') === selectedCreditsOrgId) || creditsOrganizations[0] || null;
+    const creditsOrgLabel = String(selectedCreditsOrg?.name || selectedCreditsOrgId || 'Default organization');
+    const creditsOrgSelector = creditsOrganizations.length ? `<label class="credits-org-picker"><span>Credits Organization</span><select id="credits-org-id">${creditsOrganizations.map(org => `<option value="${esc(org.id)}" ${String(org.id)===selectedCreditsOrgId?'selected':''}>${esc(org.name || org.id)}${num(org.credits)?` · ${money(org.credits)}`:''}</option>`).join('')}</select></label>${d.creditsOrganizationFallback ? `<p class="warn credits-org-fallback">선택한 organization을 찾지 못해 ${esc(creditsOrgLabel)}로 자동 복구했어.</p>` : ''}` : '';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',
       num(runway?.avgDailySpend7d) ? `7일평균 ${money(runway.avgDailySpend7d,4)}/일` : '',
@@ -2127,7 +2159,7 @@ function todayOverviewMetrics(d) {
     const today = todayOverviewMetrics(d);
     const observedStamp = state.dailyUsage?.updatedAt || state.creditDailyUsage?.updatedAt || state.lastSyncAt;
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
-    const scopeNames = {all:['전체 24h Usage','DevPass + Credits 합산 서버 집계'],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage','Default organization 서버 집계']};
+    const scopeNames = {all:['전체 24h Usage',`DevPass + ${creditsOrgLabel} Credits 합산 서버 집계`],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage',`${creditsOrgLabel} 서버 집계`]};
     const scopeActivity = d.usageScopes?.scopes?.[scopeKey] || (scopeKey === 'all' ? normalizeScopeActivity({totalRequests:a?.requests24h,totalCost:a?.cost24h,totalTokens:a?.totalTokens24h,errorRate:a?.errorRate24h,fetchedAt:d.fetchedAt,source:d.source}) : null);
     const scopeTopProvider = Array.isArray(scopeActivity?.providers) && scopeActivity.providers[0]?.name ? String(scopeActivity.providers[0].name) : '—';
     const scopeTopModel = Array.isArray(scopeActivity?.models) && scopeActivity.models[0]?.name ? String(scopeActivity.models[0].name) : '—';
@@ -2141,7 +2173,7 @@ function todayOverviewMetrics(d) {
     const analyticsNames = {
       all:['전체 Analytics','DevPass + Credits 합산 서버 분석'],
       devpass:['DevPass Analytics','DevPass project 서버 분석'],
-      credits:['Credits Analytics','Default organization 서버 분석']
+      credits:['Credits Analytics',`${creditsOrgLabel} 서버 분석`]
     };
     const analyticsBundle = d.analyticsScopes?.scopes?.[analyticsScopeKey] || (analyticsScopeKey === 'all' ? d.analytics : null) || null;
     const analyticsW24 = analyticsBundle?.windows?.['24h'] || d.usageScopes?.scopes?.[analyticsScopeKey] || (analyticsScopeKey === 'all' ? scopeActivity : null) || null;
@@ -2163,7 +2195,7 @@ function todayOverviewMetrics(d) {
       .panel{background:var(--p);border:1px solid var(--l);border-radius:13px;padding:13px}.metric{min-height:135px;display:flex;flex-direction:column}.metric small{color:var(--m);font-weight:700}.metric strong{font-size:24px;margin-top:9px}.metric em{font-style:normal;color:var(--m);font-size:12px}.metric p{margin-top:auto;margin-bottom:0}.bar{height:5px;background:#2d3138;border-radius:99px;overflow:hidden;margin:11px 0}.bar i{display:block;height:100%;background:var(--g)}.weekly .bar i{background:var(--v)}.wide{grid-column:1/-1}
       .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
-      .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}
+      .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}.credits-org-picker{max-width:420px;margin-top:10px}.credits-org-picker select{margin-top:2px}.credits-org-fallback{margin:6px 0 0}
       .grid>.usage-primary{order:20}.grid>.activity-secondary{order:21}.grid>.analytics-panel{order:30}.grid>.advanced-panel{order:40}
       .usage-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.usage-detail-box{background:var(--p2);border-radius:10px;padding:10px;margin-top:8px}.usage-detail-box h3{font-size:11px;margin:0;color:var(--m)}.usage-detail-box p{margin:8px 0 0}.usage-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:7px 0;border-top:1px solid var(--l)}.usage-detail-row:first-of-type{border-top:0}.usage-detail-row>div{min-width:0;flex:1}.usage-detail-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage-detail-row>span{color:var(--m);font-size:11px;white-space:nowrap}.aggregate-meta{display:flex!important;flex-wrap:wrap;gap:4px;margin-top:4px}.stat-chip{display:inline-flex!important;width:auto;background:#181a1f;border:1px solid var(--l);border-radius:999px;padding:2px 6px;color:var(--m)!important;font-size:9px!important;line-height:1.35;white-space:nowrap}.recent-requests{margin-top:8px}.recent-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.recent-head>span{color:var(--m);font-size:10px}.recent-filter{display:flex;gap:5px;margin:8px 0 2px}.recent-filter-btn{padding:5px 8px;border-radius:999px;font-size:10px;line-height:1.2}.recent-filter-btn.active{background:var(--g);border-color:var(--g);color:#15170f}.request-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--l)}.request-detail-row:first-of-type{border-top:0}.request-main{min-width:0;flex:1}.request-detail-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.request-detail-row span{display:block;color:var(--m);font-size:10px;margin-top:2px}.request-detail-row .request-model{color:var(--t);font-size:11px;white-space:normal;overflow-wrap:anywhere}.request-detail-row em{font-style:normal;color:var(--m);font-size:11px;text-align:right;white-space:nowrap}.request-detail-row em.error-text{color:var(--e)}.request-detail-row em.ok-text{color:var(--m)}
       .advanced-panel{padding:0;overflow:hidden}.advanced-panel>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:13px;list-style:none}.advanced-panel>summary::-webkit-details-marker{display:none}.advanced-panel>summary span{color:var(--m);font-size:11px}.advanced-panel>summary:after{content:'펼치기';color:var(--m);font-size:10px;margin-left:auto}.advanced-panel[open]>summary:after{content:'접기'}.advanced-panel[open]>summary{border-bottom:1px solid var(--l)}.advanced-body{padding:0 13px 13px}
@@ -2195,6 +2227,7 @@ function todayOverviewMetrics(d) {
       <section class="panel wide activity-secondary"><b>24h Activity</b><div class="minis"><div class="mini"><span>요청</span><b>${num(a?.requests24h)?`${a.requests24h}회`:'—'}</b></div><div class="mini"><span>비용</span><b>${money(a?.cost24h,4)}</b></div><div class="mini"><span>토큰</span><b>${num(a?.totalTokens24h)?Number(a.totalTokens24h).toLocaleString():'—'}</b></div><div class="mini"><span>오류율</span><b>${num(a?.errorRate24h)?`${Number(a.errorRate24h).toFixed(1)}%`:'—'}</b></div></div></section>
       <section class="panel wide usage-primary">
         <div class="today-head"><div><b>${dashboardView === 'devpass' ? 'DevPass Usage' : dashboardView === 'credits' ? 'Credits Usage' : '24h Usage Scope'}</b><p style="margin:2px 0 0">${esc(scopeNames[scopeKey][1])}</p></div><span class="stamp">${scopeFetchedAt ? dashboardDateText(scopeFetchedAt) : ''}</span></div>
+        ${dashboardView === 'credits' ? creditsOrgSelector : ''}
         <div class="scope-tabs" role="tablist" aria-label="24h Usage scope">
           ${[['all','전체'],['devpass','DevPass'],['credits','Credits']].map(([key,label]) => `<button class="scope-tab ${scopeKey===key?'active':''}" data-usage-scope="${key}">${label}</button>`).join('')}
         </div>
@@ -2451,6 +2484,15 @@ function todayOverviewMetrics(d) {
         renderSettings();
       };
     });
+    if (q('#credits-org-id')) q('#credits-org-id').onchange = async e => {
+      const next = String(e.target.value || '').trim();
+      if (!next || next === String(state.selectedCreditsOrgId || '')) return;
+      state.selectedCreditsOrgId = next;
+      state.selectedHourKey = '';
+      await persist();
+      await enqueueRefresh('manual');
+      renderSettings();
+    };
     document.querySelectorAll('[data-recent-filter]').forEach(button => {
       button.onclick = async () => {
         const next = String(button.getAttribute('data-recent-filter') || 'all');

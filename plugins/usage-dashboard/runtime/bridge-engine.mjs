@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.3';
+const VERSION = '1.6.4';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -841,8 +841,8 @@ async function cached(name, loader) {
     ?? (name.startsWith('devpassActivity:') && name.endsWith(':7d') ? 300_000 : null)
     ?? (name.startsWith('devpassActivity:') && name.endsWith(':30d') ? 600_000 : null)
     ?? (name.startsWith('analytics:') ? 60_000 : null)
-    ?? (name === 'usageScopes' ? 60_000 : null)
-    ?? (name === 'analyticsScopes' ? 60_000 : null)
+    ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
+    ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();
   const current = cache.get(name);
@@ -1632,9 +1632,22 @@ async function usageForOrg(org, range = '24h') {
   });
 }
 
-function creditsUsageOrganization(orgData) {
-  const rows = orgData?.organizations || [];
-  return rows.find((row) => row.kind === 'default' && row.status !== 'deleted') || null;
+function creditsUsageSelection(orgData, requestedOrgId = '') {
+  const rows = (orgData?.organizations || []).filter((row) => row.kind === 'default' && row.status !== 'deleted');
+  const requestedId = String(requestedOrgId || '').trim();
+  const requested = requestedId ? rows.find((row) => String(row.id || '') === requestedId) || null : null;
+  const fallback = rows.find((row) => finite(row.credits) !== null) || rows[0] || null;
+  const org = requested || fallback;
+  return {
+    org,
+    requestedId,
+    fallback: Boolean(requestedId && (!requested || String(requested.id || '') !== requestedId)),
+    fallbackReason: requestedId && !requested ? 'requested Credits organization unavailable' : '',
+  };
+}
+
+function creditsUsageOrganization(orgData, requestedOrgId = '') {
+  return creditsUsageSelection(orgData, requestedOrgId).org;
 }
 
 async function devPassActivityForRange(range = '24h') {
@@ -1669,9 +1682,11 @@ function legacyDevPassUsageOrganization(orgData) {
   return rows.find((row) => row.kind === 'devpass' && row.status !== 'deleted' && row.devPlan && row.devPlan !== 'none') || null;
 }
 
-async function activityForScope(range = '24h', scope = 'all') {
+async function activityForScope(range = '24h', scope = 'all', creditsOrgId = '') {
   const normalizedScope = ['all', 'devpass', 'credits'].includes(scope) ? scope : 'all';
-  return cached(`activity:${normalizedScope}:${range}`, async () => {
+  const normalizedCreditsOrgId = String(creditsOrgId || '').trim();
+  const creditsCacheKey = normalizedCreditsOrgId || 'default';
+  return cached(`activity:${normalizedScope}:${creditsCacheKey}:${range}`, async () => {
     const results = [];
     const errors = [];
     let orgData = null;
@@ -1712,7 +1727,7 @@ async function activityForScope(range = '24h', scope = 'all') {
 
     if (normalizedScope === 'all' || normalizedScope === 'credits') {
       try {
-        const creditsOrg = creditsUsageOrganization(await getOrgData());
+        const creditsOrg = creditsUsageOrganization(await getOrgData(), normalizedCreditsOrgId);
         if (creditsOrg) {
           try { results.push(await usageForOrg(creditsOrg, range)); }
           catch (error) { errors.push(`credits: ${safeMessage(error)}`); }
@@ -1748,18 +1763,19 @@ async function activityForScope(range = '24h', scope = 'all') {
   });
 }
 
-async function activityForRange(range = '24h') {
-  return activityForScope(range, 'all');
+async function activityForRange(range = '24h', creditsOrgId = '') {
+  return activityForScope(range, 'all', creditsOrgId);
 }
 
-async function activity() {
-  return activityForScope('24h', 'all');
+async function activity(creditsOrgId = '') {
+  return activityForScope('24h', 'all', creditsOrgId);
 }
 
-async function usageScopes() {
-  return cached('usageScopes', async () => {
+async function usageScopes(creditsOrgId = '') {
+  const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
+  return cached(`usageScopes:${creditsCacheKey}`, async () => {
     const scopes = ['all', 'devpass', 'credits'];
-    const settled = await Promise.allSettled(scopes.map((scope) => activityForScope('24h', scope)));
+    const settled = await Promise.allSettled(scopes.map((scope) => activityForScope('24h', scope, creditsOrgId)));
     const values = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -1772,11 +1788,12 @@ async function usageScopes() {
   });
 }
 
-async function analyticsForScope(scope = 'all') {
+async function analyticsForScope(scope = 'all', creditsOrgId = '') {
   const normalizedScope = ['all', 'devpass', 'credits'].includes(scope) ? scope : 'all';
-  return cached(`analytics:${normalizedScope}`, async () => {
+  const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
+  return cached(`analytics:${normalizedScope}:${creditsCacheKey}`, async () => {
     const ranges = ['24h', '7d', '30d'];
-    const settled = await Promise.allSettled(ranges.map((range) => activityForScope(range, normalizedScope)));
+    const settled = await Promise.allSettled(ranges.map((range) => activityForScope(range, normalizedScope, creditsOrgId)));
     const windows = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -1804,14 +1821,15 @@ async function analyticsForScope(scope = 'all') {
   });
 }
 
-async function analytics() {
-  return analyticsForScope('all');
+async function analytics(creditsOrgId = '') {
+  return analyticsForScope('all', creditsOrgId);
 }
 
-async function analyticsScopes() {
-  return cached('analyticsScopes', async () => {
+async function analyticsScopes(creditsOrgId = '') {
+  const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
+  return cached(`analyticsScopes:${creditsCacheKey}`, async () => {
     const scopes = ['all', 'devpass', 'credits'];
-    const settled = await Promise.allSettled(scopes.map((scope) => analyticsForScope(scope)));
+    const settled = await Promise.allSettled(scopes.map((scope) => analyticsForScope(scope, creditsOrgId)));
     const values = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -1838,7 +1856,7 @@ async function runwayFor(orgId) {
         }
       } catch {}
       if (total7d === null) {
-        const creditsOnly = await activityForScope('7d', 'credits');
+        const creditsOnly = await activityForScope('7d', 'credits', orgId);
         total7d = finite(creditsOnly?.totalCost);
       }
       const avgDailySpend7d = total7d !== null ? Math.max(0, total7d / 7) : null;
@@ -1889,8 +1907,9 @@ function moduleValueStatus(value) {
   return valueIsStale(value) ? 'stale' : 'ok';
 }
 
-async function snapshot(profile = 'full') {
+async function snapshot(profile = 'full', creditsOrgId = '') {
   const normalizedProfile = profile === 'light' ? 'light' : 'full';
+  const requestedCreditsOrgId = String(creditsOrgId || '').trim();
 
   // Organization discovery is no longer a hard root dependency. DevPass status
   // and project-scoped Activity can remain useful while Credits/org discovery is
@@ -1900,13 +1919,13 @@ async function snapshot(profile = 'full') {
     ? orgsResult[0].value
     : { organizations: [], fetchedAt: null, source: 'unavailable' };
   const rows = orgs?.organizations || [];
-  const creditsOrg = rows.find((row) => row.kind === 'default' && row.status !== 'deleted' && finite(row.credits) !== null)
-    || rows.find((row) => row.kind === 'default' && row.status !== 'deleted')
-    || null;
+  const creditsSelection = creditsUsageSelection({ organizations: rows }, requestedCreditsOrgId);
+  const creditsOrg = creditsSelection.org;
+  const resolvedCreditsOrgId = String(creditsOrg?.id || '');
 
-  const jobs = [loadDevPassStatus(), usageScopes()];
+  const jobs = [loadDevPassStatus(), usageScopes(resolvedCreditsOrgId)];
   if (normalizedProfile === 'full') {
-    jobs.push(creditsOrg ? runwayFor(creditsOrg.id) : Promise.resolve(null), analyticsScopes());
+    jobs.push(creditsOrg ? runwayFor(creditsOrg.id) : Promise.resolve(null), analyticsScopes(resolvedCreditsOrgId));
   }
   const settled = await Promise.allSettled(jobs);
   const devpassStatusResult = settled[0];
@@ -1933,6 +1952,9 @@ async function snapshot(profile = 'full') {
     orgs,
     devpassStatus: devpassStatusValue,
     creditsOrganizationId: creditsOrg?.id || null,
+    requestedCreditsOrganizationId: requestedCreditsOrgId || null,
+    creditsOrganizationFallback: creditsSelection.fallback,
+    creditsOrganizationFallbackReason: creditsSelection.fallbackReason || null,
     activity: activityValue,
     usageScopes: usageScopesValue,
   };
@@ -1963,6 +1985,7 @@ async function snapshot(profile = 'full') {
     cliVersion: CLI_VERSION,
     uptimeSec: Math.floor((Date.now() - STARTED_AT) / 1000),
     snapshotProfile: normalizedProfile,
+    creditsOrganization: {requestedId: requestedCreditsOrgId || null, selectedId: creditsOrg?.id || null, fallback: creditsSelection.fallback, fallbackReason: creditsSelection.fallbackReason || null},
     cacheEntries: cache.size,
     inFlight: inFlight.size,
     cache: {
@@ -2056,17 +2079,18 @@ async function handle(req, res) {
   if (!isAuthorized(req)) return json(res, 401, { error: 'Bridge token required' });
 
   try {
+    const creditsOrgId = String(url.searchParams.get('creditsOrgId') || '').trim();
     if (url.pathname === '/snapshot') {
       const profile = url.searchParams.get('profile') === 'light' ? 'light' : 'full';
-      return json(res, 200, await snapshot(profile));
+      return json(res, 200, await snapshot(profile, creditsOrgId));
     }
     if (url.pathname === '/orgs') return json(res, 200, await loadOrgs());
     if (url.pathname === '/devpass-status') return json(res, 200, await loadDevPassStatus());
-    if (url.pathname === '/activity') return json(res, 200, await activity());
-    if (url.pathname === '/analytics') return json(res, 200, await analytics());
-    if (url.pathname === '/usage-scopes') return json(res, 200, await usageScopes());
-    if (url.pathname === '/analytics-scopes') return json(res, 200, await analyticsScopes());
-    if (url.pathname === '/v1/summary') return json(res, 200, await snapshot('full'));
+    if (url.pathname === '/activity') return json(res, 200, await activity(creditsOrgId));
+    if (url.pathname === '/analytics') return json(res, 200, await analytics(creditsOrgId));
+    if (url.pathname === '/usage-scopes') return json(res, 200, await usageScopes(creditsOrgId));
+    if (url.pathname === '/analytics-scopes') return json(res, 200, await analyticsScopes(creditsOrgId));
+    if (url.pathname === '/v1/summary') return json(res, 200, await snapshot('full', creditsOrgId));
     const match = url.pathname.match(/^\/orgs\/([^/]+)\/credits-runway$/);
     if (match) return json(res, 200, await runwayFor(decodeURIComponent(match[1])));
     return json(res, 404, { error: 'Not found' });

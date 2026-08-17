@@ -30,6 +30,13 @@ jobs:
           new = "def between(text, start, end):\n    floor = text.index('\\n\\n(async () => {')\n    a = text.index(start, floor)\n    b = text.index(end, a)\n    return a, b, text[a:b]\n"
           assert old in s
           p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          t = Path('plugins/simcore/test_simcore_06336.js')
+          js = t.read_text(encoding='utf-8')
+          old_js = "out.set(hits[i][1], text.slice(start, end));"
+          new_js = "out.set(hits[i][1], text.slice(start, end).trimEnd());"
+          assert old_js in js
+          t.write_text(js.replace(old_js, new_js, 1), encoding='utf-8')
           PY
           python plugins/simcore/patch_simcore_06336.py
 
@@ -61,7 +68,7 @@ jobs:
               out = {}
               for i, hit in enumerate(hits):
                   end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
-                  out[hit.group(1)] = src[hit.start():end]
+                  out[hit.group(1)] = src[hit.start():end].rstrip()
               return out
 
           b = modules(before)

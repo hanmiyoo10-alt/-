@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import hashlib
 
 ROOT = Path('plugins/usage-dashboard')
 SRC = ROOT / 'src'
@@ -13,6 +14,10 @@ def read(path):
 
 def write(path, text):
     path.write_text(text)
+
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def replace_once(text, old, new, label):
@@ -261,6 +266,7 @@ if manifest.get('productVersion') != '3.0.0-alpha.5.39':
 manifest['productVersion'] = '3.0.0-alpha.5.40'
 manifest['components']['plugin']['version'] = '3.0.0-alpha.5.40'
 manifest['components']['bridgeManager']['productVersion'] = '3.0.0-alpha.5.40'
+manifest['components']['bridgeManager']['sha256'] = sha256(manager_path)
 write(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
 
 print('prepared Local Usage Dashboard 3.0.0-alpha.5.40 bridge control surface sync hotfix')

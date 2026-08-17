@@ -31,9 +31,27 @@ write(core_path, core)
 
 
 # 50 settings UI: split immutable config inputs from lifecycle-driven controls.
+# Keep this part's required boundary marker (`function settingsHtml`) untouched.
 ui_path = SRC / '50-settings-ui.part.js'
 ui = read(ui_path)
-helper = r'''  function bridgeControlsHtml() {
+ui = replace_once(
+    ui,
+    '      <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">\n        <label><span>Bridge URL</span>',
+    '      <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">\n        <div class="bridge-config-static"><label><span>Bridge URL</span>',
+    'static bridge config wrapper start',
+)
+old_controls = '''        <div class="actions"><button class="primary" id="connect">${state.bridgeEnabled?'저장하고 다시 연결':token?'동기화 다시 켜기':'저장하고 연결'}</button><button id="pause-sync" ${state.bridgeEnabled?'':'disabled'}>${state.bridgeEnabled?'동기화 끄기':'동기화 꺼짐'}</button><button id="forget-token" ${token?'':'disabled'}>${token?'저장된 토큰 지우기':'저장된 토큰 없음'}</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
+        <p>상태 ${esc(state.bridgeStatus)} · 토큰 ${token?'저장됨':'없음'} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
+'''
+ui = replace_once(ui, old_controls, '        </div>\n        ${bridgeControlsHtml()}\n', 'dynamic bridge controls')
+write(ui_path, ui)
+
+
+# 60 settings runtime: own the dynamic bridge-control renderer. Function declarations
+# remain top-level and are hoisted, so settingsHtml() can call bridgeControlsHtml().
+runtime_path = SRC / '60-settings-runtime.part.js'
+runtime = read(runtime_path)
+bridge_helpers = r'''  function bridgeControlsHtml() {
     const lifecycle = bridgeLifecycleMode();
     const connecting = lifecycle === 'connecting';
     const refreshAllowed = canBridgeRefresh();
@@ -57,24 +75,34 @@ helper = r'''  function bridgeControlsHtml() {
     </div>`;
   }
 
-'''
-ui = replace_once(ui, '  function settingsHtml() {\n', helper + '  function settingsHtml() {\n', 'bridge control helper')
-ui = replace_once(
-    ui,
-    '      <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">\n        <label><span>Bridge URL</span>',
-    '      <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">\n        <div class="bridge-config-static"><label><span>Bridge URL</span>',
-    'static bridge config wrapper start',
-)
-old_controls = '''        <div class="actions"><button class="primary" id="connect">${state.bridgeEnabled?'저장하고 다시 연결':token?'동기화 다시 켜기':'저장하고 연결'}</button><button id="pause-sync" ${state.bridgeEnabled?'':'disabled'}>${state.bridgeEnabled?'동기화 끄기':'동기화 꺼짐'}</button><button id="forget-token" ${token?'':'disabled'}>${token?'저장된 토큰 지우기':'저장된 토큰 없음'}</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
-        <p>상태 ${esc(state.bridgeStatus)} · 토큰 ${token?'저장됨':'없음'} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
-'''
-ui = replace_once(ui, old_controls, '        </div>\n        ${bridgeControlsHtml()}\n', 'dynamic bridge controls')
-write(ui_path, ui)
+  function renderBridgeControls() {
+    const current = document.querySelector('.bridge-control-live');
+    if (!current || typeof document?.createElement !== 'function') return false;
+    const holder = document.createElement('div');
+    holder.innerHTML = bridgeControlsHtml();
+    const next = holder.firstElementChild;
+    if (!next) return false;
+    if (current.outerHTML !== next.outerHTML) current.replaceWith(next);
+    bindSettings();
+    return true;
+  }
 
+'''
+# Preserve the required 60-settings-runtime boundary by inserting after renderSettings().
+render_settings_block = '''  function renderSettings() {
+    const startedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    document.body.innerHTML = settingsHtml();
+    bindSettings();
+    performanceRuntime.panelFullRenders += 1;
+    performanceRuntime.lastPanelRenderMode = 'full';
+    const endedPerf = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const duration = Math.max(0, endedPerf - startedPerf);
+    performanceRuntime.lastPanelRenderMs = roundPerfMs(duration);
+    noteRenderSpike(duration, 'panel', startedPerf, endedPerf, {panel:roundPerfMs(duration)});
+  }
 
-# 60 settings runtime: patch bridge controls live without touching typed config inputs.
-runtime_path = SRC / '60-settings-runtime.part.js'
-runtime = read(runtime_path)
+'''
+runtime = replace_once(runtime, render_settings_block, render_settings_block + bridge_helpers, 'bridge control helpers after renderSettings')
 old_partial = '''    // Runtime Diagnostics is safe to refresh live. Local Bridge settings are
     // deliberately left untouched so typed-but-unsaved values are preserved.
     const currentAdvanced = Array.from(document.querySelectorAll('details.advanced-panel'));
@@ -101,20 +129,6 @@ new_partial = '''    // Keep Local Bridge config inputs untouched so typed-but-u
     }
 '''
 runtime = replace_once(runtime, old_partial, new_partial, 'partial bridge control patch')
-render_helper = r'''  function renderBridgeControls() {
-    const current = document.querySelector('.bridge-control-live');
-    if (!current || typeof document?.createElement !== 'function') return false;
-    const holder = document.createElement('div');
-    holder.innerHTML = bridgeControlsHtml();
-    const next = holder.firstElementChild;
-    if (!next) return false;
-    if (current.outerHTML !== next.outerHTML) current.replaceWith(next);
-    bindSettings();
-    return true;
-  }
-
-'''
-runtime = replace_once(runtime, '  function renderSettingsPartial() {\n', render_helper + '  function renderSettingsPartial() {\n', 'bridge control renderer')
 old_connect = '''        noteBridgeLifecycleTransition('connecting','connect');
         state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
@@ -206,15 +220,16 @@ const runtime = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf8
 
 assert.ok(source.includes('//@version 3.0.0-alpha.5.40'));
 for (const marker of [
-  'function bridgeControlsHtml()',
   'class="bridge-config-static"',
+  '${bridgeControlsHtml()}',
+]) assert.ok(ui.includes(marker), `missing bridge control UI marker: ${marker}`);
+
+for (const marker of [
+  'function bridgeControlsHtml()',
   'class="bridge-control-live"',
   "const forgetArmed = Boolean(token && Number(tokenForgetArmedUntil || 0) > Date.now());",
   "connecting?'disabled':''",
   "id=\"refresh\" ${refreshAllowed?'':'disabled'}",
-]) assert.ok(ui.includes(marker), `missing bridge control UI marker: ${marker}`);
-
-for (const marker of [
   "querySelector('.bridge-control-live')",
   'function renderBridgeControls()',
   'holder.innerHTML = bridgeControlsHtml();',
@@ -226,6 +241,8 @@ for (const marker of [
 assert.ok(!runtime.includes("button.textContent = '정말 지우기?'"), 'token confirmation must render from state, not mutate stale button text');
 assert.ok(runtime.includes("currentAdvanced[0]?.querySelector('.bridge-control-live')"), 'Local Bridge live control partial patch missing');
 assert.ok(!runtime.includes("currentAdvanced[0]?.querySelector('.advanced-body')"), 'typed Local Bridge config body must not be live-patched');
+assert.ok(ui.startsWith('  function settingsHtml() {'), 'settings UI modular boundary drifted');
+assert.ok(runtime.startsWith('  function renderSettings() {'), 'settings runtime modular boundary drifted');
 console.log('usage-dashboard P5 bridge control surface sync: OK · 3.0.0-alpha.5.40');
 '''
 write(TESTS / 'p5-bridge-control-sync.cjs', control_test)

@@ -35,7 +35,7 @@ p1 = replace_once(
 write(p1_path, p1)
 
 # Feature regressions that were introduced during alpha must continue to run in RC
-# and stable. Replace only the exact historical version assertion where present.
+# and stable. Teach all common historical version gates that RC is newer than alpha.
 generic_version_assert = "assert.match(source, /^\\/\\/@version 3\\.0\\.0(?:-alpha\\.[^\\s]+|-beta\\.[^\\s]+|-rc\\.\\d+)?$/m);"
 for path in TESTS.glob('*.cjs'):
     text = read(path)
@@ -47,10 +47,24 @@ for path in TESTS.glob('*.cjs'):
         "|| version === '3.0.0';",
         "|| /^3\\.0\\.0-rc\\./.test(version) || version === '3.0.0';",
     )
+    text = text.replace(
+        ": /^(3\\.0\\.0-beta\\.|3\\.0\\.0$)/.test(version);",
+        ": /^(3\\.0\\.0-beta\\.|3\\.0\\.0-rc\\.|3\\.0\\.0$)/.test(version);",
+    )
     write(path, text)
 
-# Two older guards encode a minimum alpha build numerically instead of an enabled
-# expression. Preserve the minimum-alpha rule while treating RC/stable as newer.
+# P3 UI also checks the diagnostic panel label itself. RC deliberately productizes
+# that label while keeping the diagnostic body intact.
+p3_ui_path = TESTS / 'p3-ui.cjs'
+p3_ui = read(p3_ui_path)
+p3_ui = p3_ui.replace(
+    '<summary><b>Runtime Diagnostics</b><span>성능 · 진단</span></summary>',
+    '<summary><b>Runtime Diagnostics</b><span>요약 · 전체 진단</span></summary>',
+)
+write(p3_ui_path, p3_ui)
+
+# Two newer guards encode a minimum alpha build numerically instead of the common
+# enabled expression. Preserve the minimum-alpha rule while treating RC/stable as newer.
 lifecycle_path = TESTS / 'p5-lifecycle-race.cjs'
 lifecycle = read(lifecycle_path)
 lifecycle = replace_once(

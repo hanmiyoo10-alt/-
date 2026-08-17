@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 5.44 Structural Modularization boundary cleanup
+name: Stage Usage Dashboard 5.44 Structural Modularization final regression
 
 on:
   push:
@@ -28,11 +28,13 @@ jobs:
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r4.py
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r5.py
           python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r6.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha544_patch_r7.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch_r3.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch_r4.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch_r5.py
           python3 plugins/usage-dashboard/tools/release_alpha544_patch_r6.py
+          python3 plugins/usage-dashboard/tools/release_alpha544_patch_r7.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js

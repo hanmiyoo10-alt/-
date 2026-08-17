@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.32
+//@version 0.63.33
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.33 Output Commit Breakdown Diagnostics:
+// - Exposes the output timing measurements already collected by the existing output pipeline so core commit, mirror write and diagnostic overhead can be attributed instead of inferred from the single committed delta
+// - Reports output handler phases, processOutput state source and subphases, chat mirror subphases, plus one largest leaf hotspot; MEMORY_FAST versus STORAGE_FALLBACK is surfaced without changing the existing state-selection logic
+// - Adds no new timer, storage/API call, encoding pass, history scan or output work; the output handler, processCoreOutput, mirrorCoreState and all 17 internal SimCore modules remain byte-identical to v0.63.32
+// - Keeps Request/Handshake v0.63.31, Snapshot Write v0.63.32, Recovery/Thoughts, Time, Structure, Frame, Evidence, Prompt, reload safety and storage schema fully frozen
 //
 // v0.63.32 Snapshot Write Cost Attribution:
 // - Extends the existing request telemetry with the already-serialized bundled turn snapshot character length so pluginStorage set latency can be compared against payload size without another storage call or encoding pass
@@ -5017,6 +5023,48 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     };
   }
 
+  function diagnosticOutputBreakdown(perf) {
+    if (!perf) return null;
+    const n = (v) => Math.max(0, Number(v) || 0);
+    const total = n(perf.totalMs);
+    const detail = perf.outputDetail || {};
+    const mirror = perf.mirrorDetail || {};
+
+    const processTotal = n(perf.sessionProcessMs);
+    const processKnown = n(detail.stateLoadMs) + n(detail.prepareMs) + n(detail.validateMs)
+      + n(detail.finalizeMs) + n(detail.outSerializeMs) + n(detail.outSetMs) + n(detail.outPruneMs);
+    const processOther = Math.max(0, processTotal - processKnown);
+
+    const mirrorTotal = n(perf.mirrorMs);
+    const mirrorKnown = n(mirror.chatLoadMs) + n(mirror.prepareMs) + n(mirror.setChatMs);
+    const mirrorOther = Math.max(0, mirrorTotal - mirrorKnown);
+
+    const outerKnown = n(perf.indicesMs) + n(perf.chatLoadMs) + n(perf.sessionLoadMs)
+      + processTotal + mirrorTotal + n(perf.diagnosticsMs);
+    const handlerOther = Math.max(0, total - outerKnown);
+    const stateSource = String(detail.stateLoadSource || 'unknown').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+
+    const candidates = [
+      ['OUTPUT_INDICES', n(perf.indicesMs)], ['OUTPUT_CHAT_LOAD', n(perf.chatLoadMs)], ['OUTPUT_SESSION_LOAD', n(perf.sessionLoadMs)],
+      ['OUTPUT_STATE_LOAD', n(detail.stateLoadMs)], ['RECOVERY_PREPARE', n(detail.prepareMs)], ['STRUCTURE_VALIDATE', n(detail.validateMs)],
+      ['OUTPUT_FINALIZE', n(detail.finalizeMs)], ['OUT_SERIALIZE', n(detail.outSerializeMs)], ['OUT_STORAGE', n(detail.outSetMs)],
+      ['OUTPUT_PROCESS_OTHER', processOther], ['MIRROR_CHAT_LOAD', n(mirror.chatLoadMs)], ['MIRROR_PREPARE', n(mirror.prepareMs)],
+      ['CHAT_MIRROR_WRITE', n(mirror.setChatMs)], ['MIRROR_OTHER', mirrorOther], ['OUTPUT_DIAGNOSTICS', n(perf.diagnosticsMs)],
+      ['OUTPUT_HANDLER_OTHER', handlerOther],
+    ];
+    candidates.sort((a, b) => b[1] - a[1]);
+    const hotspot = candidates[0] || ['n/a', 0];
+
+    return {
+      total, handlerOther, processTotal, processOther, mirrorTotal, mirrorOther, stateSource,
+      hotspot: hotspot[0], hotspotMs: hotspot[1], hotspotPercent: total > 0 ? (hotspot[1] / total) * 100 : 0,
+      indicesMs: n(perf.indicesMs), chatLoadMs: n(perf.chatLoadMs), sessionLoadMs: n(perf.sessionLoadMs), diagnosticsMs: n(perf.diagnosticsMs),
+      stateLoadMs: n(detail.stateLoadMs), prepareMs: n(detail.prepareMs), validateMs: n(detail.validateMs), finalizeMs: n(detail.finalizeMs),
+      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), pruneDeferred: !!detail.pruneDeferred,
+      mirrorChatLoadMs: n(mirror.chatLoadMs), mirrorPrepareMs: n(mirror.prepareMs), mirrorSetChatMs: n(mirror.setChatMs),
+    };
+  }
+
   function buildLastTurnDiagnosticReport(chat, state) {
     const messages = Array.isArray(chat?.message) ? chat.message : [];
     const latestAssistantIndex = diagnosticLastAssistantIndex(messages);
@@ -5040,6 +5088,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const requestPerf = probeFresh && lastPerf && Number(lastPerf.sendIndex) === Number(currentUserIndex)
       && String(lastPerf.locationKey || '') === String(requestProbe?.locationKey || '') ? lastPerf : null;
     const requestBreakdown = requestPerf ? diagnosticRequestBreakdown(requestProbe, requestPerf) : null;
+    const outputBreakdown = outputFresh && lastOutputPerf ? diagnosticOutputBreakdown(lastOutputPerf) : null;
     const cacheProbe = runtimeActive ? (lastRuntimePromptCacheProbe || null) : null;
     const budget = runtimeActive ? (lastRuntimePromptBudget || null) : null;
     const rootIndex = probeFresh && lineage ? Number(lineage.rootIndex) : -1;
@@ -5062,7 +5111,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.32',
+      'Version: 0.63.33',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5082,6 +5131,10 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,
       `Request hotspot: ${requestBreakdown ? `${requestBreakdown.hotspot} · ${diagnosticFormatMs(requestBreakdown.hotspotMs)} · ${Number(requestBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
+      `Output handler breakdown: ${outputBreakdown ? `indices ${diagnosticFormatMs(outputBreakdown.indicesMs)} · chat ${diagnosticFormatMs(outputBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(outputBreakdown.sessionLoadMs)} · process ${diagnosticFormatMs(outputBreakdown.processTotal)} · mirror ${diagnosticFormatMs(outputBreakdown.mirrorTotal)} · diagnostics ${diagnosticFormatMs(outputBreakdown.diagnosticsMs)} · other ${diagnosticFormatMs(outputBreakdown.handlerOther)} · total ${diagnosticFormatMs(outputBreakdown.total)}` : 'n/a'}`,
+      `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,
+      `Output mirror: ${outputBreakdown ? `chat ${diagnosticFormatMs(outputBreakdown.mirrorChatLoadMs)} · prepare ${diagnosticFormatMs(outputBreakdown.mirrorPrepareMs)} · setChat ${diagnosticFormatMs(outputBreakdown.mirrorSetChatMs)} · other ${diagnosticFormatMs(outputBreakdown.mirrorOther)} · total ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
+      `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
@@ -5300,7 +5353,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.32</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.33</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">

@@ -1,4 +1,4 @@
-name: Stage Usage Dashboard 3.0.0-rc.1 Stable Productization r6
+name: Stage Usage Dashboard 3.0.0-rc.1 Stable Productization r7
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
       - 'plugins/usage-dashboard/tools/release_rc1_productization.py'
       - 'plugins/usage-dashboard/tools/release_rc1_test_compat.py'
+      - 'plugins/usage-dashboard/tools/release_rc1_architecture_test_compat.py'
 
 permissions:
   contents: write
@@ -27,8 +28,10 @@ jobs:
           set -euo pipefail
           python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_productization.py
           python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_test_compat.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_rc1_architecture_test_compat.py
           python3 plugins/usage-dashboard/tools/release_rc1_productization.py
           python3 plugins/usage-dashboard/tools/release_rc1_test_compat.py
+          python3 plugins/usage-dashboard/tools/release_rc1_architecture_test_compat.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js

@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
       - 'plugins/usage-dashboard/tools/release_hardening_546.py'
+      - 'plugins/usage-dashboard/tools/release_hardening_546_boundary_fix.py'
 
 permissions:
   contents: write
@@ -25,7 +26,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile plugins/usage-dashboard/tools/release_hardening_546.py
+          python3 -m py_compile plugins/usage-dashboard/tools/release_hardening_546_boundary_fix.py
           python3 plugins/usage-dashboard/tools/release_hardening_546.py
+          python3 plugins/usage-dashboard/tools/release_hardening_546_boundary_fix.py
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js

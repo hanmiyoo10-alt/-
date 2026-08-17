@@ -1,0 +1,104 @@
+name: Stage SimCore v0.63.36 Runtime Boundary Modularization
+
+on:
+  push:
+    paths:
+      - '.simcore-06336-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture v0.63.35 golden baseline
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.35' /tmp/simcore-before.js
+
+      - name: Apply Runtime Boundary Modularization patch
+        run: python plugins/simcore/patch_simcore_06336.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.36' plugins/simcore/latest.js
+          grep -q 'SimCore.define("runtime-cache"' plugins/simcore/latest.js
+          grep -q 'SimCore.define("runtime-session"' plugins/simcore/latest.js
+          grep -q 'SimCore.define("runtime-mirror"' plugins/simcore/latest.js
+          grep -q 'Cache posture:' plugins/simcore/latest.js
+
+      - name: Runtime boundary and cache fixtures
+        run: node plugins/simcore/test_simcore_06336.js
+
+      - name: Frozen-core and ordering guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, hashlib
+
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end]
+              return out
+
+          b = modules(before)
+          a = modules(after)
+          core = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          runtime = {'runtime-contracts','runtime-host','runtime-cache','runtime-session','runtime-mirror','runtime-hooks','runtime-probe'}
+          assert set(b) == core, set(b)
+          assert set(a) == core | runtime, set(a)
+          changed = [name for name in sorted(core) if b[name] != a[name]]
+          assert changed == [], changed
+
+          # Generation semantics remain byte-for-byte anchored in the frozen Prompt/Session modules.
+          assert b['prompt'] == a['prompt']
+          assert b['session'] == a['session']
+          assert "messages.push({ role: 'system', content: result.promptBlock });" in after
+          assert after.count("messages.push({ role: 'system', content: result.promptBlock });") == before.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          assert "await this.store.save('out', outIndex, result.state" in a['session']
+
+          # No new scheduler/background primitive; Deferred Mirror still owns the single zero-delay task.
+          for token in ['setTimeout(', 'setInterval(', 'requestAnimationFrame(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+
+          # Storage API surface is centralized but not expanded.
+          for token in ['pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+
+          # Named hooks remain one add + one remove for each event, now routed through runtime-hooks.
+          for token in ["addRisuReplacer('beforeRequest'", "removeRisuReplacer('beforeRequest'", "addRisuScriptHandler('output'", "removeRisuScriptHandler('output'"]:
+              assert after.count(token) == 1, (token, after.count(token))
+
+          # Cache posture is observational only: no provider directive and no message reordering.
+          assert "runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER'" in after
+          assert "runtimePromptPolicy: 'OBSERVE_ONLY'" in after
+          assert "providerCache: 'UNVERIFIED'" in after
+          assert 'cache_control' not in after.lower()
+
+          digest = hashlib.sha256('\n'.join(hashlib.sha256(a[n].encode()).hexdigest() for n in sorted(core)).encode()).hexdigest()
+          print('frozen core modules:', len(core), 'bytes:', sum(len(a[n].encode()) for n in core), 'digest:', digest)
+          print('new runtime modules:', len(runtime), sorted(runtime))
+          print('frozen-core + ordering/cache invariants: PASS')
+          PY
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --quiet && { echo 'No plugin changes produced'; exit 1; }
+          git commit -m 'Stage SimCore v0.63.36 runtime boundary modularization'
+          git push origin HEAD:${GITHUB_REF_NAME}

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.35
+//@version 0.63.36
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.36 Runtime Boundary Modularization + Cache Contract:
+// - Extracts host access, session loading, runtime-prompt cache observation, deferred mirroring, named-hook registration and cache-posture formatting from the outer runtime shell into explicit internal modules while keeping the proven v0.63.35 Core modules byte-identical
+// - Freezes request message order and runtime prompt bytes: the current runtime block remains TAIL_AFTER_CURRENT_USER, and cache telemetry explicitly distinguishes SimCore runtime-block stability from provider/host prompt-cache behavior rather than claiming a cache hit
+// - Preserves LOCATION_REUSE/KEY_REUSE/COLD_INIT decisions, authoritative snapshot sequencing, Deferred Chat Mirror guards, named callback identity, storage schema, async ordering and all Frame/Time/Evidence/Recovery/Prompt semantics
+// - Adds no provider-cache directive, host/storage/API call, polling, history scan or prompt reordering; the modular cache seam is intentionally observational so a later stable/volatile prefix A/B experiment can be isolated from the 0.63 golden runtime
 //
 // v0.63.35 Runtime Stability Consolidation:
 // - Promotes the proven v0.63.34 runtime into the 0.63 golden baseline: generation/state semantics stay frozen while CI now executes behavioral regression fixtures across lifecycle modes, Frame, Time, Recovery, Evidence, persistence, manual-edit repair, repeat-send/rewind and deferred-mirror ordering
@@ -4160,11 +4166,388 @@ function normalizationIssues(state) {
 module.exports = { perfNow, perfMs, normalizationIssues };
 });
 
+SimCore.define("runtime-contracts", function (require, module, exports) {
+const cache = Object.freeze({
+  requestOrder: 'FROZEN',
+  runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER',
+  runtimePromptPolicy: 'OBSERVE_ONLY',
+  providerCache: 'UNVERIFIED',
+});
+const ownership = Object.freeze({
+  host: 'runtime-host',
+  session: 'runtime-session',
+  cache: 'runtime-cache',
+  mirror: 'runtime-mirror',
+  hooks: 'runtime-hooks',
+  probe: 'runtime-probe',
+});
+module.exports = { cache, ownership };
+});
+
+SimCore.define("runtime-host", function (require, module, exports) {
+function createHostAdapter(Risuai) {
+  return Object.freeze({
+    async currentIndices() {
+      const [chaIdx, chatIdx] = await Promise.all([
+        Risuai.getCurrentCharacterIndex(),
+        Risuai.getCurrentChatIndex(),
+      ]);
+      return { chaIdx, chatIdx };
+    },
+    getChat(chaIdx, chatIdx) { return Risuai.getChatFromIndex(chaIdx, chatIdx); },
+    getCharacter() { return Risuai.getCharacter(); },
+    setChat(chaIdx, chatIdx, chat) { return Risuai.setChatToIndex(chaIdx, chatIdx, chat); },
+    storageBackend() {
+      return {
+        get: (k) => Risuai.pluginStorage.getItem(k),
+        set: (k, v) => Risuai.pluginStorage.setItem(k, v),
+        remove: (k) => Risuai.pluginStorage.removeItem(k),
+        keys: () => Risuai.pluginStorage.keys(),
+      };
+    },
+  });
+}
+module.exports = { createHostAdapter };
+});
+
+SimCore.define("runtime-cache", function (require, module, exports) {
+function promptChangeReason(previousLine, currentLine) {
+  const text = `${String(previousLine || '')}\n${String(currentLine || '')}`;
+  if (/^reaction_max=/m.test(text)) return 'reaction_max';
+  if (/broadcast_airtime_|broadcast_locked=|mode_b_/m.test(text)) return 'broadcast-time';
+  if (/narrative_|timestamp_semantics=/m.test(text)) return 'narrative-time';
+  if (/^(?:mode=|episode_no=)/m.test(text)) return 'mode/lifecycle';
+  if (/community_blocks_expected=|platform_groups_required=|b_end_|final_required_blocks=/m.test(text)) return 'community';
+  if (/request_template_|prior_answer_|reevaluate_current_event|do_not_mechanically_reuse/m.test(text)) return 'recurrence';
+  if (/short_community_|derive_reaction_from_current_source/m.test(text)) return 'handoff/lineage';
+  if (/korean_age_offset=|current_korean_age=|world_year=/m.test(text)) return 'age/world-year';
+  return 'other';
+}
+
+function buildRuntimePromptCacheProbe(previousText, currentText) {
+  const current = String(currentText || '');
+  const previous = previousText == null ? null : String(previousText);
+  const currentLines = current ? current.split('\n') : [];
+  if (previous == null) {
+    return {
+      baseline: true,
+      stable: false,
+      previousChars: 0,
+      currentChars: current.length,
+      stablePrefixChars: 0,
+      stablePrefixPercent: null,
+      stablePrefixLines: 0,
+      firstChangedLine: null,
+      changedLineSlots: 0,
+      reason: 'baseline',
+    };
+  }
+
+  let prefixChars = 0;
+  const charLimit = Math.min(previous.length, current.length);
+  while (prefixChars < charLimit && previous.charCodeAt(prefixChars) === current.charCodeAt(prefixChars)) prefixChars += 1;
+
+  const previousLines = previous ? previous.split('\n') : [];
+  let prefixLines = 0;
+  const lineLimit = Math.min(previousLines.length, currentLines.length);
+  while (prefixLines < lineLimit && previousLines[prefixLines] === currentLines[prefixLines]) prefixLines += 1;
+
+  const stable = previous === current;
+  const denominator = Math.max(previous.length, current.length, 1);
+  const firstChangedLine = stable ? null : prefixLines + 1;
+  const changedLineSlots = stable ? 0 : Math.max(previousLines.length, currentLines.length) - prefixLines;
+  const previousChangedLine = stable ? '' : (previousLines[prefixLines] || '');
+  const currentChangedLine = stable ? '' : (currentLines[prefixLines] || '');
+
+  return {
+    baseline: false,
+    stable,
+    previousChars: previous.length,
+    currentChars: current.length,
+    stablePrefixChars: prefixChars,
+    stablePrefixPercent: stable ? 100 : (prefixChars / denominator) * 100,
+    stablePrefixLines: prefixLines,
+    firstChangedLine,
+    changedLineSlots,
+    reason: stable ? 'stable' : promptChangeReason(previousChangedLine, currentChangedLine),
+  };
+}
+
+function createRuntimePromptCacheTracker(contract = null) {
+  let previousText = null;
+  let previousKey = null;
+  return Object.freeze({
+    observe(key, currentText, extra = null) {
+      const currentKey = String(key || '');
+      const prior = previousKey === currentKey ? previousText : null;
+      const probe = {
+        ...buildRuntimePromptCacheProbe(prior, currentText),
+        placement: contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER',
+        requestOrder: contract?.requestOrder || 'FROZEN',
+        providerCache: contract?.providerCache || 'UNVERIFIED',
+        ...(extra && typeof extra === 'object' ? extra : {}),
+      };
+      previousText = String(currentText || '');
+      previousKey = currentKey;
+      return probe;
+    },
+    reset() {
+      previousText = null;
+      previousKey = null;
+    },
+  });
+}
+module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, createRuntimePromptCacheTracker };
+});
+
+SimCore.define("runtime-session", function (require, module, exports) {
+function createSessionRuntime(deps) {
+  const { coreRules, host, perfNow, perfMs, textMessageContent, readState, writeState } = deps;
+  async function loadCoreForChat(chaIdx, chatIdx, chatArg = null, perfDetail = null) {
+    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
+    if (detail) {
+      detail.path = 'UNKNOWN';
+      detail.chatFallbackMs = 0;
+      detail.characterLoadMs = 0;
+      detail.initScanMs = 0;
+      detail.initMs = 0;
+    }
+    let { coreSession, coreKey, coreLocationKey } = readState();
+    let t = perfNow();
+    const chat = chatArg || await host.getChat(chaIdx, chatIdx);
+    if (detail) detail.chatFallbackMs = chatArg ? 0 : perfMs(t);
+    if (!chat) {
+      if (detail) detail.path = 'NO_CHAT';
+      writeState({ coreSession: null, coreKey: null, coreLocationKey: null });
+      return null;
+    }
+
+    const locationKey = `${chaIdx}:${chatIdx}:${chat.id ?? ''}`;
+    if (coreSession && coreLocationKey === locationKey) {
+      if (detail) detail.path = 'LOCATION_REUSE';
+      return coreSession;
+    }
+
+    t = perfNow();
+    const char = await host.getCharacter();
+    if (detail) detail.characterLoadMs = perfMs(t);
+    if (!char) {
+      if (detail) detail.path = 'NO_CHARACTER';
+      writeState({ coreSession: null, coreKey: null, coreLocationKey: null });
+      return null;
+    }
+    const charId = char.chaId ?? char.name;
+    const chatId = chat.id ?? `${charId}:${chatIdx}`;
+    const key = `${charId}:${chatId}`;
+    if (coreSession && coreKey === key) {
+      writeState({ coreSession, coreKey, coreLocationKey: locationKey });
+      if (detail) detail.path = 'KEY_REUSE';
+      return coreSession;
+    }
+
+    coreSession = new coreRules.CoreRulesetSession(host.storageBackend(), {
+      chatId,
+      prefix: `sim:core:${key}`,
+      keepN: 80,
+    });
+    coreKey = key;
+    coreLocationKey = locationKey;
+    writeState({ coreSession, coreKey, coreLocationKey });
+
+    if (detail) detail.path = 'COLD_INIT';
+    t = perfNow();
+    const msgs = chat.message || [];
+    let lastAssistant = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i]?.role === 'char' || msgs[i]?.role === 'assistant') { lastAssistant = i; break; }
+    }
+    const latestOutputFingerprint = lastAssistant >= 0
+      ? coreRules.fingerprintText(textMessageContent(msgs[lastAssistant]))
+      : null;
+    if (detail) detail.initScanMs = perfMs(t);
+    t = perfNow();
+    await coreSession.init(lastAssistant, chat.scriptstate?.['$simcore_core_state'] || null, latestOutputFingerprint);
+    if (detail) detail.initMs = perfMs(t);
+    return coreSession;
+  }
+  return Object.freeze({ loadCoreForChat });
+}
+module.exports = { createSessionRuntime };
+});
+
+SimCore.define("runtime-mirror", function (require, module, exports) {
+function createMirrorRuntime(deps) {
+  const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch } = deps;
+  let sequence = 0;
+  const latestByLocation = new Map();
+  let lastProbe = null;
+
+  function capture(chaIdx, chatIdx, chat, outIndex, state = null) {
+    const coreSession = getCoreSession();
+    if (!coreSession) return null;
+    const committed = state && typeof state === 'object' ? state : coreSession.current;
+    if (!committed) return null;
+    return {
+      outIndex: Number(outIndex),
+      locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
+      portableState: coreSession.portableState(),
+      mode: committed.lastMode || 'A',
+      broadcastLocked: committed.broadcastLocked ? '1' : '0',
+      communityCount: String(committed.community?.activationCount || 0),
+      ageOffset: String(committed.koreanAgeOffset || 0),
+      outputFingerprint: committed.outputFingerprint || null,
+      hostOutputFingerprint: committed.hostOutputFingerprint || null,
+    };
+  }
+
+  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null) {
+    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
+    if (detail) {
+      detail.chatLoadMs = 0;
+      detail.prepareMs = 0;
+      detail.setChatMs = 0;
+      detail.status = 'PENDING';
+    }
+    const coreSession = getCoreSession();
+    const snapshot = mirrorSnapshot || capture(chaIdx, chatIdx, chatArg, coreSession?.currentOutputIndex, coreSession?.current);
+    if (!snapshot) { if (detail) detail.status = 'NO_SNAPSHOT'; return false; }
+    const guard = typeof shouldApply === 'function' ? shouldApply : () => true;
+    if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
+    try {
+      let t = perfNow();
+      const chat = chatArg || await host.getChat(chaIdx, chatIdx);
+      if (detail) detail.chatLoadMs = perfMs(t);
+      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
+      if (!chat) { if (detail) detail.status = 'NO_CHAT'; return false; }
+      if (diagnosticLocationKey(chaIdx, chatIdx, chat) !== String(snapshot.locationKey || '')) {
+        if (detail) detail.status = 'LOCATION_MISMATCH';
+        return false;
+      }
+
+      const expectedOutIndex = Number(snapshot.outIndex);
+      if (Number.isInteger(expectedOutIndex) && expectedOutIndex >= 0) {
+        const message = Array.isArray(chat.message) ? chat.message[expectedOutIndex] : null;
+        if (!message || (message.role !== 'char' && message.role !== 'assistant')) {
+          if (detail) detail.status = 'OUTPUT_NOT_READY';
+          return false;
+        }
+        const actualFingerprint = coreRules.fingerprintText(textMessageContent(message));
+        const canonical = String(snapshot.outputFingerprint || '');
+        const hostRaw = String(snapshot.hostOutputFingerprint || '');
+        if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {
+          if (detail) detail.status = 'OUTPUT_MISMATCH';
+          return false;
+        }
+      }
+      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
+
+      t = perfNow();
+      chat.scriptstate = chat.scriptstate || {};
+      chat.scriptstate['$simcore_core_state'] = snapshot.portableState;
+      chat.scriptstate['$simcore_core_mode'] = snapshot.mode || 'A';
+      chat.scriptstate['$simcore_core_broadcast_locked'] = snapshot.broadcastLocked || '0';
+      chat.scriptstate['$simcore_core_community_count'] = snapshot.communityCount || '0';
+      chat.scriptstate['$simcore_core_age_offset'] = snapshot.ageOffset || '0';
+      delete chat.scriptstate['$simcore_core_reaction_global_max'];
+      if (detail) detail.prepareMs = perfMs(t);
+      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
+
+      t = perfNow();
+      await host.setChat(chaIdx, chatIdx, chat);
+      if (detail) { detail.setChatMs = perfMs(t); detail.status = 'COMMITTED'; }
+      return true;
+    } catch (e) {
+      if (detail) { detail.status = 'ERROR'; detail.errorName = e?.name || 'Error'; }
+      console.log('[simcore/v0.63.4] state mirror failed:', e.message);
+      return false;
+    }
+  }
+
+  function schedule(chaIdx, chatIdx, chat, outIndex, state) {
+    const snapshot = capture(chaIdx, chatIdx, chat, outIndex, state);
+    if (!snapshot) return false;
+    const epoch = getRuntimeEpoch();
+    const locationKey = String(snapshot.locationKey || '');
+    const currentSequence = ++sequence;
+    latestByLocation.set(locationKey, currentSequence);
+    const probe = {
+      outIndex: Number(outIndex), locationKey, sequence: currentSequence, status: 'SCHEDULED',
+      scheduledAt: Date.now(), startedAt: null, finishedAt: null,
+      chatLoadMs: 0, prepareMs: 0, setChatMs: 0, totalMs: 0,
+    };
+    lastProbe = probe;
+    const shouldApply = () => runtimeIsCurrent(epoch) && latestByLocation.get(locationKey) === currentSequence;
+
+    const runDeferredMirror = async () => {
+      if (!shouldApply()) {
+        probe.status = runtimeIsCurrent(epoch) ? 'SUPERSEDED' : 'STALE_DROPPED';
+        probe.finishedAt = Date.now();
+        return;
+      }
+      probe.startedAt = Date.now();
+      const detail = {};
+      const started = perfNow();
+      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply);
+      probe.totalMs = perfMs(started);
+      probe.chatLoadMs = Number(detail.chatLoadMs || 0);
+      probe.prepareMs = Number(detail.prepareMs || 0);
+      probe.setChatMs = Number(detail.setChatMs || 0);
+      if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
+      else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
+      else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
+      probe.finishedAt = Date.now();
+    };
+
+    if (typeof setTimeout === 'function') {
+      const timer = setTimeout(() => { void runDeferredMirror(); }, 0);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+    } else {
+      void runDeferredMirror();
+    }
+    return true;
+  }
+
+  function clear() {
+    latestByLocation.clear();
+    lastProbe = null;
+  }
+
+  return Object.freeze({ schedule, lastProbe: () => lastProbe, clear });
+}
+module.exports = { createMirrorRuntime };
+});
+
+SimCore.define("runtime-hooks", function (require, module, exports) {
+async function addBefore(Risuai, handler) { return Risuai.addRisuReplacer('beforeRequest', handler); }
+async function addOutput(Risuai, handler) { return Risuai.addRisuScriptHandler('output', handler); }
+async function remove(Risuai, beforeHandler, outputHandler) {
+  try { await Risuai.removeRisuReplacer('beforeRequest', beforeHandler); } catch (_) {}
+  try { await Risuai.removeRisuScriptHandler('output', outputHandler); } catch (_) {}
+}
+module.exports = { addBefore, addOutput, remove };
+});
+
+SimCore.define("runtime-probe", function (require, module, exports) {
+function cachePosture(probe, contract) {
+  if (!probe) return `${contract?.requestOrder || 'FROZEN'} · runtime ${contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER'} · runtime-prefix n/a · provider cache ${contract?.providerCache || 'UNVERIFIED'}`;
+  const prefix = probe.baseline ? 'BASELINE' : `${Number(probe.stablePrefixPercent || 0).toFixed(1)}%`;
+  return `${probe.requestOrder || contract?.requestOrder || 'FROZEN'} · runtime ${probe.placement || contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER'} · runtime-prefix ${prefix} · provider cache ${probe.providerCache || contract?.providerCache || 'UNVERIFIED'}`;
+}
+module.exports = { cachePosture };
+});
+
 (async () => {
   const coreRules = SimCore.require('session');
   const recurrenceRules = SimCore.require('recurrence');
   const evidenceRules = SimCore.require('evidence');
   const ops = SimCore.require('ops');
+  const runtimeContracts = SimCore.require('runtime-contracts');
+  const runtimeHostRules = SimCore.require('runtime-host');
+  const runtimeCacheRules = SimCore.require('runtime-cache');
+  const runtimeSessionRules = SimCore.require('runtime-session');
+  const runtimeMirrorRules = SimCore.require('runtime-mirror');
+  const runtimeHooks = SimCore.require('runtime-hooks');
+  const runtimeProbeRules = SimCore.require('runtime-probe');
   let coreSession = null;
   let coreKey = null;
   let coreLocationKey = null;
@@ -4188,16 +4571,28 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   let lastCommunitySourceHandoffProbe = null;
   let lastRuntimePromptBudget = null;
   let lastRuntimePromptCacheProbe = null;
-  let previousRuntimePromptText = null;
-  let previousRuntimePromptKey = null;
   let lastTimestampCanonicalization = null;
   let lastPreambleProvenance = null;
   let lastDiagnosticRequestProbe = null;
-  let deferredMirrorSequence = 0;
-  const deferredMirrorLatestByLocation = new Map();
-  let lastDeferredMirrorProbe = null;
 
   const { perfNow, perfMs } = ops;
+  const host = runtimeHostRules.createHostAdapter(Risuai);
+  const runtimePromptCache = runtimeCacheRules.createRuntimePromptCacheTracker(runtimeContracts.cache);
+  const runtimeSession = runtimeSessionRules.createSessionRuntime({
+    coreRules, host, perfNow, perfMs, textMessageContent,
+    readState: () => ({ coreSession, coreKey, coreLocationKey }),
+    writeState: (next) => {
+      coreSession = next.coreSession;
+      coreKey = next.coreKey;
+      coreLocationKey = next.coreLocationKey;
+    },
+  });
+  const runtimeMirror = runtimeMirrorRules.createMirrorRuntime({
+    coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey,
+    getCoreSession: () => coreSession,
+    runtimeIsCurrent,
+    getRuntimeEpoch: () => runtimeEpoch,
+  });
 
   function runtimeIsCurrent(epoch = runtimeEpoch) {
     return !runtimeDisposed && Number(epoch) === Number(runtimeEpoch);
@@ -4239,271 +4634,6 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     Object.assign(lastDiagnosticRequestProbe, patch || {});
   }
 
-  function promptChangeReason(previousLine, currentLine) {
-    const text = `${String(previousLine || '')}\n${String(currentLine || '')}`;
-    if (/^reaction_max=/m.test(text)) return 'reaction_max';
-    if (/broadcast_airtime_|broadcast_locked=|mode_b_/m.test(text)) return 'broadcast-time';
-    if (/narrative_|timestamp_semantics=/m.test(text)) return 'narrative-time';
-    if (/^(?:mode=|episode_no=)/m.test(text)) return 'mode/lifecycle';
-    if (/community_blocks_expected=|platform_groups_required=|b_end_|final_required_blocks=/m.test(text)) return 'community';
-    if (/request_template_|prior_answer_|reevaluate_current_event|do_not_mechanically_reuse/m.test(text)) return 'recurrence';
-    if (/short_community_|derive_reaction_from_current_source/m.test(text)) return 'handoff/lineage';
-    if (/korean_age_offset=|current_korean_age=|world_year=/m.test(text)) return 'age/world-year';
-    return 'other';
-  }
-
-  function buildRuntimePromptCacheProbe(previousText, currentText) {
-    const current = String(currentText || '');
-    const previous = previousText == null ? null : String(previousText);
-    const currentLines = current ? current.split('\n') : [];
-    if (previous == null) {
-      return {
-        baseline: true,
-        stable: false,
-        previousChars: 0,
-        currentChars: current.length,
-        stablePrefixChars: 0,
-        stablePrefixPercent: null,
-        stablePrefixLines: 0,
-        firstChangedLine: null,
-        changedLineSlots: 0,
-        reason: 'baseline',
-      };
-    }
-
-    let prefixChars = 0;
-    const charLimit = Math.min(previous.length, current.length);
-    while (prefixChars < charLimit && previous.charCodeAt(prefixChars) === current.charCodeAt(prefixChars)) prefixChars += 1;
-
-    const previousLines = previous ? previous.split('\n') : [];
-    let prefixLines = 0;
-    const lineLimit = Math.min(previousLines.length, currentLines.length);
-    while (prefixLines < lineLimit && previousLines[prefixLines] === currentLines[prefixLines]) prefixLines += 1;
-
-    const stable = previous === current;
-    const denominator = Math.max(previous.length, current.length, 1);
-    const firstChangedLine = stable ? null : prefixLines + 1;
-    const changedLineSlots = stable ? 0 : Math.max(previousLines.length, currentLines.length) - prefixLines;
-    const previousChangedLine = stable ? '' : (previousLines[prefixLines] || '');
-    const currentChangedLine = stable ? '' : (currentLines[prefixLines] || '');
-
-    return {
-      baseline: false,
-      stable,
-      previousChars: previous.length,
-      currentChars: current.length,
-      stablePrefixChars: prefixChars,
-      stablePrefixPercent: stable ? 100 : (prefixChars / denominator) * 100,
-      stablePrefixLines: prefixLines,
-      firstChangedLine,
-      changedLineSlots,
-      reason: stable ? 'stable' : promptChangeReason(previousChangedLine, currentChangedLine),
-    };
-  }
-
-  async function currentIndices() {
-    const [chaIdx, chatIdx] = await Promise.all([
-      Risuai.getCurrentCharacterIndex(),
-      Risuai.getCurrentChatIndex(),
-    ]);
-    return { chaIdx, chatIdx };
-  }
-
-  async function loadCoreForChat(chaIdx, chatIdx, chatArg = null, perfDetail = null) {
-    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
-    if (detail) {
-      detail.path = 'UNKNOWN';
-      detail.chatFallbackMs = 0;
-      detail.characterLoadMs = 0;
-      detail.initScanMs = 0;
-      detail.initMs = 0;
-    }
-    let t = perfNow();
-    const chat = chatArg || await Risuai.getChatFromIndex(chaIdx, chatIdx);
-    if (detail) detail.chatFallbackMs = chatArg ? 0 : perfMs(t);
-    if (!chat) {
-      if (detail) detail.path = 'NO_CHAT';
-      coreSession = null; coreKey = null; coreLocationKey = null; return null;
-    }
-
-    // The current indices + chat id are sufficient to prove that the already-loaded session still
-    // belongs to this location. Avoid an extra getCharacter() round-trip on every request.
-    const locationKey = `${chaIdx}:${chatIdx}:${chat.id ?? ''}`;
-    if (coreSession && coreLocationKey === locationKey) {
-      if (detail) detail.path = 'LOCATION_REUSE';
-      return coreSession;
-    }
-
-    t = perfNow();
-    const char = await Risuai.getCharacter();
-    if (detail) detail.characterLoadMs = perfMs(t);
-    if (!char) {
-      if (detail) detail.path = 'NO_CHARACTER';
-      coreSession = null; coreKey = null; coreLocationKey = null; return null;
-    }
-    const charId = char.chaId ?? char.name;
-    const chatId = chat.id ?? `${charId}:${chatIdx}`;
-    const key = `${charId}:${chatId}`;
-    if (coreSession && coreKey === key) {
-      coreLocationKey = locationKey;
-      if (detail) detail.path = 'KEY_REUSE';
-      return coreSession;
-    }
-
-    const backend = {
-      get: (k) => Risuai.pluginStorage.getItem(k),
-      set: (k, v) => Risuai.pluginStorage.setItem(k, v),
-      remove: (k) => Risuai.pluginStorage.removeItem(k),
-      keys: () => Risuai.pluginStorage.keys(),
-    };
-    coreSession = new coreRules.CoreRulesetSession(backend, {
-      chatId,
-      prefix: `sim:core:${key}`,
-      keepN: 80,
-    });
-    coreKey = key;
-    coreLocationKey = locationKey;
-
-    if (detail) detail.path = 'COLD_INIT';
-    t = perfNow();
-    const msgs = chat.message || [];
-    let lastAssistant = -1;
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i]?.role === 'char' || msgs[i]?.role === 'assistant') { lastAssistant = i; break; }
-    }
-    const latestOutputFingerprint = lastAssistant >= 0
-      ? coreRules.fingerprintText(textMessageContent(msgs[lastAssistant]))
-      : null;
-    if (detail) detail.initScanMs = perfMs(t);
-    t = perfNow();
-    await coreSession.init(lastAssistant, chat.scriptstate?.['$simcore_core_state'] || null, latestOutputFingerprint);
-    if (detail) detail.initMs = perfMs(t);
-    return coreSession;
-  }
-
-  function captureCoreMirrorSnapshot(chaIdx, chatIdx, chat, outIndex, state = null) {
-    if (!coreSession) return null;
-    const committed = state && typeof state === 'object' ? state : coreSession.current;
-    if (!committed) return null;
-    return {
-      outIndex: Number(outIndex),
-      locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
-      portableState: coreSession.portableState(),
-      mode: committed.lastMode || 'A',
-      broadcastLocked: committed.broadcastLocked ? '1' : '0',
-      communityCount: String(committed.community?.activationCount || 0),
-      ageOffset: String(committed.koreanAgeOffset || 0),
-      outputFingerprint: committed.outputFingerprint || null,
-      hostOutputFingerprint: committed.hostOutputFingerprint || null,
-    };
-  }
-
-  async function mirrorCoreState(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null) {
-    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
-    if (detail) {
-      detail.chatLoadMs = 0;
-      detail.prepareMs = 0;
-      detail.setChatMs = 0;
-      detail.status = 'PENDING';
-    }
-    const snapshot = mirrorSnapshot || captureCoreMirrorSnapshot(chaIdx, chatIdx, chatArg, coreSession?.currentOutputIndex, coreSession?.current);
-    if (!snapshot) { if (detail) detail.status = 'NO_SNAPSHOT'; return false; }
-    const guard = typeof shouldApply === 'function' ? shouldApply : () => true;
-    if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
-    try {
-      let t = perfNow();
-      const chat = chatArg || await Risuai.getChatFromIndex(chaIdx, chatIdx);
-      if (detail) detail.chatLoadMs = perfMs(t);
-      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
-      if (!chat) { if (detail) detail.status = 'NO_CHAT'; return false; }
-      if (diagnosticLocationKey(chaIdx, chatIdx, chat) !== String(snapshot.locationKey || '')) {
-        if (detail) detail.status = 'LOCATION_MISMATCH';
-        return false;
-      }
-
-      const expectedOutIndex = Number(snapshot.outIndex);
-      if (Number.isInteger(expectedOutIndex) && expectedOutIndex >= 0) {
-        const message = Array.isArray(chat.message) ? chat.message[expectedOutIndex] : null;
-        if (!message || (message.role !== 'char' && message.role !== 'assistant')) {
-          if (detail) detail.status = 'OUTPUT_NOT_READY';
-          return false;
-        }
-        const actualFingerprint = coreRules.fingerprintText(textMessageContent(message));
-        const canonical = String(snapshot.outputFingerprint || '');
-        const hostRaw = String(snapshot.hostOutputFingerprint || '');
-        if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {
-          if (detail) detail.status = 'OUTPUT_MISMATCH';
-          return false;
-        }
-      }
-      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
-
-      t = perfNow();
-      chat.scriptstate = chat.scriptstate || {};
-      chat.scriptstate['$simcore_core_state'] = snapshot.portableState;
-      chat.scriptstate['$simcore_core_mode'] = snapshot.mode || 'A';
-      chat.scriptstate['$simcore_core_broadcast_locked'] = snapshot.broadcastLocked || '0';
-      chat.scriptstate['$simcore_core_community_count'] = snapshot.communityCount || '0';
-      chat.scriptstate['$simcore_core_age_offset'] = snapshot.ageOffset || '0';
-      delete chat.scriptstate['$simcore_core_reaction_global_max'];
-      if (detail) detail.prepareMs = perfMs(t);
-      if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
-
-      t = perfNow();
-      await Risuai.setChatToIndex(chaIdx, chatIdx, chat);
-      if (detail) { detail.setChatMs = perfMs(t); detail.status = 'COMMITTED'; }
-      return true;
-    } catch (e) {
-      if (detail) { detail.status = 'ERROR'; detail.errorName = e?.name || 'Error'; }
-      console.log('[simcore/v0.63.4] state mirror failed:', e.message);
-      return false;
-    }
-  }
-
-  function scheduleDeferredCoreMirror(chaIdx, chatIdx, chat, outIndex, state) {
-    const snapshot = captureCoreMirrorSnapshot(chaIdx, chatIdx, chat, outIndex, state);
-    if (!snapshot) return false;
-    const epoch = runtimeEpoch;
-    const locationKey = String(snapshot.locationKey || '');
-    const sequence = ++deferredMirrorSequence;
-    deferredMirrorLatestByLocation.set(locationKey, sequence);
-    const probe = {
-      outIndex: Number(outIndex), locationKey, sequence, status: 'SCHEDULED',
-      scheduledAt: Date.now(), startedAt: null, finishedAt: null,
-      chatLoadMs: 0, prepareMs: 0, setChatMs: 0, totalMs: 0,
-    };
-    lastDeferredMirrorProbe = probe;
-    const shouldApply = () => runtimeIsCurrent(epoch) && deferredMirrorLatestByLocation.get(locationKey) === sequence;
-
-    const runDeferredMirror = async () => {
-      if (!shouldApply()) {
-        probe.status = runtimeIsCurrent(epoch) ? 'SUPERSEDED' : 'STALE_DROPPED';
-        probe.finishedAt = Date.now();
-        return;
-      }
-      probe.startedAt = Date.now();
-      const detail = {};
-      const started = perfNow();
-      const ok = await mirrorCoreState(chaIdx, chatIdx, null, detail, snapshot, shouldApply);
-      probe.totalMs = perfMs(started);
-      probe.chatLoadMs = Number(detail.chatLoadMs || 0);
-      probe.prepareMs = Number(detail.prepareMs || 0);
-      probe.setChatMs = Number(detail.setChatMs || 0);
-      if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
-      else if (deferredMirrorLatestByLocation.get(locationKey) !== sequence) probe.status = 'SUPERSEDED';
-      else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
-      probe.finishedAt = Date.now();
-    };
-
-    if (typeof setTimeout === 'function') {
-      const timer = setTimeout(() => { void runDeferredMirror(); }, 0);
-      if (timer && typeof timer.unref === 'function') timer.unref();
-    } else {
-      void runDeferredMirror();
-    }
-    return true;
-  }
-
   async function reconcileManualEdit(cs, chat, perfDetail = null) {
     const msgs = chat?.message || [];
     let lastAssistant = -1;
@@ -4521,7 +4651,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
     let t = perfNow();
     const sessionDetail = perf ? {} : null;
-    const cs = await loadCoreForChat(chaIdx, chatIdx, chat, sessionDetail);
+    const cs = await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat, sessionDetail);
     if (perf) {
       perf.sessionLoadMs = perfMs(t);
       perf.sessionDetail = sessionDetail;
@@ -4644,15 +4774,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       lastEvidenceMappingProbe = evidenceResult?.mapping || null;
       lastEvidenceFenceProbe = evidenceResult?.fence || null;
       const runtimePromptKey = String(coreKey || coreLocationKey || '');
-      const priorRuntimePrompt = previousRuntimePromptKey === runtimePromptKey ? previousRuntimePromptText : null;
-      lastRuntimePromptCacheProbe = {
-        ...buildRuntimePromptCacheProbe(priorRuntimePrompt, runtimeBudgetText),
+      lastRuntimePromptCacheProbe = runtimePromptCache.observe(runtimePromptKey, runtimeBudgetText, {
         sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
         mode: runtimeBudgetMode,
         at: Date.now(),
-      };
-      previousRuntimePromptText = runtimeBudgetText;
-      previousRuntimePromptKey = runtimePromptKey;
+      });
       messages.push({ role: 'system', content: result.promptBlock });
       const pendingProbe = result.state.pending || null;
       if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
@@ -4736,8 +4862,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     } else {
       lastRuntimePromptBudget = null;
       lastRuntimePromptCacheProbe = null;
-      previousRuntimePromptText = null;
-      previousRuntimePromptKey = null;
+      runtimePromptCache.reset();
       lastEvidenceMappingProbe = null;
       lastEvidenceFenceProbe = null;
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
@@ -4750,7 +4875,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   async function processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf = null) {
     let t = perfNow();
-    const cs = await loadCoreForChat(chaIdx, chatIdx, chat);
+    const cs = await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat);
     if (perf) perf.sessionLoadMs = perfMs(t);
     if (!cs) return content;
     if (!runtimeIsCurrent()) { dropStaleRuntime(); return content; }
@@ -4777,7 +4902,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
     lastPreambleProvenance = result.preambleProvenance || null;
 
-    const mirrorScheduled = scheduleDeferredCoreMirror(chaIdx, chatIdx, chat, outIndex, result.state);
+    const mirrorScheduled = runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state);
     if (perf) {
       perf.mirrorMs = 0;
       perf.mirrorDetail = { deferred: true, scheduled: mirrorScheduled };
@@ -4831,12 +4956,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     };
     try {
       let t = perfNow();
-      const { chaIdx, chatIdx } = await currentIndices();
+      const { chaIdx, chatIdx } = await host.currentIndices();
       perf.indicesMs = perfMs(t);
       if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
 
       t = perfNow();
-      const chat = await Risuai.getChatFromIndex(chaIdx, chatIdx);
+      const chat = await host.getChat(chaIdx, chatIdx);
       perf.chatLoadMs = perfMs(t);
       if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
 
@@ -4865,7 +4990,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     }
     return messages;
   };
-  await Risuai.addRisuReplacer('beforeRequest', beforeRequestHandler);
+  await runtimeHooks.addBefore(Risuai, beforeRequestHandler);
 
   const outputHandler = async (content) => {
     const hookEpoch = runtimeEpoch;
@@ -4880,12 +5005,12 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     };
     try {
       let t = perfNow();
-      const { chaIdx, chatIdx } = await currentIndices();
+      const { chaIdx, chatIdx } = await host.currentIndices();
       perf.indicesMs = perfMs(t);
       if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
 
       t = perfNow();
-      const chat = await Risuai.getChatFromIndex(chaIdx, chatIdx);
+      const chat = await host.getChat(chaIdx, chatIdx);
       perf.chatLoadMs = perfMs(t);
       if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
 
@@ -4903,7 +5028,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       if (lastDiagnosticRequestProbe) lastDiagnosticRequestProbe.outputTotalMs = Number(perf.totalMs || 0);
     }
   };
-  await Risuai.addRisuScriptHandler('output', outputHandler);
+  await runtimeHooks.addOutput(Risuai, outputHandler);
 
   function escapeHtml(v) {
     return String(v ?? '').replace(/[&<>\"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;' }[c]));
@@ -5195,10 +5320,11 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       && String(lastPerf.locationKey || '') === String(requestProbe?.locationKey || '') ? lastPerf : null;
     const requestBreakdown = requestPerf ? diagnosticRequestBreakdown(requestProbe, requestPerf) : null;
     const outputBreakdown = outputFresh && lastOutputPerf ? diagnosticOutputBreakdown(lastOutputPerf) : null;
-    const deferredMirror = outputFresh && lastDeferredMirrorProbe
-      && Number(lastDeferredMirrorProbe.outIndex) === Number(latestAssistantIndex)
-      && String(lastDeferredMirrorProbe.locationKey || '') === String(requestProbe?.locationKey || '')
-      ? lastDeferredMirrorProbe : null;
+    const deferredMirrorProbe = runtimeMirror.lastProbe();
+    const deferredMirror = outputFresh && deferredMirrorProbe
+      && Number(deferredMirrorProbe.outIndex) === Number(latestAssistantIndex)
+      && String(deferredMirrorProbe.locationKey || '') === String(requestProbe?.locationKey || '')
+      ? deferredMirrorProbe : null;
     const editPathRaw = requestBreakdown ? String(requestBreakdown.editPath || 'n/a') : 'n/a';
     const editPathLabel = editPathRaw === 'n/a'
       ? 'n/a'
@@ -5232,7 +5358,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.35',
+      'Version: 0.63.36',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5265,6 +5391,7 @@ module.exports = { perfNow, perfMs, normalizationIssues };
       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
       `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · policy ${preamble.policy || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
+      `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
@@ -5339,9 +5466,9 @@ module.exports = { perfNow, perfMs, normalizationIssues };
 
   async function openPanel() {
     try {
-      const { chaIdx, chatIdx } = await currentIndices();
-      const chat = await Risuai.getChatFromIndex(chaIdx, chatIdx);
-      await loadCoreForChat(chaIdx, chatIdx, chat);
+      const { chaIdx, chatIdx } = await host.currentIndices();
+      const chat = await host.getChat(chaIdx, chatIdx);
+      await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat);
       const s = coreSession?.current;
       const storageDiag = coreSession?.storageDiagnostics?.() || null;
       const aliasDiag = coreSession?.communityAliasDiagnostics?.() || null;
@@ -5477,7 +5604,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.35</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v0.63.36</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
@@ -5645,8 +5772,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   await Risuai.onUnload(async () => {
     runtimeDisposed = true;
     runtimeEpoch += 1;
-    try { await Risuai.removeRisuReplacer('beforeRequest', beforeRequestHandler); } catch (_) {}
-    try { await Risuai.removeRisuScriptHandler('output', outputHandler); } catch (_) {}
+    await runtimeHooks.remove(Risuai, beforeRequestHandler, outputHandler);
     for (const part of simcoreUiParts.splice(0)) {
       if (!part?.id) continue;
       try { await Risuai.unregisterUIPart(part.id); } catch (_) {}
@@ -5655,13 +5781,11 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreKey = null;
     coreLocationKey = null;
     lastRuntimePromptCacheProbe = null;
-    previousRuntimePromptText = null;
-    previousRuntimePromptKey = null;
+    runtimePromptCache.reset();
     lastEvidenceMappingProbe = null;
     lastEvidenceFenceProbe = null;
     lastDiagnosticRequestProbe = null;
-    deferredMirrorLatestByLocation.clear();
-    lastDeferredMirrorProbe = null;
+    runtimeMirror.clear();
   });
   console.log('[simcore/v0.63.4] initialized');
 })();

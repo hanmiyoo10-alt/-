@@ -29,12 +29,15 @@ jobs:
           changed = 0
           for i, line in enumerate(lines):
               if line == "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n'":
-                  lines[i] = "    init_anchor = '  const { perfNow, perfMs } = ops;\\n\\n  function runtimeIsCurrent('"
+                  lines[i] = "    init_anchor = '  function runtimeIsCurrent(epoch = runtimeEpoch) {'"
+                  changed += 1
+              elif line.startswith("    init_block = '''  const { perfNow, perfMs } = ops;\\n  const host ="):
+                  lines[i] = line.replace("'''  const { perfNow, perfMs } = ops;\\n  const host =", "'''  const host =", 1)
                   changed += 1
               elif line == "    src = replace_once(src, init_anchor, init_block, 'runtime init')":
-                  lines[i] = "    src = replace_once(src, init_anchor, init_block + '  function runtimeIsCurrent(', 'runtime init')"
+                  lines[i] = "    src = replace_once(src, init_anchor, init_block + '  function runtimeIsCurrent(epoch = runtimeEpoch) {', 'runtime init')"
                   changed += 1
-          assert changed == 2, changed
+          assert changed == 3, changed
           p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
           python plugins/simcore/patch_simcore_06336.py

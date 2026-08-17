@@ -9,7 +9,9 @@ const settings = fs.readFileSync(`${root}/src/60-settings-runtime.part.js`, 'utf
 const widget = fs.readFileSync(`${root}/src/70-floating-widget.part.js`, 'utf8');
 const lifecycle = fs.readFileSync(`${root}/src/80-lifecycle.part.js`, 'utf8');
 
-assert.ok(source.includes('//@version 3.0.0-alpha.5.39'));
+const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
+const alpha539Plus = version.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
+assert.ok(alpha539Plus && Number(alpha539Plus[1]) >= 39, `lifecycle race guard requires alpha.5.39+, got ${version}`);
 for (const marker of [
   'const bridgeLifecycleRuntime = {generation:1',
   'function canBridgeRefresh()',
@@ -44,4 +46,4 @@ for (const marker of [
 assert.ok(widget.includes('widgetRenderTail.catch(() => undefined).then(() => renderWidgetNow(reason, requestId))'));
 assert.ok(widget.includes('requestId !== widgetRenderRequestId'), 'widget stale render invalidation missing');
 assert.ok(source.includes('Lifecycle refresh: drops'));
-console.log('usage-dashboard P5 lifecycle race regression: OK · 3.0.0-alpha.5.39');
+console.log(`usage-dashboard P5 lifecycle race regression: OK · ${version}`);

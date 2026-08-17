@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.2.5';
-const PRODUCT_VERSION = '3.0.0-alpha.5.36';
+const MANAGER_VERSION = '1.2.6';
+const PRODUCT_VERSION = '3.0.0-alpha.5.37';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -28,8 +28,8 @@ const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-prelo
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
-const BUNDLED_ENGINE_VERSION = '1.6.3';
-const BUNDLED_ENGINE_SHA256 = '16807420932bb5a8bbdb8f85ae3a998042067997c6e6afa788b79da3b3eb6c01';
+const BUNDLED_ENGINE_VERSION = '1.6.4';
+const BUNDLED_ENGINE_SHA256 = '4053a9ede5002920779d628c168c00d482d4196f404ce0fd93c41fbf55691a13';
 const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');
 const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');
 const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
@@ -498,7 +498,7 @@ async function adoptEngine() {
 async function syncBundledEngine() {
   const current = await engineRuntimeStatus();
   if (!current.engineManaged) return {ok:false,synced:false,state:'engine-not-managed',retryable:true,error:'managed engine required before bundle sync',...current};
-  if (current.engineBundled) return {ok:true,synced:false,state:'current',...current};
+  if (current.engineBundled && String(current.engineVersion || '') === BUNDLED_ENGINE_VERSION) return {ok:true,synced:false,state:'current',...current};
   const descriptor = readDescriptor();
   const previous = descriptorCandidate(descriptor);
   const service = serviceStatus();

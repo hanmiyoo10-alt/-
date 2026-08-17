@@ -45,6 +45,12 @@ for (const marker of [
   'id=\"credits-org-id\"',
   'selectedCreditsOrgId',
   'creditsOrganizationFallback',
+  'id=\"pause-sync\"',
+  'id=\"forget-token\"',
+  "state.bridgeStatus = 'paused';",
+  "state.bridgeTokenClearedAt = Date.now();",
+  "return {label:'PAUSED', color:'#b9a6f8'};",
+  'Bridge lifecycle:',
 ]) {
   assert.ok(source.includes(marker), `missing P3 marker: ${marker}`);
 }

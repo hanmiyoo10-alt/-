@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.37
+//@version 3.0.0-alpha.5.38
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.37';
+  const VERSION = '3.0.0-alpha.5.38';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -50,6 +50,7 @@
     creditsOrgFallbackCount: 0,
     creditsOrgLastFallbackFrom: '',
     creditsOrgLastFallbackTo: '',
+    bridgePausedAt: null, bridgeLastReconnectAt: null, bridgeTokenClearedAt: null,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
@@ -63,6 +64,7 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let tokenForgetArmedUntil = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
   let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let panelRenderTimer = null, panelIdleHandle = null;
@@ -983,6 +985,8 @@
   }
 
   function connectionBadge() {
+    if (state.bridgeStatus === 'paused') return {label:'PAUSED', color:'#b9a6f8'};
+    if (state.bridgeStatus === 'off') return {label:'OFF', color:'#aeb5c0'};
     if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
     if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
     if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};
@@ -1908,8 +1912,10 @@ async function importLegacyTodayBaselines() {
         const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         state.bridgeManagerRuntime = managerRuntime;
+        if (!state.bridgeEnabled) return;
         const snapshot = await fetchSnapshot();
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!state.bridgeEnabled) return;
         state.data = applyObservedToday(snapshot);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -2008,7 +2014,8 @@ async function importLegacyTodayBaselines() {
       `Bridge engine: mode ${runtimeBridge.engineMode} · managed ${runtimeBridge.engineManaged ? 'yes' : 'no'} · adoption ${runtimeBridge.engineAdoption ? 'ready' : 'no'} · service ${runtimeBridge.engineService || '—'} · candidate ${runtimeBridge.candidateSafe === null ? 'unknown' : runtimeBridge.candidateSafe ? 'safe' : 'unsafe'} · state ${state.bridgeManagerRuntime?.adoptionState || '—'}`,
       `Runtime manifest: ${RUNTIME_MANIFEST_URL}`,
       `Bridge: ${state.bridgeStatus} · ${state.bridgeBase}`,
-      `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}`,
+      `Bridge lifecycle: ${state.bridgeEnabled ? 'enabled' : state.bridgeStatus === 'paused' ? 'paused' : 'off'} · token ${token ? 'yes' : 'no'} · paused ${state.bridgePausedAt ? age(state.bridgePausedAt) : 'none'} · last reconnect ${state.bridgeLastReconnectAt ? age(state.bridgeLastReconnectAt) : '—'} · token cleared ${state.bridgeTokenClearedAt ? age(state.bridgeTokenClearedAt) : 'never'}`,
+      `Protocol: ${num(d.protocolVersion) ? d.protocolVersion : '—'}` ,
       `Source: ${d.source || '—'}`,
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
@@ -2279,8 +2286,8 @@ function todayOverviewMetrics(d) {
         <label style="margin-top:8px"><span><input id="adaptive-refresh" type="checkbox" ${state.adaptiveRefresh !== false ? 'checked' : ''} style="width:auto;margin-right:7px">Adaptive refresh · 빠르게 회복되면 원래 주기로 복귀</span></label>
         <label style="margin-top:8px"><span><input id="background-pause" type="checkbox" ${state.backgroundPause !== false ? 'checked' : ''} style="width:auto;margin-right:7px">백그라운드에서는 자동 갱신 일시정지</span></label>
         <div class="actions"><button id="save-performance">성능 설정 저장</button></div>
-        <div class="actions"><button class="primary" id="connect">저장하고 연결</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
-        <p>상태 ${esc(state.bridgeStatus)} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
+        <div class="actions"><button class="primary" id="connect">${state.bridgeEnabled?'저장하고 다시 연결':token?'동기화 다시 켜기':'저장하고 연결'}</button><button id="pause-sync" ${state.bridgeEnabled?'':'disabled'}>${state.bridgeEnabled?'동기화 끄기':'동기화 꺼짐'}</button><button id="forget-token" ${token?'':'disabled'}>${token?'저장된 토큰 지우기':'저장된 토큰 없음'}</button><button id="refresh">지금 새로고침</button><button id="retry-now">백오프 초기화 + 재시도</button><button id="toggle">${state.widgetVisible===false?'위젯 보이기':'위젯 숨기기'}</button><button id="reset-position">위치 초기화</button><button id="recreate-widget">위젯 다시 만들기</button></div>
+        <p>상태 ${esc(state.bridgeStatus)} · 토큰 ${token?'저장됨':'없음'} · ${age(state.lastSyncAt)}${num(state.lastSyncDurationMs)?` · ${state.lastSyncDurationMs}ms`:''}</p>${state.bridgeError?`<p class="warn">${esc(state.bridgeError)}</p>`:''}
       </div></details>
       <details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>성능 · 진단</span></summary><div class="advanced-body"><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Bridge Stability · ${bridgeDiag.version?`v${esc(bridgeDiag.version)}`:'—'} · required ≥${esc(REQUIRED_BRIDGE_VERSION)} · compatible ${bridgeDiag.compatible===null?'unknown':bridgeDiag.compatible?'yes':'no'} · modules ${bridgeDiag.moduleCount??'—'} · stale ${bridgeDiag.staleModules??'—'} · errors ${bridgeDiag.errorModules??'—'} · partial ${bridgeDiag.partialModules??'—'}</p><p>Bridge Modules · freshness ${esc(bridgeModuleFreshnessText(bridgeDiag.moduleDetails))} · duration ${esc(bridgeModuleDurationText(bridgeDiag.moduleDetails))}</p><p>Bridge Runtime · cache ${bridgeDiag.cacheHitRate===null?'—':bridgeDiag.cacheHitRate.toFixed(0)+'%'} · entries ${bridgeDiag.cacheEntries??'—'} · in-flight ${bridgeDiag.inFlight??'—'} · stale fallback ${bridgeDiag.staleFallbacks??'—'} · CLI ${bridgeDiag.cliActive??'—'}/${bridgeDiag.cliQueued??'—'} · circuit ${bridgeDiag.openCircuits??'—'} open / ${bridgeDiag.circuitRecoveries??'—'} recoveries</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Stall / Render · coincidence ${performanceRuntime.lastUiStallRenderOverlap?'yes':'no'}${performanceRuntime.lastUiStallRenderOverlap?` · ${esc(performanceRuntime.lastUiStallRenderReason||'unknown')} · ${num(performanceRuntime.lastUiStallRenderMs)?roundPerfMs(performanceRuntime.lastUiStallRenderMs)+'ms':'—'}`:''} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap?'yes':'no'}</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Input · first ${num(performanceRuntime.lastResumeFirstInputAfterMs)?roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)+'ms':'—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs)?roundPerfMs(performanceRuntime.lastResumeInputDelayMs)+'ms':'—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs)?roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)+'ms':'—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh?'yes':'no'}</p><p>Resume Refresh · started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs)?roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)+'ms after':'—'} · duration ${num(performanceRuntime.lastResumeRefreshMs)?roundPerfMs(performanceRuntime.lastResumeRefreshMs)+'ms':'—'} · render ${num(performanceRuntime.lastResumeRenderMs)?roundPerfMs(performanceRuntime.lastResumeRenderMs)+'ms':'—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry?'yes':'no'}</p><p>Resume Route · requested ${esc(performanceRuntime.lastResumeRequestedReason||'—')} · actual ${esc(performanceRuntime.lastResumeActualReason||'—')} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced?'yes':'no'}${performanceRuntime.lastResumeRefreshWasCoalesced?` · into ${esc(performanceRuntime.lastResumeCoalescedIntoReason||'unknown')}`:''}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><p>Render · widget ${num(performanceRuntime.lastRenderMs)?roundPerfMs(performanceRuntime.lastRenderMs)+'ms':'—'} · panel ${num(performanceRuntime.lastPanelRenderMs)?roundPerfMs(performanceRuntime.lastPanelRenderMs)+'ms':'—'} · spike ≥${RENDER_SPIKE_THRESHOLD_MS}ms ${Number(performanceRuntime.renderSpikeCount||0)}회</p><p>Panel Render · ${panelRenderTimer || panelIdleHandle !== null?'pending':'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced||0)}회 · interaction defer 750ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>
     </main></div>`;
@@ -2475,8 +2482,57 @@ function todayOverviewMetrics(d) {
         const entered = String(q('#bridge-token')?.value || '').trim();
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
-        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; await persist(); scheduleRefresh(); await enqueueRefresh('connect');
+        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
+    };
+    if (q('#pause-sync')) q('#pause-sync').onclick = async () => {
+      if (!state.bridgeEnabled) return;
+      state.bridgeEnabled = false;
+      state.bridgeStatus = 'paused';
+      state.bridgeError = '';
+      state.bridgePausedAt = Date.now();
+      state.nextRetryAt = null;
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+      cancelResumeRefresh();
+      cancelRefreshScheduler();
+      updateRuntimeState('bridge-paused');
+      await persist();
+      await renderWidget('bridge-paused');
+      renderSettings();
+    };
+    if (q('#forget-token')) q('#forget-token').onclick = async e => {
+      if (!token) return;
+      const button = e.currentTarget;
+      const now = Date.now();
+      if (now > Number(tokenForgetArmedUntil || 0)) {
+        tokenForgetArmedUntil = now + 5000;
+        const old = button.textContent;
+        button.textContent = '정말 지우기?';
+        setTimeout(() => {
+          if (button?.isConnected && tokenForgetArmedUntil > 0 && Date.now() >= tokenForgetArmedUntil) {
+            tokenForgetArmedUntil = 0;
+            button.textContent = old;
+          }
+        }, 5100);
+        return;
+      }
+      tokenForgetArmedUntil = 0;
+      token = '';
+      if (typeof store.removeItem === 'function') await store.removeItem(TOKEN_KEY);
+      else await store.setItem(TOKEN_KEY, '');
+      state.bridgeEnabled = false;
+      state.bridgeStatus = 'off';
+      state.bridgeError = '';
+      state.bridgePausedAt = null;
+      state.bridgeTokenClearedAt = Date.now();
+      state.nextRetryAt = null;
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+      cancelResumeRefresh();
+      cancelRefreshScheduler();
+      updateRuntimeState('bridge-token-forgotten');
+      await persist();
+      await renderWidget('bridge-token-forgotten');
+      renderSettings();
     };
     document.querySelectorAll('[data-usage-scope]').forEach(button => {
       button.onclick = async () => {
@@ -2673,9 +2729,9 @@ function todayOverviewMetrics(d) {
       ${row(detailed?'프리미엄 남음':(w?.label||'주간'),main(w),'#b7add0')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${premiumSub}</div>`:''}
       <div style="height:4px;background:#2d3138;border-radius:99px;overflow:hidden;margin:5px 0 7px"><i style="display:block;height:100%;width:${w?pct(100-Number(w.percent||0)):0}%;background:#b9a6f8"></i></div>
       ${row(detailed?'크레딧':(c?.label||'Credits'),detailed?money(c?.balance):(num(c?.todayUsed)?money(c.todayUsed,4):money(c?.balance)),'#9fc9df')}${detailed?`<div style="color:#7f8792;font-size:11px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap">${creditsSub}</div>`:''}
-      ${detailed && a ? `<div style="color:#8e96a2;font-size:10px;font-weight:650;line-height:1.35;border-top:1px solid rgba(255,255,255,.09);margin-top:7px;padding-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right">24h ${num(a.requests24h)?`${a.requests24h}회`:'—'} · ${money(a.cost24h,4)} · ${tokenText(a.totalTokens24h)} tok${state.lastSyncAt?` · LIVE ${age(state.lastSyncAt)} 동기화`:''}</div>`:''}
+      ${detailed && a ? `<div style="color:#8e96a2;font-size:10px;font-weight:650;line-height:1.35;border-top:1px solid rgba(255,255,255,.09);margin-top:7px;padding-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right">24h ${num(a.requests24h)?`${a.requests24h}회`:'—'} · ${money(a.cost24h,4)} · ${tokenText(a.totalTokens24h)} tok${state.lastSyncAt?(state.bridgeStatus==='paused'?` · PAUSED · 마지막 ${age(state.lastSyncAt)} 동기화`:` · LIVE ${age(state.lastSyncAt)} 동기화`):''}</div>`:''}
       <div style="display:flex;justify-content:space-between;gap:8px;color:#7f8792;font-size:10px;margin-top:5px">
-        <span>${state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
+        <span>${state.bridgeStatus==='paused'?'동기화 일시정지':state.bridgeStatus==='off'?'동기화 꺼짐':state.bridgeStatus==='error'?'마지막 정상값 유지':dataIsStale()?`스냅샷 ${age(d.fetchedAt)}`:'자동 갱신'}</span>
         <span>${age(state.lastSyncAt)} · ${VERSION}</span>
       </div>
     </div>`;

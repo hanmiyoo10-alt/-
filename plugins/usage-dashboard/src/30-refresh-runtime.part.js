@@ -32,8 +32,10 @@
         const managerRuntime = await syncBridgeEngineBundleIfNeeded(managerAdopted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         state.bridgeManagerRuntime = managerRuntime;
+        if (!state.bridgeEnabled) return;
         const snapshot = await fetchSnapshot();
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
+        if (!state.bridgeEnabled) return;
         state.data = applyObservedToday(snapshot);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');

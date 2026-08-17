@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.37",
+  "version": "3.0.0-alpha.5.38",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "13852ff08cdbd44b350586000a085436d58a02a4ef2d6a8b2f6ac0b4ebf2946f",
+  "artifactSha256": "f6c7a766919014e537b893d63a4d1e1c8bb77d9a8a236c0c3d71e9ae7f915c0a",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 55564,
-      "sha256": "c9d4d6b0447722e54bb6d8c918e499cf3234da8c7554824820b924189bd24de9"
+      "bytes": 55840,
+      "sha256": "3ca9a45745b0d8192d3c1570839438023a8fafb4167a368255a9b57d098b2d09"
     },
     {
       "file": "10-usage-data.part.js",
@@ -28,32 +28,32 @@
     {
       "file": "30-refresh-runtime.part.js",
       "label": "refresh runtime",
-      "bytes": 6392,
-      "sha256": "9a146b3186c7e3b1feb3533a42b6dd1163fa3c0ea1b615837fbb2df9c83451b6"
+      "bytes": 6476,
+      "sha256": "88e5d2e72edeff299fd5dbb0ed5743f1bc4f02047bb842abbe8823d4edec3858"
     },
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics",
-      "bytes": 21128,
-      "sha256": "4ce9520ba9202693c118a65e4b5642e3a731a9ea0b116f2d42dae6e5f8253c30"
+      "bytes": 21531,
+      "sha256": "32f4ed70f152de413a7a7236107107f52639682feea880cc38cef4cee16dcfdb"
     },
     {
       "file": "50-settings-ui.part.js",
       "label": "settings UI",
-      "bytes": 34660,
-      "sha256": "2c2f90e186dc0867f7c27c808293e68adfba0b7708e388bd24b4e913c73fbe63"
+      "bytes": 35037,
+      "sha256": "679f4d1a397e70887e85f3f0ac0d70e77e9de29f7ba8f2859823d09a78446e67"
     },
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
-      "bytes": 13919,
-      "sha256": "2da6bcaf906e452b4988a383a5dd759c24aeeb1b16b02ff724791f73d15aead3"
+      "bytes": 15857,
+      "sha256": "eedc6336e4cdc848d9c6d4b98dd9d90c68faa09947902801d25722364f7852d8"
     },
     {
       "file": "70-floating-widget.part.js",
       "label": "floating widget",
-      "bytes": 16047,
-      "sha256": "b4b285e2f9034eed10cc7ca1b8fee2f20055146333db813d55997816678602c4"
+      "bytes": 16241,
+      "sha256": "3b51edc2d138e5b65c0c4fe7aa26ee77b4bafba900b03ef001967962789a4aeb"
     },
     {
       "file": "80-lifecycle.part.js",

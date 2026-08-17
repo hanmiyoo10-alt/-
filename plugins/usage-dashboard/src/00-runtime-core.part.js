@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.37
+//@version 3.0.0-alpha.5.38
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.37';
+  const VERSION = '3.0.0-alpha.5.38';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -50,6 +50,7 @@
     creditsOrgFallbackCount: 0,
     creditsOrgLastFallbackFrom: '',
     creditsOrgLastFallbackTo: '',
+    bridgePausedAt: null, bridgeLastReconnectAt: null, bridgeTokenClearedAt: null,
     lastSyncAt: null, lastSyncDurationMs: null, lastRefreshReason: '', refreshCount: 0,
     consecutiveFailures: 0, retryDelayMs: 0, nextRetryAt: null,
     dailyUsage: null, creditDailyUsage: null,
@@ -63,6 +64,7 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let tokenForgetArmedUntil = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
   let refreshSchedulerTimer = null, refreshSchedulerIdleHandle = null;
   let panelRenderTimer = null, panelIdleHandle = null;
@@ -983,6 +985,8 @@
   }
 
   function connectionBadge() {
+    if (state.bridgeStatus === 'paused') return {label:'PAUSED', color:'#b9a6f8'};
+    if (state.bridgeStatus === 'off') return {label:'OFF', color:'#aeb5c0'};
     if (state.bridgeStatus === 'error') return {label:'OFFLINE', color:'#ff9b95'};
     if (state.bridgeStatus === 'connected' && dataIsStale()) return {label:'STALE', color:'#ffd27d'};
     if (state.bridgeStatus === 'connected') return {label:'LIVE', color:'#c5f277'};

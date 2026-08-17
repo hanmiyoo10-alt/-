@@ -145,8 +145,57 @@
         const entered = String(q('#bridge-token')?.value || '').trim();
         if (entered) { token = entered; await store.setItem(TOKEN_KEY, token); }
         if (!token) throw new Error('Bridge Token이 필요해.');
-        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; await persist(); scheduleRefresh(); await enqueueRefresh('connect');
+        state.bridgeEnabled = true; state.bridgeStatus = 'connecting'; state.bridgePausedAt = null; state.bridgeLastReconnectAt = Date.now(); await persist(); scheduleRefresh(); await enqueueRefresh('connect');
       } catch (e) { state.bridgeStatus='error'; state.bridgeError=e?.message||String(e); await persist(); await renderWidget(); renderSettings(); }
+    };
+    if (q('#pause-sync')) q('#pause-sync').onclick = async () => {
+      if (!state.bridgeEnabled) return;
+      state.bridgeEnabled = false;
+      state.bridgeStatus = 'paused';
+      state.bridgeError = '';
+      state.bridgePausedAt = Date.now();
+      state.nextRetryAt = null;
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+      cancelResumeRefresh();
+      cancelRefreshScheduler();
+      updateRuntimeState('bridge-paused');
+      await persist();
+      await renderWidget('bridge-paused');
+      renderSettings();
+    };
+    if (q('#forget-token')) q('#forget-token').onclick = async e => {
+      if (!token) return;
+      const button = e.currentTarget;
+      const now = Date.now();
+      if (now > Number(tokenForgetArmedUntil || 0)) {
+        tokenForgetArmedUntil = now + 5000;
+        const old = button.textContent;
+        button.textContent = '정말 지우기?';
+        setTimeout(() => {
+          if (button?.isConnected && tokenForgetArmedUntil > 0 && Date.now() >= tokenForgetArmedUntil) {
+            tokenForgetArmedUntil = 0;
+            button.textContent = old;
+          }
+        }, 5100);
+        return;
+      }
+      tokenForgetArmedUntil = 0;
+      token = '';
+      if (typeof store.removeItem === 'function') await store.removeItem(TOKEN_KEY);
+      else await store.setItem(TOKEN_KEY, '');
+      state.bridgeEnabled = false;
+      state.bridgeStatus = 'off';
+      state.bridgeError = '';
+      state.bridgePausedAt = null;
+      state.bridgeTokenClearedAt = Date.now();
+      state.nextRetryAt = null;
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+      cancelResumeRefresh();
+      cancelRefreshScheduler();
+      updateRuntimeState('bridge-token-forgotten');
+      await persist();
+      await renderWidget('bridge-token-forgotten');
+      renderSettings();
     };
     document.querySelectorAll('[data-usage-scope]').forEach(button => {
       button.onclick = async () => {

@@ -62,8 +62,13 @@ for (const marker of [
   'cacheCreation1hTokens',
   '--self-test'
 ]) assert.ok(patcher.includes(marker), `missing PM local patcher marker: ${marker}`);
-assert.ok(!patcher.includes('requestBody:String'), 'patcher must not export request bodies');
-assert.ok(!patcher.includes('responseBody:String'), 'patcher must not export response bodies');
+const projectionStart = patcher.indexOf('def cache_observability_method()');
+const projectionEnd = projectionStart >= 0 ? patcher.indexOf('\n\ndef patch_text', projectionStart) : -1;
+assert.ok(projectionStart >= 0 && projectionEnd > projectionStart, 'PM read-only projection must be discoverable');
+const projection = patcher.slice(projectionStart, projectionEnd);
+assert.ok(!projection.includes('requestBody:String'), 'patcher projection must not export request bodies');
+assert.ok(!projection.includes('responseBody:String'), 'patcher projection must not export response bodies');
+assert.ok(!projection.includes('authorization:'), 'patcher projection must not export authorization headers');
 
 assert.ok(latest.includes('//@version 3.0.0-alpha.5.48'));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));

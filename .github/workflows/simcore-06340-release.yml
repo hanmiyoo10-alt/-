@@ -1,0 +1,69 @@
+name: Release SimCore v0.63.40 Current Source Integrity
+
+on:
+  push:
+    branches:
+      - simcore-06340-current-source-integrity
+    paths:
+      - .simcore-06340-release-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate staged v0.63.40 artifacts
+        run: |
+          grep -q '^SimCore v0.63.40 staging: PASS$' .simcore-06340-stage-result.txt
+          grep -q '^SimCore 0.63.40 Current Source Integrity fixtures: PASS$' .simcore-06340-stage-result.txt
+          grep -q '^Storage/API/timer/network call inventory: UNCHANGED$' .simcore-06340-stage-result.txt
+          grep -q '//@version 0.63.40' plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Re-verify against exact live v0.63.39 baseline
+        run: |
+          git fetch origin release-simcore
+          live_sha="$(git rev-parse origin/release-simcore)"
+          test "$live_sha" = 'b55e8daa5f97827b20a0d39a97e5948345359837'
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-before.js
+          test "$(git hash-object /tmp/simcore-before.js)" = 'ee4fc6b4b6590a4f631e3dd10c14fa446ed40564'
+          set -o pipefail
+          node plugins/simcore/test_simcore_06340_v2.js | tee /tmp/simcore-06340-release-test.txt
+          grep -q 'SimCore 0.63.40 Current Source Integrity fixtures: PASS' /tmp/simcore-06340-release-test.txt
+
+      - name: Publish only SimCore artifacts to release-simcore
+        run: |
+          staged_latest="$PWD/plugins/simcore/latest.js"
+          staged_install="$PWD/plugins/simcore/install.js"
+          git worktree add --detach /tmp/simcore-release origin/release-simcore
+          cp "$staged_latest" /tmp/simcore-release/plugins/simcore/latest.js
+          cp "$staged_install" /tmp/simcore-release/plugins/simcore/install.js
+          cd /tmp/simcore-release
+          changed="$(git diff --name-only)"
+          test "$changed" = $'plugins/simcore/install.js\nplugins/simcore/latest.js'
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.40 Current Source Integrity & Runtime Surface Consolidation'
+          git push origin HEAD:release-simcore
+
+      - name: Verify published release
+        run: |
+          git fetch origin release-simcore
+          published="$(git rev-parse origin/release-simcore)"
+          test "$published" != 'b55e8daa5f97827b20a0d39a97e5948345359837'
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/published-latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/published-install.js
+          cmp /tmp/published-latest.js /tmp/published-install.js
+          grep -q '//@version 0.63.40' /tmp/published-latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.40';" /tmp/published-latest.js
+          echo "Published release-simcore: $published"

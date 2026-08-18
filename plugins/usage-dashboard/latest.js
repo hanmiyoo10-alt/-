@@ -1,13 +1,14 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.47
+//@version 3.0.0-alpha.5.48
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
+//@allowed-ipc provider-manager
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.47';
+  const VERSION = '3.0.0-alpha.5.48';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -34,6 +35,13 @@
   const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
   const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
+  const PROVIDER_MANAGER_PLUGIN = 'provider-manager';
+  const PROVIDER_MANAGER_REQUEST_CHANNEL = 'provider-manager/request';
+  const PROVIDER_MANAGER_RESPONSE_CHANNEL = 'provider-manager/response';
+  const PROVIDER_MANAGER_CACHE_IPC_VERSION = 1;
+  const PROVIDER_MANAGER_CACHE_TIMEOUT_MS = 800;
+  const PROVIDER_MANAGER_CACHE_RETRY_MS = 60000;
+  const PROVIDER_MANAGER_CACHE_MAX_ROWS = 250;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -79,6 +87,13 @@
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
   const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
   const bridgeLifecycleRuntime = {generation:1,refreshDrops:0,blockedRefreshes:0,lastTransitionFrom:'',lastTransitionTo:'',lastTransitionAt:null,lastTransitionReason:''};
+  const providerManagerCacheRuntime = {
+    status:'idle', supported:false, source:'', lastError:'', lastRequestedAt:null, lastResponseAt:null,
+    responseRows:0, responseTokenRows:0, matched:0, exact:0, strong:0, ambiguous:0, unmatched:0
+  };
+  const providerManagerCachePending = new Map();
+  const PROVIDER_MANAGER_CACHE_INSTANCE_ID = `lud-cache-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  let providerManagerCacheListenerInstalled = false;
 
   function bridgeLifecycleMode() {
     if (!state) return 'off';
@@ -2189,6 +2204,206 @@ async function importLegacyTodayBaselines() {
     return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
   }
 }
+
+  function providerManagerCacheMetricKnown(usage) {
+    return ['cachedInputTokens','cacheReadInputTokens','cacheCreationInputTokens','cacheCreation5mTokens','cacheCreation1hTokens']
+      .some(key => usage?.[key] !== null && usage?.[key] !== undefined && num(usage?.[key]));
+  }
+
+  function providerManagerCacheListener() {
+    if (providerManagerCacheListenerInstalled) return true;
+    if (typeof Risuai?.addPluginChannelListener !== 'function' || typeof Risuai?.postPluginChannelMessage !== 'function') {
+      providerManagerCacheRuntime.status = 'unavailable';
+      providerManagerCacheRuntime.lastError = 'plugin channel IPC unavailable';
+      return false;
+    }
+    Risuai.addPluginChannelListener(PROVIDER_MANAGER_RESPONSE_CHANNEL, message => {
+      if (!message || typeof message !== 'object') return;
+      if (message?.recipient?.instanceId && String(message.recipient.instanceId) !== PROVIDER_MANAGER_CACHE_INSTANCE_ID) return;
+      const id = String(message.id || '');
+      const pending = providerManagerCachePending.get(id);
+      if (!pending) return;
+      providerManagerCachePending.delete(id);
+      clearTimeout(pending.timer);
+      if (message.type === 'cacheObservability' && Number(message?.data?.version) === PROVIDER_MANAGER_CACHE_IPC_VERSION) {
+        pending.resolve({ok:true, version:PROVIDER_MANAGER_CACHE_IPC_VERSION, source:String(message.data.source || 'provider-manager'), rows:Array.isArray(message.data.rows) ? message.data.rows : []});
+        return;
+      }
+      const error = message?.data?.message || message?.data?.code || `unexpected response ${String(message.type || 'unknown')}`;
+      pending.resolve({ok:false, status:'error', error:String(error), rows:[]});
+    });
+    providerManagerCacheListenerInstalled = true;
+    return true;
+  }
+
+  function providerManagerCacheRequestId() {
+    return `lud-cache-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
+  }
+
+  async function fetchProviderManagerCacheObservability() {
+    const now = Date.now();
+    if (!providerManagerCacheListener()) return {ok:false,status:'unavailable',rows:[]};
+    if (providerManagerCacheRuntime.supported !== true && providerManagerCacheRuntime.lastRequestedAt && now - Number(providerManagerCacheRuntime.lastRequestedAt) < PROVIDER_MANAGER_CACHE_RETRY_MS) {
+      return {ok:false,status:providerManagerCacheRuntime.status || 'backoff',rows:[]};
+    }
+    providerManagerCacheRuntime.lastRequestedAt = now;
+    providerManagerCacheRuntime.status = 'probing';
+    providerManagerCacheRuntime.lastError = '';
+    const id = providerManagerCacheRequestId();
+    const result = await new Promise(resolve => {
+      const timer = setTimeout(() => {
+        providerManagerCachePending.delete(id);
+        resolve({ok:false,status:'timeout',error:'Provider Manager cache IPC timeout',rows:[]});
+      }, PROVIDER_MANAGER_CACHE_TIMEOUT_MS);
+      providerManagerCachePending.set(id, {resolve,timer});
+      try {
+        Risuai.postPluginChannelMessage(PROVIDER_MANAGER_PLUGIN, PROVIDER_MANAGER_REQUEST_CHANNEL, {
+          id,
+          op:'cacheObservability',
+          sender:{pluginName:'local_usage_dashboard_modular',instanceId:PROVIDER_MANAGER_CACHE_INSTANCE_ID},
+          payload:{since:Date.now() - 24 * 60 * 60 * 1000,limit:PROVIDER_MANAGER_CACHE_MAX_ROWS},
+          meta:{protocol:'cache-observability-v1',version:PROVIDER_MANAGER_CACHE_IPC_VERSION,clientVersion:VERSION}
+        });
+      } catch (error) {
+        clearTimeout(timer);
+        providerManagerCachePending.delete(id);
+        resolve({ok:false,status:'blocked',error:error?.message || String(error),rows:[]});
+      }
+    });
+    if (!result?.ok) {
+      providerManagerCacheRuntime.status = String(result?.status || 'error');
+      providerManagerCacheRuntime.lastError = String(result?.error || '');
+      providerManagerCacheRuntime.responseRows = 0;
+      providerManagerCacheRuntime.responseTokenRows = 0;
+      return result;
+    }
+    providerManagerCacheRuntime.status = 'ready';
+    providerManagerCacheRuntime.supported = true;
+    providerManagerCacheRuntime.source = String(result.source || 'provider-manager');
+    providerManagerCacheRuntime.lastResponseAt = Date.now();
+    providerManagerCacheRuntime.responseRows = result.rows.length;
+    providerManagerCacheRuntime.responseTokenRows = result.rows.filter(row => providerManagerCacheMetricKnown(row?.usage)).length;
+    providerManagerCacheRuntime.lastError = '';
+    return result;
+  }
+
+  function providerManagerCacheName(value) {
+    return String(value || '').trim().toLowerCase().replace(/[_\s]+/g,'-');
+  }
+
+  function providerManagerCacheModel(value) {
+    const normalized = providerManagerCacheName(value);
+    const parts = normalized.split('/').filter(Boolean);
+    return parts.at(-1) || normalized;
+  }
+
+  function providerManagerCacheProviderMatch(a, b) {
+    const left = providerManagerCacheName(a).replace(/[^a-z0-9]/g,'');
+    const right = providerManagerCacheName(b).replace(/[^a-z0-9]/g,'');
+    return Boolean(left && right && (left === right || (left.length >= 5 && right.length >= 5 && (left.includes(right) || right.includes(left)))));
+  }
+
+  function providerManagerCacheModelMatch(a, b) {
+    const left = providerManagerCacheModel(a);
+    const right = providerManagerCacheModel(b);
+    return Boolean(left && right && (left === right || (left.length >= 8 && right.length >= 8 && (left.endsWith(right) || right.endsWith(left)))));
+  }
+
+  function providerManagerCacheCandidateScore(request, cacheRow) {
+    const requestId = String(request?.requestNumber || '');
+    const hints = [cacheRow?.logId,...(Array.isArray(cacheRow?.requestIdHints) ? cacheRow.requestIdHints : [])].map(value => String(value || '')).filter(Boolean);
+    if (requestId && hints.includes(requestId)) return {score:1000,kind:'exact'};
+    if (!num(request?.timestamp) || !num(cacheRow?.timestamp)) return null;
+    if (!providerManagerCacheModelMatch(request?.model, cacheRow?.model)) return null;
+    const delta = Math.abs(Number(request.timestamp) - Number(cacheRow.timestamp));
+    if (delta > 45000) return null;
+    let score = 50;
+    if (delta <= 3000) score += 30;
+    else if (delta <= 10000) score += 20;
+    else if (delta <= 30000) score += 10;
+    else score += 5;
+    if (providerManagerCacheProviderMatch(request?.provider, cacheRow?.provider)) score += 10;
+    if (num(request?.outputTokens) && num(cacheRow?.usage?.outputTokens)) {
+      const diff = Math.abs(Number(request.outputTokens) - Number(cacheRow.usage.outputTokens));
+      if (diff === 0) score += 15;
+      else if (diff <= 2) score += 10;
+    }
+    if (num(request?.inputTokens) && num(cacheRow?.usage?.inputTokens) && Number(request.inputTokens) === Number(cacheRow.usage.inputTokens)) score += 10;
+    return {score,kind:'strong',delta};
+  }
+
+  function providerManagerCacheApply(request, cacheRow, match) {
+    const usage = cacheRow?.usage && typeof cacheRow.usage === 'object' ? cacheRow.usage : {};
+    const cacheMetrics = requestCacheMetrics({...request,...usage});
+    request.inputTokens = num(usage.inputTokens) ? Number(usage.inputTokens) : request.inputTokens;
+    request.outputTokens = num(usage.outputTokens) ? Number(usage.outputTokens) : request.outputTokens;
+    request.cachedInputTokens = cacheMetrics.cachedInputTokens;
+    request.cacheReadInputTokens = cacheMetrics.cacheReadInputTokens;
+    request.cacheCreationInputTokens = cacheMetrics.cacheCreationInputTokens;
+    request.cacheCreation5mTokens = cacheMetrics.cacheCreation5mTokens;
+    request.cacheCreation1hTokens = cacheMetrics.cacheCreation1hTokens;
+    request.cacheReadRatio = cacheMetrics.cacheReadRatio;
+    request.cacheMetricSource = 'provider-manager-ipc-v1';
+    request.cacheMatch = String(match?.kind || 'strong');
+    request.cacheMatchScore = Number(match?.score || 0);
+    request.providerManagerLogId = String(cacheRow?.logId || '');
+  }
+
+  function enrichDataWithProviderManagerCache(data, payload) {
+    providerManagerCacheRuntime.matched = 0;
+    providerManagerCacheRuntime.exact = 0;
+    providerManagerCacheRuntime.strong = 0;
+    providerManagerCacheRuntime.ambiguous = 0;
+    providerManagerCacheRuntime.unmatched = 0;
+    if (!payload?.ok || !Array.isArray(payload.rows) || !data?.usageScopes?.scopes) return data;
+    const scopes = data.usageScopes.scopes;
+    const requestRefs = [];
+    const unique = new Map();
+    for (const scopeKey of ['all','devpass','credits']) {
+      const scope = scopes?.[scopeKey];
+      for (const field of ['recentLedger','recent']) {
+        const rows = Array.isArray(scope?.[field]) ? scope[field] : [];
+        for (const row of rows) {
+          if (!row || typeof row !== 'object') continue;
+          requestRefs.push(row);
+          const key = requestLedgerKey(row);
+          if (!unique.has(key)) unique.set(key,row);
+        }
+      }
+    }
+    const cacheRows = payload.rows.filter(row => row && typeof row === 'object' && providerManagerCacheMetricKnown(row.usage));
+    const used = new Set();
+    const matches = new Map();
+    for (const [key,request] of unique.entries()) {
+      const candidates = [];
+      for (let index = 0; index < cacheRows.length; index += 1) {
+        if (used.has(index)) continue;
+        const match = providerManagerCacheCandidateScore(request, cacheRows[index]);
+        if (match) candidates.push({index,row:cacheRows[index],...match});
+      }
+      candidates.sort((a,b) => Number(b.score) - Number(a.score) || Number(a.delta || 0) - Number(b.delta || 0));
+      const best = candidates[0];
+      const second = candidates[1];
+      if (!best || Number(best.score) < 70) {
+        providerManagerCacheRuntime.unmatched += 1;
+        continue;
+      }
+      if (best.kind !== 'exact' && second && Number(best.score) - Number(second.score) < 10) {
+        providerManagerCacheRuntime.ambiguous += 1;
+        continue;
+      }
+      used.add(best.index);
+      matches.set(key,best);
+      providerManagerCacheRuntime.matched += 1;
+      if (best.kind === 'exact') providerManagerCacheRuntime.exact += 1;
+      else providerManagerCacheRuntime.strong += 1;
+    }
+    for (const request of requestRefs) {
+      const match = matches.get(requestLedgerKey(request));
+      if (match) providerManagerCacheApply(request, match.row, match);
+    }
+    return data;
+  }
   async function refresh(reason = 'manual', silent = false) {
     if (runtimeDisposed) return;
     const refreshEpoch = runtimeEpoch;
@@ -2245,6 +2460,7 @@ async function importLegacyTodayBaselines() {
         state.bridgeManagerRuntime = managerRuntime;
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         refreshPhaseStarted = refreshPhaseNow();
+        const providerManagerCachePromise = fetchProviderManagerCacheObservability();
         const snapshot = await fetchSnapshot();
         finishRefreshPhase('snapshot', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
@@ -2253,6 +2469,10 @@ async function importLegacyTodayBaselines() {
         refreshPhaseStarted = refreshPhaseNow();
         state.data = applyObservedToday(snapshot);
         finishRefreshPhase('normalize-ledger', refreshPhaseStarted);
+        refreshPhaseStarted = refreshPhaseNow();
+        const providerManagerCache = await providerManagerCachePromise;
+        enrichDataWithProviderManagerCache(state.data, providerManagerCache);
+        finishRefreshPhase('provider-cache', refreshPhaseStarted);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
           const to = String(state.data.creditsOrganizationId || '');
@@ -2366,6 +2586,11 @@ async function importLegacyTodayBaselines() {
     return {ready:blockers.length === 0, blockers, updaterCompatible};
   }
 
+  function providerManagerCacheDiagnosticText() {
+    const r = providerManagerCacheRuntime;
+    return `${r.status || 'idle'} · v${PROVIDER_MANAGER_CACHE_IPC_VERSION} · source ${r.source || '—'} · rows ${Number(r.responseRows || 0)} · token rows ${Number(r.responseTokenRows || 0)} · matched ${Number(r.matched || 0)} (exact ${Number(r.exact || 0)} / strong ${Number(r.strong || 0)}) · ambiguous ${Number(r.ambiguous || 0)} · unmatched ${Number(r.unmatched || 0)} · error ${r.lastError || 'none'}`;
+  }
+
   function diagText() {
     const diagnosticCapturedAt = Date.now();
     const d = state.data || {}, h = d.health || {};
@@ -2418,7 +2643,8 @@ async function importLegacyTodayBaselines() {
       `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source ${diagUsage?.recentSourceKey || 'none'} · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
-      `Cache semantics: request HIT rate != token Read ratio · unknown stays unknown · source request metadata / Bridge aggregates`,
+      `Provider Manager cache IPC: ${providerManagerCacheDiagnosticText()}`,
+      `Cache semantics: request HIT rate != token Read ratio · unknown stays unknown · source request metadata / Bridge aggregates / Provider Manager IPC v1 when available`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,

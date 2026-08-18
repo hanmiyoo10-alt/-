@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          exec > >(tee /tmp/stage-548.log) 2>&1
           python3 -m py_compile plugins/usage-dashboard/tools/release_provider_manager_cache_ipc_548.py
           python3 -m py_compile plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py
           python3 plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py --self-test
@@ -91,6 +92,25 @@ jobs:
           grep -Fq "const STATE_KEY = 'local-usage-dashboard-v3';" plugins/usage-dashboard/latest.js
           grep -Fq "const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';" plugins/usage-dashboard/latest.js
           ! grep -Fq 'pm_request_logs' plugins/usage-dashboard/latest.js
+
+      - name: Persist staging failure log
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p plugins/usage-dashboard
+          if [ -f /tmp/stage-548.log ]; then
+            cp /tmp/stage-548.log plugins/usage-dashboard/stage-548-failure.log
+          else
+            printf '5.48 staging failed before the candidate log was created.\n' > plugins/usage-dashboard/stage-548-failure.log
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/stage-548-failure.log
+          git diff --cached --quiet && exit 0
+          git commit -m 'ci: capture 5.48 staging failure'
+          git pull --rebase origin main
+          git push origin HEAD:main
 
       - name: Commit validated 5.48 candidate to main
         shell: bash

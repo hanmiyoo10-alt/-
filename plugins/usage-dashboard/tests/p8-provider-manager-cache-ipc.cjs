@@ -28,6 +28,7 @@ for (const marker of [
   'function providerManagerCacheCandidateScore(request, cacheRow)',
   "return {score:1000,kind:'exact'}",
   'providerManagerCacheModelMatch',
+  "replace(/[_\\s]+/g,'-')",
   'providerManagerCacheRuntime.ambiguous',
   "request.cacheMetricSource = 'provider-manager-ipc-v1'",
   'cacheCreation5mTokens',

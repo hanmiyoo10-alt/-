@@ -45,7 +45,7 @@ jobs:
       - name: Current-source integrity and frozen-surface fixtures
         run: |
           set -o pipefail
-          node plugins/simcore/test_simcore_06340.js | tee /tmp/simcore-06340-test.txt
+          node plugins/simcore/test_simcore_06340_v2.js | tee /tmp/simcore-06340-test.txt
           test -s /tmp/simcore-06340-test.txt
           grep -q 'SimCore 0.63.40 Current Source Integrity fixtures: PASS' /tmp/simcore-06340-test.txt
 

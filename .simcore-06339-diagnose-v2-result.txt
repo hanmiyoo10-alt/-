@@ -1,0 +1,10 @@
+baseline_blob=ee4fc6b4b6590a4f631e3dd10c14fa446ed40564
+Traceback (most recent call last):
+  File "/home/runner/work/-/-/plugins/simcore/patch_simcore_06339.py", line 165, in <module>
+    text = replace_once(text, '//@version 0.63.38', '//@version 0.63.39', f'{path}: version')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/-/-/plugins/simcore/patch_simcore_06339.py", line 9, in replace_once
+    assert count == 1, f'{label}: expected 1 anchor, got {count}'
+           ^^^^^^^^^^
+AssertionError: plugins/simcore/latest.js: version: expected 1 anchor, got 0
+patch_exit=1

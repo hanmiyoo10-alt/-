@@ -1,0 +1,38 @@
+name: Diagnose SimCore v0.63.40 Fixtures
+
+on:
+  push:
+    branches:
+      - simcore-06340-current-source-integrity
+    paths:
+      - .simcore-06340-debug-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild from release baseline and capture fixture result
+        run: |
+          git fetch origin release-simcore
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-before.js
+          cp /tmp/simcore-before.js plugins/simcore/latest.js
+          cp /tmp/simcore-before.js plugins/simcore/install.js
+          python plugins/simcore/patch_simcore_06340.py
+          set +e
+          node plugins/simcore/test_simcore_06340.js > /tmp/fixture-output.txt 2>&1
+          code=$?
+          set -e
+          {
+            echo "EXIT_CODE=$code"
+            echo '--- fixture output ---'
+            cat /tmp/fixture-output.txt
+          } > .simcore-06340-fixture-debug.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .simcore-06340-fixture-debug.txt
+          git commit -m 'ci: record SimCore 0.63.40 fixture diagnostics'
+          git push origin HEAD:${GITHUB_REF_NAME}

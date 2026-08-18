@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.38
+//@version 0.63.39
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.39 Cache Trajectory Identity & Representation Diagnostics:
+// - Corrects trajectory identity so repeated sends/regenerations of the same user turn increment attempts but not distinct observations; distinct identity is location + send index + current-user compact signature, while full-request topology remains separately observed
+// - Corrects cadence EMA initialization and scope: BASELINE contributes no zero sample, the first real distinct-turn interval becomes the EMA seed, and retry timing remains visible only in request cadence
+// - Adds diagnostic-only canonical↔fresh representation length-delta reporting from existing fingerprints, fixes stale Diagnostic Version output, and renders BASELINE cadence/frontier values as BASELINE/n/a instead of synthetic zeroes
+// - Bumps cache-candidate handoff state to v2 so polluted v0.63.38 trajectory state is rejected while compatible runtime-prefix/topology telemetry may still be adopted across refreshless reloads
+// - Keeps request order/runtime prompt bytes, provider routing/cache policy, edit acceptance, Deferred Mirror acceptance gate, host/storage/API/timer surface and all 17 Core generation modules frozen
 //
 // v0.63.38 Cache Trajectory & Refreshless Telemetry Continuity:
 // - Extends v0.63.37 request-topology telemetry into a memory-only same-chat trajectory: cache-family id, distinct observations versus retry attempts, rolling stable floor, moving frontier, frontier streak, divergence count and cadence EMA
@@ -4526,6 +4533,7 @@ function createRequestTopologyTracker() {
         currentUserPosition: relativePosition(currentUserIndex, firstChangeIndex, baseline, stable),
         runtimePosition: relativePosition(runtimeIndex, firstChangeIndex, baseline, stable),
         retainedBodies: false, signatureKind: 'role+kind+chars+fnv1a32',
+        currentUserSignature: currentUserIndex >= 0 ? signatureKey(signatures[currentUserIndex]) : 'none',
         requestFingerprint: requestFingerprint(signatures),
         familyId: familyFingerprint(signatures),
       });
@@ -4558,7 +4566,7 @@ const EMA_ALPHA = 0.35;
 
 function freshState(key, familyId) {
   return {
-    version: 1,
+    version: 2,
     key, familyId,
     attempts: 0, distinct: 0,
     lastDistinctToken: null,
@@ -4579,7 +4587,7 @@ function freshState(key, familyId) {
 function cloneState(state) {
   if (!state) return null;
   return {
-    version: 1,
+    version: 2,
     key: String(state.key || ''), familyId: String(state.familyId || ''),
     attempts: Number(state.attempts || 0), distinct: Number(state.distinct || 0),
     lastDistinctToken: state.lastDistinctToken == null ? null : String(state.lastDistinctToken),
@@ -4605,6 +4613,7 @@ function summarize(state, familyReset, distinctObservation) {
     attempts: state.attempts,
     distinct: state.distinct,
     distinctObservation: !!distinctObservation,
+    lastObservation: distinctObservation ? 'DISTINCT' : 'RETRY',
     window: WINDOW,
     stableFloorChars: state.stableFloorChars,
     stableFloorMessages: state.stableFloorMessages,
@@ -4630,20 +4639,27 @@ function createCacheCandidateTracker() {
       }
       state.attempts += 1;
       const sendIndex = Number.isInteger(Number(extra?.sendIndex)) ? Number(extra.sendIndex) : -1;
-      const distinctToken = `${sendIndex}:${String(topology?.requestFingerprint || '')}`;
+      const userSignature = String(topology?.currentUserSignature || 'none');
+      const distinctToken = `${sendIndex}:${userSignature}`;
       const distinctObservation = state.lastDistinctToken !== distinctToken;
       if (!distinctObservation) return summarize(state, familyReset, false);
+
+      const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : (Number.isFinite(Number(topology?.at)) ? Number(topology.at) : Date.now());
+      const distinctCadence = state.lastAt == null ? null : Math.max(0, at - state.lastAt);
       state.lastDistinctToken = distinctToken;
       state.distinct += 1;
-      const cadence = Number(topology?.cadenceMs);
-      if (Number.isFinite(cadence) && cadence >= 0) {
-        state.cadenceEmaMs = state.cadenceEmaMs == null ? cadence : (EMA_ALPHA * cadence) + ((1 - EMA_ALPHA) * state.cadenceEmaMs);
+      if (distinctCadence != null) {
+        state.cadenceEmaMs = state.cadenceEmaMs == null
+          ? distinctCadence
+          : (EMA_ALPHA * distinctCadence) + ((1 - EMA_ALPHA) * state.cadenceEmaMs);
       }
+
       if (topology?.baseline || familyReset) {
         state.status = 'BASELINE';
-        state.lastAt = Number(extra?.at || topology?.at || Date.now());
+        state.lastAt = at;
         return summarize(state, familyReset, true);
       }
+
       const chars = Math.max(0, Number(topology?.commonChars || 0));
       const messages = Math.max(0, Number(topology?.commonMessages || 0));
       const priorFrontier = state.movingFrontierChars;
@@ -4671,12 +4687,12 @@ function createCacheCandidateTracker() {
         state.stableFloorChars = Math.min(...state.window.map((x) => x.chars));
         state.stableFloorMessages = Math.min(...state.window.map((x) => x.messages));
       }
-      state.lastAt = Number(extra?.at || topology?.at || Date.now());
+      state.lastAt = at;
       return summarize(state, familyReset, true);
     },
-    exportState() { return state ? { version: 1, state: cloneState(state) } : null; },
+    exportState() { return state ? { version: 2, state: cloneState(state) } : null; },
     importState(saved) {
-      if (!saved || Number(saved.version) !== 1) return false;
+      if (!saved || Number(saved.version) !== 2) return false;
       const restored = cloneState(saved.state);
       if (!restored || !restored.key || !restored.familyId) return false;
       state = restored;
@@ -4978,7 +4994,7 @@ function cachePosture(probe, contract) {
   return `${probe.requestOrder || contract?.requestOrder || 'FROZEN'} · runtime ${probe.placement || contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER'} · runtime-prefix ${prefix} · provider cache ${probe.providerCache || contract?.providerCache || 'UNVERIFIED'}`;
 }
 function cadence(ms) {
-  if (!Number.isFinite(Number(ms))) return 'BASELINE';
+  if (ms == null || !Number.isFinite(Number(ms))) return 'BASELINE';
   const value = Math.max(0, Number(ms));
   if (value < 1000) return `${value.toFixed(0)} ms`;
   if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
@@ -4996,9 +5012,9 @@ function trajectory(probe) {
   if (!probe) return 'n/a';
   const family = probe.familyId ? String(probe.familyId).slice(0, 8) : 'n/a';
   const floor = probe.stableFloorChars == null ? 'n/a' : `${Number(probe.stableFloorMessages || 0)} msgs / ${Number(probe.stableFloorChars || 0).toLocaleString('en-US')} chars`;
-  const frontier = `${Number(probe.movingFrontierMessages || 0)} msgs / ${Number(probe.movingFrontierChars || 0).toLocaleString('en-US')} chars`;
+  const frontier = probe.distinct <= 1 ? 'n/a' : `${Number(probe.movingFrontierMessages || 0)} msgs / ${Number(probe.movingFrontierChars || 0).toLocaleString('en-US')} chars`;
   const ema = probe.cadenceEmaMs == null ? 'BASELINE' : cadence(probe.cadenceEmaMs);
-  return `${probe.status || 'n/a'} · family ${family}${probe.familyReset ? ' · FAMILY_RESET' : ''} · distinct ${Number(probe.distinct || 0)} · attempts ${Number(probe.attempts || 0)} · floor ${floor} · frontier ${frontier} · streak ${Number(probe.frontierStreak || 0)} · divergence ${Number(probe.divergenceCount || 0)} · cadence EMA ${ema}`;
+  return `${probe.status || 'n/a'} · family ${family}${probe.familyReset ? ' · FAMILY_RESET' : ''} · distinct ${Number(probe.distinct || 0)} · attempts ${Number(probe.attempts || 0)} · last ${probe.lastObservation || 'n/a'} · floor ${floor} · frontier ${frontier} · streak ${Number(probe.frontierStreak || 0)} · divergence ${Number(probe.divergenceCount || 0)} · cadence EMA ${ema}`;
 }
 
 function continuity(probe) {
@@ -5006,7 +5022,20 @@ function continuity(probe) {
   if (!probe.accepted) return `FRESH · ${probe.reason || 'no-compatible-handoff'}`;
   return `ADOPTED · from ${probe.sourceVersion || '?'} · age ${cadence(probe.ageMs)} · topology ${probe.topology ? 'RESTORED' : 'FRESH'} · runtime-prefix ${probe.runtimePrefix ? 'RESTORED' : 'FRESH'} · trajectory ${probe.trajectory ? 'RESTORED' : 'FRESH'}`;
 }
-module.exports = { cachePosture, cadence, topology, trajectory, continuity };
+function fingerprintChars(value) {
+  const match = /^(\d+):/.exec(String(value || ''));
+  return match ? Number(match[1]) : null;
+}
+function representation(probe) {
+  if (!probe) return 'n/a';
+  const canonical = fingerprintChars(probe.canonicalFingerprint);
+  const fresh = fingerprintChars(probe.freshFingerprint);
+  if (canonical == null || fresh == null) return 'n/a';
+  const delta = fresh - canonical;
+  const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
+  return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
+}
+module.exports = { cachePosture, cadence, topology, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -5879,7 +5908,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity };
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.36',
+      'Version: 0.63.39',
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5906,6 +5935,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity };
       `Output mirror: ${outputBreakdown ? `DEFERRED · critical path ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
+      `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
@@ -6302,7 +6332,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     runtimeEpoch += 1;
     try {
       runtimeTelemetryRules.publish(globalThis, runtimeTelemetryRules.capture({
-        sourceVersion: '0.63.38',
+        sourceVersion: '0.63.39',
         locationKey: String(coreKey || coreLocationKey || ''),
         capturedAt: Date.now(),
         runtimePromptCache: runtimePromptCache.exportState(),

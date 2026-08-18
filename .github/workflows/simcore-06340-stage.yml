@@ -1,0 +1,91 @@
+name: Stage SimCore v0.63.40 Current Source Integrity
+
+on:
+  push:
+    branches:
+      - simcore-06340-current-source-integrity
+    paths:
+      - .simcore-06340-stage-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture exact v0.63.39 release baseline
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.39' /tmp/simcore-before.js
+          test "$(git hash-object /tmp/simcore-before.js)" = "ee4fc6b4b6590a4f631e3dd10c14fa446ed40564"
+
+      - name: Apply v0.63.40 patch
+        run: python plugins/simcore/patch_simcore_06340.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.40' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.40';" plugins/simcore/latest.js
+          grep -q 'CURRENT_ROOT_EVIDENCE' plugins/simcore/latest.js
+          grep -q 'Evidence mode:' plugins/simcore/latest.js
+          ! grep -q 'SimCore v0.63.36' plugins/simcore/latest.js
+          ! grep -q '\[simcore/v0.63.4\]' plugins/simcore/latest.js
+
+      - name: Current-source integrity and frozen-surface fixtures
+        run: node plugins/simcore/test_simcore_06340.js | tee /tmp/simcore-06340-test.txt
+
+      - name: Static lifecycle inventory
+        run: |
+          python - <<'PY' | tee /tmp/simcore-06340-inventory.txt
+          from pathlib import Path
+          import re
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          tokens = [
+              'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(',
+              'setTimeout(', 'setInterval(', 'requestAnimationFrame(', 'fetch(', 'XMLHttpRequest(',
+              'Risuai.getChatFromIndex(', 'Risuai.setChatToIndex(', 'Risuai.registerButton(', 'Risuai.registerSetting(',
+          ]
+          for token in tokens:
+              b = before.count(token); a = after.count(token)
+              assert a == b, (token, b, a)
+              print(f'{token}: {a} (unchanged)')
+          assert after.count('<CURRENT_ROOT_EVIDENCE>') >= 1
+          assert after.count('<CURRENT_SOURCE_EVIDENCE>') >= 1
+          assert 'cache_control' not in after.lower()
+          assert 'cached_content' not in after.lower()
+          print('Static lifecycle inventory: PASS')
+          PY
+
+      - name: Record staging pass
+        run: |
+          {
+            echo 'SimCore v0.63.40 staging: PASS'
+            echo 'Baseline: v0.63.39 ee4fc6b4b6590a4f631e3dd10c14fa446ed40564'
+            echo 'Branch: simcore-06340-current-source-integrity'
+            echo 'Intentional Core changes: evidence,prompt'
+            echo 'Version surface: CONSOLIDATED'
+            echo 'Evidence modes: DUAL,ROOT_ONLY,UNFENCED,INELIGIBLE'
+            echo 'Provider cache: UNVERIFIED'
+            echo 'Storage/API/timer/network call inventory: UNCHANGED'
+            echo
+            cat /tmp/simcore-06340-test.txt
+            echo
+            cat /tmp/simcore-06340-inventory.txt
+          } > .simcore-06340-stage-result.txt
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js .simcore-06340-stage-result.txt
+          git diff --cached --quiet && { echo 'No staged plugin changes produced'; exit 1; }
+          git commit -m 'Stage SimCore v0.63.40 current source integrity'
+          git push origin HEAD:${GITHUB_REF_NAME}

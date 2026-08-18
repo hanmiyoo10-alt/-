@@ -1,0 +1,24 @@
+SimCore v0.63.40 staging: PASS
+Baseline: v0.63.39 ee4fc6b4b6590a4f631e3dd10c14fa446ed40564
+Branch: simcore-06340-current-source-integrity
+Intentional Core changes: evidence,prompt
+Version surface: CONSOLIDATED
+Evidence modes: DUAL,ROOT_ONLY,UNFENCED,INELIGIBLE
+Provider cache: UNVERIFIED
+Storage/API/timer/network call inventory: UNCHANGED
+
+
+pluginStorage.getItem(: 1 (unchanged)
+pluginStorage.setItem(: 1 (unchanged)
+pluginStorage.removeItem(: 1 (unchanged)
+pluginStorage.keys(: 1 (unchanged)
+setTimeout(: 3 (unchanged)
+setInterval(: 0 (unchanged)
+requestAnimationFrame(: 0 (unchanged)
+fetch(: 0 (unchanged)
+XMLHttpRequest(: 0 (unchanged)
+Risuai.getChatFromIndex(: 1 (unchanged)
+Risuai.setChatToIndex(: 1 (unchanged)
+Risuai.registerButton(: 1 (unchanged)
+Risuai.registerSetting(: 1 (unchanged)
+Static lifecycle inventory: PASS

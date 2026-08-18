@@ -8,12 +8,18 @@ const SRC = path.join(ROOT, 'src');
 const MANIFEST = path.join(SRC, 'manifest.json');
 const LATEST = path.join(ROOT, 'latest.js');
 const hash = (content) => crypto.createHash('sha256').update(content).digest('hex');
+const WRITE = process.argv.includes('--write');
 
 const partStates = PARTS.map((part) => {
   const file = path.join(SRC, part.file);
   if (!fs.existsSync(file)) throw new Error(`missing source part: ${part.file}`);
-  const content = fs.readFileSync(file, 'utf8');
+  let content = fs.readFileSync(file, 'utf8');
   if (!content.length) throw new Error(`empty source part: ${part.file}`);
+  const normalized = content.replace(/\n+$/g, '\n');
+  if (WRITE && normalized !== content) {
+    fs.writeFileSync(file, normalized);
+    content = normalized;
+  }
   if (part.marker && !content.startsWith(part.marker)) throw new Error(`boundary drift: ${part.file}`);
   return {...part, content, bytes:Buffer.byteLength(content), sha256:hash(content)};
 });
@@ -43,7 +49,7 @@ if (process.argv.includes('--check')) {
   process.exit(0);
 }
 
-if (process.argv.includes('--write')) {
+if (WRITE) {
   fs.writeFileSync(LATEST, built);
   fs.writeFileSync(MANIFEST, manifestText);
   console.log(`usage-dashboard bundle written from modules: ${PARTS.length} modules · ${version}`);

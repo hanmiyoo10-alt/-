@@ -18,6 +18,7 @@ assert.ok(core.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v
 assert.ok(core.includes("const PROVIDER_MANAGER_CACHE_IPC_VERSION = 1;"));
 assert.ok(core.includes('const providerManagerCacheRuntime = {'));
 assert.ok(core.includes('const providerManagerCachePending = new Map();'));
+assert.ok(!bridge.endsWith('\n\n'), 'bridge module must end with exactly one newline');
 
 for (const marker of [
   'function fetchProviderManagerCacheObservability()',

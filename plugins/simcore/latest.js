@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.39
+//@version 0.63.40
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.40 Current Source Integrity & Runtime Surface Consolidation:
+// - Adds a root-first current-event authority contract so explicit facts in the current user event outrank conflicting prior versions without parsing or storing event semantics
+// - Splits Short-C request fencing into CURRENT_ROOT_EVIDENCE plus the existing CURRENT_SOURCE_EVIDENCE: safe roots remain concretely fenced even when a host-transformed assistant source fails the existing strict source-boundary gate
+// - Preserves the v0.63.39 source acceptance criteria; unsafe source boundaries are never relaxed, and root-unsafe requests remain unfenced rather than promoting source-only evidence
+// - Consolidates runtime-facing version strings through one runtime constant for panel, copied diagnostics, telemetry source version and console prefixes; plugin metadata is CI-checked against the same value
+// - Keeps trajectory/retry/EMA behavior, request order, runtime tail placement, provider-cache policy, edit/mirror acceptance, storage/API/timer/network surface, Frame/Time/Recovery and all non-Evidence/non-Prompt Core modules frozen
 //
 // v0.63.39 Cache Trajectory Identity & Representation Diagnostics:
 // - Corrects trajectory identity so repeated sends/regenerations of the same user turn increment attempts but not distinct observations; distinct identity is location + send index + current-user compact signature, while full-request topology remains separately observed
@@ -418,6 +425,9 @@
 // - Reaction abbreviations: 천/만/억 and K/M/B
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
+
+const SIMCORE_RUNTIME_VERSION = '0.63.40';
+const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
   const mods = {};
@@ -1309,6 +1319,8 @@ module.exports = {
 });
 
 SimCore.define("evidence", function (require, module, exports) {
+const ROOT_FENCE_OPEN = '<CURRENT_ROOT_EVIDENCE>';
+const ROOT_FENCE_CLOSE = '</CURRENT_ROOT_EVIDENCE>';
 const FENCE_OPEN = '<CURRENT_SOURCE_EVIDENCE>';
 const FENCE_CLOSE = '</CURRENT_SOURCE_EVIDENCE>';
 const MAX_SOURCE_NORM_DELTA = 64;
@@ -1502,9 +1514,33 @@ function stringSlot(message) {
   return null;
 }
 
+function fenceProbe(status, reason, shape, normDelta) {
+  return {
+    status,
+    reason,
+    requestIndex: Number(shape?.requestIndex ?? -1),
+    role: shape?.role || null,
+    shape: shape?.stage || null,
+    normDelta: normDelta == null ? null : Number(normDelta),
+  };
+}
+
+function applyWholeMessageFence(rows, shape, openTag, closeTag, normDelta) {
+  const message = rows[shape.requestIndex];
+  const slot = stringSlot(message);
+  if (!slot) return fenceProbe('SKIPPED', 'non-string-slot', shape, normDelta);
+  const current = message[slot];
+  if (current.includes(openTag) || current.includes(closeTag)) return fenceProbe('SKIPPED', 'already-fenced', shape, normDelta);
+  rows[shape.requestIndex] = { ...message, [slot]: `${openTag}\n${current}\n${closeTag}` };
+  return fenceProbe('APPLIED', 'safe-whole-message', shape, normDelta);
+}
+
 function inspectAndFence(requestMessages, chatMessages, pending, sendIndex, getText) {
   const mapping = mappingProbe(requestMessages, chatMessages, pending, sendIndex, getText);
-  if (!mapping) return { mapping: null, fence: { status: 'INELIGIBLE', reason: 'source-lock-off', requestIndex: -1, role: null, sourceShape: null, normDelta: null } };
+  if (!mapping) {
+    const none = fenceProbe('INELIGIBLE', 'source-lock-off', null, null);
+    return { mapping: null, mode: 'INELIGIBLE', rootFence: none, sourceFence: none, fence: none };
+  }
   const rootShape = {
     stage: mapping.rootUserShape, count: mapping.rootUserMatches, requestIndex: mapping.rootUserRequestIndex,
     role: mapping.rootUserRequestRole, targetNormChars: mapping.rootUserNormChars, requestNormChars: mapping.rootUserRequestNormChars,
@@ -1515,20 +1551,36 @@ function inspectAndFence(requestMessages, chatMessages, pending, sendIndex, getT
     role: mapping.sourceAssistantRequestRole, targetNormChars: mapping.sourceAssistantNormChars, requestNormChars: mapping.sourceAssistantRequestNormChars,
     anchorMask: mapping.sourceAssistantAnchorMask, leadingGap: mapping.sourceAssistantLeadingGap, trailingGap: mapping.sourceAssistantTrailingGap,
   };
-  const normDelta = smallDelta(sourceShape).delta;
-  if (!rootBoundarySafe(rootShape)) return { mapping, fence: { status: 'SKIPPED', reason: 'unsafe-root-boundary', requestIndex: sourceShape.requestIndex, role: sourceShape.role, sourceShape: sourceShape.stage, normDelta } };
-  if (!sourceBoundarySafe(sourceShape)) return { mapping, fence: { status: 'SKIPPED', reason: 'unsafe-source-boundary', requestIndex: sourceShape.requestIndex, role: sourceShape.role, sourceShape: sourceShape.stage, normDelta } };
+  const rootDelta = smallDelta(rootShape, 16).delta;
+  const sourceDelta = smallDelta(sourceShape).delta;
   const rows = Array.isArray(requestMessages) ? requestMessages : [];
-  const message = rows[sourceShape.requestIndex];
-  const slot = stringSlot(message);
-  if (!slot) return { mapping, fence: { status: 'SKIPPED', reason: 'non-string-source-slot', requestIndex: sourceShape.requestIndex, role: sourceShape.role, sourceShape: sourceShape.stage, normDelta } };
-  const current = message[slot];
-  if (current.includes(FENCE_OPEN) || current.includes(FENCE_CLOSE)) return { mapping, fence: { status: 'SKIPPED', reason: 'already-fenced', requestIndex: sourceShape.requestIndex, role: sourceShape.role, sourceShape: sourceShape.stage, normDelta } };
-  rows[sourceShape.requestIndex] = { ...message, [slot]: `${FENCE_OPEN}\n${current}\n${FENCE_CLOSE}` };
-  return { mapping, fence: { status: 'APPLIED', reason: 'safe-whole-message', requestIndex: sourceShape.requestIndex, role: sourceShape.role, sourceShape: sourceShape.stage, normDelta } };
+
+  if (!rootBoundarySafe(rootShape)) {
+    const rootFence = fenceProbe('SKIPPED', 'unsafe-root-boundary', rootShape, rootDelta);
+    const sourceFence = fenceProbe('SKIPPED', 'root-boundary-required', sourceShape, sourceDelta);
+    return { mapping, mode: 'UNFENCED', rootFence, sourceFence, fence: rootFence };
+  }
+
+  const rootFence = applyWholeMessageFence(rows, rootShape, ROOT_FENCE_OPEN, ROOT_FENCE_CLOSE, rootDelta);
+  if (rootFence.status !== 'APPLIED') {
+    const sourceFence = fenceProbe('SKIPPED', 'root-fence-required', sourceShape, sourceDelta);
+    return { mapping, mode: 'UNFENCED', rootFence, sourceFence, fence: rootFence };
+  }
+
+  if (!sourceBoundarySafe(sourceShape)) {
+    const sourceFence = fenceProbe('SKIPPED', 'unsafe-source-boundary', sourceShape, sourceDelta);
+    return { mapping, mode: 'ROOT_ONLY', rootFence, sourceFence, fence: rootFence };
+  }
+
+  const sourceFence = applyWholeMessageFence(rows, sourceShape, FENCE_OPEN, FENCE_CLOSE, sourceDelta);
+  const mode = sourceFence.status === 'APPLIED' ? 'DUAL' : 'ROOT_ONLY';
+  return { mapping, mode, rootFence, sourceFence, fence: sourceFence.status === 'APPLIED' ? sourceFence : rootFence };
 }
 
-module.exports = { FENCE_OPEN, FENCE_CLOSE, normalize, mappingProbe, inspectAndFence };
+module.exports = {
+  ROOT_FENCE_OPEN, ROOT_FENCE_CLOSE, FENCE_OPEN, FENCE_CLOSE,
+  normalize, mappingProbe, inspectAndFence,
+};
 });
 
 SimCore.define("kernel", function (require, module, exports) {
@@ -3168,6 +3220,7 @@ function compileStableContract() {
     'response_envelope=exactly_one_no_restart',
     'period_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline',
     'do_not_replay_completed_prior_period_transition_as_current_period_transition=1',
+    'current_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions',
     'reference_sources=character_card+currently_exposed_lore_if_present',
     'character_world_facts_use_reference_sources=1',
     'knowledge_required=1',
@@ -3244,10 +3297,13 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push(`short_community_source_root_mode=${sourceRootMode}`);
     lines.push(`short_community_source_root_index=${sourceRootIndex}`);
     lines.push('short_community_source_is_authoritative=1');
+    lines.push('current_root_evidence=CURRENT_ROOT_EVIDENCE_when_present;root_explicit_facts_highest_authority=1');
+    lines.push('current_source_evidence=CURRENT_SOURCE_EVIDENCE_when_present;rendered_context_only_when_conflicting_with_root=1');
+    lines.push('event_fact_precedence=CURRENT_ROOT_EVIDENCE>current_lineage_root>CURRENT_SOURCE_EVIDENCE>prior_similar_history');
     lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');
-    lines.push('source_event_identity_and_facts=current_lineage_root+CURRENT_SOURCE_EVIDENCE_when_present;do_not_import_prior_similar_event_details=1');
+    lines.push('source_event_identity_and_facts=current_root_first;do_not_import_prior_similar_event_details=1');
     lines.push('abstract_generalization_from_current_root_allowed=1;stable_character_world_background_allowed_as_context_not_event_evidence=1;reaction_opinion_joke_tone_emphasis_free=1');
-    lines.push('specific_event_example_scene_action_item_quote_or_outcome_requires_CURRENT_SOURCE_EVIDENCE_support_when_present_else_current_root_support=1;outside_root_specifics_omit=1');
+    lines.push('specific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support;CURRENT_SOURCE_EVIDENCE_may_support_only_nonconflicting_rendered_details=1;outside_root_specifics_omit=1');
     lines.push('outside_root_specific_event_evidence_only_if_current_user_explicitly_requests_prior_events_history_comparison_or_retrospective=1;boundary_applies_title_body_comments_descriptions_Knowledge=1');
     if (p.communitySourceHandoffNewSource) {
       lines.push(`short_community_request_reused_with_new_source=${sourceRootMode}`);
@@ -4911,7 +4967,7 @@ function createMirrorRuntime(deps) {
       return true;
     } catch (e) {
       if (detail) { detail.status = 'ERROR'; detail.errorName = e?.name || 'Error'; }
-      console.log('[simcore/v0.63.4] state mirror failed:', e.message);
+      console.log(SIMCORE_LOG_PREFIX + ' state mirror failed:', e.message);
       return false;
     }
   }
@@ -5158,7 +5214,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
       return;
     }
     const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
-    if (r.changed) console.log('[simcore/v0.63.4] manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    if (r.changed) console.log(SIMCORE_LOG_PREFIX + ' manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -5285,7 +5341,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
         ? evidenceRules.inspectAndFence(messages, chat?.message || [], result.state.pending, sendIndex, textMessageContent)
         : null;
       lastEvidenceMappingProbe = evidenceResult?.mapping || null;
-      lastEvidenceFenceProbe = evidenceResult?.fence || null;
+      lastEvidenceFenceProbe = evidenceResult || null;
       const runtimePromptKey = String(coreKey || coreLocationKey || '');
       if (!telemetryAdoptionAttempted) {
         telemetryAdoptionAttempted = true;
@@ -5445,8 +5501,8 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
 
     const issues = result.issues || [];
     const diagnostics = result.envelopeDiagnostics || [];
-    if (issues.length) console.log('[simcore/v0.63.4] structure warnings:', issues.join(' / '));
-    if (diagnostics.length) console.log('[simcore/v0.63.4] compatibility diagnostics:', diagnostics.join(' / '));
+    if (issues.length) console.log(SIMCORE_LOG_PREFIX + ' structure warnings:', issues.join(' / '));
+    if (diagnostics.length) console.log(SIMCORE_LOG_PREFIX + ' compatibility diagnostics:', diagnostics.join(' / '));
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
     lastPreambleProvenance = result.preambleProvenance || null;
 
@@ -5458,7 +5514,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
 
     t = perfNow();
     const normalizationIssues = ops.normalizationIssues(result.state);
-    if (normalizationIssues.length) console.log('[simcore/v0.63.4] reaction normalization:', normalizationIssues.join(' / '));
+    if (normalizationIssues.length) console.log(SIMCORE_LOG_PREFIX + ' reaction normalization:', normalizationIssues.join(' / '));
     lastFrameGuardProbe = result.frameGuardProbe || null;
     if (result.narrativeClockProbe) {
       const priorProbe = lastNarrativeClockProbe && lastNarrativeClockProbe.sendIndex === result.narrativeClockProbe.sendIndex
@@ -5528,7 +5584,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
       await prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf);
     } catch (e) {
       markDiagnosticRequestProbe(requestSendIndex, { status: 'ERROR', active: false, mode: null, errorStage: 'beforeRequest', errorName: e?.name || 'Error' });
-      console.log('[simcore/v0.63.4] beforeRequest error:', e.message);
+      console.log(SIMCORE_LOG_PREFIX + ' beforeRequest error:', e.message);
     } finally {
       perf.totalMs = perfMs(totalStart);
       lastPerf = perf;
@@ -5566,7 +5622,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
       return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
     } catch (e) {
       if (lastDiagnosticRequestProbe) Object.assign(lastDiagnosticRequestProbe, { outputStatus: 'ERROR', outputErrorStage: 'output', outputErrorName: e?.name || 'Error' });
-      console.log('[simcore/v0.63.4] output error:', e.message);
+      console.log(SIMCORE_LOG_PREFIX + ' output error:', e.message);
       return content;
     } finally {
       perf.totalMs = perfMs(totalStart);
@@ -5908,7 +5964,7 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
-      'Version: 0.63.39',
+      `Version: ${SIMCORE_RUNTIME_VERSION}`,
       `Captured: ${new Date(capturedAt).toISOString()}`,
       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
@@ -5962,7 +6018,9 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
       `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'CLAMPED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
       `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
-      `Evidence fence: ${evidenceFence ? `${evidenceFence.status} · request @${evidenceFence.requestIndex >= 0 ? evidenceFence.requestIndex : 'n/a'} role ${evidenceFence.role || 'n/a'} · source ${evidenceFence.sourceShape || 'n/a'} · delta ${evidenceFence.normDelta == null ? 'n/a' : evidenceFence.normDelta} · ${evidenceFence.reason || 'n/a'}` : 'n/a'}`,
+      `Evidence mode: ${evidenceFence?.mode || 'n/a'}`,
+      `Evidence root fence: ${evidenceFence?.rootFence ? `${evidenceFence.rootFence.status} · request @${evidenceFence.rootFence.requestIndex >= 0 ? evidenceFence.rootFence.requestIndex : 'n/a'} role ${evidenceFence.rootFence.role || 'n/a'} · shape ${evidenceFence.rootFence.shape || 'n/a'} · delta ${evidenceFence.rootFence.normDelta == null ? 'n/a' : evidenceFence.rootFence.normDelta} · ${evidenceFence.rootFence.reason || 'n/a'}` : 'n/a'}`,
+      `Evidence source fence: ${evidenceFence?.sourceFence ? `${evidenceFence.sourceFence.status} · request @${evidenceFence.sourceFence.requestIndex >= 0 ? evidenceFence.sourceFence.requestIndex : 'n/a'} role ${evidenceFence.sourceFence.role || 'n/a'} · shape ${evidenceFence.sourceFence.shape || 'n/a'} · delta ${evidenceFence.sourceFence.normDelta == null ? 'n/a' : evidenceFence.sourceFence.normDelta} · ${evidenceFence.sourceFence.reason || 'n/a'}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
@@ -6162,7 +6220,7 @@ details.card{padding:0}details.card>summary{cursor:pointer;padding:13px;font-wei
 @media(max-width:520px){.wrap{padding:0 12px 14px}.topbar{align-items:flex-start}.title{font-size:16px}.subtitle{display:none}.actions button{padding:6px 8px;font-size:11px}.frame-grid{grid-template-columns:1fr}.health{gap:5px}.chip{padding:5px 7px}}
 </style><div class="wrap">
 <div class="topbar">
-<div><div class="title">⚙️ SimCore v0.63.36</div><div class="subtitle">Evidence Fence · request-only source boundary</div></div>
+<div><div class="title">⚙️ SimCore v${escapeHtml(SIMCORE_RUNTIME_VERSION)}</div><div class="subtitle">Runtime & Integrity Diagnostics</div></div>
 <div class="actions"><button id="copy-turn-diag">최근 2턴 진단 복사</button><button id="close">닫기</button></div>
 </div>
 <div class="health">
@@ -6314,7 +6372,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
       document.getElementById('close').onclick = () => Risuai.hideContainer();
       await Risuai.showContainer('fullscreen');
     } catch (e) {
-      console.log('[simcore/v0.63.4] panel error:', e.message);
+      console.log(SIMCORE_LOG_PREFIX + ' panel error:', e.message);
     }
   }
 
@@ -6324,7 +6382,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     const settingPart = await Risuai.registerSetting('SimCore', openPanel, '⚙️', 'html');
     if (settingPart?.id) simcoreUiParts.push(settingPart);
   } catch (e) {
-    console.log('[simcore/v0.63.4] UI registration failed:', e.message);
+    console.log(SIMCORE_LOG_PREFIX + ' UI registration failed:', e.message);
   }
 
   await Risuai.onUnload(async () => {
@@ -6332,7 +6390,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     runtimeEpoch += 1;
     try {
       runtimeTelemetryRules.publish(globalThis, runtimeTelemetryRules.capture({
-        sourceVersion: '0.63.39',
+        sourceVersion: SIMCORE_RUNTIME_VERSION,
         locationKey: String(coreKey || coreLocationKey || ''),
         capturedAt: Date.now(),
         runtimePromptCache: runtimePromptCache.exportState(),
@@ -6360,5 +6418,5 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     lastDiagnosticRequestProbe = null;
     runtimeMirror.clear();
   });
-  console.log('[simcore/v0.63.4] initialized');
+  console.log(SIMCORE_LOG_PREFIX + ' initialized');
 })();

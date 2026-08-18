@@ -54,7 +54,6 @@
         state.bridgeManagerRuntime = managerRuntime;
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
         refreshPhaseStarted = refreshPhaseNow();
-        const providerManagerCachePromise = fetchProviderManagerCacheObservability();
         const snapshot = await fetchSnapshot();
         finishRefreshPhase('snapshot', refreshPhaseStarted);
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
@@ -63,10 +62,6 @@
         refreshPhaseStarted = refreshPhaseNow();
         state.data = applyObservedToday(snapshot);
         finishRefreshPhase('normalize-ledger', refreshPhaseStarted);
-        refreshPhaseStarted = refreshPhaseNow();
-        const providerManagerCache = await providerManagerCachePromise;
-        enrichDataWithProviderManagerCache(state.data, providerManagerCache);
-        finishRefreshPhase('provider-cache', refreshPhaseStarted);
         if (state.data?.creditsOrganizationFallback && state.data?.creditsOrganizationId) {
           const from = String(state.data.requestedCreditsOrganizationId || state.selectedCreditsOrgId || '');
           const to = String(state.data.creditsOrganizationId || '');
@@ -107,6 +102,7 @@
         }
         scheduleRefresh();
         schedulePanelRender(false);
+        scheduleProviderManagerCacheEnrichment(state.data, refreshEpoch, refreshLifecycleGeneration);
       } catch (e) {
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();

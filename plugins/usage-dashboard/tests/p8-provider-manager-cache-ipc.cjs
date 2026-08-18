@@ -12,7 +12,7 @@ const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
 assert.ok(core.includes('//@allowed-ipc provider-manager'), 'Dashboard must mutually whitelist Provider Manager');
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.48';"));
+assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.49';"));
 assert.ok(core.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
 assert.ok(core.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));
 assert.ok(core.includes("const PROVIDER_MANAGER_CACHE_IPC_VERSION = 1;"));
@@ -36,9 +36,11 @@ for (const marker of [
   'cacheCreation1hTokens'
 ]) assert.ok(latest.includes(marker) || bridge.includes(marker), `missing PM cache IPC marker: ${marker}`);
 
-assert.ok(refresh.includes('const providerManagerCachePromise = fetchProviderManagerCacheObservability();'));
-assert.ok(refresh.includes("finishRefreshPhase('provider-cache'"));
-assert.ok(refresh.indexOf('enrichDataWithProviderManagerCache(state.data, providerManagerCache);') < refresh.indexOf('collectRecentRequestLedger(state.data);'), 'PM enrichment must happen before ledger merge');
+assert.ok(bridge.includes('function fetchProviderManagerCacheObservability()'));
+assert.ok(bridge.includes('function scheduleProviderManagerCacheEnrichment('));
+assert.ok(refresh.includes('scheduleProviderManagerCacheEnrichment(state.data, refreshEpoch, refreshLifecycleGeneration);'));
+assert.ok(!refresh.includes('const providerManagerCachePromise = fetchProviderManagerCacheObservability();'));
+assert.ok(!refresh.includes("finishRefreshPhase('provider-cache'"));
 
 assert.ok(diag.includes('Provider Manager cache IPC:'));
 assert.ok(diag.includes('Provider Manager IPC v1 when available'));
@@ -71,10 +73,10 @@ assert.ok(!projection.includes('requestBody:String'), 'patcher projection must n
 assert.ok(!projection.includes('responseBody:String'), 'patcher projection must not export response bodies');
 assert.ok(!projection.includes('authorization:'), 'patcher projection must not export authorization headers');
 
-assert.ok(latest.includes('//@version 3.0.0-alpha.5.48'));
+assert.ok(latest.includes('//@version 3.0.0-alpha.5.49'));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.48';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.48');
+assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.49';"));
+assert.equal(manifest.productVersion, '3.0.0-alpha.5.49');
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});

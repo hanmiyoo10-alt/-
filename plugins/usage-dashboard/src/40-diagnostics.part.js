@@ -27,7 +27,10 @@
 
   function providerManagerCacheDiagnosticText() {
     const r = providerManagerCacheRuntime;
-    return `${r.status || 'idle'} · v${PROVIDER_MANAGER_CACHE_IPC_VERSION} · source ${r.source || '—'} · rows ${Number(r.responseRows || 0)} · token rows ${Number(r.responseTokenRows || 0)} · matched ${Number(r.matched || 0)} (exact ${Number(r.exact || 0)} / strong ${Number(r.strong || 0)}) · ambiguous ${Number(r.ambiguous || 0)} · unmatched ${Number(r.unmatched || 0)} · error ${r.lastError || 'none'}`;
+    const circuit = r.circuitState || 'closed';
+    const retrySeconds = circuit === 'open' && num(r.openUntil) ? Math.max(0, Math.ceil((Number(r.openUntil) - Date.now()) / 1000)) : null;
+    const integration = r.status === 'ready' ? 'ready' : r.inFlight ? 'probing' : 'degraded';
+    return `${r.status || 'idle'} · v${PROVIDER_MANAGER_CACHE_IPC_VERSION} · optional ${integration} · probe ${r.inFlight ? 'running' : 'idle'} · duration ${num(r.lastDurationMs) ? `${Number(r.lastDurationMs)}ms` : '—'} · circuit ${circuit}${retrySeconds !== null ? ` · next ${retrySeconds}s` : ''} · source ${r.source || '—'}${r.stale ? ' stale' : ''} · rows ${Number(r.responseRows || 0)} · token rows ${Number(r.responseTokenRows || 0)} · matched ${Number(r.matched || 0)} (exact ${Number(r.exact || 0)} / strong ${Number(r.strong || 0)}) · ambiguous ${Number(r.ambiguous || 0)} · unmatched ${Number(r.unmatched || 0)} · patches ${Number(r.patches || 0)} · stale drops ${Number(r.staleDrops || 0)} · coalesced ${Number(r.coalesced || 0)} · error ${r.lastError || 'none'}`;
   }
 
   function diagText() {
@@ -83,6 +86,7 @@
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
       `Provider Manager cache IPC: ${providerManagerCacheDiagnosticText()}`,
+      `Optional integrations: Provider cache ${providerManagerCacheRuntime.status === 'ready' ? 'ready' : providerManagerCacheRuntime.inFlight ? 'probing' : 'degraded'} · primary refresh independent`,
       `Cache semantics: request HIT rate != token Read ratio · unknown stays unknown · source request metadata / Bridge aggregates / Provider Manager IPC v1 when available`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,

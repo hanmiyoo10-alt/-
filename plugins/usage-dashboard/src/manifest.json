@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.48",
+  "version": "3.0.0-alpha.5.49",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "51988b9ec147d83f14a2c6269ed7b39ffbd4d35a96307f2763c1fe8aadb0ab5d",
+  "artifactSha256": "a3f3ef8200c01f78fd80a766d88b4c18d574c5128c417c0b2b8850fb204fd65c",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 14468,
-      "sha256": "1c09bdfaa7fc784aa91273a6032043fe754e703081dcf09bbd3e4c5a1d9c9e64"
+      "bytes": 14841,
+      "sha256": "a467cf4f07aa08154b38442caee8446ac0c07db154d556ee1f535a2f44126d88"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -64,20 +64,20 @@
     {
       "file": "20-bridge-io.part.js",
       "label": "bridge I/O",
-      "bytes": 20337,
-      "sha256": "620250d5665c7941c59fb66de303df2942e381e41dd6b28fa44b4ac3e9d47ea0"
+      "bytes": 23215,
+      "sha256": "1b18c9d2d84ba20b88ffe24ad68f4a16825b33af654703d9a9410b194664bfc9"
     },
     {
       "file": "30-refresh-runtime.part.js",
       "label": "refresh runtime",
-      "bytes": 9799,
-      "sha256": "048e2fa7b9c64e156278e1e9b5bad1065c6e51bb67ea7d27a7488084f51bf840"
+      "bytes": 9549,
+      "sha256": "b114bbe0f435f98e13ccbc9c602c4c3dbf0835c1f95fc7685305a6e7962a3444"
     },
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 28411,
-      "sha256": "6e406e550059045ddace4c57149e580c201380f88a3b2f5d02d43fa77669ef51"
+      "bytes": 29274,
+      "sha256": "5d17b8f4df9d65ec799740d2e93ab1e832289f9b3909e9f7a374818c9b3a9110"
     },
     {
       "file": "50-dashboard-context.part.js",
@@ -136,8 +136,8 @@
     {
       "file": "90-bootstrap.part.js",
       "label": "bootstrap/unload",
-      "bytes": 2026,
-      "sha256": "31e4c180dd55705077b8cef5c8daf280b4a854c5961b34294a5aa57a18cf9248"
+      "bytes": 2477,
+      "sha256": "f947b251b1889adc469224cf83ddd9ee9a42a25e2e035410e91cd7135be99ee9"
     }
   ]
 }

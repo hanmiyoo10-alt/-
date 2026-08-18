@@ -207,14 +207,17 @@
   }
 
   async function fetchProviderManagerCacheObservability() {
+    const runtime = providerManagerCacheRuntime;
     const now = Date.now();
     if (!providerManagerCacheListener()) return {ok:false,status:'unavailable',rows:[]};
-    if (providerManagerCacheRuntime.supported !== true && providerManagerCacheRuntime.lastRequestedAt && now - Number(providerManagerCacheRuntime.lastRequestedAt) < PROVIDER_MANAGER_CACHE_RETRY_MS) {
-      return {ok:false,status:providerManagerCacheRuntime.status || 'backoff',rows:[]};
+    if (runtime.circuitState === 'open' && now < Number(runtime.openUntil || 0)) {
+      return {ok:false,status:'circuit-open',error:runtime.lastError || 'Provider Manager cache IPC circuit open',rows:[]};
     }
-    providerManagerCacheRuntime.lastRequestedAt = now;
-    providerManagerCacheRuntime.status = 'probing';
-    providerManagerCacheRuntime.lastError = '';
+    if (runtime.circuitState === 'open') runtime.circuitState = 'half-open';
+    runtime.lastRequestedAt = now;
+    runtime.status = 'probing';
+    runtime.inFlight = true;
+    const startedAt = typeof performance?.now === 'function' ? performance.now() : Date.now();
     const id = providerManagerCacheRequestId();
     const result = await new Promise(resolve => {
       const timer = setTimeout(() => {
@@ -236,20 +239,32 @@
         resolve({ok:false,status:'blocked',error:error?.message || String(error),rows:[]});
       }
     });
+    const endedAt = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    runtime.lastDurationMs = Math.max(0, Math.round(endedAt - startedAt));
+    runtime.lastCompletedAt = Date.now();
+    runtime.inFlight = false;
     if (!result?.ok) {
-      providerManagerCacheRuntime.status = String(result?.status || 'error');
-      providerManagerCacheRuntime.lastError = String(result?.error || '');
-      providerManagerCacheRuntime.responseRows = 0;
-      providerManagerCacheRuntime.responseTokenRows = 0;
+      runtime.status = String(result?.status || 'error');
+      runtime.lastError = String(result?.error || '');
+      runtime.failures = Number(runtime.failures || 0) + 1;
+      runtime.stale = runtime.supported === true;
+      const exponent = Math.max(0, runtime.failures - 1);
+      const backoffMs = Math.min(PROVIDER_MANAGER_CACHE_MAX_BACKOFF_MS, PROVIDER_MANAGER_CACHE_RETRY_MS * (2 ** exponent));
+      runtime.circuitState = 'open';
+      runtime.openUntil = Date.now() + backoffMs;
       return result;
     }
-    providerManagerCacheRuntime.status = 'ready';
-    providerManagerCacheRuntime.supported = true;
-    providerManagerCacheRuntime.source = String(result.source || 'provider-manager');
-    providerManagerCacheRuntime.lastResponseAt = Date.now();
-    providerManagerCacheRuntime.responseRows = result.rows.length;
-    providerManagerCacheRuntime.responseTokenRows = result.rows.filter(row => providerManagerCacheMetricKnown(row?.usage)).length;
-    providerManagerCacheRuntime.lastError = '';
+    runtime.status = 'ready';
+    runtime.supported = true;
+    runtime.stale = false;
+    runtime.failures = 0;
+    runtime.circuitState = 'closed';
+    runtime.openUntil = 0;
+    runtime.source = String(result.source || 'provider-manager');
+    runtime.lastResponseAt = Date.now();
+    runtime.responseRows = result.rows.length;
+    runtime.responseTokenRows = result.rows.filter(row => providerManagerCacheMetricKnown(row?.usage)).length;
+    runtime.lastError = '';
     return result;
   }
 
@@ -369,4 +384,48 @@
       if (match) providerManagerCacheApply(request, match.row, match);
     }
     return data;
+  }
+
+  function providerManagerCacheCircuitBlocked() {
+    const runtime = providerManagerCacheRuntime;
+    return runtime.circuitState === 'open' && Date.now() < Number(runtime.openUntil || 0);
+  }
+
+  function scheduleProviderManagerCacheEnrichment(targetData = state?.data, epoch = runtimeEpoch, lifecycleGeneration = bridgeLifecycleRuntime.generation) {
+    if (!targetData || runtimeDisposed || !canBridgeRefresh()) return false;
+    if (providerManagerCacheCircuitBlocked()) return false;
+    if (providerManagerCacheProbeTimer || providerManagerCacheProbePromise) {
+      providerManagerCacheRuntime.coalesced = Number(providerManagerCacheRuntime.coalesced || 0) + 1;
+      return false;
+    }
+    providerManagerCacheProbeTimer = setTimeout(() => {
+      providerManagerCacheProbeTimer = null;
+      if (!runtimeIsCurrent(epoch) || !lifecycleRefreshIsCurrent(lifecycleGeneration) || state.data !== targetData) {
+        providerManagerCacheRuntime.staleDrops = Number(providerManagerCacheRuntime.staleDrops || 0) + 1;
+        return;
+      }
+      providerManagerCacheProbePromise = (async () => {
+        const payload = await fetchProviderManagerCacheObservability();
+        if (!runtimeIsCurrent(epoch) || !lifecycleRefreshIsCurrent(lifecycleGeneration) || state.data !== targetData) {
+          providerManagerCacheRuntime.staleDrops = Number(providerManagerCacheRuntime.staleDrops || 0) + 1;
+          return;
+        }
+        if (payload?.ok) {
+          enrichDataWithProviderManagerCache(targetData, payload);
+          collectRecentRequestLedger(targetData);
+          providerManagerCacheRuntime.patches = Number(providerManagerCacheRuntime.patches || 0) + 1;
+        }
+        schedulePanelRender(false);
+      })().catch(error => {
+        providerManagerCacheRuntime.status = 'error';
+        providerManagerCacheRuntime.lastError = error?.message || String(error);
+        providerManagerCacheRuntime.failures = Number(providerManagerCacheRuntime.failures || 0) + 1;
+        providerManagerCacheRuntime.circuitState = 'open';
+        providerManagerCacheRuntime.openUntil = Date.now() + PROVIDER_MANAGER_CACHE_RETRY_MS;
+      }).finally(() => {
+        providerManagerCacheRuntime.inFlight = false;
+        providerManagerCacheProbePromise = null;
+      });
+    }, PROVIDER_MANAGER_CACHE_SIDE_PROBE_DELAY_MS);
+    return true;
   }

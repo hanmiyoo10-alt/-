@@ -1,22 +1,24 @@
-name: Stage Usage Dashboard 3.0.0-alpha.5.48 Provider Manager Cache IPC
+name: Stage Usage Dashboard 3.0.0-alpha.5.49 Cache IPC Hardening
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
-      - 'plugins/usage-dashboard/tools/release_provider_manager_cache_ipc_548.py'
+      - 'plugins/usage-dashboard/tools/release_provider_manager_cache_hardening_549.py'
       - 'plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py'
       - 'plugins/usage-dashboard/tests/p7-cache-observability.cjs'
       - 'plugins/usage-dashboard/tests/p8-provider-manager-cache-ipc.cjs'
+      - 'plugins/usage-dashboard/tests/p9-provider-manager-cache-hardening.cjs'
   pull_request:
     branches: [main]
     paths:
       - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
-      - 'plugins/usage-dashboard/tools/release_provider_manager_cache_ipc_548.py'
+      - 'plugins/usage-dashboard/tools/release_provider_manager_cache_hardening_549.py'
       - 'plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py'
       - 'plugins/usage-dashboard/tests/p7-cache-observability.cjs'
       - 'plugins/usage-dashboard/tests/p8-provider-manager-cache-ipc.cjs'
+      - 'plugins/usage-dashboard/tests/p9-provider-manager-cache-hardening.cjs'
 
 permissions:
   contents: write
@@ -30,18 +32,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch Provider Manager cache IPC candidate
+      - name: Build and validate 5.49 Cache IPC Hardening candidate
         shell: bash
         run: |
           set -euo pipefail
-          exec > >(tee /tmp/stage-548.log) 2>&1
-          python3 -m py_compile plugins/usage-dashboard/tools/release_provider_manager_cache_ipc_548.py
+          exec > >(tee /tmp/stage-549.log) 2>&1
+          python3 -m py_compile plugins/usage-dashboard/tools/release_provider_manager_cache_hardening_549.py
           python3 -m py_compile plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py
           python3 plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py --self-test
-          if grep -Fq "const VERSION = '3.0.0-alpha.5.48';" plugins/usage-dashboard/src/00-runtime-core.part.js; then
-            echo '5.48 candidate already materialized; skipping 5.47 -> 5.48 patch step'
+          if grep -Fq "const VERSION = '3.0.0-alpha.5.49';" plugins/usage-dashboard/src/00-runtime-core.part.js; then
+            echo '5.49 candidate already materialized; skipping 5.48 -> 5.49 patch step'
           else
-            python3 plugins/usage-dashboard/tools/release_provider_manager_cache_ipc_548.py
+            python3 plugins/usage-dashboard/tools/release_provider_manager_cache_hardening_549.py
           fi
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
@@ -77,31 +79,37 @@ jobs:
             p6-rc-contract.cjs \
             p6-release-hardening.cjs \
             p7-cache-observability.cjs \
-            p8-provider-manager-cache-ipc.cjs; do
+            p8-provider-manager-cache-ipc.cjs \
+            p9-provider-manager-cache-hardening.cjs; do
             node "plugins/usage-dashboard/tests/$test"
           done
 
           git diff --check
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
-          grep -Fq '//@version 3.0.0-alpha.5.48' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.49' plugins/usage-dashboard/latest.js
           grep -Fq '//@allowed-ipc provider-manager' plugins/usage-dashboard/latest.js
-          grep -Fq "const VERSION = '3.0.0-alpha.5.48';" plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.49';" plugins/usage-dashboard/latest.js
           grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.5';" plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.48';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.48"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.49';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.49"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq 'Stable readiness:' plugins/usage-dashboard/latest.js
           grep -Fq 'Cache observability:' plugins/usage-dashboard/latest.js
           grep -Fq 'Provider Manager cache IPC:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Optional integrations: Provider cache' plugins/usage-dashboard/latest.js
+          grep -Fq 'primary refresh independent' plugins/usage-dashboard/latest.js
           grep -Fq "op:'cacheObservability'" plugins/usage-dashboard/latest.js
+          grep -Fq 'function scheduleProviderManagerCacheEnrichment' plugins/usage-dashboard/latest.js
           grep -Fq "request.cacheMetricSource = 'provider-manager-ipc-v1'" plugins/usage-dashboard/latest.js
           grep -Fq 'Cache Read' plugins/usage-dashboard/latest.js
           grep -Fq 'Cache Write' plugins/usage-dashboard/latest.js
           grep -Fq 'Token Read Ratio' plugins/usage-dashboard/latest.js
           grep -Fq "const STATE_KEY = 'local-usage-dashboard-v3';" plugins/usage-dashboard/latest.js
           grep -Fq "const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';" plugins/usage-dashboard/latest.js
+          ! grep -Fq 'const providerManagerCachePromise = fetchProviderManagerCacheObservability();' plugins/usage-dashboard/src/30-refresh-runtime.part.js
+          ! grep -Fq "finishRefreshPhase('provider-cache'" plugins/usage-dashboard/src/30-refresh-runtime.part.js
           ! grep -Fq 'pm_request_logs' plugins/usage-dashboard/latest.js
 
       - name: Persist staging failure log
@@ -110,20 +118,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p plugins/usage-dashboard
-          if [ -f /tmp/stage-548.log ]; then
-            cp /tmp/stage-548.log plugins/usage-dashboard/stage-548-failure.log
+          if [ -f /tmp/stage-549.log ]; then
+            cp /tmp/stage-549.log plugins/usage-dashboard/stage-549-failure.log
           else
-            printf '5.48 staging failed before the candidate log was created.\n' > plugins/usage-dashboard/stage-548-failure.log
+            printf '5.49 staging failed before the candidate log was created.\n' > plugins/usage-dashboard/stage-549-failure.log
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add plugins/usage-dashboard/stage-548-failure.log
+          git add plugins/usage-dashboard/stage-549-failure.log
           git diff --cached --quiet && exit 0
-          git commit -m 'ci: capture 5.48 staging failure'
+          git commit -m 'ci: capture 5.49 staging failure'
           git pull --rebase origin main
           git push origin HEAD:main
 
-      - name: Commit validated 5.48 candidate to main
+      - name: Commit validated 5.49 candidate to main
         if: github.event_name == 'push'
         shell: bash
         run: |
@@ -137,14 +145,14 @@ jobs:
             plugins/usage-dashboard/runtime/product-manifest.json
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo 'main already matches 3.0.0-alpha.5.48'
+            echo 'main already matches 3.0.0-alpha.5.49'
           else
-            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.48 Provider Manager cache IPC candidate'
+            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.49 Cache IPC Hardening candidate'
             git pull --rebase origin main
             git push origin HEAD:main
           fi
 
-      - name: Publish 5.48 candidate to release channel
+      - name: Publish 5.49 candidate to release channel
         if: github.event_name == 'push'
         shell: bash
         run: |
@@ -165,20 +173,22 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq '//@version 3.0.0-alpha.5.48' plugins/usage-dashboard/latest.js
+          grep -Fq '//@version 3.0.0-alpha.5.49' plugins/usage-dashboard/latest.js
           grep -Fq '//@allowed-ipc provider-manager' plugins/usage-dashboard/latest.js
           grep -Fq 'Provider Manager cache IPC:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Optional integrations: Provider cache' plugins/usage-dashboard/latest.js
+          grep -Fq 'primary refresh independent' plugins/usage-dashboard/latest.js
           grep -Fq "op:'cacheObservability'" plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.5';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.48';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.48"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.49';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.49"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq '"requiredVersion": "1.6.5"' plugins/usage-dashboard/runtime/product-manifest.json
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.48'
+            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.49'
             exit 0
           fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.48 product artifacts'
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.49 product artifacts'
           git push origin HEAD:release-usage-dashboard

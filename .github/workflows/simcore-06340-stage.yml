@@ -18,10 +18,14 @@ jobs:
 
       - name: Capture exact v0.63.39 release baseline
         run: |
-          cp plugins/simcore/latest.js /tmp/simcore-before.js
-          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          git fetch origin release-simcore
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-before.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/simcore-before-install.js
+          cmp /tmp/simcore-before.js /tmp/simcore-before-install.js
           grep -q '//@version 0.63.39' /tmp/simcore-before.js
           test "$(git hash-object /tmp/simcore-before.js)" = "ee4fc6b4b6590a4f631e3dd10c14fa446ed40564"
+          cp /tmp/simcore-before.js plugins/simcore/latest.js
+          cp /tmp/simcore-before.js plugins/simcore/install.js
 
       - name: Apply v0.63.40 patch
         run: python plugins/simcore/patch_simcore_06340.py
@@ -39,13 +43,17 @@ jobs:
           ! grep -q '\[simcore/v0.63.4\]' plugins/simcore/latest.js
 
       - name: Current-source integrity and frozen-surface fixtures
-        run: node plugins/simcore/test_simcore_06340.js | tee /tmp/simcore-06340-test.txt
+        run: |
+          set -o pipefail
+          node plugins/simcore/test_simcore_06340.js | tee /tmp/simcore-06340-test.txt
+          test -s /tmp/simcore-06340-test.txt
+          grep -q 'SimCore 0.63.40 Current Source Integrity fixtures: PASS' /tmp/simcore-06340-test.txt
 
       - name: Static lifecycle inventory
         run: |
+          set -o pipefail
           python - <<'PY' | tee /tmp/simcore-06340-inventory.txt
           from pathlib import Path
-          import re
           before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
           after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
           tokens = [
@@ -63,6 +71,7 @@ jobs:
           assert 'cached_content' not in after.lower()
           print('Static lifecycle inventory: PASS')
           PY
+          grep -q 'Static lifecycle inventory: PASS' /tmp/simcore-06340-inventory.txt
 
       - name: Record staging pass
         run: |
@@ -86,6 +95,9 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add plugins/simcore/latest.js plugins/simcore/install.js .simcore-06340-stage-result.txt
-          git diff --cached --quiet && { echo 'No staged plugin changes produced'; exit 1; }
+          if git diff --cached --quiet; then
+            echo 'Artifacts already match verified v0.63.40 stage; no artifact commit needed'
+            exit 0
+          fi
           git commit -m 'Stage SimCore v0.63.40 current source integrity'
           git push origin HEAD:${GITHUB_REF_NAME}

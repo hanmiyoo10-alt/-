@@ -65,6 +65,7 @@
         cacheCreation5mTokens:cacheMetrics.cacheCreation5mTokens,
         cacheCreation1hTokens:cacheMetrics.cacheCreation1hTokens,
         cacheReadRatio:cacheMetrics.cacheReadRatio,
+        cacheMetricSource:String(recentRequestValue(row, ['cacheMetricSource','cache_metric_source'], '') || ''),
         requestedServiceTier,
         servedServiceTier,
         requestedServiceTierSource,
@@ -128,10 +129,11 @@
   function cacheObservabilitySummaryText(stats) {
     const s = stats || requestCacheObservabilityStats([]);
     const hitRate = s.hitKnown > 0 ? `${(s.hits / s.hitKnown * 100).toFixed(1)}% (${s.hits}/${s.hitKnown})` : '—';
+    const cached = s.tokenKnown > 0 || s.cachedInputTokens > 0 ? Number(s.cachedInputTokens).toLocaleString() : '—';
     const read = s.readKnown > 0 || s.cacheReadInputTokens > 0 ? Number(s.cacheReadInputTokens).toLocaleString() : '—';
     const write = s.writeKnown > 0 || s.cacheCreationInputTokens > 0 ? Number(s.cacheCreationInputTokens).toLocaleString() : '—';
     const ratio = num(s.readRatio) ? `${Number(s.readRatio).toFixed(1)}%` : '—';
-    return `HIT ${hitRate} · Read ${read} · Write ${write} · Read ratio ${ratio}`;
+    return `HIT ${hitRate} · Cached ${cached} · Read ${read} · Write ${write} · Read ratio ${ratio}`;
   }
 
   function requestLedgerCapabilities(rows) {
@@ -190,6 +192,7 @@
           cacheCreation5mTokens:num(row.cacheCreation5mTokens) ? Number(row.cacheCreation5mTokens) : (num(current?.cacheCreation5mTokens) ? Number(current.cacheCreation5mTokens) : null),
           cacheCreation1hTokens:num(row.cacheCreation1hTokens) ? Number(row.cacheCreation1hTokens) : (num(current?.cacheCreation1hTokens) ? Number(current.cacheCreation1hTokens) : null),
           cacheReadRatio:num(row.cacheReadRatio) ? Number(row.cacheReadRatio) : (num(current?.cacheReadRatio) ? Number(current.cacheReadRatio) : null),
+          cacheMetricSource:String(row.cacheMetricSource || current?.cacheMetricSource || ''),
           requestedServiceTier:preferKnownServiceTier(row.requestedServiceTier, current?.requestedServiceTier),
           servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),

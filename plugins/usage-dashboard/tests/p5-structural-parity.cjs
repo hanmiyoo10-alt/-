@@ -14,7 +14,7 @@ if (version === '3.0.0-alpha.5.44') {
   const isPost544 = alphaBuild ? Number(alphaBuild[1]) >= 45 : /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0' || version === '3.0.1';
   assert.ok(isPost544, `unexpected post-5.44 version: ${version}`);
 }
-assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
+assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
 assert.ok(source.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));
 console.log('usage-dashboard P5 structural artifact parity: OK · 5.43 → 5.44');

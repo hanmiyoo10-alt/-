@@ -1,14 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.49
+//@version 3.0.0-alpha.5.50
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
-//@allowed-ipc provider-manager
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.49';
+  const VERSION = '3.0.0-alpha.5.50';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -27,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.5';
+  const REQUIRED_BRIDGE_VERSION = '1.6.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -35,15 +34,6 @@
   const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
   const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
-  const PROVIDER_MANAGER_PLUGIN = 'provider-manager';
-  const PROVIDER_MANAGER_REQUEST_CHANNEL = 'provider-manager/request';
-  const PROVIDER_MANAGER_RESPONSE_CHANNEL = 'provider-manager/response';
-  const PROVIDER_MANAGER_CACHE_IPC_VERSION = 1;
-  const PROVIDER_MANAGER_CACHE_TIMEOUT_MS = 1200;
-  const PROVIDER_MANAGER_CACHE_RETRY_MS = 60000;
-  const PROVIDER_MANAGER_CACHE_MAX_BACKOFF_MS = 300000;
-  const PROVIDER_MANAGER_CACHE_SIDE_PROBE_DELAY_MS = 250;
-  const PROVIDER_MANAGER_CACHE_MAX_ROWS = 250;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -89,18 +79,6 @@
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
   const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
   const bridgeLifecycleRuntime = {generation:1,refreshDrops:0,blockedRefreshes:0,lastTransitionFrom:'',lastTransitionTo:'',lastTransitionAt:null,lastTransitionReason:''};
-  const providerManagerCacheRuntime = {
-    status:'idle', supported:false, source:'', lastError:'', lastRequestedAt:null, lastResponseAt:null,
-    lastCompletedAt:null, lastDurationMs:null, inFlight:false, stale:false, failures:0,
-    circuitState:'closed', openUntil:0, patches:0, staleDrops:0, coalesced:0,
-    responseRows:0, responseTokenRows:0, matched:0, exact:0, strong:0, ambiguous:0, unmatched:0
-  };
-  const providerManagerCachePending = new Map();
-  const PROVIDER_MANAGER_CACHE_INSTANCE_ID = `lud-cache-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
-  let providerManagerCacheListenerInstalled = false;
-  let providerManagerCacheProbeTimer = null;
-  let providerManagerCacheProbePromise = null;
-
   function bridgeLifecycleMode() {
     if (!state) return 'off';
     if (!state.bridgeEnabled) return state.bridgeStatus === 'paused' ? 'paused' : 'off';
@@ -1232,13 +1210,13 @@ async function importLegacyTodayBaselines() {
     ]);
     const explicitCachedInputTokens = metric([
       'cachedInputTokens','cached_input_tokens','cachedTokens','cached_tokens',
-      'usage.cachedInputTokens','usage.cached_input_tokens','usage.cachedTokens','usage.cached_tokens'
-    ]);
-    const cacheReadInputTokens = metric([
-      'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens',
+      'usage.cachedInputTokens','usage.cached_input_tokens','usage.cachedTokens','usage.cached_tokens',
       'cachedContentTokenCount','cached_content_token_count','usage.cachedContentTokenCount','usage.cached_content_token_count',
       'usage.input_tokens_details.cached_tokens','usage.prompt_tokens_details.cached_tokens',
       'input_tokens_details.cached_tokens','prompt_tokens_details.cached_tokens'
+    ]);
+    const cacheReadInputTokens = metric([
+      'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens'
     ]);
     const cacheCreationInputTokens = metric([
       'cacheCreationInputTokens','cache_creation_input_tokens','cacheWriteTokens','cache_write_tokens',
@@ -1419,6 +1397,7 @@ async function importLegacyTodayBaselines() {
         cacheCreation5mTokens:cacheMetrics.cacheCreation5mTokens,
         cacheCreation1hTokens:cacheMetrics.cacheCreation1hTokens,
         cacheReadRatio:cacheMetrics.cacheReadRatio,
+        cacheMetricSource:String(recentRequestValue(row, ['cacheMetricSource','cache_metric_source'], '') || ''),
         requestedServiceTier,
         servedServiceTier,
         requestedServiceTierSource,
@@ -1482,10 +1461,11 @@ async function importLegacyTodayBaselines() {
   function cacheObservabilitySummaryText(stats) {
     const s = stats || requestCacheObservabilityStats([]);
     const hitRate = s.hitKnown > 0 ? `${(s.hits / s.hitKnown * 100).toFixed(1)}% (${s.hits}/${s.hitKnown})` : '—';
+    const cached = s.tokenKnown > 0 || s.cachedInputTokens > 0 ? Number(s.cachedInputTokens).toLocaleString() : '—';
     const read = s.readKnown > 0 || s.cacheReadInputTokens > 0 ? Number(s.cacheReadInputTokens).toLocaleString() : '—';
     const write = s.writeKnown > 0 || s.cacheCreationInputTokens > 0 ? Number(s.cacheCreationInputTokens).toLocaleString() : '—';
     const ratio = num(s.readRatio) ? `${Number(s.readRatio).toFixed(1)}%` : '—';
-    return `HIT ${hitRate} · Read ${read} · Write ${write} · Read ratio ${ratio}`;
+    return `HIT ${hitRate} · Cached ${cached} · Read ${read} · Write ${write} · Read ratio ${ratio}`;
   }
 
   function requestLedgerCapabilities(rows) {
@@ -1544,6 +1524,7 @@ async function importLegacyTodayBaselines() {
           cacheCreation5mTokens:num(row.cacheCreation5mTokens) ? Number(row.cacheCreation5mTokens) : (num(current?.cacheCreation5mTokens) ? Number(current.cacheCreation5mTokens) : null),
           cacheCreation1hTokens:num(row.cacheCreation1hTokens) ? Number(row.cacheCreation1hTokens) : (num(current?.cacheCreation1hTokens) ? Number(current.cacheCreation1hTokens) : null),
           cacheReadRatio:num(row.cacheReadRatio) ? Number(row.cacheReadRatio) : (num(current?.cacheReadRatio) ? Number(current.cacheReadRatio) : null),
+          cacheMetricSource:String(row.cacheMetricSource || current?.cacheMetricSource || ''),
           requestedServiceTier:preferKnownServiceTier(row.requestedServiceTier, current?.requestedServiceTier),
           servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
@@ -1793,7 +1774,7 @@ async function importLegacyTodayBaselines() {
       cacheCount:num(row?.cacheCount ?? row?.cache_count) ? Number(row.cacheCount ?? row.cache_count) : null,
       cacheRate:num(row?.cacheRate ?? row?.cache_rate) ? Number(row.cacheRate ?? row.cache_rate) : null,
       cachedInputTokens:num(row?.cachedInputTokens ?? row?.cached_input_tokens ?? row?.cachedTokens ?? row?.cached_tokens) ? Number(row.cachedInputTokens ?? row.cached_input_tokens ?? row.cachedTokens ?? row.cached_tokens) : null,
-      cacheReadInputTokens:num(row?.cacheReadInputTokens ?? row?.cache_read_input_tokens ?? row?.cachedTokens ?? row?.cached_tokens) ? Number(row.cacheReadInputTokens ?? row.cache_read_input_tokens ?? row.cachedTokens ?? row.cached_tokens) : null,
+      cacheReadInputTokens:num(row?.cacheReadInputTokens ?? row?.cache_read_input_tokens) ? Number(row.cacheReadInputTokens ?? row.cache_read_input_tokens) : null,
       cacheCreationInputTokens:num(row?.cacheCreationInputTokens ?? row?.cache_creation_input_tokens ?? row?.cacheWriteTokens ?? row?.cache_write_tokens) ? Number(row.cacheCreationInputTokens ?? row.cache_creation_input_tokens ?? row.cacheWriteTokens ?? row.cache_write_tokens) : null
     })) : [];
     const totalRequests = num(raw.totalRequests ?? raw.requests24h) ? Number(raw.totalRequests ?? raw.requests24h) : null;
@@ -1806,7 +1787,7 @@ async function importLegacyTodayBaselines() {
     const cacheCount = num(raw.cacheCount) ? Number(raw.cacheCount) : null;
     const cacheRate = num(raw.cacheRate) ? Number(raw.cacheRate) : null;
     const cachedInputTokens = num(raw.cachedInputTokens ?? raw.cached_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) ? Number(raw.cachedInputTokens ?? raw.cached_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) : null;
-    const cacheReadInputTokens = num(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) ? Number(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) : null;
+    const cacheReadInputTokens = num(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens) ? Number(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens) : null;
     const cacheCreationInputTokens = num(raw.cacheCreationInputTokens ?? raw.cache_creation_input_tokens ?? raw.cacheWriteTokens ?? raw.cache_write_tokens) ? Number(raw.cacheCreationInputTokens ?? raw.cache_creation_input_tokens ?? raw.cacheWriteTokens ?? raw.cache_write_tokens) : null;
     const providers = rows(raw.providers);
     const models = rows(raw.models);
@@ -2210,265 +2191,6 @@ async function importLegacyTodayBaselines() {
     return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
   }
 }
-
-  function providerManagerCacheMetricKnown(usage) {
-    return ['cachedInputTokens','cacheReadInputTokens','cacheCreationInputTokens','cacheCreation5mTokens','cacheCreation1hTokens']
-      .some(key => usage?.[key] !== null && usage?.[key] !== undefined && num(usage?.[key]));
-  }
-
-  function providerManagerCacheListener() {
-    if (providerManagerCacheListenerInstalled) return true;
-    if (typeof Risuai?.addPluginChannelListener !== 'function' || typeof Risuai?.postPluginChannelMessage !== 'function') {
-      providerManagerCacheRuntime.status = 'unavailable';
-      providerManagerCacheRuntime.lastError = 'plugin channel IPC unavailable';
-      return false;
-    }
-    Risuai.addPluginChannelListener(PROVIDER_MANAGER_RESPONSE_CHANNEL, message => {
-      if (!message || typeof message !== 'object') return;
-      if (message?.recipient?.instanceId && String(message.recipient.instanceId) !== PROVIDER_MANAGER_CACHE_INSTANCE_ID) return;
-      const id = String(message.id || '');
-      const pending = providerManagerCachePending.get(id);
-      if (!pending) return;
-      providerManagerCachePending.delete(id);
-      clearTimeout(pending.timer);
-      if (message.type === 'cacheObservability' && Number(message?.data?.version) === PROVIDER_MANAGER_CACHE_IPC_VERSION) {
-        pending.resolve({ok:true, version:PROVIDER_MANAGER_CACHE_IPC_VERSION, source:String(message.data.source || 'provider-manager'), rows:Array.isArray(message.data.rows) ? message.data.rows : []});
-        return;
-      }
-      const error = message?.data?.message || message?.data?.code || `unexpected response ${String(message.type || 'unknown')}`;
-      pending.resolve({ok:false, status:'error', error:String(error), rows:[]});
-    });
-    providerManagerCacheListenerInstalled = true;
-    return true;
-  }
-
-  function providerManagerCacheRequestId() {
-    return `lud-cache-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
-  }
-
-  async function fetchProviderManagerCacheObservability() {
-    const runtime = providerManagerCacheRuntime;
-    const now = Date.now();
-    if (!providerManagerCacheListener()) return {ok:false,status:'unavailable',rows:[]};
-    if (runtime.circuitState === 'open' && now < Number(runtime.openUntil || 0)) {
-      return {ok:false,status:'circuit-open',error:runtime.lastError || 'Provider Manager cache IPC circuit open',rows:[]};
-    }
-    if (runtime.circuitState === 'open') runtime.circuitState = 'half-open';
-    runtime.lastRequestedAt = now;
-    runtime.status = 'probing';
-    runtime.inFlight = true;
-    const startedAt = typeof performance?.now === 'function' ? performance.now() : Date.now();
-    const id = providerManagerCacheRequestId();
-    const result = await new Promise(resolve => {
-      const timer = setTimeout(() => {
-        providerManagerCachePending.delete(id);
-        resolve({ok:false,status:'timeout',error:'Provider Manager cache IPC timeout',rows:[]});
-      }, PROVIDER_MANAGER_CACHE_TIMEOUT_MS);
-      providerManagerCachePending.set(id, {resolve,timer});
-      try {
-        Risuai.postPluginChannelMessage(PROVIDER_MANAGER_PLUGIN, PROVIDER_MANAGER_REQUEST_CHANNEL, {
-          id,
-          op:'cacheObservability',
-          sender:{pluginName:'local_usage_dashboard_modular',instanceId:PROVIDER_MANAGER_CACHE_INSTANCE_ID},
-          payload:{since:Date.now() - 24 * 60 * 60 * 1000,limit:PROVIDER_MANAGER_CACHE_MAX_ROWS},
-          meta:{protocol:'cache-observability-v1',version:PROVIDER_MANAGER_CACHE_IPC_VERSION,clientVersion:VERSION}
-        });
-      } catch (error) {
-        clearTimeout(timer);
-        providerManagerCachePending.delete(id);
-        resolve({ok:false,status:'blocked',error:error?.message || String(error),rows:[]});
-      }
-    });
-    const endedAt = typeof performance?.now === 'function' ? performance.now() : Date.now();
-    runtime.lastDurationMs = Math.max(0, Math.round(endedAt - startedAt));
-    runtime.lastCompletedAt = Date.now();
-    runtime.inFlight = false;
-    if (!result?.ok) {
-      runtime.status = String(result?.status || 'error');
-      runtime.lastError = String(result?.error || '');
-      runtime.failures = Number(runtime.failures || 0) + 1;
-      runtime.stale = runtime.supported === true;
-      const exponent = Math.max(0, runtime.failures - 1);
-      const backoffMs = Math.min(PROVIDER_MANAGER_CACHE_MAX_BACKOFF_MS, PROVIDER_MANAGER_CACHE_RETRY_MS * (2 ** exponent));
-      runtime.circuitState = 'open';
-      runtime.openUntil = Date.now() + backoffMs;
-      return result;
-    }
-    runtime.status = 'ready';
-    runtime.supported = true;
-    runtime.stale = false;
-    runtime.failures = 0;
-    runtime.circuitState = 'closed';
-    runtime.openUntil = 0;
-    runtime.source = String(result.source || 'provider-manager');
-    runtime.lastResponseAt = Date.now();
-    runtime.responseRows = result.rows.length;
-    runtime.responseTokenRows = result.rows.filter(row => providerManagerCacheMetricKnown(row?.usage)).length;
-    runtime.lastError = '';
-    return result;
-  }
-
-  function providerManagerCacheName(value) {
-    return String(value || '').trim().toLowerCase().replace(/[_\s]+/g,'-');
-  }
-
-  function providerManagerCacheModel(value) {
-    const normalized = providerManagerCacheName(value);
-    const parts = normalized.split('/').filter(Boolean);
-    return parts.at(-1) || normalized;
-  }
-
-  function providerManagerCacheProviderMatch(a, b) {
-    const left = providerManagerCacheName(a).replace(/[^a-z0-9]/g,'');
-    const right = providerManagerCacheName(b).replace(/[^a-z0-9]/g,'');
-    return Boolean(left && right && (left === right || (left.length >= 5 && right.length >= 5 && (left.includes(right) || right.includes(left)))));
-  }
-
-  function providerManagerCacheModelMatch(a, b) {
-    const left = providerManagerCacheModel(a);
-    const right = providerManagerCacheModel(b);
-    return Boolean(left && right && (left === right || (left.length >= 8 && right.length >= 8 && (left.endsWith(right) || right.endsWith(left)))));
-  }
-
-  function providerManagerCacheCandidateScore(request, cacheRow) {
-    const requestId = String(request?.requestNumber || '');
-    const hints = [cacheRow?.logId,...(Array.isArray(cacheRow?.requestIdHints) ? cacheRow.requestIdHints : [])].map(value => String(value || '')).filter(Boolean);
-    if (requestId && hints.includes(requestId)) return {score:1000,kind:'exact'};
-    if (!num(request?.timestamp) || !num(cacheRow?.timestamp)) return null;
-    if (!providerManagerCacheModelMatch(request?.model, cacheRow?.model)) return null;
-    const delta = Math.abs(Number(request.timestamp) - Number(cacheRow.timestamp));
-    if (delta > 45000) return null;
-    let score = 50;
-    if (delta <= 3000) score += 30;
-    else if (delta <= 10000) score += 20;
-    else if (delta <= 30000) score += 10;
-    else score += 5;
-    if (providerManagerCacheProviderMatch(request?.provider, cacheRow?.provider)) score += 10;
-    if (num(request?.outputTokens) && num(cacheRow?.usage?.outputTokens)) {
-      const diff = Math.abs(Number(request.outputTokens) - Number(cacheRow.usage.outputTokens));
-      if (diff === 0) score += 15;
-      else if (diff <= 2) score += 10;
-    }
-    if (num(request?.inputTokens) && num(cacheRow?.usage?.inputTokens) && Number(request.inputTokens) === Number(cacheRow.usage.inputTokens)) score += 10;
-    return {score,kind:'strong',delta};
-  }
-
-  function providerManagerCacheApply(request, cacheRow, match) {
-    const usage = cacheRow?.usage && typeof cacheRow.usage === 'object' ? cacheRow.usage : {};
-    const cacheMetrics = requestCacheMetrics({...request,...usage});
-    request.inputTokens = num(usage.inputTokens) ? Number(usage.inputTokens) : request.inputTokens;
-    request.outputTokens = num(usage.outputTokens) ? Number(usage.outputTokens) : request.outputTokens;
-    request.cachedInputTokens = cacheMetrics.cachedInputTokens;
-    request.cacheReadInputTokens = cacheMetrics.cacheReadInputTokens;
-    request.cacheCreationInputTokens = cacheMetrics.cacheCreationInputTokens;
-    request.cacheCreation5mTokens = cacheMetrics.cacheCreation5mTokens;
-    request.cacheCreation1hTokens = cacheMetrics.cacheCreation1hTokens;
-    request.cacheReadRatio = cacheMetrics.cacheReadRatio;
-    request.cacheMetricSource = 'provider-manager-ipc-v1';
-    request.cacheMatch = String(match?.kind || 'strong');
-    request.cacheMatchScore = Number(match?.score || 0);
-    request.providerManagerLogId = String(cacheRow?.logId || '');
-  }
-
-  function enrichDataWithProviderManagerCache(data, payload) {
-    providerManagerCacheRuntime.matched = 0;
-    providerManagerCacheRuntime.exact = 0;
-    providerManagerCacheRuntime.strong = 0;
-    providerManagerCacheRuntime.ambiguous = 0;
-    providerManagerCacheRuntime.unmatched = 0;
-    if (!payload?.ok || !Array.isArray(payload.rows) || !data?.usageScopes?.scopes) return data;
-    const scopes = data.usageScopes.scopes;
-    const requestRefs = [];
-    const unique = new Map();
-    for (const scopeKey of ['all','devpass','credits']) {
-      const scope = scopes?.[scopeKey];
-      for (const field of ['recentLedger','recent']) {
-        const rows = Array.isArray(scope?.[field]) ? scope[field] : [];
-        for (const row of rows) {
-          if (!row || typeof row !== 'object') continue;
-          requestRefs.push(row);
-          const key = requestLedgerKey(row);
-          if (!unique.has(key)) unique.set(key,row);
-        }
-      }
-    }
-    const cacheRows = payload.rows.filter(row => row && typeof row === 'object' && providerManagerCacheMetricKnown(row.usage));
-    const used = new Set();
-    const matches = new Map();
-    for (const [key,request] of unique.entries()) {
-      const candidates = [];
-      for (let index = 0; index < cacheRows.length; index += 1) {
-        if (used.has(index)) continue;
-        const match = providerManagerCacheCandidateScore(request, cacheRows[index]);
-        if (match) candidates.push({index,row:cacheRows[index],...match});
-      }
-      candidates.sort((a,b) => Number(b.score) - Number(a.score) || Number(a.delta || 0) - Number(b.delta || 0));
-      const best = candidates[0];
-      const second = candidates[1];
-      if (!best || Number(best.score) < 70) {
-        providerManagerCacheRuntime.unmatched += 1;
-        continue;
-      }
-      if (best.kind !== 'exact' && second && Number(best.score) - Number(second.score) < 10) {
-        providerManagerCacheRuntime.ambiguous += 1;
-        continue;
-      }
-      used.add(best.index);
-      matches.set(key,best);
-      providerManagerCacheRuntime.matched += 1;
-      if (best.kind === 'exact') providerManagerCacheRuntime.exact += 1;
-      else providerManagerCacheRuntime.strong += 1;
-    }
-    for (const request of requestRefs) {
-      const match = matches.get(requestLedgerKey(request));
-      if (match) providerManagerCacheApply(request, match.row, match);
-    }
-    return data;
-  }
-
-  function providerManagerCacheCircuitBlocked() {
-    const runtime = providerManagerCacheRuntime;
-    return runtime.circuitState === 'open' && Date.now() < Number(runtime.openUntil || 0);
-  }
-
-  function scheduleProviderManagerCacheEnrichment(targetData = state?.data, epoch = runtimeEpoch, lifecycleGeneration = bridgeLifecycleRuntime.generation) {
-    if (!targetData || runtimeDisposed || !canBridgeRefresh()) return false;
-    if (providerManagerCacheCircuitBlocked()) return false;
-    if (providerManagerCacheProbeTimer || providerManagerCacheProbePromise) {
-      providerManagerCacheRuntime.coalesced = Number(providerManagerCacheRuntime.coalesced || 0) + 1;
-      return false;
-    }
-    providerManagerCacheProbeTimer = setTimeout(() => {
-      providerManagerCacheProbeTimer = null;
-      if (!runtimeIsCurrent(epoch) || !lifecycleRefreshIsCurrent(lifecycleGeneration) || state.data !== targetData) {
-        providerManagerCacheRuntime.staleDrops = Number(providerManagerCacheRuntime.staleDrops || 0) + 1;
-        return;
-      }
-      providerManagerCacheProbePromise = (async () => {
-        const payload = await fetchProviderManagerCacheObservability();
-        if (!runtimeIsCurrent(epoch) || !lifecycleRefreshIsCurrent(lifecycleGeneration) || state.data !== targetData) {
-          providerManagerCacheRuntime.staleDrops = Number(providerManagerCacheRuntime.staleDrops || 0) + 1;
-          return;
-        }
-        if (payload?.ok) {
-          enrichDataWithProviderManagerCache(targetData, payload);
-          collectRecentRequestLedger(targetData);
-          providerManagerCacheRuntime.patches = Number(providerManagerCacheRuntime.patches || 0) + 1;
-        }
-        schedulePanelRender(false);
-      })().catch(error => {
-        providerManagerCacheRuntime.status = 'error';
-        providerManagerCacheRuntime.lastError = error?.message || String(error);
-        providerManagerCacheRuntime.failures = Number(providerManagerCacheRuntime.failures || 0) + 1;
-        providerManagerCacheRuntime.circuitState = 'open';
-        providerManagerCacheRuntime.openUntil = Date.now() + PROVIDER_MANAGER_CACHE_RETRY_MS;
-      }).finally(() => {
-        providerManagerCacheRuntime.inFlight = false;
-        providerManagerCacheProbePromise = null;
-      });
-    }, PROVIDER_MANAGER_CACHE_SIDE_PROBE_DELAY_MS);
-    return true;
-  }
   async function refresh(reason = 'manual', silent = false) {
     if (runtimeDisposed) return;
     const refreshEpoch = runtimeEpoch;
@@ -2573,7 +2295,6 @@ async function importLegacyTodayBaselines() {
         }
         scheduleRefresh();
         schedulePanelRender(false);
-        scheduleProviderManagerCacheEnrichment(state.data, refreshEpoch, refreshLifecycleGeneration);
       } catch (e) {
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();
@@ -2647,12 +2368,13 @@ async function importLegacyTodayBaselines() {
     return {ready:blockers.length === 0, blockers, updaterCompatible};
   }
 
-  function providerManagerCacheDiagnosticText() {
-    const r = providerManagerCacheRuntime;
-    const circuit = r.circuitState || 'closed';
-    const retrySeconds = circuit === 'open' && num(r.openUntil) ? Math.max(0, Math.ceil((Number(r.openUntil) - Date.now()) / 1000)) : null;
-    const integration = r.status === 'ready' ? 'ready' : r.inFlight ? 'probing' : 'degraded';
-    return `${r.status || 'idle'} · v${PROVIDER_MANAGER_CACHE_IPC_VERSION} · optional ${integration} · probe ${r.inFlight ? 'running' : 'idle'} · duration ${num(r.lastDurationMs) ? `${Number(r.lastDurationMs)}ms` : '—'} · circuit ${circuit}${retrySeconds !== null ? ` · next ${retrySeconds}s` : ''} · source ${r.source || '—'}${r.stale ? ' stale' : ''} · rows ${Number(r.responseRows || 0)} · token rows ${Number(r.responseTokenRows || 0)} · matched ${Number(r.matched || 0)} (exact ${Number(r.exact || 0)} / strong ${Number(r.strong || 0)}) · ambiguous ${Number(r.ambiguous || 0)} · unmatched ${Number(r.unmatched || 0)} · patches ${Number(r.patches || 0)} · stale drops ${Number(r.staleDrops || 0)} · coalesced ${Number(r.coalesced || 0)} · error ${r.lastError || 'none'}`;
+  function cacheObserverDiagnosticText(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const tokenRows = list.filter(row => [row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num));
+    const sources = [...new Set(tokenRows.map(row => String(row?.cacheMetricSource || '')).filter(Boolean))].sort();
+    const readKnown = list.filter(row => num(row?.cacheReadInputTokens)).length;
+    const writeKnown = list.filter(row => num(row?.cacheCreationInputTokens)).length;
+    return `independent · protocol cache-observability-v1 · parser provider-usage-v1 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
   }
 
   function diagText() {
@@ -2707,9 +2429,8 @@ async function importLegacyTodayBaselines() {
       `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source ${diagUsage?.recentSourceKey || 'none'} · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
-      `Provider Manager cache IPC: ${providerManagerCacheDiagnosticText()}`,
-      `Optional integrations: Provider cache ${providerManagerCacheRuntime.status === 'ready' ? 'ready' : providerManagerCacheRuntime.inFlight ? 'probing' : 'degraded'} · primary refresh independent`,
-      `Cache semantics: request HIT rate != token Read ratio · unknown stays unknown · source request metadata / Bridge aggregates / Provider Manager IPC v1 when available`,
+      `Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}`,
+      `Cache semantics: request HIT rate != token Read ratio · cached total != explicit Read · unknown stays unknown · source request metadata / Bridge aggregates / independent provider usage parser`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
@@ -3940,11 +3661,6 @@ function scheduleResetSync() {
       runtimeEpoch += 1;
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
-      if(providerManagerCacheProbeTimer){clearTimeout(providerManagerCacheProbeTimer);providerManagerCacheProbeTimer=null;}
-      for(const pending of providerManagerCachePending.values()){try{clearTimeout(pending.timer);pending.resolve({ok:false,status:'disposed',error:'runtime disposed',rows:[]});}catch(_){}}
-      providerManagerCachePending.clear();
-      providerManagerCacheProbePromise=null;
-      providerManagerCacheRuntime.inFlight=false;
       cancelPanelRender();
       cancelRefreshScheduler();
       cancelResumeRefresh();

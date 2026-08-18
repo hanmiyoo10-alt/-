@@ -102,7 +102,6 @@
         }
         scheduleRefresh();
         schedulePanelRender(false);
-        scheduleProviderManagerCacheEnrichment(state.data, refreshEpoch, refreshLifecycleGeneration);
       } catch (e) {
         if (!runtimeIsCurrent(refreshEpoch)) return dropStaleAsync();
         if (!lifecycleRefreshIsCurrent(refreshLifecycleGeneration)) return dropLifecycleRefresh();

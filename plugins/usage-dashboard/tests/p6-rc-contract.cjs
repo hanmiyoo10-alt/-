@@ -13,13 +13,13 @@ assert.ok(alphaBuild ? Number(alphaBuild[1]) >= 47 : /^3\.0\.0-rc\.\d+$/.test(pr
 assert.ok(source.includes(`const VERSION = '${productVersion}';`));
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
 assert.ok(source.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));
-assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
-assert.ok(engine.includes("const VERSION = '1.6.5';"));
+assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
+assert.ok(engine.includes("const VERSION = '1.6.6';"));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
 assert.ok(manager.includes(`const PRODUCT_VERSION = '${productVersion}';`));
 assert.equal(manifest.productVersion, productVersion);
 assert.equal(manifest.components.plugin.version, productVersion);
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.components.bridgeManager.productVersion, productVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});

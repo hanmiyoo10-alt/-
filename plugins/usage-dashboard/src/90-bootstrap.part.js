@@ -20,11 +20,6 @@
       runtimeEpoch += 1;
       if(refreshTimer)clearTimeout(refreshTimer);
       if(resetSyncTimer)clearTimeout(resetSyncTimer);
-      if(providerManagerCacheProbeTimer){clearTimeout(providerManagerCacheProbeTimer);providerManagerCacheProbeTimer=null;}
-      for(const pending of providerManagerCachePending.values()){try{clearTimeout(pending.timer);pending.resolve({ok:false,status:'disposed',error:'runtime disposed',rows:[]});}catch(_){}}
-      providerManagerCachePending.clear();
-      providerManagerCacheProbePromise=null;
-      providerManagerCacheRuntime.inFlight=false;
       cancelPanelRender();
       cancelRefreshScheduler();
       cancelResumeRefresh();

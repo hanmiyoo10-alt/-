@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.5';
+const VERSION = '1.6.6';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -397,7 +397,7 @@ const output = process.env.DEVPASS_BRIDGE_CAPTURE_FILE;
 const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || ''))
   ? String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE)
   : '';
-const marker = Symbol.for('llmgateway.devpass.bridge.capture.v7');
+const marker = Symbol.for('llmgateway.devpass.bridge.capture.v8');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
   const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, captureMode: null };
@@ -443,7 +443,7 @@ if (output && !globalThis[marker]) {
 
   const sanitizeModel = (row) => {
     if (!row || typeof row !== 'object') return null;
-    const allowed = ['id','provider','requestCount','inputTokens','outputTokens','totalTokens','cost'];
+    const allowed = ['id','provider','requestCount','inputTokens','outputTokens','totalTokens','cachedTokens','cacheWriteTokens','cost'];
     const safe = {};
     for (const key of allowed) if (Object.prototype.hasOwnProperty.call(row, key)) safe[key] = row[key];
     return Object.keys(safe).length ? safe : null;
@@ -486,6 +486,96 @@ if (output && !globalThis[marker]) {
     return { value: null, source: '' };
   };
 
+  // CACHE_OBSERVER_PARSER_START
+  const cacheFinite = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, number) : null;
+  };
+
+  const cachePath = (root, path) => {
+    let value = root;
+    for (const part of String(path).split('.')) value = value?.[part];
+    return value;
+  };
+
+  const cacheNumber = (root, paths) => {
+    for (const path of paths) {
+      const value = cacheFinite(cachePath(root, path));
+      if (value !== null) return value;
+    }
+    return null;
+  };
+
+  const cacheUsageCandidates = (row) => {
+    const candidates = [
+      row?.usage,
+      row?.usageMetadata,
+      row?.usage_metadata,
+      row?.response?.usage,
+      row?.response?.usageMetadata,
+      row?.response?.usage_metadata,
+      row?.metadata?.usage,
+      row,
+    ];
+    return candidates.filter((value, index) => value && typeof value === 'object' && !Array.isArray(value) && candidates.indexOf(value) === index);
+  };
+
+  const normalizeProviderCacheUsageObject = (usage) => {
+    if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
+
+    const inputTokens = cacheNumber(usage, ['inputTokens','input_tokens','promptTokens','prompt_tokens','promptTokenCount','prompt_token_count']);
+    const outputTokens = cacheNumber(usage, ['outputTokens','output_tokens','completionTokens','completion_tokens','candidatesTokenCount','candidates_token_count']);
+    const totalTokens = cacheNumber(usage, ['totalTokens','total_tokens','totalTokenCount','total_token_count']);
+
+    const explicitRead = cacheNumber(usage, ['cacheReadInputTokens','cache_read_input_tokens']);
+    let explicitWrite = cacheNumber(usage, ['cacheCreationInputTokens','cache_creation_input_tokens','cacheWriteTokens','cache_write_tokens','input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens']);
+    const write5m = cacheNumber(usage, ['cacheCreation5mTokens','cache_creation_5m_tokens','cache_creation.ephemeral_5m_input_tokens']);
+    const write1h = cacheNumber(usage, ['cacheCreation1hTokens','cache_creation_1h_tokens','cache_creation.ephemeral_1h_input_tokens']);
+    if (explicitWrite === null && (write5m !== null || write1h !== null)) explicitWrite = Number(write5m || 0) + Number(write1h || 0);
+
+    const explicitCached = cacheNumber(usage, ['cachedInputTokens','cached_input_tokens','cachedTokens','cached_tokens']);
+    const geminiCached = cacheNumber(usage, ['cachedContentTokenCount','cached_content_token_count']);
+    const openAiCached = cacheNumber(usage, ['input_tokens_details.cached_tokens','prompt_tokens_details.cached_tokens']);
+
+    let source = '';
+    if (explicitRead !== null || cachePath(usage, 'cache_creation') || cachePath(usage, 'cache_creation_input_tokens') !== undefined) source = 'anthropic-usage';
+    else if (geminiCached !== null || cachePath(usage, 'promptTokenCount') !== undefined || cachePath(usage, 'prompt_token_count') !== undefined) source = 'gemini-usage';
+    else if (cachePath(usage, 'prompt_tokens_details') || cachePath(usage, 'prompt_tokens') !== undefined) source = 'openai-chat-usage';
+    else if (cachePath(usage, 'input_tokens_details') || cachePath(usage, 'input_tokens') !== undefined) source = 'openai-responses-usage';
+    else if (cachePath(usage, 'cachedTokens') !== undefined || cachePath(usage, 'cacheWriteTokens') !== undefined || cachePath(usage, 'cached_tokens') !== undefined || cachePath(usage, 'cache_write_tokens') !== undefined) source = 'llmgateway-usage';
+    else if (explicitCached !== null || explicitWrite !== null) source = 'normalized-usage';
+
+    let cachedInputTokens = explicitCached;
+    if (cachedInputTokens === null && geminiCached !== null) cachedInputTokens = geminiCached;
+    if (cachedInputTokens === null && openAiCached !== null) cachedInputTokens = openAiCached;
+    if (cachedInputTokens === null && (explicitRead !== null || explicitWrite !== null)) cachedInputTokens = Number(explicitRead || 0) + Number(explicitWrite || 0);
+
+    const hasCacheMetric = [cachedInputTokens, explicitRead, explicitWrite, write5m, write1h].some(value => value !== null);
+    if (!hasCacheMetric) return null;
+
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      cachedInputTokens,
+      cacheReadInputTokens: explicitRead,
+      cacheCreationInputTokens: explicitWrite,
+      cacheCreation5mTokens: write5m,
+      cacheCreation1hTokens: write1h,
+      source: source || 'normalized-usage',
+    };
+  };
+
+  const normalizeProviderCacheUsage = (row) => {
+    for (const candidate of cacheUsageCandidates(row)) {
+      const normalized = normalizeProviderCacheUsageObject(candidate);
+      if (normalized) return normalized;
+    }
+    return null;
+  };
+  // CACHE_OBSERVER_PARSER_END
+
   const sanitizeLogs = (value) => {
     if (!value || typeof value !== 'object') return null;
     const raw = value.data && typeof value.data === 'object' ? value.data : value;
@@ -506,13 +596,22 @@ if (output && !globalThis[marker]) {
         'metadata.servedServiceTier','metadata.served_service_tier','metadata.usedServiceTier','metadata.used_service_tier',
         'response.serviceTier','response.service_tier','serviceTier','service_tier'
       ]);
+      const cacheUsage = normalizeProviderCacheUsage(row);
       return {
         timestamp,
         requestNumber: String(requestNumber),
         provider: String(row.usedProvider ?? row.used_provider ?? row.requestedProvider ?? row.requested_provider ?? 'Unknown'),
         model: String(row.usedModel ?? row.used_model ?? row.requestedModel ?? row.requested_model ?? 'Unknown'),
         cost: row.cost ?? null,
-        totalTokens: row.totalTokens ?? row.total_tokens ?? null,
+        totalTokens: cacheUsage?.totalTokens ?? row.totalTokens ?? row.total_tokens ?? null,
+        inputTokens: cacheUsage?.inputTokens ?? null,
+        outputTokens: cacheUsage?.outputTokens ?? null,
+        cachedInputTokens: cacheUsage?.cachedInputTokens ?? null,
+        cacheReadInputTokens: cacheUsage?.cacheReadInputTokens ?? null,
+        cacheCreationInputTokens: cacheUsage?.cacheCreationInputTokens ?? null,
+        cacheCreation5mTokens: cacheUsage?.cacheCreation5mTokens ?? null,
+        cacheCreation1hTokens: cacheUsage?.cacheCreation1hTokens ?? null,
+        cacheMetricSource: cacheUsage?.source ?? '',
         cacheHit: typeof row.cached === 'boolean' ? row.cached : null,
         requestedServiceTier: requestedTier.value,
         servedServiceTier: servedTier.value,
@@ -1377,6 +1476,14 @@ function normalizeCapturedRecentLogs(root) {
       model: String(row.model || 'Unknown'),
       cost: finite(row.cost),
       totalTokens: finite(row.totalTokens),
+      inputTokens: finite(row.inputTokens),
+      outputTokens: finite(row.outputTokens),
+      cachedInputTokens: finite(row.cachedInputTokens),
+      cacheReadInputTokens: finite(row.cacheReadInputTokens),
+      cacheCreationInputTokens: finite(row.cacheCreationInputTokens),
+      cacheCreation5mTokens: finite(row.cacheCreation5mTokens),
+      cacheCreation1hTokens: finite(row.cacheCreation1hTokens),
+      cacheMetricSource: String(row.cacheMetricSource || ''),
       cacheHit: typeof row.cacheHit === 'boolean' ? row.cacheHit : null,
       requestedServiceTier: row.requestedServiceTier ?? null,
       servedServiceTier: row.servedServiceTier ?? null,

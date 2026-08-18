@@ -46,9 +46,9 @@ for (const marker of [
 assert.ok(ui.includes("dashboardView === 'devpass' ? devpassAccountDetailHtml : ''"), 'DevPass parity boxes must be scoped to DevPass tab');
 assert.ok(diagnostics.includes('DevPass account detail:'), 'DevPass account detail diagnostics missing');
 assert.ok(!ui.includes('<span>Organization ID</span>') && !ui.includes('<span>Project ID</span>'), 'internal identifiers must remain hidden');
-assert.ok(engine.includes("const VERSION = '1.6.5';"), 'Engine semantic version should remain 1.6.5');
+assert.ok(engine.includes("const VERSION = '1.6.6';"), 'Engine semantic version should remain 1.6.6');
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"), 'Manager semantic version should remain 1.2.6');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);

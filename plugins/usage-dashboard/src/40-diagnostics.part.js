@@ -25,12 +25,13 @@
     return {ready:blockers.length === 0, blockers, updaterCompatible};
   }
 
-  function providerManagerCacheDiagnosticText() {
-    const r = providerManagerCacheRuntime;
-    const circuit = r.circuitState || 'closed';
-    const retrySeconds = circuit === 'open' && num(r.openUntil) ? Math.max(0, Math.ceil((Number(r.openUntil) - Date.now()) / 1000)) : null;
-    const integration = r.status === 'ready' ? 'ready' : r.inFlight ? 'probing' : 'degraded';
-    return `${r.status || 'idle'} · v${PROVIDER_MANAGER_CACHE_IPC_VERSION} · optional ${integration} · probe ${r.inFlight ? 'running' : 'idle'} · duration ${num(r.lastDurationMs) ? `${Number(r.lastDurationMs)}ms` : '—'} · circuit ${circuit}${retrySeconds !== null ? ` · next ${retrySeconds}s` : ''} · source ${r.source || '—'}${r.stale ? ' stale' : ''} · rows ${Number(r.responseRows || 0)} · token rows ${Number(r.responseTokenRows || 0)} · matched ${Number(r.matched || 0)} (exact ${Number(r.exact || 0)} / strong ${Number(r.strong || 0)}) · ambiguous ${Number(r.ambiguous || 0)} · unmatched ${Number(r.unmatched || 0)} · patches ${Number(r.patches || 0)} · stale drops ${Number(r.staleDrops || 0)} · coalesced ${Number(r.coalesced || 0)} · error ${r.lastError || 'none'}`;
+  function cacheObserverDiagnosticText(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const tokenRows = list.filter(row => [row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num));
+    const sources = [...new Set(tokenRows.map(row => String(row?.cacheMetricSource || '')).filter(Boolean))].sort();
+    const readKnown = list.filter(row => num(row?.cacheReadInputTokens)).length;
+    const writeKnown = list.filter(row => num(row?.cacheCreationInputTokens)).length;
+    return `independent · protocol cache-observability-v1 · parser provider-usage-v1 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
   }
 
   function diagText() {
@@ -85,9 +86,8 @@
       `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source ${diagUsage?.recentSourceKey || 'none'} · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
-      `Provider Manager cache IPC: ${providerManagerCacheDiagnosticText()}`,
-      `Optional integrations: Provider cache ${providerManagerCacheRuntime.status === 'ready' ? 'ready' : providerManagerCacheRuntime.inFlight ? 'probing' : 'degraded'} · primary refresh independent`,
-      `Cache semantics: request HIT rate != token Read ratio · unknown stays unknown · source request metadata / Bridge aggregates / Provider Manager IPC v1 when available`,
+      `Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}`,
+      `Cache semantics: request HIT rate != token Read ratio · cached total != explicit Read · unknown stays unknown · source request metadata / Bridge aggregates / independent provider usage parser`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,

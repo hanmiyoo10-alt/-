@@ -48,13 +48,13 @@
     ]);
     const explicitCachedInputTokens = metric([
       'cachedInputTokens','cached_input_tokens','cachedTokens','cached_tokens',
-      'usage.cachedInputTokens','usage.cached_input_tokens','usage.cachedTokens','usage.cached_tokens'
-    ]);
-    const cacheReadInputTokens = metric([
-      'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens',
+      'usage.cachedInputTokens','usage.cached_input_tokens','usage.cachedTokens','usage.cached_tokens',
       'cachedContentTokenCount','cached_content_token_count','usage.cachedContentTokenCount','usage.cached_content_token_count',
       'usage.input_tokens_details.cached_tokens','usage.prompt_tokens_details.cached_tokens',
       'input_tokens_details.cached_tokens','prompt_tokens_details.cached_tokens'
+    ]);
+    const cacheReadInputTokens = metric([
+      'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens'
     ]);
     const cacheCreationInputTokens = metric([
       'cacheCreationInputTokens','cache_creation_input_tokens','cacheWriteTokens','cache_write_tokens',

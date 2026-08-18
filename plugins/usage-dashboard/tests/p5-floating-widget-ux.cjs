@@ -30,8 +30,8 @@ assert.ok(runtime.includes("state.widgetDockSide = '';"), 'position reset must c
 assert.ok(source.includes('Floating widget UX:'), 'floating widget diagnostics missing');
 assert.ok(source.includes("widgetDockSide: ''"), 'widget dock state default missing');
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
+assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);

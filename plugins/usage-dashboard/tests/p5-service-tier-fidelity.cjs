@@ -10,8 +10,8 @@ const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.js
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 
 assert.match(source, /^\/\/@version 3\.0\.0(?:-alpha\.[^\s]+|-beta\.[^\s]+|-rc\.\d+)?$/m);
-assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
-assert.ok(engine.includes("const VERSION = '1.6.5';"));
+assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
+assert.ok(engine.includes("const VERSION = '1.6.6';"));
 for (const marker of [
   'requestedServiceTierSource',
   'servedServiceTierSource',
@@ -68,10 +68,10 @@ assert.equal(stats.unknown, 1);
 
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
 assert.ok(manager.includes(`const PRODUCT_VERSION = '${version}';`));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.5';"));
+assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.6';"));
 assert.equal(manifest.productVersion, version);
 assert.equal(manifest.components.plugin.version, version);
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);

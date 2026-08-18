@@ -12,12 +12,12 @@ const alphaBuild = productVersion.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
 const isHardeningOrLater = alphaBuild ? Number(alphaBuild[1]) >= 46 : productVersion === '3.0.1';
 assert.ok(isHardeningOrLater, `unexpected release-hardening forward version: ${productVersion}`);
 assert.ok(source.includes(`const VERSION = '${productVersion}';`));
-assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.5';"));
-assert.ok(engine.includes("const VERSION = '1.6.5';"));
+assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
+assert.ok(engine.includes("const VERSION = '1.6.6';"));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
 assert.ok(manager.includes(`const PRODUCT_VERSION = '${productVersion}';`));
 assert.equal(manifest.productVersion, productVersion);
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 for (const marker of [

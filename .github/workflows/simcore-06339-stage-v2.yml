@@ -1,0 +1,81 @@
+name: Stage SimCore v0.63.39 Trajectory Identity v2
+
+on:
+  push:
+    branches:
+      - simcore-06339-trajectory-identity
+    paths:
+      - .simcore-06339-stage-v2-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture exact v0.63.38 baseline
+        run: |
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.38' /tmp/simcore-before.js
+          test "$(git hash-object /tmp/simcore-before.js)" = "e0b3bdce19579b0bd5b5968cf84900504ac70ddb"
+
+      - name: Apply v0.63.39 trajectory identity patch
+        run: python plugins/simcore/patch_simcore_06339.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.39' plugins/simcore/latest.js
+          grep -q "'Version: 0.63.39'" plugins/simcore/latest.js
+          grep -q "currentUserSignature" plugins/simcore/latest.js
+          grep -q "lastObservation" plugins/simcore/latest.js
+          grep -q "Output representation:" plugins/simcore/latest.js
+
+      - name: Trajectory identity and representation fixtures
+        run: node plugins/simcore/test_simcore_06339_v2.js
+
+      - name: Frozen semantics and call-surface guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, hashlib
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end].rstrip()
+              return out
+          b = modules(before); a = modules(after)
+          core = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          frozen_runtime = {'runtime-contracts','runtime-host','runtime-cache','runtime-session','runtime-mirror','runtime-hooks','runtime-telemetry'}
+          assert all(a[n] == b[n] for n in core), 'Core module changed'
+          assert all(a[n] == b[n] for n in frozen_runtime), 'frozen runtime module changed'
+          assert before.count("messages.push({ role: 'system', content: result.promptBlock });") == after.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          for token in ['Risuai.getCurrentCharacterIndex(', 'Risuai.getCurrentChatIndex(', 'Risuai.getChatFromIndex(', 'Risuai.getCharacter(', 'Risuai.setChatToIndex(', 'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(', 'setTimeout(', 'setInterval(', 'requestAnimationFrame(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+          gate = "if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {"
+          assert before.count(gate) == after.count(gate) == 1
+          for forbidden in ['cache_control','cached_content','prompt_cache_key']:
+              assert forbidden not in after.lower()
+          digest = hashlib.sha256('\n'.join(f'{n}:{hashlib.sha256(a[n].encode()).hexdigest()}' for n in sorted(core)).encode()).hexdigest()
+          print('Frozen semantics/call surface: PASS')
+          print('core module bodies:', len(core), 'bytes:', sum(len(a[n].encode()) for n in core), 'digest:', digest)
+          PY
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --quiet && { echo 'No plugin changes produced'; exit 1; }
+          git commit -m 'Stage SimCore v0.63.39 trajectory identity diagnostics'
+          git push origin HEAD:${GITHUB_REF_NAME}

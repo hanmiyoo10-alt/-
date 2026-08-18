@@ -1,0 +1,47 @@
+name: Diagnose SimCore v0.63.39 Staging
+
+on:
+  push:
+    branches:
+      - simcore-06339-trajectory-identity
+    paths:
+      - .simcore-06339-diagnose-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose patch and fixtures
+        id: diag
+        shell: bash
+        run: |
+          set +e
+          : > /tmp/diag.log
+          cp plugins/simcore/latest.js /tmp/simcore-before.js
+          echo "baseline_blob=$(git hash-object /tmp/simcore-before.js)" >> /tmp/diag.log
+          python plugins/simcore/patch_simcore_06339.py >> /tmp/diag.log 2>&1
+          PATCH=$?
+          echo "patch_exit=$PATCH" >> /tmp/diag.log
+          if [ "$PATCH" -eq 0 ]; then
+            node --check plugins/simcore/latest.js >> /tmp/diag.log 2>&1
+            SYNTAX=$?
+            echo "syntax_exit=$SYNTAX" >> /tmp/diag.log
+            if [ "$SYNTAX" -eq 0 ]; then
+              node plugins/simcore/test_simcore_06339.js >> /tmp/diag.log 2>&1
+              TEST=$?
+              echo "test_exit=$TEST" >> /tmp/diag.log
+            fi
+          fi
+          cp /tmp/diag.log .simcore-06339-diagnose-result.txt
+          exit 0
+      - name: Commit diagnostic result
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .simcore-06339-diagnose-result.txt
+          git commit -m 'ci: record SimCore 0.63.39 staging diagnosis'
+          git push origin HEAD:${GITHUB_REF_NAME}

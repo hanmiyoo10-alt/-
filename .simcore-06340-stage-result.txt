@@ -7,6 +7,11 @@ Evidence modes: DUAL,ROOT_ONLY,UNFENCED,INELIGIBLE
 Provider cache: UNVERIFIED
 Storage/API/timer/network call inventory: UNCHANGED
 
+SimCore 0.63.40 Current Source Integrity fixtures: PASS
+evidence modes: DUAL / ROOT_ONLY / UNFENCED / INELIGIBLE
+frozen non-Evidence/non-Prompt Core modules: 15 digest: 319c66f2d1e33954afc795ebc005363ac53001cfdb38ac62ff075a2acce76027
+trajectory retry/EMA: preserved
+provider cache: UNVERIFIED · request/mirror/storage/network/timer surfaces guarded
 
 pluginStorage.getItem(: 1 (unchanged)
 pluginStorage.setItem(: 1 (unchanged)

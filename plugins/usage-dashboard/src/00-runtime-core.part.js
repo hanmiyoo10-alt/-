@@ -1,13 +1,14 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.47
+//@version 3.0.0-alpha.5.48
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
+//@allowed-ipc provider-manager
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.47';
+  const VERSION = '3.0.0-alpha.5.48';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -34,6 +35,13 @@
   const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
   const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
+  const PROVIDER_MANAGER_PLUGIN = 'provider-manager';
+  const PROVIDER_MANAGER_REQUEST_CHANNEL = 'provider-manager/request';
+  const PROVIDER_MANAGER_RESPONSE_CHANNEL = 'provider-manager/response';
+  const PROVIDER_MANAGER_CACHE_IPC_VERSION = 1;
+  const PROVIDER_MANAGER_CACHE_TIMEOUT_MS = 800;
+  const PROVIDER_MANAGER_CACHE_RETRY_MS = 60000;
+  const PROVIDER_MANAGER_CACHE_MAX_ROWS = 250;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -79,6 +87,13 @@
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
   const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
   const bridgeLifecycleRuntime = {generation:1,refreshDrops:0,blockedRefreshes:0,lastTransitionFrom:'',lastTransitionTo:'',lastTransitionAt:null,lastTransitionReason:''};
+  const providerManagerCacheRuntime = {
+    status:'idle', supported:false, source:'', lastError:'', lastRequestedAt:null, lastResponseAt:null,
+    responseRows:0, responseTokenRows:0, matched:0, exact:0, strong:0, ambiguous:0, unmatched:0
+  };
+  const providerManagerCachePending = new Map();
+  const PROVIDER_MANAGER_CACHE_INSTANCE_ID = `lud-cache-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  let providerManagerCacheListenerInstalled = false;
 
   function bridgeLifecycleMode() {
     if (!state) return 'off';

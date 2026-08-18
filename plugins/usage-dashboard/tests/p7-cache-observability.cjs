@@ -28,5 +28,5 @@ assert.ok(markup.includes('요청 캐시 HIT'));
 assert.ok(markup.includes('Cache Read'));
 assert.ok(markup.includes('Cache Write'));
 assert.ok(markup.includes('Token Read Ratio'));
-assert.ok(latest.includes('//@version 3.0.0-alpha.5.47'));
+assert.match(latest, /\/\/@version 3\.0\.0-alpha\.5\.(?:4[7-9]|[5-9]\d|\d{3,})/);
 console.log('usage-dashboard P7 cache observability: OK · hit/read/write semantics locked');

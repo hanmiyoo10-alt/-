@@ -1,0 +1,108 @@
+name: Verify SimCore v0.63.39 Golden Runtime
+
+on:
+  push:
+    branches:
+      - simcore-06339-trajectory-identity
+    paths:
+      - .simcore-06339-verify-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact staged artifact identity
+        run: |
+          grep -q '//@version 0.63.39' plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          test "$(git hash-object plugins/simcore/latest.js)" = "ee4fc6b4b6590a4f631e3dd10c14fa446ed40564"
+
+      - name: Fetch exact v0.63.38 live baseline
+        run: |
+          git fetch --no-tags --depth=1 origin release-simcore
+          test "$(git rev-parse FETCH_HEAD)" = "7b240fa9bf82b5b8cd28b9f182b3fba8fa354eff"
+          git show FETCH_HEAD:plugins/simcore/latest.js > /tmp/simcore-before.js
+          git show FETCH_HEAD:plugins/simcore/install.js > /tmp/simcore-before-install.js
+          cmp /tmp/simcore-before.js /tmp/simcore-before-install.js
+          test "$(git hash-object /tmp/simcore-before.js)" = "e0b3bdce19579b0bd5b5968cf84900504ac70ddb"
+
+      - name: Run v0.63.39 identity and representation fixtures on exact staged blob
+        run: node plugins/simcore/test_simcore_06339_v2.js
+
+      - name: Replay v0.63 golden behavioral contracts on staged blob
+        run: |
+          git fetch --no-tags --depth=1 origin simcore-06335-runtime-stability
+          git show FETCH_HEAD:plugins/simcore/test_simcore_06335.js > /tmp/simcore-06335-golden.js
+          python - <<'PY'
+          from pathlib import Path
+          old = Path('/tmp/simcore-06335-golden.js').read_text(encoding='utf-8')
+          body = old[old.index('function loadSimCore(text)'):]
+          prelude = "const fs = require('fs');\nconst assert = require('assert');\nconst src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');\nconst expectedModules = { size: 17 };\nconst frozenBytes = 0;\nconst moduleDigest = 'behavior-replay';\n\n"
+          body = body.replace('SimCore 0.63.35 golden behavioral contracts: PASS', 'SimCore 0.63.39 replay of v0.63 golden behavioral contracts: PASS')
+          Path('/tmp/simcore-06339-golden-replay.js').write_text(prelude + body, encoding='utf-8')
+          PY
+          node /tmp/simcore-06339-golden-replay.js
+
+      - name: Exact frozen bodies and request/output invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, hashlib
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def modules(src):
+              hits = list(re.finditer(r'SimCore\.define\("([^"]+)", function \(require, module, exports\) \{', src))
+              out = {}
+              for i, hit in enumerate(hits):
+                  end = hits[i + 1].start() if i + 1 < len(hits) else src.index('\n\n(async () => {', hit.start())
+                  out[hit.group(1)] = src[hit.start():end].rstrip()
+              return out
+          b = modules(before); a = modules(after)
+          core = {'contracts','store','community','recurrence','lineage','handoff','evidence','kernel','time','lifecycle','reaction','frame','structure','recovery','prompt','session','ops'}
+          frozen_runtime = {'runtime-contracts','runtime-host','runtime-cache','runtime-session','runtime-mirror','runtime-hooks','runtime-telemetry'}
+          assert all(a[n] == b[n] for n in core)
+          assert all(a[n] == b[n] for n in frozen_runtime)
+          assert {'runtime-cache-candidates','runtime-topology','runtime-probe'} <= set(a)
+          assert before.count("messages.push({ role: 'system', content: result.promptBlock });") == after.count("messages.push({ role: 'system', content: result.promptBlock });") == 1
+          for token in ['Risuai.getCurrentCharacterIndex(', 'Risuai.getCurrentChatIndex(', 'Risuai.getChatFromIndex(', 'Risuai.getCharacter(', 'Risuai.setChatToIndex(', 'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(', 'setTimeout(', 'setInterval(', 'requestAnimationFrame(']:
+              assert after.count(token) == before.count(token), (token, before.count(token), after.count(token))
+          gate = "if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {"
+          assert before.count(gate) == after.count(gate) == 1
+          assert "await this.store.save('out', outIndex, result.state" in a['session']
+          assert after.index("outputStatus: 'COMMITTED'") < after.index('runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state)')
+          for forbidden in ['cache_control','cached_content','prompt_cache_key']:
+              assert forbidden not in after.lower()
+          digest = hashlib.sha256('\n'.join(f'{n}:{hashlib.sha256(a[n].encode()).hexdigest()}' for n in sorted(core)).encode()).hexdigest()
+          assert digest == '8c6b7458ee53b613fb9ed8c633ea1394adb9700ae431e462e16fef1bcc767630'
+          assert sum(len(a[n].encode()) for n in core) == 163284
+          print('SimCore 0.63.39 exact staged blob verification: PASS')
+          print('core module bodies: 17 bytes: 163284 digest:', digest)
+          print('retry identity: attempts include retry · distinct excludes retry')
+          print('cadence EMA: distinct-only · first real interval seeds EMA')
+          print('representation: short fingerprint lengths only · raw bodies NOT RETAINED')
+          print('provider cache: UNVERIFIED · prompt/cache behavior unchanged')
+          print('mirror acceptance gate: unchanged')
+          PY
+
+      - name: Record verification PASS
+        run: |
+          printf '%s\n' \
+            'SimCore 0.63.39 exact staged verification: PASS' \
+            'blob=ee4fc6b4b6590a4f631e3dd10c14fa446ed40564' \
+            'baseline=7b240fa9bf82b5b8cd28b9f182b3fba8fa354eff' \
+            'core_bytes=163284' \
+            'core_digest=8c6b7458ee53b613fb9ed8c633ea1394adb9700ae431e462e16fef1bcc767630' \
+            'mirror_gate=unchanged' \
+            'provider_cache=UNVERIFIED' > .simcore-06339-verify-result.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .simcore-06339-verify-result.txt
+          git commit -m 'ci: record SimCore 0.63.39 verification pass'
+          git push origin HEAD:${GITHUB_REF_NAME}

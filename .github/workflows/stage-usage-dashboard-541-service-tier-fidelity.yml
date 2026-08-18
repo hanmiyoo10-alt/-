@@ -9,6 +9,14 @@ on:
       - 'plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py'
       - 'plugins/usage-dashboard/tests/p7-cache-observability.cjs'
       - 'plugins/usage-dashboard/tests/p8-provider-manager-cache-ipc.cjs'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml'
+      - 'plugins/usage-dashboard/tools/release_provider_manager_cache_ipc_548.py'
+      - 'plugins/usage-dashboard/tools/patch_provider_manager_cache_observability.py'
+      - 'plugins/usage-dashboard/tests/p7-cache-observability.cjs'
+      - 'plugins/usage-dashboard/tests/p8-provider-manager-cache-ipc.cjs'
 
 permissions:
   contents: write
@@ -17,10 +25,9 @@ jobs:
   build-test-publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main
+      - name: Checkout candidate
         uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
 
       - name: Patch Provider Manager cache IPC candidate
@@ -94,7 +101,7 @@ jobs:
           ! grep -Fq 'pm_request_logs' plugins/usage-dashboard/latest.js
 
       - name: Persist staging failure log
-        if: failure()
+        if: failure() && github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
@@ -113,6 +120,7 @@ jobs:
           git push origin HEAD:main
 
       - name: Commit validated 5.48 candidate to main
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
@@ -133,6 +141,7 @@ jobs:
           fi
 
       - name: Publish 5.48 candidate to release channel
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail

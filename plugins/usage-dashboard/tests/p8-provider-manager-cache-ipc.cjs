@@ -41,9 +41,11 @@ assert.ok(refresh.indexOf('enrichDataWithProviderManagerCache(state.data, provid
 
 assert.ok(diag.includes('Provider Manager cache IPC:'));
 assert.ok(diag.includes('Provider Manager IPC v1 when available'));
-const readiness = diag.match(/function stableReadinessSnapshot[\s\S]*?\n  function diagText|function stableReadinessSnapshot[\s\S]*?\n  function providerManagerCacheDiagnosticText/);
-assert.ok(readiness, 'stable readiness block must be discoverable');
-assert.ok(!readiness[0].includes('providerManagerCacheRuntime'), 'optional PM cache IPC must never block Stable readiness');
+const readinessStart = diag.indexOf('function stableReadinessSnapshot');
+const readinessEnd = readinessStart >= 0 ? diag.indexOf('\n  function ', readinessStart + 'function stableReadinessSnapshot'.length) : -1;
+assert.ok(readinessStart >= 0 && readinessEnd > readinessStart, 'stable readiness block must be discoverable');
+const readinessBlock = diag.slice(readinessStart, readinessEnd);
+assert.ok(!readinessBlock.includes('providerManagerCacheRuntime'), 'optional PM cache IPC must never block Stable readiness');
 
 assert.ok(!latest.includes('pm_request_logs'), 'Dashboard must not read Provider Manager private storage');
 assert.ok(!bridge.includes('getLocalPluginStorage(provider-manager'), 'Dashboard must not reach into another plugin storage');

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.51
+//@version 3.0.0-alpha.5.52
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.51';
+  const VERSION = '3.0.0-alpha.5.52';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.7';
+  const REQUIRED_BRIDGE_VERSION = '1.6.8';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -1219,18 +1219,24 @@ async function importLegacyTodayBaselines() {
       'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens'
     ]);
     const cacheCreationInputTokens = metric([
-      'cacheCreationInputTokens','cache_creation_input_tokens','cacheWriteTokens','cache_write_tokens',
-      'usage.cacheCreationInputTokens','usage.cache_creation_input_tokens','usage.cacheWriteTokens','usage.cache_write_tokens',
+      'cacheCreationInputTokens','cache_creation_input_tokens','cacheCreationTokens','cache_creation_tokens','cacheWriteTokens','cache_write_tokens',
+      'usage.cacheCreationInputTokens','usage.cache_creation_input_tokens','usage.cacheCreationTokens','usage.cache_creation_tokens','usage.cacheWriteTokens','usage.cache_write_tokens',
       'usage.input_tokens_details.cache_write_tokens','usage.prompt_tokens_details.cache_write_tokens',
-      'input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens'
+      'usage.input_tokens_details.cache_creation_tokens','usage.prompt_tokens_details.cache_creation_tokens',
+      'input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens',
+      'input_tokens_details.cache_creation_tokens','prompt_tokens_details.cache_creation_tokens'
     ]);
     const cacheCreation5mTokens = metric([
-      'cacheCreation5mTokens','cache_creation_5m_tokens','usage.cacheCreation5mTokens','usage.cache_creation_5m_tokens',
-      'cache_creation.ephemeral_5m_input_tokens','usage.cache_creation.ephemeral_5m_input_tokens'
+      'cacheCreation5mTokens','cache_creation_5m_tokens','cacheWrite5mTokens','cache_write_5m_tokens','usage.cacheCreation5mTokens','usage.cache_creation_5m_tokens','usage.cacheWrite5mTokens','usage.cache_write_5m_tokens',
+      'cache_creation.ephemeral_5m_input_tokens','usage.cache_creation.ephemeral_5m_input_tokens',
+      'prompt_tokens_details.cache_creation.ephemeral_5m_input_tokens','input_tokens_details.cache_creation.ephemeral_5m_input_tokens',
+      'usage.prompt_tokens_details.cache_creation.ephemeral_5m_input_tokens','usage.input_tokens_details.cache_creation.ephemeral_5m_input_tokens'
     ]);
     const cacheCreation1hTokens = metric([
-      'cacheCreation1hTokens','cache_creation_1h_tokens','usage.cacheCreation1hTokens','usage.cache_creation_1h_tokens',
-      'cache_creation.ephemeral_1h_input_tokens','usage.cache_creation.ephemeral_1h_input_tokens'
+      'cacheCreation1hTokens','cache_creation_1h_tokens','cacheWrite1hTokens','cache_write_1h_tokens','usage.cacheCreation1hTokens','usage.cache_creation_1h_tokens','usage.cacheWrite1hTokens','usage.cache_write_1h_tokens',
+      'cache_creation.ephemeral_1h_input_tokens','usage.cache_creation.ephemeral_1h_input_tokens',
+      'prompt_tokens_details.cache_creation.ephemeral_1h_input_tokens','input_tokens_details.cache_creation.ephemeral_1h_input_tokens',
+      'usage.prompt_tokens_details.cache_creation.ephemeral_1h_input_tokens','usage.input_tokens_details.cache_creation.ephemeral_1h_input_tokens'
     ]);
     const cachedInputTokens = explicitCachedInputTokens !== null
       ? explicitCachedInputTokens
@@ -1397,6 +1403,9 @@ async function importLegacyTodayBaselines() {
         cacheCreation5mTokens:cacheMetrics.cacheCreation5mTokens,
         cacheCreation1hTokens:cacheMetrics.cacheCreation1hTokens,
         cacheReadRatio:cacheMetrics.cacheReadRatio,
+        cacheMetricFidelity:String(recentRequestValue(row, ['cacheMetricFidelity','cache_metric_fidelity'], 'unknown') || 'unknown'),
+        cacheWriteTelemetry:String(recentRequestValue(row, ['cacheWriteTelemetry','cache_write_telemetry'], 'unknown') || 'unknown'),
+        cacheTtlTelemetry:String(recentRequestValue(row, ['cacheTtlTelemetry','cache_ttl_telemetry'], 'unknown') || 'unknown'),
         cacheMetricSource:String(recentRequestValue(row, ['cacheMetricSource','cache_metric_source'], '') || ''),
         requestedServiceTier,
         servedServiceTier,
@@ -1432,6 +1441,7 @@ async function importLegacyTodayBaselines() {
   function requestCacheObservabilityStats(rows) {
     const stats = {
       rows:0, hitKnown:0, hits:0, tokenKnown:0, readKnown:0, writeKnown:0,
+      writeReported:0, writeNotReported:0, ttlReported:0, ttlNotReported:0,
       inputTokens:0, cachedInputTokens:0, cacheReadInputTokens:0, cacheCreationInputTokens:0,
       cacheCreation5mTokens:0, cacheCreation1hTokens:0, readDenominator:0, readRatio:null
     };
@@ -1442,6 +1452,10 @@ async function importLegacyTodayBaselines() {
       if (hasTokenMetric) stats.tokenKnown += 1;
       if (num(row?.cacheReadInputTokens)) stats.readKnown += 1;
       if (num(row?.cacheCreationInputTokens)) stats.writeKnown += 1;
+      if (row?.cacheWriteTelemetry === 'reported') stats.writeReported += 1;
+      if (row?.cacheWriteTelemetry === 'not-reported') stats.writeNotReported += 1;
+      if (row?.cacheTtlTelemetry === 'reported') stats.ttlReported += 1;
+      if (row?.cacheTtlTelemetry === 'not-reported') stats.ttlNotReported += 1;
       stats.inputTokens += num(row?.inputTokens) ? Number(row.inputTokens) : 0;
       stats.cachedInputTokens += num(row?.cachedInputTokens) ? Number(row.cachedInputTokens) : 0;
       stats.cacheReadInputTokens += num(row?.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : 0;
@@ -1524,6 +1538,9 @@ async function importLegacyTodayBaselines() {
           cacheCreation5mTokens:num(row.cacheCreation5mTokens) ? Number(row.cacheCreation5mTokens) : (num(current?.cacheCreation5mTokens) ? Number(current.cacheCreation5mTokens) : null),
           cacheCreation1hTokens:num(row.cacheCreation1hTokens) ? Number(row.cacheCreation1hTokens) : (num(current?.cacheCreation1hTokens) ? Number(current.cacheCreation1hTokens) : null),
           cacheReadRatio:num(row.cacheReadRatio) ? Number(row.cacheReadRatio) : (num(current?.cacheReadRatio) ? Number(current.cacheReadRatio) : null),
+          cacheMetricFidelity:String(row.cacheMetricFidelity || current?.cacheMetricFidelity || 'unknown'),
+          cacheWriteTelemetry:String(row.cacheWriteTelemetry || current?.cacheWriteTelemetry || 'unknown'),
+          cacheTtlTelemetry:String(row.cacheTtlTelemetry || current?.cacheTtlTelemetry || 'unknown'),
           cacheMetricSource:String(row.cacheMetricSource || current?.cacheMetricSource || ''),
           requestedServiceTier:preferKnownServiceTier(row.requestedServiceTier, current?.requestedServiceTier),
           servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
@@ -2374,7 +2391,10 @@ async function importLegacyTodayBaselines() {
     const sources = [...new Set(tokenRows.map(row => String(row?.cacheMetricSource || '')).filter(Boolean))].sort();
     const readKnown = list.filter(row => num(row?.cacheReadInputTokens)).length;
     const writeKnown = list.filter(row => num(row?.cacheCreationInputTokens)).length;
-    return `independent · protocol cache-observability-v1 · parser provider-usage-v2 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
+    const writeReported = list.filter(row => row?.cacheWriteTelemetry === 'reported').length;
+    const writeNotReported = list.filter(row => row?.cacheWriteTelemetry === 'not-reported').length;
+    const ttlReported = list.filter(row => row?.cacheTtlTelemetry === 'reported').length;
+    return `independent · protocol cache-observability-v1 · parser provider-usage-v3 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · write reported ${writeReported}/${list.length} · read-without-write ${writeNotReported}/${list.length} · ttl reported ${ttlReported}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
   }
 
   function diagText() {
@@ -2430,7 +2450,8 @@ async function importLegacyTodayBaselines() {
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
       `Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}`,
-      `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached total = Read + Write when both are known · unknown stays unknown · source request metadata / Bridge aggregates / independent provider usage parser`,
+      `Cache write telemetry: reported ${diagCacheObservability.writeReported}/${diagCacheObservability.rows} · read-without-write ${diagCacheObservability.writeNotReported}/${diagCacheObservability.rows} · TTL reported ${diagCacheObservability.ttlReported}/${diagCacheObservability.rows} · TTL unreported-after-write ${diagCacheObservability.ttlNotReported}/${diagCacheObservability.rows}`,
+      `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached total = Read + Write when both are known · unknown stays unknown · missing Write/TTL is never inferred from price/provider`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,

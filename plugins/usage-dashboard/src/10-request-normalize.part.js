@@ -57,18 +57,24 @@
       'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens'
     ]);
     const cacheCreationInputTokens = metric([
-      'cacheCreationInputTokens','cache_creation_input_tokens','cacheWriteTokens','cache_write_tokens',
-      'usage.cacheCreationInputTokens','usage.cache_creation_input_tokens','usage.cacheWriteTokens','usage.cache_write_tokens',
+      'cacheCreationInputTokens','cache_creation_input_tokens','cacheCreationTokens','cache_creation_tokens','cacheWriteTokens','cache_write_tokens',
+      'usage.cacheCreationInputTokens','usage.cache_creation_input_tokens','usage.cacheCreationTokens','usage.cache_creation_tokens','usage.cacheWriteTokens','usage.cache_write_tokens',
       'usage.input_tokens_details.cache_write_tokens','usage.prompt_tokens_details.cache_write_tokens',
-      'input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens'
+      'usage.input_tokens_details.cache_creation_tokens','usage.prompt_tokens_details.cache_creation_tokens',
+      'input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens',
+      'input_tokens_details.cache_creation_tokens','prompt_tokens_details.cache_creation_tokens'
     ]);
     const cacheCreation5mTokens = metric([
-      'cacheCreation5mTokens','cache_creation_5m_tokens','usage.cacheCreation5mTokens','usage.cache_creation_5m_tokens',
-      'cache_creation.ephemeral_5m_input_tokens','usage.cache_creation.ephemeral_5m_input_tokens'
+      'cacheCreation5mTokens','cache_creation_5m_tokens','cacheWrite5mTokens','cache_write_5m_tokens','usage.cacheCreation5mTokens','usage.cache_creation_5m_tokens','usage.cacheWrite5mTokens','usage.cache_write_5m_tokens',
+      'cache_creation.ephemeral_5m_input_tokens','usage.cache_creation.ephemeral_5m_input_tokens',
+      'prompt_tokens_details.cache_creation.ephemeral_5m_input_tokens','input_tokens_details.cache_creation.ephemeral_5m_input_tokens',
+      'usage.prompt_tokens_details.cache_creation.ephemeral_5m_input_tokens','usage.input_tokens_details.cache_creation.ephemeral_5m_input_tokens'
     ]);
     const cacheCreation1hTokens = metric([
-      'cacheCreation1hTokens','cache_creation_1h_tokens','usage.cacheCreation1hTokens','usage.cache_creation_1h_tokens',
-      'cache_creation.ephemeral_1h_input_tokens','usage.cache_creation.ephemeral_1h_input_tokens'
+      'cacheCreation1hTokens','cache_creation_1h_tokens','cacheWrite1hTokens','cache_write_1h_tokens','usage.cacheCreation1hTokens','usage.cache_creation_1h_tokens','usage.cacheWrite1hTokens','usage.cache_write_1h_tokens',
+      'cache_creation.ephemeral_1h_input_tokens','usage.cache_creation.ephemeral_1h_input_tokens',
+      'prompt_tokens_details.cache_creation.ephemeral_1h_input_tokens','input_tokens_details.cache_creation.ephemeral_1h_input_tokens',
+      'usage.prompt_tokens_details.cache_creation.ephemeral_1h_input_tokens','usage.input_tokens_details.cache_creation.ephemeral_1h_input_tokens'
     ]);
     const cachedInputTokens = explicitCachedInputTokens !== null
       ? explicitCachedInputTokens

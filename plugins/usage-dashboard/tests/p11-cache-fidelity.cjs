@@ -10,23 +10,23 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.51';"));
-assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.7';"));
-assert.ok(source.includes('//@version 3.0.0-alpha.5.51'));
-assert.ok(source.includes("const VERSION = '3.0.0-alpha.5.51';"));
-assert.ok(engine.includes("const VERSION = '1.6.7';"));
-assert.ok(engine.includes("Symbol.for('llmgateway.devpass.bridge.capture.v9')"));
+assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.52';"));
+assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.8';"));
+assert.ok(source.includes('//@version 3.0.0-alpha.5.52'));
+assert.ok(source.includes("const VERSION = '3.0.0-alpha.5.52';"));
+assert.ok(engine.includes("const VERSION = '1.6.8';"));
+assert.ok(engine.includes("Symbol.for('llmgateway.devpass.bridge.capture.v10')"));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.51';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.7';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.51');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.51');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.7');
+assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.52';"));
+assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.8';"));
+assert.equal(manifest.productVersion, '3.0.0-alpha.5.52');
+assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.52');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.8');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.51');
+assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.52');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
-assert.ok(diagnostics.includes('parser provider-usage-v2'));
+assert.ok(diagnostics.includes('parser provider-usage-v3'));
 assert.ok(diagnostics.includes('LLMGateway cachedTokens = provider cache Read'));
 assert.ok(diagnostics.includes('cached total = Read + Write when both are known'));
 assert.ok(!source.includes('providerManagerCache'));
@@ -64,6 +64,9 @@ assert.equal(llmgatewayLog.cacheCreationInputTokens, 1200);
 assert.equal(llmgatewayLog.cacheCreation5mTokens, 1000);
 assert.equal(llmgatewayLog.cacheCreation1hTokens, 200);
 assert.equal(llmgatewayLog.cachedInputTokens, 9200);
+assert.equal(llmgatewayLog.cacheMetricFidelity, 'explicit-read-write');
+assert.equal(llmgatewayLog.cacheWriteTelemetry, 'reported');
+assert.equal(llmgatewayLog.cacheTtlTelemetry, 'reported');
 
 const llmgatewayWriteOnly = parse({
   requestId: 'req-cache-2',
@@ -79,12 +82,47 @@ assert.equal(llmgatewayWriteOnly.cacheCreationInputTokens, 4096);
 assert.equal(llmgatewayWriteOnly.cacheCreation5mTokens, 4096);
 assert.equal(llmgatewayWriteOnly.cacheCreation1hTokens, 0);
 assert.equal(llmgatewayWriteOnly.cachedInputTokens, 4096);
+assert.equal(llmgatewayWriteOnly.cacheMetricFidelity, 'explicit-read-write');
+assert.equal(llmgatewayWriteOnly.cacheWriteTelemetry, 'reported');
+assert.equal(llmgatewayWriteOnly.cacheTtlTelemetry, 'reported');
 
 const generic = parse({usage:{inputTokens:55,outputTokens:5,cachedTokens:33,cacheWriteTokens:4}});
 assert.equal(generic.source, 'llmgateway-usage');
 assert.equal(generic.cachedInputTokens, 33);
 assert.equal(generic.cacheReadInputTokens, null);
 assert.equal(generic.cacheCreationInputTokens, 4);
+
+const officialAlias = parse({usage:{
+  prompt_tokens:900,
+  prompt_tokens_details:{
+    cached_tokens:400,
+    cache_creation_tokens:125,
+    cache_creation:{ephemeral_5m_input_tokens:100,ephemeral_1h_input_tokens:25},
+  },
+}});
+assert.equal(officialAlias.source, 'openai-chat-usage');
+assert.equal(officialAlias.cachedInputTokens, 400);
+assert.equal(officialAlias.cacheCreationInputTokens, 125);
+assert.equal(officialAlias.cacheCreation5mTokens, 100);
+assert.equal(officialAlias.cacheCreation1hTokens, 25);
+assert.equal(officialAlias.cacheMetricFidelity, 'explicit-write');
+assert.equal(officialAlias.cacheWriteTelemetry, 'reported');
+assert.equal(officialAlias.cacheTtlTelemetry, 'reported');
+
+const readWithoutWrite = parse({
+  requestId:'req-cache-read-only',
+  createdAt:'2026-08-19T10:02:00.000Z',
+  cachedTokens:2048,
+  cacheWriteTokens:null,
+  cacheWrite5mTokens:null,
+  cacheWrite1hTokens:null,
+});
+assert.equal(readWithoutWrite.source, 'llmgateway-log-cache-v1');
+assert.equal(readWithoutWrite.cacheReadInputTokens, 2048);
+assert.equal(readWithoutWrite.cacheCreationInputTokens, null);
+assert.equal(readWithoutWrite.cacheMetricFidelity, 'explicit-read');
+assert.equal(readWithoutWrite.cacheWriteTelemetry, 'not-reported');
+assert.equal(readWithoutWrite.cacheTtlTelemetry, 'unknown');
 
 const anthropic = parse({usage:{
   input_tokens:100,
@@ -110,5 +148,8 @@ for (const forbidden of ['requestBody:', 'responseBody:', 'messages:', 'authoriz
 assert.ok(sanitizeBlock.includes('cacheReadInputTokens: cacheUsage?.cacheReadInputTokens'));
 assert.ok(sanitizeBlock.includes('cacheCreation5mTokens: cacheUsage?.cacheCreation5mTokens'));
 assert.ok(sanitizeBlock.includes('cacheCreation1hTokens: cacheUsage?.cacheCreation1hTokens'));
+assert.ok(sanitizeBlock.includes("cacheMetricFidelity: cacheUsage?.cacheMetricFidelity"));
+assert.ok(sanitizeBlock.includes("cacheWriteTelemetry: cacheUsage?.cacheWriteTelemetry"));
+assert.ok(sanitizeBlock.includes("cacheTtlTelemetry: cacheUsage?.cacheTtlTelemetry"));
 
-console.log('usage-dashboard P11 cache fidelity: OK · LLMGateway log cache read/write/TTL fields preserved independently');
+console.log('usage-dashboard P11 cache fidelity: OK · official write aliases + provenance preserve unknown without inference');

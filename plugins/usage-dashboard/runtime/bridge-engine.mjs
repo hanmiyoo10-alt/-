@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.7';
+const VERSION = '1.6.8';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -397,7 +397,7 @@ const output = process.env.DEVPASS_BRIDGE_CAPTURE_FILE;
 const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || ''))
   ? String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE)
   : '';
-const marker = Symbol.for('llmgateway.devpass.bridge.capture.v9');
+const marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
   const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, captureMode: null };
@@ -538,10 +538,18 @@ if (output && !globalThis[marker]) {
       'cacheReadInputTokens','cache_read_input_tokens',
       ...(llmgatewayLogCacheShape ? ['cachedTokens'] : [])
     ]);
-    let explicitWrite = cacheNumber(usage, ['cacheCreationInputTokens','cache_creation_input_tokens','cacheWriteTokens','cache_write_tokens','input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens']);
+    let explicitWrite = cacheNumber(usage, [
+      'cacheCreationInputTokens','cache_creation_input_tokens',
+      'cacheCreationTokens','cache_creation_tokens',
+      'cacheWriteTokens','cache_write_tokens',
+      'input_tokens_details.cache_write_tokens','prompt_tokens_details.cache_write_tokens',
+      'input_tokens_details.cache_creation_tokens','prompt_tokens_details.cache_creation_tokens'
+    ]);
     const write5m = cacheNumber(usage, ['cacheCreation5mTokens','cache_creation_5m_tokens','cacheWrite5mTokens','cache_write_5m_tokens','cache_creation.ephemeral_5m_input_tokens','prompt_tokens_details.cache_creation.ephemeral_5m_input_tokens','input_tokens_details.cache_creation.ephemeral_5m_input_tokens']);
     const write1h = cacheNumber(usage, ['cacheCreation1hTokens','cache_creation_1h_tokens','cacheWrite1hTokens','cache_write_1h_tokens','cache_creation.ephemeral_1h_input_tokens','prompt_tokens_details.cache_creation.ephemeral_1h_input_tokens','input_tokens_details.cache_creation.ephemeral_1h_input_tokens']);
-    if (explicitWrite === null && (write5m !== null || write1h !== null)) explicitWrite = Number(write5m || 0) + Number(write1h || 0);
+    const explicitWriteReported = explicitWrite !== null;
+    const ttlReported = write5m !== null || write1h !== null;
+    if (explicitWrite === null && ttlReported) explicitWrite = Number(write5m || 0) + Number(write1h || 0);
 
     const explicitCached = cacheNumber(usage, ['cachedInputTokens','cached_input_tokens','cachedTokens','cached_tokens']);
     const geminiCached = cacheNumber(usage, ['cachedContentTokenCount','cached_content_token_count']);
@@ -566,6 +574,26 @@ if (output && !globalThis[marker]) {
     const hasCacheMetric = [cachedInputTokens, explicitRead, explicitWrite, write5m, write1h].some(value => value !== null);
     if (!hasCacheMetric) return null;
 
+    const cacheMetricFidelity = explicitRead !== null && explicitWrite !== null
+      ? 'explicit-read-write'
+      : explicitRead !== null
+        ? 'explicit-read'
+        : explicitWrite !== null
+          ? 'explicit-write'
+          : cachedInputTokens !== null
+            ? 'cached-total'
+            : 'unknown';
+    const cacheWriteTelemetry = explicitWriteReported || ttlReported
+      ? 'reported'
+      : explicitRead !== null
+        ? 'not-reported'
+        : 'unknown';
+    const cacheTtlTelemetry = ttlReported
+      ? 'reported'
+      : explicitWrite !== null
+        ? 'not-reported'
+        : 'unknown';
+
     return {
       inputTokens,
       outputTokens,
@@ -575,6 +603,9 @@ if (output && !globalThis[marker]) {
       cacheCreationInputTokens: explicitWrite,
       cacheCreation5mTokens: write5m,
       cacheCreation1hTokens: write1h,
+      cacheMetricFidelity,
+      cacheWriteTelemetry,
+      cacheTtlTelemetry,
       source: source || 'normalized-usage',
     };
   };
@@ -623,6 +654,9 @@ if (output && !globalThis[marker]) {
         cacheCreationInputTokens: cacheUsage?.cacheCreationInputTokens ?? null,
         cacheCreation5mTokens: cacheUsage?.cacheCreation5mTokens ?? null,
         cacheCreation1hTokens: cacheUsage?.cacheCreation1hTokens ?? null,
+        cacheMetricFidelity: cacheUsage?.cacheMetricFidelity ?? 'unknown',
+        cacheWriteTelemetry: cacheUsage?.cacheWriteTelemetry ?? 'unknown',
+        cacheTtlTelemetry: cacheUsage?.cacheTtlTelemetry ?? 'unknown',
         cacheMetricSource: cacheUsage?.source ?? '',
         cacheHit: typeof row.cached === 'boolean' ? row.cached : null,
         requestedServiceTier: requestedTier.value,

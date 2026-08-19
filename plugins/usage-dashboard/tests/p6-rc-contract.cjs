@@ -9,17 +9,20 @@ const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.js
 const srcManifest = JSON.parse(fs.readFileSync(`${root}/src/manifest.json`, 'utf8'));
 const productVersion = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const alphaBuild = productVersion.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
+const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
 assert.ok(alphaBuild ? Number(alphaBuild[1]) >= 47 : /^3\.0\.0-rc\.\d+$/.test(productVersion) || productVersion === '3.0.0' || productVersion === '3.0.1', `unexpected RC-train product version: ${productVersion}`);
+assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bridge contract version: ${requiredEngineVersion}`);
 assert.ok(source.includes(`const VERSION = '${productVersion}';`));
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
 assert.ok(source.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));
-assert.ok(source.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
-assert.ok(engine.includes("const VERSION = '1.6.6';"));
+assert.ok(source.includes(`const REQUIRED_BRIDGE_VERSION = '${requiredEngineVersion}';`));
+assert.ok(engine.includes(`const VERSION = '${requiredEngineVersion}';`));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
 assert.ok(manager.includes(`const PRODUCT_VERSION = '${productVersion}';`));
+assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${requiredEngineVersion}';`));
 assert.equal(manifest.productVersion, productVersion);
 assert.equal(manifest.components.plugin.version, productVersion);
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
+assert.equal(manifest.components.bridge.requiredVersion, requiredEngineVersion);
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.components.bridgeManager.productVersion, productVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
@@ -38,4 +41,4 @@ for (const marker of [
   '<span>Lifecycle</span>',
   '<span>Errors</span>',
 ]) assert.ok(source.includes(marker), `missing RC productization marker: ${marker}`);
-console.log(`usage-dashboard P6 RC contract: OK · productization locked · ${productVersion}`);
+console.log(`usage-dashboard P6 RC contract: OK · productization locked · ${productVersion} · engine ${requiredEngineVersion}`);

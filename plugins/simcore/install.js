@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.47
+//@version 0.63.48
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.48 History Turn-Ordinal Alignment:
+// - Replaces v0.63.47's body/calibrator-derived alignment candidate search after real long-chat validation produced NO_CANDIDATE with zero assistant calibrators across C/B_START/B_CONTINUE/B_END while the compact assistant frontier still advanced @16→@18→@20
+// - Anchors the request conversation spine to the authoritative raw-chat current user already identified by sendIndex, then maps the bounded suffix backward by conversation ordinal; current-user and historical assistant body equality are explicitly not required for alignment
+// - Requires the endpoint-aligned user/assistant role sequence to match across the entire bounded request spine; any missing/inserted conversational role, short raw suffix, unmappable compact target, or unsafe raw assistant fails open without request mutation
+// - Keeps the repair target frozen at assistant/text 21:4a852496 and still replaces only with a bounded canonical # 응답 envelope from the mapped raw assistant; no visible/persistent chat write or raw-body persistence is added
+// - Adds turn-ordinal alignment telemetry (SEND_INDEX endpoint, role matches, mapped targets, fixed suffix offset, body equality NOT_REQUIRED) while keeping provider-cache status UNVERIFIED and all non-alignment runtime semantics frozen
 //
 // v0.63.47 History Alignment Stabilization:
 // - Replaces v0.63.46's exact current-user body gate with a bounded conversation-spine alignment over the final request and authoritative raw-chat tail, because real long-chat validation showed CURRENT_USER_MISMATCH across C/B_START/B_CONTINUE/B_END while request-only repair stayed safely inactive
@@ -473,7 +480,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.47';
+const SIMCORE_RUNTIME_VERSION = '0.63.48';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -5589,13 +5596,14 @@ function historyMutation(probe) {
 function historyAlignment(probe) {
   if (!probe) return 'n/a';
   const offset = probe.spineOffset == null ? 'n/a' : `${Number(probe.spineOffset) >= 0 ? '+' : ''}${Number(probe.spineOffset)}`;
-  return `${probe.alignmentStatus || 'n/a'} · request spine ${Number(probe.requestSpine || 0)} · host spine ${Number(probe.hostSpine || 0)} · candidates ${Number(probe.alignmentCandidates || 0)} · anchors ${Number(probe.userAnchors || 0)} · calibrators ${Number(probe.assistantCalibrators || 0)} · offset ${offset}`;
+  const roleMatches = `${Number(probe.roleMatches || 0)}/${Number(probe.roleExpected || 0)}`;
+  return `${probe.alignmentStatus || 'n/a'} · request spine ${Number(probe.requestSpine || 0)} · host spine ${Number(probe.hostSpine || 0)} · endpoint ${probe.endpointSource || 'n/a'} · role matches ${roleMatches} · targets ${Number(probe.mappedTargets || 0)}/${Number(probe.candidates || 0)} · offset ${offset} · body equality ${probe.bodyEquality || 'n/a'}`;
 }
 function historyStabilization(probe) {
   if (!probe) return 'n/a';
   const range = probe.firstIndex == null ? 'n/a' : (probe.firstIndex === probe.lastIndex ? `@${Number(probe.firstIndex)}` : `@${Number(probe.firstIndex)}..@${Number(probe.lastIndex)}`);
   const delta = Number(probe.addedChars || 0);
-  return `${probe.status || 'n/a'} · slots ${Number(probe.applied || 0)}/${Number(probe.candidates || 0)} · range ${range} · source ${probe.source || 'n/a'} · anchors ${Number(probe.userAnchors || 0)} · calibrators ${Number(probe.assistantCalibrators || 0)} · Δchars ${delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US')} · persistent ${probe.persistentMutation || 'NONE'} · cost ${Number(probe.costMs || 0).toFixed(1)} ms`;
+  return `${probe.status || 'n/a'} · slots ${Number(probe.applied || 0)}/${Number(probe.candidates || 0)} · range ${range} · source ${probe.source || 'n/a'} · mapped ${Number(probe.mappedTargets || 0)}/${Number(probe.candidates || 0)} · Δchars ${delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US')} · persistent ${probe.persistentMutation || 'NONE'} · cost ${Number(probe.costMs || 0).toFixed(1)} ms`;
 }
 function representationCorrelation(probe) {
   if (!probe) return 'n/a';
@@ -5732,7 +5740,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
   const HISTORY_STABILIZATION_MAX_RAW_CHARS = 100000;
   const HISTORY_ALIGNMENT_REQUEST_SPINE_LIMIT = 48;
   const HISTORY_ALIGNMENT_RAW_SPINE_LIMIT = 64;
-  const HISTORY_ALIGNMENT_MIN_CALIBRATORS = 2;
+  const HISTORY_ALIGNMENT_ENDPOINT = 'SEND_INDEX';
   const RECONCILE_WINDOW_BEHIND = 1;
   const RECONCILE_WINDOW_AHEAD = 4;
   const REPEATED_BREAK_LEDGER_LIMIT = 16;
@@ -5922,12 +5930,14 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       applied: Number(d.applied || 0),
       firstIndex: Number.isInteger(Number(d.firstIndex)) ? Number(d.firstIndex) : null,
       lastIndex: Number.isInteger(Number(d.lastIndex)) ? Number(d.lastIndex) : null,
-      userAnchors: Number(d.userAnchors || 0),
-      assistantCalibrators: Number(d.assistantCalibrators || 0),
       alignmentStatus: String(d.alignmentStatus || 'n/a'),
       requestSpine: Number(d.requestSpine || 0),
       hostSpine: Number(d.hostSpine || 0),
-      alignmentCandidates: Number(d.alignmentCandidates || 0),
+      endpointSource: String(d.endpointSource || 'n/a'),
+      roleMatches: Number(d.roleMatches || 0),
+      roleExpected: Number(d.roleExpected || 0),
+      mappedTargets: Number(d.mappedTargets || 0),
+      bodyEquality: String(d.bodyEquality || 'NOT_REQUIRED'),
       spineOffset: Number.isInteger(Number(d.spineOffset)) ? Number(d.spineOffset) : null,
       addedChars: Number(d.addedChars || 0),
       persistentMutation: 'NONE',
@@ -5969,7 +5979,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
     const raw = Array.isArray(rawMessages) ? rawMessages : [];
     const rawUserIndex = Number(sendIndex);
     if (!request.length || !raw.length || !Number.isInteger(rawUserIndex) || rawUserIndex < 0 || rawUserIndex >= raw.length) {
-      return stabilizationResult('SKIPPED_NO_CONTEXT', { alignmentStatus: 'NO_CONTEXT' }, started);
+      return stabilizationResult('SKIPPED_NO_CONTEXT', { alignmentStatus: 'NO_CONTEXT', endpointSource: HISTORY_ALIGNMENT_ENDPOINT }, started);
     }
 
     let currentRequestUser = -1;
@@ -5977,7 +5987,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       if (stabilizationConversationRole(request[i]) === 'user') { currentRequestUser = i; break; }
     }
     if (currentRequestUser < 0 || stabilizationConversationRole(raw[rawUserIndex]) !== 'user') {
-      return stabilizationResult('SKIPPED_CURRENT_USER', { alignmentStatus: 'NO_CURRENT_USER' }, started);
+      return stabilizationResult('SKIPPED_ENDPOINT_ROLE', { alignmentStatus: 'ENDPOINT_ROLE_MISMATCH', endpointSource: HISTORY_ALIGNMENT_ENDPOINT }, started);
     }
 
     const requestSpine = buildStabilizationSpine(request, currentRequestUser, HISTORY_ALIGNMENT_REQUEST_SPINE_LIMIT);
@@ -5985,6 +5995,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
     const commonDetail = {
       requestSpine: requestSpine.length,
       hostSpine: rawSpine.length,
+      endpointSource: HISTORY_ALIGNMENT_ENDPOINT,
+      bodyEquality: 'NOT_REQUIRED',
     };
 
     const targetPositions = [];
@@ -6004,132 +6016,95 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
         candidates: targetPositions.length,
       }, started);
     }
-
-    const rawByAssistant = new Map();
-    for (let i = 0; i < rawSpine.length; i += 1) {
-      const item = rawSpine[i];
-      if (item.role !== 'assistant') continue;
-      const text = String(item.assistantComparable || '');
-      if (text.length < HISTORY_STABILIZATION_MIN_RAW_CHARS) continue;
-      if (!rawByAssistant.has(text)) rawByAssistant.set(text, []);
-      rawByAssistant.get(text).push(i);
-    }
-
-    const candidateOffsets = new Set();
-    for (let i = 0; i < requestSpine.length; i += 1) {
-      const item = requestSpine[i];
-      if (item.role !== 'assistant' || item.compact) continue;
-      const text = String(item.text || '');
-      if (text.length < HISTORY_STABILIZATION_MIN_RAW_CHARS) continue;
-      const matches = rawByAssistant.get(text) || [];
-      for (const rawPos of matches) {
-        const offset = rawPos - i;
-        if ((requestSpine.length - 1 + offset) === (rawSpine.length - 1)) candidateOffsets.add(offset);
-      }
-    }
-
-    if (!candidateOffsets.size) {
-      return stabilizationResult('SKIPPED_INSUFFICIENT_CALIBRATORS', {
+    if (!requestSpine.length || requestSpine.length > rawSpine.length) {
+      return stabilizationResult('SKIPPED_HOST_SUFFIX_SHORT', {
         ...commonDetail,
-        alignmentStatus: 'NO_CANDIDATE',
+        alignmentStatus: 'HOST_SUFFIX_SHORT',
         candidates: targetPositions.length,
-        alignmentCandidates: 0,
+        roleExpected: requestSpine.length,
       }, started);
     }
 
-    const oldestTarget = targetPositions[0];
-    const valid = [];
-    for (const offset of candidateOffsets) {
-      let roleMismatch = false;
-      let userAnchors = 0;
-      let assistantCalibrators = 0;
-      const mapped = new Map();
-
-      for (let requestPos = oldestTarget; requestPos < requestSpine.length; requestPos += 1) {
-        const rawPos = requestPos + offset;
-        if (rawPos < 0 || rawPos >= rawSpine.length) { roleMismatch = true; break; }
-        const reqItem = requestSpine[requestPos];
-        const rawItem = rawSpine[rawPos];
-        if (reqItem.role !== rawItem.role) { roleMismatch = true; break; }
-
-        if (reqItem.role === 'user') {
-          if (String(reqItem.text || '') === String(rawItem.text || '')) userAnchors += 1;
-        } else if (reqItem.compact) {
-          mapped.set(requestPos, rawPos);
-        } else {
-          const requestText = String(reqItem.text || '');
-          const rawText = String(rawItem.assistantComparable || '');
-          if (requestText.length >= HISTORY_STABILIZATION_MIN_RAW_CHARS && requestText === rawText) assistantCalibrators += 1;
-        }
-      }
-
-      if (roleMismatch) continue;
-      if (mapped.size !== targetPositions.length) continue;
-      if (assistantCalibrators < HISTORY_ALIGNMENT_MIN_CALIBRATORS) continue;
-      valid.push(Object.freeze({ offset, userAnchors, assistantCalibrators, mapped }));
-    }
-
-    if (!valid.length) {
-      return stabilizationResult('SKIPPED_INSUFFICIENT_CALIBRATORS', {
-        ...commonDetail,
-        alignmentStatus: 'UNVERIFIED',
-        candidates: targetPositions.length,
-        alignmentCandidates: candidateOffsets.size,
-      }, started);
-    }
-    if (valid.length !== 1) {
-      return stabilizationResult('SKIPPED_AMBIGUOUS_ALIGNMENT', {
-        ...commonDetail,
-        alignmentStatus: 'AMBIGUOUS',
-        candidates: targetPositions.length,
-        alignmentCandidates: valid.length,
-      }, started);
-    }
-
-    const alignment = valid[0];
-    const replacements = [];
-    for (const requestPos of targetPositions) {
-      const requestSlot = requestSpine[requestPos].index;
-      const rawPos = alignment.mapped.get(requestPos);
-      const rawSlot = rawSpine[rawPos]?.index;
-      if (!Number.isInteger(rawSlot)) {
-        return stabilizationResult('SKIPPED_INCOMPLETE_ALIGNMENT', {
+    const spineOffset = rawSpine.length - requestSpine.length;
+    let roleMatches = 0;
+    for (let requestPos = 0; requestPos < requestSpine.length; requestPos += 1) {
+      const rawPos = requestPos + spineOffset;
+      const reqItem = requestSpine[requestPos];
+      const rawItem = rawSpine[rawPos];
+      if (!rawItem || reqItem.role !== rawItem.role) {
+        return stabilizationResult('SKIPPED_ROLE_DRIFT', {
           ...commonDetail,
-          alignmentStatus: 'INCOMPLETE',
+          alignmentStatus: 'ROLE_DRIFT',
           candidates: targetPositions.length,
-          alignmentCandidates: 1,
-          userAnchors: alignment.userAnchors,
-          assistantCalibrators: alignment.assistantCalibrators,
-          spineOffset: alignment.offset,
+          roleMatches,
+          roleExpected: requestSpine.length,
+          spineOffset,
         }, started);
       }
+      roleMatches += 1;
+    }
+
+    const requestEndpoint = requestSpine[requestSpine.length - 1];
+    const rawEndpoint = rawSpine[rawSpine.length - 1];
+    if (requestEndpoint?.role !== 'user' || rawEndpoint?.role !== 'user') {
+      return stabilizationResult('SKIPPED_ENDPOINT_ROLE', {
+        ...commonDetail,
+        alignmentStatus: 'ENDPOINT_ROLE_MISMATCH',
+        candidates: targetPositions.length,
+        roleMatches,
+        roleExpected: requestSpine.length,
+        spineOffset,
+      }, started);
+    }
+
+    const replacements = [];
+    let mappedTargets = 0;
+    for (const requestPos of targetPositions) {
+      const requestSlot = requestSpine[requestPos]?.index;
+      const rawPos = requestPos + spineOffset;
+      const rawItem = rawSpine[rawPos];
+      const rawSlot = rawItem?.index;
+      if (!Number.isInteger(requestSlot) || rawItem?.role !== 'assistant' || !Number.isInteger(rawSlot)) {
+        return stabilizationResult('SKIPPED_TARGET_NOT_MAPPABLE', {
+          ...commonDetail,
+          alignmentStatus: 'TARGET_NOT_MAPPABLE',
+          candidates: targetPositions.length,
+          roleMatches,
+          roleExpected: requestSpine.length,
+          mappedTargets,
+          spineOffset,
+        }, started);
+      }
+
       const canonicalRaw = stabilizationCanonicalAssistantText(raw[rawSlot]);
       if (canonicalRaw.length < HISTORY_STABILIZATION_MIN_RAW_CHARS
           || canonicalRaw.length > HISTORY_STABILIZATION_MAX_RAW_CHARS
           || !canonicalRaw.startsWith('# 응답')) {
         return stabilizationResult('SKIPPED_UNSAFE_RAW_CANDIDATE', {
           ...commonDetail,
-          alignmentStatus: 'RESOLVED_UNIQUE',
+          alignmentStatus: 'RESOLVED_TURN_ORDINAL',
           candidates: targetPositions.length,
-          alignmentCandidates: 1,
-          userAnchors: alignment.userAnchors,
-          assistantCalibrators: alignment.assistantCalibrators,
-          spineOffset: alignment.offset,
+          roleMatches,
+          roleExpected: requestSpine.length,
+          mappedTargets,
+          spineOffset,
         }, started);
       }
+
       const slot = request[requestSlot];
       if (!slot || typeof slot.content !== 'string') {
         return stabilizationResult('SKIPPED_NONSTRING_SLOT', {
           ...commonDetail,
-          alignmentStatus: 'RESOLVED_UNIQUE',
+          alignmentStatus: 'RESOLVED_TURN_ORDINAL',
           candidates: targetPositions.length,
-          alignmentCandidates: 1,
-          userAnchors: alignment.userAnchors,
-          assistantCalibrators: alignment.assistantCalibrators,
-          spineOffset: alignment.offset,
+          roleMatches,
+          roleExpected: requestSpine.length,
+          mappedTargets,
+          spineOffset,
         }, started);
       }
       replacements.push({ requestSlot, canonicalRaw, beforeChars: String(slot.content || '').length });
+      mappedTargets += 1;
     }
 
     let addedChars = 0;
@@ -6142,15 +6117,15 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
     return stabilizationResult('APPLIED', {
       ...commonDetail,
       source: 'HOST_RAW_CANONICAL_ENVELOPE',
-      alignmentStatus: 'RESOLVED_UNIQUE',
+      alignmentStatus: 'RESOLVED_TURN_ORDINAL',
       candidates: targetPositions.length,
       applied: replacements.length,
       firstIndex: replacements[0]?.requestSlot,
       lastIndex: replacements[replacements.length - 1]?.requestSlot,
-      userAnchors: alignment.userAnchors,
-      assistantCalibrators: alignment.assistantCalibrators,
-      alignmentCandidates: 1,
-      spineOffset: alignment.offset,
+      roleMatches,
+      roleExpected: requestSpine.length,
+      mappedTargets,
+      spineOffset,
       addedChars,
     }, started);
   }

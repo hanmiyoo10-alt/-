@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.44
+//@version 0.63.45
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.45 History Rebuild Frontier Attribution:
+// - Adds a bounded PRE_RECONCILE / POST_RECONCILE / FINAL request-window comparison around the prior CHAT_HISTORY break frontier, reusing runtime-topology messageSignature and touching at most six candidate request slots per phase; no second full-history scan or raw-body retention is added
+// - Classifies whether the current first-break representation already existed before reconcile, changed during reconcile, changed later in request preparation, or moved outside the bounded attribution window; claims stay local to request representation and never imply provider-cache behavior
+// - Adds memory-only repeated-break-family and frontier-movement telemetry so recurring compact assistant stubs and rolling stable-prefix recovery can be distinguished across natural turns without persistence or prompt mutation
+// - Diagnostics only: request prompt bytes/order, TAIL_AFTER_CURRENT_USER placement, Broadcast End Authority, compiler tiers, Continuity/Evidence, Deferred Mirror acceptance/scheduling, storage/API/network/timer/provider-cache policy remain frozen
 //
 // v0.63.44 History Mutation Attribution:
 // - Extends existing request-topology telemetry with compact previous/current first-break signatures, bounded mutation-shape classification and one output-compatible fingerprint of the current break message; no request bodies are retained and no second history scan is added
@@ -453,7 +459,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.44';
+const SIMCORE_RUNTIME_VERSION = '0.63.45';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -5574,6 +5580,31 @@ function mutationAttribution(probe) {
   if (!probe) return 'n/a';
   return `${probe.status || 'n/a'} · ${probe.confidence || 'NONE'}`;
 }
+function reconcileFrontier(probe) {
+  if (!probe) return 'n/a';
+  if (probe.status === 'NOT_APPLICABLE') return 'NOT_APPLICABLE';
+  const index = Number.isInteger(Number(probe.index)) ? `@${Number(probe.index)}` : '@n/a';
+  const window = Number.isInteger(Number(probe.windowStart)) && Number.isInteger(Number(probe.windowEnd))
+    ? `@${Number(probe.windowStart)}..@${Number(probe.windowEnd)}`
+    : 'n/a';
+  return `${index} · PRE ${probe.preSignature || 'n/a'} · POST ${probe.postSignature || 'n/a'} · FINAL ${probe.finalSignature || 'n/a'} · window ${window}`;
+}
+function rebuildAttribution(probe) {
+  if (!probe) return 'n/a';
+  return `${probe.status || 'n/a'} · ${probe.confidence || 'NONE'} · edit ${probe.editPath || 'n/a'}`;
+}
+function repeatedBreak(probe) {
+  if (!probe) return 'n/a';
+  if (probe.status === 'NONE') return 'NONE';
+  return `${probe.signature || 'n/a'} · seen ${Number(probe.count || 0)} · first @${Number(probe.firstIndex ?? -1)} · latest @${Number(probe.latestIndex ?? -1)}`;
+}
+function frontierMovement(probe) {
+  if (!probe) return 'n/a';
+  if (probe.status !== 'MOVED') return probe.status || 'n/a';
+  const dm = Number(probe.deltaMessages || 0);
+  const dc = Number(probe.deltaChars || 0);
+  return `@${Number(probe.previousIndex)}→@${Number(probe.currentIndex)} · Δmessages ${dm >= 0 ? '+' : ''}${dm} · Δchars ${dc >= 0 ? '+' : ''}${dc.toLocaleString('en-US')}`;
+}
 function exposure(probe) {
   if (!probe || probe.baseline) return 'BASELINE';
   return `${Number(probe.exposureChars || 0).toLocaleString('en-US')}/${Number(probe.totalChars || 0).toLocaleString('en-US')} chars · ${Number(probe.exposureRatio || 0).toFixed(1)}% · local proxy only`;
@@ -5621,7 +5652,7 @@ function representation(probe) {
   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
-module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
+module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -5664,6 +5695,13 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
   let lastRuntimePromptCacheProbe = null;
   let lastRequestTopologyProbe = null;
   let lastHistoryMutationAttributionProbe = null;
+  let lastReconcileFrontierProbe = null;
+  let lastRepeatedBreakProbe = null;
+  let lastFrontierMovementProbe = null;
+  const repeatedBreakLedger = [];
+  const RECONCILE_WINDOW_BEHIND = 1;
+  const RECONCILE_WINDOW_AHEAD = 4;
+  const REPEATED_BREAK_LEDGER_LIMIT = 16;
   let lastCacheTrajectoryProbe = null;
   let lastCacheCandidateCostMs = null;
   let lastTelemetryContinuityProbe = null;
@@ -5711,6 +5749,115 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
 
   function diagnosticLocationKey(chaIdx, chatIdx, chat) {
     return `${chaIdx}:${chatIdx}:${chat?.id ?? ''}`;
+  }
+
+  function sameRequestSignature(a, b) {
+    return !!a && !!b
+      && String(a.role || '') === String(b.role || '')
+      && String(a.kind || '') === String(b.kind || '')
+      && Number(a.chars || 0) === Number(b.chars || 0)
+      && String(a.hash || '') === String(b.hash || '');
+  }
+
+  function compactRequestSignature(sig) {
+    return sig ? `${sig.role || '?'}/${sig.kind || '?'} ${Number(sig.chars || 0)}:${String(sig.hash || 'n/a')}` : 'END';
+  }
+
+  function captureFrontierWindow(messages, center) {
+    const list = Array.isArray(messages) ? messages : [];
+    const pivot = Number(center);
+    if (!Number.isInteger(pivot) || pivot < 0 || !list.length) return null;
+    const start = Math.max(0, pivot - RECONCILE_WINDOW_BEHIND);
+    const end = Math.min(list.length - 1, pivot + RECONCILE_WINDOW_AHEAD);
+    const rows = [];
+    for (let i = start; i <= end; i += 1) {
+      rows.push({ index: i, signature: runtimeTopologyRules.messageSignature(list[i]) });
+    }
+    return { start, end, rows };
+  }
+
+  function windowSignature(window, index) {
+    if (!window || !Array.isArray(window.rows)) return null;
+    const row = window.rows.find((item) => Number(item?.index) === Number(index));
+    return row?.signature || null;
+  }
+
+  function prepareReconcileFrontierDraft(messages, previousProbe) {
+    if (!previousProbe || previousProbe.baseline || previousProbe.stable) return null;
+    if (previousProbe.breakZone !== 'CHAT_HISTORY') return null;
+    const seedIndex = Number(previousProbe.firstChangeIndex);
+    if (!Number.isInteger(seedIndex) || seedIndex < 0) return null;
+    const pre = captureFrontierWindow(messages, seedIndex);
+    return pre ? { seedIndex, pre, post: null, editPath: 'n/a' } : null;
+  }
+
+  function finalizeReconcileFrontier(draft, messages, currentProbe) {
+    if (!currentProbe || currentProbe.baseline || currentProbe.stable || currentProbe.breakZone !== 'CHAT_HISTORY') {
+      return Object.freeze({ status: 'NOT_APPLICABLE', confidence: 'NONE', index: null, editPath: draft?.editPath || 'n/a' });
+    }
+    const index = Number(currentProbe.firstChangeIndex);
+    if (!Number.isInteger(index) || index < 0) {
+      return Object.freeze({ status: 'NOT_APPLICABLE', confidence: 'NONE', index: null, editPath: draft?.editPath || 'n/a' });
+    }
+    const start = Number(draft?.pre?.start);
+    const end = Number(draft?.pre?.end);
+    if (!draft?.pre || !draft?.post) {
+      return Object.freeze({ status: 'NO_PRIOR_FRONTIER_WINDOW', confidence: 'LOW', index, windowStart: Number.isFinite(start) ? start : null, windowEnd: Number.isFinite(end) ? end : null, editPath: draft?.editPath || 'n/a' });
+    }
+    if (index < start || index > end) {
+      return Object.freeze({ status: 'OUT_OF_WINDOW', confidence: 'LOW', index, windowStart: start, windowEnd: end, editPath: draft.editPath || 'n/a' });
+    }
+    const pre = windowSignature(draft.pre, index);
+    const post = windowSignature(draft.post, index);
+    const list = Array.isArray(messages) ? messages : [];
+    const finalSig = index < list.length ? runtimeTopologyRules.messageSignature(list[index]) : null;
+    const base = {
+      index, windowStart: start, windowEnd: end, editPath: draft.editPath || 'n/a',
+      preSignature: compactRequestSignature(pre),
+      postSignature: compactRequestSignature(post),
+      finalSignature: compactRequestSignature(finalSig),
+    };
+    if (!pre || !post || !finalSig) return Object.freeze({ ...base, status: 'INCOMPLETE_WINDOW', confidence: 'LOW' });
+    const prePost = sameRequestSignature(pre, post);
+    const postFinal = sameRequestSignature(post, finalSig);
+    const preFinal = sameRequestSignature(pre, finalSig);
+    if (prePost && postFinal) return Object.freeze({ ...base, status: 'PREEXISTING_REQUEST_MUTATION', confidence: 'HIGH' });
+    if (!prePost && postFinal) return Object.freeze({ ...base, status: 'RECONCILE_MUTATED_REQUEST', confidence: 'HIGH' });
+    if (prePost && !postFinal) return Object.freeze({ ...base, status: 'POST_RECONCILE_REQUEST_MUTATION', confidence: 'HIGH' });
+    if (preFinal && !prePost) return Object.freeze({ ...base, status: 'RECONCILE_TRANSIENT_MUTATION', confidence: 'MEDIUM' });
+    return Object.freeze({ ...base, status: 'MULTISTAGE_REQUEST_MUTATION', confidence: 'MEDIUM' });
+  }
+
+  function buildFrontierMovement(previousProbe, currentProbe) {
+    if (!previousProbe || !currentProbe || previousProbe.baseline || currentProbe.baseline) return Object.freeze({ status: 'BASELINE' });
+    if (String(previousProbe.locationKey || '') !== String(currentProbe.locationKey || '')) return Object.freeze({ status: 'LOCATION_RESET' });
+    if (previousProbe.stable || currentProbe.stable) return Object.freeze({ status: 'NOT_APPLICABLE' });
+    const previousIndex = Number(previousProbe.firstChangeIndex);
+    const currentIndex = Number(currentProbe.firstChangeIndex);
+    if (!Number.isInteger(previousIndex) || !Number.isInteger(currentIndex)) return Object.freeze({ status: 'NOT_APPLICABLE' });
+    return Object.freeze({
+      status: 'MOVED', previousIndex, currentIndex,
+      deltaMessages: currentIndex - previousIndex,
+      deltaChars: Number(currentProbe.commonChars || 0) - Number(previousProbe.commonChars || 0),
+    });
+  }
+
+  function observeRepeatedBreak(probe) {
+    if (!probe || probe.baseline || probe.stable || probe.breakZone !== 'CHAT_HISTORY') return Object.freeze({ status: 'NONE' });
+    const signature = String(probe.previousBreakSignature || '');
+    const index = Number(probe.firstChangeIndex);
+    const locationKey = String(probe.locationKey || '');
+    if (!signature || signature === 'END' || !Number.isInteger(index)) return Object.freeze({ status: 'NONE' });
+    if (repeatedBreakLedger.length && String(repeatedBreakLedger[0]?.locationKey || '') !== locationKey) repeatedBreakLedger.length = 0;
+    let row = repeatedBreakLedger.find((item) => item.signature === signature);
+    if (!row) {
+      row = { locationKey, signature, count: 0, firstIndex: index, latestIndex: index };
+      repeatedBreakLedger.push(row);
+      if (repeatedBreakLedger.length > REPEATED_BREAK_LEDGER_LIMIT) repeatedBreakLedger.shift();
+    }
+    row.count += 1;
+    row.latestIndex = index;
+    return Object.freeze({ status: 'TRACKED', signature: row.signature, count: row.count, firstIndex: row.firstIndex, latestIndex: row.latestIndex, ledgerSize: repeatedBreakLedger.length });
   }
 
   function correlateHistoryMutation(topologyProbe, ledger) {
@@ -5782,6 +5929,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
+    let reconcileFrontierDraft = null;
     let t = perfNow();
     const sessionDetail = perf ? {} : null;
     const cs = await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat, sessionDetail);
@@ -5829,9 +5977,14 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
     }
     if (perf) perf.bootstrapMs = perfMs(t);
 
+    reconcileFrontierDraft = prepareReconcileFrontierDraft(messages, lastRequestTopologyProbe);
     t = perfNow();
     const editDetail = perf ? {} : null;
     await reconcileManualEdit(cs, chat, editDetail);
+    if (reconcileFrontierDraft) {
+      reconcileFrontierDraft.post = captureFrontierWindow(messages, reconcileFrontierDraft.seedIndex);
+      reconcileFrontierDraft.editPath = String(editDetail?.path || 'n/a');
+    }
     if (perf) {
       perf.editReconcileMs = perfMs(t);
       perf.editDetail = editDetail;
@@ -5936,11 +6089,15 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       });
       messages.push({ role: 'system', content: result.promptBlock });
       const topologyStarted = perfNow();
+      const previousTopologyProbe = lastRequestTopologyProbe;
       lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
         runtimeIndex: messages.length - 1,
         at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
         locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
       });
+      lastReconcileFrontierProbe = finalizeReconcileFrontier(reconcileFrontierDraft, messages, lastRequestTopologyProbe);
+      lastFrontierMovementProbe = buildFrontierMovement(previousTopologyProbe, lastRequestTopologyProbe);
+      lastRepeatedBreakProbe = observeRepeatedBreak(lastRequestTopologyProbe);
       lastHistoryMutationAttributionProbe = correlateHistoryMutation(lastRequestTopologyProbe, runtimeMirror.provenanceLedger());
       if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
       const candidateStarted = perfNow();
@@ -6033,6 +6190,10 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       lastRuntimePromptCacheProbe = null;
       lastRequestTopologyProbe = null;
       lastHistoryMutationAttributionProbe = null;
+      lastReconcileFrontierProbe = null;
+      lastRepeatedBreakProbe = null;
+      lastFrontierMovementProbe = null;
+      repeatedBreakLedger.length = 0;
       lastCacheTrajectoryProbe = null;
       lastCacheCandidateCostMs = null;
       runtimePromptCache.reset();
@@ -6575,8 +6736,12 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       `Cache integrity: ${probeFresh ? runtimeProbeRules.cacheIntegrity(topologyProbe) : 'n/a'}`,
       `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
       `History mutation: ${probeFresh ? runtimeProbeRules.historyMutation(topologyProbe) : 'n/a'}`,
+      `Reconcile frontier: ${probeFresh ? runtimeProbeRules.reconcileFrontier(lastReconcileFrontierProbe) : 'n/a'}`,
+      `Frontier movement: ${probeFresh ? runtimeProbeRules.frontierMovement(lastFrontierMovementProbe) : 'n/a'}`,
+      `Repeated break: ${probeFresh ? runtimeProbeRules.repeatedBreak(lastRepeatedBreakProbe) : 'n/a'}`,
       `Representation correlation: ${probeFresh ? runtimeProbeRules.representationCorrelation(lastHistoryMutationAttributionProbe) : 'n/a'}`,
       `Mutation attribution: ${probeFresh ? runtimeProbeRules.mutationAttribution(lastHistoryMutationAttributionProbe) : 'n/a'}`,
+      `Rebuild attribution: ${probeFresh ? runtimeProbeRules.rebuildAttribution(lastReconcileFrontierProbe) : 'n/a'}`,
       `Local exposure proxy: ${probeFresh ? runtimeProbeRules.exposure(topologyProbe) : 'n/a'}`,
       `Runtime identity: ${probeFresh ? runtimeProbeRules.runtimeIdentity(cacheProbe) : 'n/a'}`,
       `SimCore contribution: ${probeFresh ? runtimeProbeRules.simcoreContribution(topologyProbe) : 'n/a'}`,

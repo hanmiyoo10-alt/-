@@ -21,7 +21,7 @@
 - Primary optimization target: `PROMPT_PREFIX_STABILIZATION_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
-This block is machine-managed by `.github/workflows/simcore-release-state-sync.yml` after each production release update, or synchronized by the release operator when GitHub token event chaining does not fire.
+This block is machine-managed by `.github/workflows/simcore-release-state-sync.yml` after each production release update.
 <!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->
 
 ---

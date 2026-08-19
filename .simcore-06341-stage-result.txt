@@ -1,0 +1,33 @@
+SimCore v0.63.41 staging: PASS
+Baseline: v0.63.40 d9584d9c171a9497ec15ec5686a0d64632a95eae / blob 4e6b31e5d220b47505f8de43cca463f7df976031
+Branch: simcore-06341-deterministic-continuity
+Intentional Core changes: contracts,time,lifecycle,frame,prompt,session
+Calendar transition: deterministic month/day + year rollover
+Frame sequencing: Volume/Chapter/Chatindex
+Source Integrity: FROZEN v0.63.40
+Trajectory/retry/EMA: FROZEN v0.63.39
+Provider cache: UNVERIFIED
+Storage/API/timer/network call inventory: UNCHANGED
+
+SimCore 0.63.41 Deterministic Continuity fixtures: PASS
+calendar: SAME_YEAR / YEAR_ROLLOVER / EXPLICIT_YEAR / INVALID / RETROSPECTIVE guarded
+frame: Volume / Chapter / Chatindex deterministic sequencing PASS
+source integrity: frozen from v0.63.40
+trajectory retry/EMA: preserved
+frozen core digest: 20ae884fdb2c4461bbaf417a3d98bc274a08c098b6cdc7406e18e3f0c29d6871
+provider cache: UNVERIFIED · request/mirror/storage/network/timer surfaces guarded
+
+pluginStorage.getItem(: 1 (unchanged)
+pluginStorage.setItem(: 1 (unchanged)
+pluginStorage.removeItem(: 1 (unchanged)
+pluginStorage.keys(: 1 (unchanged)
+setTimeout(: 3 (unchanged)
+setInterval(: 0 (unchanged)
+requestAnimationFrame(: 0 (unchanged)
+fetch(: 0 (unchanged)
+XMLHttpRequest(: 0 (unchanged)
+Risuai.getChatFromIndex(: 1 (unchanged)
+Risuai.setChatToIndex(: 1 (unchanged)
+Risuai.registerButton(: 1 (unchanged)
+Risuai.registerSetting(: 1 (unchanged)
+Static lifecycle inventory: PASS

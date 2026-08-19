@@ -1,0 +1,57 @@
+name: SimCore 0.63.46 trigger
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/simcore-06346-release.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06346-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-simcore
+          fetch-depth: 0
+
+      - name: Load release patch from main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06346-release.py > /tmp/simcore-06346-release.py
+
+      - name: Patch production source
+        run: python3 /tmp/simcore-06346-release.py
+
+      - name: Validate production source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "eeec4a58417d32acd8161844e8c2d071e17e212f"
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.63.46$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.46';" plugins/simcore/latest.js
+          grep -q 'v0.63.46 Prompt Prefix Stabilization' plugins/simcore/latest.js
+          grep -q "KNOWN_COMPACT_ASSISTANT_HASH = '4a852496'" plugins/simcore/latest.js
+          grep -q 'History stabilization:' plugins/simcore/latest.js
+          git diff --check
+
+      - name: Push v0.63.46
+        run: |
+          set -euo pipefail
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.46 Prompt Prefix Stabilization'
+          git push origin HEAD:release-simcore

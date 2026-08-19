@@ -1,0 +1,6 @@
+SimCore 0.63.43 focused behavioral regression PASS
+latest/install byte-identical
+TAIL_AFTER_CURRENT_USER preserved
+B_START/B_CONTINUE/locked-C end authority DENIED
+B_END end authority ALLOWED
+compiler-native stable tier invariant PASS

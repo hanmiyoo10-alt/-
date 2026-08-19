@@ -1,0 +1,71 @@
+name: Release SimCore v0.63.41 Deterministic Continuity
+
+on:
+  push:
+    branches:
+      - simcore-06341-deterministic-continuity
+    paths:
+      - .simcore-06341-release-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate staged v0.63.41 artifacts
+        run: |
+          grep -q '^SimCore v0.63.41 staging: PASS$' .simcore-06341-stage-result.txt
+          grep -q '^SimCore 0.63.41 Deterministic Continuity fixtures: PASS$' .simcore-06341-stage-result.txt
+          grep -q '^Storage/API/timer/network call inventory: UNCHANGED$' .simcore-06341-stage-result.txt
+          grep -q '//@version 0.63.41' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.41';" plugins/simcore/latest.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+
+      - name: Re-verify exact live v0.63.40 baseline and fixtures
+        run: |
+          git fetch origin release-simcore
+          live_sha="$(git rev-parse origin/release-simcore)"
+          test "$live_sha" = 'd9584d9c171a9497ec15ec5686a0d64632a95eae'
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-before.js
+          test "$(git hash-object /tmp/simcore-before.js)" = '4e6b31e5d220b47505f8de43cca463f7df976031'
+          set -o pipefail
+          node plugins/simcore/test_simcore_06341.js | tee /tmp/simcore-06341-release-test.txt
+          grep -q 'SimCore 0.63.41 Deterministic Continuity fixtures: PASS' /tmp/simcore-06341-release-test.txt
+
+      - name: Publish only SimCore artifacts to release-simcore
+        run: |
+          staged_latest="$PWD/plugins/simcore/latest.js"
+          staged_install="$PWD/plugins/simcore/install.js"
+          git worktree add --detach /tmp/simcore-release origin/release-simcore
+          cp "$staged_latest" /tmp/simcore-release/plugins/simcore/latest.js
+          cp "$staged_install" /tmp/simcore-release/plugins/simcore/install.js
+          cd /tmp/simcore-release
+          changed="$(git diff --name-only)"
+          test "$changed" = $'plugins/simcore/install.js\nplugins/simcore/latest.js'
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.41 Deterministic Continuity Consolidation'
+          git push origin HEAD:release-simcore
+
+      - name: Verify published release
+        run: |
+          git fetch origin release-simcore
+          published="$(git rev-parse origin/release-simcore)"
+          test "$published" != 'd9584d9c171a9497ec15ec5686a0d64632a95eae'
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/published-latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/published-install.js
+          cmp /tmp/published-latest.js /tmp/published-install.js
+          grep -q '//@version 0.63.41' /tmp/published-latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.41';" /tmp/published-latest.js
+          grep -q 'Continuity summary:' /tmp/published-latest.js
+          echo "Published release-simcore: $published"

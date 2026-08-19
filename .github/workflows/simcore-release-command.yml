@@ -31,6 +31,7 @@ jobs:
           from pathlib import Path
           p = Path('/tmp/simcore-06346-release.py')
           s = p.read_text(encoding='utf-8')
+
           old_line = 'export_old = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"'
           new_old_line = 'export_old = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"'
           old_new_line = 'export_new = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, historyStabilization, representationCorrelation, mutationAttribution, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"'
@@ -38,6 +39,15 @@ jobs:
           if s.count(old_line) != 1 or s.count(old_new_line) != 1:
               raise SystemExit(f'release patch export rewrite anchors missing: old={s.count(old_line)} new={s.count(old_new_line)}')
           s = s.replace(old_line, new_old_line, 1).replace(old_new_line, new_new_line, 1)
+
+          old_inactive_anchor = "inactive_anchor = '''      lastFrontierMovementProbe = null;\\n      lastCacheTrajectoryProbe = null;\\n'''"
+          new_inactive_anchor = "inactive_anchor = '''      lastFrontierMovementProbe = null;\\n      repeatedBreakLedger.length = 0;\\n      lastCacheTrajectoryProbe = null;\\n'''"
+          old_inactive_new = "inactive_new = '''      lastFrontierMovementProbe = null;\\n      lastHistoryStabilizationProbe = null;\\n      lastCacheTrajectoryProbe = null;\\n'''"
+          new_inactive_new = "inactive_new = '''      lastFrontierMovementProbe = null;\\n      lastHistoryStabilizationProbe = null;\\n      repeatedBreakLedger.length = 0;\\n      lastCacheTrajectoryProbe = null;\\n'''"
+          if s.count(old_inactive_anchor) != 1 or s.count(old_inactive_new) != 1:
+              raise SystemExit(f'release patch inactive rewrite anchors missing: old={s.count(old_inactive_anchor)} new={s.count(old_inactive_new)}')
+          s = s.replace(old_inactive_anchor, new_inactive_anchor, 1).replace(old_inactive_new, new_inactive_new, 1)
+
           p.write_text(s, encoding='utf-8')
           PY
 

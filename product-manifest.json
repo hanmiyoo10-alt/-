@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.45",
-  "release_name": "History Rebuild Frontier Attribution",
+  "production_version": "0.63.46",
+  "release_name": "Prompt Prefix Stabilization",
   "release_branch": "release-simcore",
-  "release_commit": "eeec4a58417d32acd8161844e8c2d071e17e212f",
-  "release_blob": "49b21dd121cc508fa5d5e1b736d088a10cfe2aa5",
+  "release_commit": "b8d7a00f7f97c4ff08a414c4e7664a98907ba33d",
+  "release_blob": "e152f302f2130bcf0b6f70d0721eb7eee7907bf0",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -13,7 +13,7 @@
   },
   "guideline": "docs/SIMCORE_GUIDELINES.md",
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
-  "current_priority": "PROMPT_PREFIX_STABILITY",
+  "current_priority": "PROMPT_PREFIX_STABILIZATION_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

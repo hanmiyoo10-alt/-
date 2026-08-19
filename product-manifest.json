@@ -5,6 +5,7 @@
   "release_name": "History Rebuild Frontier Attribution",
   "release_branch": "release-simcore",
   "release_commit": "eeec4a58417d32acd8161844e8c2d071e17e212f",
+  "release_blob": "49b21dd121cc508fa5d5e1b736d088a10cfe2aa5",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",

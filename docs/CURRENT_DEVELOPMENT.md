@@ -10,11 +10,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.46`
-- Release: `Prompt Prefix Stabilization`
+- Version: `0.63.47`
+- Release: `History Alignment Stabilization`
 - Release branch: `release-simcore`
-- Release commit: `b8d7a00f7f97c4ff08a414c4e7664a98907ba33d`
-- Release blob: `e152f302f2130bcf0b6f70d0721eb7eee7907bf0`
+- Release commit: `19a6ea81679e4473956dfbb4eee0d42398d17f6d`
+- Release blob: `839a15b71328ec075d5ac7304d9776943b00e839`
 - Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `HISTORY_ALIGNMENT_STABILIZATION_VALIDATION`
 - Provider cache: `UNVERIFIED`

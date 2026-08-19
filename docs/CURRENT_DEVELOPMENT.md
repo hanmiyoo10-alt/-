@@ -12,48 +12,50 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.45`
-- Release: `History Rebuild Frontier Attribution`
+- Version: `0.63.46`
+- Release: `Prompt Prefix Stabilization`
 - Release branch: `release-simcore`
-- Release commit: `eeec4a58417d32acd8161844e8c2d071e17e212f`
-- Release blob: `49b21dd121cc508fa5d5e1b736d088a10cfe2aa5`
+- Release commit: `b8d7a00f7f97c4ff08a414c4e7664a98907ba33d`
+- Release blob: `e152f302f2130bcf0b6f70d0721eb7eee7907bf0`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `PROMPT_PREFIX_STABILITY`
+- Primary optimization target: `PROMPT_PREFIX_STABILIZATION_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
-This block is machine-managed by `.github/workflows/simcore-release-state-sync.yml` after each production release update.
+This block is machine-managed by `.github/workflows/simcore-release-state-sync.yml` after each production release update, or synchronized by the release operator when GitHub token event chaining does not fire.
 <!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->
 
 ---
 
 ## VERIFIED
 
-- The observed prompt-prefix first break has repeatedly occurred in `PRE_SIMCORE · CHAT_HISTORY`.
-- SimCore runtime has repeatedly reported `SimCore contribution: NOT_FIRST_BREAK` for the cache break under investigation.
-- Compiler `stable` / `slow` identity has remained stable across the relevant lifecycle-mode changes while `volatile` / `full` may change as designed.
-- Repeated historical assistant slots have appeared as the same compact `21:4a852496` representation before later appearing as substantially larger assistant text.
-- A rolling stable-prefix frontier has been observed moving forward across natural turns.
-- `MANUAL_EDIT_REBUILT` has co-occurred with important degraded-prefix samples and can dominate SimCore request-preparation time.
+- The observed prompt-prefix first break repeatedly occurred in `PRE_SIMCORE · CHAT_HISTORY` under v0.63.44/v0.63.45.
+- SimCore runtime repeatedly reported `SimCore contribution: NOT_FIRST_BREAK` for the cache break under investigation.
+- Compiler `stable` / `slow` identity remained stable across the relevant lifecycle-mode changes while `volatile` / `full` changed as designed.
+- Repeated historical assistant slots appeared as the same compact `assistant/text 21:4a852496` representation before later appearing as substantially larger assistant text.
+- A rolling stable-prefix frontier was observed moving forward across natural turns: `@24 → @26`, with the following C request trajectory advancing to `@28` before a retry produced a 100% stable re-observation.
+- v0.63.45 directly observed a first-break slot with identical `PRE_RECONCILE`, `POST_RECONCILE`, and `FINAL` full fingerprints and classified it `PREEXISTING_REQUEST_MUTATION · HIGH`.
+- Therefore the tracked first-break representation change already existed before manual-edit reconcile; `reconcileManualEdit` was not the generator of that observed mutation.
+- `MANUAL_EDIT_REBUILT` is not required for frontier progression: frontier progression remained observable across a subsequent `SAME_HOST_FAST` request path.
 - A prior divergent `FRESH_CHAT` Deferred Mirror result was blocked by the strict mismatch gate; the next observed history break did not match that divergent FRESH fingerprint.
 - Provider/gateway cache behavior remains unverified without external cache-token or hit/miss telemetry.
 
 ## SUPPORTED HYPOTHESES
 
-- Historical assistant representations may be progressively materialized or re-projected across requests, causing a moving CHAT_HISTORY prefix frontier.
-- `MANUAL_EDIT_REBUILT` is strongly associated with the observed representation frontier, but v0.63.44 evidence did not yet prove whether reconcile causes the mutation or merely observes an earlier host/request mutation.
-- Improving request-history representation stability may improve prompt-cache friendliness and may indirectly reduce rebuild/cache churn, but this must be measured rather than assumed.
+- Historical assistant representations are likely being progressively materialized or re-projected by a host/request-history path before SimCore reconcile, producing the rolling CHAT_HISTORY prefix frontier.
+- Stabilizing the request-only history projection from an exactly aligned authoritative raw-chat suffix may prevent repeated compact-to-full frontier movement without rewriting visible/persistent chat.
+- Better request-history representation stability may indirectly reduce expensive rebuild/cache churn, but that is a secondary metric and must be measured rather than assumed.
 
 ## UNKNOWN
 
-- Whether the current CHAT_HISTORY first-break representation already exists before manual-edit reconcile.
-- Whether `reconcileManualEdit` directly mutates the relevant request representation.
-- Whether the mutation occurs later in request preparation after reconcile.
-- Which host/history projection path initially creates the repeated compact assistant representation.
+- Which exact host/history projection stage initially creates the repeated compact `21:4a852496` assistant representation.
+- Why the observed frontier tends to move by two request messages at a time.
+- Whether v0.63.46's conservative raw-chat alignment gate can safely resolve all relevant compact slots in real long-chat requests without frequent fail-open skips.
+- Whether successful request-only stabilization materially improves natural-request common-prefix retention across multiple distinct turns.
 - Actual gateway/provider prompt-cache hit behavior.
 
 ---
 
-## Current v0.63.45 Live Gate
+## Current v0.63.46 Live Gate
 
 Primary natural-turn validation sequence:
 
@@ -66,32 +68,72 @@ B_START
 
 Rules:
 
-- no reload between the four observed turns
-- no regeneration between the four observed turns
-- use natural new user turns
+- apply v0.63.46, then reload once if needed for the update itself
+- no reload between the four observed validation turns
+- no regeneration between the four observed validation turns
+- use natural new user turns; a 100% retry observation is not sufficient evidence by itself
 
 Inspect especially:
 
 ```text
-Edit reconcile
+History stabilization
+Cache topology
+Cache break
 History mutation
-Reconcile frontier
 Frontier movement
 Repeated break
-Representation correlation
-Mutation attribution
+Edit reconcile
 Rebuild attribution
+SimCore contribution
+Deferred mirror
+Broadcast / Frame / Continuity
 ```
 
-Decisive labels:
+Primary stabilization outcomes:
 
 ```text
-PREEXISTING_REQUEST_MUTATION · HIGH
-RECONCILE_MUTATED_REQUEST · HIGH
-POST_RECONCILE_REQUEST_MUTATION · HIGH
+APPLIED
+NOOP_NO_KNOWN_COMPACT
+SKIPPED_*
 ```
 
-Lower-confidence / bounded-window outcomes such as `OUT_OF_WINDOW` or `MULTISTAGE_REQUEST_MUTATION` do not authorize repair yet.
+Interpretation:
+
+- `APPLIED` means the strict gate deterministically aligned compact assistant slot(s) to substantial raw `# 응답` assistant bodies for this request only.
+- `NOOP_NO_KNOWN_COMPACT` is valid when the inspected request contains no exact known compact signature.
+- `SKIPPED_*` is fail-open safety behavior; do not broaden the repair gate until the skip reason is understood.
+- Success requires improvement across natural distinct requests, not merely a retry that compares an identical request to itself.
+
+Desired evidence after several natural turns:
+
+```text
+rolling 21:4a852496 break disappears or sharply decreases
+frontier stops advancing one assistant at a time
+PRE_SIMCORE CHAT_HISTORY first break moves later or becomes NONE
+persistent mutation remains NONE
+stabilization cost remains small
+Broadcast / Frame / Continuity remain PASS
+Deferred Mirror strict mismatch safety remains unchanged
+```
+
+Provider cache remains `UNVERIFIED` unless gateway/provider telemetry is supplied.
+
+---
+
+## v0.63.46 Repair Scope
+
+The History Materialization Gate is intentionally narrow:
+
+- active SimCore model requests only
+- exact known compact signature `assistant/text 21:4a852496`
+- hard cap of 12 compact candidate slots
+- exact current-user and historical-user anchor agreement
+- at least one exact substantial full-assistant calibration
+- candidate raw assistant must be a substantial string and contain `# 응답`
+- all candidates must align deterministically or the request is left untouched
+- request projection only; no visible chat rewrite
+- no persistent raw-body cache
+- no new network call or timer
 
 ---
 
@@ -109,6 +151,7 @@ Recurrence
 Structure
 Runtime placement / TAIL_AFTER_CURRENT_USER
 Compiler tier semantics
+Recovery output policy
 Deferred Mirror strict mismatch safety
 Persistent storage schema
 Network policy
@@ -116,17 +159,19 @@ Timer policy
 Provider-cache policy
 ```
 
+The earlier B_END unresolved preamble/community quarantine remains a separate output/recovery issue and is not part of the v0.63.46 cache repair.
+
 ---
 
 ## Next Candidate
 
-If v0.63.45 establishes a high-confidence causal location, the next candidate is:
+If v0.63.46 safely improves natural-request prefix retention, the next candidate is:
 
 ```text
-v0.63.46 — Prompt Prefix Stabilization
+v0.63.47 — Cache Effect Verification
 ```
 
-The exact repair target must follow the v0.63.45 evidence rather than being chosen in advance.
+Its purpose is to measure the resulting local prefix/frontier/rebuild effects and, if gateway telemetry is available, compare them against actual cached-input behavior without inferring provider hits from local evidence alone.
 
 ---
 
@@ -134,7 +179,8 @@ The exact repair target must follow the v0.63.45 evidence rather than being chos
 
 After each release:
 
-1. automated release-state sync updates the bounded Production Snapshot and `product-manifest.json`;
-2. real long-chat validation determines whether VERIFIED / SUPPORTED HYPOTHESIS / UNKNOWN sections need human/agent revision;
-3. durable architectural or operational principles are promoted to `SIMCORE_GUIDELINES.md` only when warranted;
-4. historical conclusions should be superseded explicitly rather than silently erased.
+1. automated release-state sync should update the bounded Production Snapshot and `product-manifest.json`;
+2. if release-token event chaining prevents the automatic sync, the release operator must synchronize them before declaring the update complete;
+3. real long-chat validation determines whether VERIFIED / SUPPORTED HYPOTHESIS / UNKNOWN sections need revision;
+4. durable architectural or operational principles are promoted to `SIMCORE_GUIDELINES.md` only when warranted;
+5. historical conclusions should be superseded explicitly rather than silently erased.

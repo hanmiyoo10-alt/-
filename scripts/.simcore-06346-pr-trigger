@@ -1,3 +1,3 @@
 SimCore v0.63.46 Prompt Prefix Stabilization release trigger.
 Temporary PR marker; do not merge.
-Retry after export-anchor validation fix.
+Retry after literal export-anchor fix.

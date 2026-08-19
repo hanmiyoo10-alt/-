@@ -1,1 +1,2 @@
 SimCore v0.63.50 release trigger.
+Durable memory refresh after live-gate sync.

@@ -1,3 +1,0 @@
-patched chars 371444
-SimCore 0.63.42 focused behavioral regression PASS
-FINAL_STATUS=0

@@ -16,6 +16,7 @@
 - Release: `History Rebuild Frontier Attribution`
 - Release branch: `release-simcore`
 - Release commit: `eeec4a58417d32acd8161844e8c2d071e17e212f`
+- Release blob: `49b21dd121cc508fa5d5e1b736d088a10cfe2aa5`
 - Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `PROMPT_PREFIX_STABILITY`
 - Provider cache: `UNVERIFIED`

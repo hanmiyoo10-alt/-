@@ -1,0 +1,416 @@
+name: SimCore 0.63.44 one-shot release
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event.issue.title == 'simcore-release-0.63.44'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release channel
+        uses: actions/checkout@v4
+        with:
+          ref: release-simcore
+          fetch-depth: 0
+
+      - name: Apply minimal v0.63.44 patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          latest = Path('plugins/simcore/latest.js')
+          install = Path('plugins/simcore/install.js')
+          text = latest.read_text(encoding='utf-8')
+          install_text = install.read_text(encoding='utf-8')
+          if text != install_text:
+              raise SystemExit('precondition failed: latest.js and install.js differ')
+
+          def once(src, old, new, label):
+              count = src.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, got {count}')
+              return src.replace(old, new, 1)
+
+          text = once(text, '//@version 0.63.43', '//@version 0.63.44', 'metadata version')
+          text = once(text, "const SIMCORE_RUNTIME_VERSION = '0.63.43';", "const SIMCORE_RUNTIME_VERSION = '0.63.44';", 'runtime version')
+
+          notes_anchor = '// v0.63.43 Broadcast End Authority & Runtime Identity Precision:\n'
+          notes = (
+              '// v0.63.44 History Mutation Attribution:\n'
+              '// - Extends existing request-topology telemetry with compact previous/current first-break signatures, bounded mutation-shape classification and one output-compatible fingerprint of the current break message; no request bodies are retained and no second history scan is added\n'
+              '// - Adds a bounded memory-only ledger of the 16 most recent assistant output provenance fingerprints already produced by Deferred Mirror, then correlates a CHAT_HISTORY prefix break against canonical/host-raw/fresh representations without claiming provider-cache behavior\n'
+              '// - Reports FRESH_MISMATCH_HISTORY_MATCH only when the current historical break exactly matches a prior divergent FRESH_CHAT fingerprint; equivalent, ambiguous and no-match cases remain explicit and fail-open\n'
+              '// - Diagnostics only: prompt bytes/order, TAIL_AFTER_CURRENT_USER placement, Broadcast End Authority, compiler tiers, Continuity/Evidence, Deferred Mirror acceptance/scheduling, storage/API/network/timer/provider-cache policy remain frozen\n'
+              '//\n'
+          )
+          text = once(text, notes_anchor, notes + notes_anchor, 'release notes anchor')
+
+          topology_anchor = """function messageSignature(message) {
+  const role = String(message?.role || '');
+"""
+          topology_helpers = r"""function outputCompatibleFingerprint(message) {
+  const content = message?.content;
+  let text = '';
+  if (typeof content === 'string') {
+    text = content;
+  } else {
+    try { text = JSON.stringify(content == null ? '' : content); }
+    catch (_) { text = String(content == null ? '' : content); }
+  }
+  text = String(text || '')
+    .replace(/⟦simcore:\d+⟧/g, '')
+    .replace(/\r\n/g, '\n')
+    .trimEnd();
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `${text.length}:${(h >>> 0).toString(16)}`;
+}
+
+function messageSignature(message) {
+  const role = String(message?.role || '');
+"""
+          text = once(text, topology_anchor, topology_helpers, 'topology fingerprint helper')
+
+          same_anchor = """function sameSignature(a, b) {
+  return !!a && !!b && a.role === b.role && a.kind === b.kind && a.chars === b.chars && a.hash === b.hash;
+}
+
+function relativePosition"""
+          same_replacement = """function sameSignature(a, b) {
+  return !!a && !!b && a.role === b.role && a.kind === b.kind && a.chars === b.chars && a.hash === b.hash;
+}
+
+function compactSignature(sig) {
+  return sig ? `${sig.role || '?'}/${sig.kind || '?'} ${Number(sig.chars || 0)}:${String(sig.hash || 'n/a')}` : 'END';
+}
+
+function mutationShape(priorSignatures, currentSignatures, index) {
+  if (!Number.isInteger(index) || index < 0) return 'NONE';
+  const previous = priorSignatures?.[index] || null;
+  const current = currentSignatures?.[index] || null;
+  if (!previous && current) return 'LIKELY_INSERTION';
+  if (previous && !current) return 'LIKELY_REMOVAL';
+  if (previous && current && sameSignature(priorSignatures?.[index + 1], current)) return 'LIKELY_REMOVAL';
+  if (previous && current && sameSignature(previous, currentSignatures?.[index + 1])) return 'LIKELY_INSERTION';
+  if (previous && current && (previous.role !== current.role || previous.kind !== current.kind)) return 'ROLE_OR_KIND_CHANGED';
+  return 'SAME_SLOT_CHANGED';
+}
+
+function relativePosition"""
+          text = once(text, same_anchor, same_replacement, 'mutation helpers')
+
+          prior_anchor = """      const leadingSystemMessages = leadingSystemCount(signatures);
+      const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
+      const prior = previousKey === currentKey ? previous : null;
+"""
+          prior_replacement = """      const leadingSystemMessages = leadingSystemCount(signatures);
+      const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
+      const locationKey = String(extra?.locationKey || '');
+      const prior = previousKey === currentKey ? previous : null;
+"""
+          text = once(text, prior_anchor, prior_replacement, 'topology location key')
+
+          stable_anchor = """      const stable = !!prior && firstChangeIndex == null;
+      const cadenceMs = prior ? Math.max(0, at - prior.at) : null;
+"""
+          stable_replacement = """      const previousBreak = firstChangeIndex == null ? null : (prior?.signatures?.[firstChangeIndex] || null);
+      const currentBreak = firstChangeIndex == null ? null : (signatures[firstChangeIndex] || null);
+      const mutation = firstChangeIndex == null ? 'NONE' : mutationShape(prior?.signatures || [], signatures, firstChangeIndex);
+      const currentBreakFingerprint = currentBreak ? outputCompatibleFingerprint(list[firstChangeIndex]) : null;
+      const stable = !!prior && firstChangeIndex == null;
+      const cadenceMs = prior ? Math.max(0, at - prior.at) : null;
+"""
+          text = once(text, stable_anchor, stable_replacement, 'topology break detail')
+
+          probe_anchor = """        commonMessages, commonChars, commonRatio: ratio, firstChangeIndex, previousRole, currentRole,
+        currentUserIndex, runtimeIndex, leadingSystemMessages,
+"""
+          probe_replacement = """        commonMessages, commonChars, commonRatio: ratio, firstChangeIndex, previousRole, currentRole,
+        previousBreakSignature: compactSignature(previousBreak), currentBreakSignature: compactSignature(currentBreak),
+        mutationShape: mutation, currentBreakFingerprint, locationKey,
+        currentUserIndex, runtimeIndex, leadingSystemMessages,
+"""
+          text = once(text, probe_anchor, probe_replacement, 'topology probe fields')
+
+          mirror_anchor = """  let sequence = 0;
+  const latestByLocation = new Map();
+  let lastProbe = null;
+
+  function capture"""
+          mirror_replacement = """  let sequence = 0;
+  const latestByLocation = new Map();
+  const PROVENANCE_LEDGER_LIMIT = 16;
+  const provenanceLedger = [];
+  let lastProbe = null;
+
+  function rememberProvenance(probe) {
+    if (!probe || !probe.freshFingerprintFull) return;
+    const entry = Object.freeze({
+      outIndex: Number(probe.outIndex),
+      locationKey: String(probe.locationKey || ''),
+      status: String(probe.status || 'n/a'),
+      fingerprintMatch: String(probe.fingerprintMatch || 'n/a'),
+      canonicalFingerprint: String(probe.canonicalFingerprintFull || ''),
+      hostRawFingerprint: String(probe.hostRawFingerprintFull || ''),
+      freshFingerprint: String(probe.freshFingerprintFull || ''),
+      at: Number(probe.finishedAt || Date.now()),
+    });
+    for (let i = provenanceLedger.length - 1; i >= 0; i--) {
+      if (provenanceLedger[i].locationKey === entry.locationKey && provenanceLedger[i].outIndex === entry.outIndex) provenanceLedger.splice(i, 1);
+    }
+    provenanceLedger.push(entry);
+    if (provenanceLedger.length > PROVENANCE_LEDGER_LIMIT) provenanceLedger.splice(0, provenanceLedger.length - PROVENANCE_LEDGER_LIMIT);
+  }
+
+  function capture"""
+          text = once(text, mirror_anchor, mirror_replacement, 'mirror ledger')
+
+          detail_anchor = """          detail.canonicalFingerprint = canonical.slice(0, 12);
+          detail.hostRawFingerprint = hostRaw.slice(0, 12);
+          detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
+          detail.fingerprintMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
+"""
+          detail_replacement = """          detail.canonicalFingerprint = canonical.slice(0, 12);
+          detail.hostRawFingerprint = hostRaw.slice(0, 12);
+          detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
+          detail.canonicalFingerprintFull = canonical;
+          detail.hostRawFingerprintFull = hostRaw;
+          detail.freshFingerprintFull = String(actualFingerprint || '');
+          detail.fingerprintMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
+"""
+          text = once(text, detail_anchor, detail_replacement, 'mirror full fingerprints')
+
+          probe_init_anchor = """      canonicalFingerprint: String(snapshot.outputFingerprint || '').slice(0, 12),
+      hostRawFingerprint: String(snapshot.hostOutputFingerprint || '').slice(0, 12),
+      freshFingerprint: null, fingerprintMatch: 'PENDING',
+"""
+          probe_init_replacement = """      canonicalFingerprint: String(snapshot.outputFingerprint || '').slice(0, 12),
+      hostRawFingerprint: String(snapshot.hostOutputFingerprint || '').slice(0, 12),
+      freshFingerprint: null, fingerprintMatch: 'PENDING',
+      canonicalFingerprintFull: String(snapshot.outputFingerprint || ''),
+      hostRawFingerprintFull: String(snapshot.hostOutputFingerprint || ''),
+      freshFingerprintFull: null,
+"""
+          text = once(text, probe_init_anchor, probe_init_replacement, 'mirror probe full init')
+
+          probe_update_anchor = """      probe.canonicalFingerprint = detail.canonicalFingerprint ?? probe.canonicalFingerprint;
+      probe.hostRawFingerprint = detail.hostRawFingerprint ?? probe.hostRawFingerprint;
+      probe.freshFingerprint = detail.freshFingerprint ?? probe.freshFingerprint;
+      probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
+"""
+          probe_update_replacement = """      probe.canonicalFingerprint = detail.canonicalFingerprint ?? probe.canonicalFingerprint;
+      probe.hostRawFingerprint = detail.hostRawFingerprint ?? probe.hostRawFingerprint;
+      probe.freshFingerprint = detail.freshFingerprint ?? probe.freshFingerprint;
+      probe.canonicalFingerprintFull = detail.canonicalFingerprintFull ?? probe.canonicalFingerprintFull;
+      probe.hostRawFingerprintFull = detail.hostRawFingerprintFull ?? probe.hostRawFingerprintFull;
+      probe.freshFingerprintFull = detail.freshFingerprintFull ?? probe.freshFingerprintFull;
+      probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
+"""
+          text = once(text, probe_update_anchor, probe_update_replacement, 'mirror probe full update')
+
+          remember_anchor = """      else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
+      probe.finishedAt = Date.now();
+    };
+"""
+          remember_replacement = """      else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
+      probe.finishedAt = Date.now();
+      rememberProvenance(probe);
+    };
+"""
+          text = once(text, remember_anchor, remember_replacement, 'mirror remember provenance')
+
+          clear_anchor = """  function clear() {
+    latestByLocation.clear();
+    lastProbe = null;
+  }
+
+  return Object.freeze({ schedule, lastProbe: () => lastProbe, clear });
+"""
+          clear_replacement = """  function clear() {
+    latestByLocation.clear();
+    provenanceLedger.length = 0;
+    lastProbe = null;
+  }
+
+  return Object.freeze({ schedule, lastProbe: () => lastProbe, provenanceLedger: () => provenanceLedger.slice(), clear });
+"""
+          text = once(text, clear_anchor, clear_replacement, 'mirror ledger export')
+
+          variable_anchor = """  let lastRuntimePromptCacheProbe = null;
+  let lastRequestTopologyProbe = null;
+  let lastCacheTrajectoryProbe = null;
+"""
+          variable_replacement = """  let lastRuntimePromptCacheProbe = null;
+  let lastRequestTopologyProbe = null;
+  let lastHistoryMutationAttributionProbe = null;
+  let lastCacheTrajectoryProbe = null;
+"""
+          text = once(text, variable_anchor, variable_replacement, 'history attribution variable')
+
+          location_fn_anchor = """  function diagnosticLocationKey(chaIdx, chatIdx, chat) {
+    return `${chaIdx}:${chatIdx}:${chat?.id ?? ''}`;
+  }
+
+  function diagnosticRequestProbeFresh"""
+          location_fn_replacement = """  function diagnosticLocationKey(chaIdx, chatIdx, chat) {
+    return `${chaIdx}:${chatIdx}:${chat?.id ?? ''}`;
+  }
+
+  function correlateHistoryMutation(topologyProbe, ledger) {
+    if (!topologyProbe || topologyProbe.baseline || topologyProbe.stable) {
+      return Object.freeze({ status: 'NONE', confidence: 'NONE', ledgerSize: Array.isArray(ledger) ? ledger.length : 0, matchSummary: 'NONE' });
+    }
+    if (topologyProbe.breakZone !== 'CHAT_HISTORY' || !topologyProbe.currentBreakFingerprint) {
+      return Object.freeze({ status: 'NOT_APPLICABLE', confidence: 'NONE', ledgerSize: Array.isArray(ledger) ? ledger.length : 0, matchSummary: 'NONE' });
+    }
+    const target = String(topologyProbe.currentBreakFingerprint || '');
+    const locationKey = String(topologyProbe.locationKey || '');
+    const rows = Array.isArray(ledger) ? ledger : [];
+    const matches = [];
+    for (const row of rows) {
+      if (locationKey && String(row?.locationKey || '') !== locationKey) continue;
+      if (target && target === String(row?.canonicalFingerprint || '')) matches.push({ kind: 'CANONICAL', row });
+      if (target && target === String(row?.hostRawFingerprint || '')) matches.push({ kind: 'HOST_RAW', row });
+      if (target && target === String(row?.freshFingerprint || '')) matches.push({ kind: 'FRESH_CHAT', row });
+    }
+    if (!matches.length) {
+      return Object.freeze({ status: 'NO_PROVENANCE_MATCH', confidence: 'LOW', ledgerSize: rows.length, matchSummary: 'NO_MATCH' });
+    }
+    const kinds = Array.from(new Set(matches.map((m) => m.kind)));
+    const divergentFresh = matches.filter((m) => m.kind === 'FRESH_CHAT' && String(m.row?.fingerprintMatch || '') === 'MISMATCH');
+    const uniqueOut = Array.from(new Set(matches.map((m) => Number(m.row?.outIndex)).filter(Number.isFinite)));
+    const summary = matches.slice(-4).map((m) => `${m.kind}@${Number(m.row?.outIndex)}`).join(',');
+    if (divergentFresh.length && kinds.length === 1 && kinds[0] === 'FRESH_CHAT') {
+      return Object.freeze({ status: 'FRESH_MISMATCH_HISTORY_MATCH', confidence: 'HIGH', ledgerSize: rows.length, matchSummary: summary || 'FRESH_CHAT', matchedOutIndex: uniqueOut.length === 1 ? uniqueOut[0] : null });
+    }
+    if (kinds.length > 1 || uniqueOut.length > 1) {
+      return Object.freeze({ status: 'AMBIGUOUS_HISTORY_MATCH', confidence: 'MEDIUM', ledgerSize: rows.length, matchSummary: summary || kinds.join('+') });
+    }
+    return Object.freeze({ status: 'KNOWN_OUTPUT_REPRESENTATION', confidence: 'HIGH', ledgerSize: rows.length, matchSummary: summary || kinds.join('+'), matchedOutIndex: uniqueOut.length === 1 ? uniqueOut[0] : null });
+  }
+
+  function diagnosticRequestProbeFresh"""
+          text = once(text, location_fn_anchor, location_fn_replacement, 'history correlation helper')
+
+          observe_anchor = """      lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
+        runtimeIndex: messages.length - 1,
+        at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
+      });
+      if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
+"""
+          observe_replacement = """      lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
+        runtimeIndex: messages.length - 1,
+        at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
+        locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
+      });
+      lastHistoryMutationAttributionProbe = correlateHistoryMutation(lastRequestTopologyProbe, runtimeMirror.provenanceLedger());
+      if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
+"""
+          text = once(text, observe_anchor, observe_replacement, 'history correlation call')
+
+          reset_anchor = """      lastRuntimePromptCacheProbe = null;
+      lastRequestTopologyProbe = null;
+      lastCacheTrajectoryProbe = null;
+"""
+          reset_replacement = """      lastRuntimePromptCacheProbe = null;
+      lastRequestTopologyProbe = null;
+      lastHistoryMutationAttributionProbe = null;
+      lastCacheTrajectoryProbe = null;
+"""
+          text = once(text, reset_anchor, reset_replacement, 'history correlation reset')
+
+          break_info_anchor = """function breakInfo(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  if (probe.stable) return 'NONE';
+  const first = probe.firstChangeIndex == null ? 'n/a' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
+  return `${probe.breakOwner || 'UNKNOWN'} · ${probe.breakZone || 'UNKNOWN'} · ${first}`;
+}
+function exposure"""
+          break_info_replacement = """function breakInfo(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  if (probe.stable) return 'NONE';
+  const first = probe.firstChangeIndex == null ? 'n/a' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
+  return `${probe.breakOwner || 'UNKNOWN'} · ${probe.breakZone || 'UNKNOWN'} · ${first}`;
+}
+function historyMutation(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  if (probe.stable || probe.firstChangeIndex == null) return 'NONE';
+  return `@${Number(probe.firstChangeIndex)} · ${probe.mutationShape || 'UNKNOWN'} · prev ${probe.previousBreakSignature || 'END'} → current ${probe.currentBreakSignature || 'END'}`;
+}
+function representationCorrelation(probe) {
+  if (!probe) return 'n/a';
+  return `${probe.matchSummary || 'NONE'} · ledger ${Number(probe.ledgerSize || 0)}`;
+}
+function mutationAttribution(probe) {
+  if (!probe) return 'n/a';
+  return `${probe.status || 'n/a'} · ${probe.confidence || 'NONE'}`;
+}
+function exposure"""
+          text = once(text, break_info_anchor, break_info_replacement, 'runtime probe mutation formatters')
+
+          exports_anchor = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"
+          exports_replacement = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"
+          text = once(text, exports_anchor, exports_replacement, 'runtime probe exports')
+
+          diagnostic_anchor = """      `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
+      `Local exposure proxy: ${probeFresh ? runtimeProbeRules.exposure(topologyProbe) : 'n/a'}`,
+"""
+          diagnostic_replacement = """      `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
+      `History mutation: ${probeFresh ? runtimeProbeRules.historyMutation(topologyProbe) : 'n/a'}`,
+      `Representation correlation: ${probeFresh ? runtimeProbeRules.representationCorrelation(lastHistoryMutationAttributionProbe) : 'n/a'}`,
+      `Mutation attribution: ${probeFresh ? runtimeProbeRules.mutationAttribution(lastHistoryMutationAttributionProbe) : 'n/a'}`,
+      `Local exposure proxy: ${probeFresh ? runtimeProbeRules.exposure(topologyProbe) : 'n/a'}`,
+"""
+          text = once(text, diagnostic_anchor, diagnostic_replacement, 'diagnostic mutation lines')
+
+          required = [
+              '//@version 0.63.44',
+              "const SIMCORE_RUNTIME_VERSION = '0.63.44';",
+              'v0.63.44 History Mutation Attribution',
+              'FRESH_MISMATCH_HISTORY_MATCH',
+              'History mutation:',
+              'Representation correlation:',
+              'Mutation attribution:',
+              'PROVENANCE_LEDGER_LIMIT = 16',
+          ]
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f'missing required marker after patch: {marker}')
+          if '//@version 0.63.43' in text or "const SIMCORE_RUNTIME_VERSION = '0.63.43';" in text:
+              raise SystemExit('stale v0.63.43 runtime/version marker remains')
+
+          latest.write_text(text, encoding='utf-8')
+          install.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate release artifacts
+        shell: bash
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -Fq '//@version 0.63.44' plugins/simcore/latest.js
+          grep -Fq 'FRESH_MISMATCH_HISTORY_MATCH' plugins/simcore/latest.js
+          grep -Fq 'PROVENANCE_LEDGER_LIMIT = 16' plugins/simcore/latest.js
+
+      - name: Commit release
+        shell: bash
+        run: |
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --check
+          git commit -m 'release: SimCore v0.63.44 History Mutation Attribution'
+          git push origin HEAD:release-simcore

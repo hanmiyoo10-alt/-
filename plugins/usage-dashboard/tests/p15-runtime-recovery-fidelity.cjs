@@ -21,8 +21,8 @@ assert.equal(manifest.components.bridge.requiredVersion, '1.6.8');
 assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.54');
 
-// The recovery contract must remain intact across later releases. Keep the
-// verified cache/parser semantics while allowing newer engine telemetry.
+// This release is runtime recovery fidelity only. Keep the verified cache/parser
+// and Bridge Engine baseline untouched.
 assert.ok(engine.includes("const VERSION = '1.6.8';"));
 assert.ok(diagnostics.includes('parser provider-usage-v3'));
 assert.ok(diagnostics.includes('unknown stays unknown'));
@@ -115,7 +115,7 @@ result = readyContext.stableReadinessSnapshot(bridgeDiag, runtimeBridge);
 assert.equal(result.ready, false, 'existing refresh failure blocker must remain intact');
 assert.ok(result.blockers.includes('refresh failures 1'));
 
-assert.ok(guidelines.includes('Runtime Recovery Fidelity'));
-assert.ok(guidelines.includes('cumulative local persist history remained visible while `active 0` allowed `READY`'));
+assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.54 — Runtime Recovery Fidelity`'));
+assert.ok(guidelines.includes('Next evidence-first candidate after 5.54 device validation: `Snapshot Performance Attribution`'));
 
 console.log('usage-dashboard P15 runtime recovery fidelity: OK · active errors block, recovered history stays visible');

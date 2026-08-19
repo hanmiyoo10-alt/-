@@ -1,0 +1,53 @@
+name: SimCore 0.63.44 observable release trigger
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event.pull_request.title == 'simcore-release-0.63.44-pr'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main for runner source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Extract validated patch script
+        shell: bash
+        run: |
+          awk '/python3 - <<'"'"'PY'"'"'/{flag=1;next} /^          PY$/{flag=0} flag{sub(/^          /,""); print}' .github/workflows/simcore-release-06344-issue.yml > /tmp/simcore-06344-patch.py
+          test -s /tmp/simcore-06344-patch.py
+          grep -Fq 'FRESH_MISMATCH_HISTORY_MATCH' /tmp/simcore-06344-patch.py
+
+      - name: Checkout release channel
+        shell: bash
+        run: |
+          git fetch origin release-simcore
+          git checkout -B release-simcore origin/release-simcore
+
+      - name: Patch and validate
+        shell: bash
+        run: |
+          python3 /tmp/simcore-06344-patch.py
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -Fq '//@version 0.63.44' plugins/simcore/latest.js
+          grep -Fq 'FRESH_MISMATCH_HISTORY_MATCH' plugins/simcore/latest.js
+          grep -Fq 'PROVENANCE_LEDGER_LIMIT = 16' plugins/simcore/latest.js
+          git diff --check
+
+      - name: Commit release
+        shell: bash
+        run: |
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'release: SimCore v0.63.44 History Mutation Attribution'
+          git push origin HEAD:release-simcore

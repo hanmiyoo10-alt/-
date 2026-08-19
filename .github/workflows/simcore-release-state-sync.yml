@@ -30,6 +30,7 @@ jobs:
         run: git fetch --no-tags origin release-simcore
 
       - name: Validate production and resolve release identity
+        id: release
         shell: bash
         run: |
           set -euo pipefail
@@ -73,12 +74,16 @@ jobs:
           echo "SIMCORE_RELEASE_COMMIT=$RELEASE_COMMIT" >> "$GITHUB_ENV"
           echo "SIMCORE_RELEASE_BLOB=$LATEST_BLOB" >> "$GITHUB_ENV"
 
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "release_blob=$LATEST_BLOB" >> "$GITHUB_OUTPUT"
+
       - name: Sync durable product memory
         env:
-          VERSION: ${{ env.SIMCORE_VERSION }}
+          VERSION: ${{ steps.release.outputs.version }}
           RELEASE_NAME: ${{ env.SIMCORE_RELEASE_NAME }}
-          RELEASE_COMMIT: ${{ env.SIMCORE_RELEASE_COMMIT }}
-          RELEASE_BLOB: ${{ env.SIMCORE_RELEASE_BLOB }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          RELEASE_BLOB: ${{ steps.release.outputs.release_blob }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -127,7 +132,7 @@ jobs:
 
           guide_path = Path('docs/SIMCORE_GUIDELINES.md')
           guide = guide_path.read_text(encoding='utf-8')
-          section = re.compile(r'(## 44\. Current Production Baseline.*?```text\n)(SimCore v[^\n]+)(\n```)', re.S)
+          section = re.compile(r'(## \d+\. Current Production Baseline.*?```text\n)(SimCore v[^\n]+)(\n```)', re.S)
           replacement = rf'\1SimCore v{version} — {release_name}\3'
           guide, count = section.subn(replacement, guide, count=1)
           if count != 1:
@@ -179,7 +184,7 @@ jobs:
       - name: Upload project-source artifact
         uses: actions/upload-artifact@v4
         with:
-          name: simcore-project-source-v${{ env.SIMCORE_VERSION }}
-          path: dist/SimCore-v${{ env.SIMCORE_VERSION }}-project-source.zip
+          name: simcore-project-source-v${{ steps.release.outputs.version }}
+          path: dist/SimCore-v${{ steps.release.outputs.version }}-project-source.zip
           if-no-files-found: error
           retention-days: 90

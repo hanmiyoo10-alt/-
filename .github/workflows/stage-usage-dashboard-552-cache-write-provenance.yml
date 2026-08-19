@@ -92,7 +92,8 @@ jobs:
           grep -Fq 'provider-usage-v3' plugins/usage-dashboard/latest.js
           grep -Fq 'cache_creation_tokens' plugins/usage-dashboard/latest.js
           grep -Fq 'read-without-write' plugins/usage-dashboard/latest.js
-          grep -Fq 'missing Write/TTL stays unknown' plugins/usage-dashboard/latest.js
+          grep -Fq 'unknown stays unknown' plugins/usage-dashboard/latest.js
+          grep -Fq 'missing Write/TTL is never inferred' plugins/usage-dashboard/latest.js
           grep -Fq "cacheMetricFidelity: cacheUsage?.cacheMetricFidelity" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "cacheWriteTelemetry: cacheUsage?.cacheWriteTelemetry" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "cacheTtlTelemetry: cacheUsage?.cacheTtlTelemetry" plugins/usage-dashboard/runtime/bridge-engine.mjs
@@ -171,7 +172,8 @@ jobs:
           grep -Fq 'Cache observer:' plugins/usage-dashboard/latest.js
           grep -Fq 'Cache write telemetry:' plugins/usage-dashboard/latest.js
           grep -Fq 'provider-usage-v3' plugins/usage-dashboard/latest.js
-          grep -Fq 'missing Write/TTL stays unknown' plugins/usage-dashboard/latest.js
+          grep -Fq 'unknown stays unknown' plugins/usage-dashboard/latest.js
+          grep -Fq 'missing Write/TTL is never inferred' plugins/usage-dashboard/latest.js
           ! grep -Fq '//@allowed-ipc provider-manager' plugins/usage-dashboard/latest.js
           ! grep -Fq 'providerManagerCache' plugins/usage-dashboard/latest.js
           grep -Fq "const VERSION = '1.6.8';" plugins/usage-dashboard/runtime/bridge-engine.mjs

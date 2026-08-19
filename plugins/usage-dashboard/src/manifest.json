@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.50",
+  "version": "3.0.0-alpha.5.51",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "39052d625da82fe6de5efb66cf4c6d646d1a21f9fda4e27fbf33afacfe9a7d15",
+  "artifactSha256": "eb7517a2bb247d8a8912efcfb94b418d8305519905bbf2916af173c20116731b",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13571,
-      "sha256": "52447013ac7fafb95380d0bd45534c5ca15ee62c22ef09222e4c2a5412b3aabd"
+      "sha256": "09271fcb828e9d861377c2016635ec6a34224bc6b4f5dde2abd439dd27bd0dd8"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -76,8 +76,8 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 28749,
-      "sha256": "96de076a5406e3b199b503c9af90ff129fb3ee6bbcc3c0e5c6bb579f401ab564"
+      "bytes": 28818,
+      "sha256": "d997b02cd98932b26493f0f38bc75b6777ddb202fed99445cc60fcad00ab3098"
     },
     {
       "file": "50-dashboard-context.part.js",

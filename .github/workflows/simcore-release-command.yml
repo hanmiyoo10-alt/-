@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.event.pull_request.title == 'SimCore v0.63.47 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.48 release command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
@@ -29,9 +29,9 @@ jobs:
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
           VERSION="$(sed -n 's#^//@version[[:space:]]*##p' plugins/simcore/latest.js | head -n 1)"
-          if [[ "$HEAD_SHA" == "b8d7a00f7f97c4ff08a414c4e7664a98907ba33d" && "$VERSION" == "0.63.46" ]]; then
+          if [[ "$HEAD_SHA" == "19a6ea81679e4473956dfbb4eee0d42398d17f6d" && "$VERSION" == "0.63.47" ]]; then
             echo 'mode=patch' >> "$GITHUB_OUTPUT"
-          elif [[ "$VERSION" == "0.63.47" ]]; then
+          elif [[ "$VERSION" == "0.63.48" ]]; then
             echo 'mode=already-current' >> "$GITHUB_OUTPUT"
           else
             echo "unexpected release state: head=$HEAD_SHA version=$VERSION" >&2
@@ -43,32 +43,34 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
-          git show origin/main:scripts/simcore-06347-release.py > /tmp/simcore-06347-release.py
-          python3 -m py_compile /tmp/simcore-06347-release.py
+          git show origin/main:scripts/simcore-06348-release.py > /tmp/simcore-06348-release.py
+          python3 -m py_compile /tmp/simcore-06348-release.py
 
       - name: Patch production source
         if: steps.state.outputs.mode == 'patch'
-        run: python3 /tmp/simcore-06347-release.py
+        run: python3 /tmp/simcore-06348-release.py
 
-      - name: Validate v0.63.47 production source
+      - name: Validate v0.63.48 production source
         shell: bash
         run: |
           set -euo pipefail
           node --check plugins/simcore/latest.js
           node --check plugins/simcore/install.js
           cmp -s plugins/simcore/latest.js plugins/simcore/install.js
-          grep -q '^//@version 0.63.47$' plugins/simcore/latest.js
-          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.47';" plugins/simcore/latest.js
-          grep -q 'v0.63.47 History Alignment Stabilization' plugins/simcore/latest.js
-          grep -q 'HISTORY_ALIGNMENT_REQUEST_SPINE_LIMIT = 48' plugins/simcore/latest.js
-          grep -q 'HISTORY_ALIGNMENT_RAW_SPINE_LIMIT = 64' plugins/simcore/latest.js
-          grep -q 'HISTORY_ALIGNMENT_MIN_CALIBRATORS = 2' plugins/simcore/latest.js
-          grep -q "SKIPPED_AMBIGUOUS_ALIGNMENT" plugins/simcore/latest.js
+          grep -q '^//@version 0.63.48$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.48';" plugins/simcore/latest.js
+          grep -q 'v0.63.48 History Turn-Ordinal Alignment' plugins/simcore/latest.js
+          grep -q "HISTORY_ALIGNMENT_ENDPOINT = 'SEND_INDEX'" plugins/simcore/latest.js
+          grep -q "RESOLVED_TURN_ORDINAL" plugins/simcore/latest.js
+          grep -q "SKIPPED_ROLE_DRIFT" plugins/simcore/latest.js
+          grep -q "SKIPPED_HOST_SUFFIX_SHORT" plugins/simcore/latest.js
+          grep -q "SKIPPED_TARGET_NOT_MAPPABLE" plugins/simcore/latest.js
+          grep -q "bodyEquality: 'NOT_REQUIRED'" plugins/simcore/latest.js
           grep -q "HOST_RAW_CANONICAL_ENVELOPE" plugins/simcore/latest.js
           grep -q 'History alignment:' plugins/simcore/latest.js
           grep -q "persistentMutation: 'NONE'" plugins/simcore/latest.js
-          if grep -q 'SKIPPED_CURRENT_USER_MISMATCH' plugins/simcore/latest.js; then
-            echo 'obsolete exact current-user mismatch gate remains' >&2
+          if grep -q 'HISTORY_ALIGNMENT_MIN_CALIBRATORS' plugins/simcore/latest.js; then
+            echo 'obsolete body-calibrator alignment gate remains' >&2
             exit 1
           fi
           git diff --check
@@ -81,16 +83,16 @@ jobs:
           git config user.name 'hanmiyoo10-alt'
           git config user.email 'hanmiyoo10@gmail.com'
           git add plugins/simcore/latest.js plugins/simcore/install.js
-          git commit -m 'release: SimCore v0.63.47 History Alignment Stabilization'
+          git commit -m 'release: SimCore v0.63.48 History Turn-Ordinal Alignment'
           git push origin HEAD:release-simcore
 
       - name: Confirm idempotent current state
         if: steps.state.outputs.mode == 'already-current'
-        run: echo 'SimCore v0.63.47 is already the current production release; validation still ran.'
+        run: echo 'SimCore v0.63.48 is already the current production release; validation still ran.'
 
   memory-sync:
     needs: release
-    if: github.event.pull_request.title == 'SimCore v0.63.47 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.48 release command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main memory branch

@@ -273,7 +273,7 @@ replace_once(
       `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached total = Read + Write when both are known · unknown stays unknown · source request metadata / Bridge aggregates / independent provider usage parser`,""",
     """      `Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}`,
       `Cache write telemetry: reported ${diagCacheObservability.writeReported}/${diagCacheObservability.rows} · read-without-write ${diagCacheObservability.writeNotReported}/${diagCacheObservability.rows} · TTL reported ${diagCacheObservability.ttlReported}/${diagCacheObservability.rows} · TTL unreported-after-write ${diagCacheObservability.ttlNotReported}/${diagCacheObservability.rows}`,
-      `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached observed = known Read + known Write components · unknown stays unknown · missing Write/TTL is never inferred from price/provider`,""",
+      `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached total = Read + Write when both are known · unknown stays unknown · missing Write/TTL is never inferred from price/provider`,""",
     'cache write provenance diagnostics',
 )
 

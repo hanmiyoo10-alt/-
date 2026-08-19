@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.49
+//@version 0.63.50
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.50 Host Prefix Reset Attribution:
+// - Follows v0.63.49 real long-chat validation where externally observed cache hits coexisted with rolling CHAT_HISTORY frontier movement, while the one externally observed cache miss coincided with a PRE_SIMCORE HOST_PREFIX break at system @0, 0% local common prefix and a cache-family reset
+// - Adds a memory-only system @0 block sketch using 512-character FNV-1a hashes from both the head and tail so message-level HOST_PREFIX resets can be localized without retaining raw system bodies or changing request bytes/order
+// - Classifies system @0 changes as STABLE / DELTA_LOCALIZED / WIDESPREAD / UNAVAILABLE and reports bounded head/tail agreement, changed-span upper bounds, size delta, insertion/removal/replacement-like shape and family-reset correlation; block bounds are diagnostic approximations, not semantic source attribution
+// - Keeps v0.63.49 History stabilization OBSERVE_ONLY and provider cache UNVERIFIED: no request/chat/persistent-state mutation, provider hit/miss inference, network/timer/storage call, prompt relocation, or cache directive is added
+// - Attribution scope only: TAIL_AFTER_CURRENT_USER, Broadcast End Authority, Frame/Continuity/Evidence/Lineage/Handoff/Recurrence/Structure/Recovery, compiler tiers, Deferred Mirror, persistent schema and all generation semantics remain frozen
 //
 // v0.63.49 Cache Effect Verification:
 // - Retires request-history repair attempts after v0.63.48 real long-chat validation showed the exact compact assistant frontier continuing to advance while externally observed caching still occurred on distinct natural B_START/B_CONTINUE/B_END turns; the known compact signature remains diagnostic evidence only
@@ -487,7 +494,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.49';
+const SIMCORE_RUNTIME_VERSION = '0.63.50';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4898,6 +4905,98 @@ function exactHash(text) {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+const HOST_PREFIX_BLOCK_CHARS = 512;
+
+function comparableMessageText(message) {
+  const content = message?.content;
+  if (typeof content === 'string') return content;
+  try { return JSON.stringify(content == null ? '' : content); }
+  catch (_) { return String(content == null ? '' : content); }
+}
+
+function buildSystem0Sketch(message) {
+  if (String(message?.role || '') !== 'system') return null;
+  const text = comparableMessageText(message);
+  const headBlocks = [];
+  const tailBlocks = [];
+  for (let start = 0; start < text.length; start += HOST_PREFIX_BLOCK_CHARS) {
+    headBlocks.push(exactHash(text.slice(start, Math.min(text.length, start + HOST_PREFIX_BLOCK_CHARS))));
+  }
+  for (let end = text.length; end > 0; end -= HOST_PREFIX_BLOCK_CHARS) {
+    tailBlocks.push(exactHash(text.slice(Math.max(0, end - HOST_PREFIX_BLOCK_CHARS), end)));
+  }
+  return Object.freeze({
+    version: 1,
+    chars: text.length,
+    blockChars: HOST_PREFIX_BLOCK_CHARS,
+    headBlocks: Object.freeze(headBlocks),
+    tailBlocks: Object.freeze(tailBlocks),
+  });
+}
+
+function cloneSystem0Sketch(sketch) {
+  if (!sketch || Number(sketch.version) !== 1) return null;
+  return {
+    version: 1,
+    chars: Number(sketch.chars || 0),
+    blockChars: Number(sketch.blockChars || HOST_PREFIX_BLOCK_CHARS),
+    headBlocks: Array.isArray(sketch.headBlocks) ? sketch.headBlocks.map(String) : [],
+    tailBlocks: Array.isArray(sketch.tailBlocks) ? sketch.tailBlocks.map(String) : [],
+  };
+}
+
+function buildHostPrefixProbe(previousSketch, currentSketch, previousSignature, currentSignature, previousFamilyId, currentFamilyId, baseline) {
+  const familyChanged = !!previousFamilyId && !!currentFamilyId && String(previousFamilyId) !== String(currentFamilyId);
+  const base = {
+    previousSignature: compactSignature(previousSignature),
+    currentSignature: compactSignature(currentSignature),
+    previousFamilyId: previousFamilyId || null,
+    currentFamilyId: currentFamilyId || null,
+    familyChanged,
+    blockChars: Number(currentSketch?.blockChars || previousSketch?.blockChars || HOST_PREFIX_BLOCK_CHARS),
+    retainedBodies: false,
+  };
+  if (!currentSketch) return Object.freeze({ ...base, status: 'UNAVAILABLE', shape: 'NO_SYSTEM0', confidence: 'NONE', deltaChars: 0, commonHeadChars: 0, commonTailChars: 0, previousChangedChars: 0, currentChangedChars: 0 });
+  if (baseline || !previousSketch) return Object.freeze({ ...base, status: 'BASELINE', shape: 'BASELINE', confidence: 'NONE', deltaChars: 0, commonHeadChars: 0, commonTailChars: 0, previousChangedChars: 0, currentChangedChars: 0 });
+  if (sameSignature(previousSignature, currentSignature)) {
+    return Object.freeze({ ...base, status: 'STABLE', shape: 'NONE', confidence: 'HIGH', deltaChars: 0, commonHeadChars: Number(currentSketch.chars || 0), commonTailChars: 0, previousChangedChars: 0, currentChangedChars: 0 });
+  }
+
+  const block = Math.max(1, Number(currentSketch.blockChars || previousSketch.blockChars || HOST_PREFIX_BLOCK_CHARS));
+  const previousChars = Math.max(0, Number(previousSketch.chars || 0));
+  const currentChars = Math.max(0, Number(currentSketch.chars || 0));
+  const minChars = Math.min(previousChars, currentChars);
+  const previousHead = Array.isArray(previousSketch.headBlocks) ? previousSketch.headBlocks : [];
+  const currentHead = Array.isArray(currentSketch.headBlocks) ? currentSketch.headBlocks : [];
+  const previousTail = Array.isArray(previousSketch.tailBlocks) ? previousSketch.tailBlocks : [];
+  const currentTail = Array.isArray(currentSketch.tailBlocks) ? currentSketch.tailBlocks : [];
+
+  let headBlocks = 0;
+  const headLimit = Math.min(previousHead.length, currentHead.length);
+  while (headBlocks < headLimit && String(previousHead[headBlocks]) === String(currentHead[headBlocks])) headBlocks += 1;
+  let tailBlocks = 0;
+  const tailLimit = Math.min(previousTail.length, currentTail.length);
+  while (tailBlocks < tailLimit && String(previousTail[tailBlocks]) === String(currentTail[tailBlocks])) tailBlocks += 1;
+
+  const commonHeadChars = Math.min(minChars, headBlocks * block);
+  const commonTailChars = Math.min(Math.max(0, minChars - commonHeadChars), tailBlocks * block);
+  const previousChangedChars = Math.max(0, previousChars - commonHeadChars - commonTailChars);
+  const currentChangedChars = Math.max(0, currentChars - commonHeadChars - commonTailChars);
+  const deltaChars = currentChars - previousChars;
+  const coverage = minChars > 0 ? (commonHeadChars + commonTailChars) / minChars : 0;
+  const status = coverage >= 0.75 ? 'DELTA_LOCALIZED' : 'WIDESPREAD';
+  const spanDelta = currentChangedChars - previousChangedChars;
+  let shape = status === 'DELTA_LOCALIZED' ? 'LOCALIZED_CHANGE' : 'WIDESPREAD_CHANGE';
+  if (status === 'DELTA_LOCALIZED' && deltaChars > 0 && previousChangedChars <= block * 2 && Math.abs(spanDelta - deltaChars) <= block * 2) shape = 'INSERTION_LIKE';
+  else if (status === 'DELTA_LOCALIZED' && deltaChars < 0 && currentChangedChars <= block * 2 && Math.abs(spanDelta - deltaChars) <= block * 2) shape = 'REMOVAL_LIKE';
+  else if (status === 'DELTA_LOCALIZED' && deltaChars === 0) shape = 'REPLACEMENT_LIKE';
+  else if (status === 'DELTA_LOCALIZED' && deltaChars !== 0) shape = 'SIZE_SHIFT_LOCALIZED';
+  const confidence = status === 'DELTA_LOCALIZED' && commonHeadChars >= block * 2 && commonTailChars >= block * 2
+    ? 'HIGH'
+    : (status === 'DELTA_LOCALIZED' ? 'MEDIUM' : 'LOW');
+  return Object.freeze({ ...base, status, shape, confidence, deltaChars, commonHeadChars, commonTailChars, previousChangedChars, currentChangedChars });
+}
+
 function outputCompatibleFingerprint(message) {
   const content = message?.content;
   let text = '';
@@ -5010,6 +5109,7 @@ function clonePrevious(previous) {
     currentUserIndex: Number(previous.currentUserIndex ?? -1),
     runtimeIndex: Number(previous.runtimeIndex ?? -1),
     leadingSystemMessages: Number(previous.leadingSystemMessages || 0),
+    system0Sketch: cloneSystem0Sketch(previous.system0Sketch),
   };
 }
 
@@ -5031,6 +5131,7 @@ function createRequestTopologyTracker() {
       }
       const runtimeIndex = Number.isInteger(Number(extra?.runtimeIndex)) ? Number(extra.runtimeIndex) : (list.length ? list.length - 1 : -1);
       const leadingSystemMessages = leadingSystemCount(signatures);
+      const currentSystem0Sketch = leadingSystemMessages > 0 ? buildSystem0Sketch(list[0]) : null;
       const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
       const locationKey = String(extra?.locationKey || '');
       const prior = previousKey === currentKey ? previous : null;
@@ -5062,6 +5163,17 @@ function createRequestTopologyTracker() {
       const attribution = breakAttribution(firstChangeIndex, currentUserIndex, runtimeIndex, leadingSystemMessages, prior?.leadingSystemMessages, baseline, stable);
       const exposureChars = baseline ? null : Math.max(0, totalChars - commonChars);
       const exposureRatio = baseline ? null : (totalChars > 0 ? Math.max(0, Math.min(100, (exposureChars / totalChars) * 100)) : 0);
+      const currentFamilyId = familyFingerprint(signatures);
+      const previousFamilyId = prior ? familyFingerprint(prior.signatures) : null;
+      const hostPrefixProbe = buildHostPrefixProbe(
+        prior?.system0Sketch || null,
+        currentSystem0Sketch,
+        prior?.signatures?.[0] || null,
+        signatures[0] || null,
+        previousFamilyId,
+        currentFamilyId,
+        baseline,
+      );
       const probe = Object.freeze({
         baseline, stable, at, cadenceMs,
         messages: signatures.length, previousMessages: prior?.signatures?.length ?? null,
@@ -5077,18 +5189,19 @@ function createRequestTopologyTracker() {
         retainedBodies: false, signatureKind: 'role+kind+chars+fnv1a32',
         currentUserSignature: currentUserIndex >= 0 ? signatureKey(signatures[currentUserIndex]) : 'none',
         requestFingerprint: requestFingerprint(signatures),
-        familyId: familyFingerprint(signatures),
+        familyId: currentFamilyId,
+        previousFamilyId, hostPrefixProbe,
       });
       previousKey = currentKey;
-      previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex, leadingSystemMessages };
+      previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex, leadingSystemMessages, system0Sketch: currentSystem0Sketch };
       return probe;
     },
     exportState() {
       if (!previousKey || !previous) return null;
-      return { version: 1, key: previousKey, previous: clonePrevious(previous) };
+      return { version: 2, key: previousKey, previous: clonePrevious(previous) };
     },
     importState(state) {
-      if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key) return false;
+      if (!state || ![1, 2].includes(Number(state.version)) || typeof state.key !== 'string' || !state.key) return false;
       const restored = clonePrevious(state.previous);
       if (!restored) return false;
       previousKey = state.key;
@@ -5629,6 +5742,26 @@ function cacheEffect(probe, movementProbe) {
   const breakKind = probe.stable ? 'NONE' : `${probe.breakOwner || 'UNKNOWN'} · ${probe.breakZone || 'UNKNOWN'}`;
   return `${status} · common ${commonMessages}/${messages} msgs · ${commonChars.toLocaleString('en-US')}/${totalChars.toLocaleString('en-US')} chars · ratio ${ratio.toFixed(1)}% · frontier ${frontier} · movement ${movement} · break ${breakKind} · provider UNVERIFIED`;
 }
+function hostPrefixAttribution(probe) {
+  const hp = probe?.hostPrefixProbe;
+  if (!hp) return 'n/a';
+  if (hp.status === 'BASELINE') return `BASELINE · system0 ${hp.currentSignature || 'n/a'} · block ${Number(hp.blockChars || 0)}c · raw bodies NOT RETAINED`;
+  if (hp.status === 'UNAVAILABLE') return 'UNAVAILABLE · system @0 absent · raw bodies NOT RETAINED';
+  return `${hp.status || 'n/a'} · shape ${hp.shape || 'n/a'} · confidence ${hp.confidence || 'NONE'} · block ${Number(hp.blockChars || 0)}c · raw bodies NOT RETAINED`;
+}
+function hostPrefixDelta(probe) {
+  const hp = probe?.hostPrefixProbe;
+  if (!hp) return 'n/a';
+  const familyCurrent = hp.currentFamilyId ? String(hp.currentFamilyId).slice(0, 8) : 'n/a';
+  const familyPrevious = hp.previousFamilyId ? String(hp.previousFamilyId).slice(0, 8) : 'n/a';
+  const family = hp.previousFamilyId
+    ? `${familyPrevious}→${familyCurrent} · ${hp.familyChanged ? 'RESET_CORRELATED' : 'SAME_FAMILY'}`
+    : `${familyCurrent} · BASELINE`;
+  if (hp.status === 'BASELINE') return `system0 ${hp.currentSignature || 'n/a'} · family ${family}`;
+  if (hp.status === 'UNAVAILABLE') return `system0 unavailable · family ${family}`;
+  const delta = Number(hp.deltaChars || 0);
+  return `prev ${hp.previousSignature || 'n/a'} → current ${hp.currentSignature || 'n/a'} · Δchars ${delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US')} · head ≥${Number(hp.commonHeadChars || 0).toLocaleString('en-US')} · tail ≥${Number(hp.commonTailChars || 0).toLocaleString('en-US')} · changed prev ≤${Number(hp.previousChangedChars || 0).toLocaleString('en-US')} · current ≤${Number(hp.currentChangedChars || 0).toLocaleString('en-US')} · family ${family}`;
+}
 function historyAlignment(probe) {
   if (!probe) return 'n/a';
   if (probe.alignmentStatus === 'OBSERVE_ONLY') return `OBSERVE_ONLY · target assistant/text 21:4a852496 · candidates ${Number(probe.candidates || 0)} · request mutation NONE`;
@@ -5722,7 +5855,7 @@ function representation(probe) {
   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
-module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, cacheEffect, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
+module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, cacheEffect, hostPrefixAttribution, hostPrefixDelta, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -6915,6 +7048,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Cache integrity: ${probeFresh ? runtimeProbeRules.cacheIntegrity(topologyProbe) : 'n/a'}`,
       `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
       `Cache effect: ${probeFresh ? runtimeProbeRules.cacheEffect(topologyProbe, lastFrontierMovementProbe) : 'n/a'}`,
+      `Host prefix attribution: ${probeFresh ? runtimeProbeRules.hostPrefixAttribution(topologyProbe) : 'n/a'}`,
+      `Host prefix delta: ${probeFresh ? runtimeProbeRules.hostPrefixDelta(topologyProbe) : 'n/a'}`,
       `History mutation: ${probeFresh ? runtimeProbeRules.historyMutation(topologyProbe) : 'n/a'}`,
       `History alignment: ${probeFresh ? runtimeProbeRules.historyAlignment(lastHistoryStabilizationProbe) : 'n/a'}`,
       `History stabilization: ${probeFresh ? runtimeProbeRules.historyStabilization(lastHistoryStabilizationProbe) : 'n/a'}`,

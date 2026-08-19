@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.40
+//@version 0.63.41
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.41 Deterministic Continuity Consolidation:
+// - Resolves explicit opening month/day current-time transitions against the persisted narrative clock, including deterministic year rollover, calendar-valid dates, weekday normalization and pre-generation worldYear/age-offset advancement
+// - Repairs only deterministic timestamp components: the frame date/weekday must match a resolved current-date target, while later canonical scene timestamps retain fail-closed monotonic validation with a narrow one-year rollover repair when that same rollover is already proven by the current user transition
+// - Upgrades Frame continuity from backward-only floors to deterministic sequencing: Chatindex is exactly previous visible +1, Volume jumps normalize to previous +1 only when the model already advances Volume, same-title Chapters hold, changed-title Chapters advance by one, and a Volume advance resets Chapter to 1
+// - Preserves visible-user edits as the next continuity baseline and uses number-only rewrites for new sequencing repairs while retaining the proven full-header rollback for true backward Volume/Chapter regressions
+// - Keeps v0.63.40 Evidence, v0.63.39 trajectory/retry/EMA, provider-cache policy, request order, mirror/edit acceptance, Reaction/Recurrence/Lineage/Handoff and storage/API/timer/network surfaces frozen
 //
 // v0.63.40 Current Source Integrity & Runtime Surface Consolidation:
 // - Adds a root-first current-event authority contract so explicit facts in the current user event outrank conflicting prior versions without parsing or storing event semantics
@@ -426,7 +433,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.40';
+const SIMCORE_RUNTIME_VERSION = '0.63.41';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -453,8 +460,8 @@ const MODULE_CONTRACTS = Object.freeze({
   kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
   store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
   lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
-  time: Object.freeze({ owns: 'timestamp syntax, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
-  frame: Object.freeze({ owns: 'visible response-frame parsing, deterministic backward continuity floor, and same-title Chapter-number hold', excludes: 'semantic title interpretation, narrative progression decisions, host/storage I/O' }),
+  time: Object.freeze({ owns: 'timestamp syntax, deterministic calendar transitions, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
+  frame: Object.freeze({ owns: 'visible response-frame parsing and deterministic Volume/Chapter/Chatindex sequencing', excludes: 'semantic title interpretation, narrative progression decisions, host/storage I/O' }),
   recurrence: Object.freeze({ owns: 'request-template recurrence detection and bounded registry', excludes: 'source meaning or response composition' }),
   lineage: Object.freeze({ owns: 'request root/parent/depth tracking', excludes: 'source importance or response content' }),
   handoff: Object.freeze({ owns: 'short-C source/parent-shift detection and bounded registry', excludes: 'semantic source selection or reaction content' }),
@@ -1909,6 +1916,137 @@ function elapsedMinutes(start, current) {
   return b.minuteKey - a.minuteKey;
 }
 
+function validDateMs(year, month, day) {
+  const y = Number(year), m = Number(month), d = Number(day);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d) || y < 1900 || y > 2199) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const ms = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+  const date = new Date(ms);
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null;
+  return ms;
+}
+
+function pad2(value) { return String(Math.max(0, Number(value) || 0)).padStart(2, '0'); }
+function dateString(year, month, day) { return `${Number(year)}-${pad2(month)}-${pad2(day)}`; }
+function weekdayLabel(year, month, day) {
+  const ms = validDateMs(year, month, day);
+  return ms == null ? null : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(ms).getUTCDay()];
+}
+
+function resolveCalendarTransition(userText, previousTimestamp, fallbackYear = null) {
+  const head = String(userText || '').trim().slice(0, 420);
+  const m = head.match(/^(?:한편\s+)?(?:그리고\s+)?(?:(?:((?:19|20|21)\d{2})년)\s*)?(\d{1,2})월\s*(\d{1,2})일(?:\s*(?:\([^)]+\)|(?:월|화|수|목|금|토|일)요일))?\s*(?:이|가)?\s*(?:되고|되어|되면서|되었다|됐다)(?:\s|$)/i);
+  if (!m) return { eligible: false, reason: 'INELIGIBLE', targetDate: null };
+
+  const explicitYear = m[1] ? Number(m[1]) : null;
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const previous = parseTimestamp(previousTimestamp);
+  const fallback = Number(fallbackYear);
+  const anchorYear = explicitYear || previous?.year || (Number.isFinite(fallback) ? fallback : null);
+  if (!anchorYear) return { eligible: false, reason: 'UNRESOLVED_YEAR', targetDate: null, month, day };
+
+  let resolvedYear = null;
+  if (explicitYear) {
+    const candidate = validDateMs(explicitYear, month, day);
+    if (candidate == null) return { eligible: false, reason: 'INVALID_DATE', targetDate: null, year: explicitYear, month, day };
+    const previousDay = previous ? validDateMs(previous.year, previous.month, previous.day) : null;
+    if (previousDay != null && candidate < previousDay) {
+      return { eligible: false, reason: 'EXPLICIT_BACKWARD', targetDate: null, year: explicitYear, month, day };
+    }
+    resolvedYear = explicitYear;
+  } else {
+    const previousDay = previous ? validDateMs(previous.year, previous.month, previous.day) : null;
+    for (let y = anchorYear; y <= anchorYear + 8; y++) {
+      const candidate = validDateMs(y, month, day);
+      if (candidate == null) continue;
+      if (previousDay != null && candidate < previousDay) continue;
+      resolvedYear = y;
+      break;
+    }
+    if (resolvedYear == null) return { eligible: false, reason: 'INVALID_DATE', targetDate: null, month, day };
+  }
+
+  const targetDate = dateString(resolvedYear, month, day);
+  const rollover = !explicitYear && resolvedYear > anchorYear;
+  return {
+    eligible: true,
+    reason: explicitYear ? 'EXPLICIT_YEAR' : (rollover ? 'YEAR_ROLLOVER' : 'SAME_YEAR'),
+    year: resolvedYear,
+    month,
+    day,
+    targetDate,
+    weekday: weekdayLabel(resolvedYear, month, day),
+    previousDate: previous ? dateString(previous.year, previous.month, previous.day) : null,
+    anchorYear,
+    yearRollover: rollover,
+    singleYearRollover: rollover && resolvedYear === anchorYear + 1,
+  };
+}
+
+function formatTimestampForDate(parsed, year, month, day) {
+  if (!parsed || validDateMs(year, month, day) == null) return null;
+  const weekday = weekdayLabel(year, month, day);
+  if (!weekday) return null;
+  return `⏱️[${dateString(year, month, day)} (${weekday}) ${parsed.hour12}:${pad2(parsed.minute)} ${parsed.ampm}]`;
+}
+
+function enforceNarrativeCalendarTarget(content, target) {
+  const text = String(content || '');
+  if (!target?.eligible || !target?.targetDate) {
+    return { content: text, changed: false, reason: 'ineligible', observedTimestamp: null, outputTimestamp: null, dateChanged: false, weekdayChanged: false };
+  }
+  const parsed = parseTimestamp(text);
+  if (!parsed) {
+    return { content: text, changed: false, reason: 'missing-or-invalid', observedTimestamp: null, outputTimestamp: null, dateChanged: false, weekdayChanged: false };
+  }
+  const expected = formatTimestampForDate(parsed, target.year, target.month, target.day);
+  if (!expected) {
+    return { content: text, changed: false, reason: 'invalid-target', observedTimestamp: parsed.raw, outputTimestamp: parsed.raw, dateChanged: false, weekdayChanged: false };
+  }
+  const observedDate = dateString(parsed.year, parsed.month, parsed.day);
+  const dateChanged = observedDate !== target.targetDate;
+  const weekdayChanged = String(parsed.dayLabel || '') !== String(target.weekday || '');
+  const changed = expected !== parsed.raw;
+  return {
+    content: changed ? text.replace(parsed.raw, expected) : text,
+    changed,
+    reason: changed ? (dateChanged ? 'date-repaired' : 'weekday-repaired') : 'pass',
+    observedTimestamp: parsed.raw,
+    outputTimestamp: expected,
+    dateChanged,
+    weekdayChanged,
+  };
+}
+
+function repairNarrativeYearRolloverSequence(content, target) {
+  const text = String(content || '');
+  if (!target?.eligible || !target?.singleYearRollover) return { content: text, changed: false, count: 0, reason: 'ineligible' };
+  let previous = null;
+  let index = 0;
+  let count = 0;
+  const lineRe = new RegExp(NARRATIVE_TIMESTAMP_LINE_RE.source, NARRATIVE_TIMESTAMP_LINE_RE.flags);
+  const repaired = text.replace(lineRe, (whole, raw) => {
+    const parsed = parseTimestamp(raw);
+    if (!parsed) { index += 1; return whole; }
+    let outputRaw = raw;
+    let outputParsed = parsed;
+    if (index > 0 && previous && parsed.minuteKey < previous.minuteKey && parsed.year === target.year - 1) {
+      const candidateRaw = formatTimestampForDate(parsed, target.year, parsed.month, parsed.day);
+      const candidate = candidateRaw ? parseTimestamp(candidateRaw) : null;
+      if (candidate && candidate.minuteKey >= previous.minuteKey) {
+        outputRaw = candidateRaw;
+        outputParsed = candidate;
+        count += 1;
+      }
+    }
+    previous = outputParsed;
+    index += 1;
+    return outputRaw === raw ? whole : whole.replace(raw, outputRaw);
+  });
+  return { content: repaired, changed: count > 0, count, reason: count > 0 ? 'year-rollover-repaired' : 'pass' };
+}
+
 function narrativeEnvelopeText(content) {
   const text = String(content || '');
   const header = text.match(NARRATIVE_RESPONSE_HEADER_RE);
@@ -2114,6 +2252,9 @@ module.exports = {
   timestampYear,
   compareTimestamps,
   elapsedMinutes,
+  resolveCalendarTransition,
+  enforceNarrativeCalendarTarget,
+  repairNarrativeYearRolloverSequence,
   narrativeTimestampSequence,
   resetBroadcastAirtime,
   commitBroadcastAirtime,
@@ -2180,15 +2321,20 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const broadcastAirtimeStart = /^B_/.test(c.mode) ? (state.broadcastAirtimeStart || null) : null;
   const secondaryConfigured = !!(config.secondaryName && config.secondaryKeyword);
   const secondaryActive = secondaryConfigured && input.includes(config.secondaryKeyword);
-  const narrativeProgression = /^B_/.test(c.mode) ? { active: false, reason: 'broadcast' } : time.narrativeProgressionHint(input);
   const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
+  const narrativeCalendarTarget = /^B_/.test(c.mode)
+    ? { eligible: false, reason: 'BROADCAST', targetDate: null }
+    : time.resolveCalendarTransition(input, narrativeTimestampPrevious, state.worldYear);
+  const narrativeProgression = /^B_/.test(c.mode)
+    ? { active: false, reason: 'broadcast' }
+    : (narrativeCalendarTarget.eligible ? { active: true, reason: 'calendar-resolved' } : time.narrativeProgressionHint(input));
   const narrativeClockGuard = !!(narrativeProgression.active && narrativeTimestampPrevious);
   const templateRecurrence = recurrence.observe(state, input, c.mode);
   const requestLineage = lineage.observe(state, input, c.mode, sendIndex);
   const communitySourceHandoff = handoff.observe(state, input, c.mode, requestLineage, templateRecurrence);
 
-  // Explicit user dates can advance world year before generation in every mode.
-  time.applyWorldYear(state, time.explicitWorldYear(input));
+  // Explicit current-date transitions advance world year before generation without inventing time-of-day.
+  time.applyWorldYear(state, narrativeCalendarTarget.eligible ? narrativeCalendarTarget.year : time.explicitWorldYear(input));
 
   state.lastMode = c.mode;
   state.pending = {
@@ -2211,6 +2357,7 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     narrativeProgressionReason: narrativeProgression.reason || 'none',
     narrativeTimestampPrevious,
     narrativeClockGuard,
+    narrativeCalendarTarget,
     templateRecurrenceEligible: !!templateRecurrence.eligible,
     templateRecurrenceRepeated: !!templateRecurrence.repeated,
     templateRecurrenceHash: templateRecurrence.hash == null ? null : Number(templateRecurrence.hash),
@@ -2407,6 +2554,9 @@ SimCore.define("frame", function (require, module, exports) {
 const VOLUME_LINE_RE = /^[ \t]*##[ \t]+볼륨[ \t]+(\d+)[ \t]*[:：][^\r\n]*$/mi;
 const CHAPTER_LINE_RE = /^[ \t]*###[ \t]+챕터[ \t]+(\d+)[ \t]*[:：][ \t]*([^\r\n]*)$/mi;
 const CHATINDEX_LINE_RE = /^[ \t]*####[ \t]+Chatindex[ \t]*[:：][ \t]*(\d+)[^\r\n]*∮[ \t]*$/mi;
+const VOLUME_NUMBER_RE = /^([ \t]*##[ \t]+볼륨[ \t]+)\d+([ \t]*[:：][^\r\n]*)$/mi;
+const CHAPTER_NUMBER_RE = /^([ \t]*###[ \t]+챕터[ \t]+)\d+([ \t]*[:：][ \t]*[^\r\n]*)$/mi;
+const CHATINDEX_NUMBER_RE = /^([ \t]*####[ \t]+Chatindex[ \t]*[:：][ \t]*)\d+([^\r\n]*∮[ \t]*)$/mi;
 
 function headerState(raw, re) {
   const m = String(raw || '').match(re);
@@ -2442,9 +2592,7 @@ function parseFrame(raw) {
   };
 }
 
-function assistantRole(message) {
-  return message?.role === 'assistant' || message?.role === 'char';
-}
+function assistantRole(message) { return message?.role === 'assistant' || message?.role === 'char'; }
 
 function capturePreviousFrame(messages, sendIndex, textOfMessage) {
   const rows = Array.isArray(messages) ? messages : [];
@@ -2456,9 +2604,7 @@ function capturePreviousFrame(messages, sendIndex, textOfMessage) {
       ? textOfMessage(rows[i])
       : (rows[i]?.content ?? rows[i]?.data ?? rows[i]?.text ?? '');
     const frame = parseFrame(raw);
-    if ([frame.volume, frame.chapter, frame.chatindex].some(Number.isFinite)) {
-      return { ...frame, sourceAssistantIndex: i };
-    }
+    if ([frame.volume, frame.chapter, frame.chatindex].some(Number.isFinite)) return { ...frame, sourceAssistantIndex: i };
     return null;
   }
   return null;
@@ -2472,50 +2618,107 @@ function numericFrame(frame) {
   };
 }
 
-function replaceHeader(text, re, header) {
-  return header ? String(text || '').replace(re, header) : String(text || '');
+function replaceHeader(text, re, header) { return header ? String(text || '').replace(re, header) : String(text || ''); }
+function rewriteNumber(text, re, value) {
+  if (!Number.isFinite(Number(value))) return String(text || '');
+  return String(text || '').replace(re, (_m, prefix, suffix) => `${prefix}${Number(value)}${suffix}`);
 }
+function rewriteVolumeNumber(text, value) { return rewriteNumber(text, VOLUME_NUMBER_RE, value); }
+function rewriteChapterNumber(text, value) { return rewriteNumber(text, CHAPTER_NUMBER_RE, value); }
+function rewriteChatindexNumber(text, value) { return rewriteNumber(text, CHATINDEX_NUMBER_RE, value); }
 
 function enforceContinuity(content, floor) {
   let text = String(content || '');
   const observed = parseFrame(text);
   const previous = floor && typeof floor === 'object' ? floor : null;
-  const applied = [];
+  const repairs = [];
+  const expected = numericFrame(observed);
+  let volumeSignal = 'NO_BASELINE';
+  let chapterSignal = 'NO_BASELINE';
 
   if (previous) {
     const volumeComparable = Number.isFinite(previous.volume) && Number.isFinite(observed.volume);
-    const volumeRegressed = volumeComparable && observed.volume < previous.volume;
-    const sameVolume = volumeComparable && observed.volume === previous.volume;
-
-    if (volumeRegressed) {
-      if (previous.volumeHeader && observed.volumeHeader) {
-        text = replaceHeader(text, VOLUME_LINE_RE, previous.volumeHeader);
-        applied.push('VOLUME');
+    if (volumeComparable) {
+      if (observed.volume < previous.volume) {
+        volumeSignal = 'BACKWARD';
+        expected.volume = previous.volume;
+        if (previous.volumeHeader && observed.volumeHeader) {
+          text = replaceHeader(text, VOLUME_LINE_RE, previous.volumeHeader);
+          repairs.push('VOLUME_BACKWARD');
+        }
+        if (previous.chapterHeader && observed.chapterHeader) {
+          text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
+          repairs.push('CHAPTER_WITH_VOLUME_BACKWARD');
+          expected.chapter = previous.chapter;
+        }
+      } else if (observed.volume === previous.volume) {
+        volumeSignal = 'SAME';
+        expected.volume = previous.volume;
+      } else {
+        volumeSignal = 'ADVANCED';
+        expected.volume = previous.volume + 1;
+        if (observed.volume !== expected.volume) {
+          text = rewriteVolumeNumber(text, expected.volume);
+          repairs.push('VOLUME_JUMP');
+        }
       }
-      if (previous.chapterHeader && observed.chapterHeader) {
-        text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
-        applied.push('CHAPTER');
-      }
-    } else if (sameVolume
-        && Number.isFinite(previous.chapter) && Number.isFinite(observed.chapter)
-        && observed.chapter < previous.chapter
-        && previous.chapterHeader && observed.chapterHeader) {
-      text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
-      applied.push('CHAPTER');
-    } else if (Number.isFinite(previous.chapter) && Number.isFinite(observed.chapter)
-        && observed.chapter > previous.chapter
-        && previous.chapterTitle && observed.chapterTitle
-        && previous.chapterTitle === observed.chapterTitle
-        && previous.chapterHeader && observed.chapterHeader) {
-      text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
-      applied.push('CHAPTER_TITLE_HOLD');
     }
 
-    if (Number.isFinite(previous.chatindex) && Number.isFinite(observed.chatindex)
-        && observed.chatindex < previous.chatindex
-        && previous.chatindexHeader && observed.chatindexHeader) {
-      text = replaceHeader(text, CHATINDEX_LINE_RE, previous.chatindexHeader);
-      applied.push('CHATINDEX');
+    if (Number.isFinite(previous.chapter) && Number.isFinite(observed.chapter)) {
+      if (volumeSignal === 'ADVANCED') {
+        chapterSignal = 'RESET_AFTER_VOLUME_ADVANCE';
+        expected.chapter = 1;
+        if (observed.chapter !== 1) {
+          text = rewriteChapterNumber(text, 1);
+          repairs.push('CHAPTER_RESET');
+        }
+      } else if (volumeSignal === 'SAME') {
+        const comparableTitles = !!(previous.chapterTitle && observed.chapterTitle);
+        if (comparableTitles && previous.chapterTitle === observed.chapterTitle) {
+          chapterSignal = 'SAME_TITLE_HOLD';
+          expected.chapter = previous.chapter;
+          if (observed.chapter !== expected.chapter) {
+            text = rewriteChapterNumber(text, expected.chapter);
+            repairs.push('CHAPTER_TITLE_HOLD');
+          }
+        } else if (comparableTitles && previous.chapterTitle !== observed.chapterTitle) {
+          chapterSignal = 'TITLE_CHANGED_ADVANCE';
+          expected.chapter = previous.chapter + 1;
+          if (observed.chapter !== expected.chapter) {
+            text = rewriteChapterNumber(text, expected.chapter);
+            repairs.push('CHAPTER_TITLE_ADVANCE');
+          }
+        } else if (observed.chapter < previous.chapter) {
+          chapterSignal = 'BACKWARD';
+          expected.chapter = previous.chapter;
+          if (previous.chapterHeader && observed.chapterHeader) {
+            text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
+            repairs.push('CHAPTER_BACKWARD');
+          }
+        } else {
+          chapterSignal = 'UNRESOLVED_TITLE';
+        }
+      } else if (volumeSignal === 'BACKWARD') {
+        chapterSignal = 'HELD_WITH_VOLUME';
+        expected.chapter = previous.chapter;
+      } else if (observed.chapter < previous.chapter) {
+        chapterSignal = 'BACKWARD';
+        expected.chapter = previous.chapter;
+        if (previous.chapterHeader && observed.chapterHeader) {
+          text = replaceHeader(text, CHAPTER_LINE_RE, previous.chapterHeader);
+          repairs.push('CHAPTER_BACKWARD');
+        }
+      }
+    }
+
+    if (Number.isFinite(previous.chatindex) && Number.isFinite(observed.chatindex)) {
+      expected.chatindex = previous.chatindex + 1;
+      if (observed.chatindex !== expected.chatindex) {
+        text = rewriteChatindexNumber(text, expected.chatindex);
+        repairs.push(observed.chatindex === previous.chatindex
+          ? 'CHATINDEX_SAME'
+          : (observed.chatindex < expected.chatindex ? 'CHATINDEX_BACKWARD' : 'CHATINDEX_JUMP'));
+      }
     }
   }
 
@@ -2523,20 +2726,21 @@ function enforceContinuity(content, floor) {
   return {
     content: text,
     probe: {
-      applied: applied.length > 0,
-      regression: applied.length ? applied.join('+') : 'NONE',
+      applied: repairs.length > 0,
+      regression: repairs.length ? repairs.join('+') : 'NONE',
+      sequenceStatus: previous ? (repairs.length ? 'REPAIRED' : 'PASS') : 'BASELINE',
+      volumeSignal,
+      chapterSignal,
+      repairs,
       previous: numericFrame(previous),
       observed: numericFrame(observed),
+      expected,
       output: numericFrame(output),
     },
   };
 }
 
-module.exports = {
-  parseFrame,
-  capturePreviousFrame,
-  enforceContinuity,
-};
+module.exports = { parseFrame, capturePreviousFrame, enforceContinuity, rewriteVolumeNumber, rewriteChapterNumber, rewriteChatindexNumber };
 });
 SimCore.define("structure", function (require, module, exports) {
 const kernel = require('./kernel');
@@ -3263,6 +3467,11 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push('timestamp_semantics=current_narrative_time');
     lines.push('embedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1');
     lines.push(`narrative_progression_hint=${p.narrativeProgressionReason || 'forward'}`);
+    if (p.narrativeCalendarTarget?.eligible && p.narrativeCalendarTarget?.targetDate) {
+      lines.push(`narrative_calendar_target=${p.narrativeCalendarTarget.targetDate}`);
+      lines.push(`narrative_calendar_weekday=${p.narrativeCalendarTarget.weekday || 'unknown'}`);
+      lines.push('narrative_calendar_target_is_current_date=1;time_of_day_unspecified_by_calendar_target=1');
+    }
     if (p.narrativeClockGuard && p.narrativeTimestampPrevious) {
       lines.push(`narrative_timestamp_previous=${p.narrativeTimestampPrevious}`);
       lines.push('narrative_timestamp_must_not_precede_previous=1');
@@ -3410,8 +3619,14 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
     };
   }
 
+  let calendarRepair = null;
+  let sceneRolloverRepair = null;
   let narrativeFloor = null;
   if (!/^B_/.test(String(p.mode || ''))) {
+    calendarRepair = time.enforceNarrativeCalendarTarget(finalText, p.narrativeCalendarTarget || null);
+    finalText = calendarRepair.content;
+    sceneRolloverRepair = time.repairNarrativeYearRolloverSequence(finalText, p.narrativeCalendarTarget || null);
+    finalText = sceneRolloverRepair.content;
     narrativeFloor = time.enforceNarrativeCurrentTimeFloor(
       finalText,
       p.narrativeTimestampPrevious || state.narrativeTimestamp || null,
@@ -3442,6 +3657,17 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
       mode: p.mode || null,
       guardActive: !!p.narrativeClockGuard,
       trigger: p.narrativeProgressionReason || 'none',
+      calendarEligible: !!p.narrativeCalendarTarget?.eligible,
+      calendarReason: p.narrativeCalendarTarget?.reason || 'INELIGIBLE',
+      calendarPreviousDate: p.narrativeCalendarTarget?.previousDate || null,
+      calendarTargetDate: p.narrativeCalendarTarget?.targetDate || null,
+      calendarWeekday: p.narrativeCalendarTarget?.weekday || null,
+      calendarObservedTimestamp: calendarRepair?.observedTimestamp || null,
+      calendarOutputTimestamp: calendarRepair?.outputTimestamp || null,
+      calendarFrameChanged: !!calendarRepair?.changed,
+      calendarDateChanged: !!calendarRepair?.dateChanged,
+      calendarWeekdayChanged: !!calendarRepair?.weekdayChanged,
+      sceneRolloverCount: Number(sceneRolloverRepair?.count || 0),
       previousAnchor: previousNarrative,
       observedTimestamp: narrativeFloor?.observed || narrativeCommit.frameTimestamp || narrativeCommit.timestamp || null,
       frameTimestamp: narrativeCommit.frameTimestamp || narrativeFloor?.observed || narrativeCommit.timestamp || null,
@@ -6015,7 +6241,10 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
       `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
       `RAW frame continuity: ${frameProbe.label}`,
       `RAW frame regression: ${frameProbe.regression}`,
-      `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'CLAMPED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
+      `Continuity summary: ${probeFresh ? ((frameGuard?.applied || narrative?.calendarFrameChanged || Number(narrative?.sceneRolloverCount || 0) > 0 || narrative?.floorApplied) ? 'REPAIRED' : 'PASS') : 'n/a'}`,
+      `Calendar transition: ${probeFresh && narrative ? (narrative.calendarEligible ? `${narrative.calendarReason || 'RESOLVED'} · previous ${narrative.calendarPreviousDate || 'n/a'} · target ${narrative.calendarTargetDate || 'n/a'} · weekday ${narrative.calendarWeekday || 'n/a'}${narrative.calendarFrameChanged ? ' · FRAME_REPAIRED' : ''}${Number(narrative.sceneRolloverCount || 0) > 0 ? ` · scene-year repairs ${Number(narrative.sceneRolloverCount || 0)}` : ''}` : `INELIGIBLE · ${narrative.calendarReason || 'none'}`) : 'n/a'}`,
+      `Frame sequence: ${frameGuard ? `${frameGuard.sequenceStatus || (frameGuard.applied ? 'REPAIRED' : 'PASS')} · volume ${frameGuard.observed?.volume ?? 'n/a'}→${frameGuard.output?.volume ?? 'n/a'} expected ${frameGuard.expected?.volume ?? 'n/a'} · chapter ${frameGuard.observed?.chapter ?? 'n/a'}→${frameGuard.output?.chapter ?? 'n/a'} expected ${frameGuard.expected?.chapter ?? 'n/a'} · Chatindex ${frameGuard.observed?.chatindex ?? 'n/a'}→${frameGuard.output?.chatindex ?? 'n/a'} expected ${frameGuard.expected?.chatindex ?? 'n/a'}` : 'n/a'}`,
+      `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'REPAIRED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
       `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
       `Evidence mode: ${evidenceFence?.mode || 'n/a'}`,

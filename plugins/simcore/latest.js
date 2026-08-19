@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.45
+//@version 0.63.46
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.46 Prompt Prefix Stabilization:
+// - Adds a conservative request-only History Materialization Gate for the repeatedly verified compact historical assistant signature `assistant/text 21:4a852496`; the gate runs only on active SimCore model requests and never writes visible chat or persistent storage
+// - Aligns the final request conversation suffix to authoritative raw chat from the current user backward, requires exact user-anchor agreement plus at least one exact full-assistant calibration, and replaces compact slots only when every bounded candidate maps deterministically to a substantial raw `# 응답` assistant body; any ambiguity fails open with the original request untouched
+// - Stabilizes all verified compact slots in the aligned suffix in one pass (hard cap 12) so the rolling CHAT_HISTORY frontier can stop advancing one assistant at a time; no semantic similarity, provider-cache claim, new network/storage call, timer, or second request-history scan is added
+// - Adds explicit materialization telemetry (APPLIED/NOOP/SKIPPED reason, slot range, anchor/calibration counts, added chars, cost, persistent mutation NONE) while retaining v0.63.45 attribution probes for regression comparison
+// - Repair scope only: request history projection may change under the strict gate; TAIL_AFTER_CURRENT_USER, Broadcast End Authority, Frame/Continuity/Evidence/Lineage/Handoff/Recurrence/Structure, compiler tiers, Recovery, Deferred Mirror acceptance/scheduling, persistent state schema and provider-cache policy remain frozen
 //
 // v0.63.45 History Rebuild Frontier Attribution:
 // - Adds a bounded PRE_RECONCILE / POST_RECONCILE / FINAL request-window comparison around the prior CHAT_HISTORY break frontier, reusing runtime-topology messageSignature and touching at most six candidate request slots per phase; no second full-history scan or raw-body retention is added
@@ -459,7 +466,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.45';
+const SIMCORE_RUNTIME_VERSION = '0.63.46';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -5572,6 +5579,12 @@ function historyMutation(probe) {
   if (probe.stable || probe.firstChangeIndex == null) return 'NONE';
   return `@${Number(probe.firstChangeIndex)} · ${probe.mutationShape || 'UNKNOWN'} · prev ${probe.previousBreakSignature || 'END'} → current ${probe.currentBreakSignature || 'END'}`;
 }
+function historyStabilization(probe) {
+  if (!probe) return 'n/a';
+  const range = probe.firstIndex == null ? 'n/a' : (probe.firstIndex === probe.lastIndex ? `@${Number(probe.firstIndex)}` : `@${Number(probe.firstIndex)}..@${Number(probe.lastIndex)}`);
+  const delta = Number(probe.addedChars || 0);
+  return `${probe.status || 'n/a'} · slots ${Number(probe.applied || 0)}/${Number(probe.candidates || 0)} · range ${range} · source ${probe.source || 'n/a'} · anchors ${Number(probe.userAnchors || 0)} · calibrators ${Number(probe.assistantCalibrators || 0)} · Δchars ${delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US')} · persistent ${probe.persistentMutation || 'NONE'} · cost ${Number(probe.costMs || 0).toFixed(1)} ms`;
+}
 function representationCorrelation(probe) {
   if (!probe) return 'n/a';
   return `${probe.matchSummary || 'NONE'} · ledger ${Number(probe.ledgerSize || 0)}`;
@@ -5652,7 +5665,7 @@ function representation(probe) {
   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
-module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
+module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -5698,7 +5711,13 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
   let lastReconcileFrontierProbe = null;
   let lastRepeatedBreakProbe = null;
   let lastFrontierMovementProbe = null;
+  let lastHistoryStabilizationProbe = null;
   const repeatedBreakLedger = [];
+  const KNOWN_COMPACT_ASSISTANT_CHARS = 21;
+  const KNOWN_COMPACT_ASSISTANT_HASH = '4a852496';
+  const HISTORY_STABILIZATION_MAX_SLOTS = 12;
+  const HISTORY_STABILIZATION_MIN_RAW_CHARS = 128;
+  const HISTORY_STABILIZATION_MAX_RAW_CHARS = 100000;
   const RECONCILE_WINDOW_BEHIND = 1;
   const RECONCILE_WINDOW_AHEAD = 4;
   const REPEATED_BREAK_LEDGER_LIMIT = 16;
@@ -5858,6 +5877,146 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
     row.count += 1;
     row.latestIndex = index;
     return Object.freeze({ status: 'TRACKED', signature: row.signature, count: row.count, firstIndex: row.firstIndex, latestIndex: row.latestIndex, ledgerSize: repeatedBreakLedger.length });
+  }
+
+  function stabilizationConversationRole(message) {
+    const role = String(message?.role || '').toLowerCase();
+    if (role === 'user') return 'user';
+    if (role === 'assistant' || role === 'char') return 'assistant';
+    return null;
+  }
+
+  function stabilizationComparableText(message) {
+    return String(textMessageContent(message) || '').replace(/\r\n/g, '\n').trim();
+  }
+
+  function isKnownCompactAssistant(message) {
+    const sig = runtimeTopologyRules.messageSignature(message);
+    return sig?.role === 'assistant'
+      && sig?.kind === 'text'
+      && Number(sig?.chars) === KNOWN_COMPACT_ASSISTANT_CHARS
+      && String(sig?.hash || '') === KNOWN_COMPACT_ASSISTANT_HASH;
+  }
+
+  function stabilizationResult(status, detail = null, started = null) {
+    const d = detail && typeof detail === 'object' ? detail : {};
+    return Object.freeze({
+      status: String(status || 'n/a'),
+      source: String(d.source || 'HOST_RAW_ALIGNED_SUFFIX'),
+      candidates: Number(d.candidates || 0),
+      applied: Number(d.applied || 0),
+      firstIndex: Number.isInteger(Number(d.firstIndex)) ? Number(d.firstIndex) : null,
+      lastIndex: Number.isInteger(Number(d.lastIndex)) ? Number(d.lastIndex) : null,
+      userAnchors: Number(d.userAnchors || 0),
+      assistantCalibrators: Number(d.assistantCalibrators || 0),
+      addedChars: Number(d.addedChars || 0),
+      persistentMutation: 'NONE',
+      costMs: started == null ? Number(d.costMs || 0) : perfMs(started),
+    });
+  }
+
+  function stabilizeHistoryProjection(messages, rawMessages, sendIndex) {
+    const started = perfNow();
+    const request = Array.isArray(messages) ? messages : [];
+    const raw = Array.isArray(rawMessages) ? rawMessages : [];
+    const rawUserIndex = Number(sendIndex);
+    if (!request.length || !raw.length || !Number.isInteger(rawUserIndex) || rawUserIndex < 0 || rawUserIndex >= raw.length) {
+      return stabilizationResult('SKIPPED_NO_CONTEXT', null, started);
+    }
+
+    let currentRequestUser = -1;
+    for (let i = request.length - 1; i >= 0; i -= 1) {
+      if (stabilizationConversationRole(request[i]) === 'user') { currentRequestUser = i; break; }
+    }
+    if (currentRequestUser < 0 || stabilizationConversationRole(raw[rawUserIndex]) !== 'user') {
+      return stabilizationResult('SKIPPED_CURRENT_USER', null, started);
+    }
+    if (stabilizationComparableText(request[currentRequestUser]) !== stabilizationComparableText(raw[rawUserIndex])) {
+      return stabilizationResult('SKIPPED_CURRENT_USER_MISMATCH', null, started);
+    }
+
+    const stubIndices = [];
+    for (let i = 0; i < currentRequestUser; i += 1) {
+      if (isKnownCompactAssistant(request[i])) stubIndices.push(i);
+    }
+    if (!stubIndices.length) return stabilizationResult('NOOP_NO_KNOWN_COMPACT', { userAnchors: 1 }, started);
+    if (stubIndices.length > HISTORY_STABILIZATION_MAX_SLOTS) {
+      return stabilizationResult('SKIPPED_TOO_MANY_COMPACT', { candidates: stubIndices.length, userAnchors: 1 }, started);
+    }
+
+    const wanted = new Set(stubIndices);
+    const mapped = new Map();
+    const oldestWanted = stubIndices[0];
+    let requestIndex = currentRequestUser;
+    let rawIndex = rawUserIndex;
+    let userAnchors = 0;
+    let assistantCalibrators = 0;
+    let guard = 0;
+
+    while (requestIndex >= oldestWanted && rawIndex >= 0 && guard < 256) {
+      while (requestIndex >= oldestWanted && !stabilizationConversationRole(request[requestIndex])) requestIndex -= 1;
+      while (rawIndex >= 0 && !stabilizationConversationRole(raw[rawIndex])) rawIndex -= 1;
+      if (requestIndex < oldestWanted || rawIndex < 0) break;
+      const requestRole = stabilizationConversationRole(request[requestIndex]);
+      const rawRole = stabilizationConversationRole(raw[rawIndex]);
+      if (requestRole !== rawRole) {
+        return stabilizationResult('SKIPPED_ROLE_ALIGNMENT', { candidates: stubIndices.length, userAnchors, assistantCalibrators }, started);
+      }
+      if (requestRole === 'user') {
+        if (stabilizationComparableText(request[requestIndex]) !== stabilizationComparableText(raw[rawIndex])) {
+          return stabilizationResult('SKIPPED_USER_ANCHOR_MISMATCH', { candidates: stubIndices.length, userAnchors, assistantCalibrators }, started);
+        }
+        userAnchors += 1;
+      } else if (wanted.has(requestIndex)) {
+        mapped.set(requestIndex, rawIndex);
+      } else {
+        const requestText = stabilizationComparableText(request[requestIndex]);
+        const rawText = stabilizationComparableText(raw[rawIndex]);
+        if (requestText.length >= HISTORY_STABILIZATION_MIN_RAW_CHARS && requestText === rawText) assistantCalibrators += 1;
+      }
+      requestIndex -= 1;
+      rawIndex -= 1;
+      guard += 1;
+    }
+
+    if (mapped.size !== stubIndices.length) {
+      return stabilizationResult('SKIPPED_INCOMPLETE_ALIGNMENT', { candidates: stubIndices.length, userAnchors, assistantCalibrators }, started);
+    }
+    if (userAnchors < 2 || assistantCalibrators < 1) {
+      return stabilizationResult('SKIPPED_UNVERIFIED_REPRESENTATION', { candidates: stubIndices.length, userAnchors, assistantCalibrators }, started);
+    }
+
+    const replacements = [];
+    for (const requestSlot of stubIndices) {
+      const rawSlot = mapped.get(requestSlot);
+      const rawText = String(textMessageContent(raw[rawSlot]) || '');
+      const normalizedRaw = rawText.replace(/\r\n/g, '\n').trim();
+      if (normalizedRaw.length < HISTORY_STABILIZATION_MIN_RAW_CHARS
+          || normalizedRaw.length > HISTORY_STABILIZATION_MAX_RAW_CHARS
+          || !normalizedRaw.includes('# 응답')) {
+        return stabilizationResult('SKIPPED_UNSAFE_RAW_CANDIDATE', { candidates: stubIndices.length, userAnchors, assistantCalibrators }, started);
+      }
+      const slot = request[requestSlot];
+      if (!slot || typeof slot.content !== 'string') {
+        return stabilizationResult('SKIPPED_NONSTRING_SLOT', { candidates: stubIndices.length, userAnchors, assistantCalibrators }, started);
+      }
+      replacements.push({ requestSlot, rawText, beforeChars: String(slot.content || '').length });
+    }
+
+    let addedChars = 0;
+    for (const replacement of replacements) {
+      request[replacement.requestSlot].content = replacement.rawText;
+      addedChars += replacement.rawText.length - replacement.beforeChars;
+    }
+    return stabilizationResult('APPLIED', {
+      candidates: stubIndices.length,
+      applied: replacements.length,
+      firstIndex: stubIndices[0],
+      lastIndex: stubIndices[stubIndices.length - 1],
+      userAnchors,
+      assistantCalibrators,
+      addedChars,
+    }, started);
   }
 
   function correlateHistoryMutation(topologyProbe, ledger) {
@@ -6033,6 +6192,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
 
     const postOnSendStart = perfNow();
     if (result.active && result.promptBlock) {
+      lastHistoryStabilizationProbe = stabilizeHistoryProjection(messages, chat?.message || [], sendIndex);
       const runtimeBudgetText = String(result.promptBlock || '');
       const runtimeBudgetLines = runtimeBudgetText ? runtimeBudgetText.split('\n') : [];
       const runtimeBudgetReactionLine = runtimeBudgetLines.find((line) => line.startsWith('reaction_max=')) || '';
@@ -6193,6 +6353,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       lastReconcileFrontierProbe = null;
       lastRepeatedBreakProbe = null;
       lastFrontierMovementProbe = null;
+      lastHistoryStabilizationProbe = null;
       repeatedBreakLedger.length = 0;
       lastCacheTrajectoryProbe = null;
       lastCacheCandidateCostMs = null;
@@ -6736,6 +6897,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       `Cache integrity: ${probeFresh ? runtimeProbeRules.cacheIntegrity(topologyProbe) : 'n/a'}`,
       `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
       `History mutation: ${probeFresh ? runtimeProbeRules.historyMutation(topologyProbe) : 'n/a'}`,
+      `History stabilization: ${probeFresh ? runtimeProbeRules.historyStabilization(lastHistoryStabilizationProbe) : 'n/a'}`,
       `Reconcile frontier: ${probeFresh ? runtimeProbeRules.reconcileFrontier(lastReconcileFrontierProbe) : 'n/a'}`,
       `Frontier movement: ${probeFresh ? runtimeProbeRules.frontierMovement(lastFrontierMovementProbe) : 'n/a'}`,
       `Repeated break: ${probeFresh ? runtimeProbeRules.repeatedBreak(lastRepeatedBreakProbe) : 'n/a'}`,
@@ -7158,6 +7320,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     coreLocationKey = null;
     lastRuntimePromptCacheProbe = null;
     lastRequestTopologyProbe = null;
+    lastHistoryStabilizationProbe = null;
     lastCacheTrajectoryProbe = null;
     lastCacheCandidateCostMs = null;
     runtimePromptCache.reset();

@@ -101,3 +101,10 @@ jobs:
       - name: Confirm idempotent current state
         if: steps.state.outputs.mode == 'already-current'
         run: echo 'SimCore v0.63.46 is already the exact current production release.'
+
+  memory-sync:
+    needs: release
+    if: github.event.pull_request.title == 'SimCore v0.63.46 release command'
+    uses: ./.github/workflows/simcore-release-state-sync.yml
+    with:
+      force_sync: true

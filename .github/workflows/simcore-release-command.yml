@@ -22,7 +22,24 @@ jobs:
           ref: release-simcore
           fetch-depth: 0
 
+      - name: Resolve release state
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' plugins/simcore/latest.js | head -n 1)"
+          if [[ "$HEAD_SHA" == "b8d7a00f7f97c4ff08a414c4e7664a98907ba33d" && "$VERSION" == "0.63.46" ]]; then
+            echo 'mode=already-current' >> "$GITHUB_OUTPUT"
+          elif [[ "$HEAD_SHA" == "eeec4a58417d32acd8161844e8c2d071e17e212f" && "$VERSION" == "0.63.45" ]]; then
+            echo 'mode=patch' >> "$GITHUB_OUTPUT"
+          else
+            echo "unexpected release state: head=$HEAD_SHA version=$VERSION" >&2
+            exit 1
+          fi
+
       - name: Load release patch from main
+        if: steps.state.outputs.mode == 'patch'
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
@@ -47,15 +64,17 @@ jobs:
           if s.count(old_inactive_anchor) != 1 or s.count(old_inactive_new) != 1:
               raise SystemExit(f'release patch inactive rewrite anchors missing: old={s.count(old_inactive_anchor)} new={s.count(old_inactive_new)}')
           s = s.replace(old_inactive_anchor, new_inactive_anchor, 1).replace(old_inactive_new, new_inactive_new, 1)
-
           p.write_text(s, encoding='utf-8')
           PY
 
-      - name: Patch and validate
+      - name: Patch production source
+        if: steps.state.outputs.mode == 'patch'
+        run: python3 /tmp/simcore-06346-release.py
+
+      - name: Validate v0.63.46 production source
+        shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "eeec4a58417d32acd8161844e8c2d071e17e212f"
-          python3 /tmp/simcore-06346-release.py
           node --check plugins/simcore/latest.js
           node --check plugins/simcore/install.js
           cmp -s plugins/simcore/latest.js plugins/simcore/install.js
@@ -69,6 +88,8 @@ jobs:
           git diff --check
 
       - name: Push release
+        if: steps.state.outputs.mode == 'patch'
+        shell: bash
         run: |
           set -euo pipefail
           git config user.name 'hanmiyoo10-alt'
@@ -76,3 +97,7 @@ jobs:
           git add plugins/simcore/latest.js plugins/simcore/install.js
           git commit -m 'release: SimCore v0.63.46 Prompt Prefix Stabilization'
           git push origin HEAD:release-simcore
+
+      - name: Confirm idempotent current state
+        if: steps.state.outputs.mode == 'already-current'
+        run: echo 'SimCore v0.63.46 is already the exact current production release.'

@@ -51,7 +51,7 @@ jobs:
                   "assert.ok(guidelines.includes('Runtime Recovery Fidelity'));",
               ),
               (
-                  "assert.ok(guidelines.includes('Next evidence-first candidate after 5.55 device validation: `Snapshot Performance Attribution`'));",
+                  "assert.ok(guidelines.includes('Next evidence-first candidate after 5.54 device validation: `Snapshot Performance Attribution`'));",
                   "assert.ok(guidelines.includes('cumulative local persist history remained visible while `active 0` allowed `READY`'));",
               ),
           ]

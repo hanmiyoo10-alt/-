@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.54
+//@version 3.0.0-alpha.5.55
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.54';
+  const VERSION = '3.0.0-alpha.5.55';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.8';
+  const REQUIRED_BRIDGE_VERSION = '1.6.9';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -355,6 +355,7 @@
     const cli = diagnostics?.cli && typeof diagnostics.cli === 'object' ? diagnostics.cli : null;
     const circuits = diagnostics?.circuits && typeof diagnostics.circuits === 'object' ? diagnostics.circuits : null;
     const circuitStats = diagnostics?.circuitStats && typeof diagnostics.circuitStats === 'object' ? diagnostics.circuitStats : null;
+    const snapshotPerformance = diagnostics?.snapshotPerformance && typeof diagnostics.snapshotPerformance === 'object' ? diagnostics.snapshotPerformance : null;
     const moduleError = row => {
       const status = String(row?.status || '').toLowerCase();
       return ['error','open','partial'].includes(status) || Boolean(row?.errorCode) || Boolean(row?.errorType) || Boolean(row?.errorMessage);
@@ -379,7 +380,8 @@
       cliActive: numeric(cli?.active),
       cliQueued: numeric(cli?.queued),
       openCircuits: circuits ? Object.values(circuits).filter(row => String(row?.state || '').toLowerCase() === 'open').length : null,
-      circuitRecoveries: numeric(circuitStats?.recoveries)
+      circuitRecoveries: numeric(circuitStats?.recoveries),
+      snapshotPerformance
     };
   }
 
@@ -2409,6 +2411,31 @@ async function importLegacyTodayBaselines() {
     return rows.length ? rows.map(([name,value]) => `${name} ${roundPerfMs(value)}ms`).join(' · ') : '—';
   }
 
+  function snapshotPerformanceMs(value) {
+    return num(value) ? `${Math.round(Number(value))}ms` : '—';
+  }
+
+  function bridgeSnapshotJobsText(performance) {
+    const tasks = performance?.tasks && typeof performance.tasks === 'object' ? performance.tasks : null;
+    if (!tasks) return '—';
+    const names = ['organizations','devpassStatus','usageScopes','analyticsScopes','runway'];
+    const rows = names.filter(name => num(tasks[name])).map(name => `${name} ${snapshotPerformanceMs(tasks[name])}`);
+    return rows.join(' · ') || '—';
+  }
+
+  function bridgeSnapshotCliTimingText(performance) {
+    const cli = performance?.cli && typeof performance.cli === 'object' ? performance.cli : null;
+    if (!cli) return '—';
+    const runs = Number(cli.runs || 0);
+    const queued = Number(cli.queuedRuns || 0);
+    return `runs ${runs} · queued ${queued} · queue avg ${snapshotPerformanceMs(cli.queueWaitAvgMs)} · max ${snapshotPerformanceMs(cli.queueWaitMaxMs)} · exec avg ${snapshotPerformanceMs(cli.executionAvgMs)} · max ${snapshotPerformanceMs(cli.executionMaxMs)} · slowest ${cli.slowestLabel || '—'} ${snapshotPerformanceMs(cli.slowestTotalMs)}`;
+  }
+
+  function bridgeSnapshotCounterText(value, keys) {
+    if (!value || typeof value !== 'object') return '—';
+    return keys.map(([key,label]) => `${label} ${Number(value[key] || 0)}`).join(' · ');
+  }
+
   function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {
     const blockers = [];
     const lifecycle = bridgeLifecycleMode();
@@ -2485,6 +2512,11 @@ async function importLegacyTodayBaselines() {
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
       `Bridge module freshness: ${bridgeModuleFreshnessText(bridgeDiag.moduleDetails)}`,
       `Bridge module duration: ${bridgeModuleDurationText(bridgeDiag.moduleDetails)}`,
+      `Bridge snapshot attribution: ${bridgeDiag.snapshotPerformance ? `total ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.totalMs)} · critical ${bridgeDiag.snapshotPerformance.criticalPath || '—'} ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.criticalPathMs)} · slowest ${bridgeDiag.snapshotPerformance.slowestTask || '—'} ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.slowestTaskMs)}` : '—'}`,
+      `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge snapshot cache: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.cache, [['hits','hit'],['misses','miss'],['joins','join'],['loads','load'],['errors','errors'],['staleFallbacks','stale fallback']])}`,
+      `Bridge snapshot circuit: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.circuits, [['opens','opened'],['blocked','blocked'],['recoveries','recoveries']])}`,
       `Bridge partial: modules ${bridgeDiag.partialModules ?? '—'} · usage ${countErrorMap(d.usageScopes?.errors)} · analytics ${countErrorMap(d.analyticsScopes?.errors)}`,
       `Bridge cache: hit ${bridgeDiag.cacheHitRate === null ? '—' : `${bridgeDiag.cacheHitRate.toFixed(0)}%`} · entries ${bridgeDiag.cacheEntries ?? '—'} · in-flight ${bridgeDiag.inFlight ?? '—'} · stale fallback ${bridgeDiag.staleFallbacks ?? '—'}`,
       `Bridge CLI/circuit: active ${bridgeDiag.cliActive ?? '—'} · queued ${bridgeDiag.cliQueued ?? '—'} · open ${bridgeDiag.openCircuits ?? '—'} · recoveries ${bridgeDiag.circuitRecoveries ?? '—'}`,

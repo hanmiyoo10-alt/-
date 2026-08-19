@@ -8,6 +8,7 @@
     const cli = diagnostics?.cli && typeof diagnostics.cli === 'object' ? diagnostics.cli : null;
     const circuits = diagnostics?.circuits && typeof diagnostics.circuits === 'object' ? diagnostics.circuits : null;
     const circuitStats = diagnostics?.circuitStats && typeof diagnostics.circuitStats === 'object' ? diagnostics.circuitStats : null;
+    const snapshotPerformance = diagnostics?.snapshotPerformance && typeof diagnostics.snapshotPerformance === 'object' ? diagnostics.snapshotPerformance : null;
     const moduleError = row => {
       const status = String(row?.status || '').toLowerCase();
       return ['error','open','partial'].includes(status) || Boolean(row?.errorCode) || Boolean(row?.errorType) || Boolean(row?.errorMessage);
@@ -32,6 +33,7 @@
       cliActive: numeric(cli?.active),
       cliQueued: numeric(cli?.queued),
       openCircuits: circuits ? Object.values(circuits).filter(row => String(row?.state || '').toLowerCase() === 'open').length : null,
-      circuitRecoveries: numeric(circuitStats?.recoveries)
+      circuitRecoveries: numeric(circuitStats?.recoveries),
+      snapshotPerformance
     };
   }

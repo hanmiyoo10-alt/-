@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.54`
-- Bridge Engine: `1.6.8`
+- Product: `3.0.0-alpha.5.55`
+- Bridge Engine: `1.6.9`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,30 +24,30 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.53 — Cache Provenance Diagnostics`.
+Last verified real-device baseline: `3.0.0-alpha.5.54 — Runtime Recovery Fidelity`.
 
-Verified from the 5.53 device diagnostic:
+Verified from the 5.54 device diagnostic:
 
-- Bridge Engine `1.6.8` and Bridge Manager `1.2.6` are healthy and compatible.
-- Cache Read remains available through the independent `provider-usage-v3` observer.
-- The observed cache rows had Read values but no Write values; Write provenance remained `unknown`, not fabricated zero or `not-reported`.
-- `write unknown-on-cache` and `read/no-write-value` expose that distinction correctly.
-- A recovered network/persist incident left cumulative local errors even though Bridge health, modules, failures and current runtime state had recovered.
-- Snapshot/data acquisition remains the dominant measured refresh cost; the sample diagnostic showed roughly 21 seconds in `snapshot` while render time stayed small.
+- Stable Readiness recovered correctly: cumulative local persist history remained visible while `active 0` allowed `READY`.
+- Bridge Engine `1.6.8` and Bridge Manager `1.2.6` remained healthy before this attribution release.
+- Cache provenance remained unchanged: observed cache rows had provider Read values while Write stayed unknown rather than fabricated.
+- The sampled visibility refresh took about 47.3s, including about 40.5s in plugin `snapshot`; a timer refresh sample reached about 87s.
+- Bridge cumulative telemetry showed stale fallbacks and circuit recoveries during the session, but the 5.54 diagnostics could not attribute those events to a specific snapshot or CLI wait.
+- UI render remained comparatively small, so the next evidence target is the Bridge snapshot/data path rather than render behavior.
 
-Current release implementation: `3.0.0-alpha.5.54 — Runtime Recovery Fidelity`.
+Current release implementation: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`.
 
-5.54 release contract:
+5.55 release contract:
 
-- Preserve cumulative local runtime error history.
-- Track persist/render errors as active until the same local operation succeeds.
-- Record recovery without erasing the historical failure counters.
-- Stable Readiness blocks only on active local runtime errors, while recovered history remains visible.
-- Cache provenance, Bridge Engine `1.6.8`, Bridge Manager `1.2.6`, and snapshot acquisition remain unchanged.
+- Bridge Engine becomes `1.6.9`; Bridge Manager remains `1.2.6`.
+- Measure existing work only: no new network request, CLI command, cache scan, or polling loop is added.
+- Attribute top-level snapshot waits for organizations, DevPass status, usage scopes, analytics scopes, and runway.
+- Populate existing module `durationMs` telemetry so `Bridge module duration` is no longer structurally empty when a measured task exists.
+- Separate per-snapshot CLI queue wait from CLI execution time using sanitized operation-family labels only; never persist raw arguments, org IDs, tokens, headers, or command output.
+- Report per-snapshot cache/circuit deltas while preserving existing cumulative diagnostics.
+- Keep CLI concurrency, cache TTLs, command timeout, snapshot payload semantics, cache parser `provider-usage-v3`, recovery fidelity, and updater behavior unchanged.
 
-Next evidence-first candidate after 5.54 device validation: `Snapshot Performance Attribution` — instrument the existing snapshot path before changing its behavior.
-
-Following candidate after a 5.54 device diagnostic: `Snapshot Performance`, beginning with attribution inside the snapshot phase before repair.
+Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`, with the repair target chosen only from 5.55 evidence.
 
 ## 0. Source of truth
 

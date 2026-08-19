@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "product": "SimCore",
+  "production_version": "0.63.45",
+  "release_name": "History Rebuild Frontier Attribution",
+  "release_branch": "release-simcore",
+  "release_commit": "eeec4a58417d32acd8161844e8c2d071e17e212f",
+  "production_files": {
+    "latest": "plugins/simcore/latest.js",
+    "install": "plugins/simcore/install.js",
+    "expected_identical": true
+  },
+  "guideline": "docs/SIMCORE_GUIDELINES.md",
+  "development_memory": "docs/CURRENT_DEVELOPMENT.md",
+  "current_priority": "PROMPT_PREFIX_STABILITY",
+  "provider_cache_status": "UNVERIFIED",
+  "source_of_truth": {
+    "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
+    "release_identity": "product-manifest.json",
+    "development_principles": "docs/SIMCORE_GUIDELINES.md",
+    "current_investigation": "docs/CURRENT_DEVELOPMENT.md"
+  },
+  "managed_by": ".github/workflows/simcore-release-state-sync.yml"
+}

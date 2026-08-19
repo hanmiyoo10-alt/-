@@ -1,0 +1,54 @@
+name: Usage Dashboard Project Memory
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/usage-dashboard/runtime/product-manifest.json'
+      - 'plugins/usage-dashboard/tools/sync_project_guidelines.py'
+      - '.github/workflows/usage-dashboard-project-memory.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/USAGE_DASHBOARD_GUIDELINES.md'
+      - 'plugins/usage-dashboard/runtime/product-manifest.json'
+      - 'plugins/usage-dashboard/tools/sync_project_guidelines.py'
+      - 'plugins/usage-dashboard/tests/p14-project-guidelines-memory.cjs'
+      - '.github/workflows/usage-dashboard-project-memory.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  project-memory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Synchronize release-state memory
+        if: github.event_name == 'push'
+        run: python3 plugins/usage-dashboard/tools/sync_project_guidelines.py
+
+      - name: Verify release-state memory
+        run: |
+          python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
+          node plugins/usage-dashboard/tests/p14-project-guidelines-memory.cjs
+          git diff --check
+
+      - name: Commit synchronized project memory
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/USAGE_DASHBOARD_GUIDELINES.md
+          if git diff --cached --quiet; then
+            echo 'Usage Dashboard project memory already synchronized'
+            exit 0
+          fi
+          git commit -m 'docs: sync Usage Dashboard production memory'
+          git pull --rebase origin main
+          git push origin HEAD:main

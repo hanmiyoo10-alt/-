@@ -808,61 +808,36 @@ SimCore v0.63.46 — Prompt Prefix Stabilization
 
 Do not treat this number as permanently current; update this section when production advances.
 
-## 45. Current Primary Optimization Goal
+## 45. Current Operational Source
+
+Release-specific investigation state is intentionally **not duplicated** in this guideline.
+
+Use:
+
+```text
+product-manifest.json
+→ machine-readable current release identity / current priority
+
+docs/CURRENT_DEVELOPMENT.md
+→ VERIFIED / SUPPORTED HYPOTHESIS / UNKNOWN
+→ current live validation gate
+→ current repair/measurement target
+→ next candidate
+```
+
+This separation prevents durable development principles from becoming stale when a mini release advances.
+
+## 46. Current Cache Strategy
+
+The durable strategy remains:
 
 ```text
 PROMPT PREFIX STABILITY
 ```
 
-Current investigation focuses especially on:
+Focus first on the earliest request-prefix break and preserve the distinction between local prefix evidence and actual gateway/provider cache evidence.
 
-```text
-PRE_SIMCORE
-CHAT_HISTORY
-```
-
-representation mutation and early prefix breaks.
-
-## 46. Current Investigation Chain
-
-```text
-History mutation
-↓
-Representation correlation
-↓
-History rebuild frontier attribution  ← CURRENT (v0.63.45)
-↓
-Prompt prefix stabilization
-↓
-Gateway/provider cache verification
-```
-
-### Current v0.63.45 Live Gate
-
-The current diagnostic release is intended to resolve one causal question before any repair:
-
-> Did the current CHAT_HISTORY first-break representation already exist before manual-edit reconcile, or did it change during/later in SimCore request preparation?
-
-Recommended natural-turn validation sequence:
-
-```text
-B_START
-→ B_CONTINUE
-→ B_END
-→ C
-```
-
-Do not reload or regenerate between these turns when collecting the primary comparison set.
-
-Decisive attribution labels:
-
-```text
-PREEXISTING_REQUEST_MUTATION · HIGH
-RECONCILE_MUTATED_REQUEST · HIGH
-POST_RECONCILE_REQUEST_MUTATION · HIGH
-```
-
-`OUT_OF_WINDOW`, `MULTISTAGE_REQUEST_MUTATION`, or lower-confidence results require more evidence and are not repair authorization. Provider cache remains `UNVERIFIED` without gateway/provider telemetry.
+The exact current diagnostic or repair stage must be read from `docs/CURRENT_DEVELOPMENT.md`, not inferred from an older version-specific section in this file.
 
 ## 47. Current Hard Freeze
 

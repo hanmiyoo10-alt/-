@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.43
+//@version 0.63.44
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.44 History Mutation Attribution:
+// - Extends existing request-topology telemetry with compact previous/current first-break signatures, bounded mutation-shape classification and one output-compatible fingerprint of the current break message; no request bodies are retained and no second history scan is added
+// - Adds a bounded memory-only ledger of the 16 most recent assistant output provenance fingerprints already produced by Deferred Mirror, then correlates a CHAT_HISTORY prefix break against canonical/host-raw/fresh representations without claiming provider-cache behavior
+// - Reports FRESH_MISMATCH_HISTORY_MATCH only when the current historical break exactly matches a prior divergent FRESH_CHAT fingerprint; equivalent, ambiguous and no-match cases remain explicit and fail-open
+// - Diagnostics only: prompt bytes/order, TAIL_AFTER_CURRENT_USER placement, Broadcast End Authority, compiler tiers, Continuity/Evidence, Deferred Mirror acceptance/scheduling, storage/API/network/timer/provider-cache policy remain frozen
 //
 // v0.63.43 Broadcast End Authority & Runtime Identity Precision:
 // - Makes episode/broadcast completion an explicit lifecycle authority: an open broadcast denies end narration across broadcast prose, COMMUNITY and Knowledge until the current lifecycle is B_END
@@ -447,7 +453,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.43';
+const SIMCORE_RUNTIME_VERSION = '0.63.44';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4858,6 +4864,27 @@ function exactHash(text) {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+function outputCompatibleFingerprint(message) {
+  const content = message?.content;
+  let text = '';
+  if (typeof content === 'string') {
+    text = content;
+  } else {
+    try { text = JSON.stringify(content == null ? '' : content); }
+    catch (_) { text = String(content == null ? '' : content); }
+  }
+  text = String(text || '')
+    .replace(/⟦simcore:\d+⟧/g, '')
+    .replace(/\r\n/g, '\n')
+    .trimEnd();
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `${text.length}:${(h >>> 0).toString(16)}`;
+}
+
 function messageSignature(message) {
   const role = String(message?.role || '');
   const content = message?.content;
@@ -4875,6 +4902,22 @@ function messageSignature(message) {
 
 function sameSignature(a, b) {
   return !!a && !!b && a.role === b.role && a.kind === b.kind && a.chars === b.chars && a.hash === b.hash;
+}
+
+function compactSignature(sig) {
+  return sig ? `${sig.role || '?'}/${sig.kind || '?'} ${Number(sig.chars || 0)}:${String(sig.hash || 'n/a')}` : 'END';
+}
+
+function mutationShape(priorSignatures, currentSignatures, index) {
+  if (!Number.isInteger(index) || index < 0) return 'NONE';
+  const previous = priorSignatures?.[index] || null;
+  const current = currentSignatures?.[index] || null;
+  if (!previous && current) return 'LIKELY_INSERTION';
+  if (previous && !current) return 'LIKELY_REMOVAL';
+  if (previous && current && sameSignature(priorSignatures?.[index + 1], current)) return 'LIKELY_REMOVAL';
+  if (previous && current && sameSignature(previous, currentSignatures?.[index + 1])) return 'LIKELY_INSERTION';
+  if (previous && current && (previous.role !== current.role || previous.kind !== current.kind)) return 'ROLE_OR_KIND_CHANGED';
+  return 'SAME_SLOT_CHANGED';
 }
 
 function relativePosition(index, firstChangeIndex, baseline, stable) {
@@ -4955,6 +4998,7 @@ function createRequestTopologyTracker() {
       const runtimeIndex = Number.isInteger(Number(extra?.runtimeIndex)) ? Number(extra.runtimeIndex) : (list.length ? list.length - 1 : -1);
       const leadingSystemMessages = leadingSystemCount(signatures);
       const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
+      const locationKey = String(extra?.locationKey || '');
       const prior = previousKey === currentKey ? previous : null;
       const baseline = !prior;
       let commonMessages = 0;
@@ -4974,6 +5018,10 @@ function createRequestTopologyTracker() {
           currentRole = signatures[firstChangeIndex]?.role || 'END';
         }
       }
+      const previousBreak = firstChangeIndex == null ? null : (prior?.signatures?.[firstChangeIndex] || null);
+      const currentBreak = firstChangeIndex == null ? null : (signatures[firstChangeIndex] || null);
+      const mutation = firstChangeIndex == null ? 'NONE' : mutationShape(prior?.signatures || [], signatures, firstChangeIndex);
+      const currentBreakFingerprint = currentBreak ? outputCompatibleFingerprint(list[firstChangeIndex]) : null;
       const stable = !!prior && firstChangeIndex == null;
       const cadenceMs = prior ? Math.max(0, at - prior.at) : null;
       const ratio = baseline ? null : (totalChars > 0 ? Math.max(0, Math.min(100, (commonChars / totalChars) * 100)) : 100);
@@ -4985,6 +5033,8 @@ function createRequestTopologyTracker() {
         messages: signatures.length, previousMessages: prior?.signatures?.length ?? null,
         totalChars, previousChars: prior?.totalChars ?? null,
         commonMessages, commonChars, commonRatio: ratio, firstChangeIndex, previousRole, currentRole,
+        previousBreakSignature: compactSignature(previousBreak), currentBreakSignature: compactSignature(currentBreak),
+        mutationShape: mutation, currentBreakFingerprint, locationKey,
         currentUserIndex, runtimeIndex, leadingSystemMessages,
         breakOwner: attribution.owner, breakZone: attribution.zone,
         exposureChars, exposureRatio,
@@ -5285,7 +5335,28 @@ function createMirrorRuntime(deps) {
   const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch } = deps;
   let sequence = 0;
   const latestByLocation = new Map();
+  const PROVENANCE_LEDGER_LIMIT = 16;
+  const provenanceLedger = [];
   let lastProbe = null;
+
+  function rememberProvenance(probe) {
+    if (!probe || !probe.freshFingerprintFull) return;
+    const entry = Object.freeze({
+      outIndex: Number(probe.outIndex),
+      locationKey: String(probe.locationKey || ''),
+      status: String(probe.status || 'n/a'),
+      fingerprintMatch: String(probe.fingerprintMatch || 'n/a'),
+      canonicalFingerprint: String(probe.canonicalFingerprintFull || ''),
+      hostRawFingerprint: String(probe.hostRawFingerprintFull || ''),
+      freshFingerprint: String(probe.freshFingerprintFull || ''),
+      at: Number(probe.finishedAt || Date.now()),
+    });
+    for (let i = provenanceLedger.length - 1; i >= 0; i--) {
+      if (provenanceLedger[i].locationKey === entry.locationKey && provenanceLedger[i].outIndex === entry.outIndex) provenanceLedger.splice(i, 1);
+    }
+    provenanceLedger.push(entry);
+    if (provenanceLedger.length > PROVENANCE_LEDGER_LIMIT) provenanceLedger.splice(0, provenanceLedger.length - PROVENANCE_LEDGER_LIMIT);
+  }
 
   function capture(chaIdx, chatIdx, chat, outIndex, state = null) {
     const coreSession = getCoreSession();
@@ -5343,6 +5414,9 @@ function createMirrorRuntime(deps) {
           detail.canonicalFingerprint = canonical.slice(0, 12);
           detail.hostRawFingerprint = hostRaw.slice(0, 12);
           detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
+          detail.canonicalFingerprintFull = canonical;
+          detail.hostRawFingerprintFull = hostRaw;
+          detail.freshFingerprintFull = String(actualFingerprint || '');
           detail.fingerprintMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
         }
         if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {
@@ -5388,6 +5462,9 @@ function createMirrorRuntime(deps) {
       canonicalFingerprint: String(snapshot.outputFingerprint || '').slice(0, 12),
       hostRawFingerprint: String(snapshot.hostOutputFingerprint || '').slice(0, 12),
       freshFingerprint: null, fingerprintMatch: 'PENDING',
+      canonicalFingerprintFull: String(snapshot.outputFingerprint || ''),
+      hostRawFingerprintFull: String(snapshot.hostOutputFingerprint || ''),
+      freshFingerprintFull: null,
     };
     lastProbe = probe;
     const shouldApply = () => runtimeIsCurrent(epoch) && latestByLocation.get(locationKey) === currentSequence;
@@ -5409,11 +5486,15 @@ function createMirrorRuntime(deps) {
       probe.canonicalFingerprint = detail.canonicalFingerprint ?? probe.canonicalFingerprint;
       probe.hostRawFingerprint = detail.hostRawFingerprint ?? probe.hostRawFingerprint;
       probe.freshFingerprint = detail.freshFingerprint ?? probe.freshFingerprint;
+      probe.canonicalFingerprintFull = detail.canonicalFingerprintFull ?? probe.canonicalFingerprintFull;
+      probe.hostRawFingerprintFull = detail.hostRawFingerprintFull ?? probe.hostRawFingerprintFull;
+      probe.freshFingerprintFull = detail.freshFingerprintFull ?? probe.freshFingerprintFull;
       probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
       probe.finishedAt = Date.now();
+      rememberProvenance(probe);
     };
 
     if (typeof setTimeout === 'function') {
@@ -5427,10 +5508,11 @@ function createMirrorRuntime(deps) {
 
   function clear() {
     latestByLocation.clear();
+    provenanceLedger.length = 0;
     lastProbe = null;
   }
 
-  return Object.freeze({ schedule, lastProbe: () => lastProbe, clear });
+  return Object.freeze({ schedule, lastProbe: () => lastProbe, provenanceLedger: () => provenanceLedger.slice(), clear });
 }
 module.exports = { createMirrorRuntime };
 });
@@ -5477,6 +5559,20 @@ function breakInfo(probe) {
   if (probe.stable) return 'NONE';
   const first = probe.firstChangeIndex == null ? 'n/a' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
   return `${probe.breakOwner || 'UNKNOWN'} · ${probe.breakZone || 'UNKNOWN'} · ${first}`;
+}
+function historyMutation(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  if (probe.stable || probe.firstChangeIndex == null) return 'NONE';
+  return `@${Number(probe.firstChangeIndex)} · ${probe.mutationShape || 'UNKNOWN'} · prev ${probe.previousBreakSignature || 'END'} → current ${probe.currentBreakSignature || 'END'}`;
+}
+function representationCorrelation(probe) {
+  if (!probe) return 'n/a';
+  return `${probe.matchSummary || 'NONE'} · ledger ${Number(probe.ledgerSize || 0)}`;
+}
+function mutationAttribution(probe) {
+  if (!probe) return 'n/a';
+  return `${probe.status || 'n/a'} · ${probe.confidence || 'NONE'}`;
 }
 function exposure(probe) {
   if (!probe || probe.baseline) return 'BASELINE';
@@ -5525,7 +5621,7 @@ function representation(probe) {
   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
-module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
+module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -5567,6 +5663,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
   let lastRuntimePromptBudget = null;
   let lastRuntimePromptCacheProbe = null;
   let lastRequestTopologyProbe = null;
+  let lastHistoryMutationAttributionProbe = null;
   let lastCacheTrajectoryProbe = null;
   let lastCacheCandidateCostMs = null;
   let lastTelemetryContinuityProbe = null;
@@ -5614,6 +5711,39 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
 
   function diagnosticLocationKey(chaIdx, chatIdx, chat) {
     return `${chaIdx}:${chatIdx}:${chat?.id ?? ''}`;
+  }
+
+  function correlateHistoryMutation(topologyProbe, ledger) {
+    if (!topologyProbe || topologyProbe.baseline || topologyProbe.stable) {
+      return Object.freeze({ status: 'NONE', confidence: 'NONE', ledgerSize: Array.isArray(ledger) ? ledger.length : 0, matchSummary: 'NONE' });
+    }
+    if (topologyProbe.breakZone !== 'CHAT_HISTORY' || !topologyProbe.currentBreakFingerprint) {
+      return Object.freeze({ status: 'NOT_APPLICABLE', confidence: 'NONE', ledgerSize: Array.isArray(ledger) ? ledger.length : 0, matchSummary: 'NONE' });
+    }
+    const target = String(topologyProbe.currentBreakFingerprint || '');
+    const locationKey = String(topologyProbe.locationKey || '');
+    const rows = Array.isArray(ledger) ? ledger : [];
+    const matches = [];
+    for (const row of rows) {
+      if (locationKey && String(row?.locationKey || '') !== locationKey) continue;
+      if (target && target === String(row?.canonicalFingerprint || '')) matches.push({ kind: 'CANONICAL', row });
+      if (target && target === String(row?.hostRawFingerprint || '')) matches.push({ kind: 'HOST_RAW', row });
+      if (target && target === String(row?.freshFingerprint || '')) matches.push({ kind: 'FRESH_CHAT', row });
+    }
+    if (!matches.length) {
+      return Object.freeze({ status: 'NO_PROVENANCE_MATCH', confidence: 'LOW', ledgerSize: rows.length, matchSummary: 'NO_MATCH' });
+    }
+    const kinds = Array.from(new Set(matches.map((m) => m.kind)));
+    const divergentFresh = matches.filter((m) => m.kind === 'FRESH_CHAT' && String(m.row?.fingerprintMatch || '') === 'MISMATCH');
+    const uniqueOut = Array.from(new Set(matches.map((m) => Number(m.row?.outIndex)).filter(Number.isFinite)));
+    const summary = matches.slice(-4).map((m) => `${m.kind}@${Number(m.row?.outIndex)}`).join(',');
+    if (divergentFresh.length && kinds.length === 1 && kinds[0] === 'FRESH_CHAT') {
+      return Object.freeze({ status: 'FRESH_MISMATCH_HISTORY_MATCH', confidence: 'HIGH', ledgerSize: rows.length, matchSummary: summary || 'FRESH_CHAT', matchedOutIndex: uniqueOut.length === 1 ? uniqueOut[0] : null });
+    }
+    if (kinds.length > 1 || uniqueOut.length > 1) {
+      return Object.freeze({ status: 'AMBIGUOUS_HISTORY_MATCH', confidence: 'MEDIUM', ledgerSize: rows.length, matchSummary: summary || kinds.join('+') });
+    }
+    return Object.freeze({ status: 'KNOWN_OUTPUT_REPRESENTATION', confidence: 'HIGH', ledgerSize: rows.length, matchSummary: summary || kinds.join('+'), matchedOutIndex: uniqueOut.length === 1 ? uniqueOut[0] : null });
   }
 
   function diagnosticRequestProbeFresh(probe, currentKey, currentUserIndex) {
@@ -5809,7 +5939,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
       lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
         runtimeIndex: messages.length - 1,
         at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
+        locationKey: diagnosticLocationKey(chaIdx, chatIdx, chat),
       });
+      lastHistoryMutationAttributionProbe = correlateHistoryMutation(lastRequestTopologyProbe, runtimeMirror.provenanceLedger());
       if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
       const candidateStarted = perfNow();
       lastCacheTrajectoryProbe = cacheCandidates.observe(runtimePromptKey, lastRequestTopologyProbe, {
@@ -5900,6 +6032,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
       lastRuntimePromptBudget = null;
       lastRuntimePromptCacheProbe = null;
       lastRequestTopologyProbe = null;
+      lastHistoryMutationAttributionProbe = null;
       lastCacheTrajectoryProbe = null;
       lastCacheCandidateCostMs = null;
       runtimePromptCache.reset();
@@ -6441,6 +6574,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
       `Cache integrity: ${probeFresh ? runtimeProbeRules.cacheIntegrity(topologyProbe) : 'n/a'}`,
       `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
+      `History mutation: ${probeFresh ? runtimeProbeRules.historyMutation(topologyProbe) : 'n/a'}`,
+      `Representation correlation: ${probeFresh ? runtimeProbeRules.representationCorrelation(lastHistoryMutationAttributionProbe) : 'n/a'}`,
+      `Mutation attribution: ${probeFresh ? runtimeProbeRules.mutationAttribution(lastHistoryMutationAttributionProbe) : 'n/a'}`,
       `Local exposure proxy: ${probeFresh ? runtimeProbeRules.exposure(topologyProbe) : 'n/a'}`,
       `Runtime identity: ${probeFresh ? runtimeProbeRules.runtimeIdentity(cacheProbe) : 'n/a'}`,
       `SimCore contribution: ${probeFresh ? runtimeProbeRules.simcoreContribution(topologyProbe) : 'n/a'}`,

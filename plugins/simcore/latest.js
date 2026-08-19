@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.42
+//@version 0.63.43
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.43 Broadcast End Authority & Runtime Identity Precision:
+// - Makes episode/broadcast completion an explicit lifecycle authority: an open broadcast denies end narration across broadcast prose, COMMUNITY and Knowledge until the current lifecycle is B_END
+// - B_END is the only active-broadcast mode that authorizes episode-end narration; local scene/segment/mission/vote/player-departure completion does not imply broadcast completion
+// - Keeps the guard state-driven rather than phrase-blacklist-driven: SimCore communicates lifecycle authority but does not semantically parse or rewrite narrative text
+// - Replaces runtime identity's regex tier guess on the live path with compiler-native stable/slow/volatile source tiers while preserving the exact runtime prompt byte order and TAIL_AFTER_CURRENT_USER placement
+// - Keeps v0.63.42 cache topology/trajectory/exposure, v0.63.41 Continuity, v0.63.40 Evidence, Deferred Mirror acceptance, provider-cache policy and storage/API/timer/network surfaces frozen
 //
 // v0.63.42 Cache Integrity & Cost Stabilization:
 // - Adds deterministic request-prefix break attribution (HOST_PREFIX / CHAT_HISTORY / CURRENT_USER / SIMCORE_RUNTIME / POST_CURRENT_USER) and PRE_SIMCORE / SIMCORE_RUNTIME / POST_SIMCORE ownership without retaining request bodies
@@ -440,7 +447,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.42';
+const SIMCORE_RUNTIME_VERSION = '0.63.43';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3422,7 +3429,7 @@ const lifecycle = require('./lifecycle');
 const time = require('./time');
 const recurrence = require('./recurrence');
 
-const PROMPT_COMPILER_VERSION = 1;
+const PROMPT_COMPILER_VERSION = 2;
 
 function compileStableContract() {
   return [
@@ -3467,8 +3474,38 @@ function compileModeState(s, p, communityExpected) {
   ];
 }
 
+function broadcastEndAuthority(s, p) {
+  const mode = String(p?.mode || '');
+  if (mode === 'B_END') {
+    return Object.freeze({ session: 'ENDING', authority: 'ALLOWED', reason: 'explicit-b-end' });
+  }
+  if (s?.broadcastLocked) {
+    return Object.freeze({
+      session: 'OPEN',
+      authority: 'DENIED',
+      reason: /^B_/.test(mode) ? 'active-broadcast' : 'inherited-open-broadcast',
+    });
+  }
+  return Object.freeze({ session: 'CLOSED', authority: 'NOT_APPLICABLE', reason: 'no-open-broadcast' });
+}
+
 function compileConditionalGuidance(s, p, communityExpected) {
   const lines = [];
+  const endAuthority = broadcastEndAuthority(s, p);
+  if (endAuthority.authority === 'DENIED') {
+    lines.push('broadcast_session_state=OPEN');
+    lines.push('broadcast_end_authority=DENIED');
+    lines.push('episode_end_authority=DENIED');
+    lines.push('broadcast_end_requires_explicit_B_END_lifecycle=1');
+    lines.push('do_not_narrate_or_imply_broadcast_or_episode_end=1');
+    lines.push('scene_segment_mission_vote_or_player_departure_completion_does_not_authorize_episode_end=1');
+    lines.push('broadcast_end_boundary_applies_to=broadcast_prose+COMMUNITY+Knowledge');
+  } else if (endAuthority.authority === 'ALLOWED') {
+    lines.push('broadcast_session_state=ENDING');
+    lines.push('broadcast_end_authority=ALLOWED');
+    lines.push('episode_end_authority=ALLOWED');
+    lines.push('broadcast_end_basis=explicit_B_END_lifecycle');
+  }
   if (p.mode === 'C') lines.push('mode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1');
   if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
     lines.push('timestamp_semantics=current_narrative_time');
@@ -3561,27 +3598,45 @@ function compileFooter(communityExpected) {
   ];
 }
 
-function compileRuntimePrompt(state) {
+function compileRuntimePromptParts(state) {
   const s = kernel.reconcileState(state);
   const p = s.pending;
-  if (!p?.active) return '';
+  if (!p?.active) {
+    return Object.freeze({
+      text: '',
+      identityTiers: Object.freeze({ stable: '', slow: '', volatile: '' }),
+      endAuthority: Object.freeze({ session: 'CLOSED', authority: 'NOT_APPLICABLE', reason: 'inactive' }),
+    });
+  }
   const communityExpected = lifecycle.expectedCommunityBlocks(p.mode);
-  const tiers = [
-    compileStableContract(),
-    compileSlowState(s, p),
-    compileModeState(s, p, communityExpected),
-    compileConditionalGuidance(s, p, communityExpected),
-    compileHotState(s, communityExpected),
-    compileFooter(communityExpected),
-  ];
-  return tiers.flat().join('\n');
+  const stableLines = compileStableContract();
+  const slowLines = compileSlowState(s, p);
+  const modeLines = compileModeState(s, p, communityExpected);
+  const conditionalLines = compileConditionalGuidance(s, p, communityExpected);
+  const hotLines = compileHotState(s, communityExpected);
+  const footerLines = compileFooter(communityExpected);
+  const volatileLines = [modeLines, conditionalLines, hotLines, footerLines].flat();
+  const text = [stableLines, slowLines, modeLines, conditionalLines, hotLines, footerLines].flat().join('\n');
+  return Object.freeze({
+    text,
+    identityTiers: Object.freeze({
+      stable: stableLines.join('\n'),
+      slow: slowLines.join('\n'),
+      volatile: volatileLines.join('\n'),
+    }),
+    endAuthority: broadcastEndAuthority(s, p),
+  });
+}
+
+function compileRuntimePrompt(state) {
+  return compileRuntimePromptParts(state).text;
 }
 
 function renderRuntimePrompt(state) {
   return compileRuntimePrompt(state);
 }
 
-module.exports = { PROMPT_COMPILER_VERSION, compileRuntimePrompt, renderRuntimePrompt };
+module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts, compileRuntimePrompt, renderRuntimePrompt };
 });
 
 SimCore.define("session", function (require, module, exports) {
@@ -3603,6 +3658,7 @@ function sessionNow() {
 function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
 
 const renderRuntimePrompt = prompt.renderRuntimePrompt;
+const compileRuntimePromptParts = prompt.compileRuntimePromptParts;
 
 function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   const state = kernel.reconcileState(kernel.clone(baseState));
@@ -4063,9 +4119,16 @@ class CoreRulesetSession {
     this.current = state;
     this.lastPreparedSendIndex = sendIndex;
     t = sessionNow();
-    const promptBlock = renderRuntimePrompt(state);
+    const promptCompiled = compileRuntimePromptParts(state);
+    const promptBlock = promptCompiled.text;
     if (detail) detail.runtimeRenderMs = sessionElapsed(t);
-    return { state, promptBlock, active: !!state.pending?.active };
+    return {
+      state,
+      promptBlock,
+      promptIdentityTiers: promptCompiled.identityTiers,
+      broadcastEndAuthority: promptCompiled.endAuthority,
+      active: !!state.pending?.active,
+    };
   }
 
   resolveOutputIndex(fallbackOutIndex = -1) {
@@ -4560,10 +4623,25 @@ function runtimeLineTier(line) {
   return 'stable';
 }
 
-function runtimeIdentity(text, previous = null) {
+function runtimeIdentity(text, previous = null, compilerTiers = null) {
   const value = String(text == null ? '' : text);
-  const buckets = { stable: [], slow: [], volatile: [] };
-  for (const line of (value ? value.split('\n') : [])) buckets[runtimeLineTier(line)].push(line);
+  const compilerProvided = !!compilerTiers && typeof compilerTiers === 'object';
+  let segments;
+  if (compilerProvided) {
+    segments = {
+      stable: String(compilerTiers.stable || ''),
+      slow: String(compilerTiers.slow || ''),
+      volatile: String(compilerTiers.volatile || ''),
+    };
+  } else {
+    const buckets = { stable: [], slow: [], volatile: [] };
+    for (const line of (value ? value.split('\n') : [])) buckets[runtimeLineTier(line)].push(line);
+    segments = {
+      stable: buckets.stable.join('\n'),
+      slow: buckets.slow.join('\n'),
+      volatile: buckets.volatile.join('\n'),
+    };
+  }
   const build = (name, joined) => {
     const chars = joined.length;
     const hash = cacheHash(joined);
@@ -4572,9 +4650,10 @@ function runtimeIdentity(text, previous = null) {
     return Object.freeze({ chars, hash, status });
   };
   return Object.freeze({
-    stable: build('stable', buckets.stable.join('\n')),
-    slow: build('slow', buckets.slow.join('\n')),
-    volatile: build('volatile', buckets.volatile.join('\n')),
+    source: compilerProvided ? 'COMPILER_TIERS' : 'LINE_CLASSIFIER_FALLBACK',
+    stable: build('stable', segments.stable),
+    slow: build('slow', segments.slow),
+    volatile: build('volatile', segments.volatile),
     full: build('full', value),
   });
 }
@@ -4715,7 +4794,11 @@ function createRuntimePromptCacheTracker(contract = null) {
       if (previousKey === currentKey && previousText != null) probe = buildRuntimePromptCacheProbe(previousText, currentText);
       else if (previousKey === currentKey && previousSketch) probe = buildRuntimePromptCacheProbeFromSketch(previousSketch, currentText);
       else probe = buildRuntimePromptCacheProbe(null, currentText);
-      const identity = runtimeIdentity(currentText, previousKey === currentKey ? previousIdentity : null);
+      const identity = runtimeIdentity(
+        currentText,
+        previousKey === currentKey ? previousIdentity : null,
+        extra?.identityTiers || null,
+      );
       probe = Object.freeze({
         ...probe,
         identity,
@@ -4735,14 +4818,22 @@ function createRuntimePromptCacheTracker(contract = null) {
     },
     exportState() {
       if (!previousKey || !previousSketch) return null;
-      return { version: 1, key: previousKey, sketch: previousSketch, identity: previousIdentity };
+      return {
+        version: 1,
+        key: previousKey,
+        sketch: previousSketch,
+        identity: previousIdentity,
+        identityMode: previousIdentity?.source || null,
+      };
     },
     importState(state) {
       if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key || !state.sketch) return false;
       previousKey = state.key;
       previousText = null;
       previousSketch = state.sketch;
-      previousIdentity = state.identity || null;
+      previousIdentity = state.identityMode === 'COMPILER_TIERS' && state.identity?.source === 'COMPILER_TIERS'
+        ? state.identity
+        : null;
       return true;
     },
     reset() {
@@ -5398,7 +5489,7 @@ function runtimeIdentity(probe) {
     const x = id[name];
     return `${name} ${x?.status || 'n/a'} ${String(x?.hash || 'n/a').slice(0, 8)} ${Number(x?.chars || 0)}c`;
   };
-  return `${part('stable')} · ${part('slow')} · ${part('volatile')} · ${part('full')}`;
+  return `${id.source || 'UNKNOWN'} · ${part('stable')} · ${part('slow')} · ${part('volatile')} · ${part('full')}`;
 }
 function simcoreContribution(probe) {
   if (!probe) return 'n/a';
@@ -5678,6 +5769,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
         handoff: runtimeBudgetLines.some((line) => line.startsWith('short_community_request_reused_with_new_source=')),
         lineageAnchor: runtimeBudgetLines.some((line) => line === 'short_community_request_context_is_current_lineage=1'),
         sourceAnchor: runtimeBudgetLines.some((line) => line === 'short_community_source_is_authoritative=1'),
+        broadcastSessionState: result.broadcastEndAuthority?.session || 'CLOSED',
+        broadcastEndAuthority: result.broadcastEndAuthority?.authority || 'NOT_APPLICABLE',
+        broadcastEndReason: result.broadcastEndAuthority?.reason || 'unknown',
         at: Date.now(),
       };
       const evidenceResult = lastRuntimePromptBudget.sourceAnchor
@@ -5707,6 +5801,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
       lastRuntimePromptCacheProbe = runtimePromptCache.observe(runtimePromptKey, runtimeBudgetText, {
         sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
         mode: runtimeBudgetMode,
+        identityTiers: result.promptIdentityTiers || null,
         at: Date.now(),
       });
       messages.push({ role: 'system', content: result.promptBlock });
@@ -6355,6 +6450,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, e
       `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
+      `Broadcast lifecycle: ${probeFresh && budget ? `${budget.broadcastSessionState || 'CLOSED'} · mode ${budget.mode || 'n/a'}` : 'n/a'}`,
+      `Broadcast end authority: ${probeFresh && budget ? `${budget.broadcastEndAuthority || 'NOT_APPLICABLE'} · ${budget.broadcastEndReason || 'unknown'}` : 'n/a'}`,
+      `End boundary: ${probeFresh && budget && budget.broadcastEndAuthority === 'DENIED' ? 'PROSE+COMMUNITY+KNOWLEDGE · explicit B_END required' : (probeFresh && budget && budget.broadcastEndAuthority === 'ALLOWED' ? 'END AUTHORIZED' : 'n/a')}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
       `Recurrence guidance: ${probeFresh && budget ? (budget.recurrence ? 'ON' : 'OFF') : 'n/a'}`,

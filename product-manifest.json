@@ -13,7 +13,7 @@
   },
   "guideline": "docs/SIMCORE_GUIDELINES.md",
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
-  "current_priority": "PROMPT_PREFIX_STABILIZATION_VALIDATION",
+  "current_priority": "HISTORY_ALIGNMENT_STABILIZATION_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -21,5 +21,5 @@
     "development_principles": "docs/SIMCORE_GUIDELINES.md",
     "current_investigation": "docs/CURRENT_DEVELOPMENT.md"
   },
-  "managed_by": ".github/workflows/simcore-release-state-sync.yml"
+  "managed_by": ".github/workflows/simcore-release-command.yml"
 }

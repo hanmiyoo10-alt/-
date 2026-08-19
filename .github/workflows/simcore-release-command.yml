@@ -1,12 +1,11 @@
 name: SimCore release command
 
 on:
-  issues:
+  pull_request:
     types: [opened]
 
 permissions:
   contents: write
-  issues: write
 
 concurrency:
   group: simcore-release-command
@@ -14,7 +13,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.event.issue.title == 'SimCore v0.63.46 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.46 release command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
@@ -38,6 +37,11 @@ jobs:
           node --check plugins/simcore/install.js
           cmp -s plugins/simcore/latest.js plugins/simcore/install.js
           grep -q '^//@version 0.63.46$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.46';" plugins/simcore/latest.js
+          grep -q 'v0.63.46 Prompt Prefix Stabilization' plugins/simcore/latest.js
+          grep -q "KNOWN_COMPACT_ASSISTANT_HASH = '4a852496'" plugins/simcore/latest.js
+          grep -q "SKIPPED_UNVERIFIED_REPRESENTATION" plugins/simcore/latest.js
+          grep -q "persistentMutation: 'NONE'" plugins/simcore/latest.js
           grep -q 'History stabilization:' plugins/simcore/latest.js
           git diff --check
 
@@ -49,8 +53,3 @@ jobs:
           git add plugins/simcore/latest.js plugins/simcore/install.js
           git commit -m 'release: SimCore v0.63.46 Prompt Prefix Stabilization'
           git push origin HEAD:release-simcore
-
-      - name: Close release command issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue close "${{ github.event.issue.number }}" --comment 'SimCore v0.63.46 release command completed.'

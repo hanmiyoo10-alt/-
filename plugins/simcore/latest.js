@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.48
+//@version 0.63.49
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.49 Cache Effect Verification:
+// - Retires request-history repair attempts after v0.63.48 real long-chat validation showed the exact compact assistant frontier continuing to advance while externally observed caching still occurred on distinct natural B_START/B_CONTINUE/B_END turns; the known compact signature remains diagnostic evidence only
+// - Converts History stabilization to OBSERVE_ONLY: it scans only the already-built request for the frozen assistant/text 21:4a852496 signature, reports candidate positions/cost, and performs no request, visible-chat, persistent-state, raw-body, network, timer, or provider-routing mutation
+// - Adds a local Cache effect summary that classifies the observed reusable request-prefix window as BASELINE / REUSE_WINDOW_GROWING / REUSE_WINDOW_STABLE / REUSE_WINDOW_SHRINKING / PREFIX_COLLAPSE using existing topology/frontier telemetry; the summary never claims a provider cache hit or miss
+// - Reframes frontier movement as representation-boundary telemetry rather than cache-failure proof: common-prefix size/ratio, frontier position/movement and PRE_SIMCORE break ownership are reported together while provider cache remains explicitly UNVERIFIED
+// - Verification scope only: TAIL_AFTER_CURRENT_USER, Broadcast End Authority, Frame/Continuity/Evidence/Lineage/Handoff/Recurrence/Structure/Recovery, compiler tiers, Deferred Mirror, persistent schema, storage/API/network/timer policy and provider-cache policy remain frozen
 //
 // v0.63.48 History Turn-Ordinal Alignment:
 // - Replaces v0.63.47's body/calibrator-derived alignment candidate search after real long-chat validation produced NO_CANDIDATE with zero assistant calibrators across C/B_START/B_CONTINUE/B_END while the compact assistant frontier still advanced @16→@18→@20
@@ -480,7 +487,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.48';
+const SIMCORE_RUNTIME_VERSION = '0.63.49';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -5593,8 +5600,38 @@ function historyMutation(probe) {
   if (probe.stable || probe.firstChangeIndex == null) return 'NONE';
   return `@${Number(probe.firstChangeIndex)} · ${probe.mutationShape || 'UNKNOWN'} · prev ${probe.previousBreakSignature || 'END'} → current ${probe.currentBreakSignature || 'END'}`;
 }
+function cacheEffect(probe, movementProbe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE · provider UNVERIFIED';
+  const commonMessages = Number(probe.commonMessages || 0);
+  const messages = Number(probe.messages || 0);
+  const commonChars = Number(probe.commonChars || 0);
+  const totalChars = Number(probe.totalChars || 0);
+  const ratio = Number(probe.commonRatio || 0);
+  let status = 'REUSE_WINDOW_STABLE';
+  if (probe.stable) {
+    status = 'REUSE_WINDOW_STABLE';
+  } else if (commonMessages <= 0 || commonChars <= 0) {
+    status = 'PREFIX_COLLAPSE';
+  } else if (movementProbe?.status === 'MOVED') {
+    const dm = Number(movementProbe.deltaMessages || 0);
+    const dc = Number(movementProbe.deltaChars || 0);
+    if (dm > 0 || (dm === 0 && dc > 0)) status = 'REUSE_WINDOW_GROWING';
+    else if (dm < 0 || (dm === 0 && dc < 0)) status = 'REUSE_WINDOW_SHRINKING';
+  }
+  const frontier = probe.firstChangeIndex == null ? 'none' : `@${Number(probe.firstChangeIndex)}`;
+  let movement = movementProbe?.status || 'n/a';
+  if (movementProbe?.status === 'MOVED') {
+    const dm = Number(movementProbe.deltaMessages || 0);
+    const dc = Number(movementProbe.deltaChars || 0);
+    movement = `${dm >= 0 ? '+' : ''}${dm} msgs / ${dc >= 0 ? '+' : ''}${dc.toLocaleString('en-US')} chars`;
+  }
+  const breakKind = probe.stable ? 'NONE' : `${probe.breakOwner || 'UNKNOWN'} · ${probe.breakZone || 'UNKNOWN'}`;
+  return `${status} · common ${commonMessages}/${messages} msgs · ${commonChars.toLocaleString('en-US')}/${totalChars.toLocaleString('en-US')} chars · ratio ${ratio.toFixed(1)}% · frontier ${frontier} · movement ${movement} · break ${breakKind} · provider UNVERIFIED`;
+}
 function historyAlignment(probe) {
   if (!probe) return 'n/a';
+  if (probe.alignmentStatus === 'OBSERVE_ONLY') return `OBSERVE_ONLY · target assistant/text 21:4a852496 · candidates ${Number(probe.candidates || 0)} · request mutation NONE`;
   const offset = probe.spineOffset == null ? 'n/a' : `${Number(probe.spineOffset) >= 0 ? '+' : ''}${Number(probe.spineOffset)}`;
   const roleMatches = `${Number(probe.roleMatches || 0)}/${Number(probe.roleExpected || 0)}`;
   return `${probe.alignmentStatus || 'n/a'} · request spine ${Number(probe.requestSpine || 0)} · host spine ${Number(probe.hostSpine || 0)} · endpoint ${probe.endpointSource || 'n/a'} · role matches ${roleMatches} · targets ${Number(probe.mappedTargets || 0)}/${Number(probe.candidates || 0)} · offset ${offset} · body equality ${probe.bodyEquality || 'n/a'}`;
@@ -5685,7 +5722,7 @@ function representation(probe) {
   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
-module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
+module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, cacheEffect, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -5976,157 +6013,27 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
   function stabilizeHistoryProjection(messages, rawMessages, sendIndex) {
     const started = perfNow();
     const request = Array.isArray(messages) ? messages : [];
-    const raw = Array.isArray(rawMessages) ? rawMessages : [];
-    const rawUserIndex = Number(sendIndex);
-    if (!request.length || !raw.length || !Number.isInteger(rawUserIndex) || rawUserIndex < 0 || rawUserIndex >= raw.length) {
-      return stabilizationResult('SKIPPED_NO_CONTEXT', { alignmentStatus: 'NO_CONTEXT', endpointSource: HISTORY_ALIGNMENT_ENDPOINT }, started);
-    }
-
-    let currentRequestUser = -1;
-    for (let i = request.length - 1; i >= 0; i -= 1) {
-      if (stabilizationConversationRole(request[i]) === 'user') { currentRequestUser = i; break; }
-    }
-    if (currentRequestUser < 0 || stabilizationConversationRole(raw[rawUserIndex]) !== 'user') {
-      return stabilizationResult('SKIPPED_ENDPOINT_ROLE', { alignmentStatus: 'ENDPOINT_ROLE_MISMATCH', endpointSource: HISTORY_ALIGNMENT_ENDPOINT }, started);
-    }
-
-    const requestSpine = buildStabilizationSpine(request, currentRequestUser, HISTORY_ALIGNMENT_REQUEST_SPINE_LIMIT);
-    const rawSpine = buildStabilizationSpine(raw, rawUserIndex, HISTORY_ALIGNMENT_RAW_SPINE_LIMIT);
-    const commonDetail = {
-      requestSpine: requestSpine.length,
-      hostSpine: rawSpine.length,
-      endpointSource: HISTORY_ALIGNMENT_ENDPOINT,
-      bodyEquality: 'NOT_REQUIRED',
-    };
-
     const targetPositions = [];
-    for (let i = 0; i < requestSpine.length; i += 1) {
-      if (requestSpine[i].compact) targetPositions.push(i);
+    for (let i = 0; i < request.length; i += 1) {
+      if (isKnownCompactAssistant(request[i])) targetPositions.push(i);
     }
-    if (!targetPositions.length) {
-      return stabilizationResult('NOOP_NO_KNOWN_COMPACT', {
-        ...commonDetail,
-        alignmentStatus: 'NOT_NEEDED',
-      }, started);
-    }
-    if (targetPositions.length > HISTORY_STABILIZATION_MAX_SLOTS) {
-      return stabilizationResult('SKIPPED_TOO_MANY_COMPACT', {
-        ...commonDetail,
-        alignmentStatus: 'TOO_MANY_TARGETS',
-        candidates: targetPositions.length,
-      }, started);
-    }
-    if (!requestSpine.length || requestSpine.length > rawSpine.length) {
-      return stabilizationResult('SKIPPED_HOST_SUFFIX_SHORT', {
-        ...commonDetail,
-        alignmentStatus: 'HOST_SUFFIX_SHORT',
-        candidates: targetPositions.length,
-        roleExpected: requestSpine.length,
-      }, started);
-    }
-
-    const spineOffset = rawSpine.length - requestSpine.length;
-    let roleMatches = 0;
-    for (let requestPos = 0; requestPos < requestSpine.length; requestPos += 1) {
-      const rawPos = requestPos + spineOffset;
-      const reqItem = requestSpine[requestPos];
-      const rawItem = rawSpine[rawPos];
-      if (!rawItem || reqItem.role !== rawItem.role) {
-        return stabilizationResult('SKIPPED_ROLE_DRIFT', {
-          ...commonDetail,
-          alignmentStatus: 'ROLE_DRIFT',
-          candidates: targetPositions.length,
-          roleMatches,
-          roleExpected: requestSpine.length,
-          spineOffset,
-        }, started);
-      }
-      roleMatches += 1;
-    }
-
-    const requestEndpoint = requestSpine[requestSpine.length - 1];
-    const rawEndpoint = rawSpine[rawSpine.length - 1];
-    if (requestEndpoint?.role !== 'user' || rawEndpoint?.role !== 'user') {
-      return stabilizationResult('SKIPPED_ENDPOINT_ROLE', {
-        ...commonDetail,
-        alignmentStatus: 'ENDPOINT_ROLE_MISMATCH',
-        candidates: targetPositions.length,
-        roleMatches,
-        roleExpected: requestSpine.length,
-        spineOffset,
-      }, started);
-    }
-
-    const replacements = [];
-    let mappedTargets = 0;
-    for (const requestPos of targetPositions) {
-      const requestSlot = requestSpine[requestPos]?.index;
-      const rawPos = requestPos + spineOffset;
-      const rawItem = rawSpine[rawPos];
-      const rawSlot = rawItem?.index;
-      if (!Number.isInteger(requestSlot) || rawItem?.role !== 'assistant' || !Number.isInteger(rawSlot)) {
-        return stabilizationResult('SKIPPED_TARGET_NOT_MAPPABLE', {
-          ...commonDetail,
-          alignmentStatus: 'TARGET_NOT_MAPPABLE',
-          candidates: targetPositions.length,
-          roleMatches,
-          roleExpected: requestSpine.length,
-          mappedTargets,
-          spineOffset,
-        }, started);
-      }
-
-      const canonicalRaw = stabilizationCanonicalAssistantText(raw[rawSlot]);
-      if (canonicalRaw.length < HISTORY_STABILIZATION_MIN_RAW_CHARS
-          || canonicalRaw.length > HISTORY_STABILIZATION_MAX_RAW_CHARS
-          || !canonicalRaw.startsWith('# 응답')) {
-        return stabilizationResult('SKIPPED_UNSAFE_RAW_CANDIDATE', {
-          ...commonDetail,
-          alignmentStatus: 'RESOLVED_TURN_ORDINAL',
-          candidates: targetPositions.length,
-          roleMatches,
-          roleExpected: requestSpine.length,
-          mappedTargets,
-          spineOffset,
-        }, started);
-      }
-
-      const slot = request[requestSlot];
-      if (!slot || typeof slot.content !== 'string') {
-        return stabilizationResult('SKIPPED_NONSTRING_SLOT', {
-          ...commonDetail,
-          alignmentStatus: 'RESOLVED_TURN_ORDINAL',
-          candidates: targetPositions.length,
-          roleMatches,
-          roleExpected: requestSpine.length,
-          mappedTargets,
-          spineOffset,
-        }, started);
-      }
-      replacements.push({ requestSlot, canonicalRaw, beforeChars: String(slot.content || '').length });
-      mappedTargets += 1;
-    }
-
-    let addedChars = 0;
-    for (const replacement of replacements) {
-      const slot = request[replacement.requestSlot];
-      slot.content = replacement.canonicalRaw;
-      addedChars += replacement.canonicalRaw.length - replacement.beforeChars;
-    }
-
-    return stabilizationResult('APPLIED', {
-      ...commonDetail,
-      source: 'HOST_RAW_CANONICAL_ENVELOPE',
-      alignmentStatus: 'RESOLVED_TURN_ORDINAL',
+    return stabilizationResult('OBSERVE_ONLY', {
+      source: 'REQUEST_SIGNATURE_OBSERVER',
       candidates: targetPositions.length,
-      applied: replacements.length,
-      firstIndex: replacements[0]?.requestSlot,
-      lastIndex: replacements[replacements.length - 1]?.requestSlot,
-      roleMatches,
-      roleExpected: requestSpine.length,
-      mappedTargets,
-      spineOffset,
-      addedChars,
+      applied: 0,
+      firstIndex: targetPositions.length ? targetPositions[0] : null,
+      lastIndex: targetPositions.length ? targetPositions[targetPositions.length - 1] : null,
+      alignmentStatus: 'OBSERVE_ONLY',
+      requestSpine: 0,
+      hostSpine: 0,
+      endpointSource: 'NOT_USED',
+      roleMatches: 0,
+      roleExpected: 0,
+      mappedTargets: 0,
+      bodyEquality: 'NOT_USED',
+      spineOffset: null,
+      addedChars: 0,
+      persistentMutation: 'NONE',
     }, started);
   }
 
@@ -7007,6 +6914,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, h
       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
       `Cache integrity: ${probeFresh ? runtimeProbeRules.cacheIntegrity(topologyProbe) : 'n/a'}`,
       `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
+      `Cache effect: ${probeFresh ? runtimeProbeRules.cacheEffect(topologyProbe, lastFrontierMovementProbe) : 'n/a'}`,
       `History mutation: ${probeFresh ? runtimeProbeRules.historyMutation(topologyProbe) : 'n/a'}`,
       `History alignment: ${probeFresh ? runtimeProbeRules.historyAlignment(lastHistoryStabilizationProbe) : 'n/a'}`,
       `History stabilization: ${probeFresh ? runtimeProbeRules.historyStabilization(lastHistoryStabilizationProbe) : 'n/a'}`,

@@ -1,32 +1,32 @@
 {
   "format": 1,
   "product": "Local Usage Dashboard",
-  "productVersion": "3.0.0-alpha.5.54",
+  "productVersion": "3.0.0-alpha.5.55",
   "releaseBranch": "release-usage-dashboard",
   "architecture": "single-product-modular-sidecar",
   "components": {
     "plugin": {
       "mode": "bundled",
-      "version": "3.0.0-alpha.5.54",
+      "version": "3.0.0-alpha.5.55",
       "artifact": "plugins/usage-dashboard/latest.js"
     },
     "bridge": {
       "mode": "sidecar",
       "state": "managed-bundled",
-      "requiredVersion": "1.6.8",
+      "requiredVersion": "1.6.9",
       "managementProtocol": "bridge-manager-v1",
       "managed": true,
       "selfUpdate": false,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-engine.mjs",
       "lifecycleManaged": true,
       "sourceBundled": true,
-      "sha256": "4fa2f4b8bba9f51b64e7858de3a20d26cacbead9fdd4fa534fd0a826ca7a7e20"
+      "sha256": "720d5a0dc216f3ea2524c58ea1d9568502c21128392c6045ec78799df74ee655"
     },
     "bridgeManager": {
       "mode": "sidecar-manager",
       "state": "bundled-engine-ready",
       "version": "1.2.6",
-      "productVersion": "3.0.0-alpha.5.54",
+      "productVersion": "3.0.0-alpha.5.55",
       "managementProtocol": "bridge-manager-v1",
       "host": "127.0.0.1",
       "port": 39119,
@@ -34,7 +34,7 @@
       "selfUpdate": true,
       "engineManaged": true,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
-      "sha256": "9d8253110fbce2055de9202dbe923a0e01a88d0df49f2202955f746dc69bd62e",
+      "sha256": "0fc2f4f5f8391d7c2621f0b4f3ca3a0e045d6138adc900a75178b03de082143a",
       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
       "bootstrapSha256": "4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c",
       "service": "local-usage-runtime-manager",

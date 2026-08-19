@@ -6,9 +6,10 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.8';
+const VERSION = '1.6.9';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -53,19 +54,136 @@ const CIRCUIT_BASE_OPEN_MS = 45_000;
 const CIRCUIT_MAX_OPEN_MS = 5 * 60_000;
 const circuits = new Map();
 const circuitStats = { opens: 0, blocked: 0, recoveries: 0 };
+const snapshotAttributionStorage = new AsyncLocalStorage();
 
-async function withCliSlot(task) {
+function createSnapshotAttribution(profile) {
+  return {
+    startedAt: Date.now(),
+    profile: String(profile || 'full'),
+    tasks: Object.create(null),
+    cache: { hits:0, misses:0, joins:0, loads:0, errors:0, staleFallbacks:0 },
+    circuits: { opens:0, blocked:0, recoveries:0 },
+    cli: {
+      runs:0, queuedRuns:0, queueWaitTotalMs:0, queueWaitMaxMs:0,
+      executionTotalMs:0, executionMaxMs:0,
+      slowestLabel:'', slowestTotalMs:0,
+    },
+  };
+}
+
+function currentSnapshotAttribution() {
+  return snapshotAttributionStorage.getStore() || null;
+}
+
+function noteSnapshotCounter(group, key, amount = 1) {
+  const attribution = currentSnapshotAttribution();
+  if (!attribution?.[group] || !Object.prototype.hasOwnProperty.call(attribution[group], key)) return;
+  attribution[group][key] = Number(attribution[group][key] || 0) + Number(amount || 0);
+}
+
+async function timedSnapshotTask(name, task) {
+  const attribution = currentSnapshotAttribution();
+  const started = Date.now();
+  try {
+    return await task();
+  } finally {
+    if (attribution) attribution.tasks[String(name)] = Math.max(0, Date.now() - started);
+  }
+}
+
+function cliOperationLabel(args, extraEnv = {}) {
+  const list = Array.isArray(args) ? args.map(value => String(value)) : [];
+  const activityRange = ['24h','7d','30d'].includes(String(extraEnv?.DEVPASS_BRIDGE_ACTIVITY_RANGE || ''))
+    ? String(extraEnv.DEVPASS_BRIDGE_ACTIVITY_RANGE)
+    : '';
+  if (extraEnv?.DEVPASS_BRIDGE_CAPTURE_FILE) return activityRange ? `devpass-capture-${activityRange}` : 'account-capture';
+  const command = String(list[0] || 'cli').toLowerCase();
+  if (command === 'orgs') return 'organizations';
+  if (command === 'credits') return 'credits';
+  if (command === 'usage') {
+    const rangeIndex = list.indexOf('--range');
+    const range = rangeIndex >= 0 && ['24h','7d','30d'].includes(String(list[rangeIndex + 1] || '')) ? String(list[rangeIndex + 1]) : 'unknown';
+    return list.includes('--by') ? `usage-${range}-model` : `usage-${range}`;
+  }
+  return command.replace(/[^a-z0-9-]/g, '').slice(0, 32) || 'cli';
+}
+
+function noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs) {
+  const attribution = currentSnapshotAttribution();
+  if (!attribution) return;
+  const cli = attribution.cli;
+  const wait = Math.max(0, Number(queueWaitMs) || 0);
+  const execution = Math.max(0, Number(executionMs) || 0);
+  const total = wait + execution;
+  cli.runs += 1;
+  if (queued) {
+    cli.queuedRuns += 1;
+    cli.queueWaitTotalMs += wait;
+    cli.queueWaitMaxMs = Math.max(cli.queueWaitMaxMs, wait);
+  }
+  cli.executionTotalMs += execution;
+  cli.executionMaxMs = Math.max(cli.executionMaxMs, execution);
+  if (total >= Number(cli.slowestTotalMs || 0)) {
+    cli.slowestTotalMs = total;
+    cli.slowestLabel = String(label || 'cli');
+  }
+}
+
+function snapshotAttributionSummary(attribution) {
+  const tasks = attribution?.tasks && typeof attribution.tasks === 'object' ? attribution.tasks : {};
+  const organizationsMs = Number(tasks.organizations);
+  const postRoot = ['devpassStatus','usageScopes','analyticsScopes','runway']
+    .map(name => [name, Number(tasks[name])])
+    .filter(([,ms]) => Number.isFinite(ms) && ms >= 0)
+    .sort((a,b) => b[1] - a[1])[0] || null;
+  const rootMs = Number.isFinite(organizationsMs) && organizationsMs >= 0 ? organizationsMs : 0;
+  const detailedSlowest = Object.entries(tasks)
+    .filter(([,ms]) => Number.isFinite(Number(ms)) && Number(ms) >= 0)
+    .sort((a,b) => Number(b[1]) - Number(a[1]))[0] || null;
+  const cli = attribution?.cli || {};
+  const runs = Number(cli.runs || 0);
+  const queuedRuns = Number(cli.queuedRuns || 0);
+  return {
+    totalMs: Math.max(0, Date.now() - Number(attribution?.startedAt || Date.now())),
+    criticalPath: postRoot ? `organizations→${postRoot[0]}` : (Number.isFinite(organizationsMs) ? 'organizations' : null),
+    criticalPathMs: postRoot ? rootMs + Number(postRoot[1]) : (Number.isFinite(organizationsMs) ? rootMs : null),
+    slowestTask: detailedSlowest ? String(detailedSlowest[0]) : null,
+    slowestTaskMs: detailedSlowest ? Number(detailedSlowest[1]) : null,
+    tasks: {...tasks},
+    cache: {...(attribution?.cache || {})},
+    circuits: {...(attribution?.circuits || {})},
+    cli: {
+      runs,
+      queuedRuns,
+      queueWaitAvgMs: queuedRuns > 0 ? Number(cli.queueWaitTotalMs || 0) / queuedRuns : null,
+      queueWaitMaxMs: queuedRuns > 0 ? Number(cli.queueWaitMaxMs || 0) : null,
+      executionAvgMs: runs > 0 ? Number(cli.executionTotalMs || 0) / runs : null,
+      executionMaxMs: runs > 0 ? Number(cli.executionMaxMs || 0) : null,
+      slowestLabel: runs > 0 && cli.slowestLabel ? String(cli.slowestLabel) : null,
+      slowestTotalMs: runs > 0 ? Number(cli.slowestTotalMs || 0) : null,
+    },
+  };
+}
+
+async function withCliSlot(label, task) {
+  const queuedAt = Date.now();
+  let queued = false;
   if (cliStats.active >= CLI_CONCURRENCY) {
+    queued = true;
     cliStats.queued += 1;
     await new Promise((resolve) => cliWaiters.push(resolve));
     cliStats.queued = Math.max(0, cliStats.queued - 1);
   }
+  const executionStartedAt = Date.now();
+  const queueWaitMs = Math.max(0, executionStartedAt - queuedAt);
   cliStats.active += 1;
   cliStats.runs += 1;
   cliStats.maxActive = Math.max(cliStats.maxActive, cliStats.active);
   try {
     return await task();
   } finally {
+    const executionMs = Math.max(0, Date.now() - executionStartedAt);
+    noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs);
     cliStats.active = Math.max(0, cliStats.active - 1);
     const next = cliWaiters.shift();
     if (next) next();
@@ -275,6 +393,7 @@ function circuitBeforeLoad(name) {
   const now = Date.now();
   if (circuit.state === 'open' && now < circuit.openUntil) {
     circuitStats.blocked += 1;
+    noteSnapshotCounter('circuits', 'blocked');
     const seconds = Math.max(1, Math.ceil((circuit.openUntil - now) / 1000));
     const error = new Error(`Circuit ${circuit.family} open; retry in ${seconds}s`);
     error.code = 'CIRCUIT_OPEN';
@@ -286,7 +405,10 @@ function circuitBeforeLoad(name) {
 
 function circuitSuccess(name) {
   const circuit = getCircuit(name);
-  if (circuit.state !== 'closed' || circuit.failures > 0) circuitStats.recoveries += 1;
+  if (circuit.state !== 'closed' || circuit.failures > 0) {
+    circuitStats.recoveries += 1;
+    noteSnapshotCounter('circuits', 'recoveries');
+  }
   circuit.failures = 0;
   circuit.state = 'closed';
   circuit.openUntil = 0;
@@ -307,7 +429,10 @@ function circuitFailure(name, error) {
     const wasOpen = circuit.state === 'open';
     circuit.state = 'open';
     circuit.openUntil = Date.now() + openMs;
-    if (!wasOpen) circuitStats.opens += 1;
+    if (!wasOpen) {
+      circuitStats.opens += 1;
+      noteSnapshotCounter('circuits', 'opens');
+    }
   }
   return circuit;
 }
@@ -365,7 +490,7 @@ async function runProgram(program, args, extraEnv = {}) {
 }
 
 async function runCliProcess(args, extraEnv = {}) {
-  return withCliSlot(async () => {
+  return withCliSlot(cliOperationLabel(args, extraEnv), async () => {
     try {
       return await runProgram('llmgateway', args, extraEnv);
     } catch (error) {
@@ -1018,10 +1143,12 @@ async function cached(name, loader) {
   const current = cache.get(name);
   if (current && now - current.at < ttl) {
     cacheStats.hits += 1;
+    noteSnapshotCounter('cache', 'hits');
     return current.value;
   }
   if (inFlight.has(name)) {
     cacheStats.joins += 1;
+    noteSnapshotCounter('cache', 'joins');
     return inFlight.get(name);
   }
 
@@ -1030,18 +1157,21 @@ async function cached(name, loader) {
     const ageMs = current ? now - current.at : Infinity;
     if (current && name !== 'accountCapture' && ageMs <= CACHE_STALE_MAX_MS) {
       cacheStats.staleFallbacks += 1;
+      noteSnapshotCounter('cache', 'staleFallbacks');
       return staleClone(current.value, ageMs, gate.error);
     }
     throw gate.error;
   }
 
   cacheStats.misses += 1;
+  noteSnapshotCounter('cache', 'misses');
   const promise = (async () => {
     const started = Date.now();
     try {
       const value = await loader();
       const elapsed = Date.now() - started;
       cacheStats.loads += 1;
+      noteSnapshotCounter('cache', 'loads');
       cacheStats.totalLoadMs += elapsed;
       cacheStats.lastLoadMs = elapsed;
       cache.set(name, { at: Date.now(), value });
@@ -1050,11 +1180,13 @@ async function cached(name, loader) {
       return value;
     } catch (error) {
       cacheStats.errors += 1;
+      noteSnapshotCounter('cache', 'errors');
       const circuit = circuitFailure(name, error);
       const ageMs = current ? Date.now() - current.at : Infinity;
       const allowStale = name !== 'accountCapture';
       if (allowStale && current && ageMs <= CACHE_STALE_MAX_MS) {
         cacheStats.staleFallbacks += 1;
+      noteSnapshotCounter('cache', 'staleFallbacks');
         logRateLimited('warn', `stale:${name}`, `${name} refresh failed; serving last good cache (${Math.round(ageMs / 1000)}s old): ${safeMessage(error)}`);
         return staleClone(current.value, ageMs, error);
       }
@@ -1957,7 +2089,7 @@ async function usageScopes(creditsOrgId = '') {
   const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
   return cached(`usageScopes:${creditsCacheKey}`, async () => {
     const scopes = ['all', 'devpass', 'credits'];
-    const settled = await Promise.allSettled(scopes.map((scope) => activityForScope('24h', scope, creditsOrgId)));
+    const settled = await Promise.allSettled(scopes.map((scope) => timedSnapshotTask(`usage.${scope}`, () => activityForScope('24h', scope, creditsOrgId))));
     const values = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -1975,7 +2107,7 @@ async function analyticsForScope(scope = 'all', creditsOrgId = '') {
   const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
   return cached(`analytics:${normalizedScope}:${creditsCacheKey}`, async () => {
     const ranges = ['24h', '7d', '30d'];
-    const settled = await Promise.allSettled(ranges.map((range) => activityForScope(range, normalizedScope, creditsOrgId)));
+    const settled = await Promise.allSettled(ranges.map((range) => timedSnapshotTask(`analytics.${normalizedScope}.${range}`, () => activityForScope(range, normalizedScope, creditsOrgId))));
     const windows = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -2011,7 +2143,7 @@ async function analyticsScopes(creditsOrgId = '') {
   const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
   return cached(`analyticsScopes:${creditsCacheKey}`, async () => {
     const scopes = ['all', 'devpass', 'credits'];
-    const settled = await Promise.allSettled(scopes.map((scope) => analyticsForScope(scope, creditsOrgId)));
+    const settled = await Promise.allSettled(scopes.map((scope) => timedSnapshotTask(`analytics.${scope}`, () => analyticsForScope(scope, creditsOrgId))));
     const values = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -2060,6 +2192,20 @@ function newestCacheAt(match) {
   return newest;
 }
 
+function snapshotModuleDuration(family) {
+  const tasks = currentSnapshotAttribution()?.tasks || {};
+  const taskName = family === 'organizations' ? 'organizations'
+    : family === 'account' ? 'devpassStatus'
+      : family === 'devpassActivity' ? 'usage.devpass'
+        : family === 'creditsUsage' ? 'usage.credits'
+          : family === 'usageScopes' ? 'usageScopes'
+            : family === 'analytics' ? 'analyticsScopes'
+              : family === 'runway' ? 'runway'
+                : '';
+  const value = taskName ? Number(tasks[taskName]) : NaN;
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function moduleMeta(status, family, updatedAt = null, error = null) {
   const circuit = getCircuit(family);
   const circuitState = circuit.state === 'open' && Date.now() >= circuit.openUntil ? 'half-open' : circuit.state;
@@ -2068,6 +2214,7 @@ function moduleMeta(status, family, updatedAt = null, error = null) {
     status: finalStatus,
     stale: status === 'stale',
     updatedAt: updatedAt || circuit.lastSuccessAt || null,
+    durationMs: snapshotModuleDuration(family),
     circuit: circuitState,
     failures: circuit.failures,
     retryInMs: circuitState === 'open' ? Math.max(0, circuit.openUntil - Date.now()) : 0,
@@ -2091,12 +2238,18 @@ function moduleValueStatus(value) {
 
 async function snapshot(profile = 'full', creditsOrgId = '') {
   const normalizedProfile = profile === 'light' ? 'light' : 'full';
+  const attribution = createSnapshotAttribution(normalizedProfile);
+  return snapshotAttributionStorage.run(attribution, () => snapshotAttributed(normalizedProfile, creditsOrgId, attribution));
+}
+
+async function snapshotAttributed(profile = 'full', creditsOrgId = '', attribution = currentSnapshotAttribution()) {
+  const normalizedProfile = profile === 'light' ? 'light' : 'full';
   const requestedCreditsOrgId = String(creditsOrgId || '').trim();
 
   // Organization discovery is no longer a hard root dependency. DevPass status
   // and project-scoped Activity can remain useful while Credits/org discovery is
   // stale or temporarily unavailable.
-  const orgsResult = await Promise.allSettled([loadOrgs()]);
+  const orgsResult = await Promise.allSettled([timedSnapshotTask('organizations', () => loadOrgs())]);
   const orgs = orgsResult[0].status === 'fulfilled'
     ? orgsResult[0].value
     : { organizations: [], fetchedAt: null, source: 'unavailable' };
@@ -2105,9 +2258,15 @@ async function snapshot(profile = 'full', creditsOrgId = '') {
   const creditsOrg = creditsSelection.org;
   const resolvedCreditsOrgId = String(creditsOrg?.id || '');
 
-  const jobs = [loadDevPassStatus(), usageScopes(resolvedCreditsOrgId)];
+  const jobs = [
+    timedSnapshotTask('devpassStatus', () => loadDevPassStatus()),
+    timedSnapshotTask('usageScopes', () => usageScopes(resolvedCreditsOrgId)),
+  ];
   if (normalizedProfile === 'full') {
-    jobs.push(creditsOrg ? runwayFor(creditsOrg.id) : Promise.resolve(null), analyticsScopes(resolvedCreditsOrgId));
+    jobs.push(
+      timedSnapshotTask('runway', () => creditsOrg ? runwayFor(creditsOrg.id) : Promise.resolve(null)),
+      timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId)),
+    );
   }
   const settled = await Promise.allSettled(jobs);
   const devpassStatusResult = settled[0];
@@ -2229,6 +2388,7 @@ async function snapshot(profile = 'full', creditsOrgId = '') {
       runwayResult.status === 'rejected' ? runwayResult.reason : null,
     );
   }
+  result.diagnostics.snapshotPerformance = snapshotAttributionSummary(attribution);
   return result;
 }
 

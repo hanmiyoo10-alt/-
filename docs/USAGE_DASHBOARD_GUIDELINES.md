@@ -13,7 +13,7 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.53`
+- Product: `3.0.0-alpha.5.54`
 - Bridge Engine: `1.6.8`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
@@ -35,14 +35,17 @@ Verified from the 5.53 device diagnostic:
 - A recovered network/persist incident left cumulative local errors even though Bridge health, modules, failures and current runtime state had recovered.
 - Snapshot/data acquisition remains the dominant measured refresh cost; the sample diagnostic showed roughly 21 seconds in `snapshot` while render time stayed small.
 
-Next designed release candidate: `3.0.0-alpha.5.54 — Runtime Recovery Fidelity`.
+Current release implementation: `3.0.0-alpha.5.54 — Runtime Recovery Fidelity`.
 
-Primary design goal for 5.54:
+5.54 release contract:
 
-- Preserve cumulative error history.
-- Separate active runtime errors from recovered historical errors.
-- Let Stable Readiness describe current health instead of being permanently blocked by recovered error counts.
-- Do not mix snapshot performance optimization into the same release.
+- Preserve cumulative local runtime error history.
+- Track persist/render errors as active until the same local operation succeeds.
+- Record recovery without erasing the historical failure counters.
+- Stable Readiness blocks only on active local runtime errors, while recovered history remains visible.
+- Cache provenance, Bridge Engine `1.6.8`, Bridge Manager `1.2.6`, and snapshot acquisition remain unchanged.
+
+Next evidence-first candidate after 5.54 device validation: `Snapshot Performance Attribution` — instrument the existing snapshot path before changing its behavior.
 
 Following candidate after a 5.54 device diagnostic: `Snapshot Performance`, beginning with attribution inside the snapshot phase before repair.
 

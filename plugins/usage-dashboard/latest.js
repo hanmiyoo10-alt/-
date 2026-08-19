@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.53
+//@version 3.0.0-alpha.5.54
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.53';
+  const VERSION = '3.0.0-alpha.5.54';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -77,7 +77,7 @@
   const powerRuntime = {probeWakeups:0,probeIdleWakeups:0,probeBurstWakeups:0,probeBurstUntil:0,persistWrites:0,widgetRenderCalls:0,responsiveStyleWrites:0,responsiveStyleSkips:0};
   const REFRESH_ATTRIBUTION_KEYS = Object.freeze(['manual','timer','visibility','init','connect','manual-retry','reset','scheduled']);
   const refreshAttributionRuntime = {requested:Object.create(null),executed:Object.create(null),active:null};
-  const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,lastStage:'',lastMessage:'',lastAt:null};
+  const localRuntimeErrors = {count:0,persistFailures:0,renderFailures:0,recoveredCount:0,lastStage:'',lastMessage:'',lastAt:null,lastRecoveryStage:'',lastRecoveryAt:null,active:{persist:null,render:null,runtime:null}};
   const bridgeLifecycleRuntime = {generation:1,refreshDrops:0,blockedRefreshes:0,lastTransitionFrom:'',lastTransitionTo:'',lastTransitionAt:null,lastTransitionReason:''};
   function bridgeLifecycleMode() {
     if (!state) return 'off';
@@ -2017,29 +2017,66 @@ async function importLegacyTodayBaselines() {
     powerRuntime.persistWrites += 1;
   }
 
+  function localRuntimeErrorKind(stage) {
+    const key = String(stage || 'runtime');
+    if (key.includes('persist')) return 'persist';
+    if (key.includes('render')) return 'render';
+    return 'runtime';
+  }
+
+  function localRuntimeActiveEntries() {
+    return Object.values(localRuntimeErrors.active || {}).filter(Boolean);
+  }
+
+  function localRuntimeActiveCount() {
+    return localRuntimeActiveEntries().length;
+  }
+
   function noteLocalRuntimeError(stage, error) {
     const key = String(stage || 'runtime');
+    const kind = localRuntimeErrorKind(key);
     const message = String(error?.message || error || 'unknown error')
       .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
       .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
       .replace(/\s+/g, ' ')
       .slice(0, 180);
+    const now = Date.now();
     localRuntimeErrors.count += 1;
-    if (key.includes('persist')) localRuntimeErrors.persistFailures += 1;
-    if (key.includes('render')) localRuntimeErrors.renderFailures += 1;
+    if (kind === 'persist') localRuntimeErrors.persistFailures += 1;
+    if (kind === 'render') localRuntimeErrors.renderFailures += 1;
+    const current = localRuntimeErrors.active?.[kind] || null;
+    localRuntimeErrors.active[kind] = {
+      stage:key,
+      message,
+      since:current?.since || now,
+      lastAt:now,
+      failures:Number(current?.failures || 0) + 1,
+    };
     localRuntimeErrors.lastStage = key;
     localRuntimeErrors.lastMessage = message;
-    localRuntimeErrors.lastAt = Date.now();
+    localRuntimeErrors.lastAt = now;
     console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
   }
 
+  function noteLocalRuntimeRecovery(stage) {
+    const key = String(stage || 'runtime');
+    const kind = localRuntimeErrorKind(key);
+    const active = localRuntimeErrors.active?.[kind] || null;
+    if (!active) return false;
+    localRuntimeErrors.active[kind] = null;
+    localRuntimeErrors.recoveredCount = Number(localRuntimeErrors.recoveredCount || 0) + 1;
+    localRuntimeErrors.lastRecoveryStage = key;
+    localRuntimeErrors.lastRecoveryAt = Date.now();
+    return true;
+  }
+
   async function persistRefreshState(stage) {
-    try { await persist(); return true; }
+    try { await persist(); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }
 
   async function renderRefreshWidget(reason, stage) {
-    try { await renderWidget(reason); return true; }
+    try { await renderWidget(reason); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }
 
@@ -2384,7 +2421,8 @@ async function importLegacyTodayBaselines() {
     const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
     if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);
     if (managerSync && managerSync !== VERSION) blockers.push(`manager sync ${managerSync}`);
-    if (Number(localRuntimeErrors.count || 0) > 0) blockers.push(`local errors ${Number(localRuntimeErrors.count || 0)}`);
+    const activeLocalErrors = localRuntimeActiveCount();
+    if (activeLocalErrors > 0) blockers.push(`active local errors ${activeLocalErrors}`);
     if (Number(state.consecutiveFailures || 0) > 0) blockers.push(`refresh failures ${Number(state.consecutiveFailures || 0)}`);
     const updaterCompatible = /^3\.0\.0-alpha\.5\.(?:4[6-9]|[5-9]\d|\d{3,})$/.test(VERSION) || /^3\.[1-9]\d*\.\d+$/.test(VERSION);
     if (!updaterCompatible) blockers.push('updater version ordering');
@@ -2440,7 +2478,7 @@ async function importLegacyTodayBaselines() {
       `Source: ${d.source || '—'}`,
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
-      `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'}`,
+      `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'} · local recoveries ${Number(localRuntimeErrors.recoveredCount || 0)}`,
       `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.2.6 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
       `Health: ${h.status || '—'}`,
       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
@@ -2504,7 +2542,7 @@ async function importLegacyTodayBaselines() {
       `P4 render: closed-panel skip · widget DOM dedup`,
       `Floating widget UX: ${state.widgetVisible===false?'hidden':'visible'} · mobile ${widgetMobileViewport?'yes':'no'} · expanded ${widgetMobileExpanded?'yes':'no'} · dock ${state.widgetDockSide || 'none'} · position ${num(state.widgetX)&&num(state.widgetY)?`${Math.round(Number(state.widgetX))},${Math.round(Number(state.widgetY))}`:'default'} · gesture handle-drag/arrow-toggle`,
       `Credits organization: selected ${state.data?.creditsOrganizationId || state.selectedCreditsOrgId || 'default'} · available ${Array.isArray(state.data?.organizations) ? state.data.organizations.filter(org=>String(org?.kind||'default')==='default'&&String(org?.status||'active')!=='deleted').length : 0} · fallbacks ${Number(state.creditsOrgFallbackCount || 0)}${state.creditsOrgLastFallbackFrom ? ` · last ${state.creditsOrgLastFallbackFrom} → ${state.creditsOrgLastFallbackTo || 'default'}` : ''}`,
-      `Local runtime errors: ${Number(localRuntimeErrors.count || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'}`,
+      `Local runtime errors: total ${Number(localRuntimeErrors.count || 0)} · active ${localRuntimeActiveCount()} · recoveries ${Number(localRuntimeErrors.recoveredCount || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'} · recovery ${localRuntimeErrors.lastRecoveryAt ? `${localRuntimeErrors.lastRecoveryStage || 'runtime'} · ${age(localRuntimeErrors.lastRecoveryAt)}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
       `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
       `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,

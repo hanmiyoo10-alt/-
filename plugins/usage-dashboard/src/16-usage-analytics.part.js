@@ -233,28 +233,65 @@
     powerRuntime.persistWrites += 1;
   }
 
+  function localRuntimeErrorKind(stage) {
+    const key = String(stage || 'runtime');
+    if (key.includes('persist')) return 'persist';
+    if (key.includes('render')) return 'render';
+    return 'runtime';
+  }
+
+  function localRuntimeActiveEntries() {
+    return Object.values(localRuntimeErrors.active || {}).filter(Boolean);
+  }
+
+  function localRuntimeActiveCount() {
+    return localRuntimeActiveEntries().length;
+  }
+
   function noteLocalRuntimeError(stage, error) {
     const key = String(stage || 'runtime');
+    const kind = localRuntimeErrorKind(key);
     const message = String(error?.message || error || 'unknown error')
       .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
       .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
       .replace(/\s+/g, ' ')
       .slice(0, 180);
+    const now = Date.now();
     localRuntimeErrors.count += 1;
-    if (key.includes('persist')) localRuntimeErrors.persistFailures += 1;
-    if (key.includes('render')) localRuntimeErrors.renderFailures += 1;
+    if (kind === 'persist') localRuntimeErrors.persistFailures += 1;
+    if (kind === 'render') localRuntimeErrors.renderFailures += 1;
+    const current = localRuntimeErrors.active?.[kind] || null;
+    localRuntimeErrors.active[kind] = {
+      stage:key,
+      message,
+      since:current?.since || now,
+      lastAt:now,
+      failures:Number(current?.failures || 0) + 1,
+    };
     localRuntimeErrors.lastStage = key;
     localRuntimeErrors.lastMessage = message;
-    localRuntimeErrors.lastAt = Date.now();
+    localRuntimeErrors.lastAt = now;
     console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
   }
 
+  function noteLocalRuntimeRecovery(stage) {
+    const key = String(stage || 'runtime');
+    const kind = localRuntimeErrorKind(key);
+    const active = localRuntimeErrors.active?.[kind] || null;
+    if (!active) return false;
+    localRuntimeErrors.active[kind] = null;
+    localRuntimeErrors.recoveredCount = Number(localRuntimeErrors.recoveredCount || 0) + 1;
+    localRuntimeErrors.lastRecoveryStage = key;
+    localRuntimeErrors.lastRecoveryAt = Date.now();
+    return true;
+  }
+
   async function persistRefreshState(stage) {
-    try { await persist(); return true; }
+    try { await persist(); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }
 
   async function renderRefreshWidget(reason, stage) {
-    try { await renderWidget(reason); return true; }
+    try { await renderWidget(reason); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }

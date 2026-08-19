@@ -1,0 +1,185 @@
+name: SimCore release state sync
+
+on:
+  push:
+    branches:
+      - release-simcore
+    paths:
+      - 'plugins/simcore/latest.js'
+      - 'plugins/simcore/install.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-release-state-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main memory branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch production release branch
+        run: git fetch --no-tags origin release-simcore
+
+      - name: Validate production and resolve release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RELEASE_COMMIT="$(git rev-parse origin/release-simcore)"
+          LATEST_BLOB="$(git rev-parse origin/release-simcore:plugins/simcore/latest.js)"
+          INSTALL_BLOB="$(git rev-parse origin/release-simcore:plugins/simcore/install.js)"
+
+          if [[ "$LATEST_BLOB" != "$INSTALL_BLOB" ]]; then
+            echo "latest.js/install.js blob mismatch: $LATEST_BLOB != $INSTALL_BLOB" >&2
+            exit 1
+          fi
+
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/simcore-install.js
+
+          node --check /tmp/simcore-latest.js
+          node --check /tmp/simcore-install.js
+          cmp -s /tmp/simcore-latest.js /tmp/simcore-install.js
+
+          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' /tmp/simcore-latest.js | head -n 1)"
+          if [[ -z "$VERSION" ]]; then
+            echo 'missing //@version in production source' >&2
+            exit 1
+          fi
+
+          RELEASE_NAME="$(VERSION="$VERSION" python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          version = re.escape(os.environ['VERSION'])
+          text = Path('/tmp/simcore-latest.js').read_text(encoding='utf-8')
+          m = re.search(r'^// v' + version + r'\s+(.+?):\s*$', text, re.M)
+          if not m:
+              raise SystemExit('release name not found in current-version release note')
+          print(m.group(1).strip())
+          PY
+          )"
+
+          echo "SIMCORE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "SIMCORE_RELEASE_NAME=$RELEASE_NAME" >> "$GITHUB_ENV"
+          echo "SIMCORE_RELEASE_COMMIT=$RELEASE_COMMIT" >> "$GITHUB_ENV"
+          echo "SIMCORE_RELEASE_BLOB=$LATEST_BLOB" >> "$GITHUB_ENV"
+
+      - name: Sync durable product memory
+        env:
+          VERSION: ${{ env.SIMCORE_VERSION }}
+          RELEASE_NAME: ${{ env.SIMCORE_RELEASE_NAME }}
+          RELEASE_COMMIT: ${{ env.SIMCORE_RELEASE_COMMIT }}
+          RELEASE_BLOB: ${{ env.SIMCORE_RELEASE_BLOB }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          release_name = os.environ['RELEASE_NAME']
+          release_commit = os.environ['RELEASE_COMMIT']
+          release_blob = os.environ['RELEASE_BLOB']
+
+          manifest_path = Path('product-manifest.json')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['production_version'] = version
+          manifest['release_name'] = release_name
+          manifest['release_branch'] = 'release-simcore'
+          manifest['release_commit'] = release_commit
+          manifest['release_blob'] = release_blob
+          manifest['provider_cache_status'] = manifest.get('provider_cache_status', 'UNVERIFIED')
+          manifest['managed_by'] = '.github/workflows/simcore-release-state-sync.yml'
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          dev_path = Path('docs/CURRENT_DEVELOPMENT.md')
+          dev = dev_path.read_text(encoding='utf-8')
+          begin = '<!-- SIMCORE_PRODUCTION_SNAPSHOT:BEGIN -->'
+          end = '<!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->'
+          if dev.count(begin) != 1 or dev.count(end) != 1:
+              raise SystemExit('CURRENT_DEVELOPMENT production snapshot markers missing/ambiguous')
+          snapshot = f'''{begin}
+          ## Current Production Snapshot
+
+          - Product: SimCore
+          - Version: `{version}`
+          - Release: `{release_name}`
+          - Release branch: `release-simcore`
+          - Release commit: `{release_commit}`
+          - Release blob: `{release_blob}`
+          - Validation status: `PENDING_REAL_LONG_CHAT`
+          - Primary optimization target: `{manifest.get('current_priority', 'PROMPT_PREFIX_STABILITY')}`
+          - Provider cache: `{manifest.get('provider_cache_status', 'UNVERIFIED')}`
+
+          This block is machine-managed by `.github/workflows/simcore-release-state-sync.yml` after each production release update.
+          {end}'''
+          dev = re.sub(re.escape(begin) + r'.*?' + re.escape(end), snapshot, dev, count=1, flags=re.S)
+          dev_path.write_text(dev, encoding='utf-8')
+
+          guide_path = Path('docs/SIMCORE_GUIDELINES.md')
+          guide = guide_path.read_text(encoding='utf-8')
+          section = re.compile(r'(## 44\. Current Production Baseline.*?```text\n)(SimCore v[^\n]+)(\n```)', re.S)
+          replacement = rf'\1SimCore v{version} — {release_name}\3'
+          guide, count = section.subn(replacement, guide, count=1)
+          if count != 1:
+              raise SystemExit(f'guideline Current Production Baseline match count={count}')
+          guide_path.write_text(guide, encoding='utf-8')
+          PY
+
+          git diff --check
+
+      - name: Commit synchronized memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md
+
+          if git diff --cached --quiet; then
+            echo 'Durable memory already synchronized.'
+          else
+            git commit -m "docs: sync SimCore v${SIMCORE_VERSION} production memory"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Build project-source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/project-source
+          cp product-manifest.json dist/project-source/
+          cp docs/SIMCORE_GUIDELINES.md dist/project-source/
+          cp docs/CURRENT_DEVELOPMENT.md dist/project-source/
+          cat > dist/project-source/SOURCE_METADATA.json <<EOF
+          {
+            "product": "SimCore",
+            "version": "${SIMCORE_VERSION}",
+            "release_name": "${SIMCORE_RELEASE_NAME}",
+            "release_branch": "release-simcore",
+            "release_commit": "${SIMCORE_RELEASE_COMMIT}",
+            "release_blob": "${SIMCORE_RELEASE_BLOB}",
+            "canonical_manifest": "product-manifest.json",
+            "canonical_guideline": "docs/SIMCORE_GUIDELINES.md",
+            "canonical_development_memory": "docs/CURRENT_DEVELOPMENT.md"
+          }
+          EOF
+          (cd dist/project-source && zip -q -r "../SimCore-v${SIMCORE_VERSION}-project-source.zip" .)
+
+      - name: Upload project-source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-project-source-v${{ env.SIMCORE_VERSION }}
+          path: dist/SimCore-v${{ env.SIMCORE_VERSION }}-project-source.zip
+          if-no-files-found: error
+          retention-days: 90

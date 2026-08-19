@@ -148,6 +148,46 @@ jobs:
           guide, count = section.subn(replacement, guide, count=1)
           if count != 1:
               raise SystemExit(f'guideline Current Production Baseline match count={count}')
+
+          live_section = re.compile(
+              r'## \d+\. Current Primary Optimization Goal.*?(?=## \d+\. Current Hard Freeze)',
+              re.S,
+          )
+          live_replacement = '''## 45. Current Operational Source
+
+Release-specific investigation state is intentionally **not duplicated** in this guideline.
+
+Use:
+
+```text
+product-manifest.json
+→ machine-readable current release identity / current priority
+
+docs/CURRENT_DEVELOPMENT.md
+→ VERIFIED / SUPPORTED HYPOTHESIS / UNKNOWN
+→ current live validation gate
+→ current repair/measurement target
+→ next candidate
+```
+
+This separation prevents durable development principles from becoming stale when a mini release advances.
+
+## 46. Current Cache Strategy
+
+The durable strategy remains:
+
+```text
+PROMPT PREFIX STABILITY
+```
+
+Focus first on the earliest request-prefix break and preserve the distinction between local prefix evidence and actual gateway/provider cache evidence.
+
+The exact current diagnostic or repair stage must be read from `docs/CURRENT_DEVELOPMENT.md`, not inferred from an older version-specific section in this file.
+
+'''
+          guide, live_count = live_section.subn(live_replacement, guide, count=1)
+          if live_count != 1:
+              raise SystemExit(f'guideline live-section migration match count={live_count}')
           guide_path.write_text(guide, encoding='utf-8')
           PY
 

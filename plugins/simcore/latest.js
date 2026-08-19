@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.41
+//@version 0.63.42
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.42 Cache Integrity & Cost Stabilization:
+// - Adds deterministic request-prefix break attribution (HOST_PREFIX / CHAT_HISTORY / CURRENT_USER / SIMCORE_RUNTIME / POST_CURRENT_USER) and PRE_SIMCORE / SIMCORE_RUNTIME / POST_SIMCORE ownership without retaining request bodies
+// - Adds a local uncached-exposure proxy from already-computed common-prefix characters; it is explicitly not provider billing or proof of a provider-cache hit/miss
+// - Adds stable/slow/volatile runtime-prompt identity fingerprints so byte drift is attributable while preserving TAIL_AFTER_CURRENT_USER request placement and all generation semantics
+// - Canonicalizes reaction_max top-level key order before JSON serialization to remove self-inflicted equivalent-state byte drift
+// - Keeps v0.63.41 Continuity, v0.63.40 Evidence, v0.63.39 retry/trajectory/EMA, provider-cache policy, request order, mirror/recovery/lifecycle semantics and storage/API/timer/network surfaces frozen
 //
 // v0.63.41 Deterministic Continuity Consolidation:
 // - Resolves explicit opening month/day current-time transitions against the persisted narrative clock, including deterministic year rollover, calendar-valid dates, weekday normalization and pre-generation worldYear/age-offset advancement
@@ -433,7 +440,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.41';
+const SIMCORE_RUNTIME_VERSION = '0.63.42';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3534,9 +3541,16 @@ function compileConditionalGuidance(s, p, communityExpected) {
   return lines;
 }
 
+function stableRecordJson(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const ordered = {};
+  for (const key of Object.keys(source).sort()) ordered[key] = source[key];
+  return JSON.stringify(ordered);
+}
+
 function compileHotState(s, communityExpected) {
   return communityExpected > 0
-    ? [`reaction_max=${JSON.stringify(s.community.platformMax)}`]
+    ? [`reaction_max=${stableRecordJson(s.community.platformMax)}`]
     : [];
 }
 
@@ -4528,6 +4542,43 @@ function promptChangeReason(previousLine, currentLine) {
   return 'other';
 }
 
+function cacheHash(text) {
+  const value = String(text == null ? '' : text);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function runtimeLineTier(line) {
+  const value = String(line || '');
+  if (/^(?:korean_age_offset|current_korean_age|world_year|secondary_configured|secondary_active|episode_no)=/.test(value)) return 'slow';
+  if (/^(?:mode_c_|embedded_preview_|current_root_evidence=|current_source_evidence=|event_fact_precedence=|source_event_identity_and_facts=|abstract_generalization_from_current_root_allowed=|specific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support|outside_root_specific_event_evidence_only_if_|platform_group_reuse_forbidden=|community_placement=|knowledge_after_last_community=)/.test(value)) return 'volatile';
+  if (promptChangeReason('', value) !== 'other') return 'volatile';
+  return 'stable';
+}
+
+function runtimeIdentity(text, previous = null) {
+  const value = String(text == null ? '' : text);
+  const buckets = { stable: [], slow: [], volatile: [] };
+  for (const line of (value ? value.split('\n') : [])) buckets[runtimeLineTier(line)].push(line);
+  const build = (name, joined) => {
+    const chars = joined.length;
+    const hash = cacheHash(joined);
+    const prior = previous?.[name];
+    const status = !prior ? 'BASELINE' : (Number(prior.chars) === chars && String(prior.hash || '') === hash ? 'SAME' : 'CHANGED');
+    return Object.freeze({ chars, hash, status });
+  };
+  return Object.freeze({
+    stable: build('stable', buckets.stable.join('\n')),
+    slow: build('slow', buckets.slow.join('\n')),
+    volatile: build('volatile', buckets.volatile.join('\n')),
+    full: build('full', value),
+  });
+}
+
 function buildRuntimePromptCacheProbe(previousText, currentText) {
   const current = String(currentText || '');
   const previous = previousText == null ? null : String(previousText);
@@ -4656,6 +4707,7 @@ function createRuntimePromptCacheTracker(contract = null) {
   let previousText = null;
   let previousKey = null;
   let previousSketch = null;
+  let previousIdentity = null;
   return Object.freeze({
     observe(key, currentText, extra = null) {
       const currentKey = String(key || '');
@@ -4663,8 +4715,10 @@ function createRuntimePromptCacheTracker(contract = null) {
       if (previousKey === currentKey && previousText != null) probe = buildRuntimePromptCacheProbe(previousText, currentText);
       else if (previousKey === currentKey && previousSketch) probe = buildRuntimePromptCacheProbeFromSketch(previousSketch, currentText);
       else probe = buildRuntimePromptCacheProbe(null, currentText);
+      const identity = runtimeIdentity(currentText, previousKey === currentKey ? previousIdentity : null);
       probe = Object.freeze({
         ...probe,
+        identity,
         requestOrder: contract?.requestOrder || 'FROZEN',
         placement: contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER',
         providerCache: contract?.providerCache || 'UNVERIFIED',
@@ -4675,28 +4729,31 @@ function createRuntimePromptCacheTracker(contract = null) {
       });
       previousText = String(currentText || '');
       previousSketch = cacheSketch(previousText);
+      previousIdentity = identity;
       previousKey = currentKey;
       return probe;
     },
     exportState() {
       if (!previousKey || !previousSketch) return null;
-      return { version: 1, key: previousKey, sketch: previousSketch };
+      return { version: 1, key: previousKey, sketch: previousSketch, identity: previousIdentity };
     },
     importState(state) {
       if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key || !state.sketch) return false;
       previousKey = state.key;
       previousText = null;
       previousSketch = state.sketch;
+      previousIdentity = state.identity || null;
       return true;
     },
     reset() {
       previousText = null;
       previousKey = null;
       previousSketch = null;
+      previousIdentity = null;
     },
   });
 }
-module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, createRuntimePromptCacheTracker };
+module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, runtimeLineTier, runtimeIdentity, createRuntimePromptCacheTracker };
 });
 
 SimCore.define("runtime-topology", function (require, module, exports) {
@@ -4755,6 +4812,27 @@ function familyFingerprint(signatures) {
   return exactHash((leading.length ? leading : signatures.slice(0, Math.min(2, signatures.length)).map(signatureKey)).join('\u001f'));
 }
 
+function leadingSystemCount(signatures) {
+  let count = 0;
+  while (count < signatures.length && signatures[count]?.role === 'system') count += 1;
+  return count;
+}
+
+function breakAttribution(firstChangeIndex, currentUserIndex, runtimeIndex, leadingSystemMessages, priorLeadingSystemMessages, baseline, stable) {
+  if (baseline) return Object.freeze({ owner: 'BASELINE', zone: 'BASELINE' });
+  if (stable || firstChangeIndex == null) return Object.freeze({ owner: 'NONE', zone: 'NONE' });
+  const index = Number(firstChangeIndex);
+  const owner = index < runtimeIndex ? 'PRE_SIMCORE' : (index === runtimeIndex ? 'SIMCORE_RUNTIME' : 'POST_SIMCORE');
+  const sharedLeadingSystem = Math.min(Number(leadingSystemMessages || 0), Number(priorLeadingSystemMessages ?? leadingSystemMessages ?? 0));
+  let zone;
+  if (index < sharedLeadingSystem) zone = 'HOST_PREFIX';
+  else if (index < currentUserIndex) zone = 'CHAT_HISTORY';
+  else if (index === currentUserIndex) zone = 'CURRENT_USER';
+  else if (index === runtimeIndex) zone = 'SIMCORE_RUNTIME';
+  else zone = 'POST_CURRENT_USER';
+  return Object.freeze({ owner, zone });
+}
+
 function clonePrevious(previous) {
   if (!previous || !Array.isArray(previous.signatures)) return null;
   return {
@@ -4763,6 +4841,7 @@ function clonePrevious(previous) {
     totalChars: Number(previous.totalChars || 0),
     currentUserIndex: Number(previous.currentUserIndex ?? -1),
     runtimeIndex: Number(previous.runtimeIndex ?? -1),
+    leadingSystemMessages: Number(previous.leadingSystemMessages || 0),
   };
 }
 
@@ -4783,6 +4862,7 @@ function createRequestTopologyTracker() {
         if (sig.role === 'user') currentUserIndex = i;
       }
       const runtimeIndex = Number.isInteger(Number(extra?.runtimeIndex)) ? Number(extra.runtimeIndex) : (list.length ? list.length - 1 : -1);
+      const leadingSystemMessages = leadingSystemCount(signatures);
       const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
       const prior = previousKey === currentKey ? previous : null;
       const baseline = !prior;
@@ -4806,12 +4886,17 @@ function createRequestTopologyTracker() {
       const stable = !!prior && firstChangeIndex == null;
       const cadenceMs = prior ? Math.max(0, at - prior.at) : null;
       const ratio = baseline ? null : (totalChars > 0 ? Math.max(0, Math.min(100, (commonChars / totalChars) * 100)) : 100);
+      const attribution = breakAttribution(firstChangeIndex, currentUserIndex, runtimeIndex, leadingSystemMessages, prior?.leadingSystemMessages, baseline, stable);
+      const exposureChars = baseline ? null : Math.max(0, totalChars - commonChars);
+      const exposureRatio = baseline ? null : (totalChars > 0 ? Math.max(0, Math.min(100, (exposureChars / totalChars) * 100)) : 0);
       const probe = Object.freeze({
         baseline, stable, at, cadenceMs,
         messages: signatures.length, previousMessages: prior?.signatures?.length ?? null,
         totalChars, previousChars: prior?.totalChars ?? null,
         commonMessages, commonChars, commonRatio: ratio, firstChangeIndex, previousRole, currentRole,
-        currentUserIndex, runtimeIndex,
+        currentUserIndex, runtimeIndex, leadingSystemMessages,
+        breakOwner: attribution.owner, breakZone: attribution.zone,
+        exposureChars, exposureRatio,
         currentUserPosition: relativePosition(currentUserIndex, firstChangeIndex, baseline, stable),
         runtimePosition: relativePosition(runtimeIndex, firstChangeIndex, baseline, stable),
         retainedBodies: false, signatureKind: 'role+kind+chars+fnv1a32',
@@ -4820,7 +4905,7 @@ function createRequestTopologyTracker() {
         familyId: familyFingerprint(signatures),
       });
       previousKey = currentKey;
-      previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex };
+      previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex, leadingSystemMessages };
       return probe;
     },
     exportState() {
@@ -4839,7 +4924,7 @@ function createRequestTopologyTracker() {
   });
 }
 
-module.exports = { exactHash, messageSignature, createRequestTopologyTracker };
+module.exports = { exactHash, messageSignature, leadingSystemCount, breakAttribution, createRequestTopologyTracker };
 });
 
 SimCore.define("runtime-cache-candidates", function (require, module, exports) {
@@ -5290,6 +5375,38 @@ function topology(probe) {
   const first = probe.firstChangeIndex == null ? 'none' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
   return `${probe.stable ? 'STABLE' : 'COMMON_PREFIX'} · messages ${Number(probe.commonMessages || 0)}/${Number(probe.messages || 0)} · chars ${Number(probe.commonChars || 0).toLocaleString('en-US')}/${Number(probe.totalChars || 0).toLocaleString('en-US')} · ratio ${Number(probe.commonRatio || 0).toFixed(1)}% · first change ${first}`;
 }
+function cacheIntegrity(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  return probe.stable ? 'STABLE' : 'DEGRADED';
+}
+function breakInfo(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  if (probe.stable) return 'NONE';
+  const first = probe.firstChangeIndex == null ? 'n/a' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
+  return `${probe.breakOwner || 'UNKNOWN'} · ${probe.breakZone || 'UNKNOWN'} · ${first}`;
+}
+function exposure(probe) {
+  if (!probe || probe.baseline) return 'BASELINE';
+  return `${Number(probe.exposureChars || 0).toLocaleString('en-US')}/${Number(probe.totalChars || 0).toLocaleString('en-US')} chars · ${Number(probe.exposureRatio || 0).toFixed(1)}% · local proxy only`;
+}
+function runtimeIdentity(probe) {
+  const id = probe?.identity;
+  if (!id) return 'n/a';
+  const part = (name) => {
+    const x = id[name];
+    return `${name} ${x?.status || 'n/a'} ${String(x?.hash || 'n/a').slice(0, 8)} ${Number(x?.chars || 0)}c`;
+  };
+  return `${part('stable')} · ${part('slow')} · ${part('volatile')} · ${part('full')}`;
+}
+function simcoreContribution(probe) {
+  if (!probe) return 'n/a';
+  if (probe.baseline) return 'BASELINE';
+  if (probe.stable) return 'NO_BREAK';
+  return probe.breakOwner === 'SIMCORE_RUNTIME' ? 'FIRST_BREAK' : 'NOT_FIRST_BREAK';
+}
+
 function trajectory(probe) {
   if (!probe) return 'n/a';
   const family = probe.familyId ? String(probe.familyId).slice(0, 8) : 'n/a';
@@ -5317,7 +5434,7 @@ function representation(probe) {
   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
-module.exports = { cachePosture, cadence, topology, trajectory, continuity, representation };
+module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
 
 (async () => {
@@ -6227,6 +6344,11 @@ module.exports = { cachePosture, cadence, topology, trajectory, continuity, repr
       `Prompt prefix: ${prefixLabel}`,
       `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
+      `Cache integrity: ${probeFresh ? runtimeProbeRules.cacheIntegrity(topologyProbe) : 'n/a'}`,
+      `Cache break: ${probeFresh ? runtimeProbeRules.breakInfo(topologyProbe) : 'n/a'}`,
+      `Local exposure proxy: ${probeFresh ? runtimeProbeRules.exposure(topologyProbe) : 'n/a'}`,
+      `Runtime identity: ${probeFresh ? runtimeProbeRules.runtimeIdentity(cacheProbe) : 'n/a'}`,
+      `SimCore contribution: ${probeFresh ? runtimeProbeRules.simcoreContribution(topologyProbe) : 'n/a'}`,
       `Cache placement: ${probeFresh && topologyProbe ? `current user @${topologyProbe.currentUserIndex >= 0 ? Number(topologyProbe.currentUserIndex) : 'n/a'} · ${topologyProbe.currentUserPosition || 'n/a'} · runtime @${topologyProbe.runtimeIndex >= 0 ? Number(topologyProbe.runtimeIndex) : 'n/a'} · ${topologyProbe.runtimePosition || 'n/a'}` : 'n/a'}`,
       `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
       `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,

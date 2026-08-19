@@ -1,0 +1,107 @@
+name: Stage SimCore v0.63.41 Deterministic Continuity
+
+on:
+  push:
+    branches:
+      - simcore-06341-deterministic-continuity
+    paths:
+      - .simcore-06341-stage-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture exact v0.63.40 release baseline
+        run: |
+          git fetch origin release-simcore
+          live_sha="$(git rev-parse origin/release-simcore)"
+          test "$live_sha" = 'd9584d9c171a9497ec15ec5686a0d64632a95eae'
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-before.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/simcore-before-install.js
+          cmp /tmp/simcore-before.js /tmp/simcore-before-install.js
+          grep -q '//@version 0.63.40' /tmp/simcore-before.js
+          test "$(git hash-object /tmp/simcore-before.js)" = '4e6b31e5d220b47505f8de43cca463f7df976031'
+          cp /tmp/simcore-before.js plugins/simcore/latest.js
+          cp /tmp/simcore-before.js plugins/simcore/install.js
+
+      - name: Apply v0.63.41 patch
+        run: python plugins/simcore/patch_simcore_06341.py
+
+      - name: Syntax and artifact parity
+        run: |
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '//@version 0.63.41' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.41';" plugins/simcore/latest.js
+          grep -q 'resolveCalendarTransition' plugins/simcore/latest.js
+          grep -q 'narrative_calendar_target=' plugins/simcore/latest.js
+          grep -q 'Continuity summary:' plugins/simcore/latest.js
+          grep -q 'Frame sequence:' plugins/simcore/latest.js
+
+      - name: Deterministic continuity and frozen-surface fixtures
+        run: |
+          set -o pipefail
+          node plugins/simcore/test_simcore_06341.js | tee /tmp/simcore-06341-test.txt
+          test -s /tmp/simcore-06341-test.txt
+          grep -q 'SimCore 0.63.41 Deterministic Continuity fixtures: PASS' /tmp/simcore-06341-test.txt
+
+      - name: Static lifecycle inventory
+        run: |
+          set -o pipefail
+          python - <<'PY' | tee /tmp/simcore-06341-inventory.txt
+          from pathlib import Path
+          before = Path('/tmp/simcore-before.js').read_text(encoding='utf-8')
+          after = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          tokens = [
+              'pluginStorage.getItem(', 'pluginStorage.setItem(', 'pluginStorage.removeItem(', 'pluginStorage.keys(',
+              'setTimeout(', 'setInterval(', 'requestAnimationFrame(', 'fetch(', 'XMLHttpRequest(',
+              'Risuai.getChatFromIndex(', 'Risuai.setChatToIndex(', 'Risuai.registerButton(', 'Risuai.registerSetting(',
+          ]
+          for token in tokens:
+              b = before.count(token); a = after.count(token)
+              assert a == b, (token, b, a)
+              print(f'{token}: {a} (unchanged)')
+          for token in ['<CURRENT_ROOT_EVIDENCE>', '<CURRENT_SOURCE_EVIDENCE>', "providerCache: 'UNVERIFIED'", "runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER'"]:
+              assert token in after, token
+          for forbidden in ['cache_control', 'cached_content', 'prompt_cache_key']:
+              assert forbidden not in after.lower(), forbidden
+          print('Static lifecycle inventory: PASS')
+          PY
+          grep -q 'Static lifecycle inventory: PASS' /tmp/simcore-06341-inventory.txt
+
+      - name: Record staging pass
+        run: |
+          {
+            echo 'SimCore v0.63.41 staging: PASS'
+            echo 'Baseline: v0.63.40 d9584d9c171a9497ec15ec5686a0d64632a95eae / blob 4e6b31e5d220b47505f8de43cca463f7df976031'
+            echo 'Branch: simcore-06341-deterministic-continuity'
+            echo 'Intentional Core changes: contracts,time,lifecycle,frame,prompt,session'
+            echo 'Calendar transition: deterministic month/day + year rollover'
+            echo 'Frame sequencing: Volume/Chapter/Chatindex'
+            echo 'Source Integrity: FROZEN v0.63.40'
+            echo 'Trajectory/retry/EMA: FROZEN v0.63.39'
+            echo 'Provider cache: UNVERIFIED'
+            echo 'Storage/API/timer/network call inventory: UNCHANGED'
+            echo
+            cat /tmp/simcore-06341-test.txt
+            echo
+            cat /tmp/simcore-06341-inventory.txt
+          } > .simcore-06341-stage-result.txt
+
+      - name: Commit staged plugin artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js .simcore-06341-stage-result.txt
+          if git diff --cached --quiet; then
+            echo 'Artifacts already match verified v0.63.41 stage; no artifact commit needed'
+            exit 0
+          fi
+          git commit -m 'Stage SimCore v0.63.41 deterministic continuity'
+          git push origin HEAD:${GITHUB_REF_NAME}

@@ -1,0 +1,55 @@
+name: SimCore 0.63.42 inspect
+
+on:
+  push:
+    branches: [simcore-06342-cache-integrity-cost]
+    paths: [.github/workflows/simcore-06342-inspect.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06342-cache-integrity-cost
+          fetch-depth: 0
+      - name: Extract relevant SimCore source regions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('plugins/simcore/latest.js')
+          text = p.read_text()
+          lines = text.splitlines()
+          markers = [
+              'const SIMCORE_RUNTIME_VERSION',
+              'SimCore.define("runtime-cache"',
+              'SimCore.define("runtime-topology"',
+              'SimCore.define("runtime-cache-candidates"',
+              'SimCore.define("runtime-telemetry"',
+              'SimCore.define("runtime-probe"',
+              'function compileRuntimePrompt',
+              'messages.push({ role: \'system\', content: result.promptBlock });',
+              '`Cache posture:',
+              '`Cache topology:',
+          ]
+          out=[]
+          for marker in markers:
+              hits=[i for i,l in enumerate(lines) if marker in l]
+              out.append(f'===== MARKER: {marker} | hits={hits} =====')
+              for i in hits[:4]:
+                  a=max(0,i-45); b=min(len(lines),i+95)
+                  out.append(f'--- lines {a+1}-{b} ---')
+                  out.extend(f'{j+1:05d}: {lines[j]}' for j in range(a,b))
+          Path('simcore-06342-source-report.txt').write_text('\n'.join(out)+'\n')
+          print('report chars', Path('simcore-06342-source-report.txt').stat().st_size)
+          PY
+      - name: Commit inspection report
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add simcore-06342-source-report.txt
+          git commit -m "chore: inspect SimCore 0.63.42 cache surfaces" || exit 0
+          git push origin HEAD:simcore-06342-cache-integrity-cost

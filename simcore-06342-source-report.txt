@@ -1,0 +1,1420 @@
+===== MARKER: const SIMCORE_RUNTIME_VERSION | hits=[435] =====
+--- lines 391-530 ---
+00391: // - v1 recurrence memory is rebuilt once from pre-update user history into the ABC registry; current input remains excluded
+00392: // - Existing outputs are never rewritten; only new generations can receive the recurrence hint
+00393: // - No auxiliary model, no new pluginStorage API calls, and no Broadcast/Community/Reaction/Narrative semantics changes
+00394: //
+00395: // v0.62.21 Template Recurrence Guard:
+00396: // - Detects recurring detailed [커뮤니티] request templates without auxiliary-model calls
+00397: // - One-time migration bootstrap scans pre-update user history only; current input is excluded
+00398: // - Repeated templates keep the requested fields/format but prompt the model to reevaluate current-event delta, emphasis, reactions, and wording
+00399: // - Existing outputs are never rewritten; recurrence guidance affects only new generations
+00400: // - Registry is compact, bounded, snapshot-aware, and rewind-safe; no new storage API calls
+00401: //
+00402: // v0.62.20 Narrative Clock Diagnostics:
+00403: // - Runtime diagnostics only; Narrative Clock Guard behavior from v0.62.19 is unchanged
+00404: // - Records guard ON/OFF, trigger, previous anchor, output timestamp, and commit direction
+00405: // - Records non-broadcast mode transitions so C -> A / A -> C clock continuity can be observed
+00406: // - Backward movement with the guard OFF is reported as BACKWARD OBSERVED but is not blocked
+00407: // - No new prompt tokens, persistent state fields, storage I/O, or Broadcast/Community/Reaction changes
+00408: //
+00409: // v0.62.19 Narrative Clock Guard Phase 1:
+00410: // - Adds a conservative current-narrative timestamp anchor for non-broadcast modes
+00411: // - Activates only when the user opens with a clear forward calendar/relative-time transition
+00412: // - When active, the next current timestamp may not precede the previous non-broadcast timestamp
+00413: // - Embedded preview/flashback/event time must not replace the current narrative timestamp
+00414: // - No calendar guessing for ambiguous week/day phrases; no Broadcast/Community/Reaction behavior changes
+00415: //
+00416: // v0.62 optimization rules:
+00417: // - Stable behavior is the golden baseline; no semantic contract changes
+00418: // - Dead helpers removed
+00419: // - Recovery/legacy work consolidated behind cold paths
+00420: // - Output preparation/validation/commit runs once (no duplicate canonicalize/tail pass)
+00421: // - Output state is loaded once and fingerprint is saved with the same out snapshot write
+00422: // - Unchanged manual-edit checks return from the in-memory fingerprint fast path with no snapshot I/O
+00423: // - No auxiliary-model calls
+00424: //
+00425: // Compatibility retained:
+00426: // - Same plugin name/storage namespace (`simcore`)
+00427: // - Same `sim:core:<character>:<chat>` snapshot prefix
+00428: // - Same `$simcore_core_*` chat.scriptstate mirrors
+00429: // - Same <SIMCORE_CORE_SWITCH>1</SIMCORE_CORE_SWITCH> handshake
+00430: // - Existing v0.60+ snapshots/mirrors still migrate in place; no state reset
+00431: // - START+END => B_END; locked CONTINUE+END => B_CONTINUE
+00432: // - Reaction abbreviations: 천/만/억 and K/M/B
+00433: // - Per-platform-family reaction history remains shared across B/C
+00434: // - <Knowledge> remains the final output block after all COMMUNITY blocks
+00435: 
+00436: const SIMCORE_RUNTIME_VERSION = '0.63.41';
+00437: const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
+00438: 
+00439: const SimCore = (() => {
+00440:   const mods = {};
+00441:   const cache = {};
+00442:   const define = (name, fn) => { mods[name] = fn; };
+00443:   const requireFn = (name) => {
+00444:     const key = name.replace(/^\.\//, '').replace(/\.js$/, '');
+00445:     if (cache[key]) return cache[key].exports;
+00446:     const fn = mods[key];
+00447:     if (!fn) throw new Error('module not found: ' + name);
+00448:     const module = { exports: {} };
+00449:     cache[key] = module;
+00450:     fn(requireFn, module, module.exports);
+00451:     return module.exports;
+00452:   };
+00453:   return { define, require: requireFn };
+00454: })();
+00455: 
+00456: SimCore.define("contracts", function (require, module, exports) {
+00457: const MODULE_CONTRACT_VERSION = 1;
+00458: const MODULE_CONTRACTS = Object.freeze({
+00459:   contracts: Object.freeze({ owns: 'module responsibility metadata', excludes: 'runtime policy or state mutation' }),
+00460:   kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
+00461:   store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
+00462:   lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
+00463:   time: Object.freeze({ owns: 'timestamp syntax, deterministic calendar transitions, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
+00464:   frame: Object.freeze({ owns: 'visible response-frame parsing and deterministic Volume/Chapter/Chatindex sequencing', excludes: 'semantic title interpretation, narrative progression decisions, host/storage I/O' }),
+00465:   recurrence: Object.freeze({ owns: 'request-template recurrence detection and bounded registry', excludes: 'source meaning or response composition' }),
+00466:   lineage: Object.freeze({ owns: 'request root/parent/depth tracking', excludes: 'source importance or response content' }),
+00467:   handoff: Object.freeze({ owns: 'short-C source/parent-shift detection and bounded registry', excludes: 'semantic source selection or reaction content' }),
+00468:   evidence: Object.freeze({ owns: 'authoritative request-message resolution and safe request-only source fencing', excludes: 'semantic interpretation, summarization, history search, storage, output repair, creative generation' }),
+00469:   community: Object.freeze({ owns: 'COMMUNITY parsing and platform taxonomy', excludes: 'reaction-number mutation or prose generation' }),
+00470:   reaction: Object.freeze({ owns: 'reaction parsing, per-family floors and deterministic normalization', excludes: 'community prose or platform selection' }),
+00471:   structure: Object.freeze({ owns: 'output validation and integrity judgement', excludes: 'repair or semantic rewriting' }),
+00472:   recovery: Object.freeze({ owns: 'cold-path deterministic repair/bootstrap/legacy recovery', excludes: 'normal hot-path policy ownership' }),
+00473:   prompt: Object.freeze({ owns: 'runtime prompt serialization', excludes: 'persistent semantic state ownership, host/storage I/O, creative decisions' }),
+00474:   session: Object.freeze({ owns: 'pipeline orchestration and commit sequencing', excludes: 'prompt wording ownership or creative/semantic decisions' }),
+00475:   ops: Object.freeze({ owns: 'performance and diagnostic formatting', excludes: 'generation/state policy' }),
+00476: });
+00477: module.exports = { MODULE_CONTRACT_VERSION, MODULE_CONTRACTS };
+00478: });
+00479: 
+00480: SimCore.define("store", function (require, module, exports) {
+00481: function storeNow() {
+00482:   return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+00483: }
+00484: class SnapshotStore {
+00485:   constructor(backend, prefix, keepN = 80) {
+00486:     this.b = backend;
+00487:     this.p = prefix;
+00488:     this.keepN = keepN;
+00489:     this.lastKeyScan = null;
+00490:   }
+00491:   _recordKeyScan(op, startedAt, keys, currentChatKeys = null, matchingKeys = null) {
+00492:     const total = Array.isArray(keys) ? keys.length : 0;
+00493:     const current = currentChatKeys == null ? null : Math.max(0, Number(currentChatKeys) || 0);
+00494:     const matched = matchingKeys == null ? null : Math.max(0, Number(matchingKeys) || 0);
+00495:     this.lastKeyScan = {
+00496:       op: String(op || 'unknown'),
+00497:       ms: Math.max(0, storeNow() - startedAt),
+00498:       totalKeys: total,
+00499:       currentChatKeys: current,
+00500:       matchingKeys: matched,
+00501:       at: Date.now(),
+00502:     };
+00503:     return this.lastKeyScan;
+00504:   }
+00505:   keyScanStats() {
+00506:     return this.lastKeyScan ? { ...this.lastKeyScan } : null;
+00507:   }
+00508:   _k(phase, index) { return `${this.p}:${phase}:${index}`; }
+00509:   async save(phase, index, state, opts = {}) {
+00510:     const metric = opts.metric && typeof opts.metric === 'object' ? opts.metric : null;
+00511:     let t = storeNow();
+00512:     const payload = JSON.stringify(state);
+00513:     if (metric) metric.serializeMs = Math.max(0, storeNow() - t);
+00514:     t = storeNow();
+00515:     await this.b.set(this._k(phase, index), payload);
+00516:     if (metric) metric.setMs = Math.max(0, storeNow() - t);
+00517:     if (opts.prune !== false) {
+00518:       t = storeNow();
+00519:       await this._prune();
+00520:       if (metric) metric.pruneMs = Math.max(0, storeNow() - t);
+00521:     }
+00522:   }
+00523:   async saveTurn(index, preState, sendState, opts = {}) {
+00524:     const metric = opts.metric && typeof opts.metric === 'object' ? opts.metric : null;
+00525:     let t = storeNow();
+00526:     const payload = JSON.stringify({ snapshotVersion: 1, pre: preState, send: sendState });
+00527:     if (metric) {
+00528:       metric.serializeMs = Math.max(0, storeNow() - t);
+00529:       metric.payloadChars = payload.length;
+00530:     }
+===== MARKER: SimCore.define("runtime-cache" | hits=[4516] =====
+--- lines 4472-4611 ---
+04472: SimCore.define("runtime-contracts", function (require, module, exports) {
+04473: const cache = Object.freeze({
+04474:   requestOrder: 'FROZEN',
+04475:   runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER',
+04476:   runtimePromptPolicy: 'OBSERVE_ONLY',
+04477:   providerCache: 'UNVERIFIED',
+04478: });
+04479: const ownership = Object.freeze({
+04480:   host: 'runtime-host',
+04481:   session: 'runtime-session',
+04482:   cache: 'runtime-cache',
+04483:   topology: 'runtime-topology',
+04484:   mirror: 'runtime-mirror',
+04485:   hooks: 'runtime-hooks',
+04486:   probe: 'runtime-probe',
+04487: });
+04488: module.exports = { cache, ownership };
+04489: });
+04490: 
+04491: SimCore.define("runtime-host", function (require, module, exports) {
+04492: function createHostAdapter(Risuai) {
+04493:   return Object.freeze({
+04494:     async currentIndices() {
+04495:       const [chaIdx, chatIdx] = await Promise.all([
+04496:         Risuai.getCurrentCharacterIndex(),
+04497:         Risuai.getCurrentChatIndex(),
+04498:       ]);
+04499:       return { chaIdx, chatIdx };
+04500:     },
+04501:     getChat(chaIdx, chatIdx) { return Risuai.getChatFromIndex(chaIdx, chatIdx); },
+04502:     getCharacter() { return Risuai.getCharacter(); },
+04503:     setChat(chaIdx, chatIdx, chat) { return Risuai.setChatToIndex(chaIdx, chatIdx, chat); },
+04504:     storageBackend() {
+04505:       return {
+04506:         get: (k) => Risuai.pluginStorage.getItem(k),
+04507:         set: (k, v) => Risuai.pluginStorage.setItem(k, v),
+04508:         remove: (k) => Risuai.pluginStorage.removeItem(k),
+04509:         keys: () => Risuai.pluginStorage.keys(),
+04510:       };
+04511:     },
+04512:   });
+04513: }
+04514: module.exports = { createHostAdapter };
+04515: });
+04516: 
+04517: SimCore.define("runtime-cache", function (require, module, exports) {
+04518: function promptChangeReason(previousLine, currentLine) {
+04519:   const text = `${String(previousLine || '')}\n${String(currentLine || '')}`;
+04520:   if (/^reaction_max=/m.test(text)) return 'reaction_max';
+04521:   if (/broadcast_airtime_|broadcast_locked=|mode_b_/m.test(text)) return 'broadcast-time';
+04522:   if (/narrative_|timestamp_semantics=/m.test(text)) return 'narrative-time';
+04523:   if (/^(?:mode=|episode_no=)/m.test(text)) return 'mode/lifecycle';
+04524:   if (/community_blocks_expected=|platform_groups_required=|b_end_|final_required_blocks=/m.test(text)) return 'community';
+04525:   if (/request_template_|prior_answer_|reevaluate_current_event|do_not_mechanically_reuse/m.test(text)) return 'recurrence';
+04526:   if (/short_community_|derive_reaction_from_current_source/m.test(text)) return 'handoff/lineage';
+04527:   if (/korean_age_offset=|current_korean_age=|world_year=/m.test(text)) return 'age/world-year';
+04528:   return 'other';
+04529: }
+04530: 
+04531: function buildRuntimePromptCacheProbe(previousText, currentText) {
+04532:   const current = String(currentText || '');
+04533:   const previous = previousText == null ? null : String(previousText);
+04534:   const currentLines = current ? current.split('\n') : [];
+04535:   if (previous == null) {
+04536:     return {
+04537:       baseline: true,
+04538:       stable: false,
+04539:       previousChars: 0,
+04540:       currentChars: current.length,
+04541:       stablePrefixChars: 0,
+04542:       stablePrefixPercent: null,
+04543:       stablePrefixLines: 0,
+04544:       firstChangedLine: null,
+04545:       changedLineSlots: 0,
+04546:       reason: 'baseline',
+04547:     };
+04548:   }
+04549: 
+04550:   let prefixChars = 0;
+04551:   const charLimit = Math.min(previous.length, current.length);
+04552:   while (prefixChars < charLimit && previous.charCodeAt(prefixChars) === current.charCodeAt(prefixChars)) prefixChars += 1;
+04553: 
+04554:   const previousLines = previous ? previous.split('\n') : [];
+04555:   let prefixLines = 0;
+04556:   const lineLimit = Math.min(previousLines.length, currentLines.length);
+04557:   while (prefixLines < lineLimit && previousLines[prefixLines] === currentLines[prefixLines]) prefixLines += 1;
+04558: 
+04559:   const stable = previous === current;
+04560:   const denominator = Math.max(previous.length, current.length, 1);
+04561:   const firstChangedLine = stable ? null : prefixLines + 1;
+04562:   const changedLineSlots = stable ? 0 : Math.max(previousLines.length, currentLines.length) - prefixLines;
+04563:   const previousChangedLine = stable ? '' : (previousLines[prefixLines] || '');
+04564:   const currentChangedLine = stable ? '' : (currentLines[prefixLines] || '');
+04565: 
+04566:   return {
+04567:     baseline: false,
+04568:     stable,
+04569:     previousChars: previous.length,
+04570:     currentChars: current.length,
+04571:     stablePrefixChars: prefixChars,
+04572:     stablePrefixPercent: stable ? 100 : (prefixChars / denominator) * 100,
+04573:     stablePrefixLines: prefixLines,
+04574:     firstChangedLine,
+04575:     changedLineSlots,
+04576:     reason: stable ? 'stable' : promptChangeReason(previousChangedLine, currentChangedLine),
+04577:   };
+04578: }
+04579: 
+04580: function cacheSketch(text) {
+04581:   const value = String(text == null ? '' : text);
+04582:   const prefixHashes = new Array(value.length);
+04583:   let h = 0x811c9dc5;
+04584:   for (let i = 0; i < value.length; i++) {
+04585:     h ^= value.charCodeAt(i);
+04586:     h = Math.imul(h, 0x01000193);
+04587:     prefixHashes[i] = h >>> 0;
+04588:   }
+04589:   const lines = value ? value.split('\n') : [];
+04590:   const lineHashes = lines.map((line) => {
+04591:     let x = 0x811c9dc5;
+04592:     for (let i = 0; i < line.length; i++) {
+04593:       x ^= line.charCodeAt(i);
+04594:       x = Math.imul(x, 0x01000193);
+04595:     }
+04596:     return x >>> 0;
+04597:   });
+04598:   const lineReasons = lines.map((line) => promptChangeReason('', line));
+04599:   return Object.freeze({ version: 1, chars: value.length, prefixHashes, lineHashes, lineReasons });
+04600: }
+04601: 
+04602: function buildRuntimePromptCacheProbeFromSketch(sketch, currentText) {
+04603:   const current = String(currentText || '');
+04604:   if (!sketch || Number(sketch.version) !== 1 || !Array.isArray(sketch.prefixHashes)) {
+04605:     return buildRuntimePromptCacheProbe(null, current);
+04606:   }
+04607:   const previousChars = Math.max(0, Number(sketch.chars || 0));
+04608:   const limit = Math.min(previousChars, current.length, sketch.prefixHashes.length);
+04609:   let h = 0x811c9dc5;
+04610:   let prefixChars = 0;
+04611:   for (let i = 0; i < limit; i++) {
+===== MARKER: SimCore.define("runtime-topology" | hits=[4701] =====
+--- lines 4657-4796 ---
+04657:   let previousKey = null;
+04658:   let previousSketch = null;
+04659:   return Object.freeze({
+04660:     observe(key, currentText, extra = null) {
+04661:       const currentKey = String(key || '');
+04662:       let probe;
+04663:       if (previousKey === currentKey && previousText != null) probe = buildRuntimePromptCacheProbe(previousText, currentText);
+04664:       else if (previousKey === currentKey && previousSketch) probe = buildRuntimePromptCacheProbeFromSketch(previousSketch, currentText);
+04665:       else probe = buildRuntimePromptCacheProbe(null, currentText);
+04666:       probe = Object.freeze({
+04667:         ...probe,
+04668:         requestOrder: contract?.requestOrder || 'FROZEN',
+04669:         placement: contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER',
+04670:         providerCache: contract?.providerCache || 'UNVERIFIED',
+04671:         key: currentKey,
+04672:         sendIndex: Number.isInteger(Number(extra?.sendIndex)) ? Number(extra.sendIndex) : -1,
+04673:         mode: String(extra?.mode || ''),
+04674:         at: Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now(),
+04675:       });
+04676:       previousText = String(currentText || '');
+04677:       previousSketch = cacheSketch(previousText);
+04678:       previousKey = currentKey;
+04679:       return probe;
+04680:     },
+04681:     exportState() {
+04682:       if (!previousKey || !previousSketch) return null;
+04683:       return { version: 1, key: previousKey, sketch: previousSketch };
+04684:     },
+04685:     importState(state) {
+04686:       if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key || !state.sketch) return false;
+04687:       previousKey = state.key;
+04688:       previousText = null;
+04689:       previousSketch = state.sketch;
+04690:       return true;
+04691:     },
+04692:     reset() {
+04693:       previousText = null;
+04694:       previousKey = null;
+04695:       previousSketch = null;
+04696:     },
+04697:   });
+04698: }
+04699: module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, createRuntimePromptCacheTracker };
+04700: });
+04701: 
+04702: SimCore.define("runtime-topology", function (require, module, exports) {
+04703: function exactHash(text) {
+04704:   const value = String(text == null ? '' : text);
+04705:   let h = 0x811c9dc5;
+04706:   for (let i = 0; i < value.length; i++) {
+04707:     h ^= value.charCodeAt(i);
+04708:     h = Math.imul(h, 0x01000193);
+04709:   }
+04710:   return (h >>> 0).toString(16).padStart(8, '0');
+04711: }
+04712: 
+04713: function messageSignature(message) {
+04714:   const role = String(message?.role || '');
+04715:   const content = message?.content;
+04716:   let text = '';
+04717:   let kind = 'text';
+04718:   if (typeof content === 'string') {
+04719:     text = content;
+04720:   } else {
+04721:     kind = Array.isArray(content) ? 'array' : typeof content;
+04722:     try { text = JSON.stringify(content == null ? '' : content); }
+04723:     catch (_) { text = String(content == null ? '' : content); }
+04724:   }
+04725:   return Object.freeze({ role, kind, chars: text.length, hash: exactHash(text) });
+04726: }
+04727: 
+04728: function sameSignature(a, b) {
+04729:   return !!a && !!b && a.role === b.role && a.kind === b.kind && a.chars === b.chars && a.hash === b.hash;
+04730: }
+04731: 
+04732: function relativePosition(index, firstChangeIndex, baseline, stable) {
+04733:   if (!Number.isInteger(index) || index < 0) return 'ABSENT';
+04734:   if (baseline) return 'BASELINE';
+04735:   if (stable || firstChangeIndex == null) return 'WITHIN_COMMON_PREFIX';
+04736:   if (index < firstChangeIndex) return 'WITHIN_COMMON_PREFIX';
+04737:   if (index === firstChangeIndex) return 'AT_PREFIX_BREAK';
+04738:   return 'AFTER_PREFIX_BREAK';
+04739: }
+04740: 
+04741: function signatureKey(sig) {
+04742:   return `${sig.role}|${sig.kind}|${sig.chars}|${sig.hash}`;
+04743: }
+04744: 
+04745: function requestFingerprint(signatures) {
+04746:   return exactHash(signatures.map(signatureKey).join('\u001f'));
+04747: }
+04748: 
+04749: function familyFingerprint(signatures) {
+04750:   const leading = [];
+04751:   for (const sig of signatures) {
+04752:     if (sig.role !== 'system') break;
+04753:     leading.push(signatureKey(sig));
+04754:   }
+04755:   return exactHash((leading.length ? leading : signatures.slice(0, Math.min(2, signatures.length)).map(signatureKey)).join('\u001f'));
+04756: }
+04757: 
+04758: function clonePrevious(previous) {
+04759:   if (!previous || !Array.isArray(previous.signatures)) return null;
+04760:   return {
+04761:     at: Number(previous.at || 0),
+04762:     signatures: previous.signatures.map((sig) => ({ role: String(sig.role || ''), kind: String(sig.kind || ''), chars: Number(sig.chars || 0), hash: String(sig.hash || '') })),
+04763:     totalChars: Number(previous.totalChars || 0),
+04764:     currentUserIndex: Number(previous.currentUserIndex ?? -1),
+04765:     runtimeIndex: Number(previous.runtimeIndex ?? -1),
+04766:   };
+04767: }
+04768: 
+04769: function createRequestTopologyTracker() {
+04770:   let previousKey = null;
+04771:   let previous = null;
+04772:   return Object.freeze({
+04773:     observe(key, messages, extra = null) {
+04774:       const currentKey = String(key || '');
+04775:       const list = Array.isArray(messages) ? messages : [];
+04776:       const signatures = new Array(list.length);
+04777:       let totalChars = 0;
+04778:       let currentUserIndex = -1;
+04779:       for (let i = 0; i < list.length; i++) {
+04780:         const sig = messageSignature(list[i]);
+04781:         signatures[i] = sig;
+04782:         totalChars += sig.chars;
+04783:         if (sig.role === 'user') currentUserIndex = i;
+04784:       }
+04785:       const runtimeIndex = Number.isInteger(Number(extra?.runtimeIndex)) ? Number(extra.runtimeIndex) : (list.length ? list.length - 1 : -1);
+04786:       const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : Date.now();
+04787:       const prior = previousKey === currentKey ? previous : null;
+04788:       const baseline = !prior;
+04789:       let commonMessages = 0;
+04790:       let commonChars = 0;
+04791:       let firstChangeIndex = null;
+04792:       let previousRole = null;
+04793:       let currentRole = null;
+04794:       if (prior) {
+04795:         const limit = Math.min(prior.signatures.length, signatures.length);
+04796:         while (commonMessages < limit && sameSignature(prior.signatures[commonMessages], signatures[commonMessages])) {
+===== MARKER: SimCore.define("runtime-cache-candidates" | hits=[4844] =====
+--- lines 4800-4939 ---
+04800:         if (commonMessages < limit || prior.signatures.length !== signatures.length) {
+04801:           firstChangeIndex = commonMessages;
+04802:           previousRole = prior.signatures[firstChangeIndex]?.role || 'END';
+04803:           currentRole = signatures[firstChangeIndex]?.role || 'END';
+04804:         }
+04805:       }
+04806:       const stable = !!prior && firstChangeIndex == null;
+04807:       const cadenceMs = prior ? Math.max(0, at - prior.at) : null;
+04808:       const ratio = baseline ? null : (totalChars > 0 ? Math.max(0, Math.min(100, (commonChars / totalChars) * 100)) : 100);
+04809:       const probe = Object.freeze({
+04810:         baseline, stable, at, cadenceMs,
+04811:         messages: signatures.length, previousMessages: prior?.signatures?.length ?? null,
+04812:         totalChars, previousChars: prior?.totalChars ?? null,
+04813:         commonMessages, commonChars, commonRatio: ratio, firstChangeIndex, previousRole, currentRole,
+04814:         currentUserIndex, runtimeIndex,
+04815:         currentUserPosition: relativePosition(currentUserIndex, firstChangeIndex, baseline, stable),
+04816:         runtimePosition: relativePosition(runtimeIndex, firstChangeIndex, baseline, stable),
+04817:         retainedBodies: false, signatureKind: 'role+kind+chars+fnv1a32',
+04818:         currentUserSignature: currentUserIndex >= 0 ? signatureKey(signatures[currentUserIndex]) : 'none',
+04819:         requestFingerprint: requestFingerprint(signatures),
+04820:         familyId: familyFingerprint(signatures),
+04821:       });
+04822:       previousKey = currentKey;
+04823:       previous = { at, signatures, totalChars, currentUserIndex, runtimeIndex };
+04824:       return probe;
+04825:     },
+04826:     exportState() {
+04827:       if (!previousKey || !previous) return null;
+04828:       return { version: 1, key: previousKey, previous: clonePrevious(previous) };
+04829:     },
+04830:     importState(state) {
+04831:       if (!state || Number(state.version) !== 1 || typeof state.key !== 'string' || !state.key) return false;
+04832:       const restored = clonePrevious(state.previous);
+04833:       if (!restored) return false;
+04834:       previousKey = state.key;
+04835:       previous = restored;
+04836:       return true;
+04837:     },
+04838:     reset() { previousKey = null; previous = null; },
+04839:   });
+04840: }
+04841: 
+04842: module.exports = { exactHash, messageSignature, createRequestTopologyTracker };
+04843: });
+04844: 
+04845: SimCore.define("runtime-cache-candidates", function (require, module, exports) {
+04846: const WINDOW = 3;
+04847: const EMA_ALPHA = 0.35;
+04848: 
+04849: function freshState(key, familyId) {
+04850:   return {
+04851:     version: 2,
+04852:     key, familyId,
+04853:     attempts: 0, distinct: 0,
+04854:     lastDistinctToken: null,
+04855:     status: 'BASELINE',
+04856:     window: [],
+04857:     stableFloorChars: null,
+04858:     stableFloorMessages: null,
+04859:     movingFrontierChars: 0,
+04860:     movingFrontierMessages: 0,
+04861:     frontierStreak: 0,
+04862:     divergenceCount: 0,
+04863:     regressionStreak: 0,
+04864:     cadenceEmaMs: null,
+04865:     lastAt: null,
+04866:   };
+04867: }
+04868: 
+04869: function cloneState(state) {
+04870:   if (!state) return null;
+04871:   return {
+04872:     version: 2,
+04873:     key: String(state.key || ''), familyId: String(state.familyId || ''),
+04874:     attempts: Number(state.attempts || 0), distinct: Number(state.distinct || 0),
+04875:     lastDistinctToken: state.lastDistinctToken == null ? null : String(state.lastDistinctToken),
+04876:     status: String(state.status || 'BASELINE'),
+04877:     window: Array.isArray(state.window) ? state.window.slice(-WINDOW).map((x) => ({ chars: Number(x.chars || 0), messages: Number(x.messages || 0) })) : [],
+04878:     stableFloorChars: state.stableFloorChars == null ? null : Number(state.stableFloorChars),
+04879:     stableFloorMessages: state.stableFloorMessages == null ? null : Number(state.stableFloorMessages),
+04880:     movingFrontierChars: Number(state.movingFrontierChars || 0),
+04881:     movingFrontierMessages: Number(state.movingFrontierMessages || 0),
+04882:     frontierStreak: Number(state.frontierStreak || 0),
+04883:     divergenceCount: Number(state.divergenceCount || 0),
+04884:     regressionStreak: Number(state.regressionStreak || 0),
+04885:     cadenceEmaMs: state.cadenceEmaMs == null ? null : Number(state.cadenceEmaMs),
+04886:     lastAt: state.lastAt == null ? null : Number(state.lastAt),
+04887:   };
+04888: }
+04889: 
+04890: function summarize(state, familyReset, distinctObservation) {
+04891:   return Object.freeze({
+04892:     status: state.status,
+04893:     familyId: state.familyId,
+04894:     familyReset: !!familyReset,
+04895:     attempts: state.attempts,
+04896:     distinct: state.distinct,
+04897:     distinctObservation: !!distinctObservation,
+04898:     lastObservation: distinctObservation ? 'DISTINCT' : 'RETRY',
+04899:     window: WINDOW,
+04900:     stableFloorChars: state.stableFloorChars,
+04901:     stableFloorMessages: state.stableFloorMessages,
+04902:     movingFrontierChars: state.movingFrontierChars,
+04903:     movingFrontierMessages: state.movingFrontierMessages,
+04904:     frontierStreak: state.frontierStreak,
+04905:     divergenceCount: state.divergenceCount,
+04906:     regressionStreak: state.regressionStreak,
+04907:     cadenceEmaMs: state.cadenceEmaMs,
+04908:   });
+04909: }
+04910: 
+04911: function createCacheCandidateTracker() {
+04912:   let state = null;
+04913:   return Object.freeze({
+04914:     observe(key, topology, extra = null) {
+04915:       const currentKey = String(key || '');
+04916:       const familyId = String(topology?.familyId || 'none');
+04917:       let familyReset = false;
+04918:       if (!state || state.key !== currentKey || state.familyId !== familyId) {
+04919:         familyReset = !!state;
+04920:         state = freshState(currentKey, familyId);
+04921:       }
+04922:       state.attempts += 1;
+04923:       const sendIndex = Number.isInteger(Number(extra?.sendIndex)) ? Number(extra.sendIndex) : -1;
+04924:       const userSignature = String(topology?.currentUserSignature || 'none');
+04925:       const distinctToken = `${sendIndex}:${userSignature}`;
+04926:       const distinctObservation = state.lastDistinctToken !== distinctToken;
+04927:       if (!distinctObservation) return summarize(state, familyReset, false);
+04928: 
+04929:       const at = Number.isFinite(Number(extra?.at)) ? Number(extra.at) : (Number.isFinite(Number(topology?.at)) ? Number(topology.at) : Date.now());
+04930:       const distinctCadence = state.lastAt == null ? null : Math.max(0, at - state.lastAt);
+04931:       state.lastDistinctToken = distinctToken;
+04932:       state.distinct += 1;
+04933:       if (distinctCadence != null) {
+04934:         state.cadenceEmaMs = state.cadenceEmaMs == null
+04935:           ? distinctCadence
+04936:           : (EMA_ALPHA * distinctCadence) + ((1 - EMA_ALPHA) * state.cadenceEmaMs);
+04937:       }
+04938: 
+04939:       if (topology?.baseline || familyReset) {
+===== MARKER: SimCore.define("runtime-telemetry" | hits=[4988] =====
+--- lines 4944-5083 ---
+04944: 
+04945:       const chars = Math.max(0, Number(topology?.commonChars || 0));
+04946:       const messages = Math.max(0, Number(topology?.commonMessages || 0));
+04947:       const priorFrontier = state.movingFrontierChars;
+04948:       const priorFloor = state.stableFloorChars;
+04949:       const wasEstablished = state.status === 'ESTABLISHED' || state.status === 'REGRESSED' || state.status === 'VOLATILE';
+04950:       if (wasEstablished && priorFloor != null && chars < priorFloor) {
+04951:         state.regressionStreak += 1;
+04952:         state.divergenceCount += 1;
+04953:       } else {
+04954:         state.regressionStreak = 0;
+04955:       }
+04956:       state.window.push({ chars, messages });
+04957:       if (state.window.length > WINDOW) state.window.shift();
+04958:       state.movingFrontierChars = chars;
+04959:       state.movingFrontierMessages = messages;
+04960:       state.frontierStreak = priorFrontier > 0 && chars >= priorFrontier ? state.frontierStreak + 1 : 1;
+04961:       if (state.distinct < 3) {
+04962:         state.status = 'OBSERVING';
+04963:       } else if (state.regressionStreak >= 2) {
+04964:         state.status = 'VOLATILE';
+04965:       } else if (state.regressionStreak === 1) {
+04966:         state.status = 'REGRESSED';
+04967:       } else {
+04968:         state.status = 'ESTABLISHED';
+04969:         state.stableFloorChars = Math.min(...state.window.map((x) => x.chars));
+04970:         state.stableFloorMessages = Math.min(...state.window.map((x) => x.messages));
+04971:       }
+04972:       state.lastAt = at;
+04973:       return summarize(state, familyReset, true);
+04974:     },
+04975:     exportState() { return state ? { version: 2, state: cloneState(state) } : null; },
+04976:     importState(saved) {
+04977:       if (!saved || Number(saved.version) !== 2) return false;
+04978:       const restored = cloneState(saved.state);
+04979:       if (!restored || !restored.key || !restored.familyId) return false;
+04980:       state = restored;
+04981:       return true;
+04982:     },
+04983:     reset() { state = null; },
+04984:   });
+04985: }
+04986: module.exports = { createCacheCandidateTracker };
+04987: });
+04988: 
+04989: SimCore.define("runtime-telemetry", function (require, module, exports) {
+04990: const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
+04991: const MAX_AGE_MS = 10 * 60 * 1000;
+04992: 
+04993: function capture(input) {
+04994:   const locationKey = String(input?.locationKey || '');
+04995:   if (!locationKey) return null;
+04996:   return Object.freeze({
+04997:     schema: 1,
+04998:     sourceVersion: String(input?.sourceVersion || ''),
+04999:     locationKey,
+05000:     capturedAt: Number(input?.capturedAt || Date.now()),
+05001:     runtimePromptCache: input?.runtimePromptCache || null,
+05002:     requestTopology: input?.requestTopology || null,
+05003:     cacheCandidates: input?.cacheCandidates || null,
+05004:   });
+05005: }
+05006: 
+05007: function publish(root, capsule) {
+05008:   if (!root || !capsule) return false;
+05009:   try { root[KEY] = capsule; return true; } catch (_) { return false; }
+05010: }
+05011: 
+05012: function claim(root) {
+05013:   if (!root) return null;
+05014:   try {
+05015:     const capsule = root[KEY] || null;
+05016:     try { delete root[KEY]; } catch (_) { root[KEY] = undefined; }
+05017:     return capsule;
+05018:   } catch (_) { return null; }
+05019: }
+05020: 
+05021: function validate(capsule, locationKey, now = Date.now()) {
+05022:   if (!capsule) return { accepted: false, reason: 'no-compatible-handoff', capsule: null };
+05023:   if (Number(capsule.schema) !== 1) return { accepted: false, reason: 'schema-mismatch', capsule: null };
+05024:   if (String(capsule.locationKey || '') !== String(locationKey || '')) return { accepted: false, reason: 'location-mismatch', capsule: null };
+05025:   const ageMs = Math.max(0, Number(now) - Number(capsule.capturedAt || 0));
+05026:   if (!Number.isFinite(ageMs) || ageMs > MAX_AGE_MS) return { accepted: false, reason: 'expired', ageMs, capsule: null };
+05027:   return { accepted: true, reason: 'adopted', ageMs, capsule };
+05028: }
+05029: module.exports = { capture, publish, claim, validate };
+05030: });
+05031: 
+05032: SimCore.define("runtime-session", function (require, module, exports) {
+05033: function createSessionRuntime(deps) {
+05034:   const { coreRules, host, perfNow, perfMs, textMessageContent, readState, writeState } = deps;
+05035:   async function loadCoreForChat(chaIdx, chatIdx, chatArg = null, perfDetail = null) {
+05036:     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
+05037:     if (detail) {
+05038:       detail.path = 'UNKNOWN';
+05039:       detail.chatFallbackMs = 0;
+05040:       detail.characterLoadMs = 0;
+05041:       detail.initScanMs = 0;
+05042:       detail.initMs = 0;
+05043:     }
+05044:     let { coreSession, coreKey, coreLocationKey } = readState();
+05045:     let t = perfNow();
+05046:     const chat = chatArg || await host.getChat(chaIdx, chatIdx);
+05047:     if (detail) detail.chatFallbackMs = chatArg ? 0 : perfMs(t);
+05048:     if (!chat) {
+05049:       if (detail) detail.path = 'NO_CHAT';
+05050:       writeState({ coreSession: null, coreKey: null, coreLocationKey: null });
+05051:       return null;
+05052:     }
+05053: 
+05054:     const locationKey = `${chaIdx}:${chatIdx}:${chat.id ?? ''}`;
+05055:     if (coreSession && coreLocationKey === locationKey) {
+05056:       if (detail) detail.path = 'LOCATION_REUSE';
+05057:       return coreSession;
+05058:     }
+05059: 
+05060:     t = perfNow();
+05061:     const char = await host.getCharacter();
+05062:     if (detail) detail.characterLoadMs = perfMs(t);
+05063:     if (!char) {
+05064:       if (detail) detail.path = 'NO_CHARACTER';
+05065:       writeState({ coreSession: null, coreKey: null, coreLocationKey: null });
+05066:       return null;
+05067:     }
+05068:     const charId = char.chaId ?? char.name;
+05069:     const chatId = chat.id ?? `${charId}:${chatIdx}`;
+05070:     const key = `${charId}:${chatId}`;
+05071:     if (coreSession && coreKey === key) {
+05072:       writeState({ coreSession, coreKey, coreLocationKey: locationKey });
+05073:       if (detail) detail.path = 'KEY_REUSE';
+05074:       return coreSession;
+05075:     }
+05076: 
+05077:     coreSession = new coreRules.CoreRulesetSession(host.storageBackend(), {
+05078:       chatId,
+05079:       prefix: `sim:core:${key}`,
+05080:       keepN: 80,
+05081:     });
+05082:     coreKey = key;
+05083:     coreLocationKey = locationKey;
+===== MARKER: SimCore.define("runtime-probe" | hits=[5271] =====
+--- lines 5227-5366 ---
+05227:       const started = perfNow();
+05228:       const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply);
+05229:       probe.totalMs = perfMs(started);
+05230:       probe.chatLoadMs = Number(detail.chatLoadMs || 0);
+05231:       probe.prepareMs = Number(detail.prepareMs || 0);
+05232:       probe.setChatMs = Number(detail.setChatMs || 0);
+05233:       probe.canonicalFingerprint = detail.canonicalFingerprint ?? probe.canonicalFingerprint;
+05234:       probe.hostRawFingerprint = detail.hostRawFingerprint ?? probe.hostRawFingerprint;
+05235:       probe.freshFingerprint = detail.freshFingerprint ?? probe.freshFingerprint;
+05236:       probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
+05237:       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
+05238:       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
+05239:       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
+05240:       probe.finishedAt = Date.now();
+05241:     };
+05242: 
+05243:     if (typeof setTimeout === 'function') {
+05244:       const timer = setTimeout(() => { void runDeferredMirror(); }, 0);
+05245:       if (timer && typeof timer.unref === 'function') timer.unref();
+05246:     } else {
+05247:       void runDeferredMirror();
+05248:     }
+05249:     return true;
+05250:   }
+05251: 
+05252:   function clear() {
+05253:     latestByLocation.clear();
+05254:     lastProbe = null;
+05255:   }
+05256: 
+05257:   return Object.freeze({ schedule, lastProbe: () => lastProbe, clear });
+05258: }
+05259: module.exports = { createMirrorRuntime };
+05260: });
+05261: 
+05262: SimCore.define("runtime-hooks", function (require, module, exports) {
+05263: async function addBefore(Risuai, handler) { return Risuai.addRisuReplacer('beforeRequest', handler); }
+05264: async function addOutput(Risuai, handler) { return Risuai.addRisuScriptHandler('output', handler); }
+05265: async function remove(Risuai, beforeHandler, outputHandler) {
+05266:   try { await Risuai.removeRisuReplacer('beforeRequest', beforeHandler); } catch (_) {}
+05267:   try { await Risuai.removeRisuScriptHandler('output', outputHandler); } catch (_) {}
+05268: }
+05269: module.exports = { addBefore, addOutput, remove };
+05270: });
+05271: 
+05272: SimCore.define("runtime-probe", function (require, module, exports) {
+05273: function cachePosture(probe, contract) {
+05274:   if (!probe) return `${contract?.requestOrder || 'FROZEN'} · runtime ${contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER'} · runtime-prefix n/a · provider cache ${contract?.providerCache || 'UNVERIFIED'}`;
+05275:   const prefix = probe.baseline ? 'BASELINE' : `${Number(probe.stablePrefixPercent || 0).toFixed(1)}%`;
+05276:   return `${probe.requestOrder || contract?.requestOrder || 'FROZEN'} · runtime ${probe.placement || contract?.runtimePromptPlacement || 'TAIL_AFTER_CURRENT_USER'} · runtime-prefix ${prefix} · provider cache ${probe.providerCache || contract?.providerCache || 'UNVERIFIED'}`;
+05277: }
+05278: function cadence(ms) {
+05279:   if (ms == null || !Number.isFinite(Number(ms))) return 'BASELINE';
+05280:   const value = Math.max(0, Number(ms));
+05281:   if (value < 1000) return `${value.toFixed(0)} ms`;
+05282:   if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
+05283:   const minutes = Math.floor(value / 60000);
+05284:   const seconds = (value - minutes * 60000) / 1000;
+05285:   return `${minutes}m ${seconds.toFixed(1)}s`;
+05286: }
+05287: function topology(probe) {
+05288:   if (!probe) return 'n/a';
+05289:   if (probe.baseline) return `BASELINE · messages ${Number(probe.messages || 0)} · chars ${Number(probe.totalChars || 0).toLocaleString('en-US')}`;
+05290:   const first = probe.firstChangeIndex == null ? 'none' : `@${Number(probe.firstChangeIndex)} ${probe.previousRole || '?'}→${probe.currentRole || '?'}`;
+05291:   return `${probe.stable ? 'STABLE' : 'COMMON_PREFIX'} · messages ${Number(probe.commonMessages || 0)}/${Number(probe.messages || 0)} · chars ${Number(probe.commonChars || 0).toLocaleString('en-US')}/${Number(probe.totalChars || 0).toLocaleString('en-US')} · ratio ${Number(probe.commonRatio || 0).toFixed(1)}% · first change ${first}`;
+05292: }
+05293: function trajectory(probe) {
+05294:   if (!probe) return 'n/a';
+05295:   const family = probe.familyId ? String(probe.familyId).slice(0, 8) : 'n/a';
+05296:   const floor = probe.stableFloorChars == null ? 'n/a' : `${Number(probe.stableFloorMessages || 0)} msgs / ${Number(probe.stableFloorChars || 0).toLocaleString('en-US')} chars`;
+05297:   const frontier = probe.distinct <= 1 ? 'n/a' : `${Number(probe.movingFrontierMessages || 0)} msgs / ${Number(probe.movingFrontierChars || 0).toLocaleString('en-US')} chars`;
+05298:   const ema = probe.cadenceEmaMs == null ? 'BASELINE' : cadence(probe.cadenceEmaMs);
+05299:   return `${probe.status || 'n/a'} · family ${family}${probe.familyReset ? ' · FAMILY_RESET' : ''} · distinct ${Number(probe.distinct || 0)} · attempts ${Number(probe.attempts || 0)} · last ${probe.lastObservation || 'n/a'} · floor ${floor} · frontier ${frontier} · streak ${Number(probe.frontierStreak || 0)} · divergence ${Number(probe.divergenceCount || 0)} · cadence EMA ${ema}`;
+05300: }
+05301: 
+05302: function continuity(probe) {
+05303:   if (!probe) return 'FRESH · no compatible handoff';
+05304:   if (!probe.accepted) return `FRESH · ${probe.reason || 'no-compatible-handoff'}`;
+05305:   return `ADOPTED · from ${probe.sourceVersion || '?'} · age ${cadence(probe.ageMs)} · topology ${probe.topology ? 'RESTORED' : 'FRESH'} · runtime-prefix ${probe.runtimePrefix ? 'RESTORED' : 'FRESH'} · trajectory ${probe.trajectory ? 'RESTORED' : 'FRESH'}`;
+05306: }
+05307: function fingerprintChars(value) {
+05308:   const match = /^(\d+):/.exec(String(value || ''));
+05309:   return match ? Number(match[1]) : null;
+05310: }
+05311: function representation(probe) {
+05312:   if (!probe) return 'n/a';
+05313:   const canonical = fingerprintChars(probe.canonicalFingerprint);
+05314:   const fresh = fingerprintChars(probe.freshFingerprint);
+05315:   if (canonical == null || fresh == null) return 'n/a';
+05316:   const delta = fresh - canonical;
+05317:   const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
+05318:   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
+05319: }
+05320: module.exports = { cachePosture, cadence, topology, trajectory, continuity, representation };
+05321: });
+05322: 
+05323: (async () => {
+05324:   const coreRules = SimCore.require('session');
+05325:   const recurrenceRules = SimCore.require('recurrence');
+05326:   const evidenceRules = SimCore.require('evidence');
+05327:   const ops = SimCore.require('ops');
+05328:   const runtimeContracts = SimCore.require('runtime-contracts');
+05329:   const runtimeHostRules = SimCore.require('runtime-host');
+05330:   const runtimeCacheRules = SimCore.require('runtime-cache');
+05331:   const runtimeTopologyRules = SimCore.require('runtime-topology');
+05332:   const runtimeCacheCandidateRules = SimCore.require('runtime-cache-candidates');
+05333:   const runtimeTelemetryRules = SimCore.require('runtime-telemetry');
+05334:   const runtimeSessionRules = SimCore.require('runtime-session');
+05335:   const runtimeMirrorRules = SimCore.require('runtime-mirror');
+05336:   const runtimeHooks = SimCore.require('runtime-hooks');
+05337:   const runtimeProbeRules = SimCore.require('runtime-probe');
+05338:   let coreSession = null;
+05339:   let coreKey = null;
+05340:   let coreLocationKey = null;
+05341:   let lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
+05342:   let lastPerf = null;
+05343:   let lastOutputPerf = null;
+05344:   const diagnosticRuntimeBootAt = Date.now();
+05345:   const diagnosticRuntimeGeneration = `${diagnosticRuntimeBootAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+05346:   const diagnosticActivity = { requestHooks: 0, outputHooks: 0, requestSlow50: 0, outputSlow50: 0, requestMaxMs: 0, outputMaxMs: 0 };
+05347:   let runtimeDisposed = false;
+05348:   let runtimeEpoch = 1;
+05349:   let staleRuntimeDrops = 0;
+05350:   const simcoreUiParts = [];
+05351:   let lastHistoryRestore = null;
+05352:   let lastFrameGuardProbe = null;
+05353:   let lastEvidenceMappingProbe = null;
+05354:   let lastEvidenceFenceProbe = null;
+05355:   let lastNarrativeClockProbe = null;
+05356:   let lastTemplateRecurrenceProbe = null;
+05357:   let lastRequestLineageProbe = null;
+05358:   let lastCommunitySourceHandoffProbe = null;
+05359:   let lastRuntimePromptBudget = null;
+05360:   let lastRuntimePromptCacheProbe = null;
+05361:   let lastRequestTopologyProbe = null;
+05362:   let lastCacheTrajectoryProbe = null;
+05363:   let lastCacheCandidateCostMs = null;
+05364:   let lastTelemetryContinuityProbe = null;
+05365:   let lastTimestampCanonicalization = null;
+05366:   let lastPreambleProvenance = null;
+===== MARKER: function compileRuntimePrompt | hits=[3549] =====
+--- lines 3505-3644 ---
+03505:     lines.push('short_community_source_selector=current_lineage_root_turn');
+03506:     lines.push(`short_community_source_root_mode=${sourceRootMode}`);
+03507:     lines.push(`short_community_source_root_index=${sourceRootIndex}`);
+03508:     lines.push('short_community_source_is_authoritative=1');
+03509:     lines.push('current_root_evidence=CURRENT_ROOT_EVIDENCE_when_present;root_explicit_facts_highest_authority=1');
+03510:     lines.push('current_source_evidence=CURRENT_SOURCE_EVIDENCE_when_present;rendered_context_only_when_conflicting_with_root=1');
+03511:     lines.push('event_fact_precedence=CURRENT_ROOT_EVIDENCE>current_lineage_root>CURRENT_SOURCE_EVIDENCE>prior_similar_history');
+03512:     lines.push('do_not_substitute_prior_similar_source_or_prior_community_answer=1');
+03513:     lines.push('source_event_identity_and_facts=current_root_first;do_not_import_prior_similar_event_details=1');
+03514:     lines.push('abstract_generalization_from_current_root_allowed=1;stable_character_world_background_allowed_as_context_not_event_evidence=1;reaction_opinion_joke_tone_emphasis_free=1');
+03515:     lines.push('specific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support;CURRENT_SOURCE_EVIDENCE_may_support_only_nonconflicting_rendered_details=1;outside_root_specifics_omit=1');
+03516:     lines.push('outside_root_specific_event_evidence_only_if_current_user_explicitly_requests_prior_events_history_comparison_or_retrospective=1;boundary_applies_title_body_comments_descriptions_Knowledge=1');
+03517:     if (p.communitySourceHandoffNewSource) {
+03518:       lines.push(`short_community_request_reused_with_new_source=${sourceRootMode}`);
+03519:       lines.push('derive_reaction_from_current_source_not_prior_answer=1');
+03520:     }
+03521:   }
+03522:   if (communityExpected > 0) {
+03523:     lines.push('platform_groups_required=3_distinct');
+03524:     lines.push('platform_group_reuse_forbidden=1');
+03525:     if (/^B_/.test(p.mode)) lines.push('community_placement=after_broadcast_prose');
+03526:     if (p.mode === 'B_END') {
+03527:       lines.push('b_end_output_order=broadcast_prose_then_scene_community_then_episode_community');
+03528:       lines.push('b_end_communities_must_be_contiguous_at_end=1');
+03529:       lines.push('b_end_platform_groups_required=6_distinct_across_blocks');
+03530:       lines.push('b_end_cross_block_group_reuse_forbidden=1');
+03531:     }
+03532:     lines.push('knowledge_after_last_community=1');
+03533:   }
+03534:   return lines;
+03535: }
+03536: 
+03537: function compileHotState(s, communityExpected) {
+03538:   return communityExpected > 0
+03539:     ? [`reaction_max=${JSON.stringify(s.community.platformMax)}`]
+03540:     : [];
+03541: }
+03542: 
+03543: function compileFooter(communityExpected) {
+03544:   return [
+03545:     `final_required_blocks=COMMUNITY:${communityExpected},Knowledge:1_last`,
+03546:     '[/SIMCORE CORE STATE]',
+03547:   ];
+03548: }
+03549: 
+03550: function compileRuntimePrompt(state) {
+03551:   const s = kernel.reconcileState(state);
+03552:   const p = s.pending;
+03553:   if (!p?.active) return '';
+03554:   const communityExpected = lifecycle.expectedCommunityBlocks(p.mode);
+03555:   const tiers = [
+03556:     compileStableContract(),
+03557:     compileSlowState(s, p),
+03558:     compileModeState(s, p, communityExpected),
+03559:     compileConditionalGuidance(s, p, communityExpected),
+03560:     compileHotState(s, communityExpected),
+03561:     compileFooter(communityExpected),
+03562:   ];
+03563:   return tiers.flat().join('\n');
+03564: }
+03565: 
+03566: function renderRuntimePrompt(state) {
+03567:   return compileRuntimePrompt(state);
+03568: }
+03569: 
+03570: module.exports = { PROMPT_COMPILER_VERSION, compileRuntimePrompt, renderRuntimePrompt };
+03571: });
+03572: 
+03573: SimCore.define("session", function (require, module, exports) {
+03574: const { SnapshotStore } = require('./store');
+03575: const kernel = require('./kernel');
+03576: const lifecycle = require('./lifecycle');
+03577: const time = require('./time');
+03578: const frame = require('./frame');
+03579: const community = require('./community');
+03580: const reaction = require('./reaction');
+03581: const structure = require('./structure');
+03582: const recovery = require('./recovery');
+03583: const recurrence = require('./recurrence');
+03584: const prompt = require('./prompt');
+03585: 
+03586: function sessionNow() {
+03587:   return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+03588: }
+03589: function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
+03590: 
+03591: const renderRuntimePrompt = prompt.renderRuntimePrompt;
+03592: 
+03593: function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
+03594:   const state = kernel.reconcileState(kernel.clone(baseState));
+03595:   const p = state.pending;
+03596:   if (!p?.active) {
+03597:     state.pending = null;
+03598:     return { state, content: String(prepared?.content || ''), active: false, envelopeIssues: [], stateCommit: { communitySafe: false } };
+03599:   }
+03600: 
+03601:   let finalText = String(prepared?.content || '');
+03602:   const frameGuard = frame.enforceContinuity(finalText, p.frameFloor || null);
+03603:   finalText = frameGuard.content;
+03604:   const timestampCanonicalization = time.canonicalizeTimestampSyntax(finalText);
+03605:   finalText = timestampCanonicalization.content;
+03606:   const envelope = prepared?.envelope || { resolved: true, issues: [], diagnostics: [], repaired: false };
+03607:   const commit = structure.stateCommitSafety(finalText, p, envelope.resolved);
+03608:   state.community.lastNormalization = [];
+03609:   if (commit.communitySafe) {
+03610:     if (opts.normalizeReactions === false) reaction.recordReactionMaxima(finalText, state);
+03611:     else finalText = reaction.normalizeReactionNumbers(finalText, state);
+03612:     state.community.activationCount += commit.expectedBlocks;
+03613:   } else {
+03614:     state.lastOutputQuarantine = {
+03615:       outIndex: Number.isInteger(Number(outIndex)) ? Number(outIndex) : -1,
+03616:       reason: commit.reason,
+03617:       observedBlocks: commit.observedBlocks,
+03618:       expectedBlocks: commit.expectedBlocks,
+03619:     };
+03620:   }
+03621: 
+03622:   let calendarRepair = null;
+03623:   let sceneRolloverRepair = null;
+03624:   let narrativeFloor = null;
+03625:   if (!/^B_/.test(String(p.mode || ''))) {
+03626:     calendarRepair = time.enforceNarrativeCalendarTarget(finalText, p.narrativeCalendarTarget || null);
+03627:     finalText = calendarRepair.content;
+03628:     sceneRolloverRepair = time.repairNarrativeYearRolloverSequence(finalText, p.narrativeCalendarTarget || null);
+03629:     finalText = sceneRolloverRepair.content;
+03630:     narrativeFloor = time.enforceNarrativeCurrentTimeFloor(
+03631:       finalText,
+03632:       p.narrativeTimestampPrevious || state.narrativeTimestamp || null,
+03633:     );
+03634:     finalText = narrativeFloor.content;
+03635:   }
+03636:   time.applyWorldYear(state, time.timestampYear(finalText));
+03637:   let narrativeClockProbe = null;
+03638:   if (!/^B_/.test(String(p.mode || ''))) {
+03639:     const narrativeCommit = time.commitNarrativeTimestamp(state, p, finalText);
+03640:     time.applyWorldYear(state, time.timestampYear(narrativeCommit.timestamp));
+03641:     const previousNarrative = narrativeCommit.previous || p.narrativeTimestampPrevious || null;
+03642:     const narrativeCmp = narrativeCommit.timestamp && previousNarrative
+03643:       ? time.compareTimestamps(narrativeCommit.timestamp, previousNarrative)
+03644:       : null;
+===== MARKER: messages.push({ role: 'system', content: result.promptBlock }); | hits=[5594] =====
+--- lines 5550-5689 ---
+05550:         sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
+05551:         mode: runtimeBudgetMode,
+05552:         chars: runtimeBudgetText.length,
+05553:         lines: runtimeBudgetLines.length,
+05554:         reactionMaxChars: runtimeBudgetReactionLine.length,
+05555:         referenceLines: runtimeBudgetLines.filter((line) => line === 'reference_sources=character_card+currently_exposed_lore_if_present' || line === 'character_world_facts_use_reference_sources=1').length,
+05556:         ageAnchor: runtimeBudgetLines.some((line) => line.startsWith('current_korean_age=')),
+05557:         broadcast: /^B_/.test(String(runtimeBudgetMode || '')),
+05558:         community: runtimeBudgetLines.some((line) => line.startsWith('platform_groups_required=')),
+05559:         narrativeProgression: runtimeBudgetLines.some((line) => line === 'timestamp_semantics=current_narrative_time'),
+05560:         recurrence: runtimeBudgetLines.some((line) => line === 'request_template_recurs_from_prior_history=1'),
+05561:         handoff: runtimeBudgetLines.some((line) => line.startsWith('short_community_request_reused_with_new_source=')),
+05562:         lineageAnchor: runtimeBudgetLines.some((line) => line === 'short_community_request_context_is_current_lineage=1'),
+05563:         sourceAnchor: runtimeBudgetLines.some((line) => line === 'short_community_source_is_authoritative=1'),
+05564:         at: Date.now(),
+05565:       };
+05566:       const evidenceResult = lastRuntimePromptBudget.sourceAnchor
+05567:         ? evidenceRules.inspectAndFence(messages, chat?.message || [], result.state.pending, sendIndex, textMessageContent)
+05568:         : null;
+05569:       lastEvidenceMappingProbe = evidenceResult?.mapping || null;
+05570:       lastEvidenceFenceProbe = evidenceResult || null;
+05571:       const runtimePromptKey = String(coreKey || coreLocationKey || '');
+05572:       if (!telemetryAdoptionAttempted) {
+05573:         telemetryAdoptionAttempted = true;
+05574:         const adoption = runtimeTelemetryRules.validate(pendingTelemetryHandoff, runtimePromptKey, Date.now());
+05575:         let restoredRuntimePrefix = false;
+05576:         let restoredTopology = false;
+05577:         let restoredTrajectory = false;
+05578:         if (adoption.accepted && adoption.capsule) {
+05579:           restoredRuntimePrefix = runtimePromptCache.importState(adoption.capsule.runtimePromptCache);
+05580:           restoredTopology = requestTopology.importState(adoption.capsule.requestTopology);
+05581:           restoredTrajectory = cacheCandidates.importState(adoption.capsule.cacheCandidates);
+05582:         }
+05583:         lastTelemetryContinuityProbe = Object.freeze({
+05584:           accepted: !!adoption.accepted, reason: adoption.reason || 'no-compatible-handoff',
+05585:           sourceVersion: adoption.capsule?.sourceVersion || null, ageMs: adoption.ageMs ?? null,
+05586:           runtimePrefix: restoredRuntimePrefix, topology: restoredTopology, trajectory: restoredTrajectory,
+05587:         });
+05588:         pendingTelemetryHandoff = null;
+05589:       }
+05590:       lastRuntimePromptCacheProbe = runtimePromptCache.observe(runtimePromptKey, runtimeBudgetText, {
+05591:         sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
+05592:         mode: runtimeBudgetMode,
+05593:         at: Date.now(),
+05594:       });
+05595:       messages.push({ role: 'system', content: result.promptBlock });
+05596:       const topologyStarted = perfNow();
+05597:       lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
+05598:         runtimeIndex: messages.length - 1,
+05599:         at: Number(lastRuntimePromptCacheProbe?.at || Date.now()),
+05600:       });
+05601:       if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
+05602:       const candidateStarted = perfNow();
+05603:       lastCacheTrajectoryProbe = cacheCandidates.observe(runtimePromptKey, lastRequestTopologyProbe, {
+05604:         sendIndex: Number.isInteger(Number(result.state.pending?.sendIndex)) ? Number(result.state.pending.sendIndex) : -1,
+05605:         at: Number(lastRequestTopologyProbe?.at || Date.now()),
+05606:       });
+05607:       lastCacheCandidateCostMs = perfMs(candidateStarted);
+05608:       const pendingProbe = result.state.pending || null;
+05609:       if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
+05610:         lastNarrativeClockProbe = {
+05611:           phase: 'pending',
+05612:           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+05613:           outIndex: -1,
+05614:           previousMode: snapshotDetail?.previousMode || null,
+05615:           mode: pendingProbe.mode || null,
+05616:           guardActive: !!pendingProbe.narrativeClockGuard,
+05617:           trigger: pendingProbe.narrativeProgressionReason || 'none',
+05618:           previousAnchor: pendingProbe.narrativeTimestampPrevious || null,
+05619:           outputTimestamp: null,
+05620:           commitStatus: 'PENDING',
+05621:           commitReason: 'pending',
+05622:           at: Date.now(),
+05623:         };
+05624:       }
+05625:       if (pendingProbe) {
+05626:         lastTemplateRecurrenceProbe = {
+05627:           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+05628:           mode: pendingProbe.mode || null,
+05629:           modeFamily: pendingProbe.templateRecurrenceModeFamily || null,
+05630:           hash: pendingProbe.templateRecurrenceHash == null ? null : Number(pendingProbe.templateRecurrenceHash),
+05631:           eligible: !!pendingProbe.templateRecurrenceEligible,
+05632:           repeated: !!pendingProbe.templateRecurrenceRepeated,
+05633:           normalizedChars: Number(pendingProbe.templateRecurrenceChars || 0),
+05634:           registrySize: Number(pendingProbe.templateRegistrySize || 0),
+05635:           bootstrap: snapshotDetail?.templateBootstrap || null,
+05636:           at: Date.now(),
+05637:         };
+05638:       } else {
+05639:         lastTemplateRecurrenceProbe = null;
+05640:       }
+05641:       if (pendingProbe) {
+05642:         const l = result.state.requestLineage || {};
+05643:         lastRequestLineageProbe = {
+05644:           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+05645:           currentMode: pendingProbe.mode || null,
+05646:           transitionFrom: l.transitionFrom || null,
+05647:           sourceKind: l.sourceKind || 'UNSEEDED',
+05648:           rootMode: l.rootMode || null,
+05649:           rootIndex: Number(l.rootIndex ?? -1),
+05650:           parentMode: l.parentMode || null,
+05651:           parentIndex: Number(l.parentIndex ?? -1),
+05652:           depth: Number(l.depth || 0),
+05653:           inlineSource: !!l.inlineSource,
+05654:           recentSources: Array.isArray(l.recentSources) ? l.recentSources.slice(-4) : [],
+05655:           at: Date.now(),
+05656:         };
+05657:       } else {
+05658:         lastRequestLineageProbe = null;
+05659:       }
+05660:       if (pendingProbe) {
+05661:         lastCommunitySourceHandoffProbe = {
+05662:           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
+05663:           eligible: !!pendingProbe.communitySourceHandoffEligible,
+05664:           seen: !!pendingProbe.communitySourceHandoffSeen,
+05665:           newSource: !!pendingProbe.communitySourceHandoffNewSource,
+05666:           parentComparable: !!pendingProbe.communitySourceHandoffParentComparable,
+05667:           parentShift: !!pendingProbe.communitySourceHandoffParentShift,
+05668:           normalizedChars: Number(pendingProbe.communitySourceHandoffChars || 0),
+05669:           rootMode: pendingProbe.communitySourceHandoffRootMode || null,
+05670:           rootIndex: Number(pendingProbe.communitySourceHandoffRootIndex ?? -1),
+05671:           parentMode: pendingProbe.communitySourceHandoffParentMode || null,
+05672:           parentIndex: Number(pendingProbe.communitySourceHandoffParentIndex ?? -1),
+05673:           depth: Number(pendingProbe.communitySourceHandoffDepth ?? -1),
+05674:           priorRootMode: pendingProbe.communitySourceHandoffPriorRootMode || null,
+05675:           priorRootIndex: Number(pendingProbe.communitySourceHandoffPriorRootIndex ?? -1),
+05676:           priorParentMode: pendingProbe.communitySourceHandoffPriorParentMode || null,
+05677:           priorParentIndex: Number(pendingProbe.communitySourceHandoffPriorParentIndex ?? -1),
+05678:           priorDepth: Number(pendingProbe.communitySourceHandoffPriorDepth ?? -1),
+05679:           registrySize: Number(pendingProbe.communitySourceHandoffRegistrySize || 0),
+05680:           reason: pendingProbe.communitySourceHandoffReason || 'ineligible',
+05681:           at: Date.now(),
+05682:         };
+05683:       } else {
+05684:         lastCommunitySourceHandoffProbe = null;
+05685:       }
+05686:       lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
+05687:     } else {
+05688:       lastRuntimePromptBudget = null;
+05689:       lastRuntimePromptCacheProbe = null;
+===== MARKER: `Cache posture: | hits=[6227] =====
+--- lines 6183-6322 ---
+06183:     const warnings = outputFresh && Array.isArray(lastCore?.issues) ? lastCore.issues : [];
+06184:     const compatibility = outputFresh && Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
+06185:     const prefixLabel = !probeFresh || !cacheProbe
+06186:       ? 'n/a'
+06187:       : (cacheProbe.baseline
+06188:         ? 'BASELINE'
+06189:         : `${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${cacheProbe.reason || 'other'}`);
+06190:     const lines = [
+06191:       '=== SimCore Last Turn Diagnostic ===',
+06192:       'Diagnostic format: raw-lineage-v2',
+06193:       `Version: ${SIMCORE_RUNTIME_VERSION}`,
+06194:       `Captured: ${new Date(capturedAt).toISOString()}`,
+06195:       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
+06196:       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
+06197:       `Probe context: ${probeFresh ? 'CURRENT TURN' : (requestProbe?.sendIndex >= 0 ? `STALE · probe user @${Number(requestProbe.sendIndex)} · current user @${currentUserIndex >= 0 ? currentUserIndex : 'n/a'}` : 'UNAVAILABLE')}`,
+06198:       `Request hook: ${probeFresh ? (requestProbe?.hookSeen ? 'SEEN' : 'n/a') : 'n/a'}`,
+06199:       `Core handshake: ${probeFresh ? (requestProbe?.handshake || 'UNKNOWN') : 'n/a'}`,
+06200:       `Runtime status: ${probeFresh ? (requestProbe?.status || 'UNKNOWN') : 'n/a'} · output ${probeFresh ? (requestProbe?.outputStatus || 'n/a') : 'n/a'}`,
+06201:       `Mode: ${runtimeMode || 'n/a'}`,
+06202:       `Stored last mode: ${state?.lastMode || 'n/a'}`,
+06203:       `Turn binding: request user @${probeFresh ? Number(requestProbe?.sendIndex) : 'n/a'} · output assistant @${outputFresh ? Number(requestProbe?.outIndex) : 'n/a'}`,
+06204:       `Stability: ${stabilityStatus} · binding ${bindingStatus} · out ${outputFresh ? 'COMMITTED' : (probeFresh ? String(requestProbe?.outputStatus || 'n/a') : 'NOT_EXERCISED')} · mirror ${mirrorStatus} · stale ${staleRuntimeDrops} · hooks NAMED`,
+06205:       `Request timing: ${probeFresh ? `hook ${diagnosticTimingIso(requestProbe?.at)} · handshake +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.handshakeAt)} · prepared +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.preparedAt)} · done +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.requestDoneAt)}` : 'n/a'}`,
+06206:       `Handshake breakdown: ${requestBreakdown ? `indices ${diagnosticFormatMs(requestBreakdown.indicesMs)} · chat ${diagnosticFormatMs(requestBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(requestBreakdown.sessionLoadMs)} · prompt scan ${diagnosticFormatMs(requestBreakdown.promptScanMs)} · other ${diagnosticFormatMs(requestBreakdown.handshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.handshakeTotal)}` : 'n/a'}`,
+06207:       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
+06208:       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
+06209:       `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,
+06210:       `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
+06211:       `Pre snapshot: ${requestBreakdown ? `${String(requestBreakdown.restoreReason || 'n/a').toUpperCase()} · ${requestBreakdown.preRead ? `READ ${requestBreakdown.preHit ? 'HIT' : 'MISS'}` : 'SKIPPED'} · ${diagnosticFormatMs(requestBreakdown.preLoadMs)}` : 'n/a'}`,
+06212:       `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,
+06213:       `Request hotspot: ${requestBreakdown ? `${requestBreakdown.hotspot} · ${diagnosticFormatMs(requestBreakdown.hotspotMs)} · ${Number(requestBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
+06214:       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
+06215:       `Output handler breakdown: ${outputBreakdown ? `indices ${diagnosticFormatMs(outputBreakdown.indicesMs)} · chat ${diagnosticFormatMs(outputBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(outputBreakdown.sessionLoadMs)} · process ${diagnosticFormatMs(outputBreakdown.processTotal)} · mirror ${diagnosticFormatMs(outputBreakdown.mirrorTotal)} · diagnostics ${diagnosticFormatMs(outputBreakdown.diagnosticsMs)} · other ${diagnosticFormatMs(outputBreakdown.handlerOther)} · total ${diagnosticFormatMs(outputBreakdown.total)}` : 'n/a'}`,
+06216:       `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,
+06217:       `Output mirror: ${outputBreakdown ? `DEFERRED · critical path ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
+06218:       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
+06219:       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
+06220:       `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
+06221:       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
+06222:       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
+06223:       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
+06224:       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
+06225:       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
+06226:       `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · policy ${preamble.policy || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
+06227:       `Prompt prefix: ${prefixLabel}`,
+06228:       `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
+06229:       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
+06230:       `Cache placement: ${probeFresh && topologyProbe ? `current user @${topologyProbe.currentUserIndex >= 0 ? Number(topologyProbe.currentUserIndex) : 'n/a'} · ${topologyProbe.currentUserPosition || 'n/a'} · runtime @${topologyProbe.runtimeIndex >= 0 ? Number(topologyProbe.runtimeIndex) : 'n/a'} · ${topologyProbe.runtimePosition || 'n/a'}` : 'n/a'}`,
+06231:       `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
+06232:       `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,
+06233:       `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
+06234:       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
+06235:       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
+06236:       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
+06237:       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
+06238:       `Recurrence guidance: ${probeFresh && budget ? (budget.recurrence ? 'ON' : 'OFF') : 'n/a'}`,
+06239:       `Recurrence history match: ${recurrenceHistory ? `${recurrenceHistory.status} · hash ${recurrenceHistory.hashHex} · user @${recurrenceHistory.userIndex >= 0 ? recurrenceHistory.userIndex : 'n/a'} · assistant @${recurrenceHistory.assistantIndex >= 0 ? recurrenceHistory.assistantIndex : 'n/a'}${recurrenceHistory.distance != null ? ` · distance ${recurrenceHistory.distance}` : ''}` : 'n/a'}`,
+06240:       `Request lineage: ${probeFresh && lineage ? `${lineage.sourceKind || 'UNSEEDED'} · root ${lineage.rootMode || 'n/a'}@${Number(lineage.rootIndex ?? -1)} · parent ${lineage.parentMode || 'n/a'}@${Number(lineage.parentIndex ?? -1)} · depth ${Number(lineage.depth || 0)}` : 'n/a'}`,
+06241:       `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
+06242:       `RAW frame continuity: ${frameProbe.label}`,
+06243:       `RAW frame regression: ${frameProbe.regression}`,
+06244:       `Continuity summary: ${probeFresh ? ((frameGuard?.applied || narrative?.calendarFrameChanged || Number(narrative?.sceneRolloverCount || 0) > 0 || narrative?.floorApplied) ? 'REPAIRED' : 'PASS') : 'n/a'}`,
+06245:       `Calendar transition: ${probeFresh && narrative ? (narrative.calendarEligible ? `${narrative.calendarReason || 'RESOLVED'} · previous ${narrative.calendarPreviousDate || 'n/a'} · target ${narrative.calendarTargetDate || 'n/a'} · weekday ${narrative.calendarWeekday || 'n/a'}${narrative.calendarFrameChanged ? ' · FRAME_REPAIRED' : ''}${Number(narrative.sceneRolloverCount || 0) > 0 ? ` · scene-year repairs ${Number(narrative.sceneRolloverCount || 0)}` : ''}` : `INELIGIBLE · ${narrative.calendarReason || 'none'}`) : 'n/a'}`,
+06246:       `Frame sequence: ${frameGuard ? `${frameGuard.sequenceStatus || (frameGuard.applied ? 'REPAIRED' : 'PASS')} · volume ${frameGuard.observed?.volume ?? 'n/a'}→${frameGuard.output?.volume ?? 'n/a'} expected ${frameGuard.expected?.volume ?? 'n/a'} · chapter ${frameGuard.observed?.chapter ?? 'n/a'}→${frameGuard.output?.chapter ?? 'n/a'} expected ${frameGuard.expected?.chapter ?? 'n/a'} · Chatindex ${frameGuard.observed?.chatindex ?? 'n/a'}→${frameGuard.output?.chatindex ?? 'n/a'} expected ${frameGuard.expected?.chatindex ?? 'n/a'}` : 'n/a'}`,
+06247:       `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'REPAIRED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
+06248:       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
+06249:       `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
+06250:       `Evidence mode: ${evidenceFence?.mode || 'n/a'}`,
+06251:       `Evidence root fence: ${evidenceFence?.rootFence ? `${evidenceFence.rootFence.status} · request @${evidenceFence.rootFence.requestIndex >= 0 ? evidenceFence.rootFence.requestIndex : 'n/a'} role ${evidenceFence.rootFence.role || 'n/a'} · shape ${evidenceFence.rootFence.shape || 'n/a'} · delta ${evidenceFence.rootFence.normDelta == null ? 'n/a' : evidenceFence.rootFence.normDelta} · ${evidenceFence.rootFence.reason || 'n/a'}` : 'n/a'}`,
+06252:       `Evidence source fence: ${evidenceFence?.sourceFence ? `${evidenceFence.sourceFence.status} · request @${evidenceFence.sourceFence.requestIndex >= 0 ? evidenceFence.sourceFence.requestIndex : 'n/a'} role ${evidenceFence.sourceFence.role || 'n/a'} · shape ${evidenceFence.sourceFence.shape || 'n/a'} · delta ${evidenceFence.sourceFence.normDelta == null ? 'n/a' : evidenceFence.sourceFence.normDelta} · ${evidenceFence.sourceFence.reason || 'n/a'}` : 'n/a'}`,
+06253:       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
+06254:       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
+06255:       '',
+06256:       'Warnings detail:',
+06257:       ...(warnings.length ? warnings.map((x) => `- ${x}`) : ['- none']),
+06258:       'Compatibility detail:',
+06259:       ...(compatibility.length ? compatibility.map((x) => `- ${x}`) : ['- none']),
+06260:       '',
+06261:     ];
+06262: 
+06263:     const sections = [];
+06264:     let previousAssistantIndex = -1;
+06265:     const previousSearchBefore = currentUserIndex >= 0 ? currentUserIndex : latestAssistantIndex;
+06266:     for (let i = previousSearchBefore - 1; i >= 0; i--) {
+06267:       if (diagnosticAssistantRole(messages[i])) {
+06268:         previousAssistantIndex = i;
+06269:         break;
+06270:       }
+06271:     }
+06272:     const previousUserIndex = diagnosticUserBefore(
+06273:       messages,
+06274:       previousAssistantIndex >= 0 ? previousAssistantIndex : previousSearchBefore,
+06275:     );
+06276: 
+06277:     if (previousUserIndex >= 0 || previousAssistantIndex >= 0) {
+06278:       sections.push(diagnosticSection(
+06279:         '직전 턴 (RAW)',
+06280:         messages,
+06281:         previousUserIndex,
+06282:         previousAssistantIndex,
+06283:       ));
+06284:     } else {
+06285:       sections.push([
+06286:         '--- 직전 턴 (RAW) ---',
+06287:         'unavailable',
+06288:         '',
+06289:       ].join('\n'));
+06290:     }
+06291: 
+06292:     sections.push(diagnosticSection(
+06293:       '최근 턴 (RAW)',
+06294:       messages,
+06295:       currentUserIndex,
+06296:       latestAssistantIndex,
+06297:       [`Runtime mode: ${runtimeMode || 'n/a'} · stored last mode: ${state?.lastMode || 'n/a'}`],
+06298:     ));
+06299:     return lines.join('\n') + sections.join('\n');
+06300:   }
+06301: 
+06302:   async function copyLastTurnDiagnostic(chat, state) {
+06303:     try {
+06304:       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+06305:         await navigator.clipboard.writeText(buildLastTurnDiagnosticReport(chat, state));
+06306:         return true;
+06307:       }
+06308:     } catch (_) {}
+06309:     return false;
+06310:   }
+06311: 
+06312:   async function openPanel() {
+06313:     try {
+06314:       const { chaIdx, chatIdx } = await host.currentIndices();
+06315:       const chat = await host.getChat(chaIdx, chatIdx);
+06316:       await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat);
+06317:       const s = coreSession?.current;
+06318:       const storageDiag = coreSession?.storageDiagnostics?.() || null;
+06319:       const aliasDiag = coreSession?.communityAliasDiagnostics?.() || null;
+06320:       const recurrenceDiag = coreSession?.templateRecurrenceDiagnostics?.() || null;
+06321:       const maxima = Object.entries(s?.community?.platformMax || {})
+06322:         .map(([k, v]) => [k, Math.max(0, Math.round(Number(v) || 0))])
+===== MARKER: `Cache topology: | hits=[6228] =====
+--- lines 6184-6323 ---
+06184:     const compatibility = outputFresh && Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
+06185:     const prefixLabel = !probeFresh || !cacheProbe
+06186:       ? 'n/a'
+06187:       : (cacheProbe.baseline
+06188:         ? 'BASELINE'
+06189:         : `${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${cacheProbe.reason || 'other'}`);
+06190:     const lines = [
+06191:       '=== SimCore Last Turn Diagnostic ===',
+06192:       'Diagnostic format: raw-lineage-v2',
+06193:       `Version: ${SIMCORE_RUNTIME_VERSION}`,
+06194:       `Captured: ${new Date(capturedAt).toISOString()}`,
+06195:       `Runtime boot: ${diagnosticTimingIso(diagnosticRuntimeBootAt)} · generation ${diagnosticRuntimeGeneration}`,
+06196:       `Reload safety: ${runtimeDisposed ? 'DISPOSED' : 'ARMED'} · epoch ${runtimeEpoch} · stale drops ${staleRuntimeDrops} · UI parts ${simcoreUiParts.length} · hook cleanup NAMED`,
+06197:       `Probe context: ${probeFresh ? 'CURRENT TURN' : (requestProbe?.sendIndex >= 0 ? `STALE · probe user @${Number(requestProbe.sendIndex)} · current user @${currentUserIndex >= 0 ? currentUserIndex : 'n/a'}` : 'UNAVAILABLE')}`,
+06198:       `Request hook: ${probeFresh ? (requestProbe?.hookSeen ? 'SEEN' : 'n/a') : 'n/a'}`,
+06199:       `Core handshake: ${probeFresh ? (requestProbe?.handshake || 'UNKNOWN') : 'n/a'}`,
+06200:       `Runtime status: ${probeFresh ? (requestProbe?.status || 'UNKNOWN') : 'n/a'} · output ${probeFresh ? (requestProbe?.outputStatus || 'n/a') : 'n/a'}`,
+06201:       `Mode: ${runtimeMode || 'n/a'}`,
+06202:       `Stored last mode: ${state?.lastMode || 'n/a'}`,
+06203:       `Turn binding: request user @${probeFresh ? Number(requestProbe?.sendIndex) : 'n/a'} · output assistant @${outputFresh ? Number(requestProbe?.outIndex) : 'n/a'}`,
+06204:       `Stability: ${stabilityStatus} · binding ${bindingStatus} · out ${outputFresh ? 'COMMITTED' : (probeFresh ? String(requestProbe?.outputStatus || 'n/a') : 'NOT_EXERCISED')} · mirror ${mirrorStatus} · stale ${staleRuntimeDrops} · hooks NAMED`,
+06205:       `Request timing: ${probeFresh ? `hook ${diagnosticTimingIso(requestProbe?.at)} · handshake +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.handshakeAt)} · prepared +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.preparedAt)} · done +${diagnosticTimingDelta(requestProbe?.at, requestProbe?.requestDoneAt)}` : 'n/a'}`,
+06206:       `Handshake breakdown: ${requestBreakdown ? `indices ${diagnosticFormatMs(requestBreakdown.indicesMs)} · chat ${diagnosticFormatMs(requestBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(requestBreakdown.sessionLoadMs)} · prompt scan ${diagnosticFormatMs(requestBreakdown.promptScanMs)} · other ${diagnosticFormatMs(requestBreakdown.handshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.handshakeTotal)}` : 'n/a'}`,
+06207:       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
+06208:       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
+06209:       `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,
+06210:       `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
+06211:       `Pre snapshot: ${requestBreakdown ? `${String(requestBreakdown.restoreReason || 'n/a').toUpperCase()} · ${requestBreakdown.preRead ? `READ ${requestBreakdown.preHit ? 'HIT' : 'MISS'}` : 'SKIPPED'} · ${diagnosticFormatMs(requestBreakdown.preLoadMs)}` : 'n/a'}`,
+06212:       `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,
+06213:       `Request hotspot: ${requestBreakdown ? `${requestBreakdown.hotspot} · ${diagnosticFormatMs(requestBreakdown.hotspotMs)} · ${Number(requestBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
+06214:       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
+06215:       `Output handler breakdown: ${outputBreakdown ? `indices ${diagnosticFormatMs(outputBreakdown.indicesMs)} · chat ${diagnosticFormatMs(outputBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(outputBreakdown.sessionLoadMs)} · process ${diagnosticFormatMs(outputBreakdown.processTotal)} · mirror ${diagnosticFormatMs(outputBreakdown.mirrorTotal)} · diagnostics ${diagnosticFormatMs(outputBreakdown.diagnosticsMs)} · other ${diagnosticFormatMs(outputBreakdown.handlerOther)} · total ${diagnosticFormatMs(outputBreakdown.total)}` : 'n/a'}`,
+06216:       `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,
+06217:       `Output mirror: ${outputBreakdown ? `DEFERRED · critical path ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
+06218:       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
+06219:       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
+06220:       `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
+06221:       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
+06222:       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
+06223:       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
+06224:       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
+06225:       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
+06226:       `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · policy ${preamble.policy || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
+06227:       `Prompt prefix: ${prefixLabel}`,
+06228:       `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
+06229:       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,
+06230:       `Cache placement: ${probeFresh && topologyProbe ? `current user @${topologyProbe.currentUserIndex >= 0 ? Number(topologyProbe.currentUserIndex) : 'n/a'} · ${topologyProbe.currentUserPosition || 'n/a'} · runtime @${topologyProbe.runtimeIndex >= 0 ? Number(topologyProbe.runtimeIndex) : 'n/a'} · ${topologyProbe.runtimePosition || 'n/a'}` : 'n/a'}`,
+06231:       `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
+06232:       `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,
+06233:       `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
+06234:       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
+06235:       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
+06236:       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
+06237:       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
+06238:       `Recurrence guidance: ${probeFresh && budget ? (budget.recurrence ? 'ON' : 'OFF') : 'n/a'}`,
+06239:       `Recurrence history match: ${recurrenceHistory ? `${recurrenceHistory.status} · hash ${recurrenceHistory.hashHex} · user @${recurrenceHistory.userIndex >= 0 ? recurrenceHistory.userIndex : 'n/a'} · assistant @${recurrenceHistory.assistantIndex >= 0 ? recurrenceHistory.assistantIndex : 'n/a'}${recurrenceHistory.distance != null ? ` · distance ${recurrenceHistory.distance}` : ''}` : 'n/a'}`,
+06240:       `Request lineage: ${probeFresh && lineage ? `${lineage.sourceKind || 'UNSEEDED'} · root ${lineage.rootMode || 'n/a'}@${Number(lineage.rootIndex ?? -1)} · parent ${lineage.parentMode || 'n/a'}@${Number(lineage.parentIndex ?? -1)} · depth ${Number(lineage.depth || 0)}` : 'n/a'}`,
+06241:       `Source handoff: ${probeFresh && handoff ? `${handoff.newSource ? 'NEW SOURCE' : (handoff.eligible ? (handoff.seen ? 'SAME SOURCE' : 'FIRST') : 'INELIGIBLE')} · reason ${handoff.reason || 'n/a'}` : 'n/a'}`,
+06242:       `RAW frame continuity: ${frameProbe.label}`,
+06243:       `RAW frame regression: ${frameProbe.regression}`,
+06244:       `Continuity summary: ${probeFresh ? ((frameGuard?.applied || narrative?.calendarFrameChanged || Number(narrative?.sceneRolloverCount || 0) > 0 || narrative?.floorApplied) ? 'REPAIRED' : 'PASS') : 'n/a'}`,
+06245:       `Calendar transition: ${probeFresh && narrative ? (narrative.calendarEligible ? `${narrative.calendarReason || 'RESOLVED'} · previous ${narrative.calendarPreviousDate || 'n/a'} · target ${narrative.calendarTargetDate || 'n/a'} · weekday ${narrative.calendarWeekday || 'n/a'}${narrative.calendarFrameChanged ? ' · FRAME_REPAIRED' : ''}${Number(narrative.sceneRolloverCount || 0) > 0 ? ` · scene-year repairs ${Number(narrative.sceneRolloverCount || 0)}` : ''}` : `INELIGIBLE · ${narrative.calendarReason || 'none'}`) : 'n/a'}`,
+06246:       `Frame sequence: ${frameGuard ? `${frameGuard.sequenceStatus || (frameGuard.applied ? 'REPAIRED' : 'PASS')} · volume ${frameGuard.observed?.volume ?? 'n/a'}→${frameGuard.output?.volume ?? 'n/a'} expected ${frameGuard.expected?.volume ?? 'n/a'} · chapter ${frameGuard.observed?.chapter ?? 'n/a'}→${frameGuard.output?.chapter ?? 'n/a'} expected ${frameGuard.expected?.chapter ?? 'n/a'} · Chatindex ${frameGuard.observed?.chatindex ?? 'n/a'}→${frameGuard.output?.chatindex ?? 'n/a'} expected ${frameGuard.expected?.chatindex ?? 'n/a'}` : 'n/a'}`,
+06247:       `Frame guard: ${frameGuard ? `${frameGuard.applied ? 'REPAIRED' : 'PASS'} · ${frameGuard.regression || 'NONE'}` : 'n/a'}`,
+06248:       `Evidence shape: ${evidenceMap ? `${evidenceMap.status} · root ${evidenceMap.rootUserShape} raw @${evidenceMap.rootUserRawIndex}→request @${evidenceMap.rootUserRequestIndex >= 0 ? evidenceMap.rootUserRequestIndex : 'n/a'} role ${evidenceMap.rootUserRequestRole || 'n/a'} (${evidenceMap.rootUserMatches} match) · source assistant ${evidenceMap.sourceAssistantShape} raw @${evidenceMap.sourceAssistantRawIndex >= 0 ? evidenceMap.sourceAssistantRawIndex : 'n/a'}→request @${evidenceMap.sourceAssistantRequestIndex >= 0 ? evidenceMap.sourceAssistantRequestIndex : 'n/a'} role ${evidenceMap.sourceAssistantRequestRole || 'n/a'} (${evidenceMap.sourceAssistantMatches} match)` : 'n/a'}`,
+06249:       `Evidence boundary: ${evidenceMap ? `root anchors ${evidenceMap.rootUserAnchorMask} · norm ${evidenceMap.rootUserNormChars}→${evidenceMap.rootUserRequestNormChars} · gaps ${evidenceMap.rootUserLeadingGap}/${evidenceMap.rootUserTrailingGap} · assistant anchors ${evidenceMap.sourceAssistantAnchorMask} · norm ${evidenceMap.sourceAssistantNormChars}→${evidenceMap.sourceAssistantRequestNormChars} · gaps ${evidenceMap.sourceAssistantLeadingGap}/${evidenceMap.sourceAssistantTrailingGap}` : 'n/a'}`,
+06250:       `Evidence mode: ${evidenceFence?.mode || 'n/a'}`,
+06251:       `Evidence root fence: ${evidenceFence?.rootFence ? `${evidenceFence.rootFence.status} · request @${evidenceFence.rootFence.requestIndex >= 0 ? evidenceFence.rootFence.requestIndex : 'n/a'} role ${evidenceFence.rootFence.role || 'n/a'} · shape ${evidenceFence.rootFence.shape || 'n/a'} · delta ${evidenceFence.rootFence.normDelta == null ? 'n/a' : evidenceFence.rootFence.normDelta} · ${evidenceFence.rootFence.reason || 'n/a'}` : 'n/a'}`,
+06252:       `Evidence source fence: ${evidenceFence?.sourceFence ? `${evidenceFence.sourceFence.status} · request @${evidenceFence.sourceFence.requestIndex >= 0 ? evidenceFence.sourceFence.requestIndex : 'n/a'} role ${evidenceFence.sourceFence.role || 'n/a'} · shape ${evidenceFence.sourceFence.shape || 'n/a'} · delta ${evidenceFence.sourceFence.normDelta == null ? 'n/a' : evidenceFence.sourceFence.normDelta} · ${evidenceFence.sourceFence.reason || 'n/a'}` : 'n/a'}`,
+06253:       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
+06254:       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
+06255:       '',
+06256:       'Warnings detail:',
+06257:       ...(warnings.length ? warnings.map((x) => `- ${x}`) : ['- none']),
+06258:       'Compatibility detail:',
+06259:       ...(compatibility.length ? compatibility.map((x) => `- ${x}`) : ['- none']),
+06260:       '',
+06261:     ];
+06262: 
+06263:     const sections = [];
+06264:     let previousAssistantIndex = -1;
+06265:     const previousSearchBefore = currentUserIndex >= 0 ? currentUserIndex : latestAssistantIndex;
+06266:     for (let i = previousSearchBefore - 1; i >= 0; i--) {
+06267:       if (diagnosticAssistantRole(messages[i])) {
+06268:         previousAssistantIndex = i;
+06269:         break;
+06270:       }
+06271:     }
+06272:     const previousUserIndex = diagnosticUserBefore(
+06273:       messages,
+06274:       previousAssistantIndex >= 0 ? previousAssistantIndex : previousSearchBefore,
+06275:     );
+06276: 
+06277:     if (previousUserIndex >= 0 || previousAssistantIndex >= 0) {
+06278:       sections.push(diagnosticSection(
+06279:         '직전 턴 (RAW)',
+06280:         messages,
+06281:         previousUserIndex,
+06282:         previousAssistantIndex,
+06283:       ));
+06284:     } else {
+06285:       sections.push([
+06286:         '--- 직전 턴 (RAW) ---',
+06287:         'unavailable',
+06288:         '',
+06289:       ].join('\n'));
+06290:     }
+06291: 
+06292:     sections.push(diagnosticSection(
+06293:       '최근 턴 (RAW)',
+06294:       messages,
+06295:       currentUserIndex,
+06296:       latestAssistantIndex,
+06297:       [`Runtime mode: ${runtimeMode || 'n/a'} · stored last mode: ${state?.lastMode || 'n/a'}`],
+06298:     ));
+06299:     return lines.join('\n') + sections.join('\n');
+06300:   }
+06301: 
+06302:   async function copyLastTurnDiagnostic(chat, state) {
+06303:     try {
+06304:       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+06305:         await navigator.clipboard.writeText(buildLastTurnDiagnosticReport(chat, state));
+06306:         return true;
+06307:       }
+06308:     } catch (_) {}
+06309:     return false;
+06310:   }
+06311: 
+06312:   async function openPanel() {
+06313:     try {
+06314:       const { chaIdx, chatIdx } = await host.currentIndices();
+06315:       const chat = await host.getChat(chaIdx, chatIdx);
+06316:       await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat);
+06317:       const s = coreSession?.current;
+06318:       const storageDiag = coreSession?.storageDiagnostics?.() || null;
+06319:       const aliasDiag = coreSession?.communityAliasDiagnostics?.() || null;
+06320:       const recurrenceDiag = coreSession?.templateRecurrenceDiagnostics?.() || null;
+06321:       const maxima = Object.entries(s?.community?.platformMax || {})
+06322:         .map(([k, v]) => [k, Math.max(0, Math.round(Number(v) || 0))])
+06323:         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));

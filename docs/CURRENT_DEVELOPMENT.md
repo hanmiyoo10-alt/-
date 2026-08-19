@@ -10,11 +10,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.49`
-- Release: `Cache Effect Verification`
+- Version: `0.63.50`
+- Release: `Host Prefix Reset Attribution`
 - Release branch: `release-simcore`
-- Release commit: `4af2bef0c9b9478e5a0b5f27a00dffe6ea4594c2`
-- Release blob: `7478596cd9ccc862f425ae6efdd230a0198dc804`
+- Release commit: `8dcc55c27cb8d6137728a03cbd03942237910c93`
+- Release blob: `3551f7fd85949a5309acb7a6da11a06ae44bc3f4`
 - Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `CACHE_EFFECT_VERIFICATION`
 - Provider cache: `UNVERIFIED`

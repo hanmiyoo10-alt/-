@@ -803,7 +803,7 @@ unless a deliberate narrow connector-backed change has a safer direct path.
 Current production family at the time this document was created:
 
 ```text
-SimCore v0.63.49 — Cache Effect Verification
+SimCore v0.63.50 — Host Prefix Reset Attribution
 ```
 
 Do not treat this number as permanently current; update this section when production advances.

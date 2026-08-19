@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.49",
-  "release_name": "Cache Effect Verification",
+  "production_version": "0.63.50",
+  "release_name": "Host Prefix Reset Attribution",
   "release_branch": "release-simcore",
-  "release_commit": "4af2bef0c9b9478e5a0b5f27a00dffe6ea4594c2",
-  "release_blob": "7478596cd9ccc862f425ae6efdd230a0198dc804",
+  "release_commit": "8dcc55c27cb8d6137728a03cbd03942237910c93",
+  "release_blob": "3551f7fd85949a5309acb7a6da11a06ae44bc3f4",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",

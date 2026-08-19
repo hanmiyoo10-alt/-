@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.52
+//@version 3.0.0-alpha.5.53
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.52';
+  const VERSION = '3.0.0-alpha.5.53';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1441,7 +1441,8 @@ async function importLegacyTodayBaselines() {
   function requestCacheObservabilityStats(rows) {
     const stats = {
       rows:0, hitKnown:0, hits:0, tokenKnown:0, readKnown:0, writeKnown:0,
-      writeReported:0, writeNotReported:0, ttlReported:0, ttlNotReported:0,
+      writeReported:0, writeNotReported:0, writeUnknownOnCache:0, readWithoutWriteValue:0,
+      ttlReported:0, ttlNotReported:0, ttlUnknownAfterWrite:0,
       inputTokens:0, cachedInputTokens:0, cacheReadInputTokens:0, cacheCreationInputTokens:0,
       cacheCreation5mTokens:0, cacheCreation1hTokens:0, readDenominator:0, readRatio:null
     };
@@ -1450,12 +1451,17 @@ async function importLegacyTodayBaselines() {
       if (typeof row?.cacheHit === 'boolean') { stats.hitKnown += 1; if (row.cacheHit) stats.hits += 1; }
       const hasTokenMetric = [row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num);
       if (hasTokenMetric) stats.tokenKnown += 1;
-      if (num(row?.cacheReadInputTokens)) stats.readKnown += 1;
-      if (num(row?.cacheCreationInputTokens)) stats.writeKnown += 1;
+      const readValueKnown = num(row?.cacheReadInputTokens);
+      const writeValueKnown = num(row?.cacheCreationInputTokens);
+      if (readValueKnown) stats.readKnown += 1;
+      if (writeValueKnown) stats.writeKnown += 1;
       if (row?.cacheWriteTelemetry === 'reported') stats.writeReported += 1;
       if (row?.cacheWriteTelemetry === 'not-reported') stats.writeNotReported += 1;
+      if ((readValueKnown || writeValueKnown) && !['reported','not-reported'].includes(String(row?.cacheWriteTelemetry || ''))) stats.writeUnknownOnCache += 1;
+      if (readValueKnown && !writeValueKnown) stats.readWithoutWriteValue += 1;
       if (row?.cacheTtlTelemetry === 'reported') stats.ttlReported += 1;
       if (row?.cacheTtlTelemetry === 'not-reported') stats.ttlNotReported += 1;
+      if (writeValueKnown && !['reported','not-reported'].includes(String(row?.cacheTtlTelemetry || ''))) stats.ttlUnknownAfterWrite += 1;
       stats.inputTokens += num(row?.inputTokens) ? Number(row.inputTokens) : 0;
       stats.cachedInputTokens += num(row?.cachedInputTokens) ? Number(row.cachedInputTokens) : 0;
       stats.cacheReadInputTokens += num(row?.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : 0;
@@ -2393,8 +2399,10 @@ async function importLegacyTodayBaselines() {
     const writeKnown = list.filter(row => num(row?.cacheCreationInputTokens)).length;
     const writeReported = list.filter(row => row?.cacheWriteTelemetry === 'reported').length;
     const writeNotReported = list.filter(row => row?.cacheWriteTelemetry === 'not-reported').length;
+    const writeUnknownOnCache = list.filter(row => [row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num) && !['reported','not-reported'].includes(String(row?.cacheWriteTelemetry || ''))).length;
+    const readWithoutWriteValue = list.filter(row => num(row?.cacheReadInputTokens) && !num(row?.cacheCreationInputTokens)).length;
     const ttlReported = list.filter(row => row?.cacheTtlTelemetry === 'reported').length;
-    return `independent · protocol cache-observability-v1 · parser provider-usage-v3 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · write reported ${writeReported}/${list.length} · read-without-write ${writeNotReported}/${list.length} · ttl reported ${ttlReported}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
+    return `independent · protocol cache-observability-v1 · parser provider-usage-v3 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · write reported ${writeReported}/${list.length} · write not-reported ${writeNotReported}/${list.length} · write unknown-on-cache ${writeUnknownOnCache}/${list.length} · read/no-write-value ${readWithoutWriteValue}/${list.length} · ttl reported ${ttlReported}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
   }
 
   function diagText() {
@@ -2450,7 +2458,7 @@ async function importLegacyTodayBaselines() {
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
       `Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}`,
-      `Cache write telemetry: reported ${diagCacheObservability.writeReported}/${diagCacheObservability.rows} · read-without-write ${diagCacheObservability.writeNotReported}/${diagCacheObservability.rows} · TTL reported ${diagCacheObservability.ttlReported}/${diagCacheObservability.rows} · TTL unreported-after-write ${diagCacheObservability.ttlNotReported}/${diagCacheObservability.rows}`,
+      `Cache write telemetry: reported ${diagCacheObservability.writeReported}/${diagCacheObservability.rows} · not-reported ${diagCacheObservability.writeNotReported}/${diagCacheObservability.rows} · unknown-on-cache ${diagCacheObservability.writeUnknownOnCache}/${diagCacheObservability.rows} · read/no-write-value ${diagCacheObservability.readWithoutWriteValue}/${diagCacheObservability.rows} · TTL reported ${diagCacheObservability.ttlReported}/${diagCacheObservability.rows} · TTL unreported-after-write ${diagCacheObservability.ttlNotReported}/${diagCacheObservability.rows} · TTL unknown-after-write ${diagCacheObservability.ttlUnknownAfterWrite}/${diagCacheObservability.rows}`,
       `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached total = Read + Write when both are known · unknown stays unknown · missing Write/TTL is never inferred from price/provider`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,

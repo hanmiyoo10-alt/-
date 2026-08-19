@@ -2,7 +2,7 @@ name: SimCore release command
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
 
 permissions:
   contents: write
@@ -27,6 +27,19 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin main
           git show origin/main:scripts/simcore-06346-release.py > /tmp/simcore-06346-release.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/simcore-06346-release.py')
+          s = p.read_text(encoding='utf-8')
+          old = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"
+          old_actual = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"
+          new = "module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, historyMutation, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };"
+          if old not in s:
+              raise SystemExit('release patch export_old anchor missing')
+          s = s.replace('export_old = ' + repr(old), 'export_old = ' + repr(old_actual), 1)
+          s = s.replace('export_new = ' + repr(old.replace('historyMutation, representationCorrelation', 'historyMutation, historyStabilization, representationCorrelation')), 'export_new = ' + repr(new), 1)
+          p.write_text(s, encoding='utf-8')
+          PY
 
       - name: Patch and validate
         run: |

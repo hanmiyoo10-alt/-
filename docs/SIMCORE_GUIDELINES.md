@@ -803,7 +803,7 @@ unless a deliberate narrow connector-backed change has a safer direct path.
 Current production family at the time this document was created:
 
 ```text
-SimCore v0.63.44 — History Mutation Attribution
+SimCore v0.63.45 — History Rebuild Frontier Attribution
 ```
 
 Do not treat this number as permanently current; update this section when production advances.
@@ -830,12 +830,39 @@ History mutation
 ↓
 Representation correlation
 ↓
-History rebuild / propagation attribution
+History rebuild frontier attribution  ← CURRENT (v0.63.45)
 ↓
 Prompt prefix stabilization
 ↓
 Gateway/provider cache verification
 ```
+
+### Current v0.63.45 Live Gate
+
+The current diagnostic release is intended to resolve one causal question before any repair:
+
+> Did the current CHAT_HISTORY first-break representation already exist before manual-edit reconcile, or did it change during/later in SimCore request preparation?
+
+Recommended natural-turn validation sequence:
+
+```text
+B_START
+→ B_CONTINUE
+→ B_END
+→ C
+```
+
+Do not reload or regenerate between these turns when collecting the primary comparison set.
+
+Decisive attribution labels:
+
+```text
+PREEXISTING_REQUEST_MUTATION · HIGH
+RECONCILE_MUTATED_REQUEST · HIGH
+POST_RECONCILE_REQUEST_MUTATION · HIGH
+```
+
+`OUT_OF_WINDOW`, `MULTISTAGE_REQUEST_MUTATION`, or lower-confidence results require more evidence and are not repair authorization. Provider cache remains `UNVERIFIED` without gateway/provider telemetry.
 
 ## 47. Current Hard Freeze
 
@@ -915,6 +942,14 @@ Prefer small documentation diffs that explain why guidance changed.
 ---
 
 # Guideline Changelog
+
+## 2026-08-19 — v0.63.45 History Rebuild Frontier Attribution
+
+- Advanced the production baseline from v0.63.44 to v0.63.45.
+- Made bounded PRE_RECONCILE / POST_RECONCILE / FINAL request-representation attribution the current cache investigation.
+- Added the four-turn `B_START → B_CONTINUE → B_END → C` live validation gate.
+- Kept Prompt Prefix Stability as the primary optimization goal and retained provider-cache status as `UNVERIFIED`.
+- Preserved Broadcast, compiler tier semantics, Continuity/Evidence, Deferred Mirror strict mismatch safety, persistent storage schema, network policy, and timer policy under the current hard freeze.
 
 ## 2026-08-19 — Initial Consolidated Guideline
 

@@ -103,7 +103,8 @@
   function requestCacheObservabilityStats(rows) {
     const stats = {
       rows:0, hitKnown:0, hits:0, tokenKnown:0, readKnown:0, writeKnown:0,
-      writeReported:0, writeNotReported:0, ttlReported:0, ttlNotReported:0,
+      writeReported:0, writeNotReported:0, writeUnknownOnCache:0, readWithoutWriteValue:0,
+      ttlReported:0, ttlNotReported:0, ttlUnknownAfterWrite:0,
       inputTokens:0, cachedInputTokens:0, cacheReadInputTokens:0, cacheCreationInputTokens:0,
       cacheCreation5mTokens:0, cacheCreation1hTokens:0, readDenominator:0, readRatio:null
     };
@@ -112,12 +113,17 @@
       if (typeof row?.cacheHit === 'boolean') { stats.hitKnown += 1; if (row.cacheHit) stats.hits += 1; }
       const hasTokenMetric = [row?.cachedInputTokens,row?.cacheReadInputTokens,row?.cacheCreationInputTokens].some(num);
       if (hasTokenMetric) stats.tokenKnown += 1;
-      if (num(row?.cacheReadInputTokens)) stats.readKnown += 1;
-      if (num(row?.cacheCreationInputTokens)) stats.writeKnown += 1;
+      const readValueKnown = num(row?.cacheReadInputTokens);
+      const writeValueKnown = num(row?.cacheCreationInputTokens);
+      if (readValueKnown) stats.readKnown += 1;
+      if (writeValueKnown) stats.writeKnown += 1;
       if (row?.cacheWriteTelemetry === 'reported') stats.writeReported += 1;
       if (row?.cacheWriteTelemetry === 'not-reported') stats.writeNotReported += 1;
+      if ((readValueKnown || writeValueKnown) && !['reported','not-reported'].includes(String(row?.cacheWriteTelemetry || ''))) stats.writeUnknownOnCache += 1;
+      if (readValueKnown && !writeValueKnown) stats.readWithoutWriteValue += 1;
       if (row?.cacheTtlTelemetry === 'reported') stats.ttlReported += 1;
       if (row?.cacheTtlTelemetry === 'not-reported') stats.ttlNotReported += 1;
+      if (writeValueKnown && !['reported','not-reported'].includes(String(row?.cacheTtlTelemetry || ''))) stats.ttlUnknownAfterWrite += 1;
       stats.inputTokens += num(row?.inputTokens) ? Number(row.inputTokens) : 0;
       stats.cachedInputTokens += num(row?.cachedInputTokens) ? Number(row.cachedInputTokens) : 0;
       stats.cacheReadInputTokens += num(row?.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : 0;

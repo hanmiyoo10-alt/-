@@ -1,0 +1,135 @@
+name: SimCore 0.63.43 apply
+
+on:
+  push:
+    branches: [simcore-06343-broadcast-end-authority]
+    paths: [.github/workflows/simcore-06343-apply.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simcore-06343-broadcast-end-authority
+          fetch-depth: 0
+
+      - name: Apply focused patch
+        run: python3 tools/simcore-06343-patch.py
+
+      - name: Syntax and byte-equivalence checks
+        run: |
+          node --check plugins/simcore/latest.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.63.43$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.43';" plugins/simcore/latest.js
+          grep -q "runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER'" plugins/simcore/latest.js
+
+      - name: Focused authority and identity regression
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+
+          function moduleBody(name, nextName) {
+            const startMark = `SimCore.define("${name}", function (require, module, exports) {`;
+            const endMark = `\n});\n\nSimCore.define("${nextName}", function`;
+            const a = src.indexOf(startMark);
+            const b = src.indexOf(endMark, a + startMark.length);
+            if (a < 0 || b < 0) throw new Error(`module boundary missing: ${name}`);
+            return src.slice(a + startMark.length, b);
+          }
+
+          function loadModule(name, nextName, stubs = {}) {
+            const body = moduleBody(name, nextName);
+            const module = { exports: {} };
+            const req = (id) => {
+              const key = id.replace(/^\.\//, '');
+              if (!(key in stubs)) throw new Error(`missing stub ${id} for ${name}`);
+              return stubs[key];
+            };
+            new Function('require', 'module', 'exports', body)(req, module, module.exports);
+            return module.exports;
+          }
+
+          const prompt = loadModule('prompt', 'session', {
+            kernel: { reconcileState: (x) => x },
+            lifecycle: {
+              expectedCommunityBlocks: (mode) => mode === 'B_END' ? 2 : (['B_START','B_CONTINUE','C'].includes(mode) ? 1 : 0),
+            },
+            time: { elapsedMinutes: () => 0 },
+            recurrence: { modeFamily: (m) => String(m || '').startsWith('B_') ? 'B' : (m === 'C' ? 'C' : 'A') },
+          });
+
+          const base = {
+            broadcastLocked: true,
+            koreanAgeOffset: 0,
+            worldYear: 2030,
+            episodeNo: 3,
+            community: { platformMax: {} },
+          };
+          function state(mode) {
+            return {
+              ...base,
+              pending: {
+                active: true,
+                mode,
+                secondaryConfigured: false,
+                secondaryActive: false,
+                narrativeProgressionActive: false,
+                templateRecurrenceRepeated: false,
+                communitySourceHandoffEligible: false,
+                broadcastAirtimePrevious: '⏱️[2030-03-01 (Fri) 10:00 PM]',
+                broadcastAirtimeStart: '⏱️[2030-03-01 (Fri) 10:00 PM]',
+              },
+            };
+          }
+
+          const start = prompt.compileRuntimePromptParts(state('B_START'));
+          const cont = prompt.compileRuntimePromptParts(state('B_CONTINUE'));
+          const end = prompt.compileRuntimePromptParts(state('B_END'));
+          const inheritedC = prompt.compileRuntimePromptParts(state('C'));
+
+          if (!start.text.includes('broadcast_end_authority=DENIED')) throw new Error('B_START must deny end');
+          if (!cont.text.includes('broadcast_end_authority=DENIED')) throw new Error('B_CONTINUE must deny end');
+          if (!inheritedC.text.includes('broadcast_end_authority=DENIED')) throw new Error('locked C must deny end');
+          if (!end.text.includes('broadcast_end_authority=ALLOWED')) throw new Error('B_END must allow end');
+          if (!start.text.includes('broadcast_end_boundary_applies_to=broadcast_prose+COMMUNITY+Knowledge')) throw new Error('end boundary missing');
+          if (prompt.renderRuntimePrompt(state('B_START')) !== start.text) throw new Error('parts changed prompt bytes');
+          if (start.identityTiers.stable !== cont.identityTiers.stable) throw new Error('stable compiler tier changed across B modes');
+          if (start.identityTiers.stable !== end.identityTiers.stable) throw new Error('stable compiler tier changed at B_END');
+
+          const runtimeCache = loadModule('runtime-cache', 'runtime-topology');
+          const i1 = runtimeCache.runtimeIdentity(start.text, null, start.identityTiers);
+          const i2 = runtimeCache.runtimeIdentity(cont.text, i1, cont.identityTiers);
+          if (i2.source !== 'COMPILER_TIERS') throw new Error('compiler identity source missing');
+          if (i2.stable.status !== 'SAME') throw new Error(`stable tier not SAME: ${i2.stable.status}`);
+          if (i2.volatile.status !== 'CHANGED') throw new Error(`volatile tier should change: ${i2.volatile.status}`);
+
+          const tracker = runtimeCache.createRuntimePromptCacheTracker({ runtimePromptPlacement: 'TAIL_AFTER_CURRENT_USER' });
+          tracker.observe('chat', start.text, { identityTiers: start.identityTiers });
+          const tracked = tracker.observe('chat', cont.text, { identityTiers: cont.identityTiers });
+          if (tracked.identity.stable.status !== 'SAME') throw new Error('tracker stable tier drift');
+          if (tracked.placement !== 'TAIL_AFTER_CURRENT_USER') throw new Error('placement changed');
+
+          console.log('SimCore 0.63.43 focused behavioral regression PASS');
+          NODE
+
+      - name: Commit patched plugin and report
+        run: |
+          {
+            echo "SimCore 0.63.43 focused behavioral regression PASS"
+            echo "latest/install byte-identical"
+            echo "TAIL_AFTER_CURRENT_USER preserved"
+            echo "B_START/B_CONTINUE/locked-C end authority DENIED"
+            echo "B_END end authority ALLOWED"
+            echo "compiler-native stable tier invariant PASS"
+          } > simcore-06343-apply-report.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins/simcore/latest.js plugins/simcore/install.js simcore-06343-apply-report.txt
+          git commit -m "test: apply SimCore 0.63.43 broadcast end authority" || exit 0
+          git push origin HEAD:simcore-06343-broadcast-end-authority

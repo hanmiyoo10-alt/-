@@ -10,11 +10,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.47`
-- Release: `History Alignment Stabilization`
+- Version: `0.63.48`
+- Release: `History Turn-Ordinal Alignment`
 - Release branch: `release-simcore`
-- Release commit: `19a6ea81679e4473956dfbb4eee0d42398d17f6d`
-- Release blob: `839a15b71328ec075d5ac7304d9776943b00e839`
+- Release commit: `113158245ea2ad6072210bbdd45c9e83358fbe24`
+- Release blob: `505ae6a623353560e652d1519970e3ff14c55bf8`
 - Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `HISTORY_ALIGNMENT_STABILIZATION_VALIDATION`
 - Provider cache: `UNVERIFIED`

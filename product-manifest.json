@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.47",
-  "release_name": "History Alignment Stabilization",
+  "production_version": "0.63.48",
+  "release_name": "History Turn-Ordinal Alignment",
   "release_branch": "release-simcore",
-  "release_commit": "19a6ea81679e4473956dfbb4eee0d42398d17f6d",
-  "release_blob": "839a15b71328ec075d5ac7304d9776943b00e839",
+  "release_commit": "113158245ea2ad6072210bbdd45c9e83358fbe24",
+  "release_blob": "505ae6a623353560e652d1519970e3ff14c55bf8",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",

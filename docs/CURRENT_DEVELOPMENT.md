@@ -10,12 +10,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.48`
-- Release: `History Turn-Ordinal Alignment`
+- Version: `0.63.49`
+- Release: `Cache Effect Verification`
 - Release branch: `release-simcore`
-- Release commit: `113158245ea2ad6072210bbdd45c9e83358fbe24`
-- Release blob: `505ae6a623353560e652d1519970e3ff14c55bf8`
-- Validation status: `SUPERSEDED_BY_0.63.49_RELEASE_PREPARATION`
+- Release commit: `4af2bef0c9b9478e5a0b5f27a00dffe6ea4594c2`
+- Release blob: `7478596cd9ccc862f425ae6efdd230a0198dc804`
+- Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `CACHE_EFFECT_VERIFICATION`
 - Provider cache: `UNVERIFIED`
 

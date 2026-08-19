@@ -59,7 +59,7 @@ jobs:
           grep -q 'PREEXISTING_REQUEST_MUTATION' docs/SIMCORE_GUIDELINES.md
           grep -q 'RECONCILE_MUTATED_REQUEST' docs/SIMCORE_GUIDELINES.md
           grep -q 'POST_RECONCILE_REQUEST_MUTATION' docs/SIMCORE_GUIDELINES.md
-          grep -q 'provider cache remains `UNVERIFIED`' docs/SIMCORE_GUIDELINES.md
+          grep -q 'Provider cache remains `UNVERIFIED`' docs/SIMCORE_GUIDELINES.md
           git diff --check
 
       - name: Commit guideline sync

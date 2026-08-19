@@ -9,8 +9,10 @@ const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/pro
 const version = (source.match(/^\/\/@version (.+)$/m)||[])[1]||'';
 if (!( /^3\.0\.0-alpha\.5\.(?:[3-9]|\d{2,})$/.test(version) || /^3\.0\.0-rc\.\d+$/.test(version) || version === '3.0.0' )) { console.log(`usage-dashboard P5 bundled engine regression: skipped · ${version}`); process.exit(0); }
 const hash = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
+assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bundled engine version: ${requiredEngineVersion}`);
 assert.equal(hash(enginePath),manifest.components.bridge.sha256);
-assert.ok(engine.includes("const VERSION = '1.6.6';"));
+assert.ok(engine.includes(`const VERSION = '${requiredEngineVersion}';`));
 assert.ok(engine.includes("const HOST = '127.0.0.1';"));
 assert.ok(engine.includes("if (!isAuthorized(req))"));
 assert.ok(engine.includes("const sanitizeLogs = (value) =>"));
@@ -27,7 +29,7 @@ assert.ok(engine.includes("await snapshot(profile, creditsOrgId)"));
 assert.ok(engine.includes('Prompt/response bodies'));
 assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
 assert.ok(manager.includes("url.pathname === '/engine/sync'"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.6';"));
+assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${requiredEngineVersion}';`));
 assert.ok(manager.includes("current.engineBundled && String(current.engineVersion || '') === BUNDLED_ENGINE_VERSION"));
 assert.ok(source.includes("runningEngineVersion === bundledEngineVersion"));
 assert.ok(manager.includes('async function syncBundledEngine()'));
@@ -43,8 +45,8 @@ assert.ok(source.includes("state.bridgeEngineBundleSyncAttemptedVersion = '';"),
 assert.equal(manifest.productVersion,version);
 assert.equal(manifest.components.bridge.sourceBundled,true);
 assert.equal(manifest.components.bridge.state,'managed-bundled');
-assert.equal(manifest.components.bridge.requiredVersion,'1.6.6');
+assert.equal(manifest.components.bridge.requiredVersion,requiredEngineVersion);
 assert.equal(manifest.components.bridge.sha256,hash(enginePath));
 assert.equal(manifest.components.bridgeManager.version,'1.2.6');
 assert.equal(manifest.components.bridgeManager.sha256,hash('plugins/usage-dashboard/runtime/bridge-manager.cjs'));
-console.log(`usage-dashboard P5 bundled engine regression: OK · ${version}`);
+console.log(`usage-dashboard P5 bundled engine regression: OK · ${version} · engine ${requiredEngineVersion}`);

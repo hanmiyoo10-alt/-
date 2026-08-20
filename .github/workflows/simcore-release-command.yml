@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.event.pull_request.title == 'SimCore v0.63.50 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.51 release command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
@@ -29,9 +29,9 @@ jobs:
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
           VERSION="$(sed -n 's#^//@version[[:space:]]*##p' plugins/simcore/latest.js | head -n 1)"
-          if [[ "$HEAD_SHA" == "4af2bef0c9b9478e5a0b5f27a00dffe6ea4594c2" && "$VERSION" == "0.63.49" ]]; then
+          if [[ "$HEAD_SHA" == "8dcc55c27cb8d6137728a03cbd03942237910c93" && "$VERSION" == "0.63.50" ]]; then
             echo 'mode=patch' >> "$GITHUB_OUTPUT"
-          elif [[ "$VERSION" == "0.63.50" ]]; then
+          elif [[ "$VERSION" == "0.63.51" ]]; then
             echo 'mode=already-current' >> "$GITHUB_OUTPUT"
           else
             echo "unexpected release state: head=$HEAD_SHA version=$VERSION" >&2
@@ -43,35 +43,32 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
-          git show origin/main:scripts/simcore-06350-release.py > /tmp/simcore-06350-release.py
-          python3 -m py_compile /tmp/simcore-06350-release.py
+          git show origin/main:scripts/simcore-06351-release.py > /tmp/simcore-06351-release.py
+          python3 -m py_compile /tmp/simcore-06351-release.py
 
       - name: Patch production source
         if: steps.state.outputs.mode == 'patch'
-        run: python3 /tmp/simcore-06350-release.py
+        run: python3 /tmp/simcore-06351-release.py
 
-      - name: Validate v0.63.50 production source
+      - name: Validate v0.63.51 production source
         shell: bash
         run: |
           set -euo pipefail
           node --check plugins/simcore/latest.js
           node --check plugins/simcore/install.js
           cmp -s plugins/simcore/latest.js plugins/simcore/install.js
-          grep -q '^//@version 0.63.50$' plugins/simcore/latest.js
-          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.50';" plugins/simcore/latest.js
-          grep -q 'v0.63.50 Host Prefix Reset Attribution' plugins/simcore/latest.js
-          grep -q 'const HOST_PREFIX_BLOCK_CHARS = 512;' plugins/simcore/latest.js
-          grep -q 'function buildSystem0Sketch(message)' plugins/simcore/latest.js
-          grep -q 'function buildHostPrefixProbe(' plugins/simcore/latest.js
-          grep -q "'DELTA_LOCALIZED'" plugins/simcore/latest.js
-          grep -q "'WIDESPREAD'" plugins/simcore/latest.js
-          grep -q "'INSERTION_LIKE'" plugins/simcore/latest.js
-          grep -q 'Host prefix attribution:' plugins/simcore/latest.js
-          grep -q 'Host prefix delta:' plugins/simcore/latest.js
-          grep -q 'raw bodies NOT RETAINED' plugins/simcore/latest.js
+          grep -q '^//@version 0.63.51$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.51';" plugins/simcore/latest.js
+          grep -q 'v0.63.51 Fresh-Confirmed Envelope Recovery' plugins/simcore/latest.js
+          grep -q 'function buildFreshEnvelopeConfirmation(rawPrefix, matches, candidates)' plugins/simcore/latest.js
+          grep -q "confirmation: 'FRESH_EXACT'" plugins/simcore/latest.js
+          grep -q "fingerprintMatch = freshConfirmed ? 'FRESH_CONFIRMED_SUFFIX'" plugins/simcore/latest.js
+          grep -q "detail.freshEnvelopeRecovery = freshConfirmed ? 'RECOVERED'" plugins/simcore/latest.js
+          grep -q 'Envelope recovery:' plugins/simcore/latest.js
+          grep -q 'FRESH_CONFIRMED_SUFFIX' plugins/simcore/latest.js
           grep -q "return stabilizationResult('OBSERVE_ONLY'" plugins/simcore/latest.js
           grep -q "source: 'REQUEST_SIGNATURE_OBSERVER'" plugins/simcore/latest.js
-          grep -q 'function cacheEffect(probe, movementProbe)' plugins/simcore/latest.js
+          grep -q 'Host prefix attribution:' plugins/simcore/latest.js
           grep -q 'provider UNVERIFIED' plugins/simcore/latest.js
           grep -q "persistentMutation: 'NONE'" plugins/simcore/latest.js
           if grep -q "slot.content = replacement.canonicalRaw" plugins/simcore/latest.js; then
@@ -92,16 +89,16 @@ jobs:
           git config user.name 'hanmiyoo10-alt'
           git config user.email 'hanmiyoo10@gmail.com'
           git add plugins/simcore/latest.js plugins/simcore/install.js
-          git commit -m 'release: SimCore v0.63.50 Host Prefix Reset Attribution'
+          git commit -m 'release: SimCore v0.63.51 Fresh-Confirmed Envelope Recovery'
           git push origin HEAD:release-simcore
 
       - name: Confirm idempotent current state
         if: steps.state.outputs.mode == 'already-current'
-        run: echo 'SimCore v0.63.50 is already the current production release; validation still ran.'
+        run: echo 'SimCore v0.63.51 is already the current production release; validation still ran.'
 
   memory-sync:
     needs: release
-    if: github.event.pull_request.title == 'SimCore v0.63.50 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.51 release command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main memory branch

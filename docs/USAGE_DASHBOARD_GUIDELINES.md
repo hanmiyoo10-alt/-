@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.58`
-- Bridge Engine: `1.6.12`
+- Product: `3.0.0-alpha.5.59`
+- Bridge Engine: `1.6.13`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,37 +24,39 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`.
+Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`.
 
-Verified from the 5.57 device diagnostic:
+Verified from the 5.58 device diagnostic:
 
-- Stable Readiness was `READY`; Bridge Engine `1.6.11` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
-- Organization deduplication was active on-device: `capture-primary · fallback 0 · shared account capture yes`.
-- Organization discovery fell from about 8.83s in the verified 5.56 sample to about 6.03s in 5.57, so the deduplication itself was effective.
-- The sampled Bridge snapshot nevertheless rose from about 13.49s in 5.56 to about 17.87s in 5.57 because the critical path moved to analytics.
-- `analyticsScopes` was about 11.84s and the slowest detailed task was `analytics.devpass.7d` at about 11.84s.
-- The Bridge ran 5 CLI operations; one queued for about 5.87s while average execution was about 6.02s. The slowest operation was `devpass-capture-7d` at about 11.76s total.
-- CLI concurrency stayed verified at `limit 2 · peak active 2`; snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0 in the sampled snapshot.
+- Stable Readiness was `READY`; Bridge Engine `1.6.12` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
+- Organization discovery remained on `capture-primary · fallback 0 · shared account capture yes`.
+- Shared 24h reuse was active: `bootstrap 24h · activity shared yes · dedicated 24h fallback 0`.
+- The sampled Bridge snapshot was about 13.28s, down from about 17.87s in 5.57; timer refresh was about 14.40s total.
+- `analyticsScopes` was about 5.92s, down from about 11.84s in 5.57, and the previously observed CLI queue wait disappeared.
+- The Bridge ran 3 CLI operations with `limit 2 · peak active 2 · queued 0`; average execution was about 6.33s and the slowest sanitized operation was `devpass-capture-24h` at about 7.31s.
+- The sampled critical path still looked serialized: organization/bootstrap work about 7.35s followed by post-root usage/analytics work about 5.92s, totaling about 13.27s.
+- The sampled visibility refresh was about 25.07s versus timer refresh about 14.40s; 5.58 telemetry could not attribute the exact cause.
+- Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
-Current release implementation: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`.
+Current release implementation: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`.
 
-5.58 release contract:
+5.59 release contract:
 
-- Bridge Engine becomes `1.6.12`; Bridge Manager remains `1.2.6`.
-- Keep the verified bounded CLI concurrency default and hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
-- Keep the existing `accountCapture` cache key, 30s TTL, no-stale behavior, and circuit semantics, but let its authenticated orgs session also collect the official 24h DevPass activity/logs already supported by the capture tap.
-- Reuse that same 24h account capture for organization discovery, DevPass status, and `devPassActivityForRange('24h')` when usable, eliminating the normal duplicate dedicated 24h capture.
-- If the shared capture has no usable 24h activity, run the previous dedicated 24h capture once as fallback; if the source still lacks activity, preserve the prior error instead of fabricating an empty or zero result.
-- Keep 7d and 30d capture behavior independent and unchanged.
-- Preserve the 5.57 organization fallback: if account capture fails or lacks usable rows, fall back to the prior plain `orgs list --json` path.
-- Preserve the 5.57 empty result contract: `No organizations found in CLI output` remains an error after capture and plain fallback are both exhausted.
-- Keep CLI timeout, cache TTLs, stale-cache/circuit behavior, snapshot root ordering, payload semantics, parser `provider-usage-v3`, Runtime Recovery Fidelity, updater flow, and unknown-value semantics unchanged.
-- Add only isolated safe capture-reuse diagnostics: bootstrap range, whether 24h activity reuse was exercised successfully, and dedicated 24h fallback count.
+- Bridge Engine becomes `1.6.13`; Bridge Manager remains `1.2.6`.
+- Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
+- Keep bounded CLI concurrency default/hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
+- Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
+- Preserve the 5.57 organization fallback: if account capture fails or lacks usable rows, fall back to the prior plain `orgs list --json` path; if capture and the plain fallback both contain no usable organization rows, `No organizations found in CLI output` remains an error.
+- Record relative start/end/duration for snapshot tasks inside the existing per-snapshot AsyncLocalStorage attribution context.
+- Record at most 8 CLI operation timeline entries using only sanitized family labels plus relative offsets, queue wait, and execution time.
+- Never retain raw CLI arguments, organization/project IDs, tokens, headers, capture file paths, or command output in scheduling telemetry.
+- Add `Bridge snapshot timeline` and `Bridge CLI operations` diagnostics without adding CLI/network work.
+- Preserve Runtime Recovery Fidelity, parser `provider-usage-v3`, and UNKNOWN semantics for missing Cache Write/TTL.
 
-Next step after the 5.58 real-device diagnostic: compare CLI run count, queue wait, 24h reuse/fallback, analytics duration, and snapshot wall time against the verified 5.57 baseline before considering any snapshot-root overlap change.
+Next step after the 5.59 real-device diagnostic: use the measured task/CLI timeline to choose between snapshot-root overlap and one specific range/Credits scheduling repair. Do not choose 5.60 before that evidence.
 
 ## 0. Source of truth
 

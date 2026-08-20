@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.12';
+const VERSION = '1.6.13';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -61,6 +61,8 @@ function createSnapshotAttribution(profile) {
     startedAt: Date.now(),
     profile: String(profile || 'full'),
     tasks: Object.create(null),
+    taskTimeline: Object.create(null),
+    cliOperations: [],
     organizationDiscovery: null,
     captureReuse: { bootstrapRange:'24h', activityReuseChecks:0, activityShared:0, dedicated24hFallbacks:0 },
     cache: { hits:0, misses:0, joins:0, loads:0, errors:0, staleFallbacks:0 },
@@ -86,10 +88,23 @@ function noteSnapshotCounter(group, key, amount = 1) {
 async function timedSnapshotTask(name, task) {
   const attribution = currentSnapshotAttribution();
   const started = Date.now();
+  const key = String(name);
+  const startOffsetMs = attribution ? Math.max(0, started - Number(attribution.startedAt || started)) : null;
   try {
     return await task();
   } finally {
-    if (attribution) attribution.tasks[String(name)] = Math.max(0, Date.now() - started);
+    const ended = Date.now();
+    const durationMs = Math.max(0, ended - started);
+    if (attribution) {
+      attribution.tasks[key] = durationMs;
+      if (attribution.taskTimeline) {
+        attribution.taskTimeline[key] = {
+          startOffsetMs,
+          endOffsetMs: Math.max(0, ended - Number(attribution.startedAt || ended)),
+          durationMs,
+        };
+      }
+    }
   }
 }
 
@@ -131,6 +146,25 @@ function noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs) {
   }
 }
 
+function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) {
+  const attribution = currentSnapshotAttribution();
+  if (!attribution || !Array.isArray(attribution.cliOperations)) return;
+  if (attribution.cliOperations.length >= 8) return;
+  const base = Number(attribution.startedAt || queuedAt || endedAt || Date.now());
+  const queuedStart = Number(queuedAt || executionStartedAt || endedAt || base);
+  const execStart = Number(executionStartedAt || queuedStart);
+  const ended = Number(endedAt || execStart);
+  attribution.cliOperations.push({
+    label: String(label || 'cli'),
+    startOffsetMs: Math.max(0, queuedStart - base),
+    executionStartOffsetMs: Math.max(0, execStart - base),
+    endOffsetMs: Math.max(0, ended - base),
+    queueWaitMs: Math.max(0, execStart - queuedStart),
+    executionMs: Math.max(0, ended - execStart),
+  });
+}
+
+
 function snapshotAttributionSummary(attribution) {
   const tasks = attribution?.tasks && typeof attribution.tasks === 'object' ? attribution.tasks : {};
   const organizationsMs = Number(tasks.organizations);
@@ -152,6 +186,12 @@ function snapshotAttributionSummary(attribution) {
     slowestTask: detailedSlowest ? String(detailedSlowest[0]) : null,
     slowestTaskMs: detailedSlowest ? Number(detailedSlowest[1]) : null,
     tasks: {...tasks},
+    taskTimeline: attribution?.taskTimeline && typeof attribution.taskTimeline === 'object'
+      ? Object.fromEntries(Object.entries(attribution.taskTimeline).map(([name, value]) => [name, {...value}]))
+      : {},
+    cliOperations: Array.isArray(attribution?.cliOperations)
+      ? attribution.cliOperations.slice(0, 8).map((item) => ({...item}))
+      : [],
     organizationDiscovery: attribution?.organizationDiscovery && typeof attribution.organizationDiscovery === 'object'
       ? {...attribution.organizationDiscovery}
       : null,
@@ -194,8 +234,12 @@ async function withCliSlot(label, task) {
   try {
     return await task();
   } finally {
-    const executionMs = Math.max(0, Date.now() - executionStartedAt);
+    const endedAt = Date.now();
+    const executionMs = Math.max(0, endedAt - executionStartedAt);
     noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs);
+    if (typeof noteSnapshotCliOperation === 'function') {
+      noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt);
+    }
     cliStats.active = Math.max(0, cliStats.active - 1);
     const next = cliWaiters.shift();
     if (next) next();

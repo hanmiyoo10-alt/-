@@ -17,6 +17,7 @@
   "architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
   "architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md",
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
+  "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "current_priority": "2M_MAJOR_M2_1_LIVE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
@@ -26,7 +27,8 @@
     "current_investigation": "docs/CURRENT_DEVELOPMENT.md",
     "development_governance": "docs/SIMCORE_GOVERNANCE.md",
     "current_architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
-    "current_architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md + config/simcore-architecture-v2.json"
+    "current_architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md + config/simcore-architecture-v2.json",
+    "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md"
   },
   "managed_by": ".github/workflows/simcore-release-state-sync.yml",
   "validation_status": "PENDING_REAL_LONG_CHAT",

@@ -13,13 +13,15 @@
   },
   "guideline": "docs/SIMCORE_GUIDELINES.md",
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
+  "governance": "docs/SIMCORE_GOVERNANCE.md",
   "current_priority": "REPRESENTATION_FAST_RECONCILE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
     "release_identity": "product-manifest.json",
     "development_principles": "docs/SIMCORE_GUIDELINES.md",
-    "current_investigation": "docs/CURRENT_DEVELOPMENT.md"
+    "current_investigation": "docs/CURRENT_DEVELOPMENT.md",
+    "development_governance": "docs/SIMCORE_GOVERNANCE.md"
   },
   "managed_by": ".github/workflows/simcore-release-state-sync.yml"
 }

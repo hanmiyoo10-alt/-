@@ -25,11 +25,23 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Materialize production release source
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/simcore-install.js
+          node --check /tmp/simcore-latest.js
+          node --check /tmp/simcore-install.js
+          cmp -s /tmp/simcore-latest.js /tmp/simcore-install.js
+
       - name: Finalize live validation and authorize M2
         run: |
           set -euo pipefail
           python3 scripts/simcore-055-validation-finalize.py
-          python3 scripts/simcore-architecture-check.py
+          python3 scripts/simcore-architecture-check.py \
+            --source /tmp/simcore-latest.js \
+            --source /tmp/simcore-install.js
           git diff --check
 
       - name: Commit validation state

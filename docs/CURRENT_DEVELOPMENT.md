@@ -16,7 +16,7 @@
 - Release commit: `3659464f17b60a0ba200172d7b49c8af32075706`
 - Release blob: `793d466b7c5ee9bfa7528b43ca44c6b914dc125f`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `EDIT_ORIGIN_ATTRIBUTION_VALIDATION`
+- Primary optimization target: `BOUNDARY_NORMALIZED_ENVELOPE_RECOVERY_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -26,186 +26,214 @@ This block is machine-managed after each production release update.
 
 ## VERIFIED
 
-### Cache / history line remains observational
+### Cache / history remains observational
 
-- The repeatedly tracked compact historical assistant signature `assistant/text 21:4a852496` continues to roll forward in request history, while real external cache observations can be either hit or miss.
-- v0.63.49 moved History stabilization to `OBSERVE_ONLY`; request mutation and persistent mutation remain `NONE`.
-- v0.63.50 Host Prefix Attribution showed one prior external cache loss correlated with a `HOST_PREFIX @0` reset/family reset, but later long-chat evidence proved host-prefix reset is not required for every external miss.
-- In the latest v0.63.51 sequence, system @0 remained exactly stable at `294359:aa650b09`, cache family `36c710af`, and local reusable prefix stayed roughly 86.9–87.6% while external cache observations changed from misses to later hits.
-- A genuine user edit followed by `MANUAL_EDIT_REBUILT` also coexisted with an external cache hit. Therefore neither rolling history frontier movement nor manual-edit rebuild is a sufficient cache-failure condition.
-- Provider cache remains internally `UNVERIFIED`; do not infer HIT/MISS from local prefix topology alone.
+- History stabilization remains `OBSERVE_ONLY`; request mutation and persistent mutation remain `NONE`.
+- The compact historical assistant frontier continues to move while externally observed caching can be either hit or miss.
+- Host Prefix Attribution has shown both severe reset-correlated misses and later misses with a perfectly stable system @0 / same family. Therefore host-prefix reset is not required for every external miss.
+- Genuine user edits and `MANUAL_EDIT_REBUILT` can coexist with an external cache hit.
+- Local reusable-prefix telemetry is not provider HIT/MISS telemetry. Provider cache remains internally `UNVERIFIED`.
 
-### v0.63.51 Fresh-Confirmed Envelope Recovery validation
+### v0.63.52 Edit Origin Attribution positive control succeeded
 
-- v0.63.51 introduced no observed regression in normal `SILENT_COMPAT` / `SAFE_ENVELOPE_COMPAT` output handling.
-- Normal turns continued to show `CANONICAL↔FRESH Δchars +0 · EXACT`, Deferred Mirror `COMMITTED`, and zero warnings where expected.
-- The special v0.63.51 fresh-confirmation path was **not exercised** in the observed sequence: `Envelope recovery: NOT_APPLICABLE` on all shared turns.
-- Therefore the release is safe so far but its target unresolved-THOUGHTS case remains unverified rather than failed.
-- Deferred Mirror strict mismatch blocking remained intact.
+In runtime `mt13xe18-bkr7rf`, the user explicitly hand-edited assistant @1839 before the next request.
 
-### v0.63.51 representation/reconcile evidence promoted to primary target
-
-Within one same-runtime sequence (`mt10we13-u7hpfn`), two ordinary B_CONTINUE outputs produced small canonical↔fresh mismatches:
+The following B_START request @1840 reported:
 
 ```text
-CANONICAL 4154 vs FRESH 4150 · Δ -4 · OUTPUT_MISMATCH
-CANONICAL 4183 vs FRESH 4182 · Δ -1 · OUTPUT_MISMATCH
+Edit reconcile: MANUAL_EDIT_REBUILT · 4.753 s
+Prior representation: EXACT
+canonical 2340:ee3d3fd1
+fresh 2340:ee3d3fd1
+Edit origin: USER_EDIT_CANDIDATE
+current 2338:4593cc89
+match NONE
+Edit delta: vs canonical -2 · vs fresh -2
 ```
 
-Both Deferred Mirror runs correctly blocked `setChat`.
+This is a confirmed positive-control case: a real hand edit is correctly separated from ordinary exact carryover.
 
-The following requests then entered the expensive `MANUAL_EDIT_REBUILT` path:
+### v0.63.52 unedited B_END isolated the output failure
+
+The next B_END request @1842 entered with no preceding representation drift or user edit:
 
 ```text
-Δ -4 predecessor → next Edit reconcile MANUAL_EDIT_REBUILT · 4.486 s
-Δ -1 predecessor → next Edit reconcile MANUAL_EDIT_REBUILT · 2.848 s
+Edit reconcile: SAME_FAST · 1.0 ms
+Prior representation: EXACT
+Edit origin: NONE
+current == prior FRESH_CHAT
+shape FRESH_EXACT_CARRYOVER
 ```
 
-Separately, the user explicitly confirmed a real hand edit of the preceding B_END output. The next C request also produced:
+Its output then produced a new failure entirely on the output side:
 
 ```text
-Edit reconcile: MANUAL_EDIT_REBUILT · 2.652 s
+Preamble provenance: THOUGHTS_COMPAT
+chars 4252
+lines 58
+action UNRESOLVED
+candidates 1
+
+after output:
+HOST_RAW 11328:a5b433
+CANONICAL 11321:e4e197
+FRESH_CHAT 7074:e57b8dc
+CANONICAL↔FRESH Δchars -4247
+Deferred mirror: OUTPUT_MISMATCH
+setChat 0
+Envelope recovery: FRESH_MISMATCH
 ```
 
-This is the decisive distinction: `MANUAL_EDIT_REBUILT` is a reconcile path, not proof that the user edited the visible output. Genuine user edits and prior-output representation divergence can converge on the same path.
+The unique response-envelope offset was `4252`. The raw suffix size implied by `HOST_RAW chars - envelope offset` is `7076`, while `FRESH_CHAT` was `7074` chars. The difference is exactly two characters.
 
-### v0.63.52 implementation boundary
+This does **not** prove the two characters are CR/LF, but it strongly motivates a bounded boundary-normalization test. The failure cannot be attributed to the user edit because the B_END request entered `SAME_FAST / EXACT / Edit origin NONE`.
 
-- v0.63.52 does **not** change `MANUAL_EDIT_REBUILT`, `SAME_FAST`, snapshot repair, output recovery, or mirror acceptance semantics.
-- It reuses the existing bounded memory-only Deferred Mirror provenance ledger. No new chat read, storage read, network request, timer, or persistent field is added.
-- At the next request, the current visible previous-assistant fingerprint is compared with the previous turn's recorded canonical / host-raw / fresh fingerprints for the same output slot and location.
-- The classifier reports:
-  - `NONE`
-  - `USER_EDIT_CANDIDATE`
-  - `REPRESENTATION_DRIFT_CORRELATED`
-  - `AMBIGUOUS_CHANGE`
-  - `UNKNOWN`
-- `REPRESENTATION_DRIFT_CORRELATED` requires a prior `OUTPUT_MISMATCH`, a rebuilt current turn, and exact carryover of the prior `FRESH_CHAT` fingerprint.
-- `USER_EDIT_CANDIDATE` requires a prior exact representation followed by a rebuilt current visible body that no longer matches that exact generation representation. The name deliberately remains a candidate, not proof of user intent.
-- Diagnostics also report prior representation, current match target, and character-count deltas versus prior canonical/fresh fingerprints. Raw bodies and edit bodies are not retained; text boundary localization is intentionally `n/a` in this release.
+### Deferred Mirror strict safety is correct
+
+- The failing B_END correctly remained `OUTPUT_MISMATCH` and `setChat 0`.
+- v0.63.53 must not weaken Deferred Mirror identity/location/staleness or fingerprint acceptance gates.
+- Fresh chat is confirmation evidence only. Its body must never be copied into canonical output by the new recovery path.
+
+### v0.63.53 implementation boundary
+
+v0.63.53 extends the existing Fresh-Confirmed Envelope Recovery only after the exact suffix fingerprint fails.
+
+For one unique `THOUGHTS_COMPAT` response suffix that already satisfies the existing frame + Knowledge gate:
+
+```text
+exact HOST_RAW suffix fingerprint
+→ if FRESH_EXACT: existing FRESH_CONFIRMED_SUFFIX
+→ else generate at most two trailing-character variants
+→ only CR or LF may be removed
+→ compare variant fingerprints with the already-read FRESH_CHAT fingerprint
+→ exact variant match: BOUNDARY_CONFIRMED_SUFFIX
+→ otherwise: existing FRESH_MISMATCH
+```
+
+The bounded variant check:
+
+- removes at most two trailing characters;
+- accepts only `\r` / `\n` characters;
+- stores only fingerprints, lengths, delta and boundary-kind telemetry;
+- retains no candidate or variant body;
+- adds no chat/storage/network/timer read;
+- performs no request mutation or persistent mutation;
+- preserves the existing exact `FRESH_CONFIRMED_SUFFIX` path.
+
+New diagnostics include:
+
+```text
+Envelope recovery: ... · policy BOUNDARY_CONFIRMED_SUFFIX ...
+Envelope boundary: RAW_SUFFIX N → NORMALIZED M · Δchars -1/-2 · TRAILING_* · FRESH_EXACT
+```
 
 ---
 
 ## SUPPORTED HYPOTHESES
 
-- Small prior `CANONICAL↔FRESH` divergences may cause the next request to see the fresh/display representation as different from the session's trusted canonical representation, thereby entering the same expensive rebuild path used for genuine edits.
-- If v0.63.52 reports `REPRESENTATION_DRIFT_CORRELATED` on a future `MANUAL_EDIT_REBUILT`, that will strongly support a host representation-carryover explanation without claiming that the host itself is defective.
-- If genuine hand edits report `USER_EDIT_CANDIDATE`, the classifier will have a useful positive-control baseline.
-- Only after this distinction is repeatedly verified should a future release consider a representation-specific fast reconcile path.
-- COMMUNITY structural compatibility remains a separate output-format candidate and must not be mixed into edit-origin attribution.
+- The v0.63.52 B_END mismatch is consistent with a host/output boundary normalization difference near the end of the unique `# 응답` suffix because the inferred raw suffix was 7076 chars and Fresh was 7074 chars.
+- If v0.63.53 reports `BOUNDARY_CONFIRMED_SUFFIX` with `Δchars -2` and a CR/LF-only kind, the boundary-normalization hypothesis is strongly supported.
+- If v0.63.53 still reports `FRESH_MISMATCH`, the mismatch is not explained by the narrow two-character trailing CR/LF hypothesis and the strict failure behavior should remain.
+- COMMUNITY structural warnings may be independent of the preamble representation problem. They must not be silently cleared merely because envelope representation recovery succeeds.
 
 ---
 
 ## UNKNOWN
 
-- Whether the previously observed `Δ -4` / `Δ -1` mismatch pattern will naturally recur under v0.63.52.
-- Whether the next visible assistant after such a mismatch exactly matches the prior `FRESH_CHAT` fingerprint.
-- Whether all genuine manual edits classify as `USER_EDIT_CANDIDATE` or some are ambiguous because the preceding turn was already divergent.
-- What exact host normalization produces the small fresh/canonical differences; v0.63.52 intentionally does not retain prior bodies to inspect character-level boundaries.
-- Whether the v0.63.51 `Fresh-Confirmed Envelope Recovery` target case will recur naturally.
-- Whether malformed COMMUNITY grouping remains independently reproducible after exact envelope handling.
-- The authoritative provider-cache layer and cached-token counts remain unknown to SimCore.
+- Whether the next naturally occurring unresolved B_END reproduces the 7076→7074 two-character boundary difference.
+- Whether those two characters are actually CR/LF.
+- Whether successful boundary recovery yields `CANONICAL↔FRESH EXACT` while COMMUNITY warnings/quarantine remain.
+- Whether COMMUNITY `1/2`, platform `6/3`, and separator warnings are a truly independent Structure/Community issue.
+- Whether a future representation mismatch will exercise `REPRESENTATION_DRIFT_CORRELATED`; v0.63.52 already verified the genuine-edit positive control.
+- The authoritative provider cache layer and cached-token counts remain unknown to SimCore.
 
 ---
 
-## Current v0.63.52 Live Gate
+## Current v0.63.53 Live Gate
 
 Target release:
 
 ```text
-v0.63.52 — Edit Origin Attribution
+v0.63.53 — Boundary-Normalized Envelope Recovery
 ```
 
-Use natural same-runtime turns after the one reload needed to apply the update. No forced edit or cache break is required.
+After the one reload needed to apply the update, use natural same-runtime turns. Do not force a malformed output.
 
-A short useful sequence is:
+A compact useful sequence is:
 
 ```text
 C
 → B_START
 → B_CONTINUE
-→ B_CONTINUE
 → B_END
 → C
 ```
 
-Additional natural turns are fine. If the user intentionally hand-edits an assistant output, explicitly record that fact next to the following diagnostic so it can serve as a positive control.
+Additional B_CONTINUE turns are fine. A normal turn with `Envelope recovery: NOT_APPLICABLE` is not a failure; the special path is exercised only when a compatible unresolved `THOUGHTS_COMPAT` suffix occurs.
 
 Inspect especially:
 
 ```text
-Edit reconcile
-Prior representation
-Edit origin
-Edit delta
+Preamble provenance
+Envelope recovery
+Envelope boundary
 Deferred mirror
 Output provenance
 Output representation
-Envelope recovery
 Warnings / Compatibility diagnostics
+Edit reconcile / Prior representation / Edit origin on the following request
 ```
 
-### Expected normal case
+### Desired boundary-recovery evidence
 
 ```text
-Edit reconcile: SAME_FAST ...
-Prior representation: EXACT ...
-Edit origin: NONE ... match CANONICAL or FRESH_CHAT
+Preamble provenance:
+THOUGHTS_COMPAT · candidates 1
+
+Envelope recovery:
+RECOVERED
+· policy BOUNDARY_CONFIRMED_SUFFIX
+· source HOST_RAW_SUFFIX
+· confirmation FRESH_EXACT
+· persistent NONE
+
+Envelope boundary:
+RAW_SUFFIX N → NORMALIZED N-1/N-2
+· Δchars -1/-2
+· TRAILING_LF / TRAILING_CRLF / TRAILING_LF_LF / related CR/LF-only kind
+· FRESH_EXACT
+
+Output representation:
+CANONICAL↔FRESH Δchars +0 · EXACT
 ```
 
-No reconcile behavior should change.
+Deferred Mirror should then be `COMMITTED` only because the recovered fingerprint is exactly the Fresh fingerprint. The mirror gate itself remains unchanged.
 
-### Desired representation-drift evidence
+### Safe failure evidence
 
-After a prior output such as:
+If no allowed CR/LF-only variant matches Fresh:
 
 ```text
+Envelope recovery: FRESH_MISMATCH
+Envelope boundary: NOT_APPLICABLE
 Deferred mirror: OUTPUT_MISMATCH
-Output representation: CANONICAL↔FRESH Δchars -N · DIFFERENT
+setChat 0
 ```
 
-if the next request rebuilds and its visible assistant exactly matches the prior fresh fingerprint, expect:
+This is a correct safe failure, not a regression.
+
+### COMMUNITY interpretation
+
+If envelope recovery succeeds but warnings still show:
 
 ```text
-Edit reconcile: MANUAL_EDIT_REBUILT
-Prior representation: OUTPUT_MISMATCH
-Edit origin: REPRESENTATION_DRIFT_CORRELATED
-match FRESH_CHAT
-Edit delta: ... shape FRESH_EXACT_CARRYOVER
+COMMUNITY blocks 1/2
+platform sections 6/3
+separator mismatch
+state quarantine
 ```
 
-This is correlation evidence only. v0.63.52 must still perform the existing rebuild.
-
-### Genuine hand-edit positive control
-
-If the preceding output was exact and the user explicitly edits it before the next request, expect:
-
-```text
-Edit reconcile: MANUAL_EDIT_REBUILT
-Prior representation: EXACT
-Edit origin: USER_EDIT_CANDIDATE
-match NONE
-```
-
-If a genuine edit happens after a prior mismatch, `AMBIGUOUS_CHANGE` is acceptable and safer than overclaiming user origin.
-
----
-
-## v0.63.52 Verification Scope
-
-v0.63.52 changes diagnostics/attribution only:
-
-- existing reconcile behavior is unchanged;
-- existing Deferred Mirror provenance fingerprints are reused;
-- no output body is retained for edit attribution;
-- no request/output content is rewritten by the attribution code;
-- no extra host read or persistent storage operation is added;
-- Fresh-Confirmed Envelope Recovery remains unchanged;
-- Deferred Mirror mismatch blocking remains unchanged;
-- Structure and COMMUNITY quarantine remain unchanged;
-- History stabilization remains `OBSERVE_ONLY`;
-- Host Prefix Attribution remains observational;
-- provider cache remains `UNVERIFIED`.
+then promote Community Structural Compatibility to the next isolated release target. Do not weaken Structure acceptance inside v0.63.53.
 
 ---
 
@@ -213,6 +241,7 @@ v0.63.52 changes diagnostics/attribution only:
 
 ```text
 Broadcast End Authority
+Broadcast lifecycle / modes
 Frame
 Continuity
 Evidence
@@ -220,56 +249,24 @@ Lineage
 Source Handoff
 Reaction
 Recurrence
-Structure acceptance rules
-COMMUNITY structural rules
-Runtime placement / TAIL_AFTER_CURRENT_USER
-Compiler tier semantics
-Recovery acceptance
-Fresh-Confirmed Envelope Recovery
-Deferred Mirror identity/location/staleness guards
-Deferred Mirror strict mismatch block
-MANUAL_EDIT_REBUILT / SAME_FAST behavior
-History stabilization mutation policy / OBSERVE_ONLY
-Host Prefix Attribution behavior
-Persistent storage schema
-Network policy
-Provider-cache policy
+Structure acceptance / COMMUNITY quarantine
+TAIL_AFTER_CURRENT_USER
+compiler tiers
+Deferred Mirror strict gates
+Edit Origin Attribution semantics
+History stabilization OBSERVE_ONLY
+Host Prefix Attribution
+Cache trajectory
+provider cache UNVERIFIED
+persistent schema
+network / timers / provider routing
 ```
 
 ---
 
-## Next Candidate
+## Next Candidates
 
-If v0.63.52 repeatedly distinguishes:
-
-```text
-genuine hand edit → USER_EDIT_CANDIDATE
-prior fresh mismatch carryover → REPRESENTATION_DRIFT_CORRELATED
-```
-
-then the next isolated candidate is a narrowly gated representation fast reconcile, tentatively:
-
-```text
-v0.63.53 — Representation Fast Reconcile
-```
-
-It must only be considered after evidence shows that the current visible assistant is exactly a previously observed generation-time fresh representation and not an arbitrary user edit. Deferred Mirror safety must remain strict.
-
-If v0.63.52 instead produces ambiguous or non-fresh carryover, do not optimize the rebuild path; improve attribution first.
-
-If the unresolved THOUGHTS-compatible envelope case or independent COMMUNITY structural failure reappears, keep those as separate correctness tracks rather than folding them into edit reconciliation.
-
-Storage latency remains a later performance candidate after output correctness and edit-origin attribution are stable.
-
----
-
-## Maintenance Rule
-
-After each release:
-
-1. the release workflow validates and deploys the production pair;
-2. production identity is synchronized to `product-manifest.json` and guideline baseline;
-3. `CURRENT_DEVELOPMENT.md` is manually refreshed when real long-chat evidence changes the operational conclusion;
-4. a versioned project-source ZIP is built from the final durable-memory state;
-5. durable principles are promoted to `SIMCORE_GUIDELINES.md` only when warranted;
-6. historical conclusions are superseded explicitly rather than silently erased.
+1. **If BOUNDARY_CONFIRMED_SUFFIX succeeds and COMMUNITY warnings persist:** isolate Community Structural Compatibility / grouping recovery in a later release.
+2. **If boundary recovery fails with the same ~2-char size delta:** add diagnostics that identify boundary character class without retaining raw bodies; do not broaden normalization blindly.
+3. **If future mismatch → next request reports REPRESENTATION_DRIFT_CORRELATED:** consider a separate representation fast-reconcile release only after repeated evidence.
+4. Cache work remains frozen unless real provider cached-token telemetry becomes available.

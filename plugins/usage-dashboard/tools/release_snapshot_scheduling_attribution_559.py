@@ -305,11 +305,12 @@ Current release implementation: `3.0.0-alpha.5.59 — Snapshot Scheduling Attrib
 - Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
 - Keep bounded CLI concurrency default/hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
+- Preserve the 5.57 organization fallback: if account capture fails or lacks usable rows, fall back to the prior plain `orgs list --json` path; if capture and the plain fallback both contain no usable organization rows, `No organizations found in CLI output` remains an error.
 - Record relative start/end/duration for snapshot tasks inside the existing per-snapshot AsyncLocalStorage attribution context.
 - Record at most 8 CLI operation timeline entries using only sanitized family labels plus relative offsets, queue wait, and execution time.
 - Never retain raw CLI arguments, organization/project IDs, tokens, headers, capture file paths, or command output in scheduling telemetry.
 - Add `Bridge snapshot timeline` and `Bridge CLI operations` diagnostics without adding CLI/network work.
-- Preserve 5.57 organization fallback/empty-result fidelity, Runtime Recovery Fidelity, parser `provider-usage-v3`, and UNKNOWN semantics for missing Cache Write/TTL.
+- Preserve Runtime Recovery Fidelity, parser `provider-usage-v3`, and UNKNOWN semantics for missing Cache Write/TTL.
 
 Next step after the 5.59 real-device diagnostic: use the measured task/CLI timeline to choose between snapshot-root overlap and one specific range/Credits scheduling repair. Do not choose 5.60 before that evidence.
 

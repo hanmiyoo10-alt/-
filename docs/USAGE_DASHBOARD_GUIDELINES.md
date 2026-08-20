@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.60`
-- Bridge Engine: `1.6.13`
+- Product: `3.0.0-alpha.5.61`
+- Bridge Engine: `1.6.14`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -33,39 +33,42 @@ Verified from the 5.59 device diagnostic:
 - Snapshot scheduling telemetry was live and bounded: organizations ran `0→8291ms`; `usageScopes` and `analyticsScopes` started at `8291ms` and ended around `15324–15325ms`.
 - The sampled Bridge snapshot was about 15.33s. The exact task timeline verified a serialized root barrier: about 8.29s organization/bootstrap followed by about 7.03s post-root usage/analytics.
 - The Bridge ran 3 CLI operations: `credits 1→6973ms`, `devpass-capture-24h 31→8280ms`, then `usage-24h-model 8299→15316ms`; limit 2, peak active 2, queued 0.
-- This verified that current primary latency is scheduling/dependency shape rather than CLI queueing; however three cold ~7–8s CLI operations under a hard limit of 2 still require at least two execution waves.
+- This verified that queueing is not the primary bottleneck. In the sampled cold shape, Credits finished about 1.31s before account capture, leaving one CLI lane idle until root completion.
 - Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
+- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 - Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
 - Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
 - `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - Preserve the 5.57 organization recovery contract: if account capture fails or has no usable organization rows, fall back to the prior plain `orgs list --json` path; if capture and that fallback are both empty, `No organizations found in CLI output` remains an error.
-- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
-Verified release-infrastructure incident after 5.59 materialization:
+Verified release-infrastructure state from 5.60:
 
-- Main materialized validated 5.59, then a delayed 5.58 publisher wrote `release-usage-dashboard` back to 5.58.
-- The release branch was manually restored using the exact validated main 5.59 artifact blobs.
-- This was a stale release-job race, not a same-file Git merge conflict.
-- A shared `repo-main-write` lock remains necessary but is not sufficient by itself; release publishing also needs a monotonic candidate/version guard.
+- `3.0.0-alpha.5.60 — Monotonic Release Publish Guard` deployed with Bridge Engine `1.6.13` unchanged and Bridge Manager `1.2.6`.
+- P22 verifies stale-candidate blocking, same-version artifact divergence failure, and the archived 5.55–5.59 automatic publishers.
+- The shared `repo-main-write` lock remains necessary, and the monotonic candidate/main/release guard remains mandatory for all later publishers.
 
-Current release implementation: `3.0.0-alpha.5.60 — Monotonic Release Publish Guard`.
+Current release implementation: `3.0.0-alpha.5.61 — Credits Usage Early Start`.
 
-5.60 release contract:
+5.61 release contract:
 
-- Bridge Engine remains `1.6.13`; Bridge Manager remains `1.2.6`.
-- Runtime scheduling, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallbacks, payload semantics, parser `provider-usage-v3`, updater behavior, and Cache Write/TTL UNKNOWN semantics remain unchanged from 5.59.
-- Add a fail-closed Local Usage Dashboard publisher guard that compares candidate, current main, and current release manifests using parsed semantic project versions.
-- A candidate older than either current main or current release must never publish.
-- A candidate newer than current main must fail closed rather than inventing release state.
-- If candidate and release versions are equal, Engine, Manager, bootstrap, latest.js, and canonical manifest identity must match; divergence fails closed.
-- Malformed/unsupported versions or manifest/product mismatches fail closed.
-- Keep the shared `repo-main-write` lock for main writers.
-- Archive the recent 5.55–5.59 automatic publisher workflows so they cannot be automatically retriggered from current main; their original behavior remains available in Git history.
-- The 5.60 publisher must fetch fresh main/release state immediately before publishing and run the monotonic guard before creating a release commit.
+- Bridge Engine becomes `1.6.14`; Bridge Manager remains `1.2.6`.
+- Share the existing Credits CLI read through a bounded 30s `creditsBootstrap` cache/in-flight entry; do not add another Credits CLI call to the normal snapshot.
+- Start one Credits 24h usage prefetch only with an exact requested Credits ID or exactly one explicit eligible Credits ID from the real Credits source. Ambiguous/missing IDs keep the 5.60 root-gated path.
+- `creditsBootstrap` must not serve stale fallback data. Its dedicated circuit family must not double-count failures against the existing organizations circuit. UNKNOWN/source fidelity remains unchanged.
+- Default CLI concurrency remains 2. `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.
+- Full organization selection remains authoritative for the returned payload. If the early candidate does not equal the final selected Credits org, the early result is not used by `usageScopes`.
+- Preserve account capture, plain orgs fallback, shared 24h DevPass capture, cache TTLs other than the explicit aligned Credits bootstrap entry, existing organizations circuit semantics, CLI timeout 25s, Request Ledger/provider cache fidelity, parser `provider-usage-v3`, updater behavior, and 5.60 monotonic release integrity.
+- Existing snapshot timeline/CLI-operation diagnostics are sufficient for device verification; do not add raw org IDs, CLI args, payloads, headers, tokens, or capture paths.
 
-Next step after the 5.60 real-device diagnostic: verify update/health with unchanged Engine 1.6.13, then use the preserved 5.59 timeline evidence to choose the next performance repair in the following design turn.
+5.61 device success evidence to collect:
+
+- Functional health remains READY/ok with no new active runtime errors.
+- On an eligible cold sample, `usage-24h-model` should start at or shortly after the Credits CLI ends and before `organizations` ends.
+- CLI runs should remain bounded with limit 2 and no duplicate Credits call.
+- If the Credits source is ambiguous, early-start may be absent by design and the previous root-gated behavior is correct.
+- Compare snapshot/CLI timings against the 5.59 baseline without claiming telemetry-independent speedup from a single noisy sample.
 
 ## Long-term update roadmap
 

@@ -7,6 +7,7 @@ RUNTIME = ROOT / 'runtime'
 ENGINE = RUNTIME / 'bridge-engine.mjs'
 MANAGER = RUNTIME / 'bridge-manager.cjs'
 MANIFEST = RUNTIME / 'product-manifest.json'
+GUIDELINES = Path('docs/USAGE_DASHBOARD_GUIDELINES.md')
 EXPECTED_PRODUCT = '3.0.0-alpha.5.57'
 EXPECTED_ENGINE = '1.6.11'
 EXPECTED_MANAGER = '1.2.6'
@@ -73,6 +74,15 @@ if (components.get('bridgeManager') or {}).get('version') != EXPECTED_MANAGER:
 manifest['components']['bridge']['sha256'] = engine_sha
 manifest['components']['bridgeManager']['sha256'] = sha256_file(MANAGER)
 MANIFEST.write_text(json.dumps(manifest, indent=2) + '\n')
+
+guidelines = GUIDELINES.read_text()
+contract_line = "- If capture and the plain fallback both contain no usable organization rows, preserve the prior `No organizations found in CLI output` failure instead of converting UNKNOWN/empty discovery into a successful empty result."
+if contract_line not in guidelines:
+    anchor = "- If account capture fails or does not contain usable organization rows, fall back to the prior plain `orgs list --json` path."
+    if guidelines.count(anchor) != 1:
+        raise SystemExit('5.57 organization fallback guideline anchor missing')
+    guidelines = guidelines.replace(anchor, f'{anchor}\n{contract_line}', 1)
+    GUIDELINES.write_text(guidelines)
 
 print(
     f'finalized Local Usage Dashboard {EXPECTED_PRODUCT} organization discovery contract '

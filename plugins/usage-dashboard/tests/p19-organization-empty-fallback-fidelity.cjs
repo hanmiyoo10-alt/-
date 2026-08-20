@@ -47,6 +47,10 @@ const vm = require('node:vm');
       throw new Error(`unexpected CLI ${args[0]}`);
     },
   };
+  // Later releases may share the Credits read through a bootstrap wrapper. Keep
+  // this fidelity fixture focused on the fallback/error contract, not ownership
+  // of the Credits call.
+  context.loadCreditsBootstrap = () => context.runCli(['credits', '--json']);
   vm.createContext(context);
   vm.runInContext(`${orgBlock}\nthis.loadOrgs = loadOrgs;`, context);
   await assert.rejects(

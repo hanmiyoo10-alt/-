@@ -180,6 +180,7 @@ Verified from the 5.55 device diagnostic:
 - The slowest observed operation was `devpass-capture-30d` at about 19.1s total, with much of that time attributable to queue wait rather than its own execution.
 - The same snapshot had cache errors 0, stale fallback 0, circuit opened/blocked/recoveries 0; cache/circuit failure was not the cause of that sample.
 - UI rendering remained tiny relative to refresh duration, and Cache Write provenance continued to stay UNKNOWN when the source did not report it.
+- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
 Current release implementation: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`.
 

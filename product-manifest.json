@@ -15,6 +15,8 @@
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
   "governance": "docs/SIMCORE_GOVERNANCE.md",
   "architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
+  "architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md",
+  "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "current_priority": "REPRESENTATION_FAST_RECONCILE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
@@ -23,7 +25,8 @@
     "development_principles": "docs/SIMCORE_GUIDELINES.md",
     "current_investigation": "docs/CURRENT_DEVELOPMENT.md",
     "development_governance": "docs/SIMCORE_GOVERNANCE.md",
-    "current_architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md"
+    "current_architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
+    "current_architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md + config/simcore-architecture-v2.json"
   },
   "managed_by": ".github/workflows/simcore-release-state-sync.yml"
 }

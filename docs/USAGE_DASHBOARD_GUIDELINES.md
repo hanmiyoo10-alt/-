@@ -13,7 +13,7 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.59`
+- Product: `3.0.0-alpha.5.60`
 - Bridge Engine: `1.6.13`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
@@ -24,39 +24,48 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`.
+Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`.
 
-Verified from the 5.58 device diagnostic:
+Verified from the 5.59 device diagnostic:
 
-- Stable Readiness was `READY`; Bridge Engine `1.6.12` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
-- Organization discovery remained on `capture-primary · fallback 0 · shared account capture yes`.
-- Shared 24h reuse was active: `bootstrap 24h · activity shared yes · dedicated 24h fallback 0`.
-- The sampled Bridge snapshot was about 13.28s, down from about 17.87s in 5.57; timer refresh was about 14.40s total.
-- `analyticsScopes` was about 5.92s, down from about 11.84s in 5.57, and the previously observed CLI queue wait disappeared.
-- The Bridge ran 3 CLI operations with `limit 2 · peak active 2 · queued 0`; average execution was about 6.33s and the slowest sanitized operation was `devpass-capture-24h` at about 7.31s.
-- The sampled critical path still looked serialized: organization/bootstrap work about 7.35s followed by post-root usage/analytics work about 5.92s, totaling about 13.27s.
-- The sampled visibility refresh was about 25.07s versus timer refresh about 14.40s; 5.58 telemetry could not attribute the exact cause.
+- Stable Readiness was `READY`; Bridge Engine `1.6.13` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
+- Organization discovery stayed `capture-primary · fallback 0 · shared account capture yes`; shared 24h reuse stayed active with dedicated 24h fallback 0.
+- Snapshot scheduling telemetry was live and bounded: organizations ran `0→8291ms`; `usageScopes` and `analyticsScopes` started at `8291ms` and ended around `15324–15325ms`.
+- The sampled Bridge snapshot was about 15.33s. The exact task timeline verified a serialized root barrier: about 8.29s organization/bootstrap followed by about 7.03s post-root usage/analytics.
+- The Bridge ran 3 CLI operations: `credits 1→6973ms`, `devpass-capture-24h 31→8280ms`, then `usage-24h-model 8299→15316ms`; limit 2, peak active 2, queued 0.
+- This verified that current primary latency is scheduling/dependency shape rather than CLI queueing; however three cold ~7–8s CLI operations under a hard limit of 2 still require at least two execution waves.
 - Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
-- Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
+- Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
+- Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
+- Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
+- `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
+- Preserve the 5.57 organization recovery contract: if account capture fails or has no usable organization rows, fall back to the prior plain `orgs list --json` path; if capture and that fallback are both empty, `No organizations found in CLI output` remains an error.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
-Current release implementation: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`.
+Verified release-infrastructure incident after 5.59 materialization:
 
-5.59 release contract:
+- Main materialized validated 5.59, then a delayed 5.58 publisher wrote `release-usage-dashboard` back to 5.58.
+- The release branch was manually restored using the exact validated main 5.59 artifact blobs.
+- This was a stale release-job race, not a same-file Git merge conflict.
+- A shared `repo-main-write` lock remains necessary but is not sufficient by itself; release publishing also needs a monotonic candidate/version guard.
 
-- Bridge Engine becomes `1.6.13`; Bridge Manager remains `1.2.6`.
-- Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
-- Keep bounded CLI concurrency default/hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
-- Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
-- Preserve the 5.57 organization fallback: if account capture fails or lacks usable rows, fall back to the prior plain `orgs list --json` path; if capture and the plain fallback both contain no usable organization rows, `No organizations found in CLI output` remains an error.
-- Record relative start/end/duration for snapshot tasks inside the existing per-snapshot AsyncLocalStorage attribution context.
-- Record at most 8 CLI operation timeline entries using only sanitized family labels plus relative offsets, queue wait, and execution time.
-- Never retain raw CLI arguments, organization/project IDs, tokens, headers, capture file paths, or command output in scheduling telemetry.
-- Add `Bridge snapshot timeline` and `Bridge CLI operations` diagnostics without adding CLI/network work.
-- Preserve Runtime Recovery Fidelity, parser `provider-usage-v3`, and UNKNOWN semantics for missing Cache Write/TTL.
+Current release implementation: `3.0.0-alpha.5.60 — Monotonic Release Publish Guard`.
 
-Next step after the 5.59 real-device diagnostic: use the measured task/CLI timeline to choose between snapshot-root overlap and one specific range/Credits scheduling repair. Do not choose 5.60 before that evidence.
+5.60 release contract:
+
+- Bridge Engine remains `1.6.13`; Bridge Manager remains `1.2.6`.
+- Runtime scheduling, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallbacks, payload semantics, parser `provider-usage-v3`, updater behavior, and Cache Write/TTL UNKNOWN semantics remain unchanged from 5.59.
+- Add a fail-closed Local Usage Dashboard publisher guard that compares candidate, current main, and current release manifests using parsed semantic project versions.
+- A candidate older than either current main or current release must never publish.
+- A candidate newer than current main must fail closed rather than inventing release state.
+- If candidate and release versions are equal, Engine, Manager, bootstrap, latest.js, and canonical manifest identity must match; divergence fails closed.
+- Malformed/unsupported versions or manifest/product mismatches fail closed.
+- Keep the shared `repo-main-write` lock for main writers.
+- Archive the recent 5.55–5.59 automatic publisher workflows so they cannot be automatically retriggered from current main; their original behavior remains available in Git history.
+- The 5.60 publisher must fetch fresh main/release state immediately before publishing and run the monotonic guard before creating a release commit.
+
+Next step after the 5.60 real-device diagnostic: verify update/health with unchanged Engine 1.6.13, then use the preserved 5.59 timeline evidence to choose the next performance repair in the following design turn.
 
 ## 0. Source of truth
 

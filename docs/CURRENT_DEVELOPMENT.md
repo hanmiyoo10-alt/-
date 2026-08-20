@@ -16,7 +16,7 @@
 - Release commit: `9bc327ee83df347f9b3cc57c00530fd26cc253e1`
 - Release blob: `6c188b451d4a9e70269dc8b23d39f78df852575c`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `HOST_PREFIX_RESET_ATTRIBUTION`
+- Primary optimization target: `OUTPUT_ENVELOPE_RECOVERY_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -26,195 +26,169 @@ This block is machine-managed after each production release update.
 
 ## VERIFIED
 
-### History representation line
+### History / cache line through v0.63.50
 
-- The investigated rolling prompt-prefix break repeatedly occurs before SimCore in `CHAT_HISTORY`; SimCore reports `NOT_FIRST_BREAK` for that break.
-- Historical assistant slots repeatedly appear first as the exact compact signature `assistant/text 21:4a852496` and later as substantially larger assistant text.
-- v0.63.45 proved one tracked assistant representation change already existed before reconcile: `PRE_RECONCILE == POST_RECONCILE == FINAL` with `Rebuild attribution: PREEXISTING_REQUEST_MUTATION · HIGH`.
-- Frontier progression can occur with `SAME_FAST` / `SAME_HOST_FAST`; `MANUAL_EDIT_REBUILT` is not required to generate the rolling history representation change.
-- v0.63.46 stayed fail-open because exact current-user comparison produced `SKIPPED_CURRENT_USER_MISMATCH`; no request repair executed and persistent mutation stayed `NONE`.
-- v0.63.47 stayed fail-open because body/calibrator-derived alignment produced `NO_CANDIDATE` / `SKIPPED_INSUFFICIENT_CALIBRATORS`; no request repair executed and persistent mutation stayed `NONE`.
-- v0.63.48 turn-ordinal alignment also stayed fail-open. Natural turns reported `History alignment: ROLE_DRIFT`, only the endpoint role matched (`1/N`), and `targets 0/1`; no compact target was mapped or replaced.
-- During v0.63.48, the compact assistant frontier still advanced naturally `@24 → @26 → @28`, yet the local reusable prefix stayed large and grew from about `382,389 chars / 86.4%` to `394,679 / 87.4%`.
-- External cache indications were observed on distinct v0.63.48 B_START/B_CONTINUE/B_END requests while that compact frontier remained. Therefore the rolling `21:4a852496` frontier does **not by itself** prevent useful cache reuse.
-- v0.63.49 intentionally removed active history repair. Across the verified run, `History alignment: OBSERVE_ONLY`, `History stabilization: OBSERVE_ONLY`, request mutation `NONE`, `Δchars +0`, and persistent mutation `NONE` remained intact.
+- The repeatedly tracked request-prefix break occurs before SimCore in `CHAT_HISTORY`; SimCore reports `NOT_FIRST_BREAK`.
+- Historical assistant slots repeatedly appear first as `assistant/text 21:4a852496` and later as substantially larger assistant text.
+- v0.63.46 / v0.63.47 / v0.63.48 repair attempts all failed open under their respective safety gates. No persistent or visible-chat history rewrite was performed.
+- v0.63.49 intentionally moved History stabilization to `OBSERVE_ONLY`; request mutation, added chars, persistent mutation, provider routing, network, and timers remained unchanged.
+- External cache observations can coexist with the moving compact frontier. Therefore `21:4a852496` is a repeatable projection-boundary symptom, not a sufficient cache-failure condition.
+- v0.63.49 also captured one externally observed cache loss coincident with `PREFIX_COLLAPSE`, `PRE_SIMCORE · HOST_PREFIX · @0`, and a cache-family reset. That was a strong correlation, not provider-causation proof.
 
-### v0.63.49 Cache Effect Verification
+### v0.63.50 Host Prefix Reset Attribution validation
 
-- First v0.63.49 C request was a local topology baseline and the user externally observed no cache reuse on that first request.
-- The next natural C request externally cached while SimCore reported `REUSE_WINDOW_STABLE`, `401,942 / 461,256 chars`, `87.1%`, with the first break still in `PRE_SIMCORE · CHAT_HISTORY @32`.
-- The following B_START externally cached while SimCore reported `REUSE_WINDOW_GROWING`, `406,679 / 463,663 chars`, `87.7%`, frontier `@34`, movement `+2 msgs / +4,737 chars`.
-- The following B_CONTINUE externally cached while SimCore reported `REUSE_WINDOW_GROWING`, `413,815 / 469,098 chars`, `88.2%`, frontier `@36`, movement `+2 msgs / +7,136 chars`.
-- A later natural B_CONTINUE was the decisive contrast: the user externally observed cache loss exactly when SimCore reported `PREFIX_COLLAPSE`, `0/67 messages`, `0/480,523 chars`, `0.0%`, `Cache break: PRE_SIMCORE · HOST_PREFIX · @0 system→system`, and `FAMILY_RESET`.
-- That reset changed system @0 from `system/text 287332:947b1559` to `system/text 294359:aa650b09`, a size delta of `+7,027 chars`, while `Edit reconcile: SAME_FAST` and `SimCore contribution: NOT_FIRST_BREAK` remained unchanged.
-- On the next natural B_END request, external caching returned. SimCore simultaneously showed a newly established large reusable window inside the new family: `362,941 / 415,867 chars`, `87.3%`, `REUSE_WINDOW_GROWING`.
-- The v0.63.49 sequence therefore separates two phenomena operationally: rolling `CHAT_HISTORY` materialization can coexist with external cache reuse, while the one observed external cache loss coincided with a complete message-level `HOST_PREFIX @0` collapse and cache-family reset.
-- This is a **strong observed correlation**, not proof that the host-prefix reset caused provider cache loss. SimCore still has no authoritative provider cached-token counter and must keep provider cache `UNVERIFIED`.
-- Broadcast lifecycle, Broadcast End Authority, Frame, Continuity, request placement, and strict Deferred Mirror safety remained intact during the v0.63.49 run. The B_END `OUTPUT_MISMATCH` remained safely blocked from `setChat` and is a separate output-representation issue.
+- v0.63.50 successfully established and compared the system-@0 sketch without retaining raw system bodies.
+- In the completed natural same-runtime sequence the system prefix stayed exactly stable at `system/text 1277:bdfcdec7`, family `dec26894`.
+- The rolling compact frontier still moved `@20 → @22 → @24`, with reusable local prefix growth approximately `87,891 → 92,288 → 96,654 chars`.
+- External cache observation did **not** map one-to-one to that frontier: early distinct requests in the family were externally uncached, while the later B_END request externally cached even though the compact frontier persisted and advanced.
+- Therefore a host-prefix reset is **not necessary for every externally observed cache miss**, and the prior v0.63.49 host-prefix reset must remain one observed cache-loss mechanism/correlation rather than a universal explanation.
+- Provider cache remains `UNVERIFIED` internally because SimCore still receives no authoritative cached-input/token counter.
+- History stabilization remained `OBSERVE_ONLY`, request mutation `NONE`, persistent mutation `NONE`, and SimCore remained `NOT_FIRST_BREAK` throughout.
 
-## SUPPORTED HYPOTHESES
+### Output-envelope failure promoted to primary target
 
-- A host/request-history projection step before SimCore progressively materializes or re-projects historical conversation representations, producing the moving `CHAT_HISTORY` frontier.
-- The exact compact `21:4a852496` assistant representation is a repeatable boundary symptom, not a reliable cache-failure condition.
-- Useful cache reuse can coexist with a moving history frontier when the large earlier request prefix remains unchanged.
-- The more important cache-stability boundary is now the leading host-owned system prefix, especially a request where message-level common prefix collapses at `@0` and cache family changes.
-- The observed `+7,027` system @0 size shift may represent a localized inserted/removed/generated host section or a broader system-prompt reconstruction. v0.63.49 cannot distinguish those shapes because topology hashes only whole messages.
-- A message-level `@0` break does **not** prove that the first characters of the giant system message changed. The system message may still share a very large internal head and/or tail. v0.63.50 exists to measure that distinction.
-- Storage latency (`TURN_STORAGE` / `OUT_STORAGE`) remains a possible later optimization target, but it must not be mixed into host-prefix attribution.
+- A real v0.63.50 B_END produced a unique `# 응답` envelope after a `THOUGHTS_COMPAT` preamble of about 2K chars, but full Structure safety did not accept the suffix because COMMUNITY shape was independently invalid.
+- That turn reported `Preamble provenance ... action UNRESOLVED · policy WARNING`, `Deferred mirror: OUTPUT_MISMATCH`, and a large canonical↔fresh representation difference.
+- Strict Deferred Mirror correctly blocked `setChat` on the mismatch. This guard must not be weakened.
+- The same turn separately reported COMMUNITY structural warnings and state quarantine. Those warnings are **not automatically equivalent** to the preamble problem and must be isolated after envelope recovery is proven.
 
-## UNKNOWN
+### v0.63.51 implementation boundary
 
-- Which exact host-side component creates the `HOST_PREFIX @0` family reset.
-- Whether the observed system @0 change is localized insertion/removal, localized replacement, or widespread reconstruction.
-- How many leading/trailing characters of system @0 remain identical across a message-level family reset.
-- Whether every future external cache loss will correlate with `HOST_PREFIX @0` collapse, or the v0.63.49 event was only one cache-loss mechanism.
-- Which host/provider layer produced the user-visible cache indication.
-- Whether authoritative provider cached-input/token metrics can be observed without adding new provider/network coupling.
-- Why the rolling history frontier often advances by two conversational messages.
+- Fresh chat is not available during the synchronous Recovery pass. It first becomes available in the existing Deferred Mirror fresh-chat read.
+- v0.63.51 therefore does not add a second host read or broaden initial Structure acceptance.
+- When initial Recovery sees exactly one `# 응답` suffix after a `THOUGHTS_COMPAT` prefix, and that suffix already has intact Frame + Knowledge, it records only a bounded memory-only candidate fingerprint/length/offset.
+- If and only if Deferred Mirror later reads a fresh assistant body whose fingerprint exactly equals that candidate fingerprint, the current in-memory canonical output fingerprint and mirrored portable state are promoted to that fresh-confirmed suffix representation.
+- The confirmation path retains existing location, output-index, runtime-epoch, supersession, and freshness guards.
+- No candidate body is retained. Persistent snapshot schema, request bytes/order, provider policy, and network surface are unchanged.
+- A failed exact comparison remains `OUTPUT_MISMATCH` and keeps `setChat` blocked.
 
 ---
 
-## Current v0.63.50 Live Gate
+## SUPPORTED HYPOTHESES
+
+- PocketRisu/host output processing can expose one raw handler representation while later fresh chat contains a different saved/display representation.
+- A unique `THOUGHTS_COMPAT` raw prefix plus an exact fresh-chat match to the precomputed response-suffix fingerprint is strong enough evidence to reconcile representation identity without weakening Structure rules.
+- COMMUNITY block-shape failure may remain after the preamble representation is successfully reconciled; if so, it is an independent structural-compatibility problem suitable for a later isolated release.
+- The rolling compact history frontier remains observational background evidence and should not be reactivated as a repair target merely because external cache behavior varies.
+- Storage latency remains a separate later performance candidate and should not be mixed into output-envelope correctness work.
+
+---
+
+## UNKNOWN
+
+- Whether the v0.63.51 fresh-confirmation path will naturally exercise on the next comparable B_END/output-representation event.
+- Whether every unresolved `THOUGHTS_COMPAT` case has a fresh saved representation equal to the unique response suffix.
+- Whether COMMUNITY 1-block / 6-section output remains after successful envelope confirmation.
+- Whether a remaining COMMUNITY mismatch is model formatting, host transformation, or a recoverable grouping compatibility issue.
+- Why the host occasionally presents different raw and fresh representations for the same output.
+- The authoritative provider-cache layer and cached-token counts remain unknown to SimCore.
+
+---
+
+## Current v0.63.51 Live Gate
 
 Target release:
 
 ```text
-v0.63.50 — Host Prefix Reset Attribution
+v0.63.51 — Fresh-Confirmed Envelope Recovery
 ```
 
-Primary validation sequence after applying v0.63.50 and performing one update reload if needed:
+Use one natural same-runtime sequence after the one update/reload needed to apply the release:
 
 ```text
 C baseline
 → B_START
 → B_CONTINUE
-→ B_CONTINUE
 → B_END
 → C
 ```
 
-The exact mode sequence is not itself causal; use natural distinct turns. The goal is to observe ordinary reusable-prefix growth and, if it naturally recurs, another `HOST_PREFIX @0` reset.
-
-Rules:
-
-- no reload or regeneration between observed turns;
-- no artificial retry as primary evidence;
-- keep external cache indication separate from SimCore-local telemetry;
-- do not infer provider HIT/MISS from local topology alone;
-- do not deliberately force a host-prefix reset.
+Additional natural B_CONTINUE turns are fine. Do not reload/regenerate between observed turns.
 
 Inspect especially:
 
 ```text
-Cache effect
-Cache topology
-Cache break
-Host prefix attribution
-Host prefix delta
-Cache trajectory
-History mutation
-History alignment
-History stabilization
-Frontier movement
-SimCore contribution
-Runtime identity
+Preamble provenance
+Envelope recovery
 Deferred mirror
-Broadcast / Frame / Continuity
+Output provenance
+Output representation
+Warnings / Compatibility diagnostics
+COMMUNITY structure warnings
+state quarantine
+Broadcast lifecycle / End Authority
+Frame / Continuity
+History stabilization
+Host prefix attribution
+Cache effect
 ```
 
-Expected observer-only safety:
+### Expected unaffected turns
+
+When no special recovery candidate exists:
 
 ```text
-History alignment: OBSERVE_ONLY
-History stabilization: OBSERVE_ONLY
-request mutation NONE
+Envelope recovery: NOT_APPLICABLE
+Deferred mirror: COMMITTED
+```
+
+Normal existing `THOUGHTS_COMPAT` cases already accepted by `SILENT_COMPAT` / `SAFE_ENVELOPE_COMPAT` should continue to behave as before.
+
+### Desired decisive recovery evidence
+
+For a reproduction of the v0.63.50 unresolved-prefix family:
+
+```text
+Envelope recovery: RECOVERED
+source HOST_RAW_SUFFIX
+confirmation FRESH_EXACT
 persistent NONE
-provider cache UNVERIFIED
-raw system bodies NOT RETAINED
+
+Output provenance:
+match FRESH_CONFIRMED_SUFFIX
+
+Output representation:
+CANONICAL↔FRESH Δchars +0 · EXACT
+
+Preamble provenance:
+action STRIPPED
+policy FRESH_CONFIRMED_SUFFIX
 ```
 
-Expected Host prefix attribution states:
+The confirmation may allow the normal Deferred Mirror commit because fresh chat itself proved the candidate identity. It must not manufacture or rewrite response body text.
+
+### Required fail-open evidence
+
+If the fresh body does not equal the candidate fingerprint:
 
 ```text
-BASELINE
-STABLE
-DELTA_LOCALIZED
-WIDESPREAD
-UNAVAILABLE
+Envelope recovery: FRESH_MISMATCH
+Deferred mirror: OUTPUT_MISMATCH
+setChat 0
 ```
 
-When system @0 changes, `Host prefix delta` reports only bounded hash-derived structure:
+Any ambiguous/multiple envelope, missing Frame/Knowledge, short candidate, non-THOUGHTS prefix, location mismatch, stale runtime, or superseded mirror remains ineligible.
 
-```text
-prev system signature → current system signature
-Δchars
-head ≥ N chars
-tail ≥ N chars
-changed prev ≤ N chars
-changed current ≤ N chars
-family old→new · RESET_CORRELATED / SAME_FAMILY
-```
+### COMMUNITY separation rule
 
-The block granularity is `512` characters. `head ≥` and `tail ≥` are guaranteed matching lower bounds from block hashes; changed spans are corresponding upper bounds. No raw system body is retained.
-
-Change-shape labels:
-
-```text
-INSERTION_LIKE
-REMOVAL_LIKE
-REPLACEMENT_LIKE
-SIZE_SHIFT_LOCALIZED
-LOCALIZED_CHANGE
-WIDESPREAD_CHANGE
-```
-
-Interpretation:
-
-- `STABLE` means system @0 is identical at the existing whole-message signature level.
-- `DELTA_LOCALIZED` means at least 75% of the shorter system @0 is covered by matching head/tail blocks, allowing the changed middle span to be bounded without retaining content.
-- `WIDESPREAD` means the matching head/tail coverage is insufficient to call the change localized.
-- `INSERTION_LIKE` / `REMOVAL_LIKE` are structural size/shape classifications only; they do not identify the semantic source of the changed section.
-- `RESET_CORRELATED` means the system @0 change coincided locally with a request-family identity change. It does not claim provider-cache causation.
-- External cache loss plus `PREFIX_COLLAPSE` plus a localized host-prefix delta would justify a later **source-attribution** release; it would still not justify mutating the host prompt automatically.
-
-Desired decisive evidence:
-
-```text
-normal cached turns:
-  Host prefix attribution STABLE
-  Cache effect GROWING/STABLE
-
-natural reset turn, if one appears:
-  Cache effect PREFIX_COLLAPSE
-  Cache break PRE_SIMCORE · HOST_PREFIX · @0
-  Host prefix attribution DELTA_LOCALIZED or WIDESPREAD
-  Host prefix delta identifies bounded head/tail/change shape
-  family RESET_CORRELATED
-
-next natural turn:
-  observe whether a large reusable prefix and external caching recover inside the new family
-```
-
-Provider cache remains `UNVERIFIED` unless authoritative gateway/provider usage telemetry is supplied.
+If envelope recovery succeeds but warnings still show malformed COMMUNITY grouping, keep state quarantine and treat that as a separate problem. Do **not** broaden envelope recovery to repair COMMUNITY structure.
 
 ---
 
-## v0.63.50 Verification Scope
+## v0.63.51 Verification Scope
 
-v0.63.50 is an attribution-only release:
+v0.63.51 changes only output-representation reconciliation:
 
-- inspect only request system message `@0` when present;
-- build memory-only 512-character FNV-1a block hashes from both head and tail;
-- retain lengths/hashes only, never raw system message bodies;
-- compare the current system @0 sketch against the previous same-chat request sketch;
-- preserve v0.63.49 whole-request topology and Cache effect telemetry;
-- preserve v0.63.49 `OBSERVE_ONLY` history behavior;
-- do not change request content, message order, current-user placement, or runtime prompt placement;
-- do not write visible chat or new persistent history state;
-- do not add provider directives, network requests, timers, or new storage calls;
-- do not claim provider cache hit/miss.
-
-The request-topology refreshless handoff accepts the prior v1 shape and emits v2 with the optional system @0 hash sketch. Upgrading from v0.63.49 may therefore make the first v0.63.50 host-prefix attribution observation `BASELINE`; subsequent distinct turns provide the comparison.
+- initial Recovery safety remains fail-open;
+- exactly one THOUGHTS-compatible response suffix may emit a memory-only candidate fingerprint;
+- candidate requires intact Frame + Knowledge and a bounded minimum body length;
+- existing Deferred Mirror fresh read performs the exact confirmation;
+- confirmation updates only current representation identity / existing mirrored portable state;
+- raw candidate body is not retained;
+- no new request mutation, visible output-body rewrite, provider inference, host read, network request, persistent schema, or timer path is introduced;
+- History stabilization remains `OBSERVE_ONLY`;
+- Host Prefix Attribution remains observational;
+- provider cache remains `UNVERIFIED`.
 
 ---
 
@@ -229,35 +203,36 @@ Lineage
 Source Handoff
 Reaction
 Recurrence
-Structure
+Structure acceptance rules
+COMMUNITY structural rules
 Runtime placement / TAIL_AFTER_CURRENT_USER
 Compiler tier semantics
-Recovery output policy
-Deferred Mirror strict mismatch safety
+Deferred Mirror identity/location/staleness guards
+Deferred Mirror strict non-confirmed mismatch block
 History stabilization mutation policy / OBSERVE_ONLY
+Host Prefix Attribution behavior
 Persistent storage schema
 Network policy
-Timer policy
 Provider-cache policy
 ```
-
-The variable output-envelope/Deferred-Mirror mismatch issue and request/output storage latency are separate backlogs and must not be mixed into v0.63.50.
 
 ---
 
 ## Next Candidate
 
-If v0.63.50 captures another `HOST_PREFIX @0` reset and localizes the changed system region, the next isolated candidate is:
+If v0.63.51 successfully converts an unresolved THOUGHTS-compatible raw-prefix case to exact fresh-confirmed representation **and** COMMUNITY structural warnings remain independently reproducible, the next isolated candidate is:
 
 ```text
-v0.63.51 — Host Prefix Source Attribution
+v0.63.52 — Community Structural Compatibility
 ```
 
-That release should identify which host-generated prefix component corresponds to the bounded changed region without re-enabling history repair or changing provider/cache policy.
+That release should determine whether one COMMUNITY block containing the expected total platform sections can be deterministically split into the required block grouping without inventing or rewriting community content.
 
-If v0.63.50 instead shows that system @0 is internally mostly stable even during message-level `PREFIX_COLLAPSE`, revise the topology model before attempting any repair. A whole-message hash break would then be too coarse to represent the provider-reusable prefix accurately.
+If v0.63.51 instead reports `FRESH_MISMATCH`, follow the observed representation boundary rather than weakening the exact fingerprint gate.
 
-Only after the cache-stability boundary is sufficiently explained should storage latency become the primary optimization target.
+If no unresolved-prefix event naturally occurs, keep v0.63.51 in observation until exercised; absence of the event is not a failure.
+
+Storage latency remains a later performance candidate after output correctness is stable.
 
 ---
 
@@ -265,9 +240,9 @@ Only after the cache-stability boundary is sufficiently explained should storage
 
 After each release:
 
-1. the release workflow must validate and deploy the production pair;
-2. the same workflow must synchronize `product-manifest.json`, this production snapshot, and the guideline baseline;
-3. it must build the versioned project-source ZIP artifact;
-4. real long-chat validation determines VERIFIED / SUPPORTED HYPOTHESIS / UNKNOWN changes;
+1. the release workflow validates and deploys the production pair;
+2. production identity is synchronized to `product-manifest.json` and guideline baseline;
+3. `CURRENT_DEVELOPMENT.md` is manually refreshed when real long-chat evidence changes the operational conclusion;
+4. a versioned project-source ZIP is built from the final durable-memory state;
 5. durable principles are promoted to `SIMCORE_GUIDELINES.md` only when warranted;
 6. historical conclusions are superseded explicitly rather than silently erased.

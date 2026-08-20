@@ -79,7 +79,10 @@ replace_once(engine, f"const VERSION = '{OLD_ENGINE_VERSION}';", f"const VERSION
 # Credits raw data used to be private to loadOrgs(). Share it as a 30s bounded
 # in-flight/cache entry so the snapshot may start one safe Credits 24h usage
 # request as soon as the Credits CLI releases a lane. Stale fallback is disabled
-# for this seed so it cannot silently invent a currently-selectable org.
+# for this seed so it cannot silently invent a currently-selectable org. Keep the
+# bootstrap on its own default circuit family so one Credits failure is not
+# double-counted against the pre-existing organizations circuit through nested
+# cached() wrappers.
 replace_once(
     engine,
     """  accountCapture: 30_000,
@@ -88,15 +91,6 @@ replace_once(
   creditsBootstrap: 30_000,
   devpassStatus: 30_000,""",
     'credits bootstrap ttl',
-)
-replace_once(
-    engine,
-    """  if (key === 'accountCapture' || key === 'devpassStatus') return 'account';
-  if (key.startsWith('devpassActivity:')) return 'devpassActivity';""",
-    """  if (key === 'accountCapture' || key === 'devpassStatus') return 'account';
-  if (key === 'creditsBootstrap') return 'organizations';
-  if (key.startsWith('devpassActivity:')) return 'devpassActivity';""",
-    'credits bootstrap circuit family',
 )
 replace_once(
     engine,
@@ -275,10 +269,10 @@ Current release implementation: `3.0.0-alpha.5.61 — Credits Usage Early Start`
 - Bridge Engine becomes `1.6.14`; Bridge Manager remains `1.2.6`.
 - Share the existing Credits CLI read through a bounded 30s `creditsBootstrap` cache/in-flight entry; do not add another Credits CLI call to the normal snapshot.
 - Start one Credits 24h usage prefetch only with an exact requested Credits ID or exactly one explicit eligible Credits ID from the real Credits source. Ambiguous/missing IDs keep the 5.60 root-gated path.
-- `creditsBootstrap` must not serve stale fallback data. UNKNOWN/source fidelity remains unchanged.
+- `creditsBootstrap` must not serve stale fallback data. Its dedicated circuit family must not double-count failures against the existing organizations circuit. UNKNOWN/source fidelity remains unchanged.
 - Default CLI concurrency remains 2. `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.
 - Full organization selection remains authoritative for the returned payload. If the early candidate does not equal the final selected Credits org, the early result is not used by `usageScopes`.
-- Preserve account capture, plain orgs fallback, shared 24h DevPass capture, cache TTLs other than the explicit aligned Credits bootstrap entry, circuit semantics, CLI timeout 25s, Request Ledger/provider cache fidelity, parser `provider-usage-v3`, updater behavior, and 5.60 monotonic release integrity.
+- Preserve account capture, plain orgs fallback, shared 24h DevPass capture, cache TTLs other than the explicit aligned Credits bootstrap entry, existing organizations circuit semantics, CLI timeout 25s, Request Ledger/provider cache fidelity, parser `provider-usage-v3`, updater behavior, and 5.60 monotonic release integrity.
 - Existing snapshot timeline/CLI-operation diagnostics are sufficient for device verification; do not add raw org IDs, CLI args, payloads, headers, tokens, or capture paths.
 
 5.61 device success evidence to collect:

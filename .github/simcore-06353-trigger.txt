@@ -1,1 +1,2 @@
 SimCore v0.63.53 Boundary-Normalized Envelope Recovery release trigger.
+Final memory/artifact refresh after live-gate documentation update.

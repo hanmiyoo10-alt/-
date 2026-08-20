@@ -13,7 +13,7 @@
   },
   "guideline": "docs/SIMCORE_GUIDELINES.md",
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
-  "current_priority": "OUTPUT_ENVELOPE_RECOVERY_VALIDATION",
+  "current_priority": "EDIT_ORIGIN_ATTRIBUTION_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

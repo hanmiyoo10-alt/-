@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.53
+//@version 0.63.54
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,14 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.54 Safe-Envelope Structural Boundary Reconcile:
+// - Follows v0.63.53 same-runtime A/B evidence where a SAFE_ENVELOPE_COMPAT B_CONTINUE produced CANONICAL 4238 vs FRESH_CHAT 4237, Deferred Mirror OUTPUT_MISMATCH, and the next unedited request was classified REPRESENTATION_DRIFT_CORRELATED and spent 4.091 s in MANUAL_EDIT_REBUILT; an exact predecessor returned to SAME_FAST 0 ms
+// - Corrects the initial trailing-newline hypothesis before production: SimCore fingerprints already normalize CRLF and trim trailing whitespace, and safe envelope candidates are trimmed, so the observed -1 cannot be explained by document-end CR/LF
+// - Adds a bounded canonical-derived structural-boundary confirmation only for already-safe THOUGHTS_COMPAT / SAFE_ENVELOPE_COMPAT outputs with zero structure warnings and safe state commit: one internal LF may be removed only at deterministic base→COMMUNITY, COMMUNITY→COMMUNITY, COMMUNITY→Knowledge, or base→Knowledge separators
+// - The existing Deferred Mirror fresh-chat read is the sole confirmation boundary; exactly one derived boundary fingerprint must equal FRESH_CHAT exactly before SAFE_BOUNDARY_CONFIRMED may promote the trusted canonical identity. Fresh bodies are never copied or retained, and ambiguous/non-boundary mismatches remain OUTPUT_MISMATCH with setChat blocked
+// - Adds Safe-envelope reconcile/boundary telemetry and treats all Fresh-confirmed identities as exact for next-turn Edit Origin Attribution; v0.63.53 unresolved-envelope recovery, Structure/COMMUNITY rules, request/history/cache behavior and strict mirror identity/staleness gates remain frozen
+// - No new host read, storage read/write, network call, timer, persistent field, request mutation, history mutation, provider-cache claim, prompt relocation, or generation-semantic change is introduced
 //
 // v0.63.53 Boundary-Normalized Envelope Recovery:
 // - Follows v0.63.52 real long-chat validation where a genuine user edit was correctly classified USER_EDIT_CANDIDATE, while a separate unedited B_END entered SAME_FAST/EXACT and then produced THOUGHTS_COMPAT 4252c, one # 응답 candidate, CANONICAL↔FRESH -4247c and Deferred Mirror OUTPUT_MISMATCH
@@ -514,7 +522,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.53';
+const SIMCORE_RUNTIME_VERSION = '0.63.54';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3267,6 +3275,59 @@ function buildBoundaryEnvelopeCandidates(candidateText) {
   return Object.freeze(out);
 }
 
+function buildSafeEnvelopeBoundaryConfirmation(content, envelope, issues, stateCommit) {
+  const preamble = envelope?.preambleProvenance || null;
+  if (!envelope?.resolved
+      || preamble?.kind !== 'THOUGHTS_COMPAT'
+      || preamble?.action !== 'STRIPPED'
+      || preamble?.policy !== 'SAFE_ENVELOPE_COMPAT'
+      || Number(preamble?.candidateCount || 0) !== 1
+      || (Array.isArray(issues) && issues.length)
+      || stateCommit?.communitySafe !== true) return null;
+
+  const raw = String(content || '');
+  if (!raw.startsWith('# 응답') || raw.length < 128) return null;
+  const canonicalFingerprint = kernel.fingerprintText(raw);
+  const canonicalMatch = /^(\d+):/.exec(canonicalFingerprint);
+  const canonicalChars = canonicalMatch ? Number(canonicalMatch[1]) : 0;
+  const boundaries = [];
+  const addBoundary = (start, kind) => {
+    if (!Number.isInteger(start) || start < 2 || raw.slice(start - 2, start) !== '\n\n') return;
+    const variant = raw.slice(0, start - 1) + raw.slice(start);
+    const fingerprint = kernel.fingerprintText(variant);
+    const match = /^(\d+):/.exec(fingerprint);
+    const chars = match ? Number(match[1]) : 0;
+    if (chars !== canonicalChars - 1) return;
+    boundaries.push(Object.freeze({ fingerprint, chars, deltaChars: -1, kind }));
+  };
+
+  const communityRe = /<COMMUNITY(?:\s[^>]*)?>/gi;
+  let communityIndex = 0;
+  let match;
+  while ((match = communityRe.exec(raw))) {
+    const start = Number(match.index);
+    const before = raw.slice(0, Math.max(0, start - 2)).trimEnd();
+    addBoundary(start, communityIndex > 0 || before.endsWith('</COMMUNITY>') ? 'COMMUNITY_TO_COMMUNITY' : 'BASE_TO_COMMUNITY');
+    communityIndex += 1;
+  }
+  const knowledge = raw.indexOf('<Knowledge>');
+  if (knowledge >= 0) {
+    const before = raw.slice(0, Math.max(0, knowledge - 2)).trimEnd();
+    addBoundary(knowledge, before.endsWith('</COMMUNITY>') ? 'COMMUNITY_TO_KNOWLEDGE' : 'BASE_TO_KNOWLEDGE');
+  }
+  if (!boundaries.length) return null;
+
+  return Object.freeze({
+    status: 'PENDING',
+    source: 'CANONICAL_BOUNDARY',
+    confirmation: 'FRESH_EXACT',
+    canonicalFingerprint,
+    canonicalChars,
+    boundaryCandidates: Object.freeze(boundaries),
+    persistentMutation: 'NONE',
+  });
+}
+
 function buildFreshEnvelopeConfirmation(rawPrefix, matches, candidates) {
   const rows = Array.isArray(matches) ? matches : [];
   const list = Array.isArray(candidates) ? candidates : [];
@@ -3528,6 +3589,7 @@ async function repairLatestGlobalFloorContamination(store, current, outIndex, ra
 
 module.exports = {
   classifyPreamble,
+  buildSafeEnvelopeBoundaryConfirmation,
   canonicalizeResponseEnvelope,
   normalizeTailPlacement,
   prepareOutput,
@@ -4331,6 +4393,9 @@ class CoreRulesetSession {
 
     t = sessionNow();
     const result = finalizePreparedOutput(base, prepared, outIndex);
+    const safeEnvelopeBoundaryConfirmation = recovery.buildSafeEnvelopeBoundaryConfirmation(
+      result.content, prepared.envelope, issues, result.stateCommit,
+    );
     // PocketRisu can persist either the raw handler input or the canonical handler result.
     // Keep both fingerprints so the next request does not mistake host representation for a manual edit.
     result.state.outputFingerprint = kernel.fingerprintText(result.content);
@@ -4357,6 +4422,7 @@ class CoreRulesetSession {
     result.envelopeDiagnostics = prepared.envelope.diagnostics || [];
     result.preambleProvenance = prepared.envelope.preambleProvenance || null;
     result.freshEnvelopeConfirmation = prepared.envelope.freshConfirmation || null;
+    result.safeEnvelopeBoundaryConfirmation = safeEnvelopeBoundaryConfirmation || null;
     return result;
   }
 
@@ -5592,7 +5658,7 @@ function createMirrorRuntime(deps) {
     };
   }
 
-  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null, freshEnvelopeConfirmation = null) {
+  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null, freshEnvelopeConfirmation = null, safeEnvelopeBoundaryConfirmation = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
       detail.chatLoadMs = 0;
@@ -5642,12 +5708,23 @@ function createMirrorRuntime(deps) {
           : null;
         const freshConfirmed = exactFreshConfirmed || !!boundaryMatch;
         const recoveryPolicy = boundaryMatch ? 'BOUNDARY_CONFIRMED_SUFFIX' : (exactFreshConfirmed ? 'FRESH_CONFIRMED_SUFFIX' : null);
-        const fingerprintMatch = recoveryPolicy || normalMatch;
+        const safeConfirmation = safeEnvelopeBoundaryConfirmation && typeof safeEnvelopeBoundaryConfirmation === 'object'
+          ? safeEnvelopeBoundaryConfirmation : null;
+        const safeCandidates = Array.isArray(safeConfirmation?.boundaryCandidates) ? safeConfirmation.boundaryCandidates : [];
+        const safeMatches = !freshConfirmed && normalMatch === 'MISMATCH'
+          && safeConfirmation?.status === 'PENDING'
+          && safeConfirmation?.confirmation === 'FRESH_EXACT'
+          ? safeCandidates.filter((row) => String(row?.fingerprint || '') === actualFingerprint)
+          : [];
+        const safeBoundaryMatch = safeMatches.length === 1 ? safeMatches[0] : null;
+        const safeBoundaryConfirmed = !!safeBoundaryMatch;
+        const representationConfirmed = freshConfirmed || safeBoundaryConfirmed;
+        const fingerprintMatch = safeBoundaryConfirmed ? 'SAFE_BOUNDARY_CONFIRMED' : (recoveryPolicy || normalMatch);
         if (detail) {
-          detail.canonicalFingerprint = (freshConfirmed ? actualFingerprint : canonical).slice(0, 12);
+          detail.canonicalFingerprint = (representationConfirmed ? actualFingerprint : canonical).slice(0, 12);
           detail.hostRawFingerprint = hostRaw.slice(0, 12);
           detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
-          detail.canonicalFingerprintFull = freshConfirmed ? String(actualFingerprint || '') : canonical;
+          detail.canonicalFingerprintFull = representationConfirmed ? String(actualFingerprint || '') : canonical;
           detail.hostRawFingerprintFull = hostRaw;
           detail.freshFingerprintFull = String(actualFingerprint || '');
           detail.fingerprintMatch = fingerprintMatch;
@@ -5659,8 +5736,16 @@ function createMirrorRuntime(deps) {
           detail.freshEnvelopeBoundaryDelta = boundaryMatch ? Number(boundaryMatch.deltaChars || 0) : 0;
           detail.freshEnvelopeBoundaryKind = boundaryMatch ? String(boundaryMatch.kind || 'CRLF_ONLY') : null;
           detail.freshEnvelopePersistent = 'NONE';
+          detail.safeEnvelopeReconcile = safeBoundaryConfirmed ? 'CONFIRMED' : (safeConfirmation && normalMatch === 'MISMATCH' ? 'REJECTED' : 'NOT_APPLICABLE');
+          detail.safeEnvelopeSource = safeBoundaryConfirmed ? String(safeConfirmation.source || 'CANONICAL_BOUNDARY') : null;
+          detail.safeEnvelopePolicy = safeBoundaryConfirmed ? 'SAFE_BOUNDARY_CONFIRMED' : null;
+          detail.safeEnvelopeCanonicalChars = safeConfirmation ? Number(safeConfirmation.canonicalChars || 0) : 0;
+          detail.safeEnvelopeBoundaryChars = safeBoundaryMatch ? Number(safeBoundaryMatch.chars || 0) : 0;
+          detail.safeEnvelopeBoundaryDelta = safeBoundaryMatch ? Number(safeBoundaryMatch.deltaChars || 0) : 0;
+          detail.safeEnvelopeBoundaryKind = safeBoundaryMatch ? String(safeBoundaryMatch.kind || 'STRUCTURAL_LF') : null;
+          detail.safeEnvelopePersistent = 'NONE';
         }
-        if (freshConfirmed) {
+        if (representationConfirmed) {
           snapshot.outputFingerprint = actualFingerprint;
           const liveSession = getCoreSession();
           if (liveSession?.current && Number(liveSession.currentOutputIndex) === expectedOutIndex) {
@@ -5669,7 +5754,7 @@ function createMirrorRuntime(deps) {
             snapshot.portableState = liveSession.portableState();
           }
         }
-        if ((canonical || hostRaw) && normalMatch === 'MISMATCH' && !freshConfirmed) {
+        if ((canonical || hostRaw) && normalMatch === 'MISMATCH' && !representationConfirmed) {
           if (detail) detail.status = 'OUTPUT_MISMATCH';
           return false;
         }
@@ -5698,7 +5783,7 @@ function createMirrorRuntime(deps) {
     }
   }
 
-  function schedule(chaIdx, chatIdx, chat, outIndex, state, freshEnvelopeConfirmation = null) {
+  function schedule(chaIdx, chatIdx, chat, outIndex, state, freshEnvelopeConfirmation = null, safeEnvelopeBoundaryConfirmation = null) {
     const snapshot = capture(chaIdx, chatIdx, chat, outIndex, state);
     if (!snapshot) return false;
     const epoch = getRuntimeEpoch();
@@ -5723,6 +5808,14 @@ function createMirrorRuntime(deps) {
       freshEnvelopeBoundaryDelta: 0,
       freshEnvelopeBoundaryKind: null,
       freshEnvelopePersistent: 'NONE',
+      safeEnvelopeReconcile: 'NOT_APPLICABLE',
+      safeEnvelopeSource: null,
+      safeEnvelopePolicy: null,
+      safeEnvelopeCanonicalChars: Number(safeEnvelopeBoundaryConfirmation?.canonicalChars || 0),
+      safeEnvelopeBoundaryChars: 0,
+      safeEnvelopeBoundaryDelta: 0,
+      safeEnvelopeBoundaryKind: null,
+      safeEnvelopePersistent: 'NONE',
     };
     lastProbe = probe;
     const shouldApply = () => runtimeIsCurrent(epoch) && latestByLocation.get(locationKey) === currentSequence;
@@ -5736,7 +5829,7 @@ function createMirrorRuntime(deps) {
       probe.startedAt = Date.now();
       const detail = {};
       const started = perfNow();
-      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply, freshEnvelopeConfirmation);
+      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply, freshEnvelopeConfirmation, safeEnvelopeBoundaryConfirmation);
       probe.totalMs = perfMs(started);
       probe.chatLoadMs = Number(detail.chatLoadMs || 0);
       probe.prepareMs = Number(detail.prepareMs || 0);
@@ -5756,6 +5849,14 @@ function createMirrorRuntime(deps) {
       probe.freshEnvelopeBoundaryDelta = detail.freshEnvelopeBoundaryDelta ?? probe.freshEnvelopeBoundaryDelta;
       probe.freshEnvelopeBoundaryKind = detail.freshEnvelopeBoundaryKind ?? probe.freshEnvelopeBoundaryKind;
       probe.freshEnvelopePersistent = detail.freshEnvelopePersistent ?? probe.freshEnvelopePersistent;
+      probe.safeEnvelopeReconcile = detail.safeEnvelopeReconcile ?? probe.safeEnvelopeReconcile;
+      probe.safeEnvelopeSource = detail.safeEnvelopeSource ?? probe.safeEnvelopeSource;
+      probe.safeEnvelopePolicy = detail.safeEnvelopePolicy ?? probe.safeEnvelopePolicy;
+      probe.safeEnvelopeCanonicalChars = detail.safeEnvelopeCanonicalChars ?? probe.safeEnvelopeCanonicalChars;
+      probe.safeEnvelopeBoundaryChars = detail.safeEnvelopeBoundaryChars ?? probe.safeEnvelopeBoundaryChars;
+      probe.safeEnvelopeBoundaryDelta = detail.safeEnvelopeBoundaryDelta ?? probe.safeEnvelopeBoundaryDelta;
+      probe.safeEnvelopeBoundaryKind = detail.safeEnvelopeBoundaryKind ?? probe.safeEnvelopeBoundaryKind;
+      probe.safeEnvelopePersistent = detail.safeEnvelopePersistent ?? probe.safeEnvelopePersistent;
       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
@@ -5971,7 +6072,7 @@ function representation(probe) {
   const fresh = fingerprintChars(probe.freshFingerprint);
   if (canonical == null || fresh == null) return 'n/a';
   const delta = fresh - canonical;
-  const relation = (probe.fingerprintMatch === 'CANONICAL' || probe.fingerprintMatch === 'FRESH_CONFIRMED_SUFFIX') ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
+  const relation = ['CANONICAL', 'FRESH_CONFIRMED_SUFFIX', 'BOUNDARY_CONFIRMED_SUFFIX', 'SAFE_BOUNDARY_CONFIRMED'].includes(String(probe.fingerprintMatch || '')) ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
 module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, cacheEffect, hostPrefixAttribution, hostPrefixDelta, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
@@ -6370,7 +6471,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     const priorMatch = String(priorProvenance?.fingerprintMatch || '');
     const priorRepresentation = !priorProvenance
       ? 'UNAVAILABLE'
-      : ((priorMatch === 'CANONICAL' || priorMatch === 'FRESH_CONFIRMED_SUFFIX')
+      : ((['CANONICAL', 'FRESH_CONFIRMED_SUFFIX', 'BOUNDARY_CONFIRMED_SUFFIX', 'SAFE_BOUNDARY_CONFIRMED'].includes(priorMatch))
         ? 'EXACT'
         : (priorMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'OUTPUT_MISMATCH'));
     const currentMatch = visibleFingerprint && visibleFingerprint === priorFresh
@@ -6727,7 +6828,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
     lastPreambleProvenance = result.preambleProvenance || null;
 
-    const mirrorScheduled = runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state, result.freshEnvelopeConfirmation);
+    const mirrorScheduled = runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state, result.freshEnvelopeConfirmation, result.safeEnvelopeBoundaryConfirmation);
     if (perf) {
       perf.mirrorMs = 0;
       perf.mirrorDetail = { deferred: true, scheduled: mirrorScheduled };
@@ -7221,6 +7322,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
       `Envelope recovery: ${deferredMirror ? `${deferredMirror.freshEnvelopeRecovery || 'NOT_APPLICABLE'} · policy ${deferredMirror.freshEnvelopePolicy || 'n/a'} · source ${deferredMirror.freshEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.freshEnvelopeRecovery === 'RECOVERED' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.freshEnvelopePersistent || 'NONE'}` : 'n/a'}`,
       `Envelope boundary: ${deferredMirror?.freshEnvelopePolicy === 'BOUNDARY_CONFIRMED_SUFFIX' ? `RAW_SUFFIX ${Number(deferredMirror.freshEnvelopeCandidateChars || 0)} → NORMALIZED ${Number(deferredMirror.freshEnvelopeBoundaryChars || 0)} · Δchars ${Number(deferredMirror.freshEnvelopeBoundaryDelta || 0) >= 0 ? '+' : ''}${Number(deferredMirror.freshEnvelopeBoundaryDelta || 0)} · ${deferredMirror.freshEnvelopeBoundaryKind || 'CRLF_ONLY'} · FRESH_EXACT` : 'NOT_APPLICABLE'}`,
+      `Safe-envelope reconcile: ${deferredMirror ? `${deferredMirror.safeEnvelopeReconcile || 'NOT_APPLICABLE'} · policy ${deferredMirror.safeEnvelopePolicy || 'n/a'} · source ${deferredMirror.safeEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.safeEnvelopeReconcile === 'CONFIRMED' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.safeEnvelopePersistent || 'NONE'}` : 'n/a'}`,
+      `Safe-envelope boundary: ${deferredMirror?.safeEnvelopeReconcile === 'CONFIRMED' ? `CANONICAL ${Number(deferredMirror.safeEnvelopeCanonicalChars || 0)} → NORMALIZED ${Number(deferredMirror.safeEnvelopeBoundaryChars || 0)} · Δchars ${Number(deferredMirror.safeEnvelopeBoundaryDelta || 0) >= 0 ? '+' : ''}${Number(deferredMirror.safeEnvelopeBoundaryDelta || 0)} · ${deferredMirror.safeEnvelopeBoundaryKind || 'STRUCTURAL_LF'} · FRESH_EXACT` : 'NOT_APPLICABLE'}`,
       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,

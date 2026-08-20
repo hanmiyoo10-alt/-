@@ -1,3 +1,4 @@
 SimCore v0.63.55 validation finalize command
 Purpose: trigger the main-branch validation finalizer workflow only.
+Retry: production release-source architecture validation.
 No production plugin runtime change.

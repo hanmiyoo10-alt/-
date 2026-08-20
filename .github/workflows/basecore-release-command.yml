@@ -1,0 +1,99 @@
+name: BaseCore release command
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: basecore-release-command
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.title == 'BaseCore release command')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate BaseCore source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/basecore/latest.js
+          node --check plugins/basecore/install.js
+          cmp -s plugins/basecore/latest.js plugins/basecore/install.js
+          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' plugins/basecore/latest.js | head -n 1)"
+          test -n "$VERSION"
+          grep -q '^//@name basecore$' plugins/basecore/latest.js
+          grep -q '^//@display-name BaseCore$' plugins/basecore/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-basecore/plugins/basecore/latest.js$' plugins/basecore/latest.js
+          grep -q "const BASECORE_RUNTIME_VERSION = '$VERSION';" plugins/basecore/latest.js
+          grep -q '<BASECORE_SWITCH>' products/basecore/CORE_RULESET_FRAGMENT.txt
+          VALIDATION="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('products/basecore/manifest.json').read_text(encoding='utf-8')).get('validation') or '')
+          PY
+          )"
+          if [[ "$VALIDATION" != VALIDATED_* ]]; then
+            echo "BaseCore release requires durable live validation; current validation=$VALIDATION" >&2
+            exit 1
+          fi
+          if grep -Eq 'sim:core:|\$simcore_core_|<SIMCORE_CORE_SWITCH>' plugins/basecore/latest.js; then
+            echo 'SimCore runtime namespace leaked into BaseCore source' >&2
+            exit 1
+          fi
+          git diff --check
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Promote BaseCore files to release branch
+        shell: bash
+        env:
+          VERSION: ${{ steps.source.outputs.version }}
+        run: |
+          set -euo pipefail
+          cp plugins/basecore/latest.js /tmp/basecore-latest.js
+          cp plugins/basecore/install.js /tmp/basecore-install.js
+
+          if git ls-remote --exit-code --heads origin release-basecore >/dev/null 2>&1; then
+            git fetch --no-tags origin release-basecore
+            git checkout -B release-basecore origin/release-basecore
+            NEW_BRANCH=0
+          else
+            git checkout -b release-basecore
+            NEW_BRANCH=1
+          fi
+
+          mkdir -p plugins/basecore
+          cp /tmp/basecore-latest.js plugins/basecore/latest.js
+          cp /tmp/basecore-install.js plugins/basecore/install.js
+          node --check plugins/basecore/latest.js
+          node --check plugins/basecore/install.js
+          cmp -s plugins/basecore/latest.js plugins/basecore/install.js
+          git diff --check
+
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add -- plugins/basecore/latest.js plugins/basecore/install.js
+          if git diff --cached --quiet; then
+            echo "BaseCore v${VERSION} already matches release source."
+          else
+            git commit -m "release: BaseCore v${VERSION}"
+          fi
+
+          if [[ "$NEW_BRANCH" == "1" ]] || [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/release-basecore 2>/dev/null || echo none)" ]]; then
+            git push origin HEAD:release-basecore
+          else
+            echo 'release-basecore already current.'
+          fi

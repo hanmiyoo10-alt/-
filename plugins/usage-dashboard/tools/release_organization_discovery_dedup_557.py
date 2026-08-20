@@ -149,6 +149,8 @@ new_org_block = """async function loadOrgs() {
       source = 'LLMGateway CLI';
     }
 
+    if (!organizations.length) throw new Error('No organizations found in CLI output');
+
     if (captured?.devPlanStatus) {
       organizations = enrichDevPassFromStatus(organizations, captured.devPlanStatus);
       if (hasDevPassCycleDetails(organizations)) {
@@ -275,6 +277,7 @@ Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Ded
 - Keep the verified bounded CLI concurrency default and hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - In the normal organization-discovery path, run the existing account capture beside Credits and reuse the safely captured `/orgs` response instead of launching a separate plain `orgs list` first.
 - If account capture fails or does not contain usable organization rows, fall back to the prior plain `orgs list --json` path.
+- If capture and the plain fallback both contain no usable organization rows, preserve the prior `No organizations found in CLI output` failure instead of converting UNKNOWN/empty discovery into a successful empty result.
 - Preserve the existing hard failure semantics for Credits; this release does not broaden partial-success behavior.
 - Reuse the same cached account capture for DevPass status so organization normalization and account/status enrichment share one authenticated CLI session result when available.
 - Keep all 5.55/5.56 attribution telemetry and add only safe organization-discovery provenance: mode, fallback count, and whether account capture was shared.

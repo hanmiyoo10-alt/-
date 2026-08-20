@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.57
+//@version 3.0.0-alpha.5.58
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.57';
+  const VERSION = '3.0.0-alpha.5.58';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.11';
+  const REQUIRED_BRIDGE_VERSION = '1.6.12';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -2444,6 +2444,17 @@ async function importLegacyTodayBaselines() {
     return `${discovery.mode || 'unknown'} · fallback ${Number(discovery.fallbackCount || 0)} · shared account capture ${discovery.sharedAccountCapture ? 'yes' : 'no'}`;
   }
 
+  function bridgeCaptureReuseText(performance) {
+    const reuse = performance?.captureReuse && typeof performance.captureReuse === 'object'
+      ? performance.captureReuse
+      : null;
+    if (!reuse) return '—';
+    const checks = Number(reuse.activityReuseChecks || 0);
+    const shared = Number(reuse.activityShared || 0);
+    const activityState = checks > 0 ? (shared > 0 ? 'yes' : 'no') : 'not-exercised';
+    return `bootstrap ${reuse.bootstrapRange || '—'} · activity shared ${activityState} · dedicated 24h fallback ${Number(reuse.dedicated24hFallbacks || 0)}`;
+  }
+
   function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {
     const blockers = [];
     const lifecycle = bridgeLifecycleMode();
@@ -2521,6 +2532,7 @@ async function importLegacyTodayBaselines() {
       `Bridge module freshness: ${bridgeModuleFreshnessText(bridgeDiag.moduleDetails)}`,
       `Bridge module duration: ${bridgeModuleDurationText(bridgeDiag.moduleDetails)}`,
       `Bridge organization discovery: ${bridgeOrganizationDiscoveryText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge 24h capture reuse: ${bridgeCaptureReuseText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot attribution: ${bridgeDiag.snapshotPerformance ? `total ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.totalMs)} · critical ${bridgeDiag.snapshotPerformance.criticalPath || '—'} ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.criticalPathMs)} · slowest ${bridgeDiag.snapshotPerformance.slowestTask || '—'} ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.slowestTaskMs)}` : '—'}`,
       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,

@@ -252,6 +252,7 @@ Verified from the 5.59 device diagnostic:
 - Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
+- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 - Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
 - `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - Preserve the 5.57 organization recovery contract: if account capture fails or has no usable organization rows, fall back to the prior plain orgs list --json path; if capture and that fallback are both empty, `No organizations found in CLI output` remains an error.

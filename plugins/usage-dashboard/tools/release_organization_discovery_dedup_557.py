@@ -265,7 +265,7 @@ Verified from the 5.56 device diagnostic:
 - Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0 in the sampled 5.56 snapshot.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
-- Prior attribution evidence remains relevant: after the 5.55 real-device diagnostic the next candidate was `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
+- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
 Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`.
 

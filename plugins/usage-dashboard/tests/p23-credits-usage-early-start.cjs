@@ -106,6 +106,9 @@ assert.ok(engine.includes('cliOperations'));
 
 assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));
 assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`'));
+assert.ok(guidelines.includes('Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`'));
+assert.ok(guidelines.includes('Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering'));
+assert.ok(guidelines.includes('fall back to the prior plain `orgs list --json` path'));
 assert.ok(guidelines.includes('Ambiguous/missing IDs keep the 5.60 root-gated path.'));
 assert.ok(guidelines.includes('dedicated circuit family must not double-count failures against the existing organizations circuit'));
 assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));
@@ -119,4 +122,4 @@ assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
 assert.match(workflow, /p23-credits-usage-early-start\.cjs/);
 assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf("git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.61 product artifacts'"));
 
-console.log('usage-dashboard P23 Credits Usage Early Start: OK · shared Credits bootstrap, isolated circuit, safe selector, serial rollback, monotonic release preserved');
+console.log('usage-dashboard P23 Credits Usage Early Start: OK · shared Credits bootstrap, isolated circuit, safe selector, serial rollback, history, monotonic release preserved');

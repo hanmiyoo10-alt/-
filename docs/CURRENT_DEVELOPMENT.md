@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.55`
-- Release: `Representation Fast Reconcile`
+- Version: `0.63.56`
+- Release: `M2-1 Recovery Boundary Split`
 - Release branch: `release-simcore`
-- Release commit: `6156685a3edf0ec0c5017900a82990d4f17dfb49`
-- Release blob: `8c42851df34831465403d12fc57c7499923bdbc6`
-- Validation status: `VALIDATED_REAL_LONG_CHAT`
-- Primary optimization target: `2M_MAJOR_M2_MECHANICAL_BOUNDARY_REFACTOR`
+- Release commit: `222d6bd0c589c9dd4c469979daa42cefbd512a3e`
+- Release blob: `6c828d5dadeb8a49f256afe1e54674cf5bd81803`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Primary optimization target: `2M_MAJOR_M2_1_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -87,6 +87,36 @@ v0.63.55 has now validated this **next-turn false manual-edit rebuild** fix in n
 ---
 
 # 2. Current Validation Release
+
+## M2-1 — Recovery Boundary Split
+
+Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+
+`v0.63.56` is the first physical code-movement checkpoint of the 2.0M Major. It is intentionally mechanical:
+
+```text
+old Recovery
+├─ output envelope / tail / Fresh-confirmation candidate logic
+├─ history bootstrap
+└─ legacy migration/repair
+
+new
+├─ output-compat
+├─ bootstrap-migration
+└─ recovery compatibility facade
+```
+
+Frozen behavior target:
+
+- all moved function bodies are preserved verbatim by the release patch;
+- Session/runtime callers still import `recovery`, so orchestration order is unchanged;
+- `REPRESENTATION_FAST_RECONCILED` remains the validated v0.63.55 request-side control;
+- genuine user edits must remain `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`;
+- Structure remains judge-only; History remains `OBSERVE_ONLY`; provider cache remains `UNVERIFIED`;
+- storage/API/network/timer surfaces and persistent state schema are unchanged.
+
+Live validation should first prove ordinary A/C/B turns remain stable and then, when naturally available, reconfirm the representation fast path / genuine-edit controls. Do not mix storage-latency optimization into this checkpoint.
+
 
 ## v0.63.55 — Representation Fast Reconcile
 

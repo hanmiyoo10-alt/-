@@ -476,3 +476,21 @@ current != Fresh
 → USER_EDIT_CANDIDATE
 → MANUAL_EDIT_REBUILT
 ```
+
+
+---
+
+## 15. M2-1 Physical Checkpoint — Recovery Boundary Split
+
+Production `v0.63.56` materializes the first two planned application modules:
+
+```text
+output-compat
+bootstrap-migration
+```
+
+The old `recovery` module remains temporarily as a compatibility facade exporting the exact same public API. Existing Session/runtime callers therefore do not move in M2-1. The release patch moves existing function definitions without changing their bodies and validates the resulting source against Contracts v2.
+
+M2-1 does **not** yet move Representation Fast Reconcile or the manual-edit decision tree. Those remain in their v0.63.55 locations and are frozen regression controls for the next checkpoint.
+
+Exit condition for M2-1: real long-chat behavior remains stable with no new warning/rebuild class attributable to the split. Only after that evidence may M2 continue to Representation/Edit ownership movement.

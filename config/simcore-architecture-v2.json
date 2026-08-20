@@ -2,15 +2,15 @@
   "schema_version": 2,
   "name": "SimCore Contracts v2",
   "production_baseline": {
-    "version": "0.63.55",
-    "release_name": "Representation Fast Reconcile",
-    "release_commit": "6156685a3edf0ec0c5017900a82990d4f17dfb49",
-    "release_blob": "8c42851df34831465403d12fc57c7499923bdbc6"
+    "version": "0.63.56",
+    "release_name": "M2-1 Recovery Boundary Split",
+    "release_commit": "222d6bd0c589c9dd4c469979daa42cefbd512a3e",
+    "release_blob": "6c828d5dadeb8a49f256afe1e54674cf5bd81803"
   },
   "major_update": {
     "milestone": "2.0M",
     "phase": "M2",
-    "status": "AUTHORIZED_AFTER_0_63_55_LIVE_VALIDATION",
+    "status": "M2_1_RELEASED_PENDING_LIVE_VALIDATION",
     "m2_runtime_move_gate": "V0_63_55_REAL_LONG_CHAT_REPRESENTATION_FAST_RECONCILE_VALIDATED",
     "runtime_refactor_authorized": true,
     "authorization_evidence": {
@@ -28,6 +28,14 @@
       "canonical_chars": 3715,
       "fresh_chars": 3714,
       "delta_chars": -1
+    },
+    "checkpoint": "M2-1",
+    "m2_1_release": {
+      "version": "0.63.56",
+      "release_commit": "222d6bd0c589c9dd4c469979daa42cefbd512a3e",
+      "release_blob": "6c828d5dadeb8a49f256afe1e54674cf5bd81803",
+      "scope": "mechanical recovery boundary split only",
+      "live_validation": "PENDING"
     }
   },
   "global_rules": [
@@ -265,8 +273,8 @@
     "recovery": {
       "physical": "required",
       "layer": "application",
-      "status": "legacy_container_split_in_m2",
-      "owns": "current output compatibility plus history bootstrap plus legacy repair",
+      "status": "m2_1_compatibility_facade",
+      "owns": "compatibility facade over output-compat and bootstrap-migration during staged M2 migration",
       "excludes": [
         "manual edit reconcile ownership",
         "provider cache"
@@ -277,7 +285,9 @@
         "time",
         "community",
         "reaction",
-        "structure"
+        "structure",
+        "output-compat",
+        "bootstrap-migration"
       ],
       "m2_target": [
         "output-compat",
@@ -485,9 +495,9 @@
       ]
     },
     "output-compat": {
-      "physical": "planned",
+      "physical": "required",
       "layer": "application",
-      "status": "m2_authorized_mechanical_split",
+      "status": "m2_1_physical_pending_live_validation",
       "owns": "output envelope compatibility/canonicalization and bounded Fresh-confirmation candidate metadata",
       "excludes": [
         "manual edit classification",
@@ -505,9 +515,9 @@
       ]
     },
     "bootstrap-migration": {
-      "physical": "planned",
+      "physical": "required",
       "layer": "application",
-      "status": "m2_authorized_mechanical_split",
+      "status": "m2_1_physical_pending_live_validation",
       "owns": "history bootstrap and legacy migration/repair coordination",
       "excludes": [
         "ordinary output compatibility",
@@ -520,7 +530,8 @@
         "time",
         "community",
         "reaction",
-        "structure"
+        "structure",
+        "output-compat"
       ]
     },
     "state": {
@@ -550,6 +561,9 @@
       "provider cache stays UNVERIFIED",
       "history stabilization stays OBSERVE_ONLY",
       "TAIL_AFTER_CURRENT_USER remains unchanged"
+    ],
+    "completed_checkpoints": [
+      "M2-1: Recovery mechanically split into output-compat + bootstrap-migration behind compatibility facade"
     ]
   }
 }

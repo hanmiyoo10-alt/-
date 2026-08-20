@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.55",
-  "release_name": "Representation Fast Reconcile",
+  "production_version": "0.63.56",
+  "release_name": "M2-1 Recovery Boundary Split",
   "release_branch": "release-simcore",
-  "release_commit": "6156685a3edf0ec0c5017900a82990d4f17dfb49",
-  "release_blob": "8c42851df34831465403d12fc57c7499923bdbc6",
+  "release_commit": "222d6bd0c589c9dd4c469979daa42cefbd512a3e",
+  "release_blob": "6c828d5dadeb8a49f256afe1e54674cf5bd81803",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -17,7 +17,7 @@
   "architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
   "architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md",
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
-  "current_priority": "2M_MAJOR_M2_MECHANICAL_BOUNDARY_REFACTOR",
+  "current_priority": "2M_MAJOR_M2_1_LIVE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -29,7 +29,8 @@
     "current_architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md + config/simcore-architecture-v2.json"
   },
   "managed_by": ".github/workflows/simcore-release-state-sync.yml",
-  "validation_status": "VALIDATED_REAL_LONG_CHAT",
+  "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
-  "major_update_phase": "M2"
+  "major_update_phase": "M2",
+  "major_update_checkpoint": "M2-1"
 }

@@ -1,0 +1,52 @@
+name: SimCore v0.63.55 validation finalize
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-main-write
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.title == 'SimCore v0.63.55 validation finalize command')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Finalize live validation and authorize M2
+        run: |
+          set -euo pipefail
+          python3 scripts/simcore-055-validation-finalize.py
+          python3 scripts/simcore-architecture-check.py
+          git diff --check
+
+      - name: Commit validation state
+        run: |
+          set -euo pipefail
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add \
+            product-manifest.json \
+            config/simcore-architecture-v2.json \
+            docs/CURRENT_DEVELOPMENT.md \
+            docs/SIMCORE_CONTRACTS_V2.md \
+            scripts/simcore-sync-memory.py
+          if git diff --cached --quiet; then
+            echo 'Validation state already finalized.'
+          else
+            git commit -m 'docs: validate SimCore v0.63.55 and authorize M2'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

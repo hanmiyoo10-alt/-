@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.51
+//@version 0.63.52
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.52 Edit Origin Attribution:
+// - Adds diagnostic-only edit-origin attribution after v0.63.51 real long-chat validation produced both genuine user edits and prior-output CANONICAL↔FRESH mismatches that converged on the same MANUAL_EDIT_REBUILT path; the reconcile behavior itself remains unchanged
+// - Reuses the existing memory-only Deferred Mirror provenance ledger and compares only fingerprints for the previous assistant slot against the current visible assistant fingerprint, classifying NONE / USER_EDIT_CANDIDATE / REPRESENTATION_DRIFT_CORRELATED / AMBIGUOUS_CHANGE / UNKNOWN without claiming user intent as fact
+// - Reports prior representation state plus canonical/fresh length deltas and exact fingerprint carryover shape; no previous output body, edit body, common-head/tail text, or persistent edit payload is retained, and no extra chat/storage/network/timer read is added
+// - Attribution scope only: MANUAL_EDIT_REBUILT/SAME_FAST semantics, Recovery including Fresh-Confirmed Envelope Recovery, Deferred Mirror strict gates, Structure/COMMUNITY quarantine, Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence, TAIL_AFTER_CURRENT_USER, History stabilization OBSERVE_ONLY, Host Prefix Attribution and provider-cache policy remain frozen
 //
 // v0.63.51 Fresh-Confirmed Envelope Recovery:
 // - Targets the real v0.63.50 B_END failure where a unique # 응답 suffix followed a THOUGHTS_COMPAT preamble but full Structure safety rejected the suffix because COMMUNITY shape was independently malformed; the initial Recovery pass remains fail-open and does not weaken Structure acceptance
@@ -501,7 +507,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.51';
+const SIMCORE_RUNTIME_VERSION = '0.63.52';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6291,7 +6297,65 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       if (perfDetail) perfDetail.path = 'no-assistant';
       return;
     }
-    const r = await cs.reconcileEditedOutput(lastAssistant, textMessageContent(msgs[lastAssistant]), perfDetail);
+    const visibleContent = textMessageContent(msgs[lastAssistant]);
+    const visibleFingerprint = coreRules.fingerprintText(visibleContent);
+    const provenanceRows = runtimeMirror.provenanceLedger();
+    let priorProvenance = null;
+    for (let i = provenanceRows.length - 1; i >= 0; i--) {
+      const row = provenanceRows[i];
+      if (Number(row?.outIndex) !== lastAssistant) continue;
+      if (coreLocationKey && String(row?.locationKey || '') !== String(coreLocationKey)) continue;
+      priorProvenance = row;
+      break;
+    }
+    const priorCanonical = String(priorProvenance?.canonicalFingerprint || '');
+    const priorFresh = String(priorProvenance?.freshFingerprint || '');
+    const priorHostRaw = String(priorProvenance?.hostRawFingerprint || '');
+    const priorMatch = String(priorProvenance?.fingerprintMatch || '');
+    const priorRepresentation = !priorProvenance
+      ? 'UNAVAILABLE'
+      : ((priorMatch === 'CANONICAL' || priorMatch === 'FRESH_CONFIRMED_SUFFIX')
+        ? 'EXACT'
+        : (priorMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'OUTPUT_MISMATCH'));
+    const currentMatch = visibleFingerprint && visibleFingerprint === priorFresh
+      ? 'FRESH_CHAT'
+      : (visibleFingerprint && visibleFingerprint === priorCanonical
+        ? 'CANONICAL'
+        : (visibleFingerprint && visibleFingerprint === priorHostRaw ? 'HOST_RAW' : 'NONE'));
+    const fingerprintChars = (value) => {
+      const match = String(value || '').match(/^(\d+):/);
+      return match ? Number(match[1]) : null;
+    };
+    const currentChars = fingerprintChars(visibleFingerprint);
+    const canonicalChars = fingerprintChars(priorCanonical);
+    const freshChars = fingerprintChars(priorFresh);
+    if (perfDetail) {
+      perfDetail.editPriorRepresentation = priorRepresentation;
+      perfDetail.editPriorMatch = priorMatch || 'n/a';
+      perfDetail.editPriorCanonical = priorCanonical || 'n/a';
+      perfDetail.editPriorFresh = priorFresh || 'n/a';
+      perfDetail.editCurrentFingerprint = visibleFingerprint || 'n/a';
+      perfDetail.editCurrentMatch = currentMatch;
+      perfDetail.editDeltaCanonical = currentChars != null && canonicalChars != null ? currentChars - canonicalChars : null;
+      perfDetail.editDeltaFresh = currentChars != null && freshChars != null ? currentChars - freshChars : null;
+      perfDetail.editOrigin = 'PENDING';
+      perfDetail.editDeltaShape = 'UNCLASSIFIED';
+    }
+    const r = await cs.reconcileEditedOutput(lastAssistant, visibleContent, perfDetail);
+    if (perfDetail) {
+      let editOrigin = 'NONE';
+      let deltaShape = currentMatch === 'FRESH_CHAT' ? 'FRESH_EXACT_CARRYOVER'
+        : (currentMatch === 'CANONICAL' ? 'CANONICAL_EXACT_CARRYOVER'
+          : (currentMatch === 'HOST_RAW' ? 'HOST_RAW_EXACT_CARRYOVER' : 'NEW_VISIBLE_REPRESENTATION'));
+      if (r.changed) {
+        if (!priorProvenance) editOrigin = 'UNKNOWN';
+        else if (priorRepresentation === 'OUTPUT_MISMATCH' && currentMatch === 'FRESH_CHAT') editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
+        else if (priorRepresentation === 'EXACT') editOrigin = 'USER_EDIT_CANDIDATE';
+        else editOrigin = 'AMBIGUOUS_CHANGE';
+      }
+      perfDetail.editOrigin = editOrigin;
+      perfDetail.editDeltaShape = deltaShape;
+    }
     if (r.changed) console.log(SIMCORE_LOG_PREFIX + ' manual edit reconciled:', lastAssistant, r.mode, r.revision);
   }
 
@@ -6956,6 +7020,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), turnPayloadChars, turnSetPerKChars, runtimeRenderMs: n(send.runtimeRenderMs),
       restoreReason: String(send.restoreReason || 'n/a'), preRead: !!send.mustRestorePre, preHit: !!send.existingPre,
       editPath: String(edit.path || 'n/a'), editDidSave: !!edit.didSave, editCompatibilitySource: String(edit.compatibilitySource || 'n/a'),
+      editOrigin: String(edit.editOrigin || 'NONE'), editPriorRepresentation: String(edit.editPriorRepresentation || 'UNAVAILABLE'), editPriorMatch: String(edit.editPriorMatch || 'n/a'),
+      editPriorCanonical: String(edit.editPriorCanonical || 'n/a'), editPriorFresh: String(edit.editPriorFresh || 'n/a'), editCurrentFingerprint: String(edit.editCurrentFingerprint || 'n/a'), editCurrentMatch: String(edit.editCurrentMatch || 'NONE'),
+      editDeltaCanonical: edit.editDeltaCanonical == null ? null : Number(edit.editDeltaCanonical), editDeltaFresh: edit.editDeltaFresh == null ? null : Number(edit.editDeltaFresh), editDeltaShape: String(edit.editDeltaShape || 'UNCLASSIFIED'),
     };
   }
 
@@ -7082,6 +7149,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
       `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,
+      `Prior representation: ${requestBreakdown ? `${requestBreakdown.editPriorRepresentation || 'UNAVAILABLE'} · mirror ${requestBreakdown.editPriorMatch || 'n/a'} · canonical ${requestBreakdown.editPriorCanonical || 'n/a'} · fresh ${requestBreakdown.editPriorFresh || 'n/a'}` : 'n/a'}`,
+      `Edit origin: ${requestBreakdown ? `${requestBreakdown.editOrigin || 'NONE'} · current ${requestBreakdown.editCurrentFingerprint || 'n/a'} · match ${requestBreakdown.editCurrentMatch || 'NONE'} · raw bodies NOT RETAINED` : 'n/a'}`,
+      `Edit delta: ${requestBreakdown ? `vs canonical ${requestBreakdown.editDeltaCanonical == null ? 'n/a' : `${Number(requestBreakdown.editDeltaCanonical) >= 0 ? '+' : ''}${Number(requestBreakdown.editDeltaCanonical)}`} · vs fresh ${requestBreakdown.editDeltaFresh == null ? 'n/a' : `${Number(requestBreakdown.editDeltaFresh) >= 0 ? '+' : ''}${Number(requestBreakdown.editDeltaFresh)}`} · shape ${requestBreakdown.editDeltaShape || 'UNCLASSIFIED'} · boundary n/a` : 'n/a'}`,
       `onSend breakdown: ${requestBreakdown ? `pre-load ${diagnosticFormatMs(requestBreakdown.preLoadMs)} · template bootstrap ${diagnosticFormatMs(requestBreakdown.templateBootstrapMs)} · lifecycle ${diagnosticFormatMs(requestBreakdown.lifecycleMs)} · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · storage ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · prompt render ${diagnosticFormatMs(requestBreakdown.runtimeRenderMs)} · other ${diagnosticFormatMs(requestBreakdown.onSendOther)} · total ${diagnosticFormatMs(requestBreakdown.onSendMs)}` : 'n/a'}`,
       `Pre snapshot: ${requestBreakdown ? `${String(requestBreakdown.restoreReason || 'n/a').toUpperCase()} · ${requestBreakdown.preRead ? `READ ${requestBreakdown.preHit ? 'HIT' : 'MISS'}` : 'SKIPPED'} · ${diagnosticFormatMs(requestBreakdown.preLoadMs)}` : 'n/a'}`,
       `Turn storage: ${requestBreakdown ? `payload ${Math.round(Number(requestBreakdown.turnPayloadChars || 0)).toLocaleString('en-US')} chars · serialize ${diagnosticFormatMs(requestBreakdown.turnSerializeMs)} · set ${diagnosticFormatMs(requestBreakdown.turnSetMs)} · set/1K ${requestBreakdown.turnSetPerKChars == null ? 'n/a' : `${Number(requestBreakdown.turnSetPerKChars).toFixed(2)} ms`}` : 'n/a'}`,

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.54
+//@version 0.63.55
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,14 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.55 Representation Fast Reconcile:
+// - Follows two same-runtime production cases where an unedited previous assistant was recorded as CANONICAL!=FRESH_CHAT, the next request visible assistant matched the prior FRESH_CHAT exactly, Edit Origin classified REPRESENTATION_DRIFT_CORRELATED, and the existing manual-edit path spent 4.091 s / 6.257 s rebuilding state
+// - Adds one request-side provenance fast path before snapshot I/O: only a prior OUTPUT_MISMATCH for the same assistant slot/location whose current visible fingerprint equals the recorded prior FRESH_CHAT exactly may bypass the full manual-edit reconstruction
+// - Requires the live CoreSession to still point at the same output index with both current.outputFingerprint and trustedOutputFingerprint equal to the recorded prior canonical fingerprint; any stale/missing/third representation fails open to the existing reconcile path
+// - The fast path is representation acceptance only: it performs no state rebuild, no snapshot write, no visible-chat write, no Fresh-body copy/retention and no canonical-state mutation. Genuine user edits that match neither prior canonical nor prior Fresh remain USER_EDIT_CANDIDATE and keep MANUAL_EDIT_REBUILT
+// - Output-side Deferred Mirror, v0.63.53/v0.63.54 envelope recovery, Structure/COMMUNITY quarantine, Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence, TAIL_AFTER_CURRENT_USER, History OBSERVE_ONLY, Host Prefix Attribution and provider cache UNVERIFIED remain frozen
+// - Adds no host/storage/network/timer call, persistent field, request-history mutation, provider-cache claim, prompt relocation or generation-semantic change
 //
 // v0.63.54 Safe-Envelope Structural Boundary Reconcile:
 // - Follows v0.63.53 same-runtime A/B evidence where a SAFE_ENVELOPE_COMPAT B_CONTINUE produced CANONICAL 4238 vs FRESH_CHAT 4237, Deferred Mirror OUTPUT_MISMATCH, and the next unedited request was classified REPRESENTATION_DRIFT_CORRELATED and spent 4.091 s in MANUAL_EDIT_REBUILT; an exact predecessor returned to SAME_FAST 0 ms
@@ -522,7 +530,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.54';
+const SIMCORE_RUNTIME_VERSION = '0.63.55';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6498,13 +6506,44 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       perfDetail.editOrigin = 'PENDING';
       perfDetail.editDeltaShape = 'UNCLASSIFIED';
     }
-    const r = await cs.reconcileEditedOutput(lastAssistant, visibleContent, perfDetail);
+    // v0.63.55: the Deferred Mirror already observed the host-visible previous assistant.
+    // If that exact Fresh representation carries into the next request, it is a proven
+    // representation alias for this slot/location, not a third unknown body. Keep the
+    // canonical state untouched and skip the expensive snapshot/manual-edit rebuild.
+    const representationFastEligible = !!(
+      priorProvenance
+      && priorRepresentation === 'OUTPUT_MISMATCH'
+      && currentMatch === 'FRESH_CHAT'
+      && !!priorCanonical
+      && !!priorFresh
+      && priorCanonical !== priorFresh
+      && visibleFingerprint === priorFresh
+      && Number(cs.currentOutputIndex) === lastAssistant
+      && String(cs.current?.outputFingerprint || '') === priorCanonical
+      && String(cs.trustedOutputFingerprint || '') === priorCanonical
+    );
+    let r;
+    if (representationFastEligible) {
+      if (perfDetail) {
+        perfDetail.path = 'representation-fast-reconciled';
+        perfDetail.compatibilitySource = 'fresh-exact-carryover';
+      }
+      r = {
+        changed: false,
+        reason: 'representation-fast-reconciled',
+        representationFastReconciled: true,
+      };
+    } else {
+      r = await cs.reconcileEditedOutput(lastAssistant, visibleContent, perfDetail);
+    }
     if (perfDetail) {
       let editOrigin = 'NONE';
       let deltaShape = currentMatch === 'FRESH_CHAT' ? 'FRESH_EXACT_CARRYOVER'
         : (currentMatch === 'CANONICAL' ? 'CANONICAL_EXACT_CARRYOVER'
           : (currentMatch === 'HOST_RAW' ? 'HOST_RAW_EXACT_CARRYOVER' : 'NEW_VISIBLE_REPRESENTATION'));
-      if (r.changed) {
+      if (r.representationFastReconciled) {
+        editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
+      } else if (r.changed) {
         if (!priorProvenance) editOrigin = 'UNKNOWN';
         else if (priorRepresentation === 'OUTPUT_MISMATCH' && currentMatch === 'FRESH_CHAT') editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
         else if (priorRepresentation === 'EXACT') editOrigin = 'USER_EDIT_CANDIDATE';

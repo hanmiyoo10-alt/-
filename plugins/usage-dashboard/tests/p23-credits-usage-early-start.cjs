@@ -24,8 +24,9 @@ assert.match(engine, /creditsBootstrap: 30_000/);
 assert.match(engine, /'activity:24h': 60_000/);
 assert.match(engine, /'activity:7d': 300_000/);
 assert.match(engine, /'activity:30d': 600_000/);
-assert.match(engine, /if \(key === 'creditsBootstrap'\) return 'organizations';/);
-assert.ok(engine.includes("name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS"), 'credits bootstrap must fail closed instead of serving stale data');
+assert.ok(!engine.includes("if (key === 'creditsBootstrap') return 'organizations';"), 'credits bootstrap must not double-count failures against the organizations circuit');
+assert.ok(engine.includes("name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS"), 'credits bootstrap must fail closed when its circuit is open');
+assert.ok(engine.includes("const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';"), 'credits bootstrap must also fail closed on refresh errors');
 
 // One shared Credits CLI read: loadOrgs joins it instead of launching a second credits command.
 assert.match(engine, /async function loadCreditsBootstrap\(\) \{\s*return cached\('creditsBootstrap', async \(\) => runCli\(\['credits', '--json'\]\)\);\s*\}/s);
@@ -106,6 +107,7 @@ assert.ok(engine.includes('cliOperations'));
 assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));
 assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`'));
 assert.ok(guidelines.includes('Ambiguous/missing IDs keep the 5.60 root-gated path.'));
+assert.ok(guidelines.includes('dedicated circuit family must not double-count failures against the existing organizations circuit'));
 assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));
 assert.ok(guidelines.includes('## Long-term update roadmap'), 'release memory update must preserve durable roadmap');
 
@@ -117,4 +119,4 @@ assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
 assert.match(workflow, /p23-credits-usage-early-start\.cjs/);
 assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf("git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.61 product artifacts'"));
 
-console.log('usage-dashboard P23 Credits Usage Early Start: OK · shared Credits bootstrap, safe selector, serial rollback, monotonic release preserved');
+console.log('usage-dashboard P23 Credits Usage Early Start: OK · shared Credits bootstrap, isolated circuit, safe selector, serial rollback, monotonic release preserved');

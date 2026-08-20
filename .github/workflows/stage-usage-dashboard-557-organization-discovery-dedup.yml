@@ -6,13 +6,17 @@ on:
     paths:
       - '.github/workflows/stage-usage-dashboard-557-organization-discovery-dedup.yml'
       - 'plugins/usage-dashboard/tools/release_organization_discovery_dedup_557.py'
+      - 'plugins/usage-dashboard/tools/finalize_organization_discovery_dedup_557.py'
       - 'plugins/usage-dashboard/tests/p18-organization-discovery-dedup.cjs'
+      - 'plugins/usage-dashboard/tests/p19-organization-empty-fallback-fidelity.cjs'
   pull_request:
     branches: [main]
     paths:
       - '.github/workflows/stage-usage-dashboard-557-organization-discovery-dedup.yml'
       - 'plugins/usage-dashboard/tools/release_organization_discovery_dedup_557.py'
+      - 'plugins/usage-dashboard/tools/finalize_organization_discovery_dedup_557.py'
       - 'plugins/usage-dashboard/tests/p18-organization-discovery-dedup.cjs'
+      - 'plugins/usage-dashboard/tests/p19-organization-empty-fallback-fidelity.cjs'
 
 permissions:
   contents: write
@@ -32,11 +36,13 @@ jobs:
           set -euo pipefail
           exec > >(tee /tmp/stage-557.log) 2>&1
           python3 -m py_compile plugins/usage-dashboard/tools/release_organization_discovery_dedup_557.py
+          python3 -m py_compile plugins/usage-dashboard/tools/finalize_organization_discovery_dedup_557.py
           if grep -Fq "const VERSION = '3.0.0-alpha.5.57';" plugins/usage-dashboard/src/00-runtime-core.part.js; then
             echo '5.57 candidate already materialized; skipping 5.56 -> 5.57 patch step'
           else
             python3 plugins/usage-dashboard/tools/release_organization_discovery_dedup_557.py
           fi
+          python3 plugins/usage-dashboard/tools/finalize_organization_discovery_dedup_557.py
 
           # Historical regressions keep the version they were born on. Adapt only
           # their version/guideline assertions inside this CI workspace, then restore
@@ -136,7 +142,8 @@ jobs:
             p15-runtime-recovery-fidelity.cjs \
             p16-snapshot-performance-attribution.cjs \
             p17-bounded-cli-parallelism.cjs \
-            p18-organization-discovery-dedup.cjs; do
+            p18-organization-discovery-dedup.cjs \
+            p19-organization-empty-fallback-fidelity.cjs; do
             node "plugins/usage-dashboard/tests/$test"
           done
 
@@ -155,6 +162,7 @@ jobs:
           grep -Fq "const capturePromise = loadAccountCapture()" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "discoveryMode = 'capture-primary'" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "discoveryMode = 'plain-orgs-fallback'" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "No organizations found in CLI output" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq 'organizationDiscovery:' plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq 'Bridge organization discovery:' plugins/usage-dashboard/latest.js
           grep -Fq 'peak active' plugins/usage-dashboard/latest.js
@@ -162,6 +170,7 @@ jobs:
           grep -Fq 'unknown stays unknown' plugins/usage-dashboard/latest.js
           grep -Fq 'active local errors' plugins/usage-dashboard/latest.js
           grep -Fq 'Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`' docs/USAGE_DASHBOARD_GUIDELINES.md
+          grep -Fq 'No organizations found in CLI output' docs/USAGE_DASHBOARD_GUIDELINES.md
 
           git checkout -- \
             plugins/usage-dashboard/tests/p11-cache-fidelity.cjs \
@@ -204,9 +213,9 @@ jobs:
             docs/USAGE_DASHBOARD_GUIDELINES.md
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo 'main already matches 3.0.0-alpha.5.57'
+            echo 'main already matches finalized 3.0.0-alpha.5.57'
           else
-            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.57 Organization Discovery Deduplication'
+            git commit -m 'release: finalize Local Usage Dashboard 3.0.0-alpha.5.57 Organization Discovery Deduplication'
             git pull --rebase origin main
             git push origin HEAD:main
           fi
@@ -238,6 +247,7 @@ jobs:
           grep -Fq "const VERSION = '1.6.11';" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "DEVPASS_BRIDGE_CLI_CONCURRENCY || 2" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const capturePromise = loadAccountCapture()" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "No organizations found in CLI output" plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.57';" plugins/usage-dashboard/runtime/bridge-manager.cjs
           grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.11';" plugins/usage-dashboard/runtime/bridge-manager.cjs
@@ -249,8 +259,8 @@ jobs:
           git diff --check
           git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.57'
+            echo 'release-usage-dashboard already matches finalized 3.0.0-alpha.5.57'
             exit 0
           fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.57 product artifacts'
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.57 finalized product artifacts'
           git push origin HEAD:release-usage-dashboard

@@ -303,7 +303,7 @@ Current release implementation: `3.0.0-alpha.5.59 — Snapshot Scheduling Attrib
 
 - Bridge Engine becomes `1.6.13`; Bridge Manager remains `1.2.6`.
 - Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
-- Keep bounded CLI concurrency default/hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` remains the serial rollback.
+- Keep bounded CLI concurrency default/hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
 - Record relative start/end/duration for snapshot tasks inside the existing per-snapshot AsyncLocalStorage attribution context.
 - Record at most 8 CLI operation timeline entries using only sanitized family labels plus relative offsets, queue wait, and execution time.

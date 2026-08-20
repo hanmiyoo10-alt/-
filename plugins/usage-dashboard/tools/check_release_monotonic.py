@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Guard Local Usage Dashboard release publishing against stale/downgrade candidates.
+"""Fail-closed monotonic publisher guard for Local Usage Dashboard.
 
 Exit codes:
-  0: publish is allowed, or candidate/release are already identical (no-op).
-  2: stale candidate / downgrade attempt.
+  0: publish allowed, or same-version artifacts are already identical.
+  2: stale/downgrade candidate.
   3: same-version artifact divergence.
-  4: malformed or unsupported manifest/version input.
+  4: malformed/unsupported input or candidate ahead of main.
 
-The script is intentionally product-scoped. It compares only Local Usage Dashboard
-manifests and never reads or reasons about other products in this repository.
+This guard is intentionally product-scoped. It reads only Local Usage Dashboard
+manifests/artifacts and never compares versions from other products in the repo.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ VERSION_RE = re.compile(r"^3\.0\.0-(alpha|rc)\.(\d+)(?:\.(\d+))?$")
 @dataclass(frozen=True, order=True)
 class VersionKey:
     stage: int
-    major: int
-    minor: int
+    series: int
+    iteration: int
 
 
 def parse_version(value: str) -> VersionKey:
@@ -42,11 +42,9 @@ def parse_version(value: str) -> VersionKey:
         raise ValueError(f"unsupported Local Usage Dashboard version: {text!r}")
     stage_name, first, second = match.groups()
     if stage_name == "alpha":
-        # Project alpha versions are alpha.<series>.<iteration>, e.g. alpha.5.60.
         if second is None:
             raise ValueError(f"alpha version must include series and iteration: {text!r}")
         return VersionKey(0, int(first), int(second))
-    # RC versions are rc.<iteration>.
     if second is not None:
         raise ValueError(f"rc version must have one numeric component: {text!r}")
     return VersionKey(1, int(first), 0)
@@ -55,16 +53,18 @@ def parse_version(value: str) -> VersionKey:
 def load_manifest(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text())
-    except Exception as exc:  # noqa: BLE001 - fail closed by design
+    except Exception as exc:  # fail closed by design
         raise ValueError(f"cannot read manifest {path}: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(f"manifest is not an object: {path}")
     if data.get("product") != PRODUCT:
         raise ValueError(f"unexpected product in {path}: {data.get('product')!r}")
+
     version = str(data.get("productVersion") or "")
     parse_version(version)
-    plugin_version = str(((data.get("components") or {}).get("plugin") or {}).get("version") or "")
-    manager_product_version = str(((data.get("components") or {}).get("bridgeManager") or {}).get("productVersion") or "")
+    components = data.get("components") or {}
+    plugin_version = str((components.get("plugin") or {}).get("version") or "")
+    manager_product_version = str((components.get("bridgeManager") or {}).get("productVersion") or "")
     if plugin_version != version or manager_product_version != version:
         raise ValueError(
             f"manifest product/plugin/manager productVersion mismatch in {path}: "
@@ -77,39 +77,59 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def validate_artifacts(manifest: dict[str, Any], root: Path) -> tuple[str, str, str]:
+def canonical_manifest_sha(manifest: dict[str, Any]) -> str:
+    payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def artifact_identity(manifest: dict[str, Any], runtime_root: Path) -> tuple[str, ...]:
     components = manifest.get("components") or {}
     bridge = components.get("bridge") or {}
     manager = components.get("bridgeManager") or {}
-    engine_path = root / "bridge-engine.mjs"
-    manager_path = root / "bridge-manager.cjs"
-    latest_path = root.parent / "latest.js"
-    for path in (engine_path, manager_path, latest_path):
+
+    engine_path = runtime_root / "bridge-engine.mjs"
+    manager_path = runtime_root / "bridge-manager.cjs"
+    bootstrap_path = runtime_root / "bootstrap-bridge-manager.sh"
+    latest_path = runtime_root.parent / "latest.js"
+    for path in (engine_path, manager_path, bootstrap_path, latest_path):
         if not path.is_file():
             raise ValueError(f"missing release artifact: {path}")
+
     engine_sha = sha256_file(engine_path)
     manager_sha = sha256_file(manager_path)
+    bootstrap_sha = sha256_file(bootstrap_path)
     expected_engine = str(bridge.get("sha256") or "")
     expected_manager = str(manager.get("sha256") or "")
+    expected_bootstrap = str(manager.get("bootstrapSha256") or "")
     if engine_sha != expected_engine:
         raise ValueError(f"engine sha mismatch: {engine_sha} != {expected_engine}")
     if manager_sha != expected_manager:
         raise ValueError(f"manager sha mismatch: {manager_sha} != {expected_manager}")
-    return engine_sha, manager_sha, sha256_file(latest_path)
+    if bootstrap_sha != expected_bootstrap:
+        raise ValueError(f"bootstrap sha mismatch: {bootstrap_sha} != {expected_bootstrap}")
+
+    return (
+        canonical_manifest_sha(manifest),
+        sha256_file(latest_path),
+        engine_sha,
+        manager_sha,
+        bootstrap_sha,
+    )
 
 
-def decision(candidate: dict[str, Any], main: dict[str, Any], release: dict[str, Any]) -> str:
+def version_decision(candidate: dict[str, Any], main_manifest: dict[str, Any], release: dict[str, Any]) -> str:
     candidate_v = str(candidate["productVersion"])
-    main_v = str(main["productVersion"])
+    main_v = str(main_manifest["productVersion"])
     release_v = str(release["productVersion"])
-    ck = parse_version(candidate_v)
-    mk = parse_version(main_v)
-    rk = parse_version(release_v)
-    if ck < mk:
+    candidate_key = parse_version(candidate_v)
+    main_key = parse_version(main_v)
+    release_key = parse_version(release_v)
+
+    if candidate_key < main_key:
         return f"STALE_CANDIDATE_MAIN:{candidate_v}<{main_v}"
-    if ck < rk:
+    if candidate_key < release_key:
         return f"STALE_CANDIDATE_RELEASE:{candidate_v}<{release_v}"
-    if ck > mk:
+    if candidate_key > main_key:
         return f"CANDIDATE_AHEAD_OF_MAIN:{candidate_v}>{main_v}"
     return "ALLOW"
 
@@ -128,12 +148,13 @@ def main() -> int:
         candidate = load_manifest(args.candidate_manifest)
         main_manifest = load_manifest(args.main_manifest)
         release = load_manifest(args.release_manifest)
-        result = decision(candidate, main_manifest, release)
-        if result.startswith("STALE_CANDIDATE"):
-            print(result)
+        decision = version_decision(candidate, main_manifest, release)
+
+        if decision.startswith("STALE_CANDIDATE"):
+            print(decision)
             return 2
-        if result.startswith("CANDIDATE_AHEAD_OF_MAIN"):
-            print(result)
+        if decision.startswith("CANDIDATE_AHEAD_OF_MAIN"):
+            print(decision)
             return 4
 
         candidate_v = str(candidate["productVersion"])
@@ -141,10 +162,10 @@ def main() -> int:
         if args.check_artifacts:
             if not args.candidate_runtime or not args.release_runtime:
                 raise ValueError("--check-artifacts requires candidate/release runtime directories")
-            candidate_artifacts = validate_artifacts(candidate, args.candidate_runtime)
-            release_artifacts = validate_artifacts(release, args.release_runtime)
+            candidate_identity = artifact_identity(candidate, args.candidate_runtime)
+            release_identity = artifact_identity(release, args.release_runtime)
             if parse_version(candidate_v) == parse_version(release_v):
-                if candidate_artifacts != release_artifacts:
+                if candidate_identity != release_identity:
                     print(f"SAME_VERSION_ARTIFACT_DIVERGENCE:{candidate_v}")
                     return 3
                 print(f"NOOP_IDENTICAL:{candidate_v}")

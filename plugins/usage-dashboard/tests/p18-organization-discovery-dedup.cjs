@@ -36,13 +36,15 @@ const vm = require('node:vm');
   assert.ok(engine.includes('const CACHE_STALE_MAX_MS = 30 * 60_000'));
 
   // The normal organization path is capture-primary + Credits. Plain orgs is
-  // present only as an explicit fallback inside loadOrgs.
+  // present only as an explicit fallback inside loadOrgs. Credits may be direct
+  // (the original 5.57 shape) or joined through a later shared bootstrap, but it
+  // must still execute once beside the account capture.
   const orgStart = engine.indexOf('async function loadOrgs() {');
   const orgEnd = engine.indexOf('\nfunction usageOrganizations', orgStart);
   assert.ok(orgStart >= 0 && orgEnd > orgStart, 'loadOrgs must be extractable');
   const orgBlock = engine.slice(orgStart, orgEnd);
   assert.ok(orgBlock.includes('const capturePromise = loadAccountCapture()'));
-  assert.ok(orgBlock.includes("runCli(['credits', '--json'])"));
+  assert.ok(orgBlock.includes("runCli(['credits', '--json'])") || orgBlock.includes('loadCreditsBootstrap()'));
   assert.ok(orgBlock.includes("discoveryMode = 'capture-primary'"));
   assert.ok(orgBlock.includes("discoveryMode = 'plain-orgs-fallback'"));
   assert.ok(orgBlock.includes("const rawOrgs = await runCli(['orgs', 'list', '--json']);"));
@@ -86,6 +88,7 @@ const vm = require('node:vm');
     currentSnapshotAttribution: () => context.attribution,
     classifyError: () => 'UPSTREAM_ERROR',
   };
+  context.loadCreditsBootstrap = () => context.runCli(['credits', '--json']);
   vm.createContext(context);
   vm.runInContext(`${orgBlock}\nthis.loadOrgs = loadOrgs;`, context);
 

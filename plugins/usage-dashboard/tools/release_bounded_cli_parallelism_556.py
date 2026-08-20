@@ -172,6 +172,7 @@ Last verified real-device baseline: `3.0.0-alpha.5.55 — Snapshot Performance A
 Verified from the 5.55 device diagnostic:
 
 - Stable Readiness was `READY`; Bridge Engine `1.6.9` and Bridge Manager `1.2.6` were healthy, with no local runtime errors or failures.
+- Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Snapshot attribution worked on-device: one visibility refresh spent about 35.9s in plugin snapshot and about 5.2s in manager probe.
 - The Bridge-attributed snapshot was about 35.6s with critical path `organizations→analyticsScopes`.
 - Six CLI runs averaged about 5.9s execution each; three queued runs averaged about 8.0s queue wait with a maximum about 12.7s.

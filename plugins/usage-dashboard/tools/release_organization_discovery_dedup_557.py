@@ -272,7 +272,7 @@ Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Ded
 5.57 release contract:
 
 - Bridge Engine becomes `1.6.11`; Bridge Manager remains `1.2.6`.
-- Keep the verified bounded CLI concurrency default and hard maximum at `2`; preserve `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` serial rollback.
+- Keep the verified bounded CLI concurrency default and hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - In the normal organization-discovery path, run the existing account capture beside Credits and reuse the safely captured `/orgs` response instead of launching a separate plain `orgs list` first.
 - If account capture fails or does not contain usable organization rows, fall back to the prior plain `orgs list --json` path.
 - Preserve the existing hard failure semantics for Credits; this release does not broaden partial-success behavior.

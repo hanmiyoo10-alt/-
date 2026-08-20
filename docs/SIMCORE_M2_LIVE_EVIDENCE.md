@@ -75,23 +75,84 @@ setChat 0
 
 Interpretation: M2-1 preserved the output-side fail-safe. The known structural confirmation gate did not falsely accept an unproven +1 representation, and Deferred Mirror remained conservative.
 
-### Immediate next validation gate
+### Sample 3 — next natural request proves v0.63.55 fast-path regression control
 
-Do not regenerate the same turn again. Send one new natural request in the same runtime.
+Same runtime, next natural request:
 
-If the visible prior assistant is exactly the recorded `FRESH_CHAT 3788:6240060`, the next request should preserve the v0.63.55 regression control:
+```text
+request @1900 → output @1901
+Mode: C
+Session load: LOCATION_REUSE
+```
+
+The exact prior Fresh carryover was recognized without a manual rebuild:
 
 ```text
 Prior representation: OUTPUT_MISMATCH
+prior canonical: 3787:234db05e
+prior fresh:     3788:6240060a
+current:         3788:6240060a
 current match: FRESH_CHAT
 Edit origin: REPRESENTATION_DRIFT_CORRELATED
-Edit reconcile: REPRESENTATION_FAST_RECONCILED
+Edit delta: vs canonical +1 · vs fresh +0 · FRESH_EXACT_CARRYOVER
+Edit reconcile: REPRESENTATION_FAST_RECONCILED · 0.0 ms
 snapshot UNCHANGED
+representation fresh-exact-carryover
 ```
 
-A return to `MANUAL_EDIT_REBUILT` for this exact-Fresh carryover would be an M2-1 regression signal and must be investigated before M2-2.
+This is the exact regression gate inherited from v0.63.55. The previous multi-second false `MANUAL_EDIT_REBUILT` did not return after the M2-1 Recovery split.
 
-### Still not exercised by these samples
+The C-mode source/evidence path also remained stable:
+
+```text
+Short-C source lock: ON
+Request lineage: CHAIN · root A@1898 · depth 1
+Source handoff: NEW SOURCE
+Evidence shape: TRANSFORMED
+Evidence mode: DUAL
+Evidence root fence: APPLIED
+Evidence source fence: APPLIED
+Continuity: PASS
+Frame sequence: PASS
+Warnings: 0
+```
+
+Output completed conservatively and exactly:
+
+```text
+CANONICAL 2749:d9bd7b5
+FRESH_CHAT 2749:d9bd7b5
+Δchars +0 · EXACT
+Deferred mirror: COMMITTED
+```
+
+Timing was storage-dominated rather than reconcile-dominated:
+
+```text
+request total: 293 ms
+edit reconcile: 0 ms
+turn storage: 248 ms
+output handler: 322 ms
+output storage: 300 ms
+```
+
+Interpretation: **M2-1 representation-fast regression control PASS.** This sample also provides a natural Mode-C / source-handoff / dual-evidence cross-check with no observed structural regression. Storage latency remains a separate measured concern and is intentionally not repaired inside M2-1.
+
+### Current M2-1 validation status
+
+Confirmed in production:
+
+```text
+ordinary post-reload A path                    PASS
+output-compat / SAFE_ENVELOPE_COMPAT           PASS
+same-slot regeneration fail-safe               PASS
+Deferred Mirror conservative OUTPUT_MISMATCH   PASS
+v0.63.55 representation-fast regression gate   PASS
+natural C-mode source/evidence path             PASS
+continuity / frame guards                       PASS
+```
+
+Still not exercised by these samples:
 
 ```text
 bootstrap-migration history-bootstrap cold path
@@ -99,4 +160,10 @@ natural B-mode cross-check after M2-1
 genuine user-edit positive control
 ```
 
-The genuine-user-edit control is mandatory again when M2 moves the Edit Reconcile implementation itself. It is not inferred from these samples.
+The genuine-user-edit control becomes mandatory again before/when M2 moves the Edit Reconcile implementation itself; it is not inferred from the representation-fast pass.
+
+### Immediate next validation gate
+
+Continue with a new natural turn rather than regenerating or intentionally editing the previous output. Prefer a natural B-mode path when available. Confirm that Broadcast lifecycle, output compatibility, continuity, and frame guards remain stable under the split.
+
+If a later cold/reload path naturally invokes history bootstrap, capture it separately; do not force state mutation solely to exercise it.

@@ -152,7 +152,7 @@ def patch(text: str) -> str:
     text = replace_once(text, '// v0.63.52 Edit Origin Attribution:\n', RELEASE_NOTES + '// v0.63.52 Edit Origin Attribution:\n', 'release notes')
 
     pattern = re.compile(r'function buildFreshEnvelopeConfirmation\(rawPrefix, matches, candidates\) \{.*?\n\}\n\n// Whole-response restart recovery\.', re.S)
-    text, n = pattern.subn(NEW_CONFIRMATION, text, count=1)
+    text, n = pattern.subn(lambda _m: NEW_CONFIRMATION, text, count=1)
     if n != 1:
         raise SystemExit(f'fresh confirmation function: expected one match, got {n}')
 

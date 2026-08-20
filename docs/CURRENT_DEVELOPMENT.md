@@ -10,11 +10,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.51`
-- Release: `Fresh-Confirmed Envelope Recovery`
+- Version: `0.63.52`
+- Release: `Edit Origin Attribution`
 - Release branch: `release-simcore`
-- Release commit: `9bc327ee83df347f9b3cc57c00530fd26cc253e1`
-- Release blob: `6c188b451d4a9e70269dc8b23d39f78df852575c`
+- Release commit: `ffe91cb5b1ad52fd3d07e0f2d4bc08128dd4bd8f`
+- Release blob: `ebe92ad509ef6e7efd9b5be1327dc7745701c14b`
 - Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `OUTPUT_ENVELOPE_RECOVERY_VALIDATION`
 - Provider cache: `UNVERIFIED`

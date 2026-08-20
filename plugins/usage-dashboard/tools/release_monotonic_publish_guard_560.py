@@ -116,11 +116,14 @@ Verified from the 5.59 device diagnostic:
 - Organization discovery stayed `capture-primary · fallback 0 · shared account capture yes`; shared 24h reuse stayed active with dedicated 24h fallback 0.
 - Snapshot scheduling telemetry was live and bounded: organizations ran `0→8291ms`; `usageScopes` and `analyticsScopes` started at `8291ms` and ended around `15324–15325ms`.
 - The sampled Bridge snapshot was about 15.33s. The exact task timeline verified a serialized root barrier: about 8.29s organization/bootstrap followed by about 7.03s post-root usage/analytics.
-- The sampled CLI operations were `credits 1→6973ms`, `devpass-capture-24h 31→8280ms`, then `usage-24h-model 8299→15316ms`; limit 2, peak active 2, runs 3, queued 0.
+- The Bridge ran 3 CLI operations: `credits 1→6973ms`, `devpass-capture-24h 31→8280ms`, then `usage-24h-model 8299→15316ms`; limit 2, peak active 2, queued 0.
 - This verified that current primary latency is scheduling/dependency shape rather than CLI queueing; however three cold ~7–8s CLI operations under a hard limit of 2 still require at least two execution waves.
 - Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
+- Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
+- Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
+- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
 Verified release-infrastructure incident after 5.59 materialization:
 

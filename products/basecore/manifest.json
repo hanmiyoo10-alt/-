@@ -1,0 +1,27 @@
+{
+  "product": "BaseCore",
+  "runtime_name": "basecore",
+  "development_version": "0.1.0",
+  "production_version": null,
+  "development_branch": "basecore-v0.1",
+  "release_branch": "release-basecore",
+  "runtime_source": "plugins/basecore/latest.js",
+  "installer_source": "plugins/basecore/install.js",
+  "prompt_fragment": "products/basecore/CORE_RULESET_FRAGMENT.txt",
+  "donor": {
+    "product": "SimCore",
+    "version": "0.63.56",
+    "branch": "release-simcore"
+  },
+  "status": "development",
+  "validation": "NOT_YET_LIVE_VALIDATED",
+  "namespace": {
+    "storage_prefix": "basecore:state:",
+    "scriptstate": "$basecore_state",
+    "handshake": "BASECORE_SWITCH"
+  },
+  "instructions": "products/basecore/AI_INSTRUCTIONS.md",
+  "memory_sync_script": "scripts/basecore-sync-memory.py",
+  "release_command_workflow": ".github/workflows/basecore-release-command.yml",
+  "release_state_sync_workflow": ".github/workflows/basecore-release-state-sync.yml"
+}

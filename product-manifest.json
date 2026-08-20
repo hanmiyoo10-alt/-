@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.53",
-  "release_name": "Boundary-Normalized Envelope Recovery",
+  "production_version": "0.63.54",
+  "release_name": "Safe-Envelope Structural Boundary Reconcile",
   "release_branch": "release-simcore",
-  "release_commit": "3659464f17b60a0ba200172d7b49c8af32075706",
-  "release_blob": "793d466b7c5ee9bfa7528b43ca44c6b914dc125f",
+  "release_commit": "b510ea2e8e9fc43c060cb58cce82e60a17529647",
+  "release_blob": "e47f7e3c121f82558cab05bda45d827027ea4ba2",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",

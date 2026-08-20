@@ -10,11 +10,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.53`
-- Release: `Boundary-Normalized Envelope Recovery`
+- Version: `0.63.54`
+- Release: `Safe-Envelope Structural Boundary Reconcile`
 - Release branch: `release-simcore`
-- Release commit: `3659464f17b60a0ba200172d7b49c8af32075706`
-- Release blob: `793d466b7c5ee9bfa7528b43ca44c6b914dc125f`
+- Release commit: `b510ea2e8e9fc43c060cb58cce82e60a17529647`
+- Release blob: `e47f7e3c121f82558cab05bda45d827027ea4ba2`
 - Validation status: `PENDING_REAL_LONG_CHAT`
 - Primary optimization target: `BOUNDARY_NORMALIZED_ENVELOPE_RECOVERY_VALIDATION`
 - Provider cache: `UNVERIFIED`

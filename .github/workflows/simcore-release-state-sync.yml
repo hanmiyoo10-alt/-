@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: simcore-release-state-sync
+  group: repo-main-write
   cancel-in-progress: false
 
 jobs:

@@ -2,6 +2,7 @@ from pathlib import Path
 import hashlib
 import json
 
+# Idempotent deployment retrigger marker: rerun the P19-validated 5.57 finalizer.
 ROOT = Path('plugins/usage-dashboard')
 RUNTIME = ROOT / 'runtime'
 ENGINE = RUNTIME / 'bridge-engine.mjs'

@@ -1,0 +1,3 @@
+SimCore v0.63.56 release command
+Purpose: trigger the M2-1 Recovery Boundary Split release workflow.
+No direct production file content is carried by this command branch.

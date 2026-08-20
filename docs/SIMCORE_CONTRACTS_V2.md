@@ -4,7 +4,7 @@
 >
 > M1 status: **COMPLETE — DESIGN/CI ONLY, PRODUCTION RUNTIME UNCHANGED**
 >
-> M2 runtime refactor authorization: **BLOCKED until v0.63.55 real long-chat Representation Fast Reconcile is observed successfully.**
+> M2 runtime refactor authorization: **AUTHORIZED — v0.63.55 live gate satisfied on 2026-08-20.**
 
 ---
 
@@ -305,7 +305,7 @@ Deferred Mirror safety behavior itself remains frozen.
 
 ## 9. M2 Authorization Gate
 
-M1 deliberately blocks physical runtime refactoring until live v0.63.55 evidence exists.
+M1 originally blocked physical runtime refactoring until live v0.63.55 evidence existed. The gate was satisfied on 2026-08-20 in runtime `mt1g8kbx-3qd6s0`; M2 mechanical refactoring is now authorized.
 
 Required gate:
 
@@ -327,7 +327,7 @@ USER_EDIT_CANDIDATE
 → MANUAL_EDIT_REBUILT
 ```
 
-Until the fast-path gate succeeds, `runtime_refactor_authorized` stays `false` in the machine-readable contract and planned M2 modules are forbidden from appearing physically in plugin source.
+The fast-path gate has succeeded, so `runtime_refactor_authorized` is now `true` in the machine-readable contract. Planned M2 modules may appear only through the staged mechanical order below; validated behavior remains frozen as the regression target.
 
 ---
 
@@ -439,3 +439,40 @@ production runtime remains byte-for-byte untouched by M1
 ```
 
 Status: **COMPLETE**.
+
+
+---
+
+## 14. Live M2 Authorization Evidence — 2026-08-20
+
+Runtime `mt1g8kbx-3qd6s0` exercised the exact v0.63.55 target naturally with no reload between the compared turns.
+
+```text
+@1871 output
+Deferred mirror: OUTPUT_MISMATCH
+CANONICAL 3715:2983182f
+FRESH_CHAT 3714:5329a62f
+Δchars -1
+
+@1872 next request
+Edit reconcile: REPRESENTATION_FAST_RECONCILED · 0.0 ms
+snapshot UNCHANGED
+representation fresh-exact-carryover
+Prior representation: OUTPUT_MISMATCH
+Edit origin: REPRESENTATION_DRIFT_CORRELATED
+current 3714:5329a62f · match FRESH_CHAT
+vs canonical -1 · vs fresh +0
+shape FRESH_EXACT_CARRYOVER
+```
+
+This is the required live proof that a confirmed Fresh carryover can bypass the former 4–6 second false manual-edit rebuild without mutating canonical CoreSession state. The output immediately returned to exact canonical/Fresh identity, and the following natural requests remained `SAME_FAST` at 0–2 ms with `snapshot UNCHANGED`.
+
+The genuine-user-edit positive control was not re-exercised in this same runtime. Existing verified E1 remains the control, and every M2 mechanical checkpoint must re-run/preserve:
+
+```text
+Prior EXACT
+current != canonical
+current != Fresh
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT
+```

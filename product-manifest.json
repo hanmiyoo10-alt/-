@@ -17,7 +17,7 @@
   "architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
   "architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md",
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
-  "current_priority": "REPRESENTATION_FAST_RECONCILE_VALIDATION",
+  "current_priority": "2M_MAJOR_M2_MECHANICAL_BOUNDARY_REFACTOR",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -28,5 +28,8 @@
     "current_architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
     "current_architecture_contracts": "docs/SIMCORE_CONTRACTS_V2.md + config/simcore-architecture-v2.json"
   },
-  "managed_by": ".github/workflows/simcore-release-state-sync.yml"
+  "managed_by": ".github/workflows/simcore-release-state-sync.yml",
+  "validation_status": "VALIDATED_REAL_LONG_CHAT",
+  "major_update_milestone": "2.0M",
+  "major_update_phase": "M2"
 }

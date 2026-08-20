@@ -17,7 +17,7 @@ manifest['release_commit'] = release_commit
 manifest['release_blob'] = release_blob
 priority_by_version = {
     '0.63.54': 'SAFE_ENVELOPE_STRUCTURAL_BOUNDARY_RECONCILE_VALIDATION',
-    '0.63.55': 'REPRESENTATION_FAST_RECONCILE_VALIDATION',
+    '0.63.55': '2M_MAJOR_M2_MECHANICAL_BOUNDARY_REFACTOR',
 }
 if version in priority_by_version:
     manifest['current_priority'] = priority_by_version[version]
@@ -32,6 +32,11 @@ end = '<!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->'
 if dev.count(begin) != 1 or dev.count(end) != 1:
     raise SystemExit('CURRENT_DEVELOPMENT production snapshot markers missing/ambiguous')
 
+validation_status_by_version = {
+    '0.63.55': 'VALIDATED_REAL_LONG_CHAT',
+}
+validation_status = validation_status_by_version.get(version, 'PENDING_REAL_LONG_CHAT')
+
 snapshot = f'''{begin}
 ## Current Production Snapshot
 
@@ -41,7 +46,7 @@ snapshot = f'''{begin}
 - Release branch: `release-simcore`
 - Release commit: `{release_commit}`
 - Release blob: `{release_blob}`
-- Validation status: `PENDING_REAL_LONG_CHAT`
+- Validation status: `{validation_status}`
 - Primary optimization target: `{manifest.get('current_priority', 'PROMPT_PREFIX_STABILITY')}`
 - Provider cache: `{manifest.get('provider_cache_status', 'UNVERIFIED')}`
 

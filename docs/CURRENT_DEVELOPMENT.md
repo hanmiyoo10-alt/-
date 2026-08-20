@@ -22,8 +22,8 @@
 - Release branch: `release-simcore`
 - Release commit: `6156685a3edf0ec0c5017900a82990d4f17dfb49`
 - Release blob: `8c42851df34831465403d12fc57c7499923bdbc6`
-- Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `REPRESENTATION_FAST_RECONCILE_VALIDATION`
+- Validation status: `VALIDATED_REAL_LONG_CHAT`
+- Primary optimization target: `2M_MAJOR_M2_MECHANICAL_BOUNDARY_REFACTOR`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,7 +35,7 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.63.55` is the current production release. Static release gates passed; real long-chat validation of the new request-side fast path is pending.
+`v0.63.55` is the current production release. Static release gates passed and the request-side Representation Fast Reconcile has now passed real long-chat validation.
 
 Observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -82,7 +82,7 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 now targets this **next-turn false manual-edit rebuild** directly. The next task is to validate that confirmed Fresh carryover takes the fast path while genuine user edits still rebuild.
+v0.63.55 has now validated this **next-turn false manual-edit rebuild** fix in natural long chat. The next task is the 2.0M Major M2 mechanical boundary refactor, with the validated fast path and genuine-user-edit behavior frozen as regression controls.
 
 ---
 
@@ -90,7 +90,7 @@ v0.63.55 now targets this **next-turn false manual-edit rebuild** directly. The 
 
 ## v0.63.55 — Representation Fast Reconcile
 
-Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+Status: **PRODUCTION · VALIDATED REAL LONG-CHAT**
 
 ### Goal
 
@@ -259,7 +259,7 @@ The roadmap records intended future work so it survives long chats and conversat
 
 ## Phase A — Representation & Edit Reconcile
 
-**Current phase. Highest priority.**
+**Exact Fresh-carryover exit condition satisfied; behavior is now frozen as an M2 regression control.**
 
 Objectives:
 
@@ -270,7 +270,7 @@ Objectives:
 
 Planned work:
 
-- **A1 / v0.63.55:** Representation Fast Reconcile — deployed; real long-chat validation pending.
+- **A1 / v0.63.55:** Representation Fast Reconcile — deployed and real long-chat validated in runtime `mt1g8kbx-3qd6s0`.
 - **A2:** If needed, improve representation-drift diagnostics for cases that do not exactly match a known Fresh fingerprint.
 - **A3:** Only after repeated evidence, consider whether specific `SILENT_COMPAT` representation families deserve their own narrowly proven output-side reconcile. Do not infer this from the `-80` case alone.
 
@@ -486,6 +486,41 @@ Edit Origin Attribution itself is **not** frozen against a narrowly proven fast-
 ---
 
 # 6. Verified Evidence Ledger
+
+## E-LIVE-055 — Representation Fast Reconcile validated
+
+Runtime `mt1g8kbx-3qd6s0`, same boot/generation throughout:
+
+```text
+@1870→1871 output:
+Deferred mirror OUTPUT_MISMATCH
+CANONICAL 3715:2983182f
+FRESH_CHAT 3714:5329a62f
+Δchars -1
+
+@1872 request:
+Edit reconcile REPRESENTATION_FAST_RECONCILED · 0.0 ms
+snapshot UNCHANGED
+representation fresh-exact-carryover
+Prior representation OUTPUT_MISMATCH
+Edit origin REPRESENTATION_DRIFT_CORRELATED
+current == prior FRESH_CHAT EXACT
+vs canonical -1 · vs fresh +0
+```
+
+Result: the former `4–6 s` false `MANUAL_EDIT_REBUILT` class was avoided exactly as designed. Output @1873 returned to `CANONICAL == FRESH_CHAT`, and subsequent requests @1874/@1876/@1878/@1880/@1882/@1884/@1886 remained `SAME_FAST` at 0–2 ms with `snapshot UNCHANGED`.
+
+The same run also strengthens the later storage-latency target without changing current M2 scope:
+
+```text
+Turn storage observed: 286–616 ms
+Output storage observed: 305 ms–1.007 s
+request hotspot: TURN_STORAGE ~81–90%
+output hotspot: OUT_STORAGE ~93–95%
+```
+
+This storage evidence belongs to later latency work; do not mix it into the M2 mechanical modularization. Provider cache remains `UNVERIFIED`.
+
 
 This section stores the compact evidence that future conversations should not have to rediscover.
 
@@ -769,7 +804,7 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Validate v0.63.55 — Representation Fast Reconcile in natural long chat
+2.0M Major M2 — Mechanical Boundary Refactor
 ```
 
 Current success condition:

@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.9';
+const VERSION = '1.6.10';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -46,7 +46,7 @@ const cacheStats = {
   totalLoadMs: 0,
   lastLoadMs: 0,
 };
-const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 1)));
+const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));
 const cliWaiters = [];
 const cliStats = { active: 0, queued: 0, runs: 0, maxActive: 0 };
 const CIRCUIT_FAILURE_THRESHOLD = 3;
@@ -65,7 +65,7 @@ function createSnapshotAttribution(profile) {
     circuits: { opens:0, blocked:0, recoveries:0 },
     cli: {
       runs:0, queuedRuns:0, queueWaitTotalMs:0, queueWaitMaxMs:0,
-      executionTotalMs:0, executionMaxMs:0,
+      executionTotalMs:0, executionMaxMs:0, maxActive:0,
       slowestLabel:'', slowestTotalMs:0,
     },
   };
@@ -157,6 +157,8 @@ function snapshotAttributionSummary(attribution) {
       queuedRuns,
       queueWaitAvgMs: queuedRuns > 0 ? Number(cli.queueWaitTotalMs || 0) / queuedRuns : null,
       queueWaitMaxMs: queuedRuns > 0 ? Number(cli.queueWaitMaxMs || 0) : null,
+      limit: CLI_CONCURRENCY,
+      peakActive: runs > 0 ? Number(cli.maxActive || 0) : null,
       executionAvgMs: runs > 0 ? Number(cli.executionTotalMs || 0) / runs : null,
       executionMaxMs: runs > 0 ? Number(cli.executionMaxMs || 0) : null,
       slowestLabel: runs > 0 && cli.slowestLabel ? String(cli.slowestLabel) : null,
@@ -179,6 +181,8 @@ async function withCliSlot(label, task) {
   cliStats.active += 1;
   cliStats.runs += 1;
   cliStats.maxActive = Math.max(cliStats.maxActive, cliStats.active);
+  const attribution = currentSnapshotAttribution();
+  if (attribution?.cli) attribution.cli.maxActive = Math.max(Number(attribution.cli.maxActive || 0), cliStats.active);
   try {
     return await task();
   } finally {

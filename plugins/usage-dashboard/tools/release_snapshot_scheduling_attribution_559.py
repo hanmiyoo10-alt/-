@@ -63,10 +63,8 @@ def sync_guidelines_release_state() -> None:
     write(GUIDELINES, current[:a] + block + current[b:])
 
 
-# 5.59 is measurement-only. Keep the verified 5.58 scheduling, CLI limiter,
-# cache/recovery/capture behavior, and payload semantics unchanged. Add a bounded
-# relative timeline for snapshot tasks and sanitized CLI operation families so
-# the next scheduling repair can be selected from on-device evidence.
+# 5.59 is measurement-only. Keep 5.58 scheduling/capture behavior frozen and
+# add a bounded relative timeline inside the existing per-snapshot attribution.
 core = SRC / '00-runtime-core.part.js'
 replace_all_required(core, OLD_VERSION, NEW_VERSION, 'core product version', minimum=2)
 replace_once(
@@ -77,8 +75,7 @@ replace_once(
 )
 
 engine = RUNTIME / 'bridge-engine.mjs'
-replace_once(engine, f"const VERSION = '{OLD_ENGINE_VERSION}';", f"const VERSION = '{NEW_ENGINE_VERSION}';", 'bridge engine version')
-
+replace_once(engine, f"const VERSION = '{OLD_ENGINE_VERSION}';", f"const VERSION = '{NEW_ENGINE_VERSION}';", 'engine version')
 replace_once(
     engine,
     """    tasks: Object.create(null),
@@ -87,9 +84,8 @@ replace_once(
     taskTimeline: Object.create(null),
     cliOperations: [],
     organizationDiscovery: null,""",
-    'scheduling attribution storage',
+    'timeline attribution storage',
 )
-
 replace_once(
     engine,
     """async function timedSnapshotTask(name, task) {
@@ -123,21 +119,20 @@ replace_once(
     }
   }
 }""",
-    'snapshot task timeline',
+    'task timeline recorder',
 )
 
 engine_text = read(engine)
-summary_marker = '\n\nfunction snapshotAttributionSummary(attribution) {'
-idx = engine_text.find(summary_marker)
-if idx < 0:
+marker = '\n\nfunction snapshotAttributionSummary(attribution) {'
+pos = engine_text.find(marker)
+if pos < 0:
     raise SystemExit('snapshot attribution summary marker missing')
-cli_operation_helper = """
+helper = """
 
 function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) {
   const attribution = currentSnapshotAttribution();
   if (!attribution || !Array.isArray(attribution.cliOperations)) return;
-  const maxOperations = 8;
-  if (attribution.cliOperations.length >= maxOperations) return;
+  if (attribution.cliOperations.length >= 8) return;
   const base = Number(attribution.startedAt || queuedAt || endedAt || Date.now());
   const queuedStart = Number(queuedAt || executionStartedAt || endedAt || base);
   const execStart = Number(executionStartedAt || queuedStart);
@@ -152,7 +147,7 @@ function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) 
   });
 }
 """
-write(engine, engine_text[:idx] + cli_operation_helper + engine_text[idx:])
+write(engine, engine_text[:pos] + helper + engine_text[pos:])
 
 replace_once(
     engine,
@@ -166,9 +161,8 @@ replace_once(
       ? attribution.cliOperations.slice(0, 8).map((item) => ({...item}))
       : [],
     organizationDiscovery: attribution?.organizationDiscovery && typeof attribution.organizationDiscovery === 'object'""",
-    'scheduling attribution summary fields',
+    'timeline summary fields',
 )
-
 replace_once(
     engine,
     """  } finally {
@@ -179,14 +173,14 @@ replace_once(
     const endedAt = Date.now();
     const executionMs = Math.max(0, endedAt - executionStartedAt);
     noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs);
-    noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt);
+    if (typeof noteSnapshotCliOperation === 'function') {
+      noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt);
+    }
     cliStats.active = Math.max(0, cliStats.active - 1);""",
-    'CLI operation timeline hook',
+    'CLI timeline hook',
 )
 
-# Diagnostics render only the bounded task timing and already-sanitized CLI
-# family labels. Raw arguments, organization/project IDs, tokens, headers,
-# capture paths, and command output remain absent.
+# Safe diagnostics: top-level task offsets plus already-sanitized CLI families.
 diag = SRC / '40-diagnostics.part.js'
 replace_once(
     diag,
@@ -221,7 +215,7 @@ replace_once(
     const names = ['organizations','devpassStatus','usageScopes','analyticsScopes','runway'];
     const rows = names
       .map((name) => [name, timeline[name]])
-      .filter(([,value]) => value && num(value.startOffsetMs) && num(value.endOffsetMs))
+      .filter(([,value]) => value && Number.isFinite(Number(value.startOffsetMs)) && Number.isFinite(Number(value.endOffsetMs)))
       .map(([name,value]) => `${name} ${Math.round(Number(value.startOffsetMs))}→${Math.round(Number(value.endOffsetMs))}ms`);
     return rows.join(' · ') || '—';
   }
@@ -231,18 +225,17 @@ replace_once(
     if (!operations.length) return '—';
     return operations.map((item) => {
       const label = String(item?.label || 'cli');
-      const start = num(item?.startOffsetMs) ? Math.round(Number(item.startOffsetMs)) : 0;
-      const end = num(item?.endOffsetMs) ? Math.round(Number(item.endOffsetMs)) : start;
-      const queue = num(item?.queueWaitMs) ? Math.round(Number(item.queueWaitMs)) : 0;
-      const exec = num(item?.executionMs) ? Math.round(Number(item.executionMs)) : 0;
+      const start = Number.isFinite(Number(item?.startOffsetMs)) ? Math.round(Number(item.startOffsetMs)) : 0;
+      const end = Number.isFinite(Number(item?.endOffsetMs)) ? Math.round(Number(item.endOffsetMs)) : start;
+      const queue = Number.isFinite(Number(item?.queueWaitMs)) ? Math.round(Number(item.queueWaitMs)) : 0;
+      const exec = Number.isFinite(Number(item?.executionMs)) ? Math.round(Number(item.executionMs)) : 0;
       return `${label} ${start}→${end}ms · q${queue} · exec${exec}`;
     }).join(' · ');
   }
 
   function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {""",
-    'scheduling diagnostic helpers',
+    'timeline diagnostic helpers',
 )
-
 replace_once(
     diag,
     """      `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
@@ -251,37 +244,33 @@ replace_once(
       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,""",
-    'scheduling diagnostic lines',
+    'timeline diagnostic lines',
 )
 
 manager = RUNTIME / 'bridge-manager.cjs'
 replace_once(manager, f"const PRODUCT_VERSION = '{OLD_VERSION}';", f"const PRODUCT_VERSION = '{NEW_VERSION}';", 'manager product version')
-replace_once(manager, f"const BUNDLED_ENGINE_VERSION = '{OLD_ENGINE_VERSION}';", f"const BUNDLED_ENGINE_VERSION = '{NEW_ENGINE_VERSION}';", 'manager bundled engine version')
-new_engine_sha = sha256_file(engine)
+replace_once(manager, f"const BUNDLED_ENGINE_VERSION = '{OLD_ENGINE_VERSION}';", f"const BUNDLED_ENGINE_VERSION = '{NEW_ENGINE_VERSION}';", 'manager engine version')
+engine_sha = sha256_file(engine)
 manager_text = read(manager)
-sha_prefix = "const BUNDLED_ENGINE_SHA256 = '"
-start = manager_text.find(sha_prefix)
-if start < 0:
+prefix = "const BUNDLED_ENGINE_SHA256 = '"
+start = manager_text.find(prefix)
+end = manager_text.find("';", start + len(prefix))
+if start < 0 or end < 0:
     raise SystemExit('manager bundled engine sha marker missing')
-end = manager_text.find("';", start + len(sha_prefix))
-if end < 0:
-    raise SystemExit('manager bundled engine sha terminator missing')
-manager_text = manager_text[:start] + sha_prefix + new_engine_sha + manager_text[end:]
-write(manager, manager_text)
+write(manager, manager_text[:start] + prefix + engine_sha + manager_text[end:])
 
 manifest_path = RUNTIME / 'product-manifest.json'
 manifest = json.loads(read(manifest_path))
 manifest['productVersion'] = NEW_VERSION
 manifest['components']['plugin']['version'] = NEW_VERSION
 manifest['components']['bridge']['requiredVersion'] = NEW_ENGINE_VERSION
-manifest['components']['bridge']['sha256'] = new_engine_sha
+manifest['components']['bridge']['sha256'] = engine_sha
 manifest['components']['bridgeManager']['version'] = MANAGER_VERSION
 manifest['components']['bridgeManager']['productVersion'] = NEW_VERSION
 manifest['components']['bridgeManager']['sha256'] = sha256_file(manager)
 write(manifest_path, json.dumps(manifest, indent=2) + '\n')
 
-# Durable memory records the 5.58 device evidence and keeps the next release
-# evidence-first. 5.59 itself does not change scheduling behavior.
+# Durable memory: 5.58 device evidence is the baseline; 5.59 does not repair yet.
 guidelines = read(GUIDELINES)
 start_marker = '## Current development memory\n'
 end_marker = '## 0. Source of truth\n'
@@ -296,14 +285,14 @@ Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coa
 Verified from the 5.58 device diagnostic:
 
 - Stable Readiness was `READY`; Bridge Engine `1.6.12` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
-- Organization discovery remained on the intended path: `capture-primary · fallback 0 · shared account capture yes`.
-- Shared 24h reuse was active on-device: `bootstrap 24h · activity shared yes · dedicated 24h fallback 0`.
-- The sampled Bridge snapshot fell from about 17.87s in 5.57 to about 13.28s in 5.58; timer refresh was about 14.40s total.
-- `analyticsScopes` fell from about 11.84s in 5.57 to about 5.92s in 5.58, and the previous sampled CLI queue wait disappeared.
+- Organization discovery remained on `capture-primary · fallback 0 · shared account capture yes`.
+- Shared 24h reuse was active: `bootstrap 24h · activity shared yes · dedicated 24h fallback 0`.
+- The sampled Bridge snapshot was about 13.28s, down from about 17.87s in 5.57; timer refresh was about 14.40s total.
+- `analyticsScopes` was about 5.92s, down from about 11.84s in 5.57, and the previously observed CLI queue wait disappeared.
 - The Bridge ran 3 CLI operations with `limit 2 · peak active 2 · queued 0`; average execution was about 6.33s and the slowest sanitized operation was `devpass-capture-24h` at about 7.31s.
-- The sampled critical path was still effectively serialized as organization/bootstrap work at about 7.35s followed by post-root usage/analytics work at about 5.92s, for about 13.27s total.
-- The sampled visibility refresh remained materially slower than timer refresh (about 25.07s vs 14.40s), but the exact cause was not attributable from 5.58 Bridge telemetry.
-- Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0 in the sampled 5.58 snapshot.
+- The sampled critical path still looked serialized: organization/bootstrap work about 7.35s followed by post-root usage/analytics work about 5.92s, totaling about 13.27s.
+- The sampled visibility refresh was about 25.07s versus timer refresh about 14.40s; 5.58 telemetry could not attribute the exact cause.
+- Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
@@ -314,21 +303,18 @@ Current release implementation: `3.0.0-alpha.5.59 — Snapshot Scheduling Attrib
 
 - Bridge Engine becomes `1.6.13`; Bridge Manager remains `1.2.6`.
 - Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
-- Keep the verified bounded CLI concurrency default and hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` remains the serial rollback.
-- Keep 5.58 shared 24h capture coalescing unchanged, including dedicated 24h fallback only when shared activity is absent.
+- Keep bounded CLI concurrency default/hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` remains the serial rollback.
+- Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
 - Record relative start/end/duration for snapshot tasks inside the existing per-snapshot AsyncLocalStorage attribution context.
-- Record at most 8 CLI operation timeline entries using only existing sanitized family labels plus relative offsets, queue wait, and execution time.
+- Record at most 8 CLI operation timeline entries using only sanitized family labels plus relative offsets, queue wait, and execution time.
 - Never retain raw CLI arguments, organization/project IDs, tokens, headers, capture file paths, or command output in scheduling telemetry.
-- Add `Bridge snapshot timeline` and `Bridge CLI operations` diagnostics without adding any extra CLI/network work.
-- Preserve 5.57 organization fallback and empty-result fidelity, Runtime Recovery Fidelity, parser `provider-usage-v3`, and all UNKNOWN semantics for missing Cache Write/TTL.
+- Add `Bridge snapshot timeline` and `Bridge CLI operations` diagnostics without adding CLI/network work.
+- Preserve 5.57 organization fallback/empty-result fidelity, Runtime Recovery Fidelity, parser `provider-usage-v3`, and UNKNOWN semantics for missing Cache Write/TTL.
 
-Next step after the 5.59 real-device diagnostic: use the measured task/CLI timeline to decide whether the next repair should overlap the snapshot root or target one specific range/Credits scheduling path. Do not choose the 5.60 repair before that evidence.
+Next step after the 5.59 real-device diagnostic: use the measured task/CLI timeline to choose between snapshot-root overlap and one specific range/Credits scheduling repair. Do not choose 5.60 before that evidence.
 
 """
 write(GUIDELINES, guidelines[:a] + new_memory + guidelines[b:])
 sync_guidelines_release_state()
 
-print(
-    f'prepared Local Usage Dashboard {NEW_VERSION} '
-    f'(engine {NEW_ENGINE_VERSION}, manager {MANAGER_VERSION}) with snapshot scheduling attribution'
-)
+print(f'prepared Local Usage Dashboard {NEW_VERSION} (engine {NEW_ENGINE_VERSION}, manager {MANAGER_VERSION}) with snapshot scheduling attribution')

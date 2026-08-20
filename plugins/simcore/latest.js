@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.52
+//@version 0.63.53
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.53 Boundary-Normalized Envelope Recovery:
+// - Follows v0.63.52 real long-chat validation where a genuine user edit was correctly classified USER_EDIT_CANDIDATE, while a separate unedited B_END entered SAME_FAST/EXACT and then produced THOUGHTS_COMPAT 4252c, one # 응답 candidate, CANONICAL↔FRESH -4247c and Deferred Mirror OUTPUT_MISMATCH
+// - Extends the existing v0.63.51 Fresh-Confirmed Envelope Recovery with a bounded fingerprint-only boundary check: after the exact candidate fingerprint misses, at most two trailing CR/LF characters may be removed from the unique HOST_RAW suffix and each bounded variant is compared against the already-read FRESH_CHAT fingerprint
+// - Recovery succeeds only when one such CR/LF-only boundary variant is FRESH_EXACT; the Fresh body is never copied into canonical output, candidate/variant bodies are not retained, and non-CR/LF differences or larger deltas remain FRESH_MISMATCH with setChat blocked
+// - Adds BOUNDARY_CONFIRMED_SUFFIX plus boundary delta/kind/chars telemetry while preserving existing FRESH_CONFIRMED_SUFFIX behavior, Edit Origin Attribution, Structure/COMMUNITY quarantine, Deferred Mirror strict identity/staleness gates and all request/cache/history semantics
+// - Output-boundary scope only: Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence, TAIL_AFTER_CURRENT_USER, History stabilization OBSERVE_ONLY, Host Prefix Attribution, provider cache UNVERIFIED, persistent schema, network/timer/storage surfaces and generation semantics remain frozen
 //
 // v0.63.52 Edit Origin Attribution:
 // - Adds diagnostic-only edit-origin attribution after v0.63.51 real long-chat validation produced both genuine user edits and prior-output CANONICAL↔FRESH mismatches that converged on the same MANUAL_EDIT_REBUILT path; the reconcile behavior itself remains unchanged
@@ -507,7 +514,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.52';
+const SIMCORE_RUNTIME_VERSION = '0.63.53';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3235,6 +3242,31 @@ function buildPreambleProvenance(raw, matches, selectedIndex = -1, resolved = fa
   };
 }
 
+function buildBoundaryEnvelopeCandidates(candidateText) {
+  const raw = String(candidateText || '');
+  const out = [];
+  let current = raw;
+  let removed = '';
+  for (let i = 0; i < 2; i++) {
+    const last = current.slice(-1);
+    if (last !== '\n' && last !== '\r') break;
+    removed = last + removed;
+    current = current.slice(0, -1);
+    if (!current.startsWith('# 응답') || current.length < 128) break;
+    const kind = removed === '\n' ? 'TRAILING_LF'
+      : (removed === '\r\n' ? 'TRAILING_CRLF'
+        : (removed === '\n\n' ? 'TRAILING_LF_LF'
+          : (removed === '\r\r' ? 'TRAILING_CR_CR' : 'TRAILING_CR_LF')));
+    out.push(Object.freeze({
+      fingerprint: kernel.fingerprintText(current),
+      chars: current.length,
+      deltaChars: current.length - raw.length,
+      kind,
+    }));
+  }
+  return Object.freeze(out);
+}
+
 function buildFreshEnvelopeConfirmation(rawPrefix, matches, candidates) {
   const rows = Array.isArray(matches) ? matches : [];
   const list = Array.isArray(candidates) ? candidates : [];
@@ -3251,6 +3283,7 @@ function buildFreshEnvelopeConfirmation(rawPrefix, matches, candidates) {
     confirmation: 'FRESH_EXACT',
     candidateFingerprint: kernel.fingerprintText(candidateText),
     candidateChars: candidateText.length,
+    boundaryCandidates: buildBoundaryEnvelopeCandidates(candidateText),
     envelopeOffset: Number(rows[0]?.index || 0),
     persistentMutation: 'NONE',
   });
@@ -5595,13 +5628,21 @@ function createMirrorRuntime(deps) {
         const hostRaw = String(snapshot.hostOutputFingerprint || '');
         const confirmation = freshEnvelopeConfirmation && typeof freshEnvelopeConfirmation === 'object' ? freshEnvelopeConfirmation : null;
         const candidateFingerprint = String(confirmation?.candidateFingerprint || '');
+        const boundaryCandidates = Array.isArray(confirmation?.boundaryCandidates) ? confirmation.boundaryCandidates : [];
         const normalMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
-        const freshConfirmed = normalMatch === 'MISMATCH'
+        const exactFreshConfirmed = normalMatch === 'MISMATCH'
           && confirmation?.status === 'PENDING'
           && confirmation?.confirmation === 'FRESH_EXACT'
           && !!candidateFingerprint
           && actualFingerprint === candidateFingerprint;
-        const fingerprintMatch = freshConfirmed ? 'FRESH_CONFIRMED_SUFFIX' : normalMatch;
+        const boundaryMatch = !exactFreshConfirmed && normalMatch === 'MISMATCH'
+          && confirmation?.status === 'PENDING'
+          && confirmation?.confirmation === 'FRESH_EXACT'
+          ? boundaryCandidates.find((row) => String(row?.fingerprint || '') === actualFingerprint) || null
+          : null;
+        const freshConfirmed = exactFreshConfirmed || !!boundaryMatch;
+        const recoveryPolicy = boundaryMatch ? 'BOUNDARY_CONFIRMED_SUFFIX' : (exactFreshConfirmed ? 'FRESH_CONFIRMED_SUFFIX' : null);
+        const fingerprintMatch = recoveryPolicy || normalMatch;
         if (detail) {
           detail.canonicalFingerprint = (freshConfirmed ? actualFingerprint : canonical).slice(0, 12);
           detail.hostRawFingerprint = hostRaw.slice(0, 12);
@@ -5612,6 +5653,11 @@ function createMirrorRuntime(deps) {
           detail.fingerprintMatch = fingerprintMatch;
           detail.freshEnvelopeRecovery = freshConfirmed ? 'RECOVERED' : (confirmation ? 'FRESH_MISMATCH' : 'NOT_APPLICABLE');
           detail.freshEnvelopeSource = freshConfirmed ? String(confirmation.source || 'HOST_RAW_SUFFIX') : null;
+          detail.freshEnvelopePolicy = recoveryPolicy;
+          detail.freshEnvelopeCandidateChars = confirmation ? Number(confirmation.candidateChars || 0) : 0;
+          detail.freshEnvelopeBoundaryChars = boundaryMatch ? Number(boundaryMatch.chars || 0) : 0;
+          detail.freshEnvelopeBoundaryDelta = boundaryMatch ? Number(boundaryMatch.deltaChars || 0) : 0;
+          detail.freshEnvelopeBoundaryKind = boundaryMatch ? String(boundaryMatch.kind || 'CRLF_ONLY') : null;
           detail.freshEnvelopePersistent = 'NONE';
         }
         if (freshConfirmed) {
@@ -5671,6 +5717,11 @@ function createMirrorRuntime(deps) {
       freshFingerprintFull: null,
       freshEnvelopeRecovery: freshEnvelopeConfirmation ? 'PENDING' : 'NOT_APPLICABLE',
       freshEnvelopeSource: null,
+      freshEnvelopePolicy: null,
+      freshEnvelopeCandidateChars: Number(freshEnvelopeConfirmation?.candidateChars || 0),
+      freshEnvelopeBoundaryChars: 0,
+      freshEnvelopeBoundaryDelta: 0,
+      freshEnvelopeBoundaryKind: null,
       freshEnvelopePersistent: 'NONE',
     };
     lastProbe = probe;
@@ -5699,6 +5750,11 @@ function createMirrorRuntime(deps) {
       probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
       probe.freshEnvelopeRecovery = detail.freshEnvelopeRecovery ?? probe.freshEnvelopeRecovery;
       probe.freshEnvelopeSource = detail.freshEnvelopeSource ?? probe.freshEnvelopeSource;
+      probe.freshEnvelopePolicy = detail.freshEnvelopePolicy ?? probe.freshEnvelopePolicy;
+      probe.freshEnvelopeCandidateChars = detail.freshEnvelopeCandidateChars ?? probe.freshEnvelopeCandidateChars;
+      probe.freshEnvelopeBoundaryChars = detail.freshEnvelopeBoundaryChars ?? probe.freshEnvelopeBoundaryChars;
+      probe.freshEnvelopeBoundaryDelta = detail.freshEnvelopeBoundaryDelta ?? probe.freshEnvelopeBoundaryDelta;
+      probe.freshEnvelopeBoundaryKind = detail.freshEnvelopeBoundaryKind ?? probe.freshEnvelopeBoundaryKind;
       probe.freshEnvelopePersistent = detail.freshEnvelopePersistent ?? probe.freshEnvelopePersistent;
       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
@@ -7163,13 +7219,14 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
       `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
-      `Envelope recovery: ${deferredMirror ? `${deferredMirror.freshEnvelopeRecovery || 'NOT_APPLICABLE'} · source ${deferredMirror.freshEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.fingerprintMatch === 'FRESH_CONFIRMED_SUFFIX' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.freshEnvelopePersistent || 'NONE'}` : 'n/a'}`,
+      `Envelope recovery: ${deferredMirror ? `${deferredMirror.freshEnvelopeRecovery || 'NOT_APPLICABLE'} · policy ${deferredMirror.freshEnvelopePolicy || 'n/a'} · source ${deferredMirror.freshEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.freshEnvelopeRecovery === 'RECOVERED' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.freshEnvelopePersistent || 'NONE'}` : 'n/a'}`,
+      `Envelope boundary: ${deferredMirror?.freshEnvelopePolicy === 'BOUNDARY_CONFIRMED_SUFFIX' ? `RAW_SUFFIX ${Number(deferredMirror.freshEnvelopeCandidateChars || 0)} → NORMALIZED ${Number(deferredMirror.freshEnvelopeBoundaryChars || 0)} · Δchars ${Number(deferredMirror.freshEnvelopeBoundaryDelta || 0) >= 0 ? '+' : ''}${Number(deferredMirror.freshEnvelopeBoundaryDelta || 0)} · ${deferredMirror.freshEnvelopeBoundaryKind || 'CRLF_ONLY'} · FRESH_EXACT` : 'NOT_APPLICABLE'}`,
       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
-      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? 'STRIPPED' : (preamble.action || 'n/a')} · policy ${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? 'FRESH_CONFIRMED_SUFFIX' : (preamble.policy || 'n/a')} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? ' · selected 1' : (preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`)}` : 'n/a'}`,
+      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? 'STRIPPED' : (preamble.action || 'n/a')} · policy ${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? (deferredMirror.freshEnvelopePolicy || 'FRESH_CONFIRMED_SUFFIX') : (preamble.policy || 'n/a')} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? ' · selected 1' : (preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`)}` : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
       `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,

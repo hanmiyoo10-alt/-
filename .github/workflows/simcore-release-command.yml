@@ -103,6 +103,9 @@ jobs:
     needs: release
     if: github.event.pull_request.title == 'SimCore v0.63.52 release command'
     runs-on: ubuntu-latest
+    concurrency:
+      group: repo-main-write
+      cancel-in-progress: false
     steps:
       - name: Checkout main memory branch
         uses: actions/checkout@v4

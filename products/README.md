@@ -9,6 +9,8 @@ Product ownership is separated under:
 
 The product roots define ownership and release boundaries. Existing runtime/install paths remain unchanged for compatibility.
 
+Isolation phase 1 keeps all compatibility paths stable while product ownership and main-write serialization are established.
+
 ## Main-write rule
 
 Any workflow that can commit or push to `main` must participate in the shared GitHub Actions concurrency group:

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.50
+//@version 0.63.51
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -26,6 +26,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.51 Fresh-Confirmed Envelope Recovery:
+// - Targets the real v0.63.50 B_END failure where a unique # 응답 suffix followed a THOUGHTS_COMPAT preamble but full Structure safety rejected the suffix because COMMUNITY shape was independently malformed; the initial Recovery pass remains fail-open and does not weaken Structure acceptance
+// - Records only a bounded memory-only fingerprint/length/offset for one unique THOUGHTS_COMPAT response suffix when frame + Knowledge are intact; the suffix body is not retained and no request/chat/persistent snapshot mutation occurs on the critical output path
+// - Reuses the already-existing Deferred Mirror fresh-chat read as the confirmation boundary: only exact FRESH_CHAT fingerprint equality may promote the suffix representation to canonical for the current in-memory state and mirrored portable state; mismatch remains OUTPUT_MISMATCH with setChat blocked
+// - Adds Envelope recovery telemetry with RECOVERED / FRESH_MISMATCH / NOT_APPLICABLE and FRESH_CONFIRMED_SUFFIX provenance while leaving COMMUNITY structural quarantine independent for a later targeted repair
+// - Output-recovery scope only: Deferred Mirror identity/location/staleness guards, Structure/COMMUNITY rules, Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence, TAIL_AFTER_CURRENT_USER, History stabilization OBSERVE_ONLY, Host Prefix Attribution, cache/provider policy, persistent schema, network and timer surfaces remain frozen
 //
 // v0.63.50 Host Prefix Reset Attribution:
 // - Follows v0.63.49 real long-chat validation where externally observed cache hits coexisted with rolling CHAT_HISTORY frontier movement, while the one externally observed cache miss coincided with a PRE_SIMCORE HOST_PREFIX break at system @0, 0% local common prefix and a cache-family reset
@@ -494,7 +501,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.50';
+const SIMCORE_RUNTIME_VERSION = '0.63.51';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3222,6 +3229,27 @@ function buildPreambleProvenance(raw, matches, selectedIndex = -1, resolved = fa
   };
 }
 
+function buildFreshEnvelopeConfirmation(rawPrefix, matches, candidates) {
+  const rows = Array.isArray(matches) ? matches : [];
+  const list = Array.isArray(candidates) ? candidates : [];
+  if (rows.length !== 1 || list.length !== 1) return null;
+  const classification = classifyPreamble(rawPrefix, rows.length, false);
+  if (classification.prefixKind !== 'THOUGHTS_COMPAT') return null;
+  const candidate = list[0];
+  const candidateText = String(candidate?.text || '');
+  if (!candidateText.startsWith('# 응답') || candidateText.length < 128) return null;
+  if (!candidate?.integrity?.frameOk || !candidate?.integrity?.knowledgeOk) return null;
+  return Object.freeze({
+    status: 'PENDING',
+    source: 'HOST_RAW_SUFFIX',
+    confirmation: 'FRESH_EXACT',
+    candidateFingerprint: kernel.fingerprintText(candidateText),
+    candidateChars: candidateText.length,
+    envelopeOffset: Number(rows[0]?.index || 0),
+    persistentMutation: 'NONE',
+  });
+}
+
 // Whole-response restart recovery. Structure judges candidate integrity; Recovery chooses/moves content.
 function canonicalizeResponseEnvelope(content, pending) {
   const raw = String(content || '');
@@ -3266,7 +3294,8 @@ function canonicalizeResponseEnvelope(content, pending) {
     const classification = classifyPreamble(rawPrefix, matches.length, resolved);
     if (prefix) applyPreamblePolicy(classification, '감지', issues, diagnostics);
     const preambleProvenance = buildPreambleProvenance(raw, matches, -1, resolved, classification);
-    return { content: raw.trim(), repaired: false, issues, diagnostics, candidateCount: matches.length, selectedIndex: -1, resolved, preambleProvenance };
+    const freshConfirmation = buildFreshEnvelopeConfirmation(rawPrefix, matches, candidates);
+    return { content: raw.trim(), repaired: false, issues, diagnostics, candidateCount: matches.length, selectedIndex: -1, resolved, preambleProvenance, freshConfirmation };
   }
 
   const selected = safe[0];
@@ -4288,6 +4317,7 @@ class CoreRulesetSession {
     result.issues = issues;
     result.envelopeDiagnostics = prepared.envelope.diagnostics || [];
     result.preambleProvenance = prepared.envelope.preambleProvenance || null;
+    result.freshEnvelopeConfirmation = prepared.envelope.freshConfirmation || null;
     return result;
   }
 
@@ -5523,7 +5553,7 @@ function createMirrorRuntime(deps) {
     };
   }
 
-  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null) {
+  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null, freshEnvelopeConfirmation = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
       detail.chatLoadMs = 0;
@@ -5557,16 +5587,37 @@ function createMirrorRuntime(deps) {
         const actualFingerprint = coreRules.fingerprintText(textMessageContent(message));
         const canonical = String(snapshot.outputFingerprint || '');
         const hostRaw = String(snapshot.hostOutputFingerprint || '');
+        const confirmation = freshEnvelopeConfirmation && typeof freshEnvelopeConfirmation === 'object' ? freshEnvelopeConfirmation : null;
+        const candidateFingerprint = String(confirmation?.candidateFingerprint || '');
+        const normalMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
+        const freshConfirmed = normalMatch === 'MISMATCH'
+          && confirmation?.status === 'PENDING'
+          && confirmation?.confirmation === 'FRESH_EXACT'
+          && !!candidateFingerprint
+          && actualFingerprint === candidateFingerprint;
+        const fingerprintMatch = freshConfirmed ? 'FRESH_CONFIRMED_SUFFIX' : normalMatch;
         if (detail) {
-          detail.canonicalFingerprint = canonical.slice(0, 12);
+          detail.canonicalFingerprint = (freshConfirmed ? actualFingerprint : canonical).slice(0, 12);
           detail.hostRawFingerprint = hostRaw.slice(0, 12);
           detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
-          detail.canonicalFingerprintFull = canonical;
+          detail.canonicalFingerprintFull = freshConfirmed ? String(actualFingerprint || '') : canonical;
           detail.hostRawFingerprintFull = hostRaw;
           detail.freshFingerprintFull = String(actualFingerprint || '');
-          detail.fingerprintMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
+          detail.fingerprintMatch = fingerprintMatch;
+          detail.freshEnvelopeRecovery = freshConfirmed ? 'RECOVERED' : (confirmation ? 'FRESH_MISMATCH' : 'NOT_APPLICABLE');
+          detail.freshEnvelopeSource = freshConfirmed ? String(confirmation.source || 'HOST_RAW_SUFFIX') : null;
+          detail.freshEnvelopePersistent = 'NONE';
         }
-        if ((canonical || hostRaw) && actualFingerprint !== canonical && actualFingerprint !== hostRaw) {
+        if (freshConfirmed) {
+          snapshot.outputFingerprint = actualFingerprint;
+          const liveSession = getCoreSession();
+          if (liveSession?.current && Number(liveSession.currentOutputIndex) === expectedOutIndex) {
+            liveSession.current.outputFingerprint = actualFingerprint;
+            liveSession.trustedOutputFingerprint = actualFingerprint;
+            snapshot.portableState = liveSession.portableState();
+          }
+        }
+        if ((canonical || hostRaw) && normalMatch === 'MISMATCH' && !freshConfirmed) {
           if (detail) detail.status = 'OUTPUT_MISMATCH';
           return false;
         }
@@ -5595,7 +5646,7 @@ function createMirrorRuntime(deps) {
     }
   }
 
-  function schedule(chaIdx, chatIdx, chat, outIndex, state) {
+  function schedule(chaIdx, chatIdx, chat, outIndex, state, freshEnvelopeConfirmation = null) {
     const snapshot = capture(chaIdx, chatIdx, chat, outIndex, state);
     if (!snapshot) return false;
     const epoch = getRuntimeEpoch();
@@ -5612,6 +5663,9 @@ function createMirrorRuntime(deps) {
       canonicalFingerprintFull: String(snapshot.outputFingerprint || ''),
       hostRawFingerprintFull: String(snapshot.hostOutputFingerprint || ''),
       freshFingerprintFull: null,
+      freshEnvelopeRecovery: freshEnvelopeConfirmation ? 'PENDING' : 'NOT_APPLICABLE',
+      freshEnvelopeSource: null,
+      freshEnvelopePersistent: 'NONE',
     };
     lastProbe = probe;
     const shouldApply = () => runtimeIsCurrent(epoch) && latestByLocation.get(locationKey) === currentSequence;
@@ -5625,7 +5679,7 @@ function createMirrorRuntime(deps) {
       probe.startedAt = Date.now();
       const detail = {};
       const started = perfNow();
-      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply);
+      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply, freshEnvelopeConfirmation);
       probe.totalMs = perfMs(started);
       probe.chatLoadMs = Number(detail.chatLoadMs || 0);
       probe.prepareMs = Number(detail.prepareMs || 0);
@@ -5637,6 +5691,9 @@ function createMirrorRuntime(deps) {
       probe.hostRawFingerprintFull = detail.hostRawFingerprintFull ?? probe.hostRawFingerprintFull;
       probe.freshFingerprintFull = detail.freshFingerprintFull ?? probe.freshFingerprintFull;
       probe.fingerprintMatch = detail.fingerprintMatch ?? probe.fingerprintMatch;
+      probe.freshEnvelopeRecovery = detail.freshEnvelopeRecovery ?? probe.freshEnvelopeRecovery;
+      probe.freshEnvelopeSource = detail.freshEnvelopeSource ?? probe.freshEnvelopeSource;
+      probe.freshEnvelopePersistent = detail.freshEnvelopePersistent ?? probe.freshEnvelopePersistent;
       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
@@ -5852,7 +5909,7 @@ function representation(probe) {
   const fresh = fingerprintChars(probe.freshFingerprint);
   if (canonical == null || fresh == null) return 'n/a';
   const delta = fresh - canonical;
-  const relation = probe.fingerprintMatch === 'CANONICAL' ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
+  const relation = (probe.fingerprintMatch === 'CANONICAL' || probe.fingerprintMatch === 'FRESH_CONFIRMED_SUFFIX') ? 'EXACT' : (probe.fingerprintMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'DIFFERENT');
   return `CANONICAL↔FRESH Δchars ${delta >= 0 ? '+' : ''}${delta} · ${relation} · raw bodies NOT RETAINED`;
 }
 module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, cacheEffect, hostPrefixAttribution, hostPrefixDelta, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
@@ -6550,7 +6607,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     lastTimestampCanonicalization = result.timestampCanonicalization || null;
     lastPreambleProvenance = result.preambleProvenance || null;
 
-    const mirrorScheduled = runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state);
+    const mirrorScheduled = runtimeMirror.schedule(chaIdx, chatIdx, chat, outIndex, result.state, result.freshEnvelopeConfirmation);
     if (perf) {
       perf.mirrorMs = 0;
       perf.mirrorDetail = { deferred: true, scheduled: mirrorScheduled };
@@ -7036,12 +7093,13 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
       `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
+      `Envelope recovery: ${deferredMirror ? `${deferredMirror.freshEnvelopeRecovery || 'NOT_APPLICABLE'} · source ${deferredMirror.freshEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.fingerprintMatch === 'FRESH_CONFIRMED_SUFFIX' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.freshEnvelopePersistent || 'NONE'}` : 'n/a'}`,
       `Output hotspot: ${outputBreakdown ? `${outputBreakdown.hotspot} · ${diagnosticFormatMs(outputBreakdown.hotspotMs)} · ${Number(outputBreakdown.hotspotPercent || 0).toFixed(1)}%` : 'n/a'}`,
       `Hook activity: request ${diagnosticActivity.requestHooks} · output ${diagnosticActivity.outputHooks} · slow>=50ms ${diagnosticActivity.requestSlow50}/${diagnosticActivity.outputSlow50} · max ${Number(diagnosticActivity.requestMaxMs || 0).toFixed(1)}/${Number(diagnosticActivity.outputMaxMs || 0).toFixed(1)} ms`,
       `Diagnostic age: ${probeFresh ? diagnosticTimingDelta(requestProbe?.outputAt || requestProbe?.requestDoneAt || requestProbe?.at, capturedAt) : 'n/a'}`,
       `Warnings: ${outputFresh ? warnings.length : 'n/a'}`,
       `Compatibility diagnostics: ${outputFresh ? compatibility.length : 'n/a'}`,
-      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${preamble.action || 'n/a'} · policy ${preamble.policy || 'n/a'} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`}` : 'n/a'}`,
+      `Preamble provenance: ${preamble ? `${preamble.kind || 'UNKNOWN'} · chars ${Number(preamble.chars || 0)} · lines ${Number(preamble.lines || 0)} · action ${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? 'STRIPPED' : (preamble.action || 'n/a')} · policy ${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? 'FRESH_CONFIRMED_SUFFIX' : (preamble.policy || 'n/a')} · envelope offset ${preamble.envelopeOffset == null ? 'n/a' : Number(preamble.envelopeOffset)} · candidates ${Number(preamble.candidateCount || 0)}${deferredMirror?.freshEnvelopeRecovery === 'RECOVERED' ? ' · selected 1' : (preamble.selectedCandidate == null ? '' : ` · selected ${Number(preamble.selectedCandidate)}`)}` : 'n/a'}`,
       `Prompt prefix: ${prefixLabel}`,
       `Cache posture: ${runtimeProbeRules.cachePosture(cacheProbe, runtimeContracts.cache)}`,
       `Cache topology: ${probeFresh ? runtimeProbeRules.topology(topologyProbe) : 'n/a'}`,

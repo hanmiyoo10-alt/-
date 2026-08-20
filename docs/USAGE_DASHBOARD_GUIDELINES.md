@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.56`
-- Bridge Engine: `1.6.10`
+- Product: `3.0.0-alpha.5.57`
+- Bridge Engine: `1.6.11`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,33 +24,36 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`.
+Last verified real-device baseline: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`.
 
-Verified from the 5.55 device diagnostic:
+Verified from the 5.56 device diagnostic:
 
-- Stable Readiness was `READY`; Bridge Engine `1.6.9` and Bridge Manager `1.2.6` were healthy, with no local runtime errors or failures.
+- Stable Readiness was `READY`; Bridge Engine `1.6.10` and Bridge Manager `1.2.6` were healthy, with no local runtime errors or failures.
+- The two-lane limiter was actually active on-device: `limit 2 · peak active 2`.
+- CLI queueing fell from the verified 5.55 baseline of 3 queued runs / about 8.0s average wait / about 12.7s maximum wait to `queued 0` in the sampled 5.56 snapshot.
+- Bridge snapshot wall time fell from about 35.58s in the 5.55 attribution baseline to about 13.49s in 5.56, an improvement of roughly 62% for the sampled snapshot.
+- Timer refresh was about 15.45s total and the sampled visibility refresh was about 24.76s; rendering remained tiny relative to data refresh.
+- The new critical root was organization discovery at about 8.83s, followed by usage/analytics scope work at about 4.65s.
+- Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0 in the sampled 5.56 snapshot.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
-- Snapshot attribution worked on-device: one visibility refresh spent about 35.9s in plugin snapshot and about 5.2s in manager probe.
-- The Bridge-attributed snapshot was about 35.6s with critical path `organizations→analyticsScopes`.
-- Six CLI runs averaged about 5.9s execution each; three queued runs averaged about 8.0s queue wait with a maximum about 12.7s.
-- Six average CLI execution slices totaled about 35.55s, essentially matching the observed snapshot wall time, strongly attributing the bottleneck to bounded single-lane CLI serialization rather than render work.
-- The slowest observed operation was `devpass-capture-30d` at about 19.1s total, with much of that time attributable to queue wait rather than its own execution.
-- The same snapshot had cache errors 0, stale fallback 0, circuit opened/blocked/recoveries 0; cache/circuit failure was not the cause of that sample.
-- UI rendering remained tiny relative to refresh duration, and Cache Write provenance continued to stay UNKNOWN when the source did not report it.
+- Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
-Current release implementation: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`.
+Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`.
 
-5.56 release contract:
+5.57 release contract:
 
-- Bridge Engine becomes `1.6.10`; Bridge Manager remains `1.2.6`.
-- Change only the default Bridge CLI concurrency from `1` to bounded `2`; keep the hard maximum at `2`.
-- Preserve rollback behavior: `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
-- Keep the complete 5.55 snapshot attribution telemetry and additionally report per-snapshot CLI `limit` and `peak active`.
-- Keep cache TTLs, 25s CLI timeout, snapshot data semantics, cache/circuit behavior, parser `provider-usage-v3`, Runtime Recovery Fidelity, updater flow, and unknown-value semantics unchanged.
-- Do not optimize manager probe in this release; evaluate it only after the snapshot repair is measured on-device.
+- Bridge Engine becomes `1.6.11`; Bridge Manager remains `1.2.6`.
+- Keep the verified bounded CLI concurrency default and hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
+- In the normal organization-discovery path, run the existing account capture beside Credits and reuse the safely captured `/orgs` response instead of launching a separate plain `orgs list` first.
+- If account capture fails or does not contain usable organization rows, fall back to the prior plain `orgs list --json` path.
+- Preserve the existing hard failure semantics for Credits; this release does not broaden partial-success behavior.
+- Reuse the same cached account capture for DevPass status so organization normalization and account/status enrichment share one authenticated CLI session result when available.
+- Keep all 5.55/5.56 attribution telemetry and add only safe organization-discovery provenance: mode, fallback count, and whether account capture was shared.
+- Keep CLI timeout, cache TTLs, stale-cache/circuit behavior, snapshot payload semantics, parser `provider-usage-v3`, Runtime Recovery Fidelity, updater flow, and unknown-value semantics unchanged.
+- Do not overlap the snapshot root dependency or optimize manager probe in this release.
 
-Next step after the 5.56 real-device diagnostic: compare snapshot/queue/exec/peak-active directly against the verified 5.55 baseline, then choose the next bottleneck from evidence.
+Next step after the 5.57 real-device diagnostic: compare organization duration, CLI run count, snapshot wall time, discovery mode/fallback, and queue/peak-active against the verified 5.56 baseline before choosing any root-overlap repair.
 
 ## 0. Source of truth
 

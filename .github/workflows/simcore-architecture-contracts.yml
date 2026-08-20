@@ -1,0 +1,36 @@
+name: SimCore Architecture Contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/simcore/**'
+      - 'config/simcore-architecture-v2.json'
+      - 'scripts/simcore-architecture-check.py'
+      - 'docs/SIMCORE_CONTRACTS_V2.md'
+      - 'docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md'
+      - '.github/workflows/simcore-architecture-contracts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'plugins/simcore/**'
+      - 'config/simcore-architecture-v2.json'
+      - 'scripts/simcore-architecture-check.py'
+      - 'docs/SIMCORE_CONTRACTS_V2.md'
+      - 'docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md'
+      - '.github/workflows/simcore-architecture-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts-v2:
+    name: Contracts v2 drift guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate architecture contract
+        run: python3 scripts/simcore-architecture-check.py

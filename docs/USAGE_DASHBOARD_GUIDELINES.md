@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.57`
-- Bridge Engine: `1.6.11`
+- Product: `3.0.0-alpha.5.58`
+- Bridge Engine: `1.6.12`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,37 +24,37 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`.
+Last verified real-device baseline: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`.
 
-Verified from the 5.56 device diagnostic:
+Verified from the 5.57 device diagnostic:
 
-- Stable Readiness was `READY`; Bridge Engine `1.6.10` and Bridge Manager `1.2.6` were healthy, with no local runtime errors or failures.
-- The two-lane limiter was actually active on-device: `limit 2 · peak active 2`.
-- CLI queueing fell from the verified 5.55 baseline of 3 queued runs / about 8.0s average wait / about 12.7s maximum wait to `queued 0` in the sampled 5.56 snapshot.
-- Bridge snapshot wall time fell from about 35.58s in the 5.55 attribution baseline to about 13.49s in 5.56, an improvement of roughly 62% for the sampled snapshot.
-- Timer refresh was about 15.45s total and the sampled visibility refresh was about 24.76s; rendering remained tiny relative to data refresh.
-- The new critical root was organization discovery at about 8.83s, followed by usage/analytics scope work at about 4.65s.
-- Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0 in the sampled 5.56 snapshot.
+- Stable Readiness was `READY`; Bridge Engine `1.6.11` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
+- Organization deduplication was active on-device: `capture-primary · fallback 0 · shared account capture yes`.
+- Organization discovery fell from about 8.83s in the verified 5.56 sample to about 6.03s in 5.57, so the deduplication itself was effective.
+- The sampled Bridge snapshot nevertheless rose from about 13.49s in 5.56 to about 17.87s in 5.57 because the critical path moved to analytics.
+- `analyticsScopes` was about 11.84s and the slowest detailed task was `analytics.devpass.7d` at about 11.84s.
+- The Bridge ran 5 CLI operations; one queued for about 5.87s while average execution was about 6.02s. The slowest operation was `devpass-capture-7d` at about 11.76s total.
+- CLI concurrency stayed verified at `limit 2 · peak active 2`; snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0 in the sampled snapshot.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 
-Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`.
+Current release implementation: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`.
 
-5.57 release contract:
+5.58 release contract:
 
-- Bridge Engine becomes `1.6.11`; Bridge Manager remains `1.2.6`.
+- Bridge Engine becomes `1.6.12`; Bridge Manager remains `1.2.6`.
 - Keep the verified bounded CLI concurrency default and hard maximum at `2`; `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
-- In the normal organization-discovery path, run the existing account capture beside Credits and reuse the safely captured `/orgs` response instead of launching a separate plain `orgs list` first.
-- If account capture fails or does not contain usable organization rows, fall back to the prior plain `orgs list --json` path.
-- If capture and the plain fallback both contain no usable organization rows, preserve the prior `No organizations found in CLI output` failure instead of converting UNKNOWN/empty discovery into a successful empty result.
-- Preserve the existing hard failure semantics for Credits; this release does not broaden partial-success behavior.
-- Reuse the same cached account capture for DevPass status so organization normalization and account/status enrichment share one authenticated CLI session result when available.
-- Keep all 5.55/5.56 attribution telemetry and add only safe organization-discovery provenance: mode, fallback count, and whether account capture was shared.
-- Keep CLI timeout, cache TTLs, stale-cache/circuit behavior, snapshot payload semantics, parser `provider-usage-v3`, Runtime Recovery Fidelity, updater flow, and unknown-value semantics unchanged.
-- Do not overlap the snapshot root dependency or optimize manager probe in this release.
+- Keep the existing `accountCapture` cache key, 30s TTL, no-stale behavior, and circuit semantics, but let its authenticated orgs session also collect the official 24h DevPass activity/logs already supported by the capture tap.
+- Reuse that same 24h account capture for organization discovery, DevPass status, and `devPassActivityForRange('24h')` when usable, eliminating the normal duplicate dedicated 24h capture.
+- If the shared capture has no usable 24h activity, run the previous dedicated 24h capture once as fallback; if the source still lacks activity, preserve the prior error instead of fabricating an empty or zero result.
+- Keep 7d and 30d capture behavior independent and unchanged.
+- Preserve the 5.57 organization fallback: if account capture fails or lacks usable rows, fall back to the prior plain `orgs list --json` path.
+- Preserve the 5.57 empty result contract: `No organizations found in CLI output` remains an error after capture and plain fallback are both exhausted.
+- Keep CLI timeout, cache TTLs, stale-cache/circuit behavior, snapshot root ordering, payload semantics, parser `provider-usage-v3`, Runtime Recovery Fidelity, updater flow, and unknown-value semantics unchanged.
+- Add only isolated safe capture-reuse diagnostics: bootstrap range, whether 24h activity reuse was exercised successfully, and dedicated 24h fallback count.
 
-Next step after the 5.57 real-device diagnostic: compare organization duration, CLI run count, snapshot wall time, discovery mode/fallback, and queue/peak-active against the verified 5.56 baseline before choosing any root-overlap repair.
+Next step after the 5.58 real-device diagnostic: compare CLI run count, queue wait, 24h reuse/fallback, analytics duration, and snapshot wall time against the verified 5.57 baseline before considering any snapshot-root overlap change.
 
 ## 0. Source of truth
 

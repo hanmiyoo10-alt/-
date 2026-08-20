@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.11';
+const VERSION = '1.6.12';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -62,6 +62,7 @@ function createSnapshotAttribution(profile) {
     profile: String(profile || 'full'),
     tasks: Object.create(null),
     organizationDiscovery: null,
+    captureReuse: { bootstrapRange:'24h', activityReuseChecks:0, activityShared:0, dedicated24hFallbacks:0 },
     cache: { hits:0, misses:0, joins:0, loads:0, errors:0, staleFallbacks:0 },
     circuits: { opens:0, blocked:0, recoveries:0 },
     cli: {
@@ -153,6 +154,9 @@ function snapshotAttributionSummary(attribution) {
     tasks: {...tasks},
     organizationDiscovery: attribution?.organizationDiscovery && typeof attribution.organizationDiscovery === 'object'
       ? {...attribution.organizationDiscovery}
+      : null,
+    captureReuse: attribution?.captureReuse && typeof attribution.captureReuse === 'object'
+      ? {...attribution.captureReuse}
       : null,
     cache: {...(attribution?.cache || {})},
     circuits: {...(attribution?.circuits || {})},
@@ -1129,7 +1133,10 @@ async function captureAccountDetailsViaCliSession(activityRange = '') {
 }
 
 async function loadAccountCapture() {
-  return cached('accountCapture', async () => captureAccountDetailsViaCliSession());
+  // The official orgs session can safely collect status plus 24h activity/logs
+  // through the existing capture tap. Keeping the same accountCapture cache key
+  // preserves its 30s TTL, no-stale fallback policy, and circuit semantics.
+  return cached('accountCapture', async () => captureAccountDetailsViaCliSession('24h'));
 }
 
 async function cached(name, loader) {
@@ -1997,14 +2004,35 @@ function creditsUsageOrganization(orgData, requestedOrgId = '') {
 }
 
 async function devPassActivityForRange(range = '24h') {
-  return cached(`devpassActivity:${range}`, async () => {
-    const captured = await captureAccountDetailsViaCliSession(range);
+  const normalizedRange = ['24h','7d','30d'].includes(String(range)) ? String(range) : '24h';
+  return cached(`devpassActivity:${normalizedRange}`, async () => {
+    let captured = null;
+    const attribution = currentSnapshotAttribution();
+
+    if (normalizedRange === '24h') {
+      if (attribution?.captureReuse) attribution.captureReuse.activityReuseChecks += 1;
+      try {
+        captured = await loadAccountCapture();
+      } catch {}
+      const sharedEntry = captured?.devpassActivity;
+      const sharedRawActivity = sharedEntry?.payload ?? sharedEntry;
+      const sharedUsable = Boolean(sharedRawActivity && officialActivityRows(sharedRawActivity).length);
+      if (sharedUsable) {
+        if (attribution?.captureReuse) attribution.captureReuse.activityShared += 1;
+      } else {
+        if (attribution?.captureReuse) attribution.captureReuse.dedicated24hFallbacks += 1;
+        captured = await captureAccountDetailsViaCliSession('24h');
+      }
+    } else {
+      captured = await captureAccountDetailsViaCliSession(normalizedRange);
+    }
+
     const status = normalizeIndependentDevPassStatus(captured?.devPlanStatus ?? null);
     const entry = captured?.devpassActivity;
     const rawActivity = entry?.payload ?? entry;
     if (!rawActivity || !officialActivityRows(rawActivity).length) {
       if (!status?.projectId) throw new Error('DevPass projectId unavailable from /dev-plans/status');
-      throw new Error(`DevPass /activity ${range} unavailable for the authenticated project`);
+      throw new Error(`DevPass /activity ${normalizedRange} unavailable for the authenticated project`);
     }
     const org = {
       id: status?.organizationId || null,
@@ -2012,13 +2040,13 @@ async function devPassActivityForRange(range = '24h') {
       kind: 'devpass',
       projectId: status?.projectId || null,
     };
-    const normalized = normalizeUsageActivity(rawActivity, org, range);
-    const exactRecent = range === '24h' ? normalizeCapturedRecentLogs(captured?.devpassLogs) : [];
+    const normalized = normalizeUsageActivity(rawActivity, org, normalizedRange);
+    const exactRecent = normalizedRange === '24h' ? normalizeCapturedRecentLogs(captured?.devpassLogs) : [];
     if (exactRecent.length) normalized.recentRequests = exactRecent;
     normalized.usageScope = 'devpass';
     normalized.source = exactRecent.length
-      ? `LLMGateway authenticated session · /activity + /logs · DevPass project · ${range}`
-      : `LLMGateway authenticated session · /activity · DevPass project · ${range}`;
+      ? `LLMGateway authenticated session · /activity + /logs · DevPass project · ${normalizedRange}`
+      : `LLMGateway authenticated session · /activity · DevPass project · ${normalizedRange}`;
     return normalized;
   });
 }

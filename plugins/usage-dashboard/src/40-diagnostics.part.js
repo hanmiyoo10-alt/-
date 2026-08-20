@@ -39,6 +39,17 @@
     return `${discovery.mode || 'unknown'} · fallback ${Number(discovery.fallbackCount || 0)} · shared account capture ${discovery.sharedAccountCapture ? 'yes' : 'no'}`;
   }
 
+  function bridgeCaptureReuseText(performance) {
+    const reuse = performance?.captureReuse && typeof performance.captureReuse === 'object'
+      ? performance.captureReuse
+      : null;
+    if (!reuse) return '—';
+    const checks = Number(reuse.activityReuseChecks || 0);
+    const shared = Number(reuse.activityShared || 0);
+    const activityState = checks > 0 ? (shared > 0 ? 'yes' : 'no') : 'not-exercised';
+    return `bootstrap ${reuse.bootstrapRange || '—'} · activity shared ${activityState} · dedicated 24h fallback ${Number(reuse.dedicated24hFallbacks || 0)}`;
+  }
+
   function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {
     const blockers = [];
     const lifecycle = bridgeLifecycleMode();
@@ -116,6 +127,7 @@
       `Bridge module freshness: ${bridgeModuleFreshnessText(bridgeDiag.moduleDetails)}`,
       `Bridge module duration: ${bridgeModuleDurationText(bridgeDiag.moduleDetails)}`,
       `Bridge organization discovery: ${bridgeOrganizationDiscoveryText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge 24h capture reuse: ${bridgeCaptureReuseText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot attribution: ${bridgeDiag.snapshotPerformance ? `total ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.totalMs)} · critical ${bridgeDiag.snapshotPerformance.criticalPath || '—'} ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.criticalPathMs)} · slowest ${bridgeDiag.snapshotPerformance.slowestTask || '—'} ${snapshotPerformanceMs(bridgeDiag.snapshotPerformance.slowestTaskMs)}` : '—'}`,
       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,

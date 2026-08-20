@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.event.pull_request.title == 'SimCore v0.63.53 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.54 release command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
@@ -29,9 +29,9 @@ jobs:
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
           VERSION="$(sed -n 's#^//@version[[:space:]]*##p' plugins/simcore/latest.js | head -n 1)"
-          if [[ "$HEAD_SHA" == "ffe91cb5b1ad52fd3d07e0f2d4bc08128dd4bd8f" && "$VERSION" == "0.63.52" ]]; then
+          if [[ "$HEAD_SHA" == "3659464f17b60a0ba200172d7b49c8af32075706" && "$VERSION" == "0.63.53" ]]; then
             echo 'mode=patch' >> "$GITHUB_OUTPUT"
-          elif [[ "$VERSION" == "0.63.53" ]]; then
+          elif [[ "$VERSION" == "0.63.54" ]]; then
             echo 'mode=already-current' >> "$GITHUB_OUTPUT"
           else
             echo "unexpected release state: head=$HEAD_SHA version=$VERSION" >&2
@@ -43,27 +43,31 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
-          git show origin/main:scripts/simcore-06353-release.py > /tmp/simcore-06353-release.py
-          python3 -m py_compile /tmp/simcore-06353-release.py
+          git show origin/main:scripts/simcore-06354-release.py > /tmp/simcore-06354-release.py
+          python3 -m py_compile /tmp/simcore-06354-release.py
 
       - name: Patch production source
         if: steps.state.outputs.mode == 'patch'
-        run: python3 /tmp/simcore-06353-release.py
+        run: python3 /tmp/simcore-06354-release.py
 
-      - name: Validate v0.63.53 production source
+      - name: Validate v0.63.54 production source
         shell: bash
         run: |
           set -euo pipefail
           node --check plugins/simcore/latest.js
           node --check plugins/simcore/install.js
           cmp -s plugins/simcore/latest.js plugins/simcore/install.js
-          grep -q '^//@version 0.63.53$' plugins/simcore/latest.js
-          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.53';" plugins/simcore/latest.js
+          grep -q '^//@version 0.63.54$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.63.54';" plugins/simcore/latest.js
+          grep -q 'v0.63.54 Safe-Envelope Structural Boundary Reconcile' plugins/simcore/latest.js
+          grep -q 'buildSafeEnvelopeBoundaryConfirmation' plugins/simcore/latest.js
+          grep -q "SAFE_BOUNDARY_CONFIRMED" plugins/simcore/latest.js
+          grep -q "CANONICAL_BOUNDARY" plugins/simcore/latest.js
+          grep -q "COMMUNITY_TO_KNOWLEDGE" plugins/simcore/latest.js
+          grep -q 'Safe-envelope reconcile:' plugins/simcore/latest.js
+          grep -q 'Safe-envelope boundary:' plugins/simcore/latest.js
           grep -q 'v0.63.53 Boundary-Normalized Envelope Recovery' plugins/simcore/latest.js
-          grep -q 'buildBoundaryEnvelopeCandidates' plugins/simcore/latest.js
           grep -q "BOUNDARY_CONFIRMED_SUFFIX" plugins/simcore/latest.js
-          grep -q 'freshEnvelopeBoundaryDelta' plugins/simcore/latest.js
-          grep -q 'Envelope boundary:' plugins/simcore/latest.js
           grep -q "REPRESENTATION_DRIFT_CORRELATED" plugins/simcore/latest.js
           grep -q "USER_EDIT_CANDIDATE" plugins/simcore/latest.js
           grep -q 'FRESH_CONFIRMED_SUFFIX' plugins/simcore/latest.js
@@ -90,16 +94,16 @@ jobs:
           git config user.name 'hanmiyoo10-alt'
           git config user.email 'hanmiyoo10@gmail.com'
           git add plugins/simcore/latest.js plugins/simcore/install.js
-          git commit -m 'release: SimCore v0.63.53 Boundary-Normalized Envelope Recovery'
+          git commit -m 'release: SimCore v0.63.54 Safe-Envelope Structural Boundary Reconcile'
           git push origin HEAD:release-simcore
 
       - name: Confirm idempotent current state
         if: steps.state.outputs.mode == 'already-current'
-        run: echo 'SimCore v0.63.53 is already the current production release; validation still ran.'
+        run: echo 'SimCore v0.63.54 is already the current production release; validation still ran.'
 
   memory-sync:
     needs: release
-    if: github.event.pull_request.title == 'SimCore v0.63.53 release command'
+    if: github.event.pull_request.title == 'SimCore v0.63.54 release command'
     runs-on: ubuntu-latest
     concurrency:
       group: repo-main-write

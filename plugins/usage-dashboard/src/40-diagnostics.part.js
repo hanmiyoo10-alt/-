@@ -23,7 +23,7 @@
     if (!cli) return '—';
     const runs = Number(cli.runs || 0);
     const queued = Number(cli.queuedRuns || 0);
-    return `runs ${runs} · queued ${queued} · queue avg ${snapshotPerformanceMs(cli.queueWaitAvgMs)} · max ${snapshotPerformanceMs(cli.queueWaitMaxMs)} · exec avg ${snapshotPerformanceMs(cli.executionAvgMs)} · max ${snapshotPerformanceMs(cli.executionMaxMs)} · slowest ${cli.slowestLabel || '—'} ${snapshotPerformanceMs(cli.slowestTotalMs)}`;
+    return `limit ${num(cli.limit) ? Number(cli.limit) : '—'} · peak active ${num(cli.peakActive) ? Number(cli.peakActive) : '—'} · runs ${runs} · queued ${queued} · queue avg ${snapshotPerformanceMs(cli.queueWaitAvgMs)} · max ${snapshotPerformanceMs(cli.queueWaitMaxMs)} · exec avg ${snapshotPerformanceMs(cli.executionAvgMs)} · max ${snapshotPerformanceMs(cli.executionMaxMs)} · slowest ${cli.slowestLabel || '—'} ${snapshotPerformanceMs(cli.slowestTotalMs)}`;
   }
 
   function bridgeSnapshotCounterText(value, keys) {

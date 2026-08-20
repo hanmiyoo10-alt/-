@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.55
+//@version 3.0.0-alpha.5.56
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.55';
+  const VERSION = '3.0.0-alpha.5.56';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.9';
+  const REQUIRED_BRIDGE_VERSION = '1.6.10';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -2428,7 +2428,7 @@ async function importLegacyTodayBaselines() {
     if (!cli) return '—';
     const runs = Number(cli.runs || 0);
     const queued = Number(cli.queuedRuns || 0);
-    return `runs ${runs} · queued ${queued} · queue avg ${snapshotPerformanceMs(cli.queueWaitAvgMs)} · max ${snapshotPerformanceMs(cli.queueWaitMaxMs)} · exec avg ${snapshotPerformanceMs(cli.executionAvgMs)} · max ${snapshotPerformanceMs(cli.executionMaxMs)} · slowest ${cli.slowestLabel || '—'} ${snapshotPerformanceMs(cli.slowestTotalMs)}`;
+    return `limit ${num(cli.limit) ? Number(cli.limit) : '—'} · peak active ${num(cli.peakActive) ? Number(cli.peakActive) : '—'} · runs ${runs} · queued ${queued} · queue avg ${snapshotPerformanceMs(cli.queueWaitAvgMs)} · max ${snapshotPerformanceMs(cli.queueWaitMaxMs)} · exec avg ${snapshotPerformanceMs(cli.executionAvgMs)} · max ${snapshotPerformanceMs(cli.executionMaxMs)} · slowest ${cli.slowestLabel || '—'} ${snapshotPerformanceMs(cli.slowestTotalMs)}`;
   }
 
   function bridgeSnapshotCounterText(value, keys) {

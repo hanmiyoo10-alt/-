@@ -166,7 +166,8 @@ for (const file of [
   assert.ok(!/^\s*push:/m.test(text), `${file} must not auto-run on push`);
   assert.ok(!/^\s*pull_request:/m.test(text), `${file} must not auto-run on PR`);
   assert.match(text, /contents: read/, `${file} should be read-only`);
-  assert.ok(!text.includes('release-usage-dashboard'), `${file} must not retain release write commands`);
+  assert.ok(!/contents:\s*write/.test(text), `${file} must not retain write permission`);
+  assert.ok(!text.includes('git push origin HEAD:release-usage-dashboard'), `${file} must not retain release push commands`);
 }
 
 const workflow = fs.readFileSync(workflowPath, 'utf8');

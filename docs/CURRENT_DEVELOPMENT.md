@@ -35,7 +35,7 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.63.54` is stable in the current long-chat validation run.
+`v0.63.55` is the current production release. Static release gates passed; real long-chat validation of the new request-side fast path is pending.
 
 Observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -82,15 +82,15 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-The next release should target this **next-turn false manual-edit rebuild**, not broaden output normalization.
+v0.63.55 now targets this **next-turn false manual-edit rebuild** directly. The next task is to validate that confirmed Fresh carryover takes the fast path while genuine user edits still rebuild.
 
 ---
 
-# 2. Immediate Next Release
+# 2. Current Validation Release
 
 ## v0.63.55 — Representation Fast Reconcile
 
-Status: **NEXT VALIDATED RELEASE CANDIDATE**
+Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
 
 ### Goal
 
@@ -164,17 +164,15 @@ The fast path may run only when all required provenance is available and all of 
 7. Edit attribution resolves to `REPRESENTATION_DRIFT_CORRELATED` / `FRESH_EXACT_CARRYOVER`.
 8. No explicit user-edit evidence supersedes the representation evidence.
 
-If every gate passes, reconcile the expected previous representation to the already-known Fresh identity without running the expensive full manual-edit reconstruction.
+If every gate passes, accept the already-recorded Fresh identity as a request-side representation alias for that exact slot/location and skip the expensive full manual-edit reconstruction. The canonical CoreSession state is intentionally left untouched.
 
 ### Desired diagnostic shape
 
 ```text
-Edit reconcile: REPRESENTATION_FAST_RECONCILED · <small cost>
+Edit reconcile: REPRESENTATION_FAST_RECONCILED · <small cost> · snapshot UNCHANGED · representation fresh-exact-carryover
 Prior representation: OUTPUT_MISMATCH
 Edit origin: REPRESENTATION_DRIFT_CORRELATED
 Edit delta: vs canonical <delta> · vs fresh +0 · shape FRESH_EXACT_CARRYOVER
-Representation reconcile: ADOPTED_FRESH
-persistent NONE
 ```
 
 Exact naming may change during implementation, but the diagnostic must make it obvious that:
@@ -272,7 +270,7 @@ Objectives:
 
 Planned work:
 
-- **A1 / v0.63.55:** Representation Fast Reconcile.
+- **A1 / v0.63.55:** Representation Fast Reconcile — deployed; real long-chat validation pending.
 - **A2:** If needed, improve representation-drift diagnostics for cases that do not exactly match a known Fresh fingerprint.
 - **A3:** Only after repeated evidence, consider whether specific `SILENT_COMPAT` representation families deserve their own narrowly proven output-side reconcile. Do not infer this from the `-80` case alone.
 
@@ -709,6 +707,38 @@ Only one canonical-derived `\n\n → \n` structural variant may be confirmed, an
 
 Ordinary long-chat regression check passed; natural special-path activation remains pending.
 
+## v0.63.55 — Representation Fast Reconcile
+
+Added a request-side fast reconcile for one fully proven representation case:
+
+```text
+previous output = OUTPUT_MISMATCH
+current visible == prior FRESH_CHAT EXACT
+same assistant slot/location provenance
+live CoreSession still anchored to prior canonical identity
+```
+
+When all gates hold, SimCore reports `REPRESENTATION_FAST_RECONCILED`, keeps the canonical state untouched, performs no snapshot write, and skips the full manual-edit rebuild. Any missing/stale/third representation still falls back to the existing path.
+
+Frozen positive control:
+
+```text
+genuine user edit
+current != prior canonical
+current != prior Fresh
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT
+```
+
+Release identity:
+
+```text
+release-simcore commit 6156685a3edf0ec0c5017900a82990d4f17dfb49
+production blob 8c42851df34831465403d12fc57c7499923bdbc6
+```
+
+Real long-chat activation remains the current validation target.
+
 ## Repository Product Root Isolation — Phase 1
 
 The repository now has explicit product ownership roots while preserving compatibility runtime paths:
@@ -739,13 +769,18 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-v0.63.55 — Representation Fast Reconcile
+Validate v0.63.55 — Representation Fast Reconcile in natural long chat
 ```
 
-Current reason:
+Current success condition:
 
 ```text
-confirmed Fresh exact carryover after OUTPUT_MISMATCH
-→ false MANUAL_EDIT_REBUILT
-→ 4.091 s and 6.257 s observed request-delay cases
+prior OUTPUT_MISMATCH + current == prior FRESH_CHAT EXACT
+→ REPRESENTATION_FAST_RECONCILED
+→ snapshot UNCHANGED
+→ no 4–6 s MANUAL_EDIT_REBUILT
+
+genuine user edit
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT preserved
 ```

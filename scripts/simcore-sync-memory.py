@@ -17,6 +17,7 @@ manifest['release_commit'] = release_commit
 manifest['release_blob'] = release_blob
 priority_by_version = {
     '0.63.54': 'SAFE_ENVELOPE_STRUCTURAL_BOUNDARY_RECONCILE_VALIDATION',
+    '0.63.55': 'REPRESENTATION_FAST_RECONCILE_VALIDATION',
 }
 if version in priority_by_version:
     manifest['current_priority'] = priority_by_version[version]

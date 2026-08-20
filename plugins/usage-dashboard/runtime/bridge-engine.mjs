@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.13';
+const VERSION = '1.6.14';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -24,6 +24,7 @@ const CAPTURE_TAP_FILE = path.join(CONFIG_DIR, 'capture-orgs.cjs');
 const CACHE_TTL = {
   orgs: 30_000,
   accountCapture: 30_000,
+  creditsBootstrap: 30_000,
   devpassStatus: 30_000,
   'activity:24h': 60_000,
   'activity:7d': 300_000,
@@ -1183,6 +1184,10 @@ async function loadAccountCapture() {
   return cached('accountCapture', async () => captureAccountDetailsViaCliSession('24h'));
 }
 
+async function loadCreditsBootstrap() {
+  return cached('creditsBootstrap', async () => runCli(['credits', '--json']));
+}
+
 async function cached(name, loader) {
   const ttl = CACHE_TTL[name]
     ?? (name.startsWith('usage:') && name.endsWith(':24h') ? 60_000 : null)
@@ -1214,7 +1219,7 @@ async function cached(name, loader) {
   const gate = circuitBeforeLoad(name);
   if (!gate.allowed) {
     const ageMs = current ? now - current.at : Infinity;
-    if (current && name !== 'accountCapture' && ageMs <= CACHE_STALE_MAX_MS) {
+    if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS) {
       cacheStats.staleFallbacks += 1;
       noteSnapshotCounter('cache', 'staleFallbacks');
       return staleClone(current.value, ageMs, gate.error);
@@ -1242,7 +1247,7 @@ async function cached(name, loader) {
       noteSnapshotCounter('cache', 'errors');
       const circuit = circuitFailure(name, error);
       const ageMs = current ? Date.now() - current.at : Infinity;
-      const allowStale = name !== 'accountCapture';
+      const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';
       if (allowStale && current && ageMs <= CACHE_STALE_MAX_MS) {
         cacheStats.staleFallbacks += 1;
       noteSnapshotCounter('cache', 'staleFallbacks');
@@ -1937,6 +1942,39 @@ function mergeUsageActivities(items, range = '24h') {
   };
 }
 
+function creditsBootstrapCandidate(rawCredits, requestedOrgId = '') {
+  const rows = firstArray(rawCredits, ['organizations', 'credits', 'data', 'items', 'results']);
+  const ids = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(pick(row, ['id', 'organizationId', 'organization_id', 'orgId', 'org_id'], '') || '').trim();
+    const amount = finite(pick(row, ['credits', 'balance', 'creditBalance', 'credit_balance', 'remaining', 'amount'], null));
+    const explicitKind = pick(row, ['kind', 'type'], null);
+    const explicitStatus = pick(row, ['status'], null);
+    if (!id || amount === null) continue;
+    if (explicitKind !== null && String(explicitKind) !== 'default') continue;
+    if (explicitStatus !== null && String(explicitStatus) === 'deleted') continue;
+    if (!ids.includes(id)) ids.push(id);
+  }
+  const requestedId = String(requestedOrgId || '').trim();
+  if (requestedId && ids.includes(requestedId)) return { id: requestedId, mode: 'requested-exact' };
+  if (ids.length === 1) return { id: ids[0], mode: 'single-credit-id' };
+  return null;
+}
+
+function startCreditsUsageEarly(rawCreditsPromise, requestedOrgId = '') {
+  if (CLI_CONCURRENCY < 2) return Promise.resolve(null);
+  return Promise.resolve(rawCreditsPromise)
+    .then((rawCredits) => {
+      const candidate = creditsBootstrapCandidate(rawCredits, requestedOrgId);
+      if (!candidate) return null;
+      return usageForOrg({ id: candidate.id, kind: 'default', status: 'active' }, '24h')
+        .then(() => candidate.id)
+        .catch(() => null);
+    })
+    .catch(() => null);
+}
+
 async function loadOrgs() {
   const value = await cached('orgs', async () => {
     // Account capture already runs the official `orgs list --json` command and
@@ -1950,7 +1988,7 @@ async function loadOrgs() {
       .catch((error) => ({ captured: null, error }));
     const [captureResult, rawCredits] = await Promise.all([
       capturePromise,
-      runCli(['credits', '--json']),
+      loadCreditsBootstrap(),
     ]);
 
     const captured = captureResult.captured;
@@ -2353,6 +2391,8 @@ async function snapshotAttributed(profile = 'full', creditsOrgId = '', attributi
   // Organization discovery is no longer a hard root dependency. DevPass status
   // and project-scoped Activity can remain useful while Credits/org discovery is
   // stale or temporarily unavailable.
+  const creditsBootstrapPromise = loadCreditsBootstrap();
+  startCreditsUsageEarly(creditsBootstrapPromise, requestedCreditsOrgId);
   const orgsResult = await Promise.allSettled([timedSnapshotTask('organizations', () => loadOrgs())]);
   const orgs = orgsResult[0].status === 'fulfilled'
     ? orgsResult[0].value

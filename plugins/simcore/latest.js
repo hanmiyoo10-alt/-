@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.55
+//@version 0.63.56
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -22,10 +22,19 @@
 // - Community: COMMUNITY parsing/platform-family/group taxonomy only
 // - Reaction: reaction parser, per-family historical maxima, normalization
 // - Structure: validation/integrity/state-commit safety (judge; does not repair)
-// - Recovery: cold-path envelope/output/edit/bootstrap/legacy repair
+// - Output Compat: output envelope compatibility/canonicalization + bounded Fresh-confirmation metadata
+// - Bootstrap Migration: history bootstrap + legacy migration/repair coordination
+// - Recovery: M2 compatibility facade preserving the v0.63.55 public recovery API
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.56 M2-1 Recovery Boundary Split:
+// - Begins the 2.0M Major M2 mechanical boundary refactor after v0.63.55 Representation Fast Reconcile passed real long-chat validation
+// - Splits the former Recovery implementation into output-compat (envelope/tail/Fresh-confirmation candidate logic) and bootstrap-migration (history bootstrap + legacy repair) while preserving every moved function body verbatim
+// - Keeps Recovery as a compatibility facade with the exact v0.63.55 exported API, so Session/runtime call sites and request/output sequencing remain unchanged in M2-1
+// - No representation/edit-reconcile algorithm is moved yet; v0.63.55 REPRESENTATION_FAST_RECONCILED and genuine USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT behavior remain frozen regression controls
+// - No state schema, storage key/call, host API, network/timer, request-history mutation, provider-cache claim, prompt placement, generation semantic, Structure/COMMUNITY, Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence behavior change
 //
 // v0.63.55 Representation Fast Reconcile:
 // - Follows two same-runtime production cases where an unedited previous assistant was recorded as CANONICAL!=FRESH_CHAT, the next request visible assistant matched the prior FRESH_CHAT exactly, Edit Origin classified REPRESENTATION_DRIFT_CORRELATED, and the existing manual-edit path spent 4.091 s / 6.257 s rebuilding state
@@ -530,7 +539,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.55';
+const SIMCORE_RUNTIME_VERSION = '0.63.56';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -551,7 +560,7 @@ const SimCore = (() => {
 })();
 
 SimCore.define("contracts", function (require, module, exports) {
-const MODULE_CONTRACT_VERSION = 1;
+const MODULE_CONTRACT_VERSION = 2;
 const MODULE_CONTRACTS = Object.freeze({
   contracts: Object.freeze({ owns: 'module responsibility metadata', excludes: 'runtime policy or state mutation' }),
   kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
@@ -566,7 +575,9 @@ const MODULE_CONTRACTS = Object.freeze({
   community: Object.freeze({ owns: 'COMMUNITY parsing and platform taxonomy', excludes: 'reaction-number mutation or prose generation' }),
   reaction: Object.freeze({ owns: 'reaction parsing, per-family floors and deterministic normalization', excludes: 'community prose or platform selection' }),
   structure: Object.freeze({ owns: 'output validation and integrity judgement', excludes: 'repair or semantic rewriting' }),
-  recovery: Object.freeze({ owns: 'cold-path deterministic repair/bootstrap/legacy recovery', excludes: 'normal hot-path policy ownership' }),
+  'output-compat': Object.freeze({ owns: 'output envelope compatibility/canonicalization and Fresh-confirmation candidate metadata', excludes: 'history bootstrap, manual edit attribution, persistent raw body' }),
+  'bootstrap-migration': Object.freeze({ owns: 'history bootstrap and legacy migration/repair coordination', excludes: 'ordinary output compatibility or manual edit attribution' }),
+  recovery: Object.freeze({ owns: 'M2 compatibility facade over output-compat + bootstrap-migration', excludes: 'new policy ownership; facade may shrink after callers migrate' }),
   prompt: Object.freeze({ owns: 'runtime prompt serialization', excludes: 'persistent semantic state ownership, host/storage I/O, creative decisions' }),
   session: Object.freeze({ owns: 'pipeline orchestration and commit sequencing', excludes: 'prompt wording ownership or creative/semantic decisions' }),
   ops: Object.freeze({ owns: 'performance and diagnostic formatting', excludes: 'generation/state policy' }),
@@ -3147,7 +3158,7 @@ function validateStructure(content, pending) {
 module.exports = { TIMESTAMP_RE, responseEnvelopeScope, responseEnvelopeIntegrity, stateCommitSafety, validateStructure };
 });
 
-SimCore.define("recovery", function (require, module, exports) {
+SimCore.define("output-compat", function (require, module, exports) {
 const kernel = require('./kernel');
 const lifecycle = require('./lifecycle');
 const time = require('./time');
@@ -3448,6 +3459,24 @@ function prepareOutput(content, pending) {
   return { content: text, envelope };
 }
 
+module.exports = {
+  classifyPreamble,
+  buildSafeEnvelopeBoundaryConfirmation,
+  canonicalizeResponseEnvelope,
+  normalizeTailPlacement,
+  prepareOutput,
+};
+});
+
+SimCore.define("bootstrap-migration", function (require, module, exports) {
+const kernel = require('./kernel');
+const lifecycle = require('./lifecycle');
+const time = require('./time');
+const community = require('./community');
+const reaction = require('./reaction');
+const outputCompat = require('./output-compat');
+const prepareOutput = outputCompat.prepareOutput;
+
 function bootstrapFromHistory(baseState, messages, endIndex = -1) {
   const state = kernel.reconcileState(kernel.clone(baseState || kernel.initialState()));
   if (state.historyBootstrapped) return { state, changed: false, stats: state.historyBootstrapStats };
@@ -3596,15 +3625,27 @@ async function repairLatestGlobalFloorContamination(store, current, outIndex, ra
 }
 
 module.exports = {
-  classifyPreamble,
-  buildSafeEnvelopeBoundaryConfirmation,
-  canonicalizeResponseEnvelope,
-  normalizeTailPlacement,
-  prepareOutput,
   bootstrapFromHistory,
   repairLegacyAgeClock,
   repairLegacyClockState,
   repairLatestGlobalFloorContamination,
+};
+});
+
+SimCore.define("recovery", function (require, module, exports) {
+const outputCompat = require('./output-compat');
+const bootstrapMigration = require('./bootstrap-migration');
+
+module.exports = {
+  classifyPreamble: outputCompat.classifyPreamble,
+  buildSafeEnvelopeBoundaryConfirmation: outputCompat.buildSafeEnvelopeBoundaryConfirmation,
+  canonicalizeResponseEnvelope: outputCompat.canonicalizeResponseEnvelope,
+  normalizeTailPlacement: outputCompat.normalizeTailPlacement,
+  prepareOutput: outputCompat.prepareOutput,
+  bootstrapFromHistory: bootstrapMigration.bootstrapFromHistory,
+  repairLegacyAgeClock: bootstrapMigration.repairLegacyAgeClock,
+  repairLegacyClockState: bootstrapMigration.repairLegacyClockState,
+  repairLatestGlobalFloorContamination: bootstrapMigration.repairLatestGlobalFloorContamination,
 };
 });
 

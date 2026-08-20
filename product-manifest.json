@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.54",
-  "release_name": "Safe-Envelope Structural Boundary Reconcile",
+  "production_version": "0.63.55",
+  "release_name": "Representation Fast Reconcile",
   "release_branch": "release-simcore",
-  "release_commit": "b510ea2e8e9fc43c060cb58cce82e60a17529647",
-  "release_blob": "e47f7e3c121f82558cab05bda45d827027ea4ba2",
+  "release_commit": "6156685a3edf0ec0c5017900a82990d4f17dfb49",
+  "release_blob": "8c42851df34831465403d12fc57c7499923bdbc6",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -13,7 +13,7 @@
   },
   "guideline": "docs/SIMCORE_GUIDELINES.md",
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
-  "current_priority": "SAFE_ENVELOPE_STRUCTURAL_BOUNDARY_RECONCILE_VALIDATION",
+  "current_priority": "REPRESENTATION_FAST_RECONCILE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

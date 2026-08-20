@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.54`
-- Release: `Safe-Envelope Structural Boundary Reconcile`
+- Version: `0.63.55`
+- Release: `Representation Fast Reconcile`
 - Release branch: `release-simcore`
-- Release commit: `b510ea2e8e9fc43c060cb58cce82e60a17529647`
-- Release blob: `e47f7e3c121f82558cab05bda45d827027ea4ba2`
+- Release commit: `6156685a3edf0ec0c5017900a82990d4f17dfb49`
+- Release blob: `8c42851df34831465403d12fc57c7499923bdbc6`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `SAFE_ENVELOPE_STRUCTURAL_BOUNDARY_RECONCILE_VALIDATION`
+- Primary optimization target: `REPRESENTATION_FAST_RECONCILE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.

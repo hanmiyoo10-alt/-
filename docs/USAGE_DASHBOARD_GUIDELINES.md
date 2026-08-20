@@ -67,6 +67,68 @@ Current release implementation: `3.0.0-alpha.5.60 — Monotonic Release Publish 
 
 Next step after the 5.60 real-device diagnostic: verify update/health with unchanged Engine 1.6.13, then use the preserved 5.59 timeline evidence to choose the next performance repair in the following design turn.
 
+## Long-term update roadmap
+
+This roadmap is durable strategic memory for future chats and development sessions. It records where Local Usage Dashboard is trying to go, not a promise that releases must occur in a fixed order or under preassigned version numbers.
+
+**Evidence outranks roadmap order.** The next release must always be chosen from the actual production source and the latest real-device diagnostic evidence. Do not make evidence-free changes merely to advance a roadmap phase, and do not rework behavior that is already healthy.
+
+### Phase A — Performance and scheduling
+
+Goal: make the dashboard refresh materially faster without sacrificing correctness, source fidelity, or device stability.
+
+- Continue from the verified 5.59 scheduling timeline rather than guessing at bottlenecks.
+- Reduce avoidable serialized snapshot dependencies and idle CLI-lane time where source dependencies permit safe overlap.
+- Preserve the hard CLI concurrency cap, rollback path, timeout, cache/circuit semantics and shared capture behavior unless later evidence specifically justifies changing them.
+- Measure snapshot, manager-probe, persistence and render phases independently; optimize only the phase shown to dominate.
+- Validate each performance change on the real Android/PocketRisu environment before choosing the next repair.
+
+### Phase B — Data fidelity and DevPass parity
+
+Goal: complete migration of useful DevPass usage information into Local Usage Dashboard using only real source data.
+
+- Preserve exact Request Ledger identity and observed provider/model/service-tier fields.
+- Expand Cache Read/Write/TTL observability only when the actual source exposes those fields.
+- Keep UNKNOWN distinct from known zero; never infer missing Write/TTL/token values from provider, price, model identity or other heuristics.
+- Preserve Credits, DevPass account-cycle and usage semantics while adding parity features.
+- Prefer provenance-rich diagnostics so every displayed value can be traced to the source that actually supplied it.
+
+### Phase C — UX and feature parity
+
+Goal: make Local Usage Dashboard sufficient as the primary local usage view after data/runtime behavior is proven stable.
+
+- Complete remaining useful DevPass-widget parity without duplicating or destabilizing already-working features.
+- Keep the usage-first mobile layout, navigation persistence and floating-widget interaction stable unless device evidence shows a concrete UX problem.
+- Simplify diagnostics presentation when it can be done without removing evidence needed for development and support.
+- Continue using partial rendering, DOM deduplication and closed-panel skips to avoid turning UI work into the refresh bottleneck.
+
+### Phase D — Stability, recovery and release engineering
+
+Goal: make updates boring, monotonic and recoverable.
+
+- Keep PocketRisu `+` as the normal update path; routine releases must not require manual Termux edits.
+- Preserve Bridge lifecycle, Manager self-update, Runtime Recovery Fidelity and historical-error visibility.
+- Maintain the shared `repo-main-write` lock and 5.60 monotonic release guard so stale jobs cannot downgrade production.
+- Continue shrinking release authority and accidental cross-product coupling when doing so is evidence-backed and low risk.
+- Grow regressions around every production incident so previously fixed failures cannot silently return.
+
+### Phase E — RC and stable readiness
+
+Goal: move from alpha experimentation to a deliberately frozen, supportable release when evidence says the product is ready.
+
+- Define RC entry from measured stability, parity and update reliability rather than calendar time.
+- Freeze proven contracts before RC; identify remaining UNKNOWN fields explicitly instead of hiding them.
+- Run representative real-device validation across update, resume/visibility, refresh, cache fidelity, recovery and long-lived runtime behavior.
+- Enter stable only when remaining issues are understood and no known blocker requires broad architectural churn.
+
+### Roadmap maintenance contract
+
+- Update this roadmap when a phase is materially completed, invalidated by new source evidence, or split into a better long-term direction.
+- Keep roadmap edits strategic. Release-specific timings, current bottlenecks and immediate next candidates belong in `Current development memory`.
+- A completed roadmap item should be preserved as historical context or clearly marked complete rather than silently deleted when that history explains current architecture.
+- `P14 Project Guidelines Memory` must fail if this roadmap section or its evidence-first/UNKNOWN/stable-update principles disappear.
+- New chats should read this roadmap together with the current production snapshot and current development memory before proposing the next release.
+
 ## 0. Source of truth
 
 Use this priority order:

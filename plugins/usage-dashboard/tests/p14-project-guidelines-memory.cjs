@@ -25,4 +25,16 @@ assert.ok(guidelines.includes('One release, one primary goal'));
 assert.ok(guidelines.includes('Each version update must also refresh this document\'s Current production snapshot.'));
 assert.ok(guidelines.includes('Do not fabricate unknown data.'));
 
-console.log(`usage-dashboard P14 project memory: OK · ${productVersion} / engine ${engineVersion} / manager ${managerVersion}`);
+// Durable strategic memory must survive chat/session changes and routine release edits.
+assert.ok(guidelines.includes('## Long-term update roadmap'), 'long-term roadmap section must remain present');
+assert.ok(guidelines.includes('Evidence outranks roadmap order.'), 'roadmap must remain subordinate to current evidence');
+assert.ok(guidelines.includes('### Phase A — Performance and scheduling'));
+assert.ok(guidelines.includes('### Phase B — Data fidelity and DevPass parity'));
+assert.ok(guidelines.includes('### Phase C — UX and feature parity'));
+assert.ok(guidelines.includes('### Phase D — Stability, recovery and release engineering'));
+assert.ok(guidelines.includes('### Phase E — RC and stable readiness'));
+assert.ok(guidelines.includes('Keep UNKNOWN distinct from known zero'), 'roadmap must preserve source-fidelity semantics');
+assert.ok(guidelines.includes('Keep PocketRisu `+` as the normal update path'), 'roadmap must preserve the stable update UX');
+assert.ok(guidelines.includes('New chats should read this roadmap together with the current production snapshot and current development memory before proposing the next release.'));
+
+console.log(`usage-dashboard P14 project memory: OK · ${productVersion} / engine ${engineVersion} / manager ${managerVersion} · long-term roadmap locked`);

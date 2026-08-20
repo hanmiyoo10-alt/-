@@ -1917,6 +1917,8 @@ async function loadOrgs() {
       source = 'LLMGateway CLI';
     }
 
+    if (!organizations.length) throw new Error('No organizations found in CLI output');
+
     if (captured?.devPlanStatus) {
       organizations = enrichDevPassFromStatus(organizations, captured.devPlanStatus);
       if (hasDevPassCycleDetails(organizations)) {

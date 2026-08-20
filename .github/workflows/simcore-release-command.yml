@@ -43,12 +43,12 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
-          git show origin/main:scripts/simcore-06354-release.py > /tmp/simcore-06354-release.py
-          python3 -m py_compile /tmp/simcore-06354-release.py
+          git show origin/main:scripts/simcore-06354-release-v2.py > /tmp/simcore-06354-release-v2.py
+          python3 -m py_compile /tmp/simcore-06354-release-v2.py
 
       - name: Patch production source
         if: steps.state.outputs.mode == 'patch'
-        run: python3 /tmp/simcore-06354-release.py
+        run: python3 /tmp/simcore-06354-release-v2.py
 
       - name: Validate v0.63.54 production source
         shell: bash

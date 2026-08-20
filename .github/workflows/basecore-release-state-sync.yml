@@ -1,0 +1,141 @@
+name: BaseCore release state sync
+
+on:
+  push:
+    branches:
+      - release-basecore
+    paths:
+      - 'plugins/basecore/latest.js'
+      - 'plugins/basecore/install.js'
+  workflow_run:
+    workflows:
+      - 'BaseCore release command'
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-main-write
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main memory branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch production release branch
+        run: git fetch --no-tags origin release-basecore
+
+      - name: Validate production and resolve release identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_COMMIT="$(git rev-parse origin/release-basecore)"
+          LATEST_BLOB="$(git rev-parse origin/release-basecore:plugins/basecore/latest.js)"
+          INSTALL_BLOB="$(git rev-parse origin/release-basecore:plugins/basecore/install.js)"
+          test "$LATEST_BLOB" = "$INSTALL_BLOB"
+
+          git show origin/release-basecore:plugins/basecore/latest.js > /tmp/basecore-latest.js
+          git show origin/release-basecore:plugins/basecore/install.js > /tmp/basecore-install.js
+          node --check /tmp/basecore-latest.js
+          node --check /tmp/basecore-install.js
+          cmp -s /tmp/basecore-latest.js /tmp/basecore-install.js
+
+          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' /tmp/basecore-latest.js | head -n 1)"
+          test -n "$VERSION"
+          RELEASE_NAME="$(VERSION="$VERSION" python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          text = Path('/tmp/basecore-latest.js').read_text(encoding='utf-8')
+          m = re.search(r'^// v' + re.escape(os.environ['VERSION']) + r'\s+(.+?):\s*$', text, re.M)
+          if not m:
+              raise SystemExit('BaseCore release name not found')
+          print(m.group(1).strip())
+          PY
+          )"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "release_blob=$LATEST_BLOB" >> "$GITHUB_OUTPUT"
+
+      - name: Sync BaseCore durable product memory
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_NAME: ${{ steps.release.outputs.release_name }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          RELEASE_BLOB: ${{ steps.release.outputs.release_blob }}
+        run: |
+          set -euo pipefail
+          python3 scripts/basecore-sync-memory.py
+          git diff --check
+
+      - name: Commit synchronized BaseCore memory
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add -- products/basecore/manifest.json products/basecore/CURRENT_DEVELOPMENT.md products/basecore/GUIDELINES.md
+          if git diff --cached --quiet; then
+            echo 'BaseCore durable memory already synchronized.'
+          else
+            git commit -m "docs: sync BaseCore v${VERSION} production memory"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Build BaseCore project-source snapshot
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_NAME: ${{ steps.release.outputs.release_name }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          RELEASE_BLOB: ${{ steps.release.outputs.release_blob }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/basecore-project-source
+          cp products/basecore/manifest.json dist/basecore-project-source/
+          cp products/basecore/README.md dist/basecore-project-source/
+          cp products/basecore/GUIDELINES.md dist/basecore-project-source/
+          cp products/basecore/GOVERNANCE.md dist/basecore-project-source/
+          cp products/basecore/CURRENT_DEVELOPMENT.md dist/basecore-project-source/
+          cp products/basecore/AI_INSTRUCTIONS.md dist/basecore-project-source/
+          cp products/basecore/CORE_RULESET_FRAGMENT.txt dist/basecore-project-source/
+          cat > dist/basecore-project-source/SOURCE_METADATA.json <<META
+          {
+            "product": "BaseCore",
+            "version": "${VERSION}",
+            "release_name": "${RELEASE_NAME}",
+            "release_branch": "release-basecore",
+            "release_commit": "${RELEASE_COMMIT}",
+            "release_blob": "${RELEASE_BLOB}",
+            "canonical_manifest": "products/basecore/manifest.json",
+            "canonical_guideline": "products/basecore/GUIDELINES.md",
+            "canonical_development_memory": "products/basecore/CURRENT_DEVELOPMENT.md",
+            "canonical_instructions": "products/basecore/AI_INSTRUCTIONS.md"
+          }
+          META
+          (cd dist/basecore-project-source && zip -q -r "../BaseCore-v${VERSION}-project-source.zip" .)
+
+      - name: Upload BaseCore project-source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: basecore-project-source-v${{ steps.release.outputs.version }}
+          path: dist/BaseCore-v${{ steps.release.outputs.version }}-project-source.zip
+          if-no-files-found: error
+          retention-days: 90

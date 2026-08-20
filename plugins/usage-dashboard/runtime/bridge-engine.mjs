@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.10';
+const VERSION = '1.6.11';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -61,6 +61,7 @@ function createSnapshotAttribution(profile) {
     startedAt: Date.now(),
     profile: String(profile || 'full'),
     tasks: Object.create(null),
+    organizationDiscovery: null,
     cache: { hits:0, misses:0, joins:0, loads:0, errors:0, staleFallbacks:0 },
     circuits: { opens:0, blocked:0, recoveries:0 },
     cli: {
@@ -150,6 +151,9 @@ function snapshotAttributionSummary(attribution) {
     slowestTask: detailedSlowest ? String(detailedSlowest[0]) : null,
     slowestTaskMs: detailedSlowest ? Number(detailedSlowest[1]) : null,
     tasks: {...tasks},
+    organizationDiscovery: attribution?.organizationDiscovery && typeof attribution.organizationDiscovery === 'object'
+      ? {...attribution.organizationDiscovery}
+      : null,
     cache: {...(attribution?.cache || {})},
     circuits: {...(attribution?.circuits || {})},
     cli: {
@@ -1883,39 +1887,61 @@ function mergeUsageActivities(items, range = '24h') {
 }
 
 async function loadOrgs() {
-  return cached('orgs', async () => {
-    const [rawOrgs, rawCredits] = await Promise.all([
-      runCli(['orgs', 'list', '--json']),
+  const value = await cached('orgs', async () => {
+    // Account capture already runs the official `orgs list --json` command and
+    // safely records the successful /orgs response. Start that capture beside
+    // Credits so the normal path does not launch the same org command twice.
+    // Capture failure is converted to a result object only so the legacy plain
+    // orgs command can remain the fallback. Credits retains its existing hard
+    // failure semantics.
+    const capturePromise = loadAccountCapture()
+      .then((captured) => ({ captured, error: null }))
+      .catch((error) => ({ captured: null, error }));
+    const [captureResult, rawCredits] = await Promise.all([
+      capturePromise,
       runCli(['credits', '--json']),
     ]);
-    let organizations = normalizeOrganizations(rawOrgs, rawCredits);
-    let source = 'LLMGateway CLI';
 
-    // The CLI's public JSON output can intentionally be compact. When DevPass
-    // cycle timestamps are omitted, run the same official CLI command with a
-    // local fetch tap that records only the successful /orgs RESPONSE body.
-    // No request headers, cookies, passwords, or session tokens are recorded or
-    // returned by this bridge.
-    if (!hasDevPassCycleDetails(organizations)) {
-      try {
-        const captured = await loadAccountCapture();
-        const rawFullOrgs = captured?.orgs ?? captured;
-        const richOrganizations = normalizeOrganizations(rawFullOrgs, rawCredits);
-        if (richOrganizations.length) organizations = mergeOrganizations(organizations, richOrganizations);
-        organizations = enrichDevPassFromStatus(organizations, captured?.devPlanStatus ?? null);
-        if (hasDevPassCycleDetails(organizations)) {
-          source = captured?.devPlanStatus
-            ? 'LLMGateway CLI session · /dev-plans/status'
-            : 'LLMGateway CLI session · full /orgs';
-        }
-      } catch (error) {
-        logRateLimited('warn', 'renewal-enrichment', `DevPass renewal enrichment unavailable: ${safeMessage(error)}`);
+    const captured = captureResult.captured;
+    const capturedRawOrgs = captured?.orgs ?? captured;
+    let organizations = normalizeOrganizations(capturedRawOrgs, rawCredits);
+    let source = 'LLMGateway CLI session · captured /orgs + Credits CLI';
+    let discoveryMode = 'capture-primary';
+    let fallbackCount = 0;
+
+    if (!organizations.length) {
+      fallbackCount = 1;
+      discoveryMode = 'plain-orgs-fallback';
+      const rawOrgs = await runCli(['orgs', 'list', '--json']);
+      organizations = normalizeOrganizations(rawOrgs, rawCredits);
+      source = 'LLMGateway CLI';
+    }
+
+    if (captured?.devPlanStatus) {
+      organizations = enrichDevPassFromStatus(organizations, captured.devPlanStatus);
+      if (hasDevPassCycleDetails(organizations)) {
+        source = 'LLMGateway CLI session · /dev-plans/status';
       }
     }
 
-    if (!organizations.length) throw new Error('No organizations found in CLI output');
-    return { organizations, fetchedAt: Date.now(), source };
+    return {
+      organizations,
+      fetchedAt: Date.now(),
+      source,
+      organizationDiscovery: {
+        mode: discoveryMode,
+        fallbackCount,
+        sharedAccountCapture: Boolean(captured),
+        captureErrorCode: captureResult.error ? classifyError(captureResult.error) : null,
+      },
+    };
   });
+
+  const attribution = currentSnapshotAttribution();
+  if (attribution && value?.organizationDiscovery) {
+    attribution.organizationDiscovery = { ...value.organizationDiscovery };
+  }
+  return value;
 }
 
 function usageOrganizations(orgData) {

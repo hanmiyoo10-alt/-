@@ -14,6 +14,7 @@
   "guideline": "docs/SIMCORE_GUIDELINES.md",
   "development_memory": "docs/CURRENT_DEVELOPMENT.md",
   "governance": "docs/SIMCORE_GOVERNANCE.md",
+  "architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md",
   "current_priority": "REPRESENTATION_FAST_RECONCILE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
@@ -21,7 +22,8 @@
     "release_identity": "product-manifest.json",
     "development_principles": "docs/SIMCORE_GUIDELINES.md",
     "current_investigation": "docs/CURRENT_DEVELOPMENT.md",
-    "development_governance": "docs/SIMCORE_GOVERNANCE.md"
+    "development_governance": "docs/SIMCORE_GOVERNANCE.md",
+    "current_architecture_review": "docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md"
   },
   "managed_by": ".github/workflows/simcore-release-state-sync.yml"
 }

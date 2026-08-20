@@ -35,7 +35,7 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.63.55` is the current production release. Static release gates passed and the request-side Representation Fast Reconcile has now passed real long-chat validation.
+`v0.63.56` is the current production release. Static M2-1 release gates passed; real long-chat validation of the mechanical Recovery boundary split is pending. `v0.63.55` Representation Fast Reconcile remains the validated behavioral regression baseline.
 
 Observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -58,7 +58,7 @@ Important interpretation:
 - The following request proved that the visible previous assistant message exactly matched the prior `FRESH_CHAT`, not the prior canonical representation.
 - The resulting `MANUAL_EDIT_REBUILT` consumed `6.257 s`, or `97.2%` of the request preparation time.
 
-## Current highest-value problem
+## Validated precursor problem — v0.63.55
 
 The most expensive confirmed avoidable path is now:
 
@@ -82,7 +82,7 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 has now validated this **next-turn false manual-edit rebuild** fix in natural long chat. The next task is the 2.0M Major M2 mechanical boundary refactor, with the validated fast path and genuine-user-edit behavior frozen as regression controls.
+v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat. M2-1 is now deployed as `v0.63.56`; the current task is to validate that the Recovery boundary split preserves the validated fast path, genuine-user-edit behavior, and ordinary A/B/C operation.
 
 ---
 
@@ -120,7 +120,7 @@ Live validation should first prove ordinary A/C/B turns remain stable and then, 
 
 ## v0.63.55 — Representation Fast Reconcile
 
-Status: **PRODUCTION · VALIDATED REAL LONG-CHAT**
+Status: **SUPERSEDED BY v0.63.56 · VALIDATED REAL LONG-CHAT**
 
 ### Goal
 
@@ -834,7 +834,7 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-2.0M Major M2 — Mechanical Boundary Refactor
+Validate v0.63.56 M2-1 — Recovery Boundary Split in natural long chat
 ```
 
 Current success condition:

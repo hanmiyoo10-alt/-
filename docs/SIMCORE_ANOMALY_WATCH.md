@@ -86,14 +86,17 @@ but two later visible scene timestamps regressed approximately thirteen years:
 
 The user request described activity during the current Wanna One reunion period; it did not request a flashback to 2017. Therefore the visible output contains a real non-monotonic scene-time regression.
 
-There is also a deeper semantic-time inconsistency before the explicit 2017 timestamps appear. The first body section is stamped `2030-08-07`, but its prose describes original debut-era activity and uses the protagonist's 2017 age/state. In other words, the response contains both:
+There is also a deeper semantic-time inconsistency before the explicit 2017 timestamps appear. The first body section is stamped `2030-08-07`, but its prose describes original debut-era activity and resets the protagonist to the earlier-era `15살` state even though that is not the protagonist's age in the current 2030 timeline. This is chronology/state rollback evidence, not a separate content-category anomaly.
+
+In other words, the response contains all three:
 
 ```text
 explicit timestamp regression: 2030 → 2017
 implicit semantic regression:  2030 timestamp + 2017-era body facts
+age/state regression:           current 2030 state → earlier-era 15-year-old state
 ```
 
-The current diagnostic only proves detection of the explicit parsed scene-time regression. It does not show a semantic chronology validator capable of rejecting debut-era facts embedded under a 2030 timestamp.
+The current diagnostic only proves detection of the explicit parsed scene-time regression. It does not show a semantic chronology validator capable of rejecting debut-era facts or age/state resets embedded under a 2030 timestamp.
 
 ### Diagnostic evidence
 
@@ -116,9 +119,9 @@ Warnings: 0
 This proves two distinct outcomes at once:
 
 1. **State continuity safety succeeded.** SimCore did not persist the regressed 2017 scene times as the canonical narrative clock.
-2. **Visible-output continuity failed.** The already-generated 2017 scene timestamps remained in the user-visible response; the guard only prevented state advancement/regression and did not repair or quarantine the visible body.
+2. **Visible-output continuity failed.** The already-generated 2017 scene timestamps and earlier-era semantic state remained in the user-visible response; the guard only prevented state advancement/regression and did not repair or quarantine the visible body.
 
-It does **not** prove that semantic chronology inside a same-timestamp scene is safe. The first 2030-stamped body already contains debut-era semantics, which lie outside what this clock-only repair demonstrated.
+It does **not** prove that semantic chronology inside a same-timestamp scene is safe. The first 2030-stamped body already contains debut-era semantics and an earlier-era age/state reset, which lie outside what this clock-only repair demonstrated.
 
 ### Current classification
 
@@ -128,15 +131,16 @@ confidence: HIGH for symptom
 state corruption: PREVENTED
 visible output repair: NOT PERFORMED
 semantic chronology validation: NOT DEMONSTRATED
+age/state chronology validation: NOT DEMONSTRATED
 M2-1 Recovery attribution: UNPROVEN
 continuity coverage gap: CONFIRMED FOR THIS SAMPLE
 ```
 
-Do not misclassify `Continuity summary: REPAIRED` as complete user-visible repair. In this diagnostic shape, `REPAIRED` means the canonical narrative clock was protected; it does not guarantee that every scene timestamp in the visible output was made monotonic, nor that prose under a current timestamp is semantically anchored to the current era.
+Do not misclassify `Continuity summary: REPAIRED` as complete user-visible repair. In this diagnostic shape, `REPAIRED` means the canonical narrative clock was protected; it does not guarantee that every scene timestamp in the visible output was made monotonic, nor that prose under a current timestamp is semantically anchored to the current era or current character state.
 
 ### Correlation / promotion trigger
 
-If another natural response emits an unrequested scene timestamp earlier than the current narrative floor and diagnostics again show `FLOOR CLAMPED` / `SKIPPED_NON_MONOTONIC`, promote this to an active continuity-output investigation. Also correlate cases where the timestamp stays current but body facts clearly belong to an earlier era.
+If another natural response emits an unrequested scene timestamp earlier than the current narrative floor and diagnostics again show `FLOOR CLAMPED` / `SKIPPED_NON_MONOTONIC`, promote this to an active continuity-output investigation. Also correlate cases where the timestamp stays current but body facts or age/state clearly belong to an earlier era.
 
 Compare:
 
@@ -144,6 +148,7 @@ Compare:
 - every parsed visible scene timestamp;
 - current narrative floor;
 - same-timestamp semantic era cues;
+- age/state continuity cues;
 - `scenes` count;
 - tail disposition;
 - whether the visible response is rewritten, rejected, quarantined, or merely state-clamped.

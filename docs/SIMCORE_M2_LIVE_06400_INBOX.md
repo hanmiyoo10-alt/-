@@ -85,11 +85,11 @@ Warnings: 0
 
 Interpretation: source-fence fail-closed behavior remains intact; M2-2 did not force an unsafe transformed source boundary merely to preserve source reuse.
 
-### Natural v0.64.0 representation mismatch — paired next-turn evidence pending
+### Natural v0.64.0 representation mismatch — paired next-turn evidence
 
-Status: `DIRECT_EVIDENCE / NEXT_TURN_PENDING`
+Status: `REGRESSION_CONTROL / FAST-RECONCILE LIVE GATE PASS`
 
-Request `@2018` → output `@2019`, Mode C:
+Request `@2018` → output `@2019`, Mode C first produced:
 
 ```text
 Prior representation: EXACT
@@ -105,17 +105,74 @@ Stability: OBSERVED
 Warnings: 0
 ```
 
-This is the first natural `CANONICAL != FRESH_CHAT` sample captured after the M2-2 ownership split. Conservative mirror behavior is correct so far. The critical paired gate is the next ordinary request:
+The next ordinary request `@2020` then supplied the required paired proof:
 
 ```text
 Prior representation: OUTPUT_MISMATCH
-current visible == prior FRESH_CHAT exact
-→ Edit origin: REPRESENTATION_DRIFT_CORRELATED
-→ Edit reconcile: REPRESENTATION_FAST_RECONCILED
-→ snapshot UNCHANGED
+mirror: MISMATCH
+canonical 3578:8bd4314
+fresh     3574:5eee8b4
+
+current 3574:5eee8b4
+match FRESH_CHAT
+Edit delta: vs canonical -4 · vs fresh +0
+shape FRESH_EXACT_CARRYOVER
+Edit origin: REPRESENTATION_DRIFT_CORRELATED
+Edit reconcile: REPRESENTATION_FAST_RECONCILED · 0.0 ms
+snapshot UNCHANGED
+representation fresh-exact-carryover
 ```
 
-Do not mark the M2-2 fast-reconcile live gate complete until that next-turn evidence exists.
+Interpretation: the exact v0.63.55 regression control survives the physical M2-2 ownership split in a natural long-chat mismatch. Representation owns the provenance facts, Runtime Mirror remains transport-only, and the prior Fresh carryover is accepted without the old multi-second false manual rebuild. This closes the M2-2 live fast-reconcile gate.
+
+### New output mismatch after successful fast reconcile
+
+Status: `DIRECT_EVIDENCE / CONSERVATIVE PATH PASS SO FAR`
+
+The same `@2020` request produced a new output-side mismatch:
+
+```text
+Output provenance:
+  CANONICAL 4172:b76580f
+  FRESH_CHAT 4148:46b1421
+  Δchars -24
+Output representation: DIFFERENT
+Deferred mirror: OUTPUT_MISMATCH · setChat 0
+Safe-envelope reconcile: REJECTED
+Preamble: THOUGHTS_COMPAT · STRIPPED · SAFE_ENVELOPE_COMPAT
+Representation ownership: REPRESENTATION · ledger 8 · mirror TRANSPORT_ONLY
+Warnings: 0
+```
+
+This is not a regression by itself. Conservative write blocking is correct. A later ordinary request may provide a second natural fast-reconcile pair if its visible prior assistant exactly matches this Fresh representation.
+
+### HOST_PREFIX family reset / local cache collapse
+
+Status: `SUSPECTED HOST-SIDE CHANGE / OBSERVE_ONLY / NON-M2-ATTRIBUTED`
+
+The `@2020` request also produced a sharp cache-topology reset not seen in the preceding same-runtime requests:
+
+```text
+Cache topology: COMMON_PREFIX 0/40 · 0/448,777 chars · 0.0%
+Cache effect: PREFIX_COLLAPSE
+Cache break: PRE_SIMCORE · HOST_PREFIX · @0 system→system
+frontier movement: @37 → @0 · -37 messages / -433,042 chars
+
+Host prefix attribution: DELTA_LOCALIZED
+shape: INSERTION_LIKE
+confidence: MEDIUM
+previous system0 332167:afc9a9b6
+current  system0 336013:57277cd8
+Δchars +3,846
+family 52ee112a → bb4ec352
+RESET_CORRELATED
+
+SimCore contribution: NOT_FIRST_BREAK
+runtime prompt: 2140 chars / 38 lines
+provider cache: UNVERIFIED
+```
+
+Interpretation: a real local prefix-family reset occurred, but the first break is at the host system prefix before the SimCore runtime tail and the SimCore runtime prompt size did not grow. Do not attribute this cache collapse to M2-2 Representation without further evidence. Preserve the +3,846 insertion-like host-prefix change and watch whether the new `bb4ec352` family stabilizes on following requests.
 
 ### SUSPECTED narrative-tail coverage recurrence — separate from M2-2 attribution
 
@@ -141,11 +198,13 @@ Warnings: 0
 
 The following short-C turn used `08:30 PM` as its frame and committed that later time, so no persistent chronology rollback is established by this sample. However, because the RAW body contains explicit elapsed/end-of-performance cues while the A output has no terminal canonical timestamp beyond the opening frame, preserve this as a possible v0.63.58 generation-contract coverage recurrence. Do not attribute it to Representation M2-2 without repeated evidence.
 
+The `@2020` year-summary output is a useful negative control: it is framed at `2030-12-31 11:50 PM` and contains summary statistics rather than an in-scene elapsed/current/end-time progression, so its `FRAME_ONLY` state does not add evidence to the suspected narrative-tail recurrence.
+
 ### Cache / prefix observation during this sequence
 
 Status: `OBSERVE_ONLY`
 
-After the cold-init BASELINE, local prefix telemetry converged to:
+Before the host-prefix family reset, local prefix telemetry had converged to:
 
 ```text
 COMMON_PREFIX ~89.3–89.4% by chars
@@ -156,7 +215,7 @@ Cache break: PRE_SIMCORE · CHAT_HISTORY
 provider cache: UNVERIFIED
 ```
 
-The user separately observed caching on later requests. That observation is compatible with the growing local reuse window, but SimCore telemetry still must not claim provider-cache behavior without provider evidence.
+At `@2020`, the host system prefix changed by +3,846 chars and the local prefix fell to 0%, creating a new cache family baseline. Provider cache behavior remains unverified; only the local topology/family reset is established.
 
 ### Current verdict
 
@@ -166,8 +225,10 @@ cold-init Representation memory behavior          PASS
 ordinary EXACT carryover                          PASS
 SAFE_ENVELOPE_COMPAT exact path                    PASS
 short-C source/evidence fail-closed behavior       PASS
-natural output mismatch conservative handling     PASS SO FAR
-next-turn Representation Fast Reconcile            PENDING
+natural output mismatch conservative handling     PASS
+next-turn Representation Fast Reconcile            PASS — LIVE GATE CLOSED
+new -24 mismatch conservative handling             PASS SO FAR / paired follow-up optional
 possible narrative-tail contract recurrence        SUSPECTED / NON-BLOCKING
+host-prefix +3,846 family reset                    OBSERVED / HOST-SIDE WATCH
 provider cache attribution                         UNVERIFIED
 ```

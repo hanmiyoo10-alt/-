@@ -42,7 +42,75 @@ persisted narrative floor                 remains protected
 M2-1 representation/recovery controls     unchanged
 ```
 
-Until real long-chat evidence arrives, status remains `PENDING_REAL_LONG_CHAT`.
+### Sample 1 — natural C-mode current-era handoff under historical-context pressure
+
+Runtime:
+
+```text
+boot 2026-08-21T04:06:33.115Z
+generation mt2fgh3v-6ti55c
+request @1932 → output @1933
+Mode: C
+```
+
+The immediately preceding source turn was anchored at `2030-09-01 01:00 AM` and contained explicit references to the protagonist's historical debut-age period while also establishing the protagonist's current age/state. The short C request asked only for community reaction to that source.
+
+Observed chronology:
+
+```text
+Narrative clock: SAME
+previous:  2030-09-01 01:00 AM
+frame:     2030-09-01 01:00 AM
+committed: 2030-09-01 01:00 AM
+scenes: 0
+tail: FRAME_ONLY
+Visible chronology: PASS_OR_NOT_APPLICABLE
+```
+
+The generated community response stayed in the current 2030 timeline and continued to treat the old debut-age material as historical reference rather than silently resetting the current character state to the past. No 2017 scene timestamp or current-age rollback appeared.
+
+The rest of the C-mode path remained stable:
+
+```text
+Stability: PASS
+Session load: LOCATION_REUSE
+Edit reconcile: SAME_FAST · 0.0 ms · snapshot UNCHANGED
+Prior representation: EXACT
+Edit origin: NONE
+Output process recovery: 4.0 ms
+CANONICAL == FRESH_CHAT · EXACT
+Deferred mirror: COMMITTED
+Warnings: 0
+Compatibility diagnostics: 0
+Short-C source lock: ON
+Request lineage: CHAIN · root A@1930 · depth 1
+Source handoff: NEW SOURCE
+Evidence mode: DUAL
+Evidence root fence: APPLIED
+Evidence source fence: APPLIED
+Broadcast lifecycle: CLOSED
+```
+
+Frame sequencing also exercised a narrow existing repair without destabilizing chronology:
+
+```text
+RAW frame continuity: volume 75→75 · chapter 13→13 · Chatindex 937→938
+Frame sequence: REPAIRED
+Frame guard: REPAIRED · CHATINDEX_SAME
+final Chatindex: 938
+```
+
+Interpretation: **first positive real-long-chat evidence for v0.63.57 current-timeline authority.** This sample is especially useful because historical age/context was present in the authoritative source, yet the generated C response did not let that historical context replace the current timeline or current character state.
+
+This does **not** yet exercise:
+
+```text
+explicit user-requested flashback/past-scene allowance
+recurrence of a non-monotonic visible scene sequence under v0.63.57
+natural B-mode chronology cross-check
+```
+
+Status therefore remains `PENDING_REAL_LONG_CHAT`; continue naturally without forcing a past scene or malformed chronology.
 
 ## M2-1 — v0.63.56 Recovery Boundary Split
 

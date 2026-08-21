@@ -416,12 +416,12 @@ Verified from the 5.61 device diagnostics on 2026-08-20/21 KST:
 - Stable Readiness stayed `READY`; Bridge Engine `1.6.14` and Bridge Manager `1.2.6` remained healthy with no local runtime errors or failures.
 - Organization discovery stayed `capture-primary · fallback 0 · shared account capture yes`; shared 24h reuse stayed active with dedicated 24h fallback 0.
 - Eligible 3-operation cold samples verified Credits early-start twice. One sample started `usage-24h-model` at 5790ms before organizations ended at 6866ms (about 1.08s overlap); a later sample started usage at 4895ms before organizations ended at 6802ms (about 1.91s overlap).
-- The later eligible sample completed the Bridge snapshot in about 9.21s with `credits 0→4895ms`, `devpass-capture-24h 21→6795ms`, `usage-24h-model 4895→9204ms`, limit 2, peak active 2, runs 3, queued 0.
+- The later eligible sample completed the Bridge snapshot in about 9.21s with `credits 0→4895ms`, `devpass-capture-24h 21→6795ms`, `usage-24h-model 4895→9204ms`, limit 2, peak active 2, runs 3, queued 0. Bridge ran 3 CLI operations in that verified cold sample.
 - Another visibility sample took about 17.17s because long-window analytics work became cold: `usage-30d-model` and `devpass-capture-7d` joined the snapshot; the 7d capture queued about 5.52s behind the two-lane limit. This verified a separate long-window contention shape, not a persistent 5.61 regression.
 - In that 17.17s sample early-start was absent, while later eligible samples re-enabled it. The exact skip reason is UNKNOWN in 5.61 diagnostics and is an explicit 5.62 measurement target.
 - A one-off Manager probe latency of about 4.15s later returned to about 313ms with manager connected/sync none/errors none; no persistent Manager regression is verified.
 - Latest Request Ledger sample was exact 158/163 with 5 bucket rows. Bucket rows remain explicitly lower-fidelity and are not promoted to exact identity.
-- Cache/source fidelity remained intact: missing provider Cache Write/TTL stayed UNKNOWN; no inferred zero or provider-based estimate was introduced.
+- Cache/source fidelity remained intact: missing Write/TTL remained UNKNOWN and was never inferred. Missing provider Cache Write/TTL stayed UNKNOWN; no inferred zero or provider-based estimate was introduced.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 - Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.

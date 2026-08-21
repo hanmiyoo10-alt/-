@@ -422,6 +422,7 @@ Verified from the 5.61 device diagnostics on 2026-08-20/21 KST:
 - A one-off Manager probe latency of about 4.15s later returned to about 313ms with manager connected/sync none/errors none; no persistent Manager regression is verified.
 - Latest Request Ledger sample was exact 158/163 with 5 bucket rows. Bucket rows remain explicitly lower-fidelity and are not promoted to exact identity.
 - Cache/source fidelity remained intact: missing provider Cache Write/TTL stayed UNKNOWN; no inferred zero or provider-based estimate was introduced.
+- Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 - Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
 - Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.

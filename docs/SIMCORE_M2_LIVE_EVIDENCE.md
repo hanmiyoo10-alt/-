@@ -76,6 +76,32 @@ Deferred Mirror unknown representation
 
 Do not infer those live results from CI. The static checkpoint proves source/contract shape only.
 
+## Pre-M2-2 mini patch — v0.63.59 Broadcast End Closure Contract
+
+Production baseline:
+
+```text
+Version: 0.63.59
+Release: Broadcast End Closure Contract
+Release commit: 7c0f6f4a8e0b7e42a5996dc7bacd149f27e3751d
+Release blob: da47e5d8123c0abfe9902f016c84ac758f766032
+```
+
+### Triggering direct long-chat evidence
+
+A natural 24-hour broadcast sequence reached B_END with end authority correctly allowing the explicit closure and unlocking the session. The visible response began at the `08:30 AM` frame and progressed through remaining-time cues to the `09:00 AM` terminal end, but the stored broadcast airtime remained `08:30 AM` because no later canonical terminal timestamp was committed.
+
+The same evidence family also established the intended B_END structural closure as:
+
+```text
+2 COMMUNITY blocks
+× exactly 3 platform sections each
+```
+
+`v0.63.59` therefore requires the terminal current broadcast airtime to be represented by a canonical timestamp line at B_END and makes terminal-time coverage independently diagnosable from end-authority/unlock success. It does not infer arbitrary prose time.
+
+This release is the direct production parent of M2-2. Its behavior is a frozen regression contract during Representation ownership validation.
+
 ## Pre-M2-2 mini patch — v0.63.58 Narrative Tail Time Contract
 
 Production baseline:

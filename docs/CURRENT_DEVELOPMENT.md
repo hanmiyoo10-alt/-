@@ -37,7 +37,7 @@ This block is machine-managed after each production release update.
 
 `v0.64.0` is the current production release and the M2-2 physical checkpoint. It moves bounded CANONICAL / HOST_RAW / FRESH_CHAT representation provenance and exact carryover classification out of Runtime Mirror / the outer shell into a first-class memory-only `representation` module. Runtime Mirror remains the host-facing Fresh observer and strict identity/location/staleness mirror transport boundary. The v0.63.55 representation-fast decision semantics, genuine-user-edit rebuild path, v0.63.56 Recovery split, v0.63.57/.58 timeline contracts, and v0.63.59 Broadcast closure contract remain frozen regression controls. Static/architecture validation passed; real long-chat validation is pending.
 
-Observed in runtime `mt19j4wz-2a7t5e`:
+Historical precursor evidence retained below (not v0.64.0 live validation), observed in runtime `mt19j4wz-2a7t5e`:
 
 ```text
 C                  → EXACT · mirror COMMITTED
@@ -82,7 +82,7 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat. M2-1 remains the active architectural baseline under `v0.63.57`; the current task is to validate the chronology guard while continuing to preserve the validated fast path, genuine-user-edit behavior, and ordinary A/B/C operation.
+v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat and now serves as a frozen regression control. The active checkpoint is M2-2 (`v0.64.0`); the current task is to validate the new Representation ownership boundary while preserving the validated fast path, genuine-user-edit behavior, and ordinary A/B/C operation.
 
 ---
 
@@ -172,9 +172,24 @@ Live gate before M2 advances to Edit Reconcile extraction:
 
 Do not start physical `edit-reconcile` extraction until this checkpoint has direct real-long-chat evidence.
 
+## v0.63.59 — Broadcast End Closure Contract
+
+Status: **SUPERSEDED BY v0.64.0 · DIRECT PARENT / FROZEN REGRESSION CONTRACT**
+
+`v0.63.59` is the direct production parent of M2-2. It closed the B_END terminal-airtime/structure contract before Representation ownership movement resumed.
+
+```text
+Version: 0.63.59
+Release: Broadcast End Closure Contract
+Release commit: 7c0f6f4a8e0b7e42a5996dc7bacd149f27e3751d
+Release blob: da47e5d8123c0abfe9902f016c84ac758f766032
+```
+
+The motivating long-chat B_END showed an explicit allowed broadcast end and visible progression to the terminal airtime while persisted airtime remained at the opening frame. The release requires an explicit canonical terminal timestamp for B_END and keeps the COMMUNITY closure contract at exactly two blocks with three platform sections each. M2-2 does not alter this behavior.
+
 ## v0.63.58 — Narrative Tail Time Contract
 
-Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+Status: **SUPERSEDED BY v0.64.0 · HISTORICAL CONTRACT / REGRESSION EVIDENCE**
 
 Direct triggering evidence came from a non-broadcast live-scene turn that began with a canonical `01:00 AM` frame but explicitly reached and ended at `03:00 AM` only in prose. The renderer emitted no later canonical timestamp line, so Time observed:
 
@@ -228,7 +243,7 @@ The separate COMMUNITY platform-family warning observed during v0.63.57 validati
 
 ## v0.63.57 — Current Timeline Authority Guard
 
-Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+Status: **SUPERSEDED BY v0.64.0 · HISTORICAL CONTRACT / REGRESSION EVIDENCE**
 
 This mini update was inserted before further M2 ownership movement because a natural Mode-A turn exposed a continuity coverage gap: the canonical narrative clock remained in 2030, but the visible response emitted unrequested 2017 scene timestamps and also reverted current character age/state to the historical era.
 
@@ -267,7 +282,7 @@ Real long-chat validation should confirm three cases before M2 advances:
 
 ## M2-1 — Recovery Boundary Split
 
-Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+Status: **SUPERSEDED BY M2-2 · SUPPORTED REAL LONG-CHAT REGRESSION BASELINE**
 
 `v0.63.56` is the first physical code-movement checkpoint of the 2.0M Major. It is intentionally mechanical:
 

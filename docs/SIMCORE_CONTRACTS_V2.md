@@ -24,7 +24,7 @@ Edit Reconcile as one application service
 Recovery split by execution phase
 ```
 
-M1 is intentionally non-behavioral. It defines the target contract and adds a CI drift guard, but it does not move the v0.63.55 code currently under live validation.
+M1 was intentionally non-behavioral. At M1 completion it defined the target contract and CI drift guard without moving the then-current v0.63.55 runtime; later physical M2 checkpoints are recorded below.
 
 ---
 
@@ -77,8 +77,9 @@ Representation
   representation (physical since M2-2)
         ↓
 Application
-  prompt / session / current recovery
-  edit-reconcile / output-compat / bootstrap-migration (planned)
+  prompt / session / recovery compatibility facade
+  output-compat / bootstrap-migration (physical since M2-1)
+  edit-reconcile (planned after M2-2 live gate)
         ↓
 Runtime
   host / session adapter / mirror / hooks / cache / topology / telemetry / probes
@@ -226,9 +227,9 @@ same slot/location + canonical CoreSession identity still trusted
 
 ## 7. Recovery Phase Split
 
-Current `recovery` is a legacy container with two real execution phases.
+The legacy `recovery` container was physically split in M2-1 and now remains as a compatibility facade over two execution-phase modules.
 
-### Planned `output-compat`
+### Physical `output-compat` — since M2-1
 
 Owns:
 
@@ -243,7 +244,7 @@ safe structural-boundary confirmation
 
 It does not own edit attribution or history bootstrap.
 
-### Planned `bootstrap-migration`
+### Physical `bootstrap-migration` — since M2-1
 
 Owns:
 
@@ -256,7 +257,7 @@ cold/migration coordination
 
 It does not run ordinary output compatibility.
 
-This split should initially be mechanical: move responsibility without changing decisions, ordering, storage behavior, output bytes, or diagnostics meaning.
+M2-1 performed this split mechanically: responsibility moved without intentionally changing decisions, ordering, storage behavior, output bytes, or diagnostics meaning. The compatibility facade remains until later transition cleanup is independently validated.
 
 ---
 
@@ -491,7 +492,7 @@ The old `recovery` module remains temporarily as a compatibility facade exportin
 
 M2-1 does **not** yet move Representation Fast Reconcile or the manual-edit decision tree. Those remain in their v0.63.55 locations and are frozen regression controls for the next checkpoint.
 
-Exit condition for M2-1: real long-chat behavior remains stable with no new warning/rebuild class attributable to the split. Only after that evidence may M2 continue to Representation/Edit ownership movement.
+M2-1 exit evidence is now supported by real long-chat ordinary paths, conservative mismatch handling, and the v0.63.55 Representation Fast Reconcile regression gate. M2 therefore advanced to the separate M2-2 Representation ownership checkpoint; Edit Reconcile extraction remains gated on M2-2 live evidence.
 
 ---
 

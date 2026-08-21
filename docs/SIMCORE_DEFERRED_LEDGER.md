@@ -60,8 +60,9 @@ Operational rule:
 ## Current baseline
 
 ```text
-Production: v0.63.59 — Broadcast End Closure Contract
-Primary next phase: M2-2 Representation Ownership Split
+Production: v0.64.0 — M2-2 Representation Ownership Split
+Primary current phase: M2-2 real long-chat ownership validation
+Next physical move: Edit Reconcile extraction only after M2-2 live gate
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 ```
 
@@ -92,13 +93,13 @@ warnings: 8
 state quarantine: response=1, COMMUNITY=1/2
 ```
 
-v0.63.59 addresses the exact B_END closure boundary. Natural revalidation is desirable but does not block M2-2.
+v0.63.59 addresses the exact B_END closure boundary. Natural revalidation remains desirable but does not block M2-2 live validation or, by itself, justify delaying the Representation ownership checkpoint.
 
 ### Legacy/bootstrap migration path
 
 Status: `DEFERRED_NON_BLOCKING`
 
-Ordinary COLD_INIT and reload behavior have been observed, but a true legacy/history-bootstrap schema migration path has not been meaningfully exercised. Do not force destructive state mutation solely to obtain this sample. Revisit if M2-2 touches migration ownership.
+Ordinary COLD_INIT and reload behavior have been observed, but a true legacy/history-bootstrap schema migration path has not been meaningfully exercised. Do not force destructive state mutation solely to obtain this sample. M2-2 did not touch migration ownership. Revisit only when a later checkpoint changes bootstrap/migration coordination or a natural legacy path exposes new evidence.
 
 ### Explicit past-scene allowance under Current Timeline Authority
 

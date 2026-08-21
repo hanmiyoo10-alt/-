@@ -920,7 +920,7 @@ The exact current diagnostic or repair stage must be read from `docs/CURRENT_DEV
 
 ## 47. Current Hard Freeze
 
-Unless new evidence directly requires otherwise, keep these areas frozen during the current cache investigation:
+Unless new evidence directly requires otherwise, keep these areas frozen during the current M2-2 live-validation checkpoint and any parallel cache observation:
 
 ```text
 Broadcast End Authority
@@ -932,7 +932,7 @@ Source Handoff
 Reaction
 Recurrence
 Structure
-Runtime placement
+Runtime prompt placement
 Compiler tier semantics
 Deferred Mirror strict mismatch safety
 Persistent storage schema

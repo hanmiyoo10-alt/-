@@ -54,6 +54,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/simcore-06400-admin-sync.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/SIMCORE_CONTRACTS_V2.md')
+          p.write_text(p.read_text(encoding='utf-8').rstrip() + '\n', encoding='utf-8')
+          PY
 
       - name: Validate synchronized contracts and docs
         shell: bash

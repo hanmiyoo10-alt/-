@@ -616,6 +616,72 @@ additional storage cost
 
 Diagnostics must not become the performance problem they are measuring.
 
+## 33A. Diagnostic Forensics and Cross-Validation
+
+A long SimCore diagnostic is not a status dashboard to skim. Every field exists to expose a different failure mode or attribution boundary. When a full diagnostic is supplied, inspect it as a connected forensic record rather than selecting only the lines that look important.
+
+Never treat labels such as `PASS`, `REPAIRED`, `SAME`, `COMMITTED`, or `Warnings: 0` as sufficient proof by themselves. Their scope must be checked against the actual RAW turn content and against neighboring state.
+
+For each diagnostic, cross-validate at least these layers:
+
+```text
+1. User RAW intent / event facts
+2. Previous assistant RAW result
+3. Request/session/edit state entering the current turn
+4. Output provenance / recovery / mirror result
+5. Frame / Continuity / Narrative clock state committed by SimCore
+6. Current assistant RAW visible result
+7. What state the next turn actually inherits, when available
+```
+
+The key question is not only:
+
+```text
+What does the diagnostic claim?
+```
+
+but also:
+
+```text
+Does the RAW output actually match that claim?
+Did SimCore commit the state implied by the visible event?
+Did the next turn inherit the state that the prior visible output established?
+```
+
+Cross-check related fields instead of reading them independently. Examples include:
+
+```text
+Narrative clock + scenes + tail
+↔ visible timestamps and prose-level elapsed time
+↔ next-turn timestamp
+
+Frame sequence / Frame guard
+↔ RAW Volume / Chapter / Chatindex before and after repair
+
+Broadcast lifecycle / end authority
+↔ whether the visible renderer actually starts, continues, or ends the broadcast correctly
+
+Evidence / Lineage / Handoff
+↔ whether the current COMMUNITY output actually uses the intended source and only exposed facts
+
+Output provenance / Deferred Mirror
+↔ the representation visible to the user
+↔ the representation seen on the following request
+
+Edit reconcile
+↔ whether the visible prior assistant was genuinely edited or merely changed representation
+```
+
+A diagnostic may therefore be internally correct while still exposing a product-level gap. For example, `Narrative clock: SAME` can be correct under a line-level timestamp parser even when the visible prose explicitly advances from 01:00 to 03:00 and the following turn incorrectly reuses 01:00. In that case the correct conclusion is not “Continuity PASS”; it is that the diagnostic has revealed an **intra-turn semantic time advancement coverage gap**.
+
+Likewise, `Continuity summary: REPAIRED` may mean persisted state was protected while the visible body still contains a regression. Always state exactly **what was repaired, what was merely detected, and what remained visible or stale**.
+
+Default review rule:
+
+> **Read every diagnostic section once, then perform cross-field and RAW-to-state consistency checks before declaring a turn healthy.**
+
+Do not optimize for a short review at the cost of missing a contradiction that the diagnostic was specifically built to expose.
+
 ---
 
 # Part XII — Performance
@@ -816,7 +882,7 @@ unless a deliberate narrow connector-backed change has a safer direct path.
 Current production family at the time this document was created:
 
 ```text
-SimCore v0.63.56 — M2-1 Recovery Boundary Split
+SimCore v0.63.57 — Current Timeline Authority Guard
 ```
 
 Do not treat this number as permanently current; update this section when production advances.
@@ -930,6 +996,14 @@ Prefer small documentation diffs that explain why guidance changed.
 ---
 
 # Guideline Changelog
+
+## 2026-08-21 — Diagnostic Forensics and Cross-Validation
+
+- Added the rule that full diagnostics must be reviewed as connected forensic records rather than skimmed status summaries.
+- Required RAW input/output, committed state, diagnostic labels, and next-turn inheritance to be cross-validated before declaring a turn healthy.
+- Explicitly documented that `PASS`, `REPAIRED`, `SAME`, `COMMITTED`, and `Warnings: 0` have bounded scopes and can coexist with user-visible or state-inheritance gaps.
+- Added intra-turn narrative-time advancement as a concrete example: visible prose can advance time while a line-level clock remains stale.
+- Advanced the guideline's current production baseline to v0.63.57.
 
 ## 2026-08-19 — v0.63.45 History Rebuild Frontier Attribution
 

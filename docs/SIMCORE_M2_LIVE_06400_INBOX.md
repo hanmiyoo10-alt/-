@@ -286,3 +286,9 @@ standalone C lineage over-chain                     SUSPECTED / NON-BLOCKING
 annual-only vs cumulative-YoY summary scope         SUSPECTED / USER-VISIBLE QUALITY WATCH
 provider cache attribution                         UNVERIFIED
 ```
+
+## v0.64.1 mini-release checkpoint
+
+Status: `PRODUCTION / STATIC GATE PASS / LIVE SEMANTIC VALIDATION PENDING`
+
+The Summary Scope Authority mini was released from the evidence captured above. Static CI passed nine deterministic classifier fixtures, syntax/equality, Contracts v2, and frozen M2-2 controls. Do not mark the annual-only or cumulative-YoY quality defect resolved until fresh production RAW confirms the intended scope and factual coverage. Lineage over-chain remains intentionally unchanged and on WATCH.

@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.0`
-- Release: `M2-2 Representation Ownership Split`
+- Version: `0.64.1`
+- Release: `Summary Scope Authority`
 - Release branch: `release-simcore`
-- Release commit: `d0407c5cd7441a978f815db068344219f8c15027`
-- Release blob: `6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb`
+- Release commit: `0cd0b01440e0d8654a84b64362541a9fbfcb03b3`
+- Release blob: `2d5d0acf4d2da52874aafaa5bbd074a81c7f7b52`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `06400_M2_2_REPRESENTATION_OWNERSHIP_LIVE_VALIDATION`
+- Primary optimization target: `06401_SUMMARY_SCOPE_AUTHORITY_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,7 +35,9 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.64.0` is the current production release and the M2-2 physical checkpoint. It moves bounded CANONICAL / HOST_RAW / FRESH_CHAT representation provenance and exact carryover classification out of Runtime Mirror / the outer shell into a first-class memory-only `representation` module. Runtime Mirror remains the host-facing Fresh observer and strict identity/location/staleness mirror transport boundary. The v0.63.55 representation-fast decision semantics, genuine-user-edit rebuild path, v0.63.56 Recovery split, v0.63.57/.58 timeline contracts, and v0.63.59 Broadcast closure contract remain frozen regression controls. Static/architecture validation passed; real long-chat validation is pending.
+`v0.64.1` is the current production release. It is a bounded correctness insert on top of the still-active M2-2 Representation Ownership Split checkpoint: Lifecycle now classifies eligible Mode-C year-end summaries as `ANNUAL_ONLY`, `CUMULATIVE_YOY`, or fail-closed `NONE`, and Prompt serializes the resulting temporal authority. Recurrence may still guide structure/style but is explicitly below Summary Scope for factual target-year/baseline authority. Lineage/Recurrence implementations, Representation/Edit/Runtime Mirror, persistent schema, and the rest of the M2 frozen surface are unchanged.
+
+The v0.64.0 M2-2 natural mismatch pair already proved `REPRESENTATION_FAST_RECONCILED` after the ownership split. The remaining major M2-2 positive control is a genuine visible user edit on the v0.64.x line (`USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`). Summary Scope live validation is now the immediate mini-release gate before returning to that control and M2-3.
 
 Historical precursor evidence retained below (not v0.64.0 live validation), observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -87,6 +89,72 @@ v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural l
 ---
 
 # 2. Current Validation Release
+
+## v0.64.1 — Summary Scope Authority
+
+Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+
+Production identity:
+
+```text
+Version: 0.64.1
+Release: Summary Scope Authority
+Release commit: 0cd0b01440e0d8654a84b64362541a9fbfcb03b3
+Release blob: 2d5d0acf4d2da52874aafaa5bbd074a81c7f7b52
+Parent production baseline: v0.64.0 M2-2 Representation Ownership Split
+Major checkpoint remains: M2-2
+```
+
+Direct triggering evidence came from paired year-end C requests in runtime `mt2qjgt5-9oi0sk`:
+
+```text
+ANNUAL_ONLY candidate @2020:
+- target-year achievements may be omitted while earlier achievements can bleed into the annual summary
+- standalone summary remained over-chained to root A@2014 (WATCH; Lineage not patched)
+
+CUMULATIVE_YOY @2022:
+- explicit 2029.12.31 -> 2030.12.31 baseline/current comparison
+- visible COSMIC section used 3,400만 as the 2029 baseline, while a later comment reused 720만
+- several requested per-metric absolute/percentage YoY deltas were omitted
+- recurrence matched an older template; correlation preserved, causality not assumed
+```
+
+Patch boundary:
+
+```text
+Lifecycle request classifier: NONE / ANNUAL_ONLY / CUMULATIVE_YOY
+pending metadata only; no persistent schema
+Prompt compiler v3 serializes scope authority
+Summary factual authority > Recurrence factual carryover
+Recurrence/Lineage implementation unchanged
+no output-body parser or semantic repair
+```
+
+Static release gate:
+
+```text
+python helper compile            PASS
+node --check latest/install      PASS
+latest == install               PASS
+Contracts v2 checker             PASS
+summary classifier fixtures 9/9 PASS
+M2-2 frozen markers retained     PASS
+```
+
+Live targets:
+
+```text
+ANNUAL_ONLY input -> Summary scope ANNUAL_ONLY / target 2030
+- target-year achievements stay target-year scoped
+- earlier facts only labeled context/metadata
+- cumulative counters labeled year-end snapshot
+
+CUMULATIVE_YOY input -> Summary scope CUMULATIVE_YOY / target 2030 / comparison 2029
+- every requested comparable metric gets previous/current/absolute delta/percentage delta
+- older historical values cannot replace the requested 2029 baseline
+
+Lineage over-chain remains WATCH and is intentionally unchanged for attribution isolation.
+```
 
 ## v0.64.0 — M2-2 Representation Ownership Split
 

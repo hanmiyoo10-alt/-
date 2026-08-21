@@ -60,8 +60,8 @@ Operational rule:
 ## Current baseline
 
 ```text
-Production: v0.64.0 — M2-2 Representation Ownership Split
-Primary current phase: M2-2 real long-chat ownership validation
+Production: v0.64.1 — Summary Scope Authority (M2-2 correctness insert)
+Primary current phase: M2-2 final live validation + v0.64.1 summary-scope validation
 Next physical move: Edit Reconcile extraction only after M2-2 live gate
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 ```
@@ -106,6 +106,12 @@ Ordinary COLD_INIT and reload behavior have been observed, but a true legacy/his
 Status: `DEFERRED_NATURAL_SAMPLE`
 
 v0.63.57 current-era containment has positive evidence. A natural explicit flashback/past-scene allowance sample remains useful, but is not a blocker unless chronology ownership is changed.
+
+### Summary Scope Authority live validation
+
+Status: `DEFERRED_NON_BLOCKING / ACTIVE_MINI_VALIDATION`
+
+v0.64.1 adds request-scoped `ANNUAL_ONLY` versus `CUMULATIVE_YOY` temporal authority after direct long-chat evidence of annual-scope omission/contamination and an internally inconsistent historical baseline in a YoY summary. Re-run the natural annual-only and cumulative-YoY request families. Keep the repeated standalone-C lineage over-chain on WATCH; v0.64.1 intentionally does not patch Lineage/Recurrence implementation so the live result can separate temporal-scope authority from source-chain debt.
 
 ## WATCH_ONLY anomalies
 

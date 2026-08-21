@@ -181,3 +181,16 @@ M2-2 Representation path                          PASS
 host-prefix reset                                  stabilized on new family
 unshared ~9.275 s request spike                    WATCH / cause unknown
 ```
+
+## v0.64.1 production response to this evidence
+
+Status: `PATCHED / LIVE REVALIDATION PENDING`
+
+```text
+release: Summary Scope Authority
+commit: 0cd0b01440e0d8654a84b64362541a9fbfcb03b3
+blob: 2d5d0acf4d2da52874aafaa5bbd074a81c7f7b52
+major checkpoint: M2-2 unchanged
+```
+
+The patch adds deterministic `ANNUAL_ONLY / CUMULATIVE_YOY / NONE` request classification and scope-specific prompt authority. It does not reset or rewrite Lineage, alter Recurrence matching, parse/repair output bodies, or add persistent state. This preserves the existing over-chain and recurrence signals as attribution controls while testing whether explicit temporal authority alone fixes annual-only contamination and YoY baseline/coverage defects.

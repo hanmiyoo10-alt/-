@@ -2,6 +2,25 @@
 
 This file records production diagnostics gathered during the staged 2.0M Major refactor. It is evidence-only: do not infer behavior that the captured diagnostics did not exercise.
 
+## M2-2 correctness insert — v0.64.1 Summary Scope Authority
+
+Production baseline:
+
+```text
+Version: 0.64.1
+Release: Summary Scope Authority
+Release commit: 0cd0b01440e0d8654a84b64362541a9fbfcb03b3
+Release blob: 2d5d0acf4d2da52874aafaa5bbd074a81c7f7b52
+Parent: v0.64.0 M2-2 Representation Ownership Split
+Major checkpoint: M2-2 (unchanged)
+```
+
+Reason for insert: paired real long-chat summary requests established two different temporal-authority contracts. `ANNUAL_ONLY` must keep achievements inside the target year, while `CUMULATIVE_YOY` must use the requested previous-year-end baseline and complete previous/current/absolute/percentage comparisons. A visible CUMULATIVE_YOY response mixed two incompatible COSMIC historical baselines (`3,400만` and `720만`) and omitted some requested per-metric YoY deltas.
+
+Implementation is deliberately request/prompt scoped: Lifecycle classifies `NONE / ANNUAL_ONLY / CUMULATIVE_YOY`, stores only pending metadata, and Prompt compiler v3 emits temporal authority. Recurrence and Lineage implementations remain frozen. Summary authority is explicitly above recurrence factual carryover while recurrence can still guide structure/style.
+
+Release CI directly passed nine classifier fixtures plus Node syntax, latest/install equality, Contracts v2 architecture checks, and frozen M2-2 markers. Live semantic validation remains pending.
+
 ## M2-2 — v0.64.0 Representation Ownership Split
 
 Production baseline:

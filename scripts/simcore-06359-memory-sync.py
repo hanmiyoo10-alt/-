@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import sys
 
 root = Path(sys.argv[1] if len(sys.argv) > 1 else '.').resolve()
@@ -12,21 +13,42 @@ for path in (current, evidence, anomaly):
 
 # CURRENT_DEVELOPMENT.md
 text = current.read_text(encoding='utf-8')
-replacements = {
-    '- Version: `0.63.58`': '- Version: `0.63.59`',
-    '- Release: `Narrative Tail Time Contract`': '- Release: `Broadcast End Closure Contract`',
-    '- Release commit: `4dc71f01cc5dade0ae69005ee0f771961f638be0`': '- Release commit: `7c0f6f4a8e0b7e42a5996dc7bacd149f27e3751d`',
-    '- Release blob: `eb976adc97fd5b8ac1cec2ad10672638ae83c7e2`': '- Release blob: `da47e5d8123c0abfe9902f016c84ac758f766032`',
-    '- Primary optimization target: `06358_NARRATIVE_TAIL_TIME_LIVE_VALIDATION`': '- Primary optimization target: `06359_BROADCAST_END_CLOSURE_LIVE_VALIDATION`',
-    '`v0.63.58` is the current production release. It is a narrow pre-M2-2 narrative-tail contract inserted after direct long-chat evidence showed that a scene could visibly progress from 01:00 to a 03:00 ending in prose while Time still reported `scenes 0 / FRAME_ONLY` and persisted 01:00. `v0.63.57` Current Timeline Authority remains in force, M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.': '`v0.63.59` is the current production release. It is the final intended pre-M2 correctness mini-patch, focused only on B_END closure after a natural 24-hour broadcast proved that end authority/unlock could succeed while terminal airtime stayed at the opening 08:30 frame and the required two COMMUNITY blocks collapsed into one six-section block. `v0.63.58` Narrative Tail Time Contract and `v0.63.57` Current Timeline Authority remain in force, M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.',
-}
-for old, new in replacements.items():
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit(f'CURRENT_DEVELOPMENT replacement expected once: {old!r}, found {count}')
-    text = text.replace(old, new, 1)
+snapshot = '''<!-- SIMCORE_PRODUCTION_SNAPSHOT:BEGIN -->
+## Current Production Snapshot
 
-anchor = '## v0.63.58 — Narrative Tail Time Contract\n'
+- Product: SimCore
+- Version: `0.63.59`
+- Release: `Broadcast End Closure Contract`
+- Release branch: `release-simcore`
+- Release commit: `7c0f6f4a8e0b7e42a5996dc7bacd149f27e3751d`
+- Release blob: `da47e5d8123c0abfe9902f016c84ac758f766032`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Primary optimization target: `06359_BROADCAST_END_CLOSURE_LIVE_VALIDATION`
+- Provider cache: `UNVERIFIED`
+
+This block is machine-managed after each production release update.
+<!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->'''
+text, count = re.subn(
+    r'<!-- SIMCORE_PRODUCTION_SNAPSHOT:BEGIN -->.*?<!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->',
+    snapshot,
+    text,
+    count=1,
+    flags=re.S,
+)
+if count != 1:
+    raise SystemExit('CURRENT_DEVELOPMENT production snapshot not found')
+
+verdict = '`v0.63.59` is the current production release. It is the final intended pre-M2 correctness mini-patch, focused only on B_END closure after a natural 24-hour broadcast proved that end authority/unlock could succeed while terminal airtime stayed at the opening 08:30 frame and the required two COMMUNITY blocks collapsed into one six-section block. `v0.63.58` Narrative Tail Time Contract and `v0.63.57` Current Timeline Authority remain in force, M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.'
+text, count = re.subn(
+    r'^`v0\.63\.58` is the current production release\..*$',
+    verdict,
+    text,
+    count=1,
+    flags=re.M,
+)
+if count == 0 and verdict not in text:
+    raise SystemExit('CURRENT_DEVELOPMENT production verdict anchor not found')
+
 section = '''## v0.63.59 — Broadcast End Closure Contract
 
 Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
@@ -105,14 +127,15 @@ Required final pre-M2 live gate:
 After this gate, do not continue open-ended mini-patch discovery. Only a newly confirmed hard state-corruption/lifecycle regression should block M2-2; lower-priority anomalies remain WATCH items.
 
 '''
-if text.count(anchor) != 1:
-    raise SystemExit(f'CURRENT_DEVELOPMENT v0.63.58 anchor expected once, found {text.count(anchor)}')
-text = text.replace(anchor, section + anchor, 1)
+anchor = '## v0.63.58 — Narrative Tail Time Contract\n'
+if '## v0.63.59 — Broadcast End Closure Contract' not in text:
+    if anchor not in text:
+        raise SystemExit('CURRENT_DEVELOPMENT v0.63.58 anchor missing')
+    text = text.replace(anchor, section + anchor, 1)
 current.write_text(text, encoding='utf-8')
 
 # SIMCORE_M2_LIVE_EVIDENCE.md
 text = evidence.read_text(encoding='utf-8')
-anchor = '## Pre-M2-2 mini patch — v0.63.58 Narrative Tail Time Contract\n'
 section = '''## Pre-M2-2 mini patch — v0.63.59 Broadcast End Closure Contract
 
 Production baseline:
@@ -149,31 +172,13 @@ next request REPRESENTATION_FAST_RECONCILED  PASS
 same-turn reroll replacement                  PASS
 ```
 
-A separate same-version genuine hand-edit positive control had already shown:
-
-```text
-Prior representation EXACT
-current matches neither canonical nor Fresh
-Edit origin USER_EDIT_CANDIDATE
-MANUAL_EDIT_REBUILT
-corrected timestamp absorbed into state
-```
-
-Historical response-variant restore was also naturally exercised: an older answer for the same input could become the current visible/canonical answer, and reroll returned authority to the newly generated output without stale historical persistence.
+A separate same-version genuine hand-edit positive control had already shown `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`, with the corrected timestamp absorbed into state. Historical response-variant restore was also naturally exercised: an older answer could become the current visible/canonical answer, and reroll returned authority to the newly generated output without stale historical persistence.
 
 ### B_END closure defect found by RAW cross-check
 
-The final B_END diagnostic looked healthy at the lifecycle level:
+Lifecycle telemetry correctly showed `ENDING`, explicit end authority and `UNLOCKED`, but RAW proved closure was partial. The response opened at `08:30 AM`, then described `30 minutes remaining`, later `5 minutes remaining`, and ended a broadcast that began at `09:00 AM` the previous day. Correct terminal airtime was `09:00 AM`; persisted airtime stayed `08:30 AM`.
 
-```text
-Broadcast lifecycle: ENDING
-Broadcast end authority: ALLOWED · explicit-b-end
-Stored broadcast: UNLOCKED
-```
-
-RAW showed that this was only a partial success. The response opened at `08:30 AM`, then explicitly described `30 minutes remaining`, later `5 minutes remaining`, and finally ended a broadcast that began at `09:00 AM` the previous day. The correct terminal airtime was therefore `09:00 AM`, while persisted airtime stayed `08:30 AM`.
-
-The same output also produced a true-positive B_END structure failure:
+The same output produced a true-positive structural failure:
 
 ```text
 required: 2 COMMUNITY blocks × 3 platform sections
@@ -182,12 +187,10 @@ warnings: 8
 state quarantine: response=1, COMMUNITY=1/2
 ```
 
-This validates the diagnostic-forensics rule: `End Authority ALLOWED` / `UNLOCKED` did not imply complete B_END closure.
-
 ### v0.63.59 implementation boundary
 
 - B_END always requests an explicit terminal canonical broadcast timestamp.
-- `commitBroadcastAirtime()` may select the final timestamp only when a line-level sequence is monotonic and contains an explicit terminal line.
+- `commitBroadcastAirtime()` selects the final timestamp only when the line-level sequence is monotonic and has an explicit terminal line.
 - No prose-time parser or semantic time inference was added.
 - Existing B_END COMMUNITY expectations are clarified as exactly `2 × 3`; Structure remains non-repairing.
 - New `Broadcast closure` and `Broadcast terminal coverage` diagnostics make partial closure visible.
@@ -195,27 +198,13 @@ This validates the diagnostic-forensics rule: `End Authority ALLOWED` / `UNLOCKE
 Validation status: **PENDING_REAL_LONG_CHAT**. One clean natural B_END closure is the intended final pre-M2 correctness gate.
 
 '''
-if text.count(anchor) != 1:
-    raise SystemExit(f'SIMCORE_M2_LIVE_EVIDENCE v0.63.58 anchor expected once, found {text.count(anchor)}')
-text = text.replace(anchor, section + anchor, 1)
+anchor = '## Pre-M2-2 mini patch — v0.63.58 Narrative Tail Time Contract\n'
+if '## Pre-M2-2 mini patch — v0.63.59 Broadcast End Closure Contract' not in text:
+    if anchor not in text:
+        raise SystemExit('SIMCORE_M2_LIVE_EVIDENCE v0.63.58 anchor missing')
+    text = text.replace(anchor, section + anchor, 1)
 
-old_remaining = '''Still not exercised by these samples:
-
-```text
-bootstrap-migration history-bootstrap cold path
-natural B-mode cross-check after M2-1
-genuine user-edit positive control
-```
-
-The genuine-user-edit control becomes mandatory again before/when M2 moves the Edit Reconcile implementation itself; it is not inferred from the representation-fast pass.
-
-### Immediate next validation gate
-
-Continue with a new natural turn rather than regenerating or intentionally editing the previous output. Prefer a natural B-mode path when available. Confirm that Broadcast lifecycle, output compatibility, continuity, and frame guards remain stable under the split.
-
-If a later cold/reload path naturally invokes history bootstrap, capture it separately; do not force state mutation solely to exercise it.
-'''
-new_remaining = '''Additional pre-M2 evidence obtained after these initial samples:
+replacement = '''Additional pre-M2 evidence obtained after these initial samples:
 
 ```text
 natural B_START / B_CONTINUE / B_END lifecycle       PASS
@@ -234,9 +223,11 @@ bootstrap-migration legacy/history-bootstrap migration path
 
 This remaining migration-specific path is not a blocker for M2-2 unless the next ownership move changes that migration boundary. The immediate blocker is now only the v0.63.59 B_END closure regression gate described above.
 '''
-if text.count(old_remaining) != 1:
-    raise SystemExit(f'SIMCORE_M2_LIVE_EVIDENCE remaining-gate block expected once, found {text.count(old_remaining)}')
-text = text.replace(old_remaining, new_remaining, 1)
+pattern = re.compile(
+    r'Still not exercised by these samples:\n\n```text\nbootstrap-migration history-bootstrap cold path\nnatural B-mode cross-check after M2-1\ngenuine user-edit positive control\n```\n\nThe genuine-user-edit control becomes mandatory again before/when M2 moves the Edit Reconcile implementation itself; it is not inferred from the representation-fast pass\.\n\n### Immediate next validation gate\n\nContinue with a new natural turn rather than regenerating or intentionally editing the previous output\. Prefer a natural B-mode path when available\. Confirm that Broadcast lifecycle, output compatibility, continuity, and frame guards remain stable under the split\.\n\nIf a later cold/reload path naturally invokes history bootstrap, capture it separately; do not force state mutation solely to exercise it\.\n',
+    re.S,
+)
+text, _ = pattern.subn(replacement, text, count=1)
 evidence.write_text(text, encoding='utf-8')
 
 # SIMCORE_ANOMALY_WATCH.md
@@ -247,15 +238,7 @@ addition = '''
 
 Status: `PATCHED_IN_0.63.59_PENDING_LIVE_VALIDATION`
 
-Direct natural 24-hour broadcast evidence showed:
-
-```text
-B_END frame: 2030-09-09 08:30 AM
-visible progression: 30 minutes remaining -> 5 minutes remaining -> broadcast end
-broadcast start: 2030-09-08 09:00 AM
-expected terminal airtime: 2030-09-09 09:00 AM
-stored broadcast airtime: 2030-09-09 08:30 AM
-```
+Direct natural 24-hour broadcast evidence showed `08:30 AM` frame airtime, visible progression through 30 minutes remaining and 5 minutes remaining, then broadcast end; with a prior-day `09:00 AM` start, expected terminal airtime was `09:00 AM` while stored airtime stayed `08:30 AM`.
 
 Root boundary: Mode B was excluded from v0.63.58 narrative-tail handling and `commitBroadcastAirtime()` selected only the first timestamp. v0.63.59 adds a B_END-only explicit terminal timestamp contract and monotonic final-timestamp commit. Do not add arbitrary prose-time inference.
 
@@ -263,25 +246,13 @@ Root boundary: Mode B was excluded from v0.63.58 narrative-tail handling and `co
 
 Status: `WATCH_ONLY`
 
-One B_END sample simultaneously showed:
-
-```text
-THOUGHTS_COMPAT action: UNRESOLVED
-preamble chars: ~4200
-CANONICAL/FRESH delta: ~-4189
-COMMUNITY shape: 1 block x 6 sections instead of 2 x 3
-Structure quarantine: active
-```
-
-The numerical proximity is worth preserving as evidence, but causality is not proven. The visible COMMUNITY structure was independently malformed, so do not fold this into Representation Ownership or broaden envelope recovery without recurrence/correlation.
+One B_END sample combined a roughly 4200-character unresolved THOUGHTS_COMPAT preamble, roughly -4189 CANONICAL/FRESH delta, a malformed `1 × 6` COMMUNITY shape instead of `2 × 3`, and Structure quarantine. Preserve the correlation, but causality is not proven; do not broaden Representation/Recovery from this sample alone.
 
 ## Partial previous-turn replay inside new B_CONTINUE output
 
 Status: `WATCH_ONLY`
 
-One first-generation B_CONTINUE response replayed a large semantic prefix from the preceding turn before continuing with the new requested material. Existing recurrence telemetry reported `FIRST / NO MATCH`; a reroll of the same user input removed the replay and proceeded directly with the new content.
-
-Preserve as `PARTIAL_PREVIOUS_TURN_REPLAY`. Do not patch Recurrence from one sample. Escalate only if the same partial carryover shape recurs naturally.
+One first-generation B_CONTINUE response replayed a large semantic prefix from the preceding turn before continuing with the new requested material. Recurrence telemetry reported `FIRST / NO MATCH`; reroll removed the replay and proceeded directly with the new content. Preserve as `PARTIAL_PREVIOUS_TURN_REPLAY`; escalate only on natural recurrence.
 '''
 if '## B_END terminal airtime stale after visible end-time progression' not in text:
     text = text.rstrip() + addition + '\n'

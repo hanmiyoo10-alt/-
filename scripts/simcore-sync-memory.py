@@ -19,6 +19,8 @@ priority_by_version = {
     '0.63.54': 'SAFE_ENVELOPE_STRUCTURAL_BOUNDARY_RECONCILE_VALIDATION',
     '0.63.55': '2M_MAJOR_M2_MECHANICAL_BOUNDARY_REFACTOR',
     '0.63.56': '2M_MAJOR_M2_1_LIVE_VALIDATION',
+    '0.63.57': '06357_CURRENT_TIMELINE_AUTHORITY_LIVE_VALIDATION',
+    '0.63.58': '06358_NARRATIVE_TAIL_TIME_LIVE_VALIDATION',
 }
 if version in priority_by_version:
     manifest['current_priority'] = priority_by_version[version]

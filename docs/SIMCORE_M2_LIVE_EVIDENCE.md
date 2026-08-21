@@ -2,6 +2,65 @@
 
 This file records production diagnostics gathered during the staged 2.0M Major refactor. It is evidence-only: do not infer behavior that the captured diagnostics did not exercise.
 
+## Pre-M2-2 mini patch — v0.63.58 Narrative Tail Time Contract
+
+Production baseline:
+
+```text
+Version: 0.63.58
+Release: Narrative Tail Time Contract
+Release commit: 4dc71f01cc5dade0ae69005ee0f771961f638be0
+Release blob: eb976adc97fd5b8ac1cec2ad10672638ae83c7e2
+```
+
+### Triggering evidence — intra-turn terminal time lost
+
+In runtime `mt2fgh3v-6ti55c`, the source A turn visibly began at `2030-09-01 01:00 AM` and the prose explicitly reached a `03:00 AM` ending, but no second canonical timestamp line was emitted. The following C diagnostic therefore showed the stale inherited clock:
+
+```text
+Narrative clock: SAME
+previous: 01:00 AM
+frame: 01:00 AM
+committed: 01:00 AM
+scenes: 0
+tail: FRAME_ONLY
+```
+
+This is a confirmed **intra-turn narrative-time advancement coverage gap**: visible current time advanced, while persisted narrative time did not.
+
+### Positive control — genuine edit rebuild absorbs corrected terminal timestamp
+
+The visible prior assistant timestamp was then hand-edited from `01:00 AM` to `03:00 AM` without changing length. On request `@1934`, SimCore correctly reported:
+
+```text
+Prior representation: EXACT
+current fingerprint: different from canonical and Fresh
+Edit origin: USER_EDIT_CANDIDATE
+Edit reconcile: MANUAL_EDIT_REBUILT · 6.213 s
+snapshot UPDATED
+```
+
+After rebuild:
+
+```text
+Narrative clock: ADVANCED
+previous: 03:00 AM
+frame: 03:30 AM
+committed: 03:30 AM
+```
+
+Interpretation: genuine-user-edit semantics remain intact under v0.63.57, and the existing narrative-clock path can consume a valid explicit terminal timestamp. The defect is specifically that terminal current time can be left only in prose and therefore remain invisible to the line-level commit path.
+
+### v0.63.58 behavior
+
+The patch adds a renderer contract requiring a canonical timestamp line when current scene time advances beyond the frame, including user-stated later current/end times. It deliberately does **not** infer arbitrary prose times or alter `commitNarrativeTimestamp()` semantics. A new `Narrative tail coverage` diagnostic makes `FRAME_ONLY` explicitly require RAW prose cross-check for elapsed/current/end-time cues.
+
+Validation remains `PENDING_REAL_LONG_CHAT` until a natural advancing scene proves the later canonical timestamp is emitted and inherited by the next turn.
+
+### Separate observation — COMMUNITY family diversity
+
+The same later v0.63.57 C sample produced a true-positive Structure warning: three named sites mapped to only two distinct platform families. This remains independent from v0.63.58 and should be promoted only if it recurs naturally.
+
 ## Pre-M2-2 mini patch — v0.63.57 Current Timeline Authority Guard
 
 Production baseline:

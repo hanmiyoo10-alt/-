@@ -169,3 +169,22 @@ Compare:
 - whether the visible response is rewritten, rejected, quarantined, or merely state-clamped.
 
 Any future repair should be scoped separately from M2 mechanical modularization unless evidence shows the refactor caused it. Preserve the current state-safety behavior while investigating whether visible scene-time validation belongs before commit, during output validation, or in a dedicated renderer/continuity boundary.
+---
+
+## INTRA_TURN_NARRATIVE_TIME_ADVANCEMENT_GAP — DIRECT EVIDENCE / MITIGATED
+
+First confirmed: 2026-08-21
+Production at discovery: `v0.63.57 — Current Timeline Authority Guard`
+Runtime: `mt2fgh3v-6ti55c`
+
+A non-broadcast response began at a canonical `01:00 AM` frame and explicitly reached a `03:00 AM` ending in prose, but emitted no later canonical timestamp line. Time therefore reported `scenes 0 / FRAME_ONLY` and persisted the opening time. The next C turn inherited the stale `01:00 AM`.
+
+A hand edit that changed the prior visible canonical timestamp to `03:00 AM` was correctly detected as `USER_EDIT_CANDIDATE`, rebuilt, and became the next narrative anchor. This isolates the gap to **terminal time observability** rather than the commit mechanism itself.
+
+`v0.63.58 — Narrative Tail Time Contract` mitigates this by requiring the renderer to emit a canonical timestamp line whenever current scene time advances beyond the frame, especially when the user explicitly states a later current/end time. Arbitrary prose-time auto-commit remains forbidden.
+
+Promotion / recurrence check:
+
+- if RAW prose clearly advances current time but `Narrative tail coverage` remains `FRAME_ONLY`, treat it as recurrence;
+- if a later canonical timestamp is emitted and `Narrative clock` commits it, record a positive live validation;
+- always verify the next turn inherits the terminal time.

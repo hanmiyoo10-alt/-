@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.57`
-- Release: `Current Timeline Authority Guard`
+- Version: `0.63.58`
+- Release: `Narrative Tail Time Contract`
 - Release branch: `release-simcore`
-- Release commit: `fb8b7a1ac67d470dfd338e698de952ff71910e85`
-- Release blob: `43d54d2cb77c36eb72f9f009d4d97981fd17fc3f`
+- Release commit: `4dc71f01cc5dade0ae69005ee0f771961f638be0`
+- Release blob: `eb976adc97fd5b8ac1cec2ad10672638ae83c7e2`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `06357_CURRENT_TIMELINE_AUTHORITY_LIVE_VALIDATION`
+- Primary optimization target: `06358_NARRATIVE_TAIL_TIME_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,7 +35,7 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.63.57` is the current production release. It is a narrow pre-M2-2 chronology guard inserted after direct long-chat evidence showed that persisted 2030 state could remain protected while the visible response silently regressed scene timestamps and character-era state to 2017. M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.
+`v0.63.58` is the current production release. It is a narrow pre-M2-2 narrative-tail contract inserted after direct long-chat evidence showed that a scene could visibly progress from 01:00 to a 03:00 ending in prose while Time still reported `scenes 0 / FRAME_ONLY` and persisted 01:00. `v0.63.57` Current Timeline Authority remains in force, M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.
 
 Observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -87,6 +87,60 @@ v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural l
 ---
 
 # 2. Current Validation Release
+
+## v0.63.58 — Narrative Tail Time Contract
+
+Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+
+Direct triggering evidence came from a non-broadcast live-scene turn that began with a canonical `01:00 AM` frame but explicitly reached and ended at `03:00 AM` only in prose. The renderer emitted no later canonical timestamp line, so Time observed:
+
+```text
+Narrative clock: SAME
+frame: 01:00 AM
+committed: 01:00 AM
+scenes: 0
+tail: FRAME_ONLY
+```
+
+The following C turn inherited the stale `01:00 AM`. A later hand-edit changing the visible prior timestamp to `03:00 AM` was correctly classified as a genuine edit (`USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`) and the rebuilt state then used `03:00 AM` as the previous narrative anchor. This proves the missing piece is terminal timestamp observability, not inability of the existing commit path to accept a valid later canonical timestamp.
+
+The v0.63.58 patch is intentionally narrow:
+
+```text
+non-broadcast rendering
+→ if current scene time advances beyond frame time
+→ emit canonical timestamp line at transition or terminal current point
+→ if the user states a later current/end time, render it as canonical current timestamp
+→ do not leave terminal current-time advancement only in prose
+
+Time commit
+→ existing v0.63.28 line-level monotonic sequence unchanged
+→ no arbitrary prose-time auto-commit
+
+Diagnostics
+→ FRAME_ONLY explicitly reports that no terminal timestamp beyond frame was observable
+→ copied RAW prose must be cross-checked for elapsed/current/end-time cues
+```
+
+Frozen:
+
+- v0.63.57 current-timeline authority behavior;
+- M2-1 Recovery / output-compat / bootstrap-migration ownership;
+- Representation Fast Reconcile and genuine-user-edit semantics;
+- Deferred Mirror;
+- Broadcast and Frame behavior;
+- Evidence / Lineage / Handoff / Recurrence;
+- Structure / COMMUNITY;
+- cache/history, storage/API/network/timer surfaces, persistent schema.
+
+Real long-chat validation target:
+
+1. a natural scene whose current time advances inside one response emits an explicit later canonical timestamp and commits it;
+2. the next natural turn inherits that terminal time instead of the opening frame time;
+3. ordinary single-time responses may remain `FRAME_ONLY` without being treated as faults, but RAW must be checked when prose contains time advancement;
+4. v0.63.57 current-era authority and v0.63.55 representation/edit controls remain unchanged.
+
+The separate COMMUNITY platform-family warning observed during v0.63.57 validation is not repaired in v0.63.58; keep it as an independent recurrence watch.
 
 ## v0.63.57 — Current Timeline Authority Guard
 

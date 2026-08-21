@@ -216,3 +216,5 @@ elif "'0.63.58': '06358_NARRATIVE_TAIL_TIME_LIVE_VALIDATION'" not in sync:
 p.write_text(sync, encoding='utf-8')
 
 print('SimCore v0.63.58 durable memory prepared')
+
+# One-shot trigger marker; removed with the command file after successful sync.

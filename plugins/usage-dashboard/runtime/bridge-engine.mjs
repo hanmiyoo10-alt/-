@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.14';
+const VERSION = '1.6.15';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -66,6 +66,8 @@ function createSnapshotAttribution(profile) {
     cliOperations: [],
     organizationDiscovery: null,
     captureReuse: { bootstrapRange:'24h', activityReuseChecks:0, activityShared:0, dedicated24hFallbacks:0 },
+    creditsEarlyStart: { decision:'not-evaluated', reason:'', candidateMode:'', result:'none' },
+    cacheDecisions: [],
     cache: { hits:0, misses:0, joins:0, loads:0, errors:0, staleFallbacks:0 },
     circuits: { opens:0, blocked:0, recoveries:0 },
     cli: {
@@ -84,6 +86,59 @@ function noteSnapshotCounter(group, key, amount = 1) {
   const attribution = currentSnapshotAttribution();
   if (!attribution?.[group] || !Object.prototype.hasOwnProperty.call(attribution[group], key)) return;
   attribution[group][key] = Number(attribution[group][key] || 0) + Number(amount || 0);
+}
+
+function snapshotCacheDescriptor(name) {
+  const key = String(name || '');
+  if (key === 'orgs') return { family:'organizations', scope:'', range:'' };
+  if (key === 'accountCapture') return { family:'accountCapture', scope:'', range:'24h' };
+  if (key === 'creditsBootstrap') return { family:'creditsBootstrap', scope:'credits', range:'' };
+  if (key === 'devpassStatus') return { family:'devpassStatus', scope:'devpass', range:'' };
+  if (key === 'usageScopes') return { family:'usageScopes', scope:'all', range:'24h' };
+  if (key === 'analyticsScopes') return { family:'analyticsScopes', scope:'all', range:'' };
+  if (key.startsWith('usageScopes:')) return { family:'usageScopes', scope:'all', range:'24h' };
+  if (key.startsWith('analyticsScopes:')) return { family:'analyticsScopes', scope:'all', range:'' };
+  if (key.startsWith('usage:')) {
+    const parts = key.split(':');
+    const range = ['24h','7d','30d'].includes(parts.at(-1)) ? parts.at(-1) : '';
+    return { family:'usage', scope:'credits', range };
+  }
+  if (key.startsWith('devpassActivity:')) {
+    const parts = key.split(':');
+    const range = ['24h','7d','30d'].includes(parts.at(-1)) ? parts.at(-1) : '';
+    return { family:'devpassActivity', scope:'devpass', range };
+  }
+  if (key.startsWith('activity:')) {
+    const parts = key.split(':');
+    const scope = ['all','devpass','credits'].includes(parts[1]) ? parts[1] : '';
+    const range = ['24h','7d','30d'].includes(parts.at(-1)) ? parts.at(-1) : '';
+    return { family:'activity', scope, range };
+  }
+  if (key.startsWith('analytics:')) {
+    const parts = key.split(':');
+    const scope = ['all','devpass','credits'].includes(parts[1]) ? parts[1] : '';
+    return { family:'analytics', scope, range:'' };
+  }
+  if (key.startsWith('runway:')) return { family:'runway', scope:'credits', range:'7d' };
+  return { family:'other', scope:'', range:'' };
+}
+
+function noteSnapshotCacheDecision(name, action, current = null, ttl = null, now = Date.now(), reason = '') {
+  const attribution = currentSnapshotAttribution();
+  if (!attribution || !Array.isArray(attribution.cacheDecisions) || attribution.cacheDecisions.length >= 64) return;
+  const descriptor = snapshotCacheDescriptor(name);
+  const at = Number(current?.at);
+  const ageMs = Number.isFinite(at) && at > 0 ? Math.max(0, Number(now) - at) : null;
+  const ttlMs = Number.isFinite(Number(ttl)) ? Math.max(0, Number(ttl)) : null;
+  const safeAction = ['hit','miss','join','load','stale','blocked','error'].includes(String(action)) ? String(action) : 'other';
+  const safeReason = ['empty','expired','loaded','circuit-open','refresh-error'].includes(String(reason)) ? String(reason) : '';
+  attribution.cacheDecisions.push({ ...descriptor, action:safeAction, reason:safeReason, ageMs, ttlMs });
+}
+
+function noteCreditsEarlyStart(patch) {
+  const attribution = currentSnapshotAttribution();
+  if (!attribution?.creditsEarlyStart || !patch || typeof patch !== 'object') return;
+  Object.assign(attribution.creditsEarlyStart, patch);
 }
 
 async function timedSnapshotTask(name, task) {
@@ -199,6 +254,12 @@ function snapshotAttributionSummary(attribution) {
     captureReuse: attribution?.captureReuse && typeof attribution.captureReuse === 'object'
       ? {...attribution.captureReuse}
       : null,
+    creditsEarlyStart: attribution?.creditsEarlyStart && typeof attribution.creditsEarlyStart === 'object'
+      ? {...attribution.creditsEarlyStart}
+      : null,
+    cacheDecisions: Array.isArray(attribution?.cacheDecisions)
+      ? attribution.cacheDecisions.slice(0, 64).map((item) => ({...item}))
+      : [],
     cache: {...(attribution?.cache || {})},
     circuits: {...(attribution?.circuits || {})},
     cli: {
@@ -1206,11 +1267,13 @@ async function cached(name, loader) {
   const now = Date.now();
   const current = cache.get(name);
   if (current && now - current.at < ttl) {
+    noteSnapshotCacheDecision(name, 'hit', current, ttl, now);
     cacheStats.hits += 1;
     noteSnapshotCounter('cache', 'hits');
     return current.value;
   }
   if (inFlight.has(name)) {
+    noteSnapshotCacheDecision(name, 'join', current, ttl, now);
     cacheStats.joins += 1;
     noteSnapshotCounter('cache', 'joins');
     return inFlight.get(name);
@@ -1220,13 +1283,16 @@ async function cached(name, loader) {
   if (!gate.allowed) {
     const ageMs = current ? now - current.at : Infinity;
     if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS) {
+      noteSnapshotCacheDecision(name, 'stale', current, ttl, now, 'circuit-open');
       cacheStats.staleFallbacks += 1;
       noteSnapshotCounter('cache', 'staleFallbacks');
       return staleClone(current.value, ageMs, gate.error);
     }
+    noteSnapshotCacheDecision(name, 'blocked', current, ttl, now, 'circuit-open');
     throw gate.error;
   }
 
+  noteSnapshotCacheDecision(name, 'miss', current, ttl, now, current ? 'expired' : 'empty');
   cacheStats.misses += 1;
   noteSnapshotCounter('cache', 'misses');
   const promise = (async () => {
@@ -1239,6 +1305,7 @@ async function cached(name, loader) {
       cacheStats.totalLoadMs += elapsed;
       cacheStats.lastLoadMs = elapsed;
       cache.set(name, { at: Date.now(), value });
+      noteSnapshotCacheDecision(name, 'load', null, ttl, Date.now(), 'loaded');
       circuitSuccess(name);
       pruneCache();
       return value;
@@ -1249,11 +1316,13 @@ async function cached(name, loader) {
       const ageMs = current ? Date.now() - current.at : Infinity;
       const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';
       if (allowStale && current && ageMs <= CACHE_STALE_MAX_MS) {
+        noteSnapshotCacheDecision(name, 'stale', current, ttl, Date.now(), 'refresh-error');
         cacheStats.staleFallbacks += 1;
       noteSnapshotCounter('cache', 'staleFallbacks');
         logRateLimited('warn', `stale:${name}`, `${name} refresh failed; serving last good cache (${Math.round(ageMs / 1000)}s old): ${safeMessage(error)}`);
         return staleClone(current.value, ageMs, error);
       }
+      noteSnapshotCacheDecision(name, 'error', current, ttl, Date.now(), 'refresh-error');
       if (circuit.state === 'open') {
         logRateLimited('warn', `circuit:${circuit.family}`, `Circuit ${circuit.family} opened after ${circuit.failures} failures (${circuit.lastErrorCode})`, 30_000);
       }
@@ -1963,16 +2032,32 @@ function creditsBootstrapCandidate(rawCredits, requestedOrgId = '') {
 }
 
 function startCreditsUsageEarly(rawCreditsPromise, requestedOrgId = '') {
-  if (CLI_CONCURRENCY < 2) return Promise.resolve(null);
+  if (CLI_CONCURRENCY < 2) {
+    noteCreditsEarlyStart({ decision:'skipped', reason:'serial-mode', candidateMode:'', result:'none' });
+    return Promise.resolve(null);
+  }
   return Promise.resolve(rawCreditsPromise)
     .then((rawCredits) => {
       const candidate = creditsBootstrapCandidate(rawCredits, requestedOrgId);
-      if (!candidate) return null;
+      if (!candidate) {
+        noteCreditsEarlyStart({ decision:'skipped', reason:'no-safe-candidate', candidateMode:'', result:'none' });
+        return null;
+      }
+      noteCreditsEarlyStart({ decision:'started', reason:'', candidateMode:candidate.mode, result:'in-flight' });
       return usageForOrg({ id: candidate.id, kind: 'default', status: 'active' }, '24h')
-        .then(() => candidate.id)
-        .catch(() => null);
+        .then(() => {
+          noteCreditsEarlyStart({ result:'completed' });
+          return candidate.id;
+        })
+        .catch(() => {
+          noteCreditsEarlyStart({ reason:'prefetch-error', result:'failed' });
+          return null;
+        });
     })
-    .catch(() => null);
+    .catch(() => {
+      noteCreditsEarlyStart({ decision:'skipped', reason:'bootstrap-error', candidateMode:'', result:'failed' });
+      return null;
+    });
 }
 
 async function loadOrgs() {

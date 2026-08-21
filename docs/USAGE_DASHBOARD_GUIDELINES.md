@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.61`
-- Bridge Engine: `1.6.14`
+- Product: `3.0.0-alpha.5.62`
+- Bridge Engine: `1.6.15`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,18 +24,19 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`.
+Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`.
 
-Verified from the 5.59 device diagnostic:
+Verified from the 5.61 device diagnostics on 2026-08-20/21 KST:
 
-- Stable Readiness was `READY`; Bridge Engine `1.6.13` and Bridge Manager `1.2.6` were healthy with no local runtime errors or failures.
+- Stable Readiness stayed `READY`; Bridge Engine `1.6.14` and Bridge Manager `1.2.6` remained healthy with no local runtime errors or failures.
 - Organization discovery stayed `capture-primary · fallback 0 · shared account capture yes`; shared 24h reuse stayed active with dedicated 24h fallback 0.
-- Snapshot scheduling telemetry was live and bounded: organizations ran `0→8291ms`; `usageScopes` and `analyticsScopes` started at `8291ms` and ended around `15324–15325ms`.
-- The sampled Bridge snapshot was about 15.33s. The exact task timeline verified a serialized root barrier: about 8.29s organization/bootstrap followed by about 7.03s post-root usage/analytics.
-- The Bridge ran 3 CLI operations: `credits 1→6973ms`, `devpass-capture-24h 31→8280ms`, then `usage-24h-model 8299→15316ms`; limit 2, peak active 2, queued 0.
-- This verified that queueing is not the primary bottleneck. In the sampled cold shape, Credits finished about 1.31s before account capture, leaving one CLI lane idle until root completion.
-- Snapshot cache errors/stale fallbacks and circuit opens/blocks/recoveries were all 0.
-- Cache fidelity remained verified: provider Cache Read stayed observable while missing Write/TTL remained UNKNOWN and was never inferred.
+- Eligible 3-operation cold samples verified Credits early-start twice. One sample started `usage-24h-model` at 5790ms before organizations ended at 6866ms (about 1.08s overlap); a later sample started usage at 4895ms before organizations ended at 6802ms (about 1.91s overlap).
+- The later eligible sample completed the Bridge snapshot in about 9.21s with `credits 0→4895ms`, `devpass-capture-24h 21→6795ms`, `usage-24h-model 4895→9204ms`, limit 2, peak active 2, runs 3, queued 0. Bridge ran 3 CLI operations in that verified cold sample.
+- Another visibility sample took about 17.17s because long-window analytics work became cold: `usage-30d-model` and `devpass-capture-7d` joined the snapshot; the 7d capture queued about 5.52s behind the two-lane limit. This verified a separate long-window contention shape, not a persistent 5.61 regression.
+- In that 17.17s sample early-start was absent, while later eligible samples re-enabled it. The exact skip reason is UNKNOWN in 5.61 diagnostics and is an explicit 5.62 measurement target.
+- A one-off Manager probe latency of about 4.15s later returned to about 313ms with manager connected/sync none/errors none; no persistent Manager regression is verified.
+- Latest Request Ledger sample was exact 158/163 with 5 bucket rows. Bucket rows remain explicitly lower-fidelity and are not promoted to exact identity.
+- Cache/source fidelity remained intact: missing Write/TTL remained UNKNOWN and was never inferred. Missing provider Cache Write/TTL stayed UNKNOWN; no inferred zero or provider-based estimate was introduced.
 - Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
 - Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
 - Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
@@ -43,32 +44,30 @@ Verified from the 5.59 device diagnostic:
 - `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
 - Preserve the 5.57 organization recovery contract: if account capture fails or has no usable organization rows, fall back to the prior plain `orgs list --json` path; if capture and that fallback are both empty, `No organizations found in CLI output` remains an error.
 
-Verified release-infrastructure state from 5.60:
+Verified release-infrastructure state from 5.60+:
 
-- `3.0.0-alpha.5.60 — Monotonic Release Publish Guard` deployed with Bridge Engine `1.6.13` unchanged and Bridge Manager `1.2.6`.
-- P22 verifies stale-candidate blocking, same-version artifact divergence failure, and the archived 5.55–5.59 automatic publishers.
-- The shared `repo-main-write` lock remains necessary, and the monotonic candidate/main/release guard remains mandatory for all later publishers.
+- The shared `repo-main-write` lock and monotonic candidate/main/release guard remain mandatory for every later publisher.
+- P22 continues to verify stale-candidate blocking, same-version artifact divergence failure, and archived older automatic publishers.
 
-Current release implementation: `3.0.0-alpha.5.61 — Credits Usage Early Start`.
+Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`.
 
-5.61 release contract:
+5.62 release contract:
 
-- Bridge Engine becomes `1.6.14`; Bridge Manager remains `1.2.6`.
-- Share the existing Credits CLI read through a bounded 30s `creditsBootstrap` cache/in-flight entry; do not add another Credits CLI call to the normal snapshot.
-- Start one Credits 24h usage prefetch only with an exact requested Credits ID or exactly one explicit eligible Credits ID from the real Credits source. Ambiguous/missing IDs keep the 5.60 root-gated path.
-- `creditsBootstrap` must not serve stale fallback data. Its dedicated circuit family must not double-count failures against the existing organizations circuit. UNKNOWN/source fidelity remains unchanged.
-- Default CLI concurrency remains 2. `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.
-- Full organization selection remains authoritative for the returned payload. If the early candidate does not equal the final selected Credits org, the early result is not used by `usageScopes`.
-- Preserve account capture, plain orgs fallback, shared 24h DevPass capture, cache TTLs other than the explicit aligned Credits bootstrap entry, existing organizations circuit semantics, CLI timeout 25s, Request Ledger/provider cache fidelity, parser `provider-usage-v3`, updater behavior, and 5.60 monotonic release integrity.
-- Existing snapshot timeline/CLI-operation diagnostics are sufficient for device verification; do not add raw org IDs, CLI args, payloads, headers, tokens, or capture paths.
+- Bridge Engine becomes `1.6.15`; Bridge Manager remains `1.2.6`.
+- Measurement only: preserve 5.61 scheduling, Credits early-start selection/prefetch behavior, CLI concurrency limit 2, CLI timeout 25s, cache TTLs, cache/stale/circuit semantics, shared capture, payload semantics, Request Ledger, updater flow, and monotonic release integrity.
+- Add snapshot-local Credits early-start decision attribution: `started` or `skipped`, safe candidate mode, result, and a bounded reason vocabulary (`serial-mode`, `no-safe-candidate`, `prefetch-error`, `bootstrap-error`). Never expose the candidate organization ID.
+- Add bounded snapshot-local cache decision attribution with only sanitized family/scope/range plus `hit`, `miss`, `join`, `load`, `stale`, `blocked`, or `error`, and actual cache age/TTL when available.
+- Raw cache keys, organization IDs, CLI args, payloads, headers, tokens, capture paths, and arbitrary error text must never enter the new decision attribution.
+- Diagnostics must group cache decisions by sanitized family/scope/range so 7d/30d TTL expiry/load and queue contention can be correlated without changing source behavior.
+- The new attribution must add zero CLI/network requests. Normal-path `runCli()` call sites remain unchanged from 5.61.
 
-5.61 device success evidence to collect:
+5.62 device success evidence to collect:
 
 - Functional health remains READY/ok with no new active runtime errors.
-- On an eligible cold sample, `usage-24h-model` should start at or shortly after the Credits CLI ends and before `organizations` ends.
-- CLI runs should remain bounded with limit 2 and no duplicate Credits call.
-- If the Credits source is ambiguous, early-start may be absent by design and the previous root-gated behavior is correct.
-- Compare snapshot/CLI timings against the 5.59 baseline without claiming telemetry-independent speedup from a single noisy sample.
+- An eligible early-start sample reports `decision started`; a skipped sample reports a bounded reason instead of leaving the cause UNKNOWN.
+- A normal 3-operation sample identifies long-window 7d/30d entries as cache hits when they are warm.
+- When a long-window refresh spike recurs, diagnostics identify which 7d/30d families expired/loaded/joined while the existing CLI timeline independently shows the resulting lane/queue shape.
+- No raw organization identifier or cache key appears in the new attribution lines.
 
 ## Long-term update roadmap
 

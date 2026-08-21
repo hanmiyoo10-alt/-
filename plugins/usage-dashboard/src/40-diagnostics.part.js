@@ -76,6 +76,57 @@
     }).join(' · ');
   }
 
+  function bridgeCreditsEarlyStartText(performance) {
+    const early = performance?.creditsEarlyStart && typeof performance.creditsEarlyStart === 'object'
+      ? performance.creditsEarlyStart
+      : null;
+    if (!early) return '—';
+    const decision = ['started','skipped','not-evaluated'].includes(String(early.decision)) ? String(early.decision) : 'unknown';
+    const mode = ['requested-exact','single-credit-id'].includes(String(early.candidateMode)) ? String(early.candidateMode) : '—';
+    const reason = ['serial-mode','no-safe-candidate','prefetch-error','bootstrap-error'].includes(String(early.reason)) ? String(early.reason) : 'none';
+    const result = ['none','in-flight','completed','failed'].includes(String(early.result)) ? String(early.result) : 'unknown';
+    return `decision ${decision} · candidate ${mode} · result ${result} · reason ${reason}`;
+  }
+
+  function bridgeSnapshotCacheDecisionsText(performance) {
+    const events = Array.isArray(performance?.cacheDecisions) ? performance.cacheDecisions.slice(0, 64) : [];
+    if (!events.length) return '—';
+    const groups = new Map();
+    for (const item of events) {
+      const family = ['organizations','accountCapture','creditsBootstrap','devpassStatus','usageScopes','analyticsScopes','usage','devpassActivity','activity','analytics','runway','other'].includes(String(item?.family))
+        ? String(item.family)
+        : 'other';
+      const scope = ['all','devpass','credits'].includes(String(item?.scope)) ? String(item.scope) : '';
+      const range = ['24h','7d','30d'].includes(String(item?.range)) ? String(item.range) : '';
+      const key = [family, scope, range].filter(Boolean).join('/');
+      if (!groups.has(key)) groups.set(key, { family, scope, range, actions:[], ageMs:null, ttlMs:null });
+      const group = groups.get(key);
+      const action = ['hit','miss','join','load','stale','blocked','error'].includes(String(item?.action)) ? String(item.action) : 'other';
+      const reason = ['empty','expired','circuit-open','refresh-error'].includes(String(item?.reason)) ? String(item.reason) : '';
+      const actionText = reason ? `${action}(${reason})` : action;
+      if (group.actions.at(-1) !== actionText) group.actions.push(actionText);
+      if (Number.isFinite(Number(item?.ageMs))) group.ageMs = Math.max(0, Number(item.ageMs));
+      if (Number.isFinite(Number(item?.ttlMs))) group.ttlMs = Math.max(0, Number(item.ttlMs));
+    }
+    const rows = [...groups.values()]
+      .sort((a,b) => {
+        const aLong = ['7d','30d'].includes(a.range) ? 0 : 1;
+        const bLong = ['7d','30d'].includes(b.range) ? 0 : 1;
+        if (aLong !== bLong) return aLong - bLong;
+        const aLoad = a.actions.some(value => /load|stale|blocked|error/.test(value)) ? 0 : 1;
+        const bLoad = b.actions.some(value => /load|stale|blocked|error/.test(value)) ? 0 : 1;
+        return aLoad - bLoad;
+      })
+      .slice(0, 24)
+      .map((group) => {
+        const label = [group.family, group.scope, group.range].filter(Boolean).join('/');
+        const ageText = group.ageMs === null ? '' : ` · age ${Math.round(group.ageMs)}ms`;
+        const ttlText = group.ttlMs === null ? '' : ` · ttl ${Math.round(group.ttlMs)}ms`;
+        return `${label} ${group.actions.join('→') || '—'}${ageText}${ttlText}`;
+      });
+    return rows.join(' · ') || '—';
+  }
+
   function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {
     const blockers = [];
     const lifecycle = bridgeLifecycleMode();
@@ -158,8 +209,10 @@
       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot cache: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.cache, [['hits','hit'],['misses','miss'],['joins','join'],['loads','load'],['errors','errors'],['staleFallbacks','stale fallback']])}`,
+      `Bridge snapshot cache decisions: ${bridgeSnapshotCacheDecisionsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot circuit: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.circuits, [['opens','opened'],['blocked','blocked'],['recoveries','recoveries']])}`,
       `Bridge partial: modules ${bridgeDiag.partialModules ?? '—'} · usage ${countErrorMap(d.usageScopes?.errors)} · analytics ${countErrorMap(d.analyticsScopes?.errors)}`,
       `Bridge cache: hit ${bridgeDiag.cacheHitRate === null ? '—' : `${bridgeDiag.cacheHitRate.toFixed(0)}%`} · entries ${bridgeDiag.cacheEntries ?? '—'} · in-flight ${bridgeDiag.inFlight ?? '—'} · stale fallback ${bridgeDiag.staleFallbacks ?? '—'}`,

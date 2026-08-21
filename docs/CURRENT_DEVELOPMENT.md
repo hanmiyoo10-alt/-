@@ -84,7 +84,7 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat and now serves as a frozen regression control. The active checkpoint is M2-2 (`v0.64.0`); the current task is to validate the new Representation ownership boundary while preserving the validated fast path, genuine-user-edit behavior, and ordinary A/B/C operation.
+v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat and now serves as a frozen regression control. The active major checkpoint remains M2-2, while current production is the v0.64.1 Summary Scope Authority correctness insert; preserve the validated Representation fast path and genuine-user-edit behavior while completing summary-scope live validation and the final M2-2 positive control.
 
 ---
 

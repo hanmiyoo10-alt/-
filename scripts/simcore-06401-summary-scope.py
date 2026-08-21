@@ -87,7 +87,7 @@ function classifySummaryScope(input, mode = 'A') {
     reason: summaryHasExplicitFullYearWindow(text, targetYear) ? 'BOUNDED_SINGLE_YEAR' : 'SINGLE_YEAR_SUMMARY',
   });
 }
-'''.replace(r'\"', '"')
+'''
 
 
 def one(text, old, new, label):
@@ -107,8 +107,8 @@ def patch(text):
     text = one(text, f"const SIMCORE_RUNTIME_VERSION = '{FROM_VERSION}';", f"const SIMCORE_RUNTIME_VERSION = '{TO_VERSION}';", 'runtime version')
     text = one(text, '// v0.64.0 M2-2 Representation Ownership Split:', RELEASE_NOTE + '// v0.64.0 M2-2 Representation Ownership Split:', 'release note')
 
-    lifecycle_marker = '''  return { mode, wasLocked, hasContinue, hasEnd, hasStart, hasCommunity };\n}\n\nfunction prepareTurn(baseState, userText, promptProbe, sendIndex) {'''
-    lifecycle_replacement = '''  return { mode, wasLocked, hasContinue, hasEnd, hasStart, hasCommunity };\n}\n\n''' + SUMMARY_CLASSIFIER + '''\nfunction prepareTurn(baseState, userText, promptProbe, sendIndex) {'''
+    lifecycle_marker = "  return { mode, wasLocked, hasContinue, hasEnd, hasStart, hasCommunity };\n}\n\nfunction prepareTurn(baseState, userText, promptProbe, sendIndex) {"
+    lifecycle_replacement = "  return { mode, wasLocked, hasContinue, hasEnd, hasStart, hasCommunity };\n}\n\n" + SUMMARY_CLASSIFIER + "\nfunction prepareTurn(baseState, userText, promptProbe, sendIndex) {"
     text = one(text, lifecycle_marker, lifecycle_replacement, 'summary classifier insertion')
 
     text = one(
@@ -117,14 +117,12 @@ def patch(text):
         "  const c = classifyMode(state, input);\n  const summaryScope = classifySummaryScope(input, c.mode);\n  const broadcastAirtimeIsNew = !!(c.hasStart && !c.wasLocked);",
         'summary classification call',
     )
-
     text = one(
         text,
-        '''    sendIndex,\n    mode: c.mode,\n    userText: input.slice(0, 16000),''',
-        '''    sendIndex,\n    mode: c.mode,\n    summaryScope: summaryScope.scope,\n    summaryTargetYear: summaryScope.targetYear,\n    summaryComparisonYear: summaryScope.comparisonYear,\n    summaryAuthority: summaryScope.authority,\n    summaryScopeReason: summaryScope.reason,\n    userText: input.slice(0, 16000),''',
+        "    sendIndex,\n    mode: c.mode,\n    userText: input.slice(0, 16000),",
+        "    sendIndex,\n    mode: c.mode,\n    summaryScope: summaryScope.scope,\n    summaryTargetYear: summaryScope.targetYear,\n    summaryComparisonYear: summaryScope.comparisonYear,\n    summaryAuthority: summaryScope.authority,\n    summaryScopeReason: summaryScope.reason,\n    userText: input.slice(0, 16000),",
         'pending summary metadata',
     )
-
     text = one(
         text,
         'module.exports = { classifyMode, prepareTurn, expectedCommunityBlocks };',
@@ -134,50 +132,80 @@ def patch(text):
 
     text = one(text, 'const PROMPT_COMPILER_VERSION = 2;', 'const PROMPT_COMPILER_VERSION = 3;', 'prompt compiler version')
 
-    recurrence_to_handoff = '''  if (p.templateRecurrenceRepeated) {\n    lines.push('request_template_recurs_from_prior_history=1');\n    lines.push(`request_template_mode_family=${p.templateRecurrenceModeFamily || recurrence.modeFamily(p.mode)}`);\n    lines.push('prior_answer_is_not_a_content_template=1');\n    lines.push('preserve_requested_fields_and_output_contract=1');\n    lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');\n    lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');\n  }\n  if (p.mode === 'C' && p.communitySourceHandoffEligible) {'''
-    summary_guidance = '''  if (p.templateRecurrenceRepeated) {\n    lines.push('request_template_recurs_from_prior_history=1');\n    lines.push(`request_template_mode_family=${p.templateRecurrenceModeFamily || recurrence.modeFamily(p.mode)}`);\n    lines.push('prior_answer_is_not_a_content_template=1');\n    lines.push('preserve_requested_fields_and_output_contract=1');\n    lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');\n    lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');\n  }\n  if (p.summaryScope === 'ANNUAL_ONLY' && Number.isInteger(Number(p.summaryTargetYear))) {\n    lines.push('summary_scope=ANNUAL_ONLY');\n    lines.push(`summary_target_year=${Number(p.summaryTargetYear)}`);\n    lines.push('summary_temporal_authority=TARGET_YEAR_ONLY');\n    lines.push('target_year_achievement_authority=1;prior_year_achievement_as_target_year_achievement=forbidden');\n    lines.push('historical_context_allowed=1;historical_context_must_be_labeled=1');\n    lines.push('ongoing_role_prior_start_date_allowed_as_metadata=1;ongoing_role_target_year_activity_is_authoritative=1');\n    lines.push('year_end_cumulative_snapshot_allowed=1;year_end_cumulative_snapshot_must_be_labeled=1');\n    lines.push('do_not_replace_missing_target_year_achievement_with_older_achievement=1;requested_category_coverage_required=1');\n  } else if (p.summaryScope === 'CUMULATIVE_YOY'\n      && Number.isInteger(Number(p.summaryTargetYear))\n      && Number.isInteger(Number(p.summaryComparisonYear))) {\n    lines.push('summary_scope=CUMULATIVE_YOY');\n    lines.push(`summary_target_year=${Number(p.summaryTargetYear)}`);\n    lines.push(`summary_comparison_year=${Number(p.summaryComparisonYear)}`);\n    lines.push('summary_temporal_authority=YEAR_END_BASELINE_COMPARE');\n    lines.push('for_each_requested_metric_require=previous_value,current_value,absolute_delta,percentage_delta');\n    lines.push('comparison_baseline_must_equal_requested_previous_year_end=1;older_historical_value_cannot_replace_comparison_baseline=1');\n    lines.push('same_metric_baseline_consistency_required=1');\n    lines.push('lifetime_origin_value_allowed_as_secondary_context=1;lifetime_growth_cannot_replace_requested_yoy_growth=1');\n  }\n  if (p.summaryScope && p.summaryScope !== 'NONE') {\n    lines.push('summary_scope_authority_over_recurrence_factual_content=1;recurrence_is_structure_style_guidance_only=1');\n    lines.push('reevaluate_summary_facts_from_current_target_scope=1');\n  }\n  if (p.mode === 'C' && p.communitySourceHandoffEligible) {'''
-    text = one(text, recurrence_to_handoff, summary_guidance, 'summary prompt guidance')
+    recurrence_block = """  if (p.templateRecurrenceRepeated) {
+    lines.push('request_template_recurs_from_prior_history=1');
+    lines.push(`request_template_mode_family=${p.templateRecurrenceModeFamily || recurrence.modeFamily(p.mode)}`);
+    lines.push('prior_answer_is_not_a_content_template=1');
+    lines.push('preserve_requested_fields_and_output_contract=1');
+    lines.push('reevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1');
+    lines.push('do_not_mechanically_reuse_prior_answer_composition_or_wording=1');
+  }
+"""
+    summary_guidance = recurrence_block + """  if (p.summaryScope === 'ANNUAL_ONLY' && Number.isInteger(Number(p.summaryTargetYear))) {
+    lines.push('summary_scope=ANNUAL_ONLY');
+    lines.push(`summary_target_year=${Number(p.summaryTargetYear)}`);
+    lines.push('summary_temporal_authority=TARGET_YEAR_ONLY');
+    lines.push('target_year_achievement_authority=1;prior_year_achievement_as_target_year_achievement=forbidden');
+    lines.push('historical_context_allowed=1;historical_context_must_be_labeled=1');
+    lines.push('ongoing_role_prior_start_date_allowed_as_metadata=1;ongoing_role_target_year_activity_is_authoritative=1');
+    lines.push('year_end_cumulative_snapshot_allowed=1;year_end_cumulative_snapshot_must_be_labeled=1');
+    lines.push('do_not_replace_missing_target_year_achievement_with_older_achievement=1;requested_category_coverage_required=1');
+  } else if (p.summaryScope === 'CUMULATIVE_YOY'
+      && Number.isInteger(Number(p.summaryTargetYear))
+      && Number.isInteger(Number(p.summaryComparisonYear))) {
+    lines.push('summary_scope=CUMULATIVE_YOY');
+    lines.push(`summary_target_year=${Number(p.summaryTargetYear)}`);
+    lines.push(`summary_comparison_year=${Number(p.summaryComparisonYear)}`);
+    lines.push('summary_temporal_authority=YEAR_END_BASELINE_COMPARE');
+    lines.push('for_each_requested_metric_require=previous_value,current_value,absolute_delta,percentage_delta');
+    lines.push('comparison_baseline_must_equal_requested_previous_year_end=1;older_historical_value_cannot_replace_comparison_baseline=1');
+    lines.push('same_metric_baseline_consistency_required=1');
+    lines.push('lifetime_origin_value_allowed_as_secondary_context=1;lifetime_growth_cannot_replace_requested_yoy_growth=1');
+  }
+  if (p.summaryScope && p.summaryScope !== 'NONE') {
+    lines.push('summary_scope_authority_over_recurrence_factual_content=1;recurrence_is_structure_style_guidance_only=1');
+    lines.push('reevaluate_summary_facts_from_current_target_scope=1');
+  }
+"""
+    text = one(text, recurrence_block, summary_guidance, 'summary prompt guidance')
 
     text = one(
         text,
-        '''          registrySize: Number(pendingProbe.templateRegistrySize || 0),\n          bootstrap: snapshotDetail?.templateBootstrap || null,''',
-        '''          registrySize: Number(pendingProbe.templateRegistrySize || 0),\n          summaryScope: pendingProbe.summaryScope || 'NONE',\n          summaryTargetYear: pendingProbe.summaryTargetYear == null ? null : Number(pendingProbe.summaryTargetYear),\n          summaryComparisonYear: pendingProbe.summaryComparisonYear == null ? null : Number(pendingProbe.summaryComparisonYear),\n          summaryAuthority: pendingProbe.summaryAuthority || 'NONE',\n          summaryScopeReason: pendingProbe.summaryScopeReason || 'INELIGIBLE',\n          bootstrap: snapshotDetail?.templateBootstrap || null,''',
+        "          registrySize: Number(pendingProbe.templateRegistrySize || 0),\n          bootstrap: snapshotDetail?.templateBootstrap || null,",
+        "          registrySize: Number(pendingProbe.templateRegistrySize || 0),\n          summaryScope: pendingProbe.summaryScope || 'NONE',\n          summaryTargetYear: pendingProbe.summaryTargetYear == null ? null : Number(pendingProbe.summaryTargetYear),\n          summaryComparisonYear: pendingProbe.summaryComparisonYear == null ? null : Number(pendingProbe.summaryComparisonYear),\n          summaryAuthority: pendingProbe.summaryAuthority || 'NONE',\n          summaryScopeReason: pendingProbe.summaryScopeReason || 'INELIGIBLE',\n          bootstrap: snapshotDetail?.templateBootstrap || null,",
         'summary diagnostic probe capture',
     )
 
-    diagnostic_marker = "      `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,”
-    diagnostic_marker = diagnostic_marker.replace(',”', '`,')
-    diagnostic_line = "      `Summary scope: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.summaryScope || 'NONE'} · target ${recurrenceProbe.summaryTargetYear == null ? 'n/a' : Number(recurrenceProbe.summaryTargetYear)} · comparison ${recurrenceProbe.summaryComparisonYear == null ? 'n/a' : Number(recurrenceProbe.summaryComparisonYear)} · authority ${recurrenceProbe.summaryAuthority || 'NONE'} · reason ${recurrenceProbe.summaryScopeReason || 'INELIGIBLE'}` : 'n/a'}`,\n"
-    text = one(text, diagnostic_marker, diagnostic_line + diagnostic_marker, 'summary diagnostic line')
+    recurrence_diag = "      `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,"
+    summary_diag = "      `Summary scope: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.summaryScope || 'NONE'} · target ${recurrenceProbe.summaryTargetYear == null ? 'n/a' : Number(recurrenceProbe.summaryTargetYear)} · comparison ${recurrenceProbe.summaryComparisonYear == null ? 'n/a' : Number(recurrenceProbe.summaryComparisonYear)} · authority ${recurrenceProbe.summaryAuthority || 'NONE'} · reason ${recurrenceProbe.summaryScopeReason || 'INELIGIBLE'}` : 'n/a'}`,\n"
+    text = one(text, recurrence_diag, summary_diag + recurrence_diag, 'summary diagnostic line')
 
     return text
 
 
 for target in TARGETS:
-    source = target.read_text(encoding='utf-8')
-    target.write_text(patch(source), encoding='utf-8')
+    target.write_text(patch(target.read_text(encoding='utf-8')), encoding='utf-8')
 
 latest = TARGETS[0].read_text(encoding='utf-8')
 install = TARGETS[1].read_text(encoding='utf-8')
 if latest != install:
     raise SystemExit('latest.js and install.js diverged')
 
-required = (
+for needle in (
     '//@version 0.64.1',
     "const SIMCORE_RUNTIME_VERSION = '0.64.1';",
     'v0.64.1 Summary Scope Authority',
     'function classifySummaryScope',
     'summaryScope: summaryScope.scope',
-    "summary_scope=ANNUAL_ONLY",
-    "summary_scope=CUMULATIVE_YOY",
+    'summary_scope=ANNUAL_ONLY',
+    'summary_scope=CUMULATIVE_YOY',
     'summary_scope_authority_over_recurrence_factual_content=1',
     'Summary scope:',
     'Representation ownership: REPRESENTATION',
     'REPRESENTATION_FAST_RECONCILED',
     'USER_EDIT_CANDIDATE',
     'MANUAL_EDIT_REBUILT',
-)
-for needle in required:
+):
     if needle not in latest:
         raise SystemExit(f'missing post-patch marker: {needle}')
 

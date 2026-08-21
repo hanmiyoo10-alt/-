@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.58",
-  "release_name": "Narrative Tail Time Contract",
+  "production_version": "0.63.59",
+  "release_name": "Broadcast End Closure Contract",
   "release_branch": "release-simcore",
-  "release_commit": "4dc71f01cc5dade0ae69005ee0f771961f638be0",
-  "release_blob": "eb976adc97fd5b8ac1cec2ad10672638ae83c7e2",
+  "release_commit": "7c0f6f4a8e0b7e42a5996dc7bacd149f27e3751d",
+  "release_blob": "da47e5d8123c0abfe9902f016c84ac758f766032",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06358_NARRATIVE_TAIL_TIME_LIVE_VALIDATION",
+  "current_priority": "06359_BROADCAST_END_CLOSURE_LIVE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

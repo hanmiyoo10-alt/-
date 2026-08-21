@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.57
+//@version 0.63.58
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -28,6 +28,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.58 Narrative Tail Time Contract:
+// - Follows direct long-chat evidence where a visible non-broadcast scene began at 01:00, explicitly progressed in prose to a 03:00 ending, but emitted no later canonical timestamp line; Time therefore reported scenes 0 / FRAME_ONLY and persisted 01:00 into the next turn
+// - Requires non-broadcast rendering to emit a canonical timestamp line whenever the current scene advances beyond the frame time, including a user-stated later current/end time; elapsed current time must not exist only as prose when it changes the terminal narrative time
+// - Reuses the existing v0.63.28 line-level monotonic timestamp sequence and commit logic unchanged: SimCore does not infer or auto-commit arbitrary prose clock mentions, avoiding confusion with historical/event/reference times
+// - Adds Narrative tail coverage diagnostics so FRAME_ONLY explicitly means no terminal timestamp beyond the frame was observable and copied RAW prose must be cross-checked for elapsed/current/end-time cues
+// - Scope is renderer time-tail contract + diagnostics only: v0.63.57 current-timeline authority, M2-1 Recovery boundaries, Representation/Edit Reconcile, Deferred Mirror, Broadcast, Frame, Evidence/Lineage/Handoff/Recurrence, Structure/COMMUNITY, cache/history, storage/API/network/timer behavior and persistent schema remain frozen
 //
 // v0.63.57 Current Timeline Authority Guard:
 // - Follows direct long-chat evidence where the persisted/current frame remained in 2030 while a non-broadcast response silently reverted visible scene timestamps and character-era state to 2017; existing Continuity correctly protected the persisted narrative clock but left the visible body unchanged
@@ -546,7 +553,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.57';
+const SIMCORE_RUNTIME_VERSION = '0.63.58';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3744,6 +3751,11 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push(`current_timeline_anchor=${p.narrativeTimestampPrevious}`);
     lines.push('current_timeline_authority=1;historical_context_reference_only=1;explicit_user_requested_past_scene_or_flashback_may_depart=1');
     lines.push('current_character_age_and_status_follow_current_timeline=1;past_event_age_or_status_not_current=1');
+  }
+  if (!/^B_/.test(String(p.mode || ''))) {
+    lines.push('narrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1');
+    lines.push('terminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1');
+    lines.push('user_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1');
   }
   if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
     lines.push('timestamp_semantics=current_narrative_time');
@@ -7469,6 +7481,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Evidence root fence: ${evidenceFence?.rootFence ? `${evidenceFence.rootFence.status} · request @${evidenceFence.rootFence.requestIndex >= 0 ? evidenceFence.rootFence.requestIndex : 'n/a'} role ${evidenceFence.rootFence.role || 'n/a'} · shape ${evidenceFence.rootFence.shape || 'n/a'} · delta ${evidenceFence.rootFence.normDelta == null ? 'n/a' : evidenceFence.rootFence.normDelta} · ${evidenceFence.rootFence.reason || 'n/a'}` : 'n/a'}`,
       `Evidence source fence: ${evidenceFence?.sourceFence ? `${evidenceFence.sourceFence.status} · request @${evidenceFence.sourceFence.requestIndex >= 0 ? evidenceFence.sourceFence.requestIndex : 'n/a'} role ${evidenceFence.sourceFence.role || 'n/a'} · shape ${evidenceFence.sourceFence.shape || 'n/a'} · delta ${evidenceFence.sourceFence.normDelta == null ? 'n/a' : evidenceFence.sourceFence.normDelta} · ${evidenceFence.sourceFence.reason || 'n/a'}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
+      `Narrative tail coverage: ${probeFresh && narrative ? (/^FRAME_ONLY/.test(String(narrative.tailStatus || '')) ? 'FRAME_ONLY · no explicit terminal timestamp beyond frame · RAW prose cross-check required for elapsed/current/end-time cues' : (narrative.tailPromoted ? 'EXPLICIT_TAIL · terminal timestamp observed and committed' : `NO_TAIL_PROMOTION · ${narrative.tailStatus || 'n/a'}`)) : 'n/a'}`,
       `Visible chronology: ${probeFresh && narrative ? (narrative.tailStatus === 'SKIPPED_NON_MONOTONIC' ? 'NON_MONOTONIC_VISIBLE_SEQUENCE · state floor protected · body unchanged' : (narrative.tailStatus === 'SKIPPED_MALFORMED' ? 'MALFORMED_VISIBLE_SEQUENCE · state floor protected · body unchanged' : 'PASS_OR_NOT_APPLICABLE')) : 'n/a'}`,
       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',

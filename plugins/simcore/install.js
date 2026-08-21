@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.59
+//@version 0.64.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -22,12 +22,22 @@
 // - Community: COMMUNITY parsing/platform-family/group taxonomy only
 // - Reaction: reaction parser, per-family historical maxima, normalization
 // - Structure: validation/integrity/state-commit safety (judge; does not repair)
+// - Representation: bounded CANONICAL/HOST_RAW/FRESH_CHAT identity + provenance classification only; memory-only, no raw bodies or chat writes
 // - Output Compat: output envelope compatibility/canonicalization + bounded Fresh-confirmation metadata
 // - Bootstrap Migration: history bootstrap + legacy migration/repair coordination
 // - Recovery: M2 compatibility facade preserving the v0.63.55 public recovery API
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.0 M2-2 Representation Ownership Split:
+// - Starts the next staged 2.0M Major checkpoint from the v0.63.59 production baseline; this checkpoint is mechanical ownership movement, not a feature release
+// - Introduces Representation as a first-class memory-only module owning the bounded CANONICAL / HOST_RAW / FRESH_CHAT provenance ledger, prior representation taxonomy, exact visible carryover classification and fingerprint-length deltas
+// - Runtime Mirror still owns Fresh chat observation plus strict identity/location/staleness guards and mirror writes, but no longer owns the provenance ledger or exposes provenance through its runtime API
+// - The outer request shell consumes Representation facts directly; v0.63.55 representation-fast eligibility and edit-origin routing remain unchanged in decision semantics
+// - Genuine user edits remain the frozen positive control: Prior EXACT + current matches neither canonical nor Fresh continues to route USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT
+// - Fresh remains identity evidence, never a body source: no raw Fresh body retention, persistent representation state, chat/history mutation, network call or timer is introduced
+// - Recovery/output-compat/bootstrap-migration, Deferred Mirror safety, Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence/Structure, cache/history observation, storage schema and prompt placement remain frozen
 //
 // v0.63.59 Broadcast End Closure Contract:
 // - Follows direct 24-hour B_START -> B_CONTINUE -> B_END long-chat evidence where Broadcast End Authority correctly allowed the explicit B_END and unlocked the session, but the response began at 08:30, visibly progressed through "5 minutes remaining" to the 09:00 end, and persisted broadcast airtime at the stale 08:30 frame timestamp
@@ -561,7 +571,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.59';
+const SIMCORE_RUNTIME_VERSION = '0.64.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -5725,16 +5735,67 @@ function createSessionRuntime(deps) {
 module.exports = { createSessionRuntime };
 });
 
-SimCore.define("runtime-mirror", function (require, module, exports) {
-function createMirrorRuntime(deps) {
-  const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch } = deps;
-  let sequence = 0;
-  const latestByLocation = new Map();
-  const PROVENANCE_LEDGER_LIMIT = 16;
-  const provenanceLedger = [];
-  let lastProbe = null;
+SimCore.define("representation", function (require, module, exports) {
+const EXACT_PRIOR_MATCHES = Object.freeze([
+  'CANONICAL',
+  'FRESH_CONFIRMED_SUFFIX',
+  'BOUNDARY_CONFIRMED_SUFFIX',
+  'SAFE_BOUNDARY_CONFIRMED',
+]);
 
-  function rememberProvenance(probe) {
+function fingerprintChars(value) {
+  const match = String(value || '').match(/^(\d+):/);
+  return match ? Number(match[1]) : null;
+}
+
+function priorRepresentation(row) {
+  if (!row) return 'UNAVAILABLE';
+  const match = String(row.fingerprintMatch || '');
+  if (EXACT_PRIOR_MATCHES.includes(match)) return 'EXACT';
+  if (match === 'HOST_RAW') return 'HOST_RAW_MATCH';
+  return 'OUTPUT_MISMATCH';
+}
+
+function currentMatch(visibleFingerprint, row) {
+  const visible = String(visibleFingerprint || '');
+  if (!visible || !row) return 'NONE';
+  if (visible === String(row.freshFingerprint || '')) return 'FRESH_CHAT';
+  if (visible === String(row.canonicalFingerprint || '')) return 'CANONICAL';
+  if (visible === String(row.hostRawFingerprint || '')) return 'HOST_RAW';
+  return 'NONE';
+}
+
+function deltaShape(match) {
+  if (match === 'FRESH_CHAT') return 'FRESH_EXACT_CARRYOVER';
+  if (match === 'CANONICAL') return 'CANONICAL_EXACT_CARRYOVER';
+  if (match === 'HOST_RAW') return 'HOST_RAW_EXACT_CARRYOVER';
+  return 'NEW_VISIBLE_REPRESENTATION';
+}
+
+function inspectCarryover(visibleFingerprint, row) {
+  const priorCanonical = String(row?.canonicalFingerprint || '');
+  const priorFresh = String(row?.freshFingerprint || '');
+  const priorHostRaw = String(row?.hostRawFingerprint || '');
+  const priorMatch = String(row?.fingerprintMatch || '');
+  const prior = priorRepresentation(row);
+  const current = currentMatch(visibleFingerprint, row);
+  const currentChars = fingerprintChars(visibleFingerprint);
+  const canonicalChars = fingerprintChars(priorCanonical);
+  const freshChars = fingerprintChars(priorFresh);
+  return Object.freeze({
+    priorCanonical, priorFresh, priorHostRaw, priorMatch,
+    priorRepresentation: prior,
+    currentMatch: current,
+    deltaCanonical: currentChars != null && canonicalChars != null ? currentChars - canonicalChars : null,
+    deltaFresh: currentChars != null && freshChars != null ? currentChars - freshChars : null,
+    deltaShape: deltaShape(current),
+  });
+}
+
+function createRegistry(limit = 16) {
+  const maxRows = Math.max(1, Number(limit) || 16);
+  const ledger = [];
+  function remember(probe) {
     if (!probe || !probe.freshFingerprintFull) return;
     const entry = Object.freeze({
       outIndex: Number(probe.outIndex),
@@ -5746,12 +5807,37 @@ function createMirrorRuntime(deps) {
       freshFingerprint: String(probe.freshFingerprintFull || ''),
       at: Number(probe.finishedAt || Date.now()),
     });
-    for (let i = provenanceLedger.length - 1; i >= 0; i--) {
-      if (provenanceLedger[i].locationKey === entry.locationKey && provenanceLedger[i].outIndex === entry.outIndex) provenanceLedger.splice(i, 1);
+    for (let i = ledger.length - 1; i >= 0; i--) {
+      if (ledger[i].locationKey === entry.locationKey && ledger[i].outIndex === entry.outIndex) ledger.splice(i, 1);
     }
-    provenanceLedger.push(entry);
-    if (provenanceLedger.length > PROVENANCE_LEDGER_LIMIT) provenanceLedger.splice(0, provenanceLedger.length - PROVENANCE_LEDGER_LIMIT);
+    ledger.push(entry);
+    if (ledger.length > maxRows) ledger.splice(0, ledger.length - maxRows);
   }
+  function rows() { return ledger.slice(); }
+  function latest(outIndex, locationKey = '') {
+    const expectedIndex = Number(outIndex);
+    const expectedLocation = String(locationKey || '');
+    for (let i = ledger.length - 1; i >= 0; i--) {
+      const row = ledger[i];
+      if (Number(row?.outIndex) !== expectedIndex) continue;
+      if (expectedLocation && String(row?.locationKey || '') !== expectedLocation) continue;
+      return row;
+    }
+    return null;
+  }
+  function clear() { ledger.length = 0; }
+  return Object.freeze({ remember, rows, latest, clear });
+}
+
+module.exports = { createRegistry, inspectCarryover, fingerprintChars };
+});
+
+SimCore.define("runtime-mirror", function (require, module, exports) {
+function createMirrorRuntime(deps) {
+  const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch, rememberRepresentation } = deps;
+  let sequence = 0;
+  const latestByLocation = new Map();
+  let lastProbe = null;
 
   function capture(chaIdx, chatIdx, chat, outIndex, state = null) {
     const coreSession = getCoreSession();
@@ -5974,7 +6060,7 @@ function createMirrorRuntime(deps) {
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
       probe.finishedAt = Date.now();
-      rememberProvenance(probe);
+      rememberRepresentation(probe);
     };
 
     if (typeof setTimeout === 'function') {
@@ -5988,11 +6074,10 @@ function createMirrorRuntime(deps) {
 
   function clear() {
     latestByLocation.clear();
-    provenanceLedger.length = 0;
     lastProbe = null;
   }
 
-  return Object.freeze({ schedule, lastProbe: () => lastProbe, provenanceLedger: () => provenanceLedger.slice(), clear });
+  return Object.freeze({ schedule, lastProbe: () => lastProbe, clear });
 }
 module.exports = { createMirrorRuntime };
 });
@@ -6203,6 +6288,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   const runtimeCacheCandidateRules = SimCore.require('runtime-cache-candidates');
   const runtimeTelemetryRules = SimCore.require('runtime-telemetry');
   const runtimeSessionRules = SimCore.require('runtime-session');
+  const representationRules = SimCore.require('representation');
   const runtimeMirrorRules = SimCore.require('runtime-mirror');
   const runtimeHooks = SimCore.require('runtime-hooks');
   const runtimeProbeRules = SimCore.require('runtime-probe');
@@ -6270,11 +6356,13 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       coreLocationKey = next.coreLocationKey;
     },
   });
+  const representationRegistry = representationRules.createRegistry(16);
   const runtimeMirror = runtimeMirrorRules.createMirrorRuntime({
     coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey,
     getCoreSession: () => coreSession,
     runtimeIsCurrent,
     getRuntimeEpoch: () => runtimeEpoch,
+    rememberRepresentation: (probe) => representationRegistry.remember(probe),
   });
 
   function runtimeIsCurrent(epoch = runtimeEpoch) {
@@ -6569,36 +6657,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     }
     const visibleContent = textMessageContent(msgs[lastAssistant]);
     const visibleFingerprint = coreRules.fingerprintText(visibleContent);
-    const provenanceRows = runtimeMirror.provenanceLedger();
-    let priorProvenance = null;
-    for (let i = provenanceRows.length - 1; i >= 0; i--) {
-      const row = provenanceRows[i];
-      if (Number(row?.outIndex) !== lastAssistant) continue;
-      if (coreLocationKey && String(row?.locationKey || '') !== String(coreLocationKey)) continue;
-      priorProvenance = row;
-      break;
-    }
-    const priorCanonical = String(priorProvenance?.canonicalFingerprint || '');
-    const priorFresh = String(priorProvenance?.freshFingerprint || '');
-    const priorHostRaw = String(priorProvenance?.hostRawFingerprint || '');
-    const priorMatch = String(priorProvenance?.fingerprintMatch || '');
-    const priorRepresentation = !priorProvenance
-      ? 'UNAVAILABLE'
-      : ((['CANONICAL', 'FRESH_CONFIRMED_SUFFIX', 'BOUNDARY_CONFIRMED_SUFFIX', 'SAFE_BOUNDARY_CONFIRMED'].includes(priorMatch))
-        ? 'EXACT'
-        : (priorMatch === 'HOST_RAW' ? 'HOST_RAW_MATCH' : 'OUTPUT_MISMATCH'));
-    const currentMatch = visibleFingerprint && visibleFingerprint === priorFresh
-      ? 'FRESH_CHAT'
-      : (visibleFingerprint && visibleFingerprint === priorCanonical
-        ? 'CANONICAL'
-        : (visibleFingerprint && visibleFingerprint === priorHostRaw ? 'HOST_RAW' : 'NONE'));
-    const fingerprintChars = (value) => {
-      const match = String(value || '').match(/^(\d+):/);
-      return match ? Number(match[1]) : null;
-    };
-    const currentChars = fingerprintChars(visibleFingerprint);
-    const canonicalChars = fingerprintChars(priorCanonical);
-    const freshChars = fingerprintChars(priorFresh);
+    const priorProvenance = representationRegistry.latest(lastAssistant, coreLocationKey);
+    const relation = representationRules.inspectCarryover(visibleFingerprint, priorProvenance);
+    const { priorCanonical, priorFresh, priorHostRaw, priorMatch, priorRepresentation, currentMatch } = relation;
     if (perfDetail) {
       perfDetail.editPriorRepresentation = priorRepresentation;
       perfDetail.editPriorMatch = priorMatch || 'n/a';
@@ -6606,8 +6667,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       perfDetail.editPriorFresh = priorFresh || 'n/a';
       perfDetail.editCurrentFingerprint = visibleFingerprint || 'n/a';
       perfDetail.editCurrentMatch = currentMatch;
-      perfDetail.editDeltaCanonical = currentChars != null && canonicalChars != null ? currentChars - canonicalChars : null;
-      perfDetail.editDeltaFresh = currentChars != null && freshChars != null ? currentChars - freshChars : null;
+      perfDetail.editDeltaCanonical = relation.deltaCanonical;
+      perfDetail.editDeltaFresh = relation.deltaFresh;
       perfDetail.editOrigin = 'PENDING';
       perfDetail.editDeltaShape = 'UNCLASSIFIED';
     }
@@ -6643,9 +6704,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     }
     if (perfDetail) {
       let editOrigin = 'NONE';
-      let deltaShape = currentMatch === 'FRESH_CHAT' ? 'FRESH_EXACT_CARRYOVER'
-        : (currentMatch === 'CANONICAL' ? 'CANONICAL_EXACT_CARRYOVER'
-          : (currentMatch === 'HOST_RAW' ? 'HOST_RAW_EXACT_CARRYOVER' : 'NEW_VISIBLE_REPRESENTATION'));
+      let deltaShape = relation.deltaShape;
       if (r.representationFastReconciled) {
         editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
       } else if (r.changed) {
@@ -6831,7 +6890,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       lastReconcileFrontierProbe = finalizeReconcileFrontier(reconcileFrontierDraft, messages, lastRequestTopologyProbe);
       lastFrontierMovementProbe = buildFrontierMovement(previousTopologyProbe, lastRequestTopologyProbe);
       lastRepeatedBreakProbe = observeRepeatedBreak(lastRequestTopologyProbe);
-      lastHistoryMutationAttributionProbe = correlateHistoryMutation(lastRequestTopologyProbe, runtimeMirror.provenanceLedger());
+      lastHistoryMutationAttributionProbe = correlateHistoryMutation(lastRequestTopologyProbe, representationRegistry.rows());
       if (perf) perf.cacheTopologyMs = perfMs(topologyStarted);
       const candidateStarted = perfNow();
       lastCacheTrajectoryProbe = cacheCandidates.observe(runtimePromptKey, lastRequestTopologyProbe, {
@@ -7472,6 +7531,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
       `Output representation: ${deferredMirror ? runtimeProbeRules.representation(deferredMirror) : 'n/a'}`,
+      `Representation ownership: REPRESENTATION · ledger ${representationRegistry.rows().length} · mirror TRANSPORT_ONLY · raw bodies NOT RETAINED`,
       `Envelope recovery: ${deferredMirror ? `${deferredMirror.freshEnvelopeRecovery || 'NOT_APPLICABLE'} · policy ${deferredMirror.freshEnvelopePolicy || 'n/a'} · source ${deferredMirror.freshEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.freshEnvelopeRecovery === 'RECOVERED' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.freshEnvelopePersistent || 'NONE'}` : 'n/a'}`,
       `Envelope boundary: ${deferredMirror?.freshEnvelopePolicy === 'BOUNDARY_CONFIRMED_SUFFIX' ? `RAW_SUFFIX ${Number(deferredMirror.freshEnvelopeCandidateChars || 0)} → NORMALIZED ${Number(deferredMirror.freshEnvelopeBoundaryChars || 0)} · Δchars ${Number(deferredMirror.freshEnvelopeBoundaryDelta || 0) >= 0 ? '+' : ''}${Number(deferredMirror.freshEnvelopeBoundaryDelta || 0)} · ${deferredMirror.freshEnvelopeBoundaryKind || 'CRLF_ONLY'} · FRESH_EXACT` : 'NOT_APPLICABLE'}`,
       `Safe-envelope reconcile: ${deferredMirror ? `${deferredMirror.safeEnvelopeReconcile || 'NOT_APPLICABLE'} · policy ${deferredMirror.safeEnvelopePolicy || 'n/a'} · source ${deferredMirror.safeEnvelopeSource || 'n/a'} · confirmation ${deferredMirror.safeEnvelopeReconcile === 'CONFIRMED' ? 'FRESH_EXACT' : 'n/a'} · persistent ${deferredMirror.safeEnvelopePersistent || 'NONE'}` : 'n/a'}`,
@@ -7928,6 +7988,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
     lastEvidenceMappingProbe = null;
     lastEvidenceFenceProbe = null;
     lastDiagnosticRequestProbe = null;
+    representationRegistry.clear();
     runtimeMirror.clear();
   });
   console.log(SIMCORE_LOG_PREFIX + ' initialized');

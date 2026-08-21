@@ -1,4 +1,4 @@
-# one-shot merge trigger for v0.63.58 durable memory sync
+# one-shot traceable trigger for v0.63.58 durable memory sync
 name: SimCore v0.63.58 memory sync
 
 on:
@@ -7,12 +7,17 @@ on:
     paths:
       - 'scripts/simcore-06358-memory.py'
       - '.github/workflows/simcore-memory-sync-06358.yml'
+  pull_request:
+    types: [opened, synchronize]
 
 permissions:
   contents: write
 
 jobs:
   sync:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.title == 'SimCore v0.63.58 memory sync trigger')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main

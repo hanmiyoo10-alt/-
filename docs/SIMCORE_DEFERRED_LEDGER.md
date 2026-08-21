@@ -2,6 +2,61 @@
 
 Purpose: preserve deferred validation items, watch-only anomalies, confirmed-but-nonblocking defects, and regression controls so they are not lost while M2 proceeds. This file is additive evidence memory; it does not replace `SIMCORE_GUIDELINES.md`, `CURRENT_DEVELOPMENT.md`, `SIMCORE_M2_LIVE_EVIDENCE.md`, or `SIMCORE_ANOMALY_WATCH.md`.
 
+## Immediate diagnostic capture rule
+
+This ledger is part of the normal diagnostic-review workflow, not a document that is updated only at release time.
+
+Whenever a real SimCore diagnostic or copied RAW turn exposes **any suspicious behavior, contradiction, unexplained mismatch, probable defect, or new regression-control sample**, record it immediately before moving on to unrelated development work.
+
+Do not wait for recurrence before preserving the first specimen. Recurrence controls promotion priority, not whether the evidence is recorded.
+
+Minimum capture flow:
+
+```text
+full diagnostic review
+→ RAW / state / next-turn cross-check
+→ suspicious or defective behavior observed
+→ classify immediately
+→ append evidence to this ledger or SIMCORE_ANOMALY_WATCH.md
+→ only then decide WATCH / DEFER / FIX / DISMISS / REGRESSION_CONTROL
+```
+
+Use the narrowest applicable status:
+
+```text
+SUSPECTED                    evidence exists, cause not established
+WATCH_ONLY                   one-off or low-confidence anomaly preserved for recurrence
+DIRECT_EVIDENCE              observable defect is real, attribution may still be open
+DEFERRED_NON_BLOCKING        real or useful validation item intentionally not blocking current work
+CONFIRMED_BLOCKING           must be repaired before the active architectural step continues
+MITIGATED                    production patch exists; preserve as a regression target
+REGRESSION_CONTROL           verified healthy behavior that future updates must preserve
+DISMISSED_NO_DEFECT          suspicion was resolved as expected behavior; retain the reason
+```
+
+Every new entry should preserve, when available:
+
+```text
+production version
+runtime/generation ID
+user / assistant turn indices
+mode
+exact suspicious diagnostic fields
+relevant RAW evidence
+cross-field contradiction or reason for suspicion
+whether reroll/regeneration reproduced or cleared it
+whether the next turn inherited the suspect state
+confidence / attribution status
+```
+
+A suspicious item must not be silently dropped merely because the rest of the diagnostic says `PASS`, `Warnings: 0`, `COMMITTED`, or `REPAIRED`. Those labels remain scoped signals and must be cross-checked against RAW and neighboring state.
+
+If later evidence disproves the suspicion, update the existing entry to `DISMISSED_NO_DEFECT` with the resolving evidence rather than deleting the specimen. If it recurs, append the new runtime/turn evidence and promote classification as appropriate.
+
+Operational rule:
+
+> **See something suspicious in a diagnostic → capture it immediately. Do not rely on chat memory to remember it later.**
+
 ## Current baseline
 
 ```text

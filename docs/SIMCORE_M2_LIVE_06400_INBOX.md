@@ -194,6 +194,38 @@ The visible output successfully produced a broad annual summary, so no user-visi
 
 Do not attribute this to Representation M2-2 unless recurrence or cross-module evidence establishes an ownership interaction.
 
+### Annual-only versus cumulative-YoY summary scope ambiguity
+
+Status: `SUSPECTED / USER-VISIBLE QUALITY DEFECT / NON-BLOCKING / SCOPE WATCH`
+
+User clarification after inspecting `@2020`:
+
+- the `2030.1.1.~12.31.` input is intended to contain **only achievements attributable to that single target year**;
+- prior-year / earlier-career achievements should not be silently promoted as current-year achievements;
+- at the same time, the user has another similar-looking input whose intent is explicitly **cumulative totals plus comparison against the previous year and growth delta**;
+- therefore these two request families are semantically distinct even though both are large year-end summaries.
+
+Observed user-visible symptom family: annual-only summaries can omit achievements that should be present for the target year while also pulling in prior/earlier achievements. The current `@2020` standalone-C over-chain (`root A@2014`) is a possible contributing factor, but causality is not established; broad long-chat retrieval/aggregation and prompt scope ambiguity are also candidates.
+
+Preserve two separate conceptual contracts for later design instead of merging them:
+
+```text
+ANNUAL_ONLY
+- authority window = target year only
+- include achievements/events that occurred or materially changed during target year
+- earlier career facts may appear only as labeled context/comparison, never as target-year achievements
+- ongoing roles may include start date as metadata, but annual activity/results must be target-year scoped
+- year-end cumulative counters may be reported only when clearly labeled as end-of-year snapshot; do not confuse them with achievements from earlier years
+
+CUMULATIVE_YOY
+- authority = cumulative state as of target year-end
+- previous year-end snapshot is an explicit comparison baseline
+- output current cumulative total + previous cumulative total + absolute/percentage growth where evidence exists
+- earlier achievements remain part of cumulative history when relevant
+```
+
+Do not patch Lineage or summary generation from this single clarification alone. First collect the similar cumulative-YoY input/diagnostic and compare how Lineage, source/handoff, visible omissions, and prior-year inclusion differ between the two scopes. If both request classes receive the same source-chain treatment despite opposite temporal authority, promote to a scoped aggregation/lineage design issue.
+
 ### SUSPECTED narrative-tail coverage recurrence — separate from M2-2 attribution
 
 Status: `SUSPECTED / NON_BLOCKING / CROSS-CHECK NEXT NATURAL TIME ADVANCEMENT`
@@ -251,5 +283,6 @@ new -24 mismatch conservative handling             PASS SO FAR / paired follow-u
 possible narrative-tail contract recurrence        SUSPECTED / NON-BLOCKING
 host-prefix +3,846 + context contraction           OBSERVED / HOST-SIDE WATCH
 standalone C lineage over-chain                     SUSPECTED / NON-BLOCKING
+annual-only vs cumulative-YoY summary scope         SUSPECTED / USER-VISIBLE QUALITY WATCH
 provider cache attribution                         UNVERIFIED
 ```

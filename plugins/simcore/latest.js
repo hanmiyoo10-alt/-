@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.58
+//@version 0.63.59
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -28,6 +28,14 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.59 Broadcast End Closure Contract:
+// - Follows direct 24-hour B_START -> B_CONTINUE -> B_END long-chat evidence where Broadcast End Authority correctly allowed the explicit B_END and unlocked the session, but the response began at 08:30, visibly progressed through "5 minutes remaining" to the 09:00 end, and persisted broadcast airtime at the stale 08:30 frame timestamp
+// - Extends the v0.63.58 explicit terminal-time contract only to B_END: every B_END must emit a final canonical timestamp line for the terminal current broadcast airtime, even when equal to the frame time; prose-only end-time progression is not authoritative
+// - B_END airtime commit now uses the last line-level canonical timestamp only when the complete timestamp sequence is monotonic and an explicit terminal line exists; malformed/non-monotonic/missing tails fail closed to the existing frame airtime rather than inferring arbitrary prose times
+// - Clarifies the already-existing B_END COMMUNITY contract as exactly two COMMUNITY blocks with exactly three platform sections each; one COMMUNITY block containing six sections is explicitly invalid, while Structure remains judge/quarantine-only and performs no output repair
+// - Adds Broadcast closure / terminal coverage diagnostics separating end authority, terminal airtime coverage and COMMUNITY structural closure; unlock success alone no longer reads as complete closure
+// - Scope is B_END closure only: B_START/B_CONTINUE airtime semantics, v0.63.58 non-broadcast Narrative Tail Time Contract, v0.63.57 current-timeline authority, Representation/Edit Reconcile, Recovery, Deferred Mirror, Frame, Evidence/Lineage/Handoff/Recurrence, cache/history, storage/API/network/timer behavior and persistent schema remain frozen
 //
 // v0.63.58 Narrative Tail Time Contract:
 // - Follows direct long-chat evidence where a visible non-broadcast scene began at 01:00, explicitly progressed in prose to a 03:00 ending, but emitted no later canonical timestamp line; Time therefore reported scenes 0 / FRAME_ONLY and persisted 01:00 into the next turn
@@ -553,7 +561,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.58';
+const SIMCORE_RUNTIME_VERSION = '0.63.59';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -2259,16 +2267,42 @@ function commitBroadcastAirtime(state, pending, content) {
   if (!/^B_/.test(String(pending?.mode || ''))) return { changed: false, reason: 'not-broadcast', timestamp: null };
   const parsed = parseTimestamp(content);
   if (!parsed) return { changed: false, reason: 'missing-or-invalid', timestamp: null };
-  const current = parsed.raw;
+  const isEnd = String(pending?.mode || '') === 'B_END';
+  const terminal = isEnd ? narrativeTimestampSequence(content) : null;
+  const terminalExplicit = !!(terminal
+    && terminal.sceneCount > 0
+    && terminal.tailStatus === 'MONOTONIC'
+    && terminal.candidate);
+  const current = terminalExplicit ? terminal.candidate : parsed.raw;
   const previous = pending?.broadcastAirtimePrevious || state.broadcastAirtime || null;
   if (previous) {
     const cmp = compareTimestamps(current, previous);
-    if (cmp != null && cmp < 0) return { changed: false, reason: 'backward', timestamp: current, previous };
+    if (cmp != null && cmp < 0) return {
+      changed: false,
+      reason: 'backward',
+      timestamp: current,
+      previous,
+      frameTimestamp: parsed.raw,
+      sequenceCount: Number(terminal?.sequenceCount || 0),
+      sceneCount: Number(terminal?.sceneCount || 0),
+      tailStatus: terminal?.tailStatus || 'n/a',
+      terminalExplicit,
+    };
   }
   const changed = state.broadcastAirtime !== current;
   if (!state.broadcastAirtimeStart || pending?.broadcastAirtimeIsNew) state.broadcastAirtimeStart = current;
   state.broadcastAirtime = current;
-  return { changed, reason: 'committed', timestamp: current, previous };
+  return {
+    changed,
+    reason: 'committed',
+    timestamp: current,
+    previous,
+    frameTimestamp: parsed.raw,
+    sequenceCount: Number(terminal?.sequenceCount || 0),
+    sceneCount: Number(terminal?.sceneCount || 0),
+    tailStatus: terminal?.tailStatus || (isEnd ? 'FRAME_ONLY' : 'n/a'),
+    terminalExplicit,
+  };
 }
 
 function applyWorldYear(state, year) {
@@ -3781,6 +3815,10 @@ function compileConditionalGuidance(s, p, communityExpected) {
     if (p.broadcastAirtimePrevious) lines.push('broadcast_airtime_must_not_precede_previous=1');
     const elapsed = time.elapsedMinutes(p.broadcastAirtimeStart, p.broadcastAirtimePrevious);
     if (elapsed != null && elapsed >= 0) lines.push(`broadcast_airtime_elapsed_program_minutes=${elapsed}`);
+    if (p.mode === 'B_END') {
+      lines.push('broadcast_end_closure_contract=1;broadcast_end_always_emit_terminal_canonical_timestamp_line=1');
+      lines.push('broadcast_terminal_timestamp_means_final_current_broadcast_airtime=1;do_not_leave_broadcast_end_time_only_in_prose=1');
+    }
   }
   if (p.templateRecurrenceRepeated) {
     lines.push('request_template_recurs_from_prior_history=1');
@@ -3822,6 +3860,8 @@ function compileConditionalGuidance(s, p, communityExpected) {
       lines.push('b_end_communities_must_be_contiguous_at_end=1');
       lines.push('b_end_platform_groups_required=6_distinct_across_blocks');
       lines.push('b_end_cross_block_group_reuse_forbidden=1');
+      lines.push('b_end_block_shape=2_community_blocks_x_3_platform_sections_each');
+      lines.push('b_end_one_community_block_with_6_platform_sections_is_invalid=1');
     }
     lines.push('knowledge_after_last_community=1');
   }
@@ -7348,6 +7388,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     const evidenceMap = runtimeActive ? (lastEvidenceMappingProbe || null) : null;
     const evidenceFence = runtimeActive ? (lastEvidenceFenceProbe || null) : null;
     const narrative = outputFresh ? (lastNarrativeClockProbe || null) : null;
+    const broadcastTerminal = outputFresh && runtimeMode === 'B_END' && latestAssistantIndex >= 0
+      ? time.narrativeTimestampSequence(kernel.textOfMessage(messages[latestAssistantIndex]))
+      : null;
     const preamble = outputFresh ? (lastPreambleProvenance || null) : null;
     const requestPerf = probeFresh && lastPerf && Number(lastPerf.sendIndex) === Number(currentUserIndex)
       && String(lastPerf.locationKey || '') === String(requestProbe?.locationKey || '') ? lastPerf : null;
@@ -7385,6 +7428,11 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     const frameProbe = diagnosticFrameContinuity(messages, currentUserIndex, latestAssistantIndex);
     const warnings = outputFresh && Array.isArray(lastCore?.issues) ? lastCore.issues : [];
     const compatibility = outputFresh && Array.isArray(lastCore?.diagnostics) ? lastCore.diagnostics : [];
+    const broadcastTerminalExplicit = !!(broadcastTerminal
+      && broadcastTerminal.sceneCount > 0
+      && broadcastTerminal.tailStatus === 'MONOTONIC'
+      && broadcastTerminal.candidate);
+    const broadcastCommunityClean = !warnings.some((x) => /^COMMUNITY\b/.test(String(x || '')));
     const prefixLabel = !probeFresh || !cacheProbe
       ? 'n/a'
       : (cacheProbe.baseline
@@ -7463,6 +7511,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Broadcast lifecycle: ${probeFresh && budget ? `${budget.broadcastSessionState || 'CLOSED'} · mode ${budget.mode || 'n/a'}` : 'n/a'}`,
       `Broadcast end authority: ${probeFresh && budget ? `${budget.broadcastEndAuthority || 'NOT_APPLICABLE'} · ${budget.broadcastEndReason || 'unknown'}` : 'n/a'}`,
       `End boundary: ${probeFresh && budget && budget.broadcastEndAuthority === 'DENIED' ? 'PROSE+COMMUNITY+KNOWLEDGE · explicit B_END required' : (probeFresh && budget && budget.broadcastEndAuthority === 'ALLOWED' ? 'END AUTHORIZED' : 'n/a')}`,
+      `Broadcast closure: ${outputFresh && runtimeMode === 'B_END' ? `${broadcastTerminalExplicit && broadcastCommunityClean ? 'COMPLETE' : 'PARTIAL'} · terminal ${broadcastTerminalExplicit ? 'EXPLICIT' : 'MISSING_OR_INVALID'} · structure ${broadcastCommunityClean ? 'PASS' : 'QUARANTINED'}` : 'n/a'}`,
+      `Broadcast terminal coverage: ${outputFresh && runtimeMode === 'B_END' ? (broadcastTerminalExplicit ? `EXPLICIT_TERMINAL · frame ${broadcastTerminal?.frameTimestamp || 'n/a'} · terminal ${broadcastTerminal?.candidate || 'n/a'} · stored ${state?.broadcastAirtime || 'n/a'}` : `${broadcastTerminal?.tailStatus || 'MISSING'} · explicit terminal canonical timestamp absent or invalid · RAW prose cross-check required for elapsed/end-time cues`) : 'n/a'}`,
       `Short-C source lock: ${runtimeActive ? (budget?.sourceAnchor ? 'ON' : 'OFF') : 'n/a'}`,
       `Template recurrence: ${probeFresh && recurrenceProbe ? `${recurrenceProbe.eligible ? (recurrenceProbe.repeated ? 'REPEATED' : 'FIRST') : 'INELIGIBLE'} · family ${recurrenceProbe.modeFamily || 'n/a'}` : 'n/a'}`,
       `Recurrence guidance: ${probeFresh && budget ? (budget.recurrence ? 'ON' : 'OFF') : 'n/a'}`,

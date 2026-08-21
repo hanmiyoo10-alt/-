@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import re
 
 TARGETS = [Path('plugins/simcore/latest.js'), Path('plugins/simcore/install.js')]
 FROM_VERSION = '0.63.59'
@@ -10,7 +9,7 @@ RELEASE_NOTE = r'''// v0.64.0 M2-2 Representation Ownership Split:
 // - Starts the next staged 2.0M Major checkpoint from the v0.63.59 production baseline; this checkpoint is mechanical ownership movement, not a feature release
 // - Introduces Representation as a first-class memory-only module owning the bounded CANONICAL / HOST_RAW / FRESH_CHAT provenance ledger, prior representation taxonomy, exact visible carryover classification and fingerprint-length deltas
 // - Runtime Mirror still owns Fresh chat observation plus strict identity/location/staleness guards and mirror writes, but no longer owns the provenance ledger or exposes provenance through its runtime API
-// - The outer request shell now consumes Representation facts through the new module; v0.63.55 representation-fast eligibility and edit-origin routing remain byte-for-byte equivalent in decision semantics
+// - The outer request shell now consumes Representation facts through the new module; v0.63.55 representation-fast eligibility and edit-origin routing remain unchanged in decision semantics
 // - Genuine user edits remain the frozen positive control: Prior EXACT + current matches neither canonical nor Fresh continues to route USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT
 // - Fresh remains identity evidence, never a body source: no raw Fresh body retention, persistent representation state, chat/history mutation, network call or timer is introduced
 // - Recovery/output-compat/bootstrap-migration, Deferred Mirror safety, Broadcast/Frame/Continuity/Evidence/Lineage/Handoff/Recurrence/Structure, cache/history observation, storage schema and prompt placement remain frozen
@@ -73,9 +72,6 @@ function inspectCarryover(visibleFingerprint, row) {
     priorMatch,
     priorRepresentation: representation,
     currentMatch: match,
-    currentChars,
-    canonicalChars,
-    freshChars,
     deltaCanonical: currentChars != null && canonicalChars != null ? currentChars - canonicalChars : null,
     deltaFresh: currentChars != null && freshChars != null ? currentChars - freshChars : null,
     deltaShape: deltaShape(match),
@@ -125,7 +121,7 @@ function createRegistry(limit = 16) {
 }
 
 module.exports = { createRegistry, inspectCarryover, fingerprintChars };
-});'''
+});'''.replace(r'\"', '"')
 
 OLD_RELATION_BLOCK = r'''    const provenanceRows = runtimeMirror.provenanceLedger();
     let priorProvenance = null;
@@ -151,26 +147,14 @@ OLD_RELATION_BLOCK = r'''    const provenanceRows = runtimeMirror.provenanceLedg
         ? 'CANONICAL'
         : (visibleFingerprint && visibleFingerprint === priorHostRaw ? 'HOST_RAW' : 'NONE'));
     const fingerprintChars = (value) => {
-      const match = String(value || '').match(/^(\\d+):/);
+      const match = String(value || '').match(/^(\d+):/);
       return match ? Number(match[1]) : null;
     };
     const currentChars = fingerprintChars(visibleFingerprint);
     const canonicalChars = fingerprintChars(priorCanonical);
     const freshChars = fingerprintChars(priorFresh);'''
 
-NEW_RELATION_BLOCK = r'''    const priorProvenance = representationRegistry.latest(lastAssistant, coreLocationKey);
-    const relation = representationRules.inspectCarryover(visibleFingerprint, priorProvenance);
-    const {
-      priorCanonical,
-      priorFresh,
-      priorHostRaw,
-      priorMatch,
-      priorRepresentation,
-      currentMatch,
-      currentChars,
-      canonicalChars,
-      freshChars,
-    } = relation;'''
+NEW_RELATION_BLOCK = '''    const priorProvenance = representationRegistry.latest(lastAssistant, coreLocationKey);\n    const relation = representationRules.inspectCarryover(visibleFingerprint, priorProvenance);\n    const { priorCanonical, priorFresh, priorHostRaw, priorMatch, priorRepresentation, currentMatch } = relation;'''
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -201,10 +185,10 @@ def patch(text: str) -> str:
     text = replace_once(text, mirror_marker, REPRESENTATION_MODULE + '\n\n' + mirror_marker, 'representation module insertion')
 
     old_mirror_head = '''function createMirrorRuntime(deps) {\n  const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch } = deps;\n  let sequence = 0;\n  const latestByLocation = new Map();\n  const PROVENANCE_LEDGER_LIMIT = 16;\n  const provenanceLedger = [];\n  let lastProbe = null;\n\n  function rememberProvenance(probe) {\n    if (!probe || !probe.freshFingerprintFull) return;\n    const entry = Object.freeze({\n      outIndex: Number(probe.outIndex),\n      locationKey: String(probe.locationKey || ''),\n      status: String(probe.status || 'n/a'),\n      fingerprintMatch: String(probe.fingerprintMatch || 'n/a'),\n      canonicalFingerprint: String(probe.canonicalFingerprintFull || ''),\n      hostRawFingerprint: String(probe.hostRawFingerprintFull || ''),\n      freshFingerprint: String(probe.freshFingerprintFull || ''),\n      at: Number(probe.finishedAt || Date.now()),\n    });\n    for (let i = provenanceLedger.length - 1; i >= 0; i--) {\n      if (provenanceLedger[i].locationKey === entry.locationKey && provenanceLedger[i].outIndex === entry.outIndex) provenanceLedger.splice(i, 1);\n    }\n    provenanceLedger.push(entry);\n    if (provenanceLedger.length > PROVENANCE_LEDGER_LIMIT) provenanceLedger.splice(0, provenanceLedger.length - PROVENANCE_LEDGER_LIMIT);\n  }'''
-    new_mirror_head = '''function createMirrorRuntime(deps) {\n  const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch, representationRegistry } = deps;\n  let sequence = 0;\n  const latestByLocation = new Map();\n  let lastProbe = null;'''
+    new_mirror_head = '''function createMirrorRuntime(deps) {\n  const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch, rememberRepresentation } = deps;\n  let sequence = 0;\n  const latestByLocation = new Map();\n  let lastProbe = null;'''
     text = replace_once(text, old_mirror_head, new_mirror_head, 'runtime mirror ownership head')
-    text = replace_once(text, '      rememberProvenance(probe);', '      representationRegistry.remember(probe);', 'mirror provenance remember')
-    text = replace_once(text, '    provenanceLedger.length = 0;', '    representationRegistry.clear();', 'mirror provenance clear')
+    text = replace_once(text, '      rememberProvenance(probe);', '      rememberRepresentation(probe);', 'mirror provenance handoff')
+    text = replace_once(text, '    provenanceLedger.length = 0;\n', '', 'mirror provenance clear ownership')
     text = replace_once(
         text,
         '  return Object.freeze({ schedule, lastProbe: () => lastProbe, provenanceLedger: () => provenanceLedger.slice(), clear });',
@@ -221,7 +205,7 @@ def patch(text: str) -> str:
     text = replace_once(
         text,
         '''  const runtimeMirror = runtimeMirrorRules.createMirrorRuntime({\n    coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey,\n    getCoreSession: () => coreSession,\n    runtimeIsCurrent,\n    getRuntimeEpoch: () => runtimeEpoch,\n  });''',
-        '''  const representationRegistry = representationRules.createRegistry(16);\n  const runtimeMirror = runtimeMirrorRules.createMirrorRuntime({\n    coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey,\n    getCoreSession: () => coreSession,\n    runtimeIsCurrent,\n    getRuntimeEpoch: () => runtimeEpoch,\n    representationRegistry,\n  });''',
+        '''  const representationRegistry = representationRules.createRegistry(16);\n  const runtimeMirror = runtimeMirrorRules.createMirrorRuntime({\n    coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey,\n    getCoreSession: () => coreSession,\n    runtimeIsCurrent,\n    getRuntimeEpoch: () => runtimeEpoch,\n    rememberRepresentation: (probe) => representationRegistry.remember(probe),\n  });''',
         'representation registry wiring',
     )
 
@@ -244,17 +228,21 @@ def patch(text: str) -> str:
         raise SystemExit(f'expected one remaining runtimeMirror.provenanceLedger() call after relation extraction, got {provenance_calls}')
     text = text.replace('runtimeMirror.provenanceLedger()', 'representationRegistry.rows()')
 
-    output_rep = "      `Output representation: ${runtimeProbeRules.representation(lastDeferredProbe)}`,”
-    # The source uses an ASCII comma; keep a fallback below rather than relying on the typographic sentinel.
-    ascii_output_rep = "      `Output representation: ${runtimeProbeRules.representation(lastDeferredProbe)}` ,"
-    normal_output_rep = "      `Output representation: ${runtimeProbeRules.representation(lastDeferredProbe)}`,”
-    marker = "      `Output representation: ${runtimeProbeRules.representation(lastDeferredProbe)}`," 
+    marker = "      `Output representation: ${runtimeProbeRules.representation(lastDeferredProbe)}`,"
     if marker not in text:
         raise SystemExit('output representation diagnostic marker not found')
     text = text.replace(
         marker,
         marker + "\n      `Representation ownership: REPRESENTATION · ledger ${representationRegistry.rows().length} · mirror TRANSPORT_ONLY · raw bodies NOT RETAINED`,",
         1,
+    )
+
+    cleanup = '    lastDiagnosticRequestProbe = null;\n    runtimeMirror.clear();'
+    text = replace_once(
+        text,
+        cleanup,
+        '    lastDiagnosticRequestProbe = null;\n    representationRegistry.clear();\n    runtimeMirror.clear();',
+        'representation cleanup ownership',
     )
 
     return text
@@ -285,8 +273,9 @@ for needle in required:
         raise SystemExit(f'missing expected post-patch marker: {needle}')
 
 runtime_mirror = latest.split('SimCore.define("runtime-mirror"', 1)[1].split('SimCore.define("runtime-hooks"', 1)[0]
-if 'provenanceLedger' in runtime_mirror or 'rememberProvenance' in runtime_mirror:
-    raise SystemExit('runtime-mirror still owns provenance ledger symbols')
+for forbidden in ('const provenanceLedger = []', 'rememberProvenance(', 'provenanceLedger:'):
+    if forbidden in runtime_mirror:
+        raise SystemExit(f'runtime-mirror still owns provenance symbol: {forbidden}')
 if 'runtimeMirror.provenanceLedger()' in latest:
     raise SystemExit('outer shell still consumes provenance through runtime-mirror')
 

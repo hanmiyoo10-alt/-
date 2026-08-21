@@ -1,0 +1,123 @@
+name: SimCore v0.64.1 Summary Scope Authority
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06401-summary-scope
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.pull_request.title == 'SimCore v0.64.1 Summary Scope Authority release command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout production release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-simcore
+          fetch-depth: 0
+
+      - name: Load patch and architecture tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06401-summary-scope.py > /tmp/simcore-06401-summary-scope.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-06401-summary-scope.py /tmp/simcore-architecture-check.py
+
+      - name: Apply scoped mini patch
+        run: python3 /tmp/simcore-06401-summary-scope.py
+
+      - name: Validate production source and frozen controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.1$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.1';" plugins/simcore/latest.js
+          grep -q 'v0.64.1 Summary Scope Authority' plugins/simcore/latest.js
+          grep -q 'function classifySummaryScope' plugins/simcore/latest.js
+          grep -q 'summary_scope=ANNUAL_ONLY' plugins/simcore/latest.js
+          grep -q 'summary_scope=CUMULATIVE_YOY' plugins/simcore/latest.js
+          grep -q 'summary_scope_authority_over_recurrence_factual_content=1' plugins/simcore/latest.js
+          grep -q 'Summary scope:' plugins/simcore/latest.js
+
+          # M2-2/frozen behavior markers must remain untouched.
+          grep -q 'Representation ownership: REPRESENTATION' plugins/simcore/latest.js
+          grep -q 'REPRESENTATION_FAST_RECONCILED' plugins/simcore/latest.js
+          grep -q 'USER_EDIT_CANDIDATE' plugins/simcore/latest.js
+          grep -q 'MANUAL_EDIT_REBUILT' plugins/simcore/latest.js
+          grep -q 'Broadcast closure:' plugins/simcore/latest.js
+          grep -q 'Narrative tail coverage:' plugins/simcore/latest.js
+          grep -q "return stabilizationResult('OBSERVE_ONLY'" plugins/simcore/latest.js
+
+          if grep -q 'resetLineageForSummary\|summary_scope_authority_over_lineage\|summaryPersistentState' plugins/simcore/latest.js; then
+            echo 'summary-scope patch expanded into frozen Lineage/persistent ownership' >&2
+            exit 1
+          fi
+
+          python3 /tmp/simcore-architecture-check.py \
+            --contract /tmp/simcore-architecture-v2.json \
+            --source plugins/simcore/latest.js \
+            --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Run deterministic summary-scope fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const start = text.indexOf("const SUMMARY_SCOPE_NONE = 'NONE';");
+          const end = text.indexOf('function prepareTurn(', start);
+          if (start < 0 || end <= start) throw new Error('classifier extraction failed');
+          const classify = new Function(`${text.slice(start, end)}\nreturn classifySummaryScope;`)();
+
+          const cases = [
+            ['[커뮤니티] 2030.1.1.~12.31. 활동 성과 총정리', 'C', 'ANNUAL_ONLY', 2030, null],
+            ['[커뮤니티] 2030년 한 해 수상 성과 총정리', 'C', 'ANNUAL_ONLY', 2030, null],
+            ['[커뮤니티] 2029.12.31 수치를 기준점으로 2030.12.31 누적 수치 증가량 증가율 비교', 'C', 'CUMULATIVE_YOY', 2030, 2029],
+            ['[커뮤니티] 2030년 성과와 2029년 대비 증가폭', 'C', 'CUMULATIVE_YOY', 2030, 2029],
+            ['[커뮤니티] 2030년 활동 성과 총정리. 2025년에 시작한 계약 기간도 표시', 'C', 'ANNUAL_ONLY', 2030, null],
+            ['[커뮤니티] 슈퍼볼 무대 반응', 'C', 'NONE', null, null],
+            ['[커뮤니티] 2028~2030 활동 총정리', 'C', 'NONE', null, null],
+            ['[커뮤니티] 누적 구독자 알려줘', 'C', 'NONE', null, null],
+            ['[커뮤니티] 2030년 한 해 수상 성과 총정리', 'A', 'NONE', null, null],
+          ];
+
+          for (const [input, mode, scope, target, comparison] of cases) {
+            const got = classify(input, mode);
+            const same = got.scope === scope
+              && got.targetYear === target
+              && got.comparisonYear === comparison;
+            if (!same) {
+              console.error({ input, mode, expected: { scope, target, comparison }, got });
+              process.exit(1);
+            }
+          }
+          console.log(`Summary-scope fixtures PASS (${cases.length})`);
+          NODE
+
+      - name: Commit and push production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'v0.64.1 production is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'SimCore v0.64.1 Summary Scope Authority'
+          git push origin HEAD:release-simcore

@@ -34,7 +34,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          exec > >(tee /tmp/stage-562.log) 2>&1
           python3 -m py_compile \
             plugins/usage-dashboard/tools/check_release_monotonic.py \
             plugins/usage-dashboard/tools/release_snapshot_decision_attribution_562.py
@@ -45,112 +44,56 @@ jobs:
             python3 plugins/usage-dashboard/tools/release_snapshot_decision_attribution_562.py
           fi
 
-          # Historical regressions keep the release they were born on. Adapt only
-          # current-version/current-memory assertions in this CI workspace.
+          # Historical regressions retain their original release fixtures. Adapt
+          # only assertions that intentionally track the currently materialized
+          # product/engine/current-memory/publisher in this CI workspace.
           python3 - <<'PY'
           from pathlib import Path
           root = Path('plugins/usage-dashboard/tests')
-          current_product = '3.0.0-alpha.5.62'
-          current_engine = '1.6.15'
-          current_title = 'Snapshot Decision Attribution'
+          product = '3.0.0-alpha.5.62'
+          engine = '1.6.15'
+          baseline = 'Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`'
+          current = 'Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'
 
-          for name in [
-              'p11-cache-fidelity.cjs',
-              'p13-cache-provenance-diagnostics.cjs',
-              'p15-runtime-recovery-fidelity.cjs',
-              'p16-snapshot-performance-attribution.cjs',
-          ]:
+          def update(name, replacements):
               path = root / name
               text = path.read_text()
-              text = text.replace('3.0.0-alpha.5.55', current_product)
-              text = text.replace('1.6.9', current_engine)
+              for old, new in replacements:
+                  text = text.replace(old, new)
               path.write_text(text)
 
-          p16 = root / 'p16-snapshot-performance-attribution.cjs'
-          text = p16.read_text()
-          text = text.replace(
-              "const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 1)));",
-              "const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));",
-          )
-          text = text.replace(
-              "const summaryContext = { Date: { now: () => 2000 } };",
-              "const summaryContext = { Date: { now: () => 2000 }, CLI_CONCURRENCY: 2, Object, Array };",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Performance Attribution`'));",
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));",
-          )
-          p16.write_text(text)
+          for name in ['p11-cache-fidelity.cjs','p13-cache-provenance-diagnostics.cjs','p15-runtime-recovery-fidelity.cjs','p16-snapshot-performance-attribution.cjs']:
+              update(name, [('3.0.0-alpha.5.55', product), ('1.6.9', engine)])
 
-          p17 = root / 'p17-bounded-cli-parallelism.cjs'
-          text = p17.read_text()
-          text = text.replace('3.0.0-alpha.5.56', current_product)
-          text = text.replace('1.6.10', current_engine)
-          text = text.replace(
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`'));",
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Performance Repair: Bounded CLI Parallelism`'));",
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));",
-          )
-          p17.write_text(text)
+          update('p16-snapshot-performance-attribution.cjs', [
+              ("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 1)));", "const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"),
+              ("const summaryContext = { Date: { now: () => 2000 } };", "const summaryContext = { Date: { now: () => 2000 }, CLI_CONCURRENCY: 2, Object, Array };"),
+              ("Current release implementation: `3.0.0-alpha.5.62 — Snapshot Performance Attribution`", current),
+          ])
+          update('p17-bounded-cli-parallelism.cjs', [
+              ('3.0.0-alpha.5.56', product), ('1.6.10', engine),
+              ('Last verified real-device baseline: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`', baseline),
+              ('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Performance Repair: Bounded CLI Parallelism`', current),
+          ])
+          update('p18-organization-discovery-dedup.cjs', [
+              ('3.0.0-alpha.5.57', product), ('1.6.11', engine),
+              ('Last verified real-device baseline: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`', baseline),
+              ('Current release implementation: `3.0.0-alpha.5.62 — Organization Discovery Deduplication`', current),
+          ])
+          update('p19-organization-empty-fallback-fidelity.cjs', [('3.0.0-alpha.5.57', product), ('1.6.11', engine)])
+          update('p20-shared-24h-capture.cjs', [
+              ('3.0.0-alpha.5.58', product), ('1.6.12', engine),
+              ('Last verified real-device baseline: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`', baseline),
+              ('Current release implementation: `3.0.0-alpha.5.62 — Shared 24h Capture Coalescing`', current),
+              ('one queued for about 5.87s', 'Another visibility sample took about 17.17s because long-window analytics work became cold'),
+              ('accountCapture` cache key, 30s TTL, no-stale behavior', 'Keep 5.58 shared 24h capture coalescing unchanged'),
+          ])
+          update('p21-snapshot-scheduling-attribution.cjs', [
+              ('3.0.0-alpha.5.59', product), ('1.6.13', engine),
+              ('Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`', baseline),
+              ('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Scheduling Attribution`', current),
+          ])
 
-          p18 = root / 'p18-organization-discovery-dedup.cjs'
-          text = p18.read_text()
-          text = text.replace('3.0.0-alpha.5.57', current_product)
-          text = text.replace('1.6.11', current_engine)
-          text = text.replace(
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`'));",
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Organization Discovery Deduplication`'));",
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));",
-          )
-          p18.write_text(text)
-
-          p19 = root / 'p19-organization-empty-fallback-fidelity.cjs'
-          text = p19.read_text().replace('3.0.0-alpha.5.57', current_product).replace('1.6.11', current_engine)
-          p19.write_text(text)
-
-          p20 = root / 'p20-shared-24h-capture.cjs'
-          text = p20.read_text()
-          text = text.replace('3.0.0-alpha.5.58', current_product)
-          text = text.replace('1.6.12', current_engine)
-          text = text.replace(
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`'));",
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Shared 24h Capture Coalescing`'));",
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('one queued for about 5.87s'));",
-              "assert.ok(guidelines.includes('Another visibility sample took about 17.17s because long-window analytics work became cold'));",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('accountCapture` cache key, 30s TTL, no-stale behavior'));",
-              "assert.ok(guidelines.includes('Keep 5.58 shared 24h capture coalescing unchanged'));
-",
-          )
-          p20.write_text(text)
-
-          p21 = root / 'p21-snapshot-scheduling-attribution.cjs'
-          text = p21.read_text().replace('3.0.0-alpha.5.59', current_product).replace('1.6.13', current_engine)
-          text = text.replace(
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`'));",
-              "assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));",
-          )
-          text = text.replace(
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Scheduling Attribution`'));",
-              "assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));",
-          )
-          p21.write_text(text)
-
-          # P22 remains the historical 5.60 race fixture; adapt only the current
-          # materialized runtime assertions.
           p22 = root / 'p22-monotonic-release-integrity.cjs'
           text = p22.read_text()
           text = text.replace(
@@ -161,23 +104,18 @@ jobs:
           text = text.replace("assert.equal(productManifest.components.bridge.requiredVersion, '1.6.13');", "assert.equal(productManifest.components.bridge.requiredVersion, '1.6.15');")
           p22.write_text(text)
 
-          # P23 owns the 5.61 early-start contract. Point its current-runtime and
-          # publisher assertions at the 5.62 candidate while keeping selector,
-          # shared-bootstrap, serial rollback, and fallback semantics intact.
-          p23 = root / 'p23-credits-usage-early-start.cjs'
-          text = p23.read_text()
-          text = text.replace('.github/workflows/stage-usage-dashboard-561-credits-usage-early-start.yml', '.github/workflows/stage-usage-dashboard-562-snapshot-decision-attribution.yml')
-          text = text.replace('3.0.0-alpha.5.61', '3.0.0-alpha.5.62')
-          text = text.replace('1\\.6\\.14', '1\\.6\\.15')
-          text = text.replace('1.6.14', '1.6.15')
-          text = text.replace('Current release implementation: `3.0.0-alpha.5.62 — Credits Usage Early Start`', 'Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`')
-          text = text.replace('Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`', 'Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`')
-          text = text.replace("assert.ok(earlySource.includes('if (CLI_CONCURRENCY < 2) return Promise.resolve(null);'));", "assert.ok(earlySource.includes('if (CLI_CONCURRENCY < 2) {'));" )
-          text = text.replace("assert.ok(earlySource.includes('.catch(() => null)'));", "assert.ok(earlySource.includes(\"reason:'prefetch-error'\"));")
-          text = text.replace("assert.ok(guidelines.includes('Ambiguous/missing IDs keep the 5.60 root-gated path.'));", "assert.ok(guidelines.includes('preserve 5.61 scheduling, Credits early-start selection/prefetch behavior'));")
-          text = text.replace("assert.ok(guidelines.includes('dedicated circuit family must not double-count failures against the existing organizations circuit'));", "assert.ok(guidelines.includes('cache/stale/circuit semantics'));")
-          text = text.replace("assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));", "assert.ok(guidelines.includes('CLI concurrency limit 2'));")
-          p23.write_text(text)
+          update('p23-credits-usage-early-start.cjs', [
+              ('.github/workflows/stage-usage-dashboard-561-credits-usage-early-start.yml', '.github/workflows/stage-usage-dashboard-562-snapshot-decision-attribution.yml'),
+              ('3.0.0-alpha.5.61', product),
+              ('1\\.6\\.14', '1\\.6\\.15'), ('1.6.14', engine),
+              ('Current release implementation: `3.0.0-alpha.5.62 — Credits Usage Early Start`', current),
+              ('Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`', baseline),
+              ("assert.ok(earlySource.includes('if (CLI_CONCURRENCY < 2) return Promise.resolve(null);'));", "assert.ok(earlySource.includes('if (CLI_CONCURRENCY < 2) {'));"),
+              ("assert.ok(earlySource.includes('.catch(() => null)'));", "assert.ok(earlySource.includes(\"reason:'prefetch-error'\"));"),
+              ("assert.ok(guidelines.includes('Ambiguous/missing IDs keep the 5.60 root-gated path.'));", "assert.ok(guidelines.includes('preserve 5.61 scheduling, Credits early-start selection/prefetch behavior'));"),
+              ("assert.ok(guidelines.includes('dedicated circuit family must not double-count failures against the existing organizations circuit'));", "assert.ok(guidelines.includes('cache/stale/circuit semantics'));"),
+              ("assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));", "assert.ok(guidelines.includes('CLI concurrency limit 2'));"),
+          ])
           PY
 
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
@@ -189,49 +127,20 @@ jobs:
           bash -n scripts/bootstrap-usage-dashboard.sh
           python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
 
-          for test in \
-            foundation.cjs \
-            p1-contract.cjs \
-            p2-build.cjs \
-            p3-ui.cjs \
-            p3-recent.cjs \
-            p4-render.cjs \
-            p4-partial.cjs \
-            p4-hourly-drilldown.cjs \
-            p4-hourly-detail.cjs \
-            p4-request-fidelity.cjs \
-            p5-unified-runtime.cjs \
-            p5-bridge-manager.cjs \
-            p5-engine-adoption.cjs \
-            p5-bundled-engine.cjs \
-            p5-lifecycle-race.cjs \
-            p5-bridge-control-sync.cjs \
-            p5-service-tier-fidelity.cjs \
-            p5-devpass-account-parity.cjs \
-            p5-floating-widget-ux.cjs \
-            p5-module-layout.cjs \
-            p5-structural-parity.cjs \
-            p5-state-compatibility.cjs \
-            p6-rc-migration.cjs \
-            p6-rc-contract.cjs \
-            p6-release-hardening.cjs \
-            p7-cache-observability.cjs \
-            p11-cache-fidelity.cjs \
-            p12-gh-bootstrap.cjs \
-            p13-cache-provenance-diagnostics.cjs \
-            p14-project-guidelines-memory.cjs \
-            p15-runtime-recovery-fidelity.cjs \
-            p16-snapshot-performance-attribution.cjs \
-            p17-bounded-cli-parallelism.cjs \
-            p18-organization-discovery-dedup.cjs \
-            p19-organization-empty-fallback-fidelity.cjs \
-            p20-shared-24h-capture.cjs \
-            p21-snapshot-scheduling-attribution.cjs \
-            p22-monotonic-release-integrity.cjs \
-            p23-credits-usage-early-start.cjs \
-            p24-snapshot-decision-attribution.cjs; do
-            node "plugins/usage-dashboard/tests/$test"
-          done
+          tests=(
+            foundation.cjs p1-contract.cjs p2-build.cjs p3-ui.cjs p3-recent.cjs
+            p4-render.cjs p4-partial.cjs p4-hourly-drilldown.cjs p4-hourly-detail.cjs p4-request-fidelity.cjs
+            p5-unified-runtime.cjs p5-bridge-manager.cjs p5-engine-adoption.cjs p5-bundled-engine.cjs
+            p5-lifecycle-race.cjs p5-bridge-control-sync.cjs p5-service-tier-fidelity.cjs p5-devpass-account-parity.cjs
+            p5-floating-widget-ux.cjs p5-module-layout.cjs p5-structural-parity.cjs p5-state-compatibility.cjs
+            p6-rc-migration.cjs p6-rc-contract.cjs p6-release-hardening.cjs p7-cache-observability.cjs
+            p11-cache-fidelity.cjs p12-gh-bootstrap.cjs p13-cache-provenance-diagnostics.cjs p14-project-guidelines-memory.cjs
+            p15-runtime-recovery-fidelity.cjs p16-snapshot-performance-attribution.cjs p17-bounded-cli-parallelism.cjs
+            p18-organization-discovery-dedup.cjs p19-organization-empty-fallback-fidelity.cjs p20-shared-24h-capture.cjs
+            p21-snapshot-scheduling-attribution.cjs p22-monotonic-release-integrity.cjs p23-credits-usage-early-start.cjs
+            p24-snapshot-decision-attribution.cjs
+          )
+          for test in "${tests[@]}"; do node "plugins/usage-dashboard/tests/$test"; done
 
           git diff --check
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
@@ -269,25 +178,6 @@ jobs:
             plugins/usage-dashboard/tests/p22-monotonic-release-integrity.cjs \
             plugins/usage-dashboard/tests/p23-credits-usage-early-start.cjs
 
-      - name: Persist staging failure log
-        if: failure() && github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p plugins/usage-dashboard
-          if [ -f /tmp/stage-562.log ]; then
-            cp /tmp/stage-562.log plugins/usage-dashboard/stage-562-failure.log
-          else
-            printf '5.62 staging failed before the candidate log was created.\n' > plugins/usage-dashboard/stage-562-failure.log
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- plugins/usage-dashboard/stage-562-failure.log
-          git diff --cached --quiet && exit 0
-          git commit -m 'ci: capture 5.62 staging failure'
-          git pull --rebase origin main
-          git push origin HEAD:main
-
       - name: Commit validated 5.62 candidate to main
         if: github.event_name == 'push'
         shell: bash
@@ -316,7 +206,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           rm -rf /tmp/usage-dashboard-candidate /tmp/usage-dashboard-release
           mkdir -p /tmp/usage-dashboard-candidate/plugins/usage-dashboard
           cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-candidate/plugins/usage-dashboard/latest.js
@@ -342,19 +231,9 @@ jobs:
           GUARD_RC=$?
           set -e
           echo "$GUARD_OUTPUT"
-
-          if [ "$GUARD_RC" -eq 2 ]; then
-            echo 'STALE_CANDIDATE: publish skipped without touching release-usage-dashboard'
-            exit 0
-          fi
-          if [ "$GUARD_RC" -ne 0 ]; then
-            echo "monotonic release guard failed closed with rc=$GUARD_RC" >&2
-            exit "$GUARD_RC"
-          fi
-          if printf '%s\n' "$GUARD_OUTPUT" | grep -Fq 'NOOP_IDENTICAL:'; then
-            echo 'release-usage-dashboard already contains identical 5.62 artifacts'
-            exit 0
-          fi
+          if [ "$GUARD_RC" -eq 2 ]; then echo 'STALE_CANDIDATE: publish skipped without touching release-usage-dashboard'; exit 0; fi
+          if [ "$GUARD_RC" -ne 0 ]; then echo "monotonic release guard failed closed with rc=$GUARD_RC" >&2; exit "$GUARD_RC"; fi
+          if printf '%s\n' "$GUARD_OUTPUT" | grep -Fq 'NOOP_IDENTICAL:'; then echo 'release-usage-dashboard already contains identical 5.62 artifacts'; exit 0; fi
 
           RELEASE_BASE="$(git rev-parse origin/release-usage-dashboard)"
           git config user.name 'github-actions[bot]'
@@ -377,21 +256,12 @@ jobs:
           grep -Fq '"productVersion": "3.0.0-alpha.5.62"' plugins/usage-dashboard/runtime/product-manifest.json
 
           git fetch origin main release-usage-dashboard
-          test "$(git rev-parse origin/release-usage-dashboard)" = "$RELEASE_BASE" || {
-            echo 'RELEASE_REF_MOVED: refusing to commit on a stale release base' >&2
-            exit 1
-          }
+          test "$(git rev-parse origin/release-usage-dashboard)" = "$RELEASE_BASE" || { echo 'RELEASE_REF_MOVED: refusing stale release base' >&2; exit 1; }
           git show origin/main:plugins/usage-dashboard/runtime/product-manifest.json > /tmp/usage-dashboard-main-manifest-final.json
-          cmp /tmp/usage-dashboard-main-manifest.json /tmp/usage-dashboard-main-manifest-final.json || {
-            echo 'MAIN_MANIFEST_MOVED: refusing to publish after main release state changed' >&2
-            exit 1
-          }
+          cmp /tmp/usage-dashboard-main-manifest.json /tmp/usage-dashboard-main-manifest-final.json || { echo 'MAIN_MANIFEST_MOVED: refusing publish after main release state changed' >&2; exit 1; }
 
           git add -- plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.62'
-            exit 0
-          fi
+          if git diff --cached --quiet; then echo 'release-usage-dashboard already matches 3.0.0-alpha.5.62'; exit 0; fi
           git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.62 product artifacts'
           git push origin HEAD:release-usage-dashboard

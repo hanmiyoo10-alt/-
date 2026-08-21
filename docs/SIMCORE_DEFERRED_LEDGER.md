@@ -62,13 +62,49 @@ Operational rule:
 ```text
 Production: v0.64.1 — Summary Scope Authority (M2-2 correctness insert)
 Primary current phase: M2-2 final live validation + v0.64.1 summary-scope validation
-Next physical move: Edit Reconcile extraction only after M2-2 live gate
+Next physical move: Edit Reconcile extraction may begin after diagnostic-copy hardening
+v0.64.x genuine-edit direct revalidation: DEFERRED_NON_BLOCKING; required before M2-3 closes or M2-4 begins
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 ```
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
 ## Deferred / non-blocking validation
+
+### v0.64.x genuine visible user-edit direct revalidation
+
+Status: `DEFERRED_NON_BLOCKING`
+
+The direct v0.64.x positive-control sample remains useful but no longer blocks **starting** M2-3.
+
+Expected behavior remains frozen:
+
+```text
+Prior representation: EXACT
+current visible fingerprint != canonical
+current visible fingerprint != Fresh
+→ Edit origin: USER_EDIT_CANDIDATE
+→ Edit reconcile: MANUAL_EDIT_REBUILT
+→ snapshot UPDATED
+```
+
+Why deferral is acceptable:
+
+```text
+- genuine hand-edit behavior already has historical live positive evidence before M2-2;
+- M2-2 moved Representation ownership mechanically and retained the genuine-edit decision markers/semantics;
+- v0.64.0 live evidence directly proved the complementary representation-drift fast path after the ownership move;
+- ordinary exact carryover, B lifecycle, reload continuity, Deferred Mirror and Representation ownership have direct v0.64.x live controls;
+- forcing an artificial hand edit solely to satisfy sequencing would stall the architectural step without evidence of current edit corruption.
+```
+
+Risk retained by deferral:
+
+```text
+A failure discovered later cannot be attributed as cleanly to pre-M2-3 versus the M2-3 extraction itself.
+```
+
+Therefore this is a **start-gate deferral, not a deletion of the control**. Capture the sample naturally if it occurs earlier; otherwise perform one deliberate harmless visible edit before M2-3 is declared complete. M2-4 must not begin until the direct v0.64.x/M2-3-line genuine-edit control has passed.
 
 ### B_END closure natural revalidation
 
@@ -174,14 +210,14 @@ B_END could unlock successfully while retaining the opening frame airtime instea
 
 ## Validated M2 regression controls
 
-Preserve these behaviors through M2-2:
+Preserve these behaviors through M2-2 and M2-3:
 
 ```text
 normal canonical == Fresh EXACT                         PASS
 small output representation mismatch                   OBSERVED
 next-turn REPRESENTATION_FAST_RECONCILED               PASS
-genuine user hand-edit -> USER_EDIT_CANDIDATE          PASS
-genuine user hand-edit -> MANUAL_EDIT_REBUILT          PASS
+genuine user hand-edit -> USER_EDIT_CANDIDATE          PASS (historical live control; direct v0.64.x recheck deferred)
+genuine user hand-edit -> MANUAL_EDIT_REBUILT          PASS (historical live control; direct v0.64.x recheck deferred)
 same-turn reroll replacement                           PASS
 historical response-variant restore                    PASS
 historical restore -> reroll returns to new authority  PASS
@@ -196,7 +232,7 @@ Frame progression / deterministic repair               PASS
 
 ## Escalation rule
 
-Do not stop M2-2 for every new anomaly. Promote a deferred/watch item into a blocking fix only when natural evidence establishes one of the following:
+Do not stop M2 for every new anomaly. Promote a deferred/watch item into a blocking fix only when natural evidence establishes one of the following:
 
 ```text
 hard state corruption
@@ -212,7 +248,9 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 ## Next action
 
 ```text
-Proceed with M2-2 — Representation Ownership Split.
-Use this ledger plus SIMCORE_M2_LIVE_EVIDENCE.md as regression baselines.
-Natural B_END confirmation remains on hold and should be captured whenever it appears, without delaying M2.
+Harden diagnostic-copy observability without changing runtime semantics.
+Then M2-3 Edit Reconcile extraction may begin.
+The direct v0.64.x genuine-edit positive control is deferred from the M2-3 start gate to the M2-3 close gate.
+Do not begin M2-4 until that control passes.
+Capture natural B_END and Summary Scope confirmations whenever they occur without stalling M2.
 ```

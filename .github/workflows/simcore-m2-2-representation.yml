@@ -6,6 +6,8 @@ on:
     paths:
       - 'scripts/simcore-m2-2-representation.py'
       - '.github/workflows/simcore-m2-2-representation.yml'
+  pull_request:
+    types: [opened, synchronize]
 
 permissions:
   contents: write
@@ -16,6 +18,7 @@ concurrency:
 
 jobs:
   checkpoint:
+    if: github.event_name == 'push' || github.event.pull_request.title == 'SimCore M2-2 checkpoint command'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout M2-2 branch

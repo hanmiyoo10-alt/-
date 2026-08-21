@@ -59,3 +59,78 @@ If recurrence is confirmed, investigate Prompt/instruction adherence, long-chat 
 ### Preservation rule
 
 Do not delete this entry when M2 advances. Future similar events should be appended with runtime ID, turn indices, exact scope restriction category, relevant diagnostics, and whether regeneration reproduced or corrected the excursion.
+
+---
+
+## VISIBLE_SCENE_TIME_REGRESSION_GUARD_GAP — WATCH / DIRECT EVIDENCE
+
+First observed: 2026-08-21
+Production: `v0.63.56 — M2-1 Recovery Boundary Split`
+Runtime: `mt2cejv0-fcumha`
+Turn: user `@1920` → assistant `@1921`
+
+### Observable symptom
+
+The visible response header correctly remained in the current narrative year:
+
+```text
+⏱️[2030-08-07 (Wed) 06:00 PM]
+```
+
+but two later visible scene timestamps regressed approximately thirteen years:
+
+```text
+⏱️[2017-09-09 (Sat) 07:15 PM]
+⏱️[2017-10-15 (Sun) 02:00 PM]
+```
+
+The user request described activity during the current Wanna One reunion period; it did not request a flashback to 2017. Therefore the visible output contains a real non-monotonic scene-time regression.
+
+### Diagnostic evidence
+
+The continuity subsystem detected the non-monotonic scene-time material and protected persisted state:
+
+```text
+Continuity summary: REPAIRED
+Narrative clock: FLOOR CLAMPED
+previous:  ⏱️[2030-08-07 (Wed) 06:00 PM]
+frame:     ⏱️[2030-08-07 (Wed) 06:00 PM]
+committed: ⏱️[2030-08-07 (Wed) 06:00 PM]
+scenes: 2
+tail: SKIPPED_NON_MONOTONIC
+Frame sequence: PASS
+Frame guard: PASS
+RAW frame regression: NONE
+Warnings: 0
+```
+
+This proves two distinct outcomes at once:
+
+1. **State continuity safety succeeded.** SimCore did not persist the regressed 2017 scene times as the canonical narrative clock.
+2. **Visible-output continuity failed.** The already-generated 2017 scene timestamps remained in the user-visible response; the guard only prevented state advancement/regression and did not repair or quarantine the visible body.
+
+### Current classification
+
+```text
+VISIBLE_SCENE_TIME_REGRESSION_GUARD_GAP
+confidence: HIGH for symptom
+state corruption: PREVENTED
+visible output repair: NOT PERFORMED
+M2-1 Recovery attribution: UNPROVEN
+continuity coverage gap: CONFIRMED FOR THIS SAMPLE
+```
+
+Do not misclassify `Continuity summary: REPAIRED` as complete user-visible repair. In this diagnostic shape, `REPAIRED` means the canonical narrative clock was protected; it does not guarantee that every scene timestamp in the visible output was made monotonic.
+
+### Correlation / promotion trigger
+
+If another natural response emits an unrequested scene timestamp earlier than the current narrative floor and diagnostics again show `FLOOR CLAMPED` / `SKIPPED_NON_MONOTONIC`, promote this to an active continuity-output investigation. Compare:
+
+- header/frame timestamp;
+- every parsed visible scene timestamp;
+- current narrative floor;
+- `scenes` count;
+- tail disposition;
+- whether the visible response is rewritten, rejected, quarantined, or merely state-clamped.
+
+Any future repair should be scoped separately from M2 mechanical modularization unless evidence shows the refactor caused it. Preserve the current state-safety behavior while investigating whether visible scene-time validation belongs before commit, during output validation, or in a dedicated renderer/continuity boundary.

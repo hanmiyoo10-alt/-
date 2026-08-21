@@ -138,6 +138,21 @@ continuity coverage gap: CONFIRMED FOR THIS SAMPLE
 
 Do not misclassify `Continuity summary: REPAIRED` as complete user-visible repair. In this diagnostic shape, `REPAIRED` means the canonical narrative clock was protected; it does not guarantee that every scene timestamp in the visible output was made monotonic, nor that prose under a current timestamp is semantically anchored to the current era or current character state.
 
+### Mitigation release
+
+`v0.63.57 — Current Timeline Authority Guard` was released as a narrow pre-M2-2 mitigation. It adds current-timeline authority guidance before generation and makes non-monotonic visible scene-time sequences explicit in copied diagnostics.
+
+Status after release:
+
+```text
+issue evidence: DIRECT / HIGH
+production mitigation: DEPLOYED
+real long-chat validation: PENDING
+M2-1 attribution: still UNPROVEN
+```
+
+The mitigation does not claim to semantically rewrite a malformed visible response. Success means preventing the unrequested era rollback in ordinary current-timeline generation while preserving explicit user-requested historical scenes, and retaining the existing persisted-state floor if generation still misbehaves.
+
 ### Correlation / promotion trigger
 
 If another natural response emits an unrequested scene timestamp earlier than the current narrative floor and diagnostics again show `FLOOR CLAMPED` / `SKIPPED_NON_MONOTONIC`, promote this to an active continuity-output investigation. Also correlate cases where the timestamp stays current but body facts or age/state clearly belong to an earlier era.

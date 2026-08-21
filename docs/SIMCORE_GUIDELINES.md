@@ -458,6 +458,19 @@ Compiler
 
 Do not modify unrelated layers just because one subsystem is under investigation.
 
+## 24A. Continuity State Safety vs Visible Output
+
+Treat persisted-state continuity and user-visible chronology as separate guarantees. A diagnostic such as `FLOOR CLAMPED`, `SKIPPED_NON_MONOTONIC`, or `Continuity summary: REPAIRED` may prove that canonical state was protected without proving that already-generated scene timestamps or era-specific character state were repaired in the visible body.
+
+When investigating chronology faults, inspect both:
+
+```text
+persisted narrative/frame state
+visible scene timestamps + current-era character state
+```
+
+Do not claim complete continuity repair from state protection alone. Avoid broad semantic/date rewrites unless a deterministic repair is proven; prefer authoritative pre-generation constraints plus explicit post-generation diagnostics.
+
 ## 25. Frame Integrity
 
 Continue validating progression of:

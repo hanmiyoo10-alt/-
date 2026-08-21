@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.56`
-- Release: `M2-1 Recovery Boundary Split`
+- Version: `0.63.57`
+- Release: `Current Timeline Authority Guard`
 - Release branch: `release-simcore`
-- Release commit: `222d6bd0c589c9dd4c469979daa42cefbd512a3e`
-- Release blob: `6c828d5dadeb8a49f256afe1e54674cf5bd81803`
+- Release commit: `fb8b7a1ac67d470dfd338e698de952ff71910e85`
+- Release blob: `43d54d2cb77c36eb72f9f009d4d97981fd17fc3f`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `2M_MAJOR_M2_1_LIVE_VALIDATION`
+- Primary optimization target: `06357_CURRENT_TIMELINE_AUTHORITY_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,7 +35,7 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.63.56` is the current production release. Static M2-1 release gates passed; real long-chat validation of the mechanical Recovery boundary split is pending. `v0.63.55` Representation Fast Reconcile remains the validated behavioral regression baseline.
+`v0.63.57` is the current production release. It is a narrow pre-M2-2 chronology guard inserted after direct long-chat evidence showed that persisted 2030 state could remain protected while the visible response silently regressed scene timestamps and character-era state to 2017. M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.
 
 Observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -82,11 +82,50 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat. M2-1 is now deployed as `v0.63.56`; the current task is to validate that the Recovery boundary split preserves the validated fast path, genuine-user-edit behavior, and ordinary A/B/C operation.
+v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat. M2-1 remains the active architectural baseline under `v0.63.57`; the current task is to validate the chronology guard while continuing to preserve the validated fast path, genuine-user-edit behavior, and ordinary A/B/C operation.
 
 ---
 
 # 2. Current Validation Release
+
+## v0.63.57 — Current Timeline Authority Guard
+
+Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+
+This mini update was inserted before further M2 ownership movement because a natural Mode-A turn exposed a continuity coverage gap: the canonical narrative clock remained in 2030, but the visible response emitted unrequested 2017 scene timestamps and also reverted current character age/state to the historical era.
+
+The patch is intentionally narrow:
+
+```text
+pre-generation:
+known non-broadcast narrative timestamp
+→ inject current_timeline_anchor
+→ current timeline is authoritative
+→ historical context is reference-only unless the user explicitly requests a past scene / flashback
+→ current character age/status follows the current timeline
+
+post-generation diagnostics:
+non-monotonic visible timestamp sequence
+→ existing persisted-state floor remains protected
+→ visible chronology is reported explicitly
+→ generated body is not semantically/date-rewritten by SimCore
+```
+
+Frozen in this mini release:
+
+- M2-1 `output-compat` / `bootstrap-migration` / Recovery facade boundaries;
+- Representation Fast Reconcile and genuine-user-edit semantics;
+- Deferred Mirror mismatch safety;
+- Broadcast lifecycle and end authority;
+- Frame sequencing;
+- Evidence / Lineage / Handoff / Recurrence / Structure / COMMUNITY;
+- cache/history behavior, storage/API/network/timer surfaces, and persistent schema.
+
+Real long-chat validation should confirm three cases before M2 advances:
+
+1. ordinary current-timeline A/C output stays in the current era;
+2. an explicit user-requested historical scene/flashback remains possible;
+3. if another non-monotonic visible sequence occurs, diagnostics report `Visible chronology: NON_MONOTONIC_VISIBLE_SEQUENCE` while the persisted narrative floor remains protected.
 
 ## M2-1 — Recovery Boundary Split
 

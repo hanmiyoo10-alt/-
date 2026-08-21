@@ -2,6 +2,48 @@
 
 This file records production diagnostics gathered during the staged 2.0M Major refactor. It is evidence-only: do not infer behavior that the captured diagnostics did not exercise.
 
+## Pre-M2-2 mini patch — v0.63.57 Current Timeline Authority Guard
+
+Production baseline:
+
+```text
+Version: 0.63.57
+Release: Current Timeline Authority Guard
+Release commit: fb8b7a1ac67d470dfd338e698de952ff71910e85
+Release blob: 43d54d2cb77c36eb72f9f009d4d97981fd17fc3f
+```
+
+Triggering direct evidence came from runtime `mt2cejv0-fcumha`, request `@1920` → output `@1921`. The persisted narrative/frame state remained at `2030-08-07`, while the visible body emitted two explicit 2017 scene timestamps and also used historical character age/state under the current-era frame. Diagnostics simultaneously reported:
+
+```text
+Continuity summary: REPAIRED
+Narrative clock: FLOOR CLAMPED
+previous:  2030-08-07 06:00 PM
+frame:     2030-08-07 06:00 PM
+committed: 2030-08-07 06:00 PM
+scenes: 2
+tail: SKIPPED_NON_MONOTONIC
+Frame sequence: PASS
+Frame guard: PASS
+Warnings: 0
+```
+
+Interpretation: persisted-state safety worked, but visible chronology was not protected. This is a real coverage gap and is distinct from M2-1 Recovery/Representation behavior.
+
+The mini patch adds a non-broadcast current-timeline authority anchor whenever a prior narrative timestamp is known and adds an explicit `Visible chronology` diagnostic. It intentionally does **not** rewrite generated dates/prose, infer scene semantics, change state schema, or alter M2 ownership boundaries.
+
+Validation target:
+
+```text
+current-era ordinary turn                 PASS without era rollback
+explicit user-requested past scene        still allowed
+non-monotonic visible sequence recurrence explicitly diagnosed
+persisted narrative floor                 remains protected
+M2-1 representation/recovery controls     unchanged
+```
+
+Until real long-chat evidence arrives, status remains `PENDING_REAL_LONG_CHAT`.
+
 ## M2-1 — v0.63.56 Recovery Boundary Split
 
 Production baseline:

@@ -138,6 +138,63 @@ output storage: 300 ms
 
 Interpretation: **M2-1 representation-fast regression control PASS.** This sample also provides a natural Mode-C / source-handoff / dual-evidence cross-check with no observed structural regression. Storage latency remains a separate measured concern and is intentionally not repaired inside M2-1.
 
+### Sample 4 — cache frontier after prompt-fragment placement change
+
+A later long-chat sample in runtime `mt2cejv0-fcumha` showed:
+
+```text
+request @1920 → output @1921
+Mode: A
+Session load: LOCATION_REUSE
+Edit reconcile: SAME_FAST · 0.0 ms · snapshot UNCHANGED
+Warnings: 0
+```
+
+Local prefix telemetry:
+
+```text
+Cache topology: COMMON_PREFIX
+common: 30/59 messages
+common chars: 98,523/141,701
+ratio: 69.5%
+first change: @30 assistant→assistant
+Cache break: PRE_SIMCORE · CHAT_HISTORY · @30
+Cache effect: REUSE_WINDOW_GROWING
+frontier movement: +2 messages / +2,836 chars
+Cache trajectory: ESTABLISHED
+floor: 26 messages / 92,817 chars
+frontier: 30 messages / 98,523 chars
+streak: 4
+Host prefix attribution: STABLE · SAME_FAMILY
+SimCore contribution: NOT_FIRST_BREAK
+provider cache: UNVERIFIED
+```
+
+Important attribution caveat: the user clarified that the **Core Ruleset is a SimCore-connected prompt fragment**, not part of the runtime-tail block measured by the `SimCore contribution` field. Therefore `PRE_SIMCORE` / `NOT_FIRST_BREAK` means only that the first local prefix break occurs **before the runtime-tail injection**. It does **not** prove that every prompt fragment belonging to the broader SimCore product is uninvolved.
+
+This distinction matters when the Core Ruleset fragment is physically placed earlier in host prompt composition and may vary with globals/mode/activation. Moving that fragment later can change prefix topology without changing the runtime-tail identity. The current sample's later frontier (`@30`, 98,523 chars) is consistent with a healthier local reuse window than earlier samples that broke around `@10`, but causality is **not yet proven** because the runtime, history size, and intervening turns also changed.
+
+Do not promote this into a provider-cache claim. The only safe conclusions are:
+
+```text
+local reusable prefix: growing / established
+runtime-tail SimCore: not the first observed break
+connected Core Ruleset fragment: still a possible upstream contributor
+provider cache: UNVERIFIED
+```
+
+The same output again ended with a conservative +1 representation mismatch:
+
+```text
+CANONICAL 3176:af64ce2
+FRESH_CHAT 3177:7154990
+Δchars +1
+Deferred mirror: OUTPUT_MISMATCH
+Safe-envelope reconcile: REJECTED
+```
+
+If the next natural request sees the exact prior Fresh body, the expected request-side control remains `REPRESENTATION_FAST_RECONCILED` with snapshot unchanged.
+
 ### Current M2-1 validation status
 
 Confirmed in production:

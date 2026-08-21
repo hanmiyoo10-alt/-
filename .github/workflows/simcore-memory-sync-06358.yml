@@ -10,10 +10,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: repo-main-write
-  cancel-in-progress: false
-
 jobs:
   sync:
     runs-on: ubuntu-latest

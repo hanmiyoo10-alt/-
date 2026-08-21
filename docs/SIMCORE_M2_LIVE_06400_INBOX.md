@@ -153,7 +153,9 @@ Status: `SUSPECTED HOST-SIDE CHANGE / OBSERVE_ONLY / NON-M2-ATTRIBUTED`
 The `@2020` request also produced a sharp cache-topology reset not seen in the preceding same-runtime requests:
 
 ```text
-Cache topology: COMMON_PREFIX 0/40 · 0/448,777 chars · 0.0%
+previous request topology: 37/68 messages · 433,042/485,019 chars · 89.3%
+current request topology:   0/40 messages · 0/448,777 chars · 0.0%
+
 Cache effect: PREFIX_COLLAPSE
 Cache break: PRE_SIMCORE · HOST_PREFIX · @0 system→system
 frontier movement: @37 → @0 · -37 messages / -433,042 chars
@@ -172,7 +174,25 @@ runtime prompt: 2140 chars / 38 lines
 provider cache: UNVERIFIED
 ```
 
-Interpretation: a real local prefix-family reset occurred, but the first break is at the host system prefix before the SimCore runtime tail and the SimCore runtime prompt size did not grow. Do not attribute this cache collapse to M2-2 Representation without further evidence. Preserve the +3,846 insertion-like host-prefix change and watch whether the new `bb4ec352` family stabilizes on following requests.
+The simultaneous message-count contraction (`68 → 40`) means this event is better preserved as a possible **host context rebase/compaction plus system-prefix family reset**, not merely a single changed system string. The diagnostic does not prove the host mechanism, so attribution remains suspected. The first break is before the SimCore runtime tail and the SimCore runtime prompt size did not grow; do not attribute this cache collapse to M2-2 Representation without further evidence. Watch whether the new `bb4ec352` family stabilizes on following requests.
+
+### Standalone C lineage over-chain candidate
+
+Status: `SUSPECTED / NON_BLOCKING / LINEAGE WATCH`
+
+Request `@2020` is a self-contained annual-summary instruction covering `2030.1.1.~12.31.` and does not use a short-C source reference. Yet diagnostics report:
+
+```text
+Short-C source lock: OFF
+Template recurrence: FIRST · family C
+Request lineage: CHAIN · root A@2014 · parent C@2018 · depth 3
+Source handoff: INELIGIBLE · reason template-recurrence-owned
+Evidence: n/a
+```
+
+The visible output successfully produced a broad annual summary, so no user-visible source restriction or state corruption is established. However, `A@2014` is the Super Bowl performance root and is not an obvious semantic root for a new full-year standalone summary. Preserve this as a possible stale/over-inherited lineage classification. A useful natural follow-up is whether a later short-C reaction to the annual summary chooses the current annual-summary turn as source/root or incorrectly continues the old Super Bowl chain.
+
+Do not attribute this to Representation M2-2 unless recurrence or cross-module evidence establishes an ownership interaction.
 
 ### SUSPECTED narrative-tail coverage recurrence — separate from M2-2 attribution
 
@@ -215,7 +235,7 @@ Cache break: PRE_SIMCORE · CHAT_HISTORY
 provider cache: UNVERIFIED
 ```
 
-At `@2020`, the host system prefix changed by +3,846 chars and the local prefix fell to 0%, creating a new cache family baseline. Provider cache behavior remains unverified; only the local topology/family reset is established.
+At `@2020`, the host system prefix changed by +3,846 chars, the host-visible message set contracted from 68 to 40, and the local common prefix fell to 0%, creating a new cache family baseline. Provider cache behavior remains unverified; only the local topology/family reset is established.
 
 ### Current verdict
 
@@ -229,6 +249,7 @@ natural output mismatch conservative handling     PASS
 next-turn Representation Fast Reconcile            PASS — LIVE GATE CLOSED
 new -24 mismatch conservative handling             PASS SO FAR / paired follow-up optional
 possible narrative-tail contract recurrence        SUSPECTED / NON-BLOCKING
-host-prefix +3,846 family reset                    OBSERVED / HOST-SIDE WATCH
+host-prefix +3,846 + context contraction           OBSERVED / HOST-SIDE WATCH
+standalone C lineage over-chain                     SUSPECTED / NON-BLOCKING
 provider cache attribution                         UNVERIFIED
 ```

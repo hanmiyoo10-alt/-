@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.63.56
+//@version 0.63.57
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -28,6 +28,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.63.57 Current Timeline Authority Guard:
+// - Follows direct long-chat evidence where the persisted/current frame remained in 2030 while a non-broadcast response silently reverted visible scene timestamps and character-era state to 2017; existing Continuity correctly protected the persisted narrative clock but left the visible body unchanged
+// - Adds a current-timeline authority anchor on every non-broadcast request with a known persisted narrative timestamp, not only turns that contain an explicit forward calendar transition
+// - Historical context remains usable as reference, and explicitly user-requested past scenes/flashbacks remain allowed; absent such a request, historical context must not silently replace the current scene timeline or current character age/status
+// - Adds explicit visible-chronology diagnostics for non-monotonic scene timestamp sequences while preserving the existing fail-closed state floor and leaving generated body text untouched rather than performing unsafe semantic/date rewrites
+// - Scope is chronology authority + diagnostics only: M2-1 Recovery boundaries, Representation/Edit Reconcile, Deferred Mirror, Broadcast, Frame sequencing, Evidence/Lineage/Handoff/Recurrence, Structure/COMMUNITY, cache/history, storage/API/network/timer behavior and persistent schema remain frozen
 //
 // v0.63.56 M2-1 Recovery Boundary Split:
 // - Begins the 2.0M Major M2 mechanical boundary refactor after v0.63.55 Representation Fast Reconcile passed real long-chat validation
@@ -539,7 +546,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.63.56';
+const SIMCORE_RUNTIME_VERSION = '0.63.57';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -3733,6 +3740,11 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push('broadcast_end_basis=explicit_B_END_lifecycle');
   }
   if (p.mode === 'C') lines.push('mode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1');
+  if (!/^B_/.test(String(p.mode || '')) && p.narrativeTimestampPrevious) {
+    lines.push(`current_timeline_anchor=${p.narrativeTimestampPrevious}`);
+    lines.push('current_timeline_authority=1;historical_context_reference_only=1;explicit_user_requested_past_scene_or_flashback_may_depart=1');
+    lines.push('current_character_age_and_status_follow_current_timeline=1;past_event_age_or_status_not_current=1');
+  }
   if (!/^B_/.test(String(p.mode || '')) && p.narrativeProgressionActive) {
     lines.push('timestamp_semantics=current_narrative_time');
     lines.push('embedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1');
@@ -7457,6 +7469,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Evidence root fence: ${evidenceFence?.rootFence ? `${evidenceFence.rootFence.status} · request @${evidenceFence.rootFence.requestIndex >= 0 ? evidenceFence.rootFence.requestIndex : 'n/a'} role ${evidenceFence.rootFence.role || 'n/a'} · shape ${evidenceFence.rootFence.shape || 'n/a'} · delta ${evidenceFence.rootFence.normDelta == null ? 'n/a' : evidenceFence.rootFence.normDelta} · ${evidenceFence.rootFence.reason || 'n/a'}` : 'n/a'}`,
       `Evidence source fence: ${evidenceFence?.sourceFence ? `${evidenceFence.sourceFence.status} · request @${evidenceFence.sourceFence.requestIndex >= 0 ? evidenceFence.sourceFence.requestIndex : 'n/a'} role ${evidenceFence.sourceFence.role || 'n/a'} · shape ${evidenceFence.sourceFence.shape || 'n/a'} · delta ${evidenceFence.sourceFence.normDelta == null ? 'n/a' : evidenceFence.sourceFence.normDelta} · ${evidenceFence.sourceFence.reason || 'n/a'}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
+      `Visible chronology: ${probeFresh && narrative ? (narrative.tailStatus === 'SKIPPED_NON_MONOTONIC' ? 'NON_MONOTONIC_VISIBLE_SEQUENCE · state floor protected · body unchanged' : (narrative.tailStatus === 'SKIPPED_MALFORMED' ? 'MALFORMED_VISIBLE_SEQUENCE · state floor protected · body unchanged' : 'PASS_OR_NOT_APPLICABLE')) : 'n/a'}`,
       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,
       '',
       'Warnings detail:',

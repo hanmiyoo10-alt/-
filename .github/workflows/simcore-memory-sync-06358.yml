@@ -1,3 +1,4 @@
+# one-shot merge trigger for v0.63.58 durable memory sync
 name: SimCore v0.63.58 memory sync
 
 on:

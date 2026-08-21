@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.63.59",
-  "release_name": "Broadcast End Closure Contract",
+  "production_version": "0.64.0",
+  "release_name": "M2-2 Representation Ownership Split",
   "release_branch": "release-simcore",
-  "release_commit": "7c0f6f4a8e0b7e42a5996dc7bacd149f27e3751d",
-  "release_blob": "da47e5d8123c0abfe9902f016c84ac758f766032",
+  "release_commit": "d0407c5cd7441a978f815db068344219f8c15027",
+  "release_blob": "6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06359_BROADCAST_END_CLOSURE_LIVE_VALIDATION",
+  "current_priority": "06400_M2_2_REPRESENTATION_OWNERSHIP_LIVE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -32,9 +32,9 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "managed_by": ".github/workflows/simcore-release-state-sync.yml",
+  "managed_by": ".github/workflows/simcore-release-state-sync.yml + simcore-06400-admin-sync",
   "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
-  "major_update_checkpoint": "M2-1"
+  "major_update_checkpoint": "M2-2"
 }

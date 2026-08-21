@@ -1,6 +1,6 @@
 # SimCore 2.0M Major — M1 Contracts v2
 
-> Production baseline: `v0.63.55 — Representation Fast Reconcile`
+> Production baseline: `v0.64.0 — M2-2 Representation Ownership Split`
 >
 > M1 status: **COMPLETE — DESIGN/CI ONLY, PRODUCTION RUNTIME UNCHANGED**
 >
@@ -74,7 +74,7 @@ Validation
   structure
         ↓
 Representation
-  representation (planned)
+  representation (physical since M2-2)
         ↓
 Application
   prompt / session / current recovery
@@ -138,7 +138,7 @@ Therefore M2 must not create a Turn Pipeline merely for aesthetic modularity.
 
 ## 5. Representation Contract
 
-`representation` is a planned first-class subsystem.
+`representation` is a physical first-class subsystem as of M2-2 (`v0.64.0`).
 
 ### Owns
 
@@ -292,14 +292,14 @@ strict identity/location/staleness gates
 mirror write scheduling
 ```
 
-Move later:
+Moved in M2-2:
 
 ```text
 representation relation classification
 bounded representation provenance ownership
 ```
 
-Deferred Mirror safety behavior itself remains frozen.
+These now belong to the memory-only `representation` subsystem. Runtime Mirror keeps Fresh host observation plus strict identity/location/staleness gates and mirror write scheduling. Deferred Mirror safety behavior itself remains frozen.
 
 ---
 
@@ -372,30 +372,28 @@ This is a **drift guard**, not a style linter. It is designed to stop architectu
 
 ## 11. M2 Mechanical Order
 
-After live authorization:
+Actual staged order after live authorization:
 
 ```text
-M2.1
-Create target module boundaries/adapters with no behavior change.
+M2-1 — completed in v0.63.56
+Recovery boundary split:
+recovery → output-compat + bootstrap-migration + compatibility facade
 
-M2.2
-Split Recovery:
-recovery → output-compat + bootstrap-migration.
+Pre-M2-2 correctness inserts — v0.63.57..v0.63.59
+Current Timeline Authority / Narrative Tail Time / Broadcast End Closure
+(no Representation/Edit ownership movement)
 
-M2.3
-Extract Representation ownership from runtime-mirror / outer shell.
+M2-2 — physical in v0.64.0, live validation pending
+Extract Representation ownership from runtime-mirror / outer shell
 
-M2.4
-Extract Edit Reconcile from outer shell + Session.
+M2-3 — planned only after M2-2 live gate
+Extract Edit Reconcile from outer shell + Session
 
-M2.5
-Narrow Session and Runtime Mirror contracts.
+M2-4
+Narrow Session and remaining Runtime Mirror orchestration contracts
 
-M2.6
-Remove old transition code only after equivalence/regression evidence.
-
-M2.7
-Shrink Contracts v2 transition exceptions as actual source edges disappear.
+M2-5+
+Remove transition code only after equivalence evidence and shrink Contracts v2 exceptions as real source edges disappear
 ```
 
 Each step gets its own checkpoint. New feature behavior must not be mixed into a mechanical move.
@@ -494,3 +492,43 @@ The old `recovery` module remains temporarily as a compatibility facade exportin
 M2-1 does **not** yet move Representation Fast Reconcile or the manual-edit decision tree. Those remain in their v0.63.55 locations and are frozen regression controls for the next checkpoint.
 
 Exit condition for M2-1: real long-chat behavior remains stable with no new warning/rebuild class attributable to the split. Only after that evidence may M2 continue to Representation/Edit ownership movement.
+
+---
+
+## 16. M2-2 Physical Checkpoint — Representation Ownership Split
+
+Production `v0.64.0` materializes the planned Representation boundary.
+
+```text
+representation
+├─ bounded fingerprint-only provenance ledger
+├─ prior CANONICAL/HOST_RAW/FRESH_CHAT relation taxonomy
+├─ exact current carryover classification
+└─ fingerprint delta / shape metadata
+```
+
+Runtime Mirror no longer owns or exposes the provenance ledger. It keeps:
+
+```text
+Fresh chat observation
+strict identity/location/staleness gates
+mirror write scheduling
+```
+
+The outer request shell consumes Representation facts but the Edit Reconcile decision tree itself is **not yet physically extracted**. That is the next planned checkpoint only after live equivalence evidence.
+
+Frozen positive controls:
+
+```text
+OUTPUT_MISMATCH + exact prior FRESH carryover
+→ REPRESENTATION_FAST_RECONCILED
+→ snapshot UNCHANGED
+
+Prior EXACT + unknown edited representation
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT
+```
+
+Static checkpoint validation passed before release: both installable files were syntax-valid and identical, Contracts v2 passed against the new module graph, Runtime Mirror's provenance API was removed, and no new persistent/host/network/timer surface was introduced.
+
+Live status: **PENDING REAL LONG-CHAT VALIDATION**.

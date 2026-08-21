@@ -2,15 +2,15 @@
   "schema_version": 2,
   "name": "SimCore Contracts v2",
   "production_baseline": {
-    "version": "0.63.56",
-    "release_name": "M2-1 Recovery Boundary Split",
-    "release_commit": "222d6bd0c589c9dd4c469979daa42cefbd512a3e",
-    "release_blob": "6c828d5dadeb8a49f256afe1e54674cf5bd81803"
+    "version": "0.64.0",
+    "release_name": "M2-2 Representation Ownership Split",
+    "release_commit": "d0407c5cd7441a978f815db068344219f8c15027",
+    "release_blob": "6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb"
   },
   "major_update": {
     "milestone": "2.0M",
     "phase": "M2",
-    "status": "M2_1_RELEASED_PENDING_LIVE_VALIDATION",
+    "status": "M2_2_RELEASED_PENDING_LIVE_VALIDATION",
     "m2_runtime_move_gate": "V0_63_55_REAL_LONG_CHAT_REPRESENTATION_FAST_RECONCILE_VALIDATED",
     "runtime_refactor_authorized": true,
     "authorization_evidence": {
@@ -29,13 +29,22 @@
       "fresh_chars": 3714,
       "delta_chars": -1
     },
-    "checkpoint": "M2-1",
+    "checkpoint": "M2-2",
     "m2_1_release": {
       "version": "0.63.56",
       "release_commit": "222d6bd0c589c9dd4c469979daa42cefbd512a3e",
       "release_blob": "6c828d5dadeb8a49f256afe1e54674cf5bd81803",
       "scope": "mechanical recovery boundary split only",
-      "live_validation": "PENDING"
+      "live_validation": "SUPPORTED_REAL_LONG_CHAT"
+    },
+    "m2_2_release": {
+      "version": "0.64.0",
+      "release_commit": "d0407c5cd7441a978f815db068344219f8c15027",
+      "release_blob": "6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb",
+      "scope": "mechanical representation ownership split only",
+      "static_validation": "PASS",
+      "live_validation": "PENDING",
+      "rollback_parent": "0.63.59"
     }
   },
   "global_rules": [
@@ -316,7 +325,7 @@
       "status": "orchestrator_reduce_in_m2",
       "owns": "session state holder and current request/output/persistence orchestration",
       "excludes": [
-        "future representation classification ownership"
+        "representation classification ownership"
       ],
       "allowed_dependencies": [
         "store",
@@ -424,15 +433,17 @@
     "runtime-mirror": {
       "physical": "required",
       "layer": "runtime",
-      "status": "keep_then_narrow_after_representation",
-      "owns": "fresh-chat read plus strict identity/location/staleness mirror guard and current provenance ledger",
+      "status": "narrowed_m2_2",
+      "owns": "fresh-chat read plus strict identity/location/staleness mirror guard and mirror write scheduling",
       "excludes": [
         "raw Fresh retention",
-        "semantic state mutation"
+        "semantic state mutation",
+        "representation taxonomy ownership",
+        "bounded representation provenance ownership"
       ],
       "allowed_dependencies": [],
       "m2_target": [
-        "move_representation_classification_and_bounded_provenance_to_representation",
+        "representation_provenance_move_completed_in_m2_2",
         "keep_host_read_and_mirror_write_here"
       ]
     },
@@ -457,9 +468,9 @@
       "allowed_dependencies": []
     },
     "representation": {
-      "physical": "planned",
+      "physical": "required",
       "layer": "representation",
-      "status": "m2_authorized",
+      "status": "m2_2_physical_pending_live_validation",
       "owns": "exact fingerprint identity, CANONICAL/HOST_RAW/FRESH_CHAT relations, bounded provenance and exact carryover classification",
       "excludes": [
         "raw response body persistence",
@@ -479,7 +490,7 @@
     "edit-reconcile": {
       "physical": "planned",
       "layer": "application",
-      "status": "m2_authorized",
+      "status": "m2_next_after_representation_live_gate",
       "owns": "single edit reconciliation decision tree and fallback coordination",
       "excludes": [
         "representation taxonomy ownership",

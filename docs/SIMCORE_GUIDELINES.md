@@ -882,7 +882,7 @@ unless a deliberate narrow connector-backed change has a safer direct path.
 Current production family at the time this document was created:
 
 ```text
-SimCore v0.63.58 — Narrative Tail Time Contract
+SimCore v0.64.0 — M2-2 Representation Ownership Split
 ```
 
 Do not treat this number as permanently current; update this section when production advances.
@@ -940,6 +940,32 @@ Network policy
 Timer policy
 ```
 
+## 47A. Representation Ownership Boundary
+
+As of M2-2, representation identity/provenance is a first-class memory-only boundary.
+
+```text
+Representation owns
+- bounded CANONICAL / HOST_RAW / FRESH_CHAT fingerprint provenance
+- prior representation taxonomy
+- exact current carryover classification
+- fingerprint delta / carryover shape metadata
+
+Runtime Mirror owns
+- Fresh host observation
+- strict location / identity / staleness guards
+- mirror transport and write scheduling
+
+Edit Reconcile owns (current implementation location may still be transitional)
+- the decision to accept a known representation alias or rebuild state
+```
+
+Non-negotiable invariant:
+
+> **Fresh is identity evidence, never a body source.**
+
+Therefore Representation must not retain raw Fresh bodies, mutate chat/history, create persistent Core fields, or add host/network/timer surfaces. Runtime Mirror must not regain bounded provenance/taxonomy ownership merely for convenience. When ownership moves again, diagnostics and Contracts v2 must move with it.
+
 ---
 
 # Part XVII — Guideline Update Protocol
@@ -996,6 +1022,14 @@ Prefer small documentation diffs that explain why guidance changed.
 ---
 
 # Guideline Changelog
+
+## 2026-08-21 — v0.64.0 M2-2 Representation Ownership Split
+
+- Advanced the production baseline to `v0.64.0 — M2-2 Representation Ownership Split`.
+- Promoted Representation from a planned Contracts v2 boundary to a physical memory-only subsystem.
+- Moved bounded CANONICAL/HOST_RAW/FRESH_CHAT provenance ownership and exact carryover classification out of Runtime Mirror while keeping Fresh observation and mirror transport there.
+- Preserved the `REPRESENTATION_FAST_RECONCILED` and genuine `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT` paths as frozen live regression controls.
+- Reaffirmed that Fresh is identity evidence, never a raw-body source, and that no persistent schema/host/network/timer surface was added.
 
 ## 2026-08-21 — Diagnostic Forensics and Cross-Validation
 

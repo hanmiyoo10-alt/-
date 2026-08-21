@@ -2,6 +2,80 @@
 
 This file records production diagnostics gathered during the staged 2.0M Major refactor. It is evidence-only: do not infer behavior that the captured diagnostics did not exercise.
 
+## M2-2 — v0.64.0 Representation Ownership Split
+
+Production baseline:
+
+```text
+Version: 0.64.0
+Release: M2-2 Representation Ownership Split
+Release commit: d0407c5cd7441a978f815db068344219f8c15027
+Release blob: 6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb
+Parent: v0.63.59 Broadcast End Closure Contract
+```
+
+### Release/CI checkpoint evidence — not yet live runtime evidence
+
+The staged checkpoint moved bounded representation identity/provenance ownership without moving Edit Reconcile behavior.
+
+```text
+new physical module: representation
+bounded provenance ledger owner: representation
+Runtime Mirror provenance ledger/API: removed
+Runtime Mirror Fresh observation + mirror transport: retained
+raw Fresh body retention: none
+persistent schema change: none
+host/network/timer surface change: none
+```
+
+Pre-release static validation:
+
+```text
+patch application                    PASS
+node --check latest.js               PASS
+node --check install.js              PASS
+latest.js == install.js              PASS
+Contracts v2 architecture checker    PASS
+v0.63.55 fast-path markers retained  PASS
+genuine user-edit markers retained   PASS
+v0.63.59 closure markers retained    PASS
+```
+
+The new diagnostic exposes the physical boundary directly:
+
+```text
+Representation ownership: REPRESENTATION · ledger <N> · mirror TRANSPORT_ONLY · raw bodies NOT RETAINED
+```
+
+### Live validation status
+
+`PENDING_REAL_LONG_CHAT`.
+
+Required direct evidence before the next physical Edit Reconcile move:
+
+```text
+ordinary exact carryover
+→ SAME_FAST / Edit origin NONE
+
+natural CANONICAL != FRESH followed by exact Fresh carryover
+→ Prior OUTPUT_MISMATCH
+→ current FRESH_CHAT
+→ REPRESENTATION_DRIFT_CORRELATED
+→ REPRESENTATION_FAST_RECONCILED
+→ snapshot UNCHANGED
+
+genuine visible user edit
+→ Prior EXACT
+→ current matches neither canonical nor Fresh
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT
+
+Deferred Mirror unknown representation
+→ conservative OUTPUT_MISMATCH / unsafe mirror write blocked
+```
+
+Do not infer those live results from CI. The static checkpoint proves source/contract shape only.
+
 ## Pre-M2-2 mini patch — v0.63.58 Narrative Tail Time Contract
 
 Production baseline:

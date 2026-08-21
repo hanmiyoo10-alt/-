@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.63.58`
-- Release: `Narrative Tail Time Contract`
+- Version: `0.64.0`
+- Release: `M2-2 Representation Ownership Split`
 - Release branch: `release-simcore`
-- Release commit: `4dc71f01cc5dade0ae69005ee0f771961f638be0`
-- Release blob: `eb976adc97fd5b8ac1cec2ad10672638ae83c7e2`
+- Release commit: `d0407c5cd7441a978f815db068344219f8c15027`
+- Release blob: `6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `06358_NARRATIVE_TAIL_TIME_LIVE_VALIDATION`
+- Primary optimization target: `06400_M2_2_REPRESENTATION_OWNERSHIP_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,7 +35,7 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.63.58` is the current production release. It is a narrow pre-M2-2 narrative-tail contract inserted after direct long-chat evidence showed that a scene could visibly progress from 01:00 to a 03:00 ending in prose while Time still reported `scenes 0 / FRAME_ONLY` and persisted 01:00. `v0.63.57` Current Timeline Authority remains in force, M2-1 Recovery boundaries remain unchanged, and `v0.63.55` Representation Fast Reconcile remains a frozen behavioral regression baseline.
+`v0.64.0` is the current production release and the M2-2 physical checkpoint. It moves bounded CANONICAL / HOST_RAW / FRESH_CHAT representation provenance and exact carryover classification out of Runtime Mirror / the outer shell into a first-class memory-only `representation` module. Runtime Mirror remains the host-facing Fresh observer and strict identity/location/staleness mirror transport boundary. The v0.63.55 representation-fast decision semantics, genuine-user-edit rebuild path, v0.63.56 Recovery split, v0.63.57/.58 timeline contracts, and v0.63.59 Broadcast closure contract remain frozen regression controls. Static/architecture validation passed; real long-chat validation is pending.
 
 Observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -87,6 +87,90 @@ v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural l
 ---
 
 # 2. Current Validation Release
+
+## v0.64.0 — M2-2 Representation Ownership Split
+
+Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+
+Production identity:
+
+```text
+Version: 0.64.0
+Release: M2-2 Representation Ownership Split
+Release commit: d0407c5cd7441a978f815db068344219f8c15027
+Release blob: 6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb
+Parent production baseline: v0.63.59 Broadcast End Closure Contract
+```
+
+This is a mechanical ownership checkpoint, not a feature release.
+
+```text
+Before
+Runtime Mirror
+├─ Fresh observation / mirror transport
+└─ bounded representation provenance ledger
+
+Outer request shell
+└─ prior/current representation taxonomy + carryover shape
+
+After M2-2
+Representation
+├─ bounded fingerprint-only provenance ledger
+├─ CANONICAL / HOST_RAW / FRESH_CHAT relation taxonomy
+├─ prior representation classification
+├─ current exact carryover classification
+└─ fingerprint-length deltas / carryover shape
+
+Runtime Mirror
+├─ Fresh chat observation
+├─ strict identity/location/staleness guards
+└─ mirror write scheduling
+```
+
+Static checkpoint evidence:
+
+```text
+node syntax latest/install          PASS
+latest.js == install.js             PASS
+Contracts v2 architecture checker   PASS
+representation module present       PASS
+runtime-mirror provenance API gone  PASS
+Fresh raw body retention             NONE
+persistent schema change             NONE
+new host/network/timer surfaces      NONE
+```
+
+Frozen behavioral controls that must remain unchanged in live validation:
+
+```text
+Prior OUTPUT_MISMATCH + current == prior FRESH_CHAT exact
+→ REPRESENTATION_DRIFT_CORRELATED
+→ REPRESENTATION_FAST_RECONCILED
+→ snapshot UNCHANGED
+
+Prior EXACT + current matches neither canonical nor Fresh
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT
+
+Deferred Mirror unknown representation
+→ conservative OUTPUT_MISMATCH / no unsafe mirror write
+```
+
+New diagnostic ownership line:
+
+```text
+Representation ownership: REPRESENTATION · ledger <N> · mirror TRANSPORT_ONLY · raw bodies NOT RETAINED
+```
+
+Live gate before M2 advances to Edit Reconcile extraction:
+
+1. ordinary A/C/B turns keep stable request/output/binding/mirror behavior;
+2. a normal exact carryover remains `SAME_FAST` / `Edit origin NONE`;
+3. when a natural CANONICAL↔FRESH mismatch occurs, exact Fresh carryover still reaches `REPRESENTATION_FAST_RECONCILED` without the old multi-second rebuild;
+4. a genuine user edit still reaches `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`;
+5. no regression appears in Recovery, timeline, Broadcast closure, Frame, Evidence/Lineage/Handoff/Recurrence, Structure/COMMUNITY, cache/history observation, or persistent schema.
+
+Do not start physical `edit-reconcile` extraction until this checkpoint has direct real-long-chat evidence.
 
 ## v0.63.58 — Narrative Tail Time Contract
 

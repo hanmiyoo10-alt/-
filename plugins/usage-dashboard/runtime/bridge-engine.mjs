@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.15';
+const VERSION = '1.6.16';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -56,6 +56,25 @@ const CIRCUIT_MAX_OPEN_MS = 5 * 60_000;
 const circuits = new Map();
 const circuitStats = { opens: 0, blocked: 0, recoveries: 0 };
 const snapshotAttributionStorage = new AsyncLocalStorage();
+const SECONDARY_REFRESH_CONCURRENCY = 1;
+const SECONDARY_REFRESH_MAX_KEYS = 32;
+const secondaryRefreshQueue = [];
+const secondaryRefreshKeys = new Set();
+const secondaryRefreshStats = {
+  servedStale: 0,
+  completed: 0,
+  errors: 0,
+  blocked: 0,
+  superseded: 0,
+  foregroundHeld: 0,
+  dropped: 0,
+  lastStartAt: null,
+  lastStartAfterForegroundMs: null,
+};
+let secondaryRefreshRunning = false;
+let secondaryDrainScheduled = false;
+let foregroundSnapshotsActive = 0;
+let lastForegroundEndedAt = null;
 
 function createSnapshotAttribution(profile) {
   return {
@@ -130,8 +149,8 @@ function noteSnapshotCacheDecision(name, action, current = null, ttl = null, now
   const at = Number(current?.at);
   const ageMs = Number.isFinite(at) && at > 0 ? Math.max(0, Number(now) - at) : null;
   const ttlMs = Number.isFinite(Number(ttl)) ? Math.max(0, Number(ttl)) : null;
-  const safeAction = ['hit','miss','join','load','stale','blocked','error'].includes(String(action)) ? String(action) : 'other';
-  const safeReason = ['empty','expired','loaded','circuit-open','refresh-error'].includes(String(reason)) ? String(reason) : '';
+  const safeAction = ['hit','miss','join','load','stale','deferred','blocked','error'].includes(String(action)) ? String(action) : 'other';
+  const safeReason = ['empty','expired','loaded','deferred-refresh','circuit-open','refresh-error'].includes(String(reason)) ? String(reason) : '';
   attribution.cacheDecisions.push({ ...descriptor, action:safeAction, reason:safeReason, ageMs, ttlMs });
 }
 
@@ -260,6 +279,7 @@ function snapshotAttributionSummary(attribution) {
     cacheDecisions: Array.isArray(attribution?.cacheDecisions)
       ? attribution.cacheDecisions.slice(0, 64).map((item) => ({...item}))
       : [],
+    secondaryRefresh: secondaryRefreshSnapshot(),
     cache: {...(attribution?.cache || {})},
     circuits: {...(attribution?.circuits || {})},
     cli: {
@@ -1249,7 +1269,79 @@ async function loadCreditsBootstrap() {
   return cached('creditsBootstrap', async () => runCli(['credits', '--json']));
 }
 
-async function cached(name, loader) {
+function secondaryRefreshSnapshot() {
+  return {
+    limit: SECONDARY_REFRESH_CONCURRENCY,
+    maxKeys: SECONDARY_REFRESH_MAX_KEYS,
+    queued: secondaryRefreshQueue.length,
+    running: secondaryRefreshRunning ? 1 : 0,
+    servedStale: secondaryRefreshStats.servedStale,
+    completed: secondaryRefreshStats.completed,
+    errors: secondaryRefreshStats.errors,
+    blocked: secondaryRefreshStats.blocked,
+    superseded: secondaryRefreshStats.superseded,
+    foregroundHeld: secondaryRefreshStats.foregroundHeld,
+    dropped: secondaryRefreshStats.dropped,
+    lastStartAt: secondaryRefreshStats.lastStartAt,
+    lastStartAfterForegroundMs: secondaryRefreshStats.lastStartAfterForegroundMs,
+  };
+}
+
+function scheduleSecondaryDrain() {
+  if (secondaryDrainScheduled || secondaryRefreshRunning || foregroundSnapshotsActive > 0 || !secondaryRefreshQueue.length) return;
+  secondaryDrainScheduled = true;
+  setImmediate(() => {
+    secondaryDrainScheduled = false;
+    snapshotAttributionStorage.run(undefined, () => {
+      void drainSecondaryRefresh();
+    });
+  });
+}
+
+function enqueueSecondaryRefresh(name, loader) {
+  if (inFlight.has(name) || secondaryRefreshKeys.has(name)) return true;
+  if (secondaryRefreshKeys.size >= SECONDARY_REFRESH_MAX_KEYS) {
+    secondaryRefreshStats.dropped += 1;
+    return false;
+  }
+  secondaryRefreshKeys.add(name);
+  secondaryRefreshQueue.push({ name, loader });
+  if (foregroundSnapshotsActive > 0) secondaryRefreshStats.foregroundHeld += 1;
+  scheduleSecondaryDrain();
+  return true;
+}
+
+async function drainSecondaryRefresh() {
+  if (secondaryRefreshRunning || foregroundSnapshotsActive > 0 || !secondaryRefreshQueue.length) return;
+  const job = secondaryRefreshQueue.shift();
+  secondaryRefreshRunning = true;
+  secondaryRefreshStats.lastStartAt = Date.now();
+  secondaryRefreshStats.lastStartAfterForegroundMs = Number.isFinite(Number(lastForegroundEndedAt))
+    ? Math.max(0, secondaryRefreshStats.lastStartAt - Number(lastForegroundEndedAt))
+    : null;
+  const previousAt = Number(cache.get(job.name)?.at || 0);
+  try {
+    await cached(job.name, job.loader, { backgroundRefresh:true });
+    const currentAt = Number(cache.get(job.name)?.at || 0);
+    if (currentAt > previousAt) {
+      secondaryRefreshStats.completed += 1;
+    } else {
+      const circuit = getCircuit(job.name);
+      if (circuit.state === 'open') secondaryRefreshStats.blocked += 1;
+      else secondaryRefreshStats.superseded += 1;
+    }
+  } catch {
+    const circuit = getCircuit(job.name);
+    if (circuit.state === 'open') secondaryRefreshStats.blocked += 1;
+    else secondaryRefreshStats.errors += 1;
+  } finally {
+    secondaryRefreshKeys.delete(job.name);
+    secondaryRefreshRunning = false;
+    scheduleSecondaryDrain();
+  }
+}
+
+async function cached(name, loader, options = {}) {
   const ttl = CACHE_TTL[name]
     ?? (name.startsWith('usage:') && name.endsWith(':24h') ? 60_000 : null)
     ?? (name.startsWith('usage:') && name.endsWith(':7d') ? 300_000 : null)
@@ -1272,6 +1364,34 @@ async function cached(name, loader) {
     noteSnapshotCounter('cache', 'hits');
     return current.value;
   }
+
+  const ageMs = current ? now - current.at : Infinity;
+  const deferExpired = options?.deferExpired === true && options?.backgroundRefresh !== true;
+  let gate = null;
+  if (deferExpired && current && ageMs <= CACHE_STALE_MAX_MS) {
+    if (inFlight.has(name)) {
+      noteSnapshotCacheDecision(name, 'deferred', current, ttl, now, 'deferred-refresh');
+      cacheStats.staleFallbacks += 1;
+      noteSnapshotCounter('cache', 'staleFallbacks');
+      secondaryRefreshStats.servedStale += 1;
+      return staleClone(current.value, ageMs, 'deferred-refresh');
+    }
+    gate = circuitBeforeLoad(name);
+    if (!gate.allowed) {
+      noteSnapshotCacheDecision(name, 'stale', current, ttl, now, 'circuit-open');
+      cacheStats.staleFallbacks += 1;
+      noteSnapshotCounter('cache', 'staleFallbacks');
+      return staleClone(current.value, ageMs, gate.error);
+    }
+    if (enqueueSecondaryRefresh(name, loader)) {
+      noteSnapshotCacheDecision(name, 'deferred', current, ttl, now, 'deferred-refresh');
+      cacheStats.staleFallbacks += 1;
+      noteSnapshotCounter('cache', 'staleFallbacks');
+      secondaryRefreshStats.servedStale += 1;
+      return staleClone(current.value, ageMs, 'deferred-refresh');
+    }
+  }
+
   if (inFlight.has(name)) {
     noteSnapshotCacheDecision(name, 'join', current, ttl, now);
     cacheStats.joins += 1;
@@ -1279,7 +1399,7 @@ async function cached(name, loader) {
     return inFlight.get(name);
   }
 
-  const gate = circuitBeforeLoad(name);
+  gate ||= circuitBeforeLoad(name);
   if (!gate.allowed) {
     const ageMs = current ? now - current.at : Infinity;
     if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS) {
@@ -1304,8 +1424,12 @@ async function cached(name, loader) {
       noteSnapshotCounter('cache', 'loads');
       cacheStats.totalLoadMs += elapsed;
       cacheStats.lastLoadMs = elapsed;
-      cache.set(name, { at: Date.now(), value });
-      noteSnapshotCacheDecision(name, 'load', null, ttl, Date.now(), 'loaded');
+      if (valueIsStale(value)) {
+        noteSnapshotCacheDecision(name, 'stale', current, ttl, Date.now(), staleValueReason(value));
+      } else {
+        cache.set(name, { at: Date.now(), value });
+        noteSnapshotCacheDecision(name, 'load', null, ttl, Date.now(), 'loaded');
+      }
       circuitSuccess(name);
       pruneCache();
       return value;
@@ -1977,6 +2101,12 @@ function mergeAggregateUsageTotals(breakdown, aggregate) {
 }
 
 function mergeUsageActivities(items, range = '24h') {
+  const staleInputs = (items || []).map((item) => item?._cache).filter((meta) => meta?.stale === true);
+  const aggregateCache = staleInputs.length ? {
+    stale: true,
+    ageMs: Math.max(...staleInputs.map((meta) => Number(meta?.ageMs)).filter(Number.isFinite), 0),
+    reason: staleInputs.some((meta) => String(meta?.reason) === 'deferred-refresh') ? 'deferred-refresh' : 'source-stale',
+  } : null;
   const providerMap = new Map();
   const modelMap = new Map();
   const recent = [];
@@ -2008,6 +2138,7 @@ function mergeUsageActivities(items, range = '24h') {
     recentRequests: recentRequests.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 100),
     fetchedAt: Date.now(),
     source: `LLMGateway hybrid · DevPass /activity + Credits CLI · ${range}`,
+    ...(aggregateCache ? { _cache: aggregateCache } : {}),
   };
 }
 
@@ -2129,7 +2260,7 @@ function usageOrganizations(orgData) {
   return [...activeDevPass.slice(0, 1), ...defaults.slice(0, 1)];
 }
 
-async function usageForOrg(org, range = '24h') {
+async function usageForOrg(org, range = '24h', options = {}) {
   const key = `usage:${org.id}:${range}`;
   return cached(key, async () => {
     const breakdownArgs = ['usage', '--org', org.id, '--by', 'model', '--range', range, '--json'];
@@ -2149,7 +2280,7 @@ async function usageForOrg(org, range = '24h') {
       }
     }
     return normalized;
-  });
+  }, { deferExpired: options?.deferExpired === true && ['7d','30d'].includes(String(range)) });
 }
 
 function creditsUsageSelection(orgData, requestedOrgId = '') {
@@ -2170,7 +2301,7 @@ function creditsUsageOrganization(orgData, requestedOrgId = '') {
   return creditsUsageSelection(orgData, requestedOrgId).org;
 }
 
-async function devPassActivityForRange(range = '24h') {
+async function devPassActivityForRange(range = '24h', options = {}) {
   const normalizedRange = ['24h','7d','30d'].includes(String(range)) ? String(range) : '24h';
   return cached(`devpassActivity:${normalizedRange}`, async () => {
     let captured = null;
@@ -2215,7 +2346,7 @@ async function devPassActivityForRange(range = '24h') {
       ? `LLMGateway authenticated session · /activity + /logs · DevPass project · ${normalizedRange}`
       : `LLMGateway authenticated session · /activity · DevPass project · ${normalizedRange}`;
     return normalized;
-  });
+  }, { deferExpired: options?.deferExpired === true && ['7d','30d'].includes(normalizedRange) });
 }
 
 function legacyDevPassUsageOrganization(orgData) {
@@ -2223,10 +2354,11 @@ function legacyDevPassUsageOrganization(orgData) {
   return rows.find((row) => row.kind === 'devpass' && row.status !== 'deleted' && row.devPlan && row.devPlan !== 'none') || null;
 }
 
-async function activityForScope(range = '24h', scope = 'all', creditsOrgId = '') {
+async function activityForScope(range = '24h', scope = 'all', creditsOrgId = '', options = {}) {
   const normalizedScope = ['all', 'devpass', 'credits'].includes(scope) ? scope : 'all';
   const normalizedCreditsOrgId = String(creditsOrgId || '').trim();
   const creditsCacheKey = normalizedCreditsOrgId || 'default';
+  const deferLongWindow = options?.deferLongWindow === true && ['7d','30d'].includes(String(range));
   return cached(`activity:${normalizedScope}:${creditsCacheKey}:${range}`, async () => {
     const results = [];
     const errors = [];
@@ -2250,12 +2382,12 @@ async function activityForScope(range = '24h', scope = 'all', creditsOrgId = '')
     // is temporarily unavailable.
     if (normalizedScope === 'all' || normalizedScope === 'devpass') {
       try {
-        results.push(await devPassActivityForRange(range));
+        results.push(await devPassActivityForRange(range, { deferExpired:deferLongWindow }));
       } catch (error) {
         try {
           const legacyOrg = legacyDevPassUsageOrganization(await getOrgData());
           if (legacyOrg) {
-            try { results.push(await usageForOrg(legacyOrg, range)); }
+            try { results.push(await usageForOrg(legacyOrg, range, { deferExpired:deferLongWindow })); }
             catch (legacyError) { errors.push(`devpass: ${safeMessage(error)} · legacy: ${safeMessage(legacyError)}`); }
           } else {
             errors.push(`devpass: ${safeMessage(error)}`);
@@ -2270,7 +2402,7 @@ async function activityForScope(range = '24h', scope = 'all', creditsOrgId = '')
       try {
         const creditsOrg = creditsUsageOrganization(await getOrgData(), normalizedCreditsOrgId);
         if (creditsOrg) {
-          try { results.push(await usageForOrg(creditsOrg, range)); }
+          try { results.push(await usageForOrg(creditsOrg, range, { deferExpired:deferLongWindow })); }
           catch (error) { errors.push(`credits: ${safeMessage(error)}`); }
         } else {
           errors.push('credits: default organization unavailable');
@@ -2329,12 +2461,12 @@ async function usageScopes(creditsOrgId = '') {
   });
 }
 
-async function analyticsForScope(scope = 'all', creditsOrgId = '') {
+async function analyticsForScope(scope = 'all', creditsOrgId = '', options = {}) {
   const normalizedScope = ['all', 'devpass', 'credits'].includes(scope) ? scope : 'all';
   const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
   return cached(`analytics:${normalizedScope}:${creditsCacheKey}`, async () => {
     const ranges = ['24h', '7d', '30d'];
-    const settled = await Promise.allSettled(ranges.map((range) => timedSnapshotTask(`analytics.${normalizedScope}.${range}`, () => activityForScope(range, normalizedScope, creditsOrgId))));
+    const settled = await Promise.allSettled(ranges.map((range) => timedSnapshotTask(`analytics.${normalizedScope}.${range}`, () => activityForScope(range, normalizedScope, creditsOrgId, { deferLongWindow:options?.deferLongWindow === true }))));
     const windows = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -2366,11 +2498,11 @@ async function analytics(creditsOrgId = '') {
   return analyticsForScope('all', creditsOrgId);
 }
 
-async function analyticsScopes(creditsOrgId = '') {
+async function analyticsScopes(creditsOrgId = '', options = {}) {
   const creditsCacheKey = String(creditsOrgId || '').trim() || 'default';
   return cached(`analyticsScopes:${creditsCacheKey}`, async () => {
     const scopes = ['all', 'devpass', 'credits'];
-    const settled = await Promise.allSettled(scopes.map((scope) => timedSnapshotTask(`analytics.${scope}`, () => analyticsForScope(scope, creditsOrgId))));
+    const settled = await Promise.allSettled(scopes.map((scope) => timedSnapshotTask(`analytics.${scope}`, () => analyticsForScope(scope, creditsOrgId, { deferLongWindow:options?.deferLongWindow === true }))));
     const values = {};
     const errors = {};
     settled.forEach((result, index) => {
@@ -2383,7 +2515,7 @@ async function analyticsScopes(creditsOrgId = '') {
   });
 }
 
-async function runwayFor(orgId) {
+async function runwayFor(orgId, options = {}) {
   return cached(`runway:${orgId}`, async () => {
 
       const orgData = await loadOrgs();
@@ -2393,11 +2525,13 @@ async function runwayFor(orgId) {
       try {
         if (org) {
           const usage = await usageForOrg(org, '7d');
+          if (valueIsStale(usage)) throw new Error('Runway usage source is stale');
           total7d = finite(usage?.totalCost);
         }
       } catch {}
       if (total7d === null) {
         const creditsOnly = await activityForScope('7d', 'credits', orgId);
+        if (valueIsStale(creditsOnly)) throw new Error('Runway activity source is stale');
         total7d = finite(creditsOnly?.totalCost);
       }
       const avgDailySpend7d = total7d !== null ? Math.max(0, total7d / 7) : null;
@@ -2405,7 +2539,7 @@ async function runwayFor(orgId) {
         ? balance / avgDailySpend7d
         : null;
       return { runwayDays, avgDailySpend7d, approximate: true, fetchedAt: Date.now(), source: 'LLMGateway CLI usage 7d' };
-  });
+  }, { deferExpired:options?.deferExpired === true });
 }
 
 function newestCacheAt(match) {
@@ -2449,13 +2583,35 @@ function moduleMeta(status, family, updatedAt = null, error = null) {
   };
 }
 
-function valueIsStale(value) {
-  if (!value || typeof value !== 'object') return false;
-  if (value?._cache?.stale) return true;
+function staleCacheMetadata(value) {
+  if (!value || typeof value !== 'object') return [];
+  const metadata = [];
+  if (value?._cache?.stale === true) metadata.push(value._cache);
   if (value.windows && typeof value.windows === 'object') {
-    return Object.values(value.windows).some((item) => item?._cache?.stale);
+    for (const item of Object.values(value.windows)) {
+      if (item?._cache?.stale === true) metadata.push(item._cache);
+    }
   }
-  return false;
+  if (value.scopes && typeof value.scopes === 'object') {
+    for (const scopeValue of Object.values(value.scopes)) {
+      if (scopeValue?._cache?.stale === true) metadata.push(scopeValue._cache);
+      if (!scopeValue?.windows || typeof scopeValue.windows !== 'object') continue;
+      for (const item of Object.values(scopeValue.windows)) {
+        if (item?._cache?.stale === true) metadata.push(item._cache);
+      }
+    }
+  }
+  return metadata;
+}
+
+function valueIsStale(value) {
+  return staleCacheMetadata(value).length > 0;
+}
+
+function staleValueReason(value) {
+  return staleCacheMetadata(value).some((meta) => String(meta?.reason) === 'deferred-refresh')
+    ? 'deferred-refresh'
+    : 'refresh-error';
 }
 
 function moduleValueStatus(value) {
@@ -2466,7 +2622,16 @@ function moduleValueStatus(value) {
 async function snapshot(profile = 'full', creditsOrgId = '') {
   const normalizedProfile = profile === 'light' ? 'light' : 'full';
   const attribution = createSnapshotAttribution(normalizedProfile);
-  return snapshotAttributionStorage.run(attribution, () => snapshotAttributed(normalizedProfile, creditsOrgId, attribution));
+  foregroundSnapshotsActive += 1;
+  try {
+    return await snapshotAttributionStorage.run(attribution, () => snapshotAttributed(normalizedProfile, creditsOrgId, attribution));
+  } finally {
+    foregroundSnapshotsActive = Math.max(0, foregroundSnapshotsActive - 1);
+    if (foregroundSnapshotsActive === 0) {
+      lastForegroundEndedAt = Date.now();
+      scheduleSecondaryDrain();
+    }
+  }
 }
 
 async function snapshotAttributed(profile = 'full', creditsOrgId = '', attribution = currentSnapshotAttribution()) {
@@ -2493,8 +2658,8 @@ async function snapshotAttributed(profile = 'full', creditsOrgId = '', attributi
   ];
   if (normalizedProfile === 'full') {
     jobs.push(
-      timedSnapshotTask('runway', () => creditsOrg ? runwayFor(creditsOrg.id) : Promise.resolve(null)),
-      timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId)),
+      timedSnapshotTask('runway', () => creditsOrg ? runwayFor(creditsOrg.id, { deferExpired:true }) : Promise.resolve(null)),
+      timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId, { deferLongWindow:true })),
     );
   }
   const settled = await Promise.allSettled(jobs);

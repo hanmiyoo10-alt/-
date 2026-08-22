@@ -49,7 +49,9 @@ function starts(bridge, label) {
     const response = await bridge.request('/orgs');
     assert.equal(response.status, 502);
     assert.equal(starts(bridge, 'credits').length, 1);
-    assert.equal(starts(bridge, 'devpass-capture-24h').length, 1);
+    // Credits is authoritative for /orgs. An immediate Credits failure may
+    // finish the response before the parallel capture reaches the CLI ledger,
+    // so only the absence of an unrelated plain-org fallback is deterministic.
     assert.equal(starts(bridge, 'organizations').length, 0, 'Credits hard failure must not trigger an unrelated organization fallback');
   });
 

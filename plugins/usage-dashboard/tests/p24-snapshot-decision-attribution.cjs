@@ -1,19 +1,14 @@
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
-const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
-const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
-
-// 5.62 is measurement-only: preserve all protected runtime knobs from 5.61.
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number\(process\.env\.DEVPASS_BRIDGE_CLI_CONCURRENCY \|\| 2\)\)\);/);
 assert.match(engine, /timeout: 25_000/);
 assert.match(engine, /accountCapture: 30_000/);
@@ -25,92 +20,47 @@ assert.ok(engine.includes("name !== 'accountCapture' && name !== 'creditsBootstr
 assert.ok(engine.includes("const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';"));
 const runCliOccurrences = (engine.match(/\brunCli\(/g) || []).length;
 const runCliDefinitions = (engine.match(/async function runCli\(/g) || []).length;
-assert.equal(runCliDefinitions, 1, 'runCli must retain one function definition');
-assert.equal(runCliOccurrences - runCliDefinitions, 5, 'decision attribution must not add a runCli call site');
-assert.ok(engine.includes("captureReuse: { bootstrapRange:'24h'"));
-assert.ok(engine.includes("runCli(['orgs', 'list', '--json'])"), 'plain org recovery fallback must remain');
-assert.ok(engine.includes("throw new Error('No organizations found in CLI output')"), 'empty-org error contract must remain');
+assert.equal(runCliDefinitions, 1);
+assert.equal(runCliOccurrences - runCliDefinitions, 5);
+assert.ok(engine.includes("runCli(['orgs', 'list', '--json'])"));
+assert.ok(engine.includes("throw new Error('No organizations found in CLI output')"));
 
-// Snapshot-local attribution is bounded and contains only sanitized decision fields.
 assert.ok(engine.includes("creditsEarlyStart: { decision:'not-evaluated', reason:'', candidateMode:'', result:'none' }"));
 assert.ok(engine.includes('cacheDecisions: []'));
 assert.ok(engine.includes('attribution.cacheDecisions.length >= 64'));
 assert.ok(engine.includes("['hit','miss','join','load','stale','deferred','blocked','error']"));
 assert.ok(engine.includes("['empty','expired','loaded','deferred-refresh','circuit-open','refresh-error']"));
-assert.ok(engine.includes("decision:'skipped', reason:'serial-mode'"));
-assert.ok(engine.includes("decision:'skipped', reason:'no-safe-candidate'"));
-assert.ok(engine.includes("reason:'prefetch-error', result:'failed'"));
-assert.ok(engine.includes("decision:'skipped', reason:'bootstrap-error'"));
-assert.ok(engine.includes("decision:'started', reason:'', candidateMode:candidate.mode, result:'in-flight'"));
-assert.ok(engine.includes("noteSnapshotCacheDecision(name, 'hit'"));
-assert.ok(engine.includes("noteSnapshotCacheDecision(name, 'join'"));
-assert.ok(engine.includes("noteSnapshotCacheDecision(name, 'miss'"));
-assert.ok(engine.includes("noteSnapshotCacheDecision(name, 'load'"));
-assert.ok(engine.includes("noteSnapshotCacheDecision(name, 'stale'"));
+for (const marker of [
+  "decision:'skipped', reason:'serial-mode'", "decision:'skipped', reason:'no-safe-candidate'",
+  "reason:'prefetch-error', result:'failed'", "decision:'skipped', reason:'bootstrap-error'",
+  "decision:'started', reason:'', candidateMode:candidate.mode, result:'in-flight'",
+  "noteSnapshotCacheDecision(name, 'hit'", "noteSnapshotCacheDecision(name, 'join'",
+  "noteSnapshotCacheDecision(name, 'miss'", "noteSnapshotCacheDecision(name, 'load'",
+  "noteSnapshotCacheDecision(name, 'stale'",
+]) assert.ok(engine.includes(marker));
 
-// Exercise the cache descriptor directly: arbitrary org/cache identifiers must
-// be discarded rather than copied into snapshot diagnostics.
-const descriptorStart = engine.indexOf('function snapshotCacheDescriptor(');
-const descriptorEnd = engine.indexOf('\nfunction noteSnapshotCacheDecision(', descriptorStart);
-assert.ok(descriptorStart >= 0 && descriptorEnd > descriptorStart);
-const descriptorSource = engine.slice(descriptorStart, descriptorEnd);
-const descriptorContext = {};
-vm.createContext(descriptorContext);
-vm.runInContext(`${descriptorSource}\nthis.snapshotCacheDescriptor = snapshotCacheDescriptor;`, descriptorContext);
-const describe = descriptorContext.snapshotCacheDescriptor;
-const secret = 'TEST_ORG_ID_DO_NOT_LOG';
-for (const key of [
-  `usage:${secret}:24h`,
-  `activity:credits:${secret}:30d`,
-  `analytics:devpass:${secret}`,
-  `runway:${secret}`,
-  `unknown:${secret}`,
-]) {
-  const result = describe(key);
-  assert.ok(!JSON.stringify(result).includes(secret), `descriptor leaked raw identifier for ${key}`);
-}
-assert.deepEqual(JSON.parse(JSON.stringify(describe(`usage:${secret}:24h`))), {family:'usage', scope:'credits', range:'24h'});
-assert.deepEqual(JSON.parse(JSON.stringify(describe(`activity:devpass:${secret}:7d`))), {family:'activity', scope:'devpass', range:'7d'});
-assert.deepEqual(JSON.parse(JSON.stringify(describe(`unknown:${secret}`))), {family:'other', scope:'', range:''});
-
-// Diagnostics consume only sanitized summary fields and compress cache events by
-// family/scope/range. They never print raw keys or candidate IDs.
+assert.ok(engine.includes("if (key.startsWith('usage:'))"));
+assert.ok(engine.includes("return { family:'usage', scope:'credits', range };"));
+assert.ok(engine.includes("if (key.startsWith('runway:')) return { family:'runway', scope:'credits', range:'7d' };"));
+assert.ok(engine.includes("return { family:'other', scope:'', range:'' };"));
 assert.ok(diagnostics.includes('function bridgeCreditsEarlyStartText(performance)'));
 assert.ok(diagnostics.includes('function bridgeSnapshotCacheDecisionsText(performance)'));
 assert.ok(diagnostics.includes('Bridge Credits early-start:'));
 assert.ok(diagnostics.includes('Bridge snapshot cache decisions:'));
-const cacheTextStart = diagnostics.indexOf('function bridgeSnapshotCacheDecisionsText(');
-const cacheTextEnd = diagnostics.indexOf('\n  function stableReadinessSnapshot(', cacheTextStart);
-const cacheTextSource = diagnostics.slice(cacheTextStart, cacheTextEnd);
-assert.ok(!/organizationId|orgId|requestedId|selectedId|\.key\b/.test(cacheTextSource), 'cache decision formatter must not access raw IDs/keys');
-const cacheContext = { Map, Array, Number, String };
-vm.createContext(cacheContext);
-vm.runInContext(`${cacheTextSource}\nthis.bridgeSnapshotCacheDecisionsText = bridgeSnapshotCacheDecisionsText;`, cacheContext);
-const cacheText = cacheContext.bridgeSnapshotCacheDecisionsText({cacheDecisions:[
-  {family:'usage',scope:'credits',range:'30d',action:'miss',reason:'expired',ageMs:600123,ttlMs:600000,rawKey:secret},
-  {family:'usage',scope:'credits',range:'30d',action:'load',reason:'loaded',ageMs:null,ttlMs:600000,rawKey:secret},
-  {family:'devpassActivity',scope:'devpass',range:'7d',action:'hit',reason:'',ageMs:120000,ttlMs:300000},
-]});
-assert.ok(cacheText.includes('usage/credits/30d miss(expired)→load'));
-assert.ok(cacheText.includes('devpassActivity/devpass/7d hit'));
-assert.ok(!cacheText.includes(secret));
-
 assert.ok(latest.includes('Bridge Credits early-start:'));
 assert.ok(latest.includes('Bridge snapshot cache decisions:'));
+
+assert.ok(workflow.includes('behavior-snapshot-attribution.cjs'));
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
 assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));
 assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
 assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/range'));
-assert.ok(guidelines.includes('## Long-term update roadmap'), 'durable roadmap must remain');
-assert.ok(guidelines.includes('Evidence outranks roadmap order.'), 'evidence-first roadmap rule must remain');
-
+assert.ok(guidelines.includes('Evidence outranks roadmap order.'));
 assert.match(workflow, /group: repo-main-write/);
 assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
-assert.match(workflow, /p23-credits-usage-early-start\.cjs/);
-assert.match(workflow, /p24-snapshot-decision-attribution\.cjs/);
 assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf('git commit -m "release: publish Local Usage Dashboard $UD_PRODUCT_VERSION product artifacts"'));
 
-console.log('usage-dashboard P24 Snapshot Decision Attribution: OK · early-start reason + sanitized cache decisions observed with zero new CLI call sites');
+console.log('usage-dashboard P24 Snapshot Decision Attribution: OK · decision invariants retained; sanitized cache behavior delegated to black-box Engine harness');

@@ -10,6 +10,7 @@ const behaviorTests = [
   'behavior-cache-runtime.cjs',
   'behavior-snapshot-scheduler.cjs',
   'behavior-snapshot-attribution.cjs',
+  'behavior-organization-capture.cjs',
 ];
 const harnessFiles = [
   'harness/bridge-process.cjs',
@@ -19,7 +20,10 @@ const harnessFiles = [
 const migratedIncidentTests = [
   'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
+  'p18-organization-discovery-dedup.cjs',
+  'p20-shared-24h-capture.cjs',
   'p21-snapshot-scheduling-attribution.cjs',
+  'p23-credits-usage-early-start.cjs',
   'p24-snapshot-decision-attribution.cjs',
   'p25-long-window-critical-path-decoupling.cjs',
   'p26-foreground-cli-launcher-attribution.cjs',
@@ -45,7 +49,10 @@ const adapter = fs.readFileSync('plugins/usage-dashboard/tools/prepare_release_r
 for (const name of [
   'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
+  'p18-organization-discovery-dedup.cjs',
+  'p20-shared-24h-capture.cjs',
   'p21-snapshot-scheduling-attribution.cjs',
+  'p23-credits-usage-early-start.cjs',
   'p24-snapshot-decision-attribution.cjs',
   'p26-foreground-cli-launcher-attribution.cjs',
   'p27-npx-cache-first-launcher.cjs',
@@ -63,6 +70,9 @@ assert.ok(bridgeHarness.includes('fs.rmSync(fixtureRoot, {recursive:true,force:t
 assert.ok(!fakeCli.includes("require('node:http')"));
 assert.ok(!fakeCli.includes("require('node:https')"));
 assert.ok(!fakeCli.includes('fetch('));
+assert.ok(fakeCli.includes('failureByLabel'));
+assert.ok(fakeCli.includes('captureActivityByCall'));
+assert.ok(fakeCli.includes("return 'organizations'"));
 
 const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 for (const name of ['behavior-harness-contract.cjs', ...behaviorTests]) {

@@ -10,7 +10,8 @@ const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml', 'utf8');
+const workflow = fs.readFileSync('.github/workflows/reusable-usage-dashboard-release.yml', 'utf8');
+const workflowCaller = fs.readFileSync('.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml', 'utf8');
 const materializer = fs.readFileSync('plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py', 'utf8');
 
 assert.match(engine, /const VERSION = '1\.6\.19';/);
@@ -139,6 +140,8 @@ assert.ok(guidelines.includes('once the managed command starts, its success or f
 assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 assert.ok(workflow.includes('p28-managed-direct-cli-runtime.cjs'));
+assert.ok(workflowCaller.includes('uses: ./.github/workflows/reusable-usage-dashboard-release.yml'));
+assert.ok(workflowCaller.includes('publish: false'));
 assert.ok(materializer.includes("BASE_VERSION = '3.0.0-alpha.5.65'"));
 assert.ok(materializer.includes("TARGET_VERSION = '3.0.0-alpha.5.66'"));
 

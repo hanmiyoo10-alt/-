@@ -39,7 +39,7 @@ function initialState() {
         servedServiceTier:'',
         requestedServiceTierSource:'',
         servedServiceTierSource:'',
-        scopes:['all'],
+        scopes:['devpass'],
       },
       {
         timestamp:now - 10_000,
@@ -54,9 +54,29 @@ function initialState() {
         servedServiceTier:'standard',
         requestedServiceTierSource:'legacy-fixture',
         servedServiceTierSource:'legacy-fixture',
-        scopes:['all'],
+        scopes:['devpass'],
       },
     ],
+  };
+}
+
+function recentRows() {
+  return [
+    {timestamp:iso(10_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-1',status:'completed',success:true,requestedServiceTier:'flex',usedServiceTier:'flex'},
+    {timestamp:iso(20_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-2',status:'completed',success:true,requested_service_tier:'default',served_service_tier:'default'},
+    {timestamp:iso(30_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-3',status:'timeout',success:true,requestedTier:'priority'},
+    {timestamp:iso(40_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-4',status:'cancelled',success:true,request:{serviceTier:'flex'},response:{serviceTier:'default'}},
+  ];
+}
+
+function scopePayload() {
+  return {
+    totalRequests:4,
+    totalCost:0.4,
+    totalTokens:400,
+    providers:[{name:'fixture-provider',requests:4,cost:0.4}],
+    models:[{name:'fixture-provider/model',requests:4,cost:0.4}],
+    recent:recentRows(),
   };
 }
 
@@ -76,19 +96,8 @@ function snapshot() {
     activity:{totalRequests:4,totalCost:0.4,totalTokens:400,errorRate:25,source:'service-tier-outcome-process-harness'},
     usageScopes:{
       scopes:{
-        all:{
-          totalRequests:4,
-          totalCost:0.4,
-          totalTokens:400,
-          providers:[{name:'fixture-provider',requests:4,cost:0.4}],
-          models:[{name:'fixture-provider/model',requests:4,cost:0.4}],
-          recent:[
-            {timestamp:iso(10_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-1',status:'completed',success:true,requestedServiceTier:'flex',usedServiceTier:'flex'},
-            {timestamp:iso(20_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-2',status:'completed',success:true,requested_service_tier:'default',served_service_tier:'default'},
-            {timestamp:iso(30_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-3',status:'timeout',success:true,requestedTier:'priority'},
-            {timestamp:iso(40_000),provider:'fixture-provider',model:'fixture-provider/model',sequence:'tier-4',status:'cancelled',success:true,request:{serviceTier:'flex'},response:{serviceTier:'default'}},
-          ],
-        },
+        all:scopePayload(),
+        devpass:scopePayload(),
       },
       errors:{},
     },
@@ -117,11 +126,12 @@ function snapshot() {
   assert.ok(view.html.includes('요청 PRIORITY · 실제 ?'), 'rendered request row must keep missing served tier unknown');
 
   const ledger = Array.isArray(run.state?.requestLedger) ? run.state.requestLedger : [];
-  assert.equal(ledger.length, 5, 'same request identity with changed tier must merge rather than duplicate');
+  assert.equal(ledger.length, 5, 'same request identity across all/devpass scopes and changed tier must merge rather than duplicate');
   const flexRow = ledger.find(row => row.requestNumber === 'tier-1');
   assert.equal(flexRow?.requestedServiceTier, 'flex');
   assert.equal(flexRow?.servedServiceTier, 'flex');
   assert.equal(flexRow?.requestedServiceTierSource, 'requestedServiceTier', 'fresh tier enrichment must replace legacy tier metadata without changing request identity');
+  assert.deepEqual(new Set(flexRow?.scopes || []), new Set(['all','devpass']), 'cross-scope observations must merge onto one request identity');
   const defaultRow = ledger.find(row => row.requestNumber === 'tier-2');
   assert.equal(defaultRow?.requestedServiceTier, 'standard');
   assert.equal(defaultRow?.servedServiceTier, 'standard');
@@ -134,7 +144,7 @@ function snapshot() {
   assert.equal(run.fetches.filter(row => row.url.includes('/snapshot')).length, 1);
   assert.ok(!JSON.stringify(run).includes('service-tier-outcome-fixture-token'), 'harness output must not retain the bridge token');
 
-  console.log('usage-dashboard service-tier/outcome behavior: OK · actual dashboard refresh normalizes tier fidelity, preserves dedupe identity, and emits all four outcome categories without VM extraction');
+  console.log('usage-dashboard service-tier/outcome behavior: OK · actual dashboard refresh normalizes DevPass tier fidelity, preserves cross-scope dedupe identity, and emits all four outcome categories without VM extraction');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

@@ -26,6 +26,7 @@ const migratedIncidentTests = [
   'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
   'p18-organization-discovery-dedup.cjs',
+  'p19-organization-empty-fallback-fidelity.cjs',
   'p20-shared-24h-capture.cjs',
   'p21-snapshot-scheduling-attribution.cjs',
   'p23-credits-usage-early-start.cjs',

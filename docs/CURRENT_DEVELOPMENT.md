@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.2`
-- Release: `Diagnostic Copy Resilience`
+- Version: `0.64.3`
+- Release: `B_END Diagnostic Builder Binding Repair`
 - Release branch: `release-simcore`
-- Release commit: `7a1f1692920abbc890c6663b40e38a24676c3de9`
-- Release blob: `3058e5bafa7f3abd15277ceabd0bd9d8518f52dc`
+- Release commit: `d7fd45cd193ef1ff187c73761ded958d89558ebf`
+- Release blob: `ff481aa904340b844ef29b0d89aa20bd6286286d`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `06402_DIAGNOSTIC_COPY_LIVE_VALIDATION`
+- Primary optimization target: `06403_B_END_DIAGNOSTIC_BUILDER_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,30 +35,9 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.64.2` is the current production release. It hardens only the manual diagnostic-copy path: report construction runs exactly once, Clipboard API transport is isolated, a DOM-local textarea fallback is available, and the UI exposes `COPIED`, `COPIED_FALLBACK`, `REPORT_BUILD_FAILED`, or `CLIPBOARD_WRITE_FAILED`. `buildLastTurnDiagnosticReport()` remains byte-identical to v0.64.1, and no request/output hot-path, persistent state, generation, M2-2, Summary Scope, Broadcast, Time, Representation, Recovery, Prompt, or Store behavior changed.
+`v0.64.3` is the current production release. It is a narrow diagnostic-only repair for the confirmed v0.64.2 natural B_END `REPORT_BUILD_FAILED`: the outer runtime now binds the existing Kernel and Time modules used by `buildLastTurnDiagnosticReport()`. The report-builder body, B_END terminal-coverage calculation, clipboard transport contract, request/output hot paths, Broadcast/Time semantics, persistent state, M2-2 behavior, and the frozen v0.65.0 M2-3 design are unchanged.
 
-The ordinary live gate is one successful `COPIED` or `COPIED_FALLBACK` result. A future natural B_END `REPORT_BUILD_FAILED` directly attributes a builder defect and must be handled in a separate narrow mini; `CLIPBOARD_WRITE_FAILED` instead narrows the problem to WebView clipboard transport. This one live result is the only remaining diagnostic-copy gate before starting M2-3 Edit Reconcile extraction. The v0.64.x/M2-3-line genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
-
-Historical precursor evidence retained below (not v0.64.0 live validation), observed in runtime `mt19j4wz-2a7t5e`:
-
-```text
-C                  → EXACT · mirror COMMITTED
-B_START            → SAFE_ENVELOPE_COMPAT · EXACT · mirror COMMITTED
-B_CONTINUE         → SAFE_ENVELOPE_COMPAT · EXACT · mirror COMMITTED
-B_CONTINUE         → SAFE_ENVELOPE_COMPAT · EXACT · mirror COMMITTED
-B_END              → SAFE_ENVELOPE_COMPAT · EXACT · mirror COMMITTED
-C                  → SILENT_COMPAT · CANONICAL 4180 / FRESH 4100 · Δ -80 · OUTPUT_MISMATCH
-next C request     → REPRESENTATION_DRIFT_CORRELATED · MANUAL_EDIT_REBUILT 6.257 s
-```
-
-Important interpretation:
-
-- v0.63.54 shows no regression on ordinary `SAFE_ENVELOPE_COMPAT` output.
-- `SAFE_BOUNDARY_CONFIRMED` has **not yet naturally fired** in production; the special repair path remains `NOT_EXERCISED`.
-- The new `-80` case is outside the v0.63.54 gate because its policy was `SILENT_COMPAT`, not `SAFE_ENVELOPE_COMPAT`.
-- Deferred Mirror correctly rejected that mismatch with `OUTPUT_MISMATCH` and `setChat 0`.
-- The following request proved that the visible previous assistant message exactly matched the prior `FRESH_CHAT`, not the prior canonical representation.
-- The resulting `MANUAL_EDIT_REBUILT` consumed `6.257 s`, or `97.2%` of the request preparation time.
+The live close gate is one natural current-turn B_END diagnostic copy with `output COMMITTED`, report construction success, Broadcast closure / terminal coverage lines present, and copy result `COPIED` or `COPIED_FALLBACK`. After that gate, review the separately preserved `POST_BEND_C_CLOCK_DOMAIN_GAP` evidence before starting M2-3; if the clock-authority contract is confirmed, ship a separate narrow clock mini first. M2-3 implementation remains blocked until that disposition is explicit. The genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
 
 ## Validated precursor problem — v0.63.55
 
@@ -89,6 +68,46 @@ v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural l
 ---
 
 # 2. Current Validation Release
+
+## v0.64.3 — B_END Diagnostic Builder Binding Repair
+
+Status: **PRODUCTION · PENDING NATURAL B_END LIVE CLOSE GATE**
+
+```text
+Version: 0.64.3
+Release: B_END Diagnostic Builder Binding Repair
+Release commit: d7fd45cd193ef1ff187c73761ded958d89558ebf
+Release blob: ff481aa904340b844ef29b0d89aa20bd6286286d
+Parent: v0.64.2 Diagnostic Copy Resilience
+Major checkpoint: M2-2 unchanged
+```
+
+Primary contract:
+
+```text
+outer runtime binds existing Kernel + Time modules
+buildLastTurnDiagnosticReport body byte-identical
+B_END terminal coverage expression byte-identical
+COPIED / COPIED_FALLBACK / REPORT_BUILD_FAILED / CLIPBOARD_WRITE_FAILED unchanged
+no request/output hot-path behavior change
+no Broadcast/Time semantic change
+no persistent schema or host/storage/network/timer surface change
+M2-3 design remains frozen for v0.65.0
+```
+
+Static release gate requires syntax, latest/install identity, Contracts v2, B_END report-builder binding fixture, unchanged builder body, unchanged protected side-effect counts, and unchanged diagnostic-copy stage fixtures.
+
+Natural live close gate:
+
+```text
+current runtime mode B_END
+output COMMITTED
+report build succeeds
+Broadcast closure / terminal coverage lines present
+copy result COPIED or COPIED_FALLBACK
+```
+
+After the live close gate, review `POST_BEND_C_CLOCK_DOMAIN_GAP` as a separate correctness contract. Do not fold it into v0.64.3 or M2-3; if confirmed, release a narrow post-B_END clock-authority mini before v0.65.0. M2-3 remains blocked until that review is resolved.
 
 ## v0.64.2 — Diagnostic Copy Resilience
 

@@ -111,3 +111,16 @@ Evidence:
 - `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md`
 - `SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md`
 - `SIMCORE_POST_BEND_C_EVIDENCE_06402.md`
+
+
+## Release status
+
+```text
+STATIC RELEASED
+Version: 0.64.3
+Release commit: d7fd45cd193ef1ff187c73761ded958d89558ebf
+Release blob: ff481aa904340b844ef29b0d89aa20bd6286286d
+Live close gate: PENDING natural current-turn B_END diagnostic copy
+```
+
+After the B_END live close gate, review the separately captured `POST_BEND_C_CLOCK_DOMAIN_GAP`. M2-3 remains blocked until that clock-authority disposition is explicit.

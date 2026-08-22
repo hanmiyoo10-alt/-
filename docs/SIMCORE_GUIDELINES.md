@@ -882,7 +882,7 @@ unless a deliberate narrow connector-backed change has a safer direct path.
 Current production family at the time this document was created:
 
 ```text
-SimCore v0.64.2 — Diagnostic Copy Resilience
+SimCore v0.64.3 — B_END Diagnostic Builder Binding Repair
 ```
 
 Do not treat this number as permanently current; update this section when production advances.

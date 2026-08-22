@@ -175,3 +175,8 @@ Required ordering:
 Do not combine this repair with Edit Reconcile, Broadcast semantics, Structure/COMMUNITY behavior, Store performance, Prompt, or host-history work.
 
 Full natural B_START→B_END sequence evidence is preserved in `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md`.
+
+
+## v0.64.3 builder-binding repair
+
+Production `v0.64.3 — B_END Diagnostic Builder Binding Repair` is statically released at `d7fd45cd193ef1ff187c73761ded958d89558ebf` / blob `ff481aa904340b844ef29b0d89aa20bd6286286d`. The confirmed v0.64.2 `REPORT_BUILD_FAILED` source defect is repaired by binding the existing Kernel and Time modules in the outer diagnostic runtime scope while keeping the report-builder body and clipboard transport contract unchanged. Natural current-turn B_END copy remains this mini's close gate. The separate `POST_BEND_C_CLOCK_DOMAIN_GAP` must be reviewed after that close gate before M2-3 is allowed to start.

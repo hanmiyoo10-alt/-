@@ -25,21 +25,38 @@ function initialState() {
     dashboardView:'settings',
     refreshCount:0,
     consecutiveFailures:0,
-    requestLedger:[{
-      timestamp:now - 50_000,
-      timestampPrecision:'exact',
-      timestampSource:'timestamp',
-      provider:'unknown-fixture',
-      model:'unknown-fixture/model',
-      requestNumber:'unknown-1',
-      requestStatus:'',
-      success:null,
-      requestedServiceTier:'',
-      servedServiceTier:'',
-      requestedServiceTierSource:'',
-      servedServiceTierSource:'',
-      scopes:['all'],
-    }],
+    requestLedger:[
+      {
+        timestamp:now - 50_000,
+        timestampPrecision:'exact',
+        timestampSource:'timestamp',
+        provider:'unknown-fixture',
+        model:'unknown-fixture/model',
+        requestNumber:'unknown-1',
+        requestStatus:'',
+        success:null,
+        requestedServiceTier:'',
+        servedServiceTier:'',
+        requestedServiceTierSource:'',
+        servedServiceTierSource:'',
+        scopes:['all'],
+      },
+      {
+        timestamp:now - 10_000,
+        timestampPrecision:'exact',
+        timestampSource:'timestamp',
+        provider:'fixture-provider',
+        model:'fixture-provider/model',
+        requestNumber:'tier-1',
+        requestStatus:'completed',
+        success:true,
+        requestedServiceTier:'standard',
+        servedServiceTier:'standard',
+        requestedServiceTierSource:'legacy-fixture',
+        servedServiceTierSource:'legacy-fixture',
+        scopes:['all'],
+      },
+    ],
   };
 }
 
@@ -100,7 +117,11 @@ function snapshot() {
   assert.ok(view.html.includes('요청 PRIORITY · 실제 ?'), 'rendered request row must keep missing served tier unknown');
 
   const ledger = Array.isArray(run.state?.requestLedger) ? run.state.requestLedger : [];
-  assert.equal(ledger.length, 5, 'seeded unknown plus four refreshed requests must remain distinct');
+  assert.equal(ledger.length, 5, 'same request identity with changed tier must merge rather than duplicate');
+  const flexRow = ledger.find(row => row.requestNumber === 'tier-1');
+  assert.equal(flexRow?.requestedServiceTier, 'flex');
+  assert.equal(flexRow?.servedServiceTier, 'flex');
+  assert.equal(flexRow?.requestedServiceTierSource, 'requestedServiceTier', 'fresh tier enrichment must replace legacy tier metadata without changing request identity');
   const defaultRow = ledger.find(row => row.requestNumber === 'tier-2');
   assert.equal(defaultRow?.requestedServiceTier, 'standard');
   assert.equal(defaultRow?.servedServiceTier, 'standard');
@@ -113,7 +134,7 @@ function snapshot() {
   assert.equal(run.fetches.filter(row => row.url.includes('/snapshot')).length, 1);
   assert.ok(!JSON.stringify(run).includes('service-tier-outcome-fixture-token'), 'harness output must not retain the bridge token');
 
-  console.log('usage-dashboard service-tier/outcome behavior: OK · actual dashboard refresh normalizes tier fidelity and emits all four outcome categories without VM extraction');
+  console.log('usage-dashboard service-tier/outcome behavior: OK · actual dashboard refresh normalizes tier fidelity, preserves dedupe identity, and emits all four outcome categories without VM extraction');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

@@ -115,14 +115,15 @@ jobs:
             p18-organization-discovery-dedup.cjs p19-organization-empty-fallback-fidelity.cjs p20-shared-24h-capture.cjs
             p21-snapshot-scheduling-attribution.cjs p22-monotonic-release-integrity.cjs p23-credits-usage-early-start.cjs
             p24-snapshot-decision-attribution.cjs p25-long-window-critical-path-decoupling.cjs p26-foreground-cli-launcher-attribution.cjs
-            p27-npx-cache-first-launcher.cjs p28-managed-direct-cli-runtime.cjs
+            p27-npx-cache-first-launcher.cjs p28-managed-direct-cli-runtime.cjs p29-diagnostics-workspace-separation.cjs
           )
           for test in "${tests[@]}"; do node "plugins/usage-dashboard/tests/$test"; done
           assert_test_tree_clean
 
           python3 plugins/usage-dashboard/tools/validate_release_candidate.py --spec "$RELEASE_SPEC"
           git diff --check
-          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
+          EXPECTED_PARTS="$(node -e "console.log(require('./plugins/usage-dashboard/src/parts.cjs').PARTS.length)")"
+          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq "$EXPECTED_PARTS"
           grep -Fq 'STALE_CANDIDATE_MAIN' plugins/usage-dashboard/tools/check_release_monotonic.py
           grep -Fq 'SAME_VERSION_ARTIFACT_DIVERGENCE' plugins/usage-dashboard/tools/check_release_monotonic.py
 

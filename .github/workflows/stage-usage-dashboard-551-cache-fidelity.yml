@@ -1,0 +1,187 @@
+name: Stage Usage Dashboard 3.0.0-alpha.5.51 Cache Fidelity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-usage-dashboard-551-cache-fidelity.yml'
+      - 'plugins/usage-dashboard/tools/release_cache_fidelity_551.py'
+      - 'plugins/usage-dashboard/tests/p11-cache-fidelity.cjs'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-usage-dashboard-551-cache-fidelity.yml'
+      - 'plugins/usage-dashboard/tools/release_cache_fidelity_551.py'
+      - 'plugins/usage-dashboard/tests/p11-cache-fidelity.cjs'
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build and validate 5.51 Cache Fidelity candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee /tmp/stage-551.log) 2>&1
+          python3 -m py_compile plugins/usage-dashboard/tools/release_cache_fidelity_551.py
+          if grep -Fq "const VERSION = '3.0.0-alpha.5.51';" plugins/usage-dashboard/src/00-runtime-core.part.js; then
+            echo '5.51 candidate already materialized; skipping 5.50 -> 5.51 patch step'
+          else
+            python3 plugins/usage-dashboard/tools/release_cache_fidelity_551.py
+          fi
+
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+
+          for test in \
+            foundation.cjs \
+            p1-contract.cjs \
+            p2-build.cjs \
+            p3-ui.cjs \
+            p3-recent.cjs \
+            p4-render.cjs \
+            p4-partial.cjs \
+            p4-hourly-drilldown.cjs \
+            p4-hourly-detail.cjs \
+            p4-request-fidelity.cjs \
+            p5-unified-runtime.cjs \
+            p5-bridge-manager.cjs \
+            p5-engine-adoption.cjs \
+            p5-bundled-engine.cjs \
+            p5-lifecycle-race.cjs \
+            p5-bridge-control-sync.cjs \
+            p5-service-tier-fidelity.cjs \
+            p5-devpass-account-parity.cjs \
+            p5-floating-widget-ux.cjs \
+            p5-module-layout.cjs \
+            p5-structural-parity.cjs \
+            p5-state-compatibility.cjs \
+            p6-rc-migration.cjs \
+            p6-rc-contract.cjs \
+            p6-release-hardening.cjs \
+            p7-cache-observability.cjs \
+            p11-cache-fidelity.cjs; do
+            node "plugins/usage-dashboard/tests/$test"
+          done
+
+          git diff --check
+          test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
+          grep -Fq '//@version 3.0.0-alpha.5.51' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.51';" plugins/usage-dashboard/latest.js
+          grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.7';" plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '1.6.7';" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.51';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.7';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.51"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"requiredVersion": "1.6.7"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq 'Stable readiness:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache observability:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache observer:' plugins/usage-dashboard/latest.js
+          grep -Fq 'provider-usage-v2' plugins/usage-dashboard/latest.js
+          grep -Fq 'LLMGateway cachedTokens = provider cache Read' plugins/usage-dashboard/latest.js
+          grep -Fq 'llmgateway-log-cache-v1' plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq 'cacheWrite5mTokens' plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq 'cacheWrite1hTokens' plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "Symbol.for('llmgateway.devpass.bridge.capture.v9')" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "const STATE_KEY = 'local-usage-dashboard-v3';" plugins/usage-dashboard/latest.js
+          grep -Fq "const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';" plugins/usage-dashboard/latest.js
+          ! grep -Fq '//@allowed-ipc provider-manager' plugins/usage-dashboard/latest.js
+          ! grep -Fq 'providerManagerCache' plugins/usage-dashboard/latest.js
+          ! grep -Fq "op:'cacheObservability'" plugins/usage-dashboard/latest.js
+          ! grep -Fq 'Provider Manager cache IPC' plugins/usage-dashboard/latest.js
+          ! grep -Fq 'pm_request_logs' plugins/usage-dashboard/latest.js
+
+      - name: Persist staging failure log
+        if: failure() && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p plugins/usage-dashboard
+          if [ -f /tmp/stage-551.log ]; then
+            cp /tmp/stage-551.log plugins/usage-dashboard/stage-551-failure.log
+          else
+            printf '5.51 staging failed before the candidate log was created.\n' > plugins/usage-dashboard/stage-551-failure.log
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/stage-551-failure.log
+          git diff --cached --quiet && exit 0
+          git commit -m 'ci: capture 5.51 staging failure'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Commit validated 5.51 candidate to main
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A plugins/usage-dashboard/src \
+            plugins/usage-dashboard/latest.js \
+            plugins/usage-dashboard/tests \
+            plugins/usage-dashboard/runtime/bridge-engine.mjs \
+            plugins/usage-dashboard/runtime/bridge-manager.cjs \
+            plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'main already matches 3.0.0-alpha.5.51'
+          else
+            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.51 Cache Fidelity'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish 5.51 candidate to release channel
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq '//@version 3.0.0-alpha.5.51' plugins/usage-dashboard/latest.js
+          grep -Fq 'Cache observer:' plugins/usage-dashboard/latest.js
+          grep -Fq 'provider-usage-v2' plugins/usage-dashboard/latest.js
+          ! grep -Fq '//@allowed-ipc provider-manager' plugins/usage-dashboard/latest.js
+          ! grep -Fq 'providerManagerCache' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '1.6.7';" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.51';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.7';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.51"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"requiredVersion": "1.6.7"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          if git diff --cached --quiet; then
+            echo 'release-usage-dashboard already matches 3.0.0-alpha.5.51'
+            exit 0
+          fi
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.51 product artifacts'
+          git push origin HEAD:release-usage-dashboard

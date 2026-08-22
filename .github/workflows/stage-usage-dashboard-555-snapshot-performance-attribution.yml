@@ -1,0 +1,13 @@
+name: Archived Usage Dashboard 3.0.0-alpha.5.55 Snapshot Performance Attribution
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  archived:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Archived publisher. Historical validation remains in git history; this workflow no longer writes main or release-usage-dashboard.'

@@ -1,0 +1,91 @@
+name: Release Local Usage Dashboard alpha.4.1 P1 bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-local-usage-alpha401.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch and validate alpha.4.1 P1 bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha401_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha401_patch.py
+          node --check plugins/usage-dashboard/latest.js
+          node plugins/usage-dashboard/tests/foundation.cjs
+          node plugins/usage-dashboard/tests/p1-contract.cjs
+          python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/tests/fixtures/p1-bridge-contract.json >/dev/null
+          git diff --check
+          grep -q '^//@version 3.0.0-alpha.4.1$' plugins/usage-dashboard/latest.js
+          grep -q "const VERSION = '3.0.0-alpha.4.1';" plugins/usage-dashboard/latest.js
+          grep -q 'function normalizeBridgeModule(name, row)' plugins/usage-dashboard/latest.js
+          grep -q 'function normalizeErrorMap(raw)' plugins/usage-dashboard/latest.js
+          grep -q 'function usageCacheText(scope)' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge module freshness:' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge module duration:' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge partial:' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge Modules · freshness' plugins/usage-dashboard/latest.js
+          grep -q 'cache ${usageCacheText(diagUsage)}' plugins/usage-dashboard/latest.js
+          grep -q 'Schema: snapshot v' plugins/usage-dashboard/latest.js
+          grep -q 'Resume route: requested' plugins/usage-dashboard/latest.js
+          grep -q 'Stall/render coincidence:' plugins/usage-dashboard/latest.js
+          grep -q 'Performance settings:' plugins/usage-dashboard/latest.js
+          grep -q "Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'" plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+
+      - name: Commit alpha.4.1 artifact to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- plugins/usage-dashboard/latest.js; then
+            test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add plugins/usage-dashboard/latest.js
+            git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.4.1 P1 bridge contract bundle'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          else
+            echo 'main latest.js already matches alpha.4.1'
+          fi
+
+      - name: Publish alpha.4.1 to release-usage-dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/latest.js
+          grep -q '^//@version 3.0.0-alpha.4.1$' plugins/usage-dashboard/latest.js
+          grep -q 'Bridge module freshness:' plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+          git diff --check
+          if git diff --quiet -- plugins/usage-dashboard/latest.js; then
+            echo 'release-usage-dashboard already matches alpha.4.1'
+            exit 0
+          fi
+          test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'release: publish Local Usage Dashboard v3.0.0-alpha.4.1'
+          git push origin HEAD:release-usage-dashboard

@@ -1,0 +1,50 @@
+name: SimCore v0.63.59 memory sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/simcore-06359-memory-sync.py'
+      - '.github/workflows/simcore-memory-sync-06359.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch SimCore development memory
+        id: patch
+        shell: bash
+        run: |
+          set +e
+          python scripts/simcore-06359-memory-sync.py . > /tmp/simcore-memory-sync.log 2>&1
+          code=$?
+          cat /tmp/simcore-memory-sync.log
+          {
+            echo "exit_code=${code}"
+            echo "---"
+            cat /tmp/simcore-memory-sync.log
+          } > docs/SIMCORE_06359_SYNC_STATUS.txt
+          exit 0
+
+      - name: Commit memory update and trace
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_M2_LIVE_EVIDENCE.md docs/SIMCORE_ANOMALY_WATCH.md docs/SIMCORE_06359_SYNC_STATUS.txt
+          git diff --cached --check
+          git diff --cached --stat
+          if git diff --cached --quiet; then
+            echo 'No memory or trace changes to commit.'
+            exit 1
+          fi
+          git commit -m 'docs: record SimCore v0.63.59 closure baseline'
+          git push origin HEAD:main

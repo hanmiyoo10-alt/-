@@ -1,0 +1,297 @@
+
+  function normalizeScopeActivity(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const rows = value => Array.isArray(value) ? value.map(row => ({
+      name:String(row?.name || 'Unknown'),
+      requests:num(row?.requests) ? Number(row.requests) : 0,
+      cost:num(row?.cost) ? Number(row.cost) : 0,
+      totalTokens:num(row?.totalTokens ?? row?.total_tokens) ? Number(row.totalTokens ?? row.total_tokens) : null,
+      inputTokens:num(row?.inputTokens ?? row?.input_tokens) ? Number(row.inputTokens ?? row.input_tokens) : null,
+      outputTokens:num(row?.outputTokens ?? row?.output_tokens) ? Number(row.outputTokens ?? row.output_tokens) : null,
+      errorCount:num(row?.errorCount ?? row?.error_count) ? Number(row.errorCount ?? row.error_count) : null,
+      errorRate:num(row?.errorRate ?? row?.error_rate) ? Number(row.errorRate ?? row.error_rate) : null,
+      cacheCount:num(row?.cacheCount ?? row?.cache_count) ? Number(row.cacheCount ?? row.cache_count) : null,
+      cacheRate:num(row?.cacheRate ?? row?.cache_rate) ? Number(row.cacheRate ?? row.cache_rate) : null,
+      cachedInputTokens:num(row?.cachedInputTokens ?? row?.cached_input_tokens ?? row?.cachedTokens ?? row?.cached_tokens) ? Number(row.cachedInputTokens ?? row.cached_input_tokens ?? row.cachedTokens ?? row.cached_tokens) : null,
+      cacheReadInputTokens:num(row?.cacheReadInputTokens ?? row?.cache_read_input_tokens) ? Number(row.cacheReadInputTokens ?? row.cache_read_input_tokens) : null,
+      cacheCreationInputTokens:num(row?.cacheCreationInputTokens ?? row?.cache_creation_input_tokens ?? row?.cacheWriteTokens ?? row?.cache_write_tokens) ? Number(row.cacheCreationInputTokens ?? row.cache_creation_input_tokens ?? row.cacheWriteTokens ?? row.cache_write_tokens) : null
+    })) : [];
+    const totalRequests = num(raw.totalRequests ?? raw.requests24h) ? Number(raw.totalRequests ?? raw.requests24h) : null;
+    const totalCost = num(raw.totalCost ?? raw.cost24h) ? Number(raw.totalCost ?? raw.cost24h) : null;
+    const totalTokens = num(raw.totalTokens ?? raw.totalTokens24h) ? Number(raw.totalTokens ?? raw.totalTokens24h) : null;
+    const inputTokens = num(raw.inputTokens) ? Number(raw.inputTokens) : null;
+    const outputTokens = num(raw.outputTokens) ? Number(raw.outputTokens) : null;
+    const errorCount = num(raw.errorCount) ? Number(raw.errorCount) : null;
+    const errorRate = num(raw.errorRate ?? raw.errorRate24h) ? Number(raw.errorRate ?? raw.errorRate24h) : null;
+    const cacheCount = num(raw.cacheCount) ? Number(raw.cacheCount) : null;
+    const cacheRate = num(raw.cacheRate) ? Number(raw.cacheRate) : null;
+    const cachedInputTokens = num(raw.cachedInputTokens ?? raw.cached_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) ? Number(raw.cachedInputTokens ?? raw.cached_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) : null;
+    const cacheReadInputTokens = num(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens) ? Number(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens) : null;
+    const cacheCreationInputTokens = num(raw.cacheCreationInputTokens ?? raw.cache_creation_input_tokens ?? raw.cacheWriteTokens ?? raw.cache_write_tokens) ? Number(raw.cacheCreationInputTokens ?? raw.cache_creation_input_tokens ?? raw.cacheWriteTokens ?? raw.cache_write_tokens) : null;
+    const providers = rows(raw.providers);
+    const models = rows(raw.models);
+    const recentCandidates = [
+      ['requestLedger', raw.requestLedger], ['request_ledger', raw.request_ledger],
+      ['recentRequests', raw.recentRequests], ['recent_requests', raw.recent_requests],
+      ['requests', raw.requests], ['recent', raw.recent]
+    ];
+    const recentSource = recentCandidates.find(([,value]) => Array.isArray(value) && value.length) || recentCandidates.find(([,value]) => Array.isArray(value)) || ['none', []];
+    const recentSourceKey = recentSource[0];
+    const rawRecent = Array.isArray(recentSource[1]) ? recentSource[1] : [];
+    const recent = normalizeRecentRequestRows(rawRecent);
+    const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
+    if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+  }
+
+  function normalizeUsageScopesPayload(raw, fallbackRaw = null) {
+    const source = raw && typeof raw === 'object' ? (raw.scopes && typeof raw.scopes === 'object' ? raw.scopes : raw) : null;
+    const scopes = {};
+    for (const key of ['all','devpass','credits']) {
+      const normalized = normalizeScopeActivity(source?.[key]);
+      if (normalized) scopes[key] = normalized;
+    }
+    if (!scopes.all && fallbackRaw) {
+      const fallback = normalizeScopeActivity(fallbackRaw);
+      if (fallback) scopes.all = fallback;
+    }
+    if (!Object.keys(scopes).length) return null;
+    return {scopes,errors:normalizeErrorMap(raw?.errors),fetchedAt:raw?.fetchedAt || scopes.all?.fetchedAt || Date.now(),source:String(raw?.source || 'LLMGateway hybrid scoped usage')};
+  }
+
+  function normalizeAnalyticsPayload(raw, fallback24h = null) {
+    if ((!raw || typeof raw !== 'object') && !fallback24h) return null;
+    const sourceWindows = raw && typeof raw === 'object'
+      ? (raw.windows && typeof raw.windows === 'object' ? raw.windows : raw)
+      : {};
+    const windows = {};
+    for (const range of ['24h','7d','30d']) {
+      const normalized = normalizeScopeActivity(sourceWindows?.[range]);
+      if (normalized) windows[range] = normalized;
+    }
+    if (!windows['24h'] && fallback24h) {
+      const fallback = normalizeScopeActivity(fallback24h);
+      if (fallback) windows['24h'] = fallback;
+    }
+    if (!Object.keys(windows).length) return null;
+    return {
+      windows,
+      averages:{
+        dailyCost7d:num(raw?.averages?.dailyCost7d)?Number(raw.averages.dailyCost7d):null,
+        dailyRequests7d:num(raw?.averages?.dailyRequests7d)?Number(raw.averages.dailyRequests7d):null,
+        dailyCost30d:num(raw?.averages?.dailyCost30d)?Number(raw.averages.dailyCost30d):null
+      },
+      errors:normalizeErrorMap(raw?.errors),
+      fetchedAt:raw?.fetchedAt || windows['24h']?.fetchedAt || Date.now(),
+      source:String(raw?.source || 'LLMGateway CLI analytics')
+    };
+  }
+
+  function normalizeAnalyticsScopesPayload(raw, usageScopes = null, allAnalytics = null) {
+    const source = raw && typeof raw === 'object'
+      ? (raw.scopes && typeof raw.scopes === 'object' ? raw.scopes : raw)
+      : null;
+    const scopes = {};
+    for (const key of ['all','devpass','credits']) {
+      const fallback24h = usageScopes?.scopes?.[key] || null;
+      const normalized = normalizeAnalyticsPayload(source?.[key], fallback24h);
+      if (normalized) scopes[key] = normalized;
+    }
+    if (!scopes.all && allAnalytics) scopes.all = allAnalytics;
+    if (!Object.keys(scopes).length) return null;
+    return {
+      scopes,
+      errors:normalizeErrorMap(raw?.errors),
+      fetchedAt:raw?.fetchedAt || scopes.all?.fetchedAt || Date.now(),
+      source:String(raw?.source || 'LLMGateway hybrid scoped analytics')
+    };
+  }
+
+  function normalize(payload) {
+    const r = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+    if (!r || typeof r !== 'object') throw new Error('snapshot 형식이 잘못됐어.');
+
+    // DevPass Bridge v1.6.x compatibility adapter.
+    // Keep the original generic local-JSON adapter below as a fallback.
+    const ds = r.devpassStatus && typeof r.devpassStatus === 'object' ? r.devpassStatus : null;
+    const ba = r.activity && typeof r.activity === 'object' ? r.activity : null;
+    if (ds || r.__bridgeSnapshot || r.bridgeVersion) {
+      const directResetPasses = ds && num(ds.resetPasses) ? Number(ds.resetPasses) : null;
+      const includedResetPassesRemaining = ds && num(ds.includedResetPassesRemaining) ? Number(ds.includedResetPassesRemaining) : null;
+      const resetPassesRemaining = directResetPasses !== null
+        ? directResetPasses + Number(includedResetPassesRemaining || 0)
+        : includedResetPassesRemaining;
+      const monthly = ds ? bucket({
+        label:'DevPass 월간',
+        used:ds.creditsUsed,
+        limit:ds.creditsLimit,
+        remaining:ds.creditsRemaining,
+        resetAt:ds.expiresAt
+      }, 'DevPass 월간') : null;
+      const weekly = ds ? bucket({
+        label:'Premium 주간',
+        used:ds.premiumCreditsUsed,
+        limit:ds.premiumWeeklyLimit,
+        resetAt:ds.premiumWeekResetsAt,
+        resetPasses:resetPassesRemaining,
+        resetPassesExact:num(resetPassesRemaining)
+      }, 'Premium 주간') : null;
+      const orgRows = Array.isArray(r.orgs)
+        ? r.orgs
+        : (Array.isArray(r.orgs?.organizations)
+          ? r.orgs.organizations
+          : (Array.isArray(r.orgs?.data?.organizations) ? r.orgs.data.organizations : []));
+      const selectedCreditsOrgId = String(r.creditsOrganizationId || '').trim();
+      const creditOrg = orgRows.find(org =>
+        selectedCreditsOrgId && String(org?.id || '') === selectedCreditsOrgId &&
+        String(org?.kind || 'default') === 'default' &&
+        String(org?.status || 'active') !== 'deleted'
+      ) || orgRows.find(org =>
+        String(org?.kind || 'default') === 'default' &&
+        String(org?.status || 'active') !== 'deleted' &&
+        num(org?.credits)
+      ) || orgRows.find(org => String(org?.status || 'active') !== 'deleted' && num(org?.credits)) || null;
+      const credits = creditOrg
+        ? {label:'Credits', balance:Number(creditOrg.credits), todayUsed:null}
+        : (ds && num(ds.regularCredits)
+          ? {label:'Credits', balance:Number(ds.regularCredits), todayUsed:null}
+          : null);
+      const activity = ba ? {
+        requests24h:num(ba.totalRequests)?Number(ba.totalRequests):null,
+        cost24h:num(ba.totalCost)?Number(ba.totalCost):null,
+        totalTokens24h:num(ba.totalTokens)?Number(ba.totalTokens):null,
+        errorRate24h:num(ba.errorRate)?Number(ba.errorRate):null
+      } : null;
+      const usageScopes = normalizeUsageScopesPayload(r.usageScopes, ba || activity);
+      const analytics = normalizeAnalyticsPayload(r.analytics, usageScopes?.scopes?.all || ba || activity);
+      const analyticsScopes = normalizeAnalyticsScopesPayload(r.analyticsScopes, usageScopes, analytics);
+      const runwayRaw = r.runway && typeof r.runway === 'object' ? r.runway : null;
+      const runway = runwayRaw ? {
+        runwayDays:num(runwayRaw.runwayDays)?Number(runwayRaw.runwayDays):null,
+        avgDailySpend7d:num(runwayRaw.avgDailySpend7d)?Number(runwayRaw.avgDailySpend7d):null,
+        fetchedAt:runwayRaw.fetchedAt || r.fetchedAt || Date.now()
+      } : null;
+      const devpassAccount = ds ? {
+        plan:String(ds.plan || 'none'),
+        cycle:ds.cycle === null || ds.cycle === undefined ? '' : String(ds.cycle),
+        billingCycleStart:ds.billingCycleStart || null,
+        expiresAt:ds.expiresAt || null,
+        cancelled:ds.cancelled === true,
+        pendingTier:ds.pendingTier === null || ds.pendingTier === undefined ? '' : String(ds.pendingTier),
+        serviceTier:String(ds.serviceTier || 'default'),
+        routingStrategy:String(ds.routingStrategy || 'auto'),
+        paygEnabled:ds.paygEnabled === true,
+        hasPersonalOrg:typeof ds.hasPersonalOrg === 'boolean' ? ds.hasPersonalOrg : null,
+        hasBillingHistory:typeof ds.hasBillingHistory === 'boolean' ? ds.hasBillingHistory : null,
+        resetPasses:num(ds.resetPasses) ? Number(ds.resetPasses) : null,
+        includedResetPasses:num(ds.includedResetPasses) ? Number(ds.includedResetPasses) : null,
+        includedResetPassesRemaining:num(ds.includedResetPassesRemaining) ? Number(ds.includedResetPassesRemaining) : null,
+        resetPassPrice:num(ds.resetPassPrice) ? Number(ds.resetPassPrice) : null,
+        regularCredits:num(ds.regularCredits) ? Number(ds.regularCredits) : null,
+        source:String(ds.source || '')
+      } : null;
+      const out = {
+        protocolVersion:Number(r.protocolVersion || 1),
+        fetchedAt:r.fetchedAt || ds?.fetchedAt || ba?.fetchedAt || Date.now(),
+        source:String(ba?.source || ds?.source || ('LLMGateway DevPass Bridge' + (r.bridgeVersion ? ' v' + r.bridgeVersion : ''))),
+        health:{status:r.ok === false ? 'error' : 'ok', bridgeVersion:r.bridgeVersion || null},
+        bridge:normalizeBridgeMetadata(r),
+        monthly, weekly, credits, activity, runway, usageScopes, analytics, analyticsScopes, devpassAccount,
+        organizations:orgRows.filter(org => String(org?.id || '') && String(org?.status || 'active') !== 'deleted').map(org => ({id:String(org.id),name:String(org?.name || org.id),kind:String(org?.kind || 'default'),status:String(org?.status || 'active'),credits:num(org?.credits)?Number(org.credits):null})),
+        creditsOrganizationId:String(r.creditsOrganizationId || creditOrg?.id || ''),
+        requestedCreditsOrganizationId:String(r.requestedCreditsOrganizationId || ''),
+        creditsOrganizationFallback:r.creditsOrganizationFallback === true,
+        creditsOrganizationFallbackReason:String(r.creditsOrganizationFallbackReason || '')
+      };
+      if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('DevPass Bridge에 표시할 데이터가 없어.');
+      return out;
+    }
+
+    const u = r.usage && typeof r.usage === 'object' ? r.usage : r;
+    const credits = u.credits && typeof u.credits === 'object'
+      ? {label:String(u.credits.label || 'Credits'), balance:num(u.credits.balance)?Number(u.credits.balance):null, todayUsed:num(u.credits.todayUsed)?Number(u.credits.todayUsed):null}
+      : null;
+    const activity = u.activity && typeof u.activity === 'object'
+      ? {requests24h:num(u.activity.requests24h)?Number(u.activity.requests24h):null, cost24h:num(u.activity.cost24h)?Number(u.activity.cost24h):null, totalTokens24h:num(u.activity.totalTokens24h)?Number(u.activity.totalTokens24h):null, errorRate24h:num(u.activity.errorRate24h)?Number(u.activity.errorRate24h):null}
+      : null;
+    const usageScopes = normalizeUsageScopesPayload(r.usageScopes ?? u.usageScopes, u.activity || activity);
+    const analytics = normalizeAnalyticsPayload(r.analytics ?? u.analytics, usageScopes?.scopes?.all || u.activity || activity);
+    const analyticsScopes = normalizeAnalyticsScopesPayload(r.analyticsScopes ?? u.analyticsScopes, usageScopes, analytics);
+    const out = {
+      protocolVersion: Number(r.protocolVersion || 1), fetchedAt: r.fetchedAt || Date.now(),
+      source: String(r.source || 'Local Bridge'), health: r.health && typeof r.health === 'object' ? r.health : null,
+      bridge: normalizeBridgeMetadata(r),
+      monthly: bucket(u.monthly, '월간'), weekly: bucket(u.weekly, '주간'), credits, activity, usageScopes, analytics, analyticsScopes
+    };
+    if (!out.monthly && !out.weekly && !out.credits && !out.activity) throw new Error('표시할 usage 데이터가 없어.');
+    return out;
+  }
+
+  async function persist() {
+    if (runtimeDisposed) return dropStaleAsync();
+    await store.setItem(STATE_KEY, {...state});
+    powerRuntime.persistWrites += 1;
+  }
+
+  function localRuntimeErrorKind(stage) {
+    const key = String(stage || 'runtime');
+    if (key.includes('persist')) return 'persist';
+    if (key.includes('render')) return 'render';
+    return 'runtime';
+  }
+
+  function localRuntimeActiveEntries() {
+    return Object.values(localRuntimeErrors.active || {}).filter(Boolean);
+  }
+
+  function localRuntimeActiveCount() {
+    return localRuntimeActiveEntries().length;
+  }
+
+  function noteLocalRuntimeError(stage, error) {
+    const key = String(stage || 'runtime');
+    const kind = localRuntimeErrorKind(key);
+    const message = String(error?.message || error || 'unknown error')
+      .replace(/llmgtwy_[A-Za-z0-9_-]+/g, 'llmgtwy_[REDACTED]')
+      .replace(/Bearer\s+[^\s'\"]+/gi, 'Bearer [REDACTED]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 180);
+    const now = Date.now();
+    localRuntimeErrors.count += 1;
+    if (kind === 'persist') localRuntimeErrors.persistFailures += 1;
+    if (kind === 'render') localRuntimeErrors.renderFailures += 1;
+    const current = localRuntimeErrors.active?.[kind] || null;
+    localRuntimeErrors.active[kind] = {
+      stage:key,
+      message,
+      since:current?.since || now,
+      lastAt:now,
+      failures:Number(current?.failures || 0) + 1,
+    };
+    localRuntimeErrors.lastStage = key;
+    localRuntimeErrors.lastMessage = message;
+    localRuntimeErrors.lastAt = now;
+    console.log(`[Local Usage Dashboard] local ${key} failed: ${message}`);
+  }
+
+  function noteLocalRuntimeRecovery(stage) {
+    const key = String(stage || 'runtime');
+    const kind = localRuntimeErrorKind(key);
+    const active = localRuntimeErrors.active?.[kind] || null;
+    if (!active) return false;
+    localRuntimeErrors.active[kind] = null;
+    localRuntimeErrors.recoveredCount = Number(localRuntimeErrors.recoveredCount || 0) + 1;
+    localRuntimeErrors.lastRecoveryStage = key;
+    localRuntimeErrors.lastRecoveryAt = Date.now();
+    return true;
+  }
+
+  async function persistRefreshState(stage) {
+    try { await persist(); noteLocalRuntimeRecovery(stage); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
+  async function renderRefreshWidget(reason, stage) {
+    try { await renderWidget(reason); noteLocalRuntimeRecovery(stage); return true; }
+    catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }

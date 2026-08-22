@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "local-usage-dashboard/snapshot-v1",
+  "title": "Local Usage Dashboard Snapshot v1",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": ["string", "number"] },
+    "protocolVersion": { "type": "number" },
+    "bridgeVersion": { "type": "string" },
+    "fetchedAt": { "type": ["string", "number"] },
+    "usageScopes": {
+      "type": "object",
+      "properties": {
+        "scopes": {
+          "type": "object",
+          "properties": {
+            "all": { "$ref": "#/$defs/usageScope" },
+            "devpass": { "$ref": "#/$defs/usageScope" },
+            "credits": { "$ref": "#/$defs/usageScope" }
+          },
+          "additionalProperties": true
+        },
+        "errors": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/errorValue" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "analyticsScopes": {
+      "type": "object",
+      "properties": {
+        "errors": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/errorValue" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "modules": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/moduleState" }
+    },
+    "diagnostics": { "type": "object" }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "errorDetail": {
+      "type": "object",
+      "properties": {
+        "code": { "type": ["string", "number"] },
+        "type": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "errorValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "$ref": "#/$defs/errorDetail" }
+      ]
+    },
+    "moduleState": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "stale": { "type": "boolean" },
+        "fetchedAt": { "type": ["string", "number"] },
+        "updatedAt": { "type": ["string", "number"] },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "elapsedMs": { "type": "number", "minimum": 0 },
+        "errorCode": { "type": ["string", "number"] },
+        "errorType": { "type": "string" },
+        "error": { "$ref": "#/$defs/errorValue" }
+      },
+      "additionalProperties": true
+    },
+    "aggregateRow": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "requests": { "type": "number", "minimum": 0 },
+        "cost": { "type": "number", "minimum": 0 },
+        "totalTokens": { "type": "number", "minimum": 0 },
+        "inputTokens": { "type": "number", "minimum": 0 },
+        "outputTokens": { "type": "number", "minimum": 0 },
+        "errorCount": { "type": "number", "minimum": 0 },
+        "errorRate": { "type": "number", "minimum": 0 },
+        "cacheCount": { "type": "number", "minimum": 0 },
+        "cacheRate": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "usageScope": {
+      "type": "object",
+      "properties": {
+        "totalRequests": { "type": "number", "minimum": 0 },
+        "totalCost": { "type": "number", "minimum": 0 },
+        "totalTokens": { "type": "number", "minimum": 0 },
+        "inputTokens": { "type": "number", "minimum": 0 },
+        "outputTokens": { "type": "number", "minimum": 0 },
+        "errorCount": { "type": "number", "minimum": 0 },
+        "errorRate": { "type": "number", "minimum": 0 },
+        "cacheCount": { "type": "number", "minimum": 0 },
+        "cacheRate": { "type": "number", "minimum": 0 },
+        "providers": { "type": "array", "items": { "$ref": "#/$defs/aggregateRow" } },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/aggregateRow" } },
+        "recent": { "type": "array", "items": { "$ref": "recent-request-v1.schema.json" } }
+      },
+      "additionalProperties": true
+    }
+  }
+}

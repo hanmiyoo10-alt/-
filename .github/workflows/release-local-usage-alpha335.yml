@@ -1,0 +1,89 @@
+name: Release Local Usage Dashboard alpha.3.35
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-local-usage-alpha335.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch alpha.3.34 to alpha.3.35 performance settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile plugins/usage-dashboard/tools/release_alpha335_patch.py
+          python3 plugins/usage-dashboard/tools/release_alpha335_patch.py
+          node --check plugins/usage-dashboard/latest.js
+          git diff --check
+          grep -q '^//@version 3.0.0-alpha.3.35$' plugins/usage-dashboard/latest.js
+          grep -q "const VERSION = '3.0.0-alpha.3.35';" plugins/usage-dashboard/latest.js
+          grep -q 'id="sync-on-focus"' plugins/usage-dashboard/latest.js
+          grep -q 'id="performance-guard"' plugins/usage-dashboard/latest.js
+          grep -q 'id="adaptive-refresh"' plugins/usage-dashboard/latest.js
+          grep -q 'id="background-pause"' plugins/usage-dashboard/latest.js
+          grep -q 'id="save-performance"' plugins/usage-dashboard/latest.js
+          grep -q 'Performance settings:' plugins/usage-dashboard/latest.js
+          grep -q "Risuai.registerButton({name:'Usage',icon:'📊',iconType:'html',location:'chat'" plugins/usage-dashboard/latest.js
+          grep -q 'Runtime state:' plugins/usage-dashboard/latest.js
+          grep -q 'Resume input:' plugins/usage-dashboard/latest.js
+          grep -q 'Panel render scheduler:' plugins/usage-dashboard/latest.js
+          grep -q 'Render spike:' plugins/usage-dashboard/latest.js
+          grep -q 'Scheduler: pending' plugins/usage-dashboard/latest.js
+          grep -q 'Resume grace:' plugins/usage-dashboard/latest.js
+          grep -q 'UI stall probe:' plugins/usage-dashboard/latest.js
+          grep -q 'Analytics · 24h / 7d / 30d' plugins/usage-dashboard/latest.js
+          grep -q '24h Usage Scope' plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+
+      - name: Commit staged release to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- plugins/usage-dashboard/latest.js; then
+            echo 'latest.js already matches alpha.3.35'
+            exit 0
+          fi
+          test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'release: Local Usage Dashboard v3.0.0-alpha.3.35 performance settings UI'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Publish alpha.3.35 to release-usage-dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main release-usage-dashboard
+          git show origin/main:plugins/usage-dashboard/latest.js > /tmp/usage-dashboard-latest.js
+          node --check /tmp/usage-dashboard-latest.js
+          grep -q '^//@version 3.0.0-alpha.3.35$' /tmp/usage-dashboard-latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' /tmp/usage-dashboard-latest.js
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/latest.js
+          git diff --check
+          if git diff --quiet -- plugins/usage-dashboard/latest.js; then
+            echo 'release-usage-dashboard already matches alpha.3.35'
+            exit 0
+          fi
+          test "$(git diff --name-only)" = 'plugins/usage-dashboard/latest.js'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/usage-dashboard/latest.js
+          git commit -m 'release: publish Local Usage Dashboard v3.0.0-alpha.3.35'
+          git push origin HEAD:release-usage-dashboard

@@ -1,0 +1,100 @@
+name: SimCore M2-2 representation checkpoint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/simcore-m2-2-representation.py'
+      - '.github/workflows/simcore-m2-2-representation.yml'
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-m2-2-representation
+  cancel-in-progress: false
+
+jobs:
+  checkpoint:
+    if: github.event_name == 'push' || github.event.pull_request.title == 'SimCore M2-2 checkpoint command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout M2-2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-m2-2-representation
+          fetch-depth: 0
+
+      - name: Load checkpoint tooling from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-m2-2-representation.py > /tmp/simcore-m2-2-representation.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-m2-2-representation.py /tmp/simcore-architecture-check.py
+
+      - name: Apply M2-2 mechanical ownership split
+        run: python3 /tmp/simcore-m2-2-representation.py
+
+      - name: Validate source and frozen controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.0$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.0';" plugins/simcore/latest.js
+          grep -q 'v0.64.0 M2-2 Representation Ownership Split' plugins/simcore/latest.js
+          grep -q 'SimCore.define("representation"' plugins/simcore/latest.js
+          grep -q 'representationRegistry.remember(probe)' plugins/simcore/latest.js
+          grep -q 'representationRegistry.latest(lastAssistant, coreLocationKey)' plugins/simcore/latest.js
+          grep -q 'representationRules.inspectCarryover' plugins/simcore/latest.js
+          grep -q 'Representation ownership: REPRESENTATION' plugins/simcore/latest.js
+          grep -q "REPRESENTATION_DRIFT_CORRELATED" plugins/simcore/latest.js
+          grep -q "USER_EDIT_CANDIDATE" plugins/simcore/latest.js
+          grep -q "reason: 'representation-fast-reconciled'" plugins/simcore/latest.js
+          grep -q "MANUAL_EDIT_REBUILT" plugins/simcore/latest.js
+          grep -q 'Broadcast closure:' plugins/simcore/latest.js
+          grep -q 'Narrative tail coverage:' plugins/simcore/latest.js
+          grep -q "return stabilizationResult('OBSERVE_ONLY'" plugins/simcore/latest.js
+          if grep -q 'runtimeMirror.provenanceLedger()' plugins/simcore/latest.js; then
+            echo 'outer shell still reads provenance through runtime-mirror' >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          mirror = text.split('SimCore.define("runtime-mirror"', 1)[1].split('SimCore.define("runtime-hooks"', 1)[0]
+          for forbidden in ('const provenanceLedger = []', 'rememberProvenance(', 'provenanceLedger:'):
+              if forbidden in mirror:
+                  raise SystemExit(f'runtime-mirror ownership not narrowed: {forbidden}')
+          representation = text.split('SimCore.define("representation"', 1)[1].split('SimCore.define("runtime-mirror"', 1)[0]
+          for required in ('function createRegistry', 'function inspectCarryover', 'function remember(probe)', 'function latest(outIndex'):
+              if required not in representation:
+                  raise SystemExit(f'representation module incomplete: {required}')
+          print('M2-2 static ownership assertions: PASS')
+          PY
+          python3 /tmp/simcore-architecture-check.py \
+            --contract /tmp/simcore-architecture-v2.json \
+            --source plugins/simcore/latest.js \
+            --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Commit M2-2 checkpoint branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'M2-2 branch already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'SimCore v0.64.0 M2-2 Representation Ownership Split'
+          git push origin HEAD:simcore-m2-2-representation

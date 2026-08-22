@@ -1,0 +1,148 @@
+name: Release Local Usage Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/usage-dashboard/latest.js'
+      - 'plugins/usage-dashboard/src/**'
+      - 'plugins/usage-dashboard/runtime/**'
+      - 'plugins/usage-dashboard/contracts/**'
+      - 'plugins/usage-dashboard/tests/**'
+      - 'plugins/usage-dashboard/tools/build_usage_dashboard.cjs'
+      - 'plugins/usage-dashboard/tools/split_usage_dashboard.cjs'
+      - '.github/workflows/release-local-usage-dashboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate product and regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+
+          for test in \
+            foundation.cjs \
+            p1-contract.cjs \
+            p2-build.cjs \
+            p3-ui.cjs \
+            p3-recent.cjs \
+            p4-render.cjs \
+            p4-partial.cjs \
+            p4-hourly-drilldown.cjs \
+            p4-hourly-detail.cjs \
+            p4-request-fidelity.cjs \
+            p5-unified-runtime.cjs \
+            p5-bridge-manager.cjs \
+            p5-engine-adoption.cjs \
+            p5-bundled-engine.cjs \
+            p5-lifecycle-race.cjs \
+            p5-bridge-control-sync.cjs \
+            p5-service-tier-fidelity.cjs \
+            p5-devpass-account-parity.cjs \
+            p5-floating-widget-ux.cjs \
+            p5-module-layout.cjs \
+            p5-structural-parity.cjs \
+            p5-state-compatibility.cjs \
+            p6-rc-migration.cjs \
+            p6-rc-contract.cjs; do
+            node "plugins/usage-dashboard/tests/$test"
+          done
+
+          python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/contracts/snapshot-v1.schema.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/contracts/recent-request-v1.schema.json >/dev/null
+
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const {PARTS} = require('./plugins/usage-dashboard/src/parts.cjs');
+          const src = 'plugins/usage-dashboard/src';
+          const count = fs.readdirSync(src).filter(name => name.endsWith('.part.js')).length;
+          if (count !== PARTS.length) throw new Error(`source part count ${count} != PARTS ${PARTS.length}`);
+          const manifest = JSON.parse(fs.readFileSync(`${src}/manifest.json`, 'utf8'));
+          if (manifest.parts.length !== PARTS.length) throw new Error(`manifest part count ${manifest.parts.length} != PARTS ${PARTS.length}`);
+          NODE
+
+          ENGINE_SHA="$(node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(m.components?.bridge?.sha256||""))' plugins/usage-dashboard/runtime/product-manifest.json)"
+          test "$ENGINE_SHA" = "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')"
+          git diff --check
+
+          VERSION="$(sed -n 's#^//@version ##p' plugins/usage-dashboard/latest.js | head -n1)"
+          test -n "$VERSION"
+          grep -Fq "const VERSION = '$VERSION';" plugins/usage-dashboard/latest.js
+          grep -Fq "\"version\": \"$VERSION\"" plugins/usage-dashboard/src/manifest.json
+          grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
+          case "$VERSION" in
+            3.0.0-alpha.*|3.0.0-beta.*|3.0.0-rc.*|3.0.0) ;;
+            *) echo "unexpected Usage Dashboard version: $VERSION"; exit 1 ;;
+          esac
+
+          grep -Fq 'const SNAPSHOT_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -Fq 'const RECENT_REQUEST_SCHEMA_VERSION = 1;' plugins/usage-dashboard/latest.js
+          grep -Fq "const BRIDGE_MANAGER_PROTOCOL = 'bridge-manager-v1';" plugins/usage-dashboard/latest.js
+          grep -Fq 'Service tier fidelity:' plugins/usage-dashboard/latest.js
+          grep -Fq 'DevPass account detail:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Floating widget UX:' plugins/usage-dashboard/latest.js
+          grep -Fq 'Lifecycle refresh:' plugins/usage-dashboard/latest.js
+          grep -Fq 'System Health' plugins/usage-dashboard/latest.js
+          grep -Fq 'Lifecycle & Recovery' plugins/usage-dashboard/latest.js
+          grep -q '^//@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js$' plugins/usage-dashboard/latest.js
+
+          printf '%s\n' "$VERSION" > /tmp/usage-dashboard-version.txt
+          cp plugins/usage-dashboard/latest.js /tmp/usage-dashboard-latest.js
+          rm -rf /tmp/usage-dashboard-runtime
+          cp -R plugins/usage-dashboard/runtime /tmp/usage-dashboard-runtime
+
+      - name: Publish validated product artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(cat /tmp/usage-dashboard-version.txt)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard
+          cp /tmp/usage-dashboard-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/usage-dashboard-runtime plugins/usage-dashboard/runtime
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          grep -Fq "//@version $VERSION" plugins/usage-dashboard/latest.js
+          grep -Fq "\"productVersion\": \"$VERSION\"" plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          if git diff --cached --quiet; then
+            echo "release-usage-dashboard already matches $VERSION"
+            exit 0
+          fi
+          CHANGED="$(git diff --cached --name-only | sort)"
+          while IFS= read -r path; do
+            case "$path" in
+              plugins/usage-dashboard/latest.js|plugins/usage-dashboard/runtime/product-manifest.json|plugins/usage-dashboard/runtime/bridge-manager.cjs|plugins/usage-dashboard/runtime/bridge-engine.mjs|plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh) ;;
+              *) echo "unexpected release artifact: $path"; exit 1 ;;
+            esac
+          done <<< "$CHANGED"
+          git commit -m "release: publish Local Usage Dashboard $VERSION product artifacts"
+          git push origin HEAD:release-usage-dashboard

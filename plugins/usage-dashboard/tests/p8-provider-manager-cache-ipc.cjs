@@ -1,0 +1,84 @@
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+
+const root = 'plugins/usage-dashboard';
+const core = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
+const bridge = fs.readFileSync(`${root}/src/20-bridge-io.part.js`, 'utf8');
+const refresh = fs.readFileSync(`${root}/src/30-refresh-runtime.part.js`, 'utf8');
+const diag = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
+const patcher = fs.readFileSync(`${root}/tools/patch_provider_manager_cache_observability.py`, 'utf8');
+const latest = fs.readFileSync(`${root}/latest.js`, 'utf8');
+const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
+const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
+
+assert.ok(core.includes('//@allowed-ipc provider-manager'), 'Dashboard must mutually whitelist Provider Manager');
+assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.49';"));
+assert.ok(core.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
+assert.ok(core.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));
+assert.ok(core.includes("const PROVIDER_MANAGER_CACHE_IPC_VERSION = 1;"));
+assert.ok(core.includes('const providerManagerCacheRuntime = {'));
+assert.ok(core.includes('const providerManagerCachePending = new Map();'));
+assert.ok(!bridge.endsWith('\n\n'), 'bridge module must end with exactly one newline');
+
+for (const marker of [
+  'function fetchProviderManagerCacheObservability()',
+  "PROVIDER_MANAGER_REQUEST_CHANNEL = 'provider-manager/request'",
+  "PROVIDER_MANAGER_RESPONSE_CHANNEL = 'provider-manager/response'",
+  "op:'cacheObservability'",
+  "sender:{pluginName:'local_usage_dashboard_modular'",
+  'function providerManagerCacheCandidateScore(request, cacheRow)',
+  "return {score:1000,kind:'exact'}",
+  'providerManagerCacheModelMatch',
+  "replace(/[_\\s]+/g,'-')",
+  'providerManagerCacheRuntime.ambiguous',
+  "request.cacheMetricSource = 'provider-manager-ipc-v1'",
+  'cacheCreation5mTokens',
+  'cacheCreation1hTokens'
+]) assert.ok(latest.includes(marker) || bridge.includes(marker), `missing PM cache IPC marker: ${marker}`);
+
+assert.ok(bridge.includes('function fetchProviderManagerCacheObservability()'));
+assert.ok(bridge.includes('function scheduleProviderManagerCacheEnrichment('));
+assert.ok(refresh.includes('scheduleProviderManagerCacheEnrichment(state.data, refreshEpoch, refreshLifecycleGeneration);'));
+assert.ok(!refresh.includes('const providerManagerCachePromise = fetchProviderManagerCacheObservability();'));
+assert.ok(!refresh.includes("finishRefreshPhase('provider-cache'"));
+
+assert.ok(diag.includes('Provider Manager cache IPC:'));
+assert.ok(diag.includes('Provider Manager IPC v1 when available'));
+const readinessStart = diag.indexOf('function stableReadinessSnapshot');
+const readinessEnd = readinessStart >= 0 ? diag.indexOf('\n  function ', readinessStart + 'function stableReadinessSnapshot'.length) : -1;
+assert.ok(readinessStart >= 0 && readinessEnd > readinessStart, 'stable readiness block must be discoverable');
+const readinessBlock = diag.slice(readinessStart, readinessEnd);
+assert.ok(!readinessBlock.includes('providerManagerCacheRuntime'), 'optional PM cache IPC must never block Stable readiness');
+
+assert.ok(!latest.includes('pm_request_logs'), 'Dashboard must not read Provider Manager private storage');
+assert.ok(!bridge.includes('getLocalPluginStorage(provider-manager'), 'Dashboard must not reach into another plugin storage');
+
+for (const marker of [
+  "EXPECTED_VERSION = '1.13.0'",
+  "DASHBOARD_PLUGIN = 'local_usage_dashboard_modular'",
+  'cacheObservability',
+  'async cacheObs(t)',
+  'provider-manager-request-log',
+  'cacheReadInputTokens',
+  'cacheCreationInputTokens',
+  'cacheCreation5mTokens',
+  'cacheCreation1hTokens',
+  '--self-test'
+]) assert.ok(patcher.includes(marker), `missing PM local patcher marker: ${marker}`);
+const projectionStart = patcher.indexOf('def cache_observability_method()');
+const projectionEnd = projectionStart >= 0 ? patcher.indexOf('\n\ndef patch_text', projectionStart) : -1;
+assert.ok(projectionStart >= 0 && projectionEnd > projectionStart, 'PM read-only projection must be discoverable');
+const projection = patcher.slice(projectionStart, projectionEnd);
+assert.ok(!projection.includes('requestBody:String'), 'patcher projection must not export request bodies');
+assert.ok(!projection.includes('responseBody:String'), 'patcher projection must not export response bodies');
+assert.ok(!projection.includes('authorization:'), 'patcher projection must not export authorization headers');
+
+assert.ok(latest.includes('//@version 3.0.0-alpha.5.49'));
+assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
+assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.49';"));
+assert.equal(manifest.productVersion, '3.0.0-alpha.5.49');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
+assert.equal(manifest.components.bridgeManager.version, '1.2.6');
+assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
+
+console.log('usage-dashboard P8 Provider Manager cache IPC: OK · optional read-only enrichment locked');

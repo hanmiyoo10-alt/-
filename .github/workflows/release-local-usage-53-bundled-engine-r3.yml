@@ -1,0 +1,110 @@
+name: Release Local Usage 5.3 Bundled Engine R3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-local-usage-53-bundled-engine-r3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply 5.3 once
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq '//@version 3.0.0-alpha.5.3' plugins/usage-dashboard/src/00-runtime-core.part.js; then
+            echo 'main already has 5.3 product patch; skip mutation'
+          else
+            grep -Fq '//@version 3.0.0-alpha.5.2' plugins/usage-dashboard/src/00-runtime-core.part.js
+            python3 .github/lud53/prepatch53.py
+            python3 .github/lud53/patch53.py
+            python3 .github/lud53/postpatch53.py
+          fi
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+
+      - name: Validate complete 5.3 product
+        shell: bash
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          for test in plugins/usage-dashboard/tests/*.cjs; do
+            echo "=== $test ==="
+            node "$test"
+          done
+          python3 -m json.tool plugins/usage-dashboard/src/manifest.json >/dev/null
+          python3 -m json.tool plugins/usage-dashboard/runtime/product-manifest.json >/dev/null
+          test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
+          grep -Fq '//@version 3.0.0-alpha.5.3' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.3';" plugins/usage-dashboard/latest.js
+          grep -Fq "const MANAGER_VERSION = '1.2.0';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.3';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "url.pathname === '/engine/sync'" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq 'async function syncBundledEngine()' plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq 'rollbackRestored' plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq 'async function syncBridgeEngineBundleIfNeeded(status)' plugins/usage-dashboard/latest.js
+          grep -Fq 'bridgeEngineBundleSyncAttemptedVersion' plugins/usage-dashboard/latest.js
+          grep -Fq '"state": "managed-bundled"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"sourceBundled": true' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"version": "1.2.0"' plugins/usage-dashboard/runtime/product-manifest.json
+          git diff --check
+
+      - name: Commit main if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/lud53/patch53-last.log .github/lud53/validate53-last.log .github/lud53/r2-last.log .github/lud53/r3-last.log
+          git add plugins/usage-dashboard .github/workflows/release-local-usage-dashboard.yml
+          if git diff --cached --quiet; then
+            echo 'main already matches 5.3'
+          else
+            git commit -m 'feat: Local Usage Dashboard 3.0.0-alpha.5.3 bundled engine'
+            git push origin HEAD:main
+          fi
+
+      - name: Publish exact artifacts to release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/lud53-runtime
+          mkdir -p /tmp/lud53-runtime
+          cp plugins/usage-dashboard/latest.js /tmp/lud53-latest.js
+          cp -R plugins/usage-dashboard/runtime/. /tmp/lud53-runtime/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin release-usage-dashboard
+          git switch -C release-usage-dashboard origin/release-usage-dashboard
+          git reset --hard origin/release-usage-dashboard
+          git clean -fd
+          rm -rf plugins/usage-dashboard/runtime
+          mkdir -p plugins/usage-dashboard/runtime
+          cp /tmp/lud53-latest.js plugins/usage-dashboard/latest.js
+          cp -R /tmp/lud53-runtime/. plugins/usage-dashboard/runtime/
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          test "$(sha256sum plugins/usage-dashboard/runtime/bridge-engine.mjs | awk '{print $1}')" = 'fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d'
+          git add plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
+          if git diff --cached --quiet; then
+            echo 'release branch already matches 5.3'
+          else
+            git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.3 bundled engine'
+            git push origin HEAD:release-usage-dashboard
+          fi

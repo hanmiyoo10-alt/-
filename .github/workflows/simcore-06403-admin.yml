@@ -1,0 +1,114 @@
+name: SimCore v0.64.3 admin finalizer
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-main-write
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: github.event.pull_request.title == 'SimCore v0.64.3 admin finalize command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify production identity
+        id: prod
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          RELEASE_COMMIT="$(git rev-parse origin/release-simcore)"
+          LATEST_BLOB="$(git rev-parse origin/release-simcore:plugins/simcore/latest.js)"
+          INSTALL_BLOB="$(git rev-parse origin/release-simcore:plugins/simcore/install.js)"
+          test "$LATEST_BLOB" = "$INSTALL_BLOB"
+          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > /tmp/simcore-install.js
+          node --check /tmp/simcore-latest.js
+          node --check /tmp/simcore-install.js
+          cmp -s /tmp/simcore-latest.js /tmp/simcore-install.js
+          grep -q '^//@version 0.64.3$' /tmp/simcore-latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.3';" /tmp/simcore-latest.js
+          grep -q 'v0.64.3 B_END Diagnostic Builder Binding Repair' /tmp/simcore-latest.js
+          grep -q "const kernel = SimCore.require('kernel');" /tmp/simcore-latest.js
+          grep -q "const time = SimCore.require('time');" /tmp/simcore-latest.js
+          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "release_blob=$LATEST_BLOB" >> "$GITHUB_OUTPUT"
+
+      - name: Synchronize durable memory
+        env:
+          RELEASE_COMMIT: ${{ steps.prod.outputs.release_commit }}
+          RELEASE_BLOB: ${{ steps.prod.outputs.release_blob }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/simcore-06403-admin.py
+          python3 scripts/simcore-06403-admin.py
+          python3 scripts/simcore-architecture-check.py \
+            --contract config/simcore-architecture-v2.json \
+            --source /tmp/simcore-latest.js \
+            --source /tmp/simcore-install.js
+          git diff --check
+
+      - name: Validate administrative state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m = json.loads(Path('product-manifest.json').read_text(encoding='utf-8'))
+          assert m['production_version'] == '0.64.3'
+          assert m['release_name'] == 'B_END Diagnostic Builder Binding Repair'
+          assert m['major_update_checkpoint'] == 'M2-2'
+          assert m['current_priority'] == '06403_B_END_DIAGNOSTIC_BUILDER_LIVE_VALIDATION'
+          assert m['validation_status'] == 'PENDING_REAL_LONG_CHAT'
+          dev = Path('docs/CURRENT_DEVELOPMENT.md').read_text(encoding='utf-8')
+          assert '- Version: `0.64.3`' in dev
+          assert '## v0.64.3 — B_END Diagnostic Builder Binding Repair' in dev
+          assert 'v0.65.0 M2-3' in dev
+          gate = Path('docs/SIMCORE_NEXT_RELEASE_GATE_06403.md').read_text(encoding='utf-8')
+          assert 'STATIC RELEASED' in gate
+          assert 'Live close gate: PENDING' in gate
+          watch = Path('docs/SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md').read_text(encoding='utf-8')
+          assert '## v0.64.3 builder-binding repair' in watch
+          guide = Path('docs/SIMCORE_GUIDELINES.md').read_text(encoding='utf-8')
+          assert 'SimCore v0.64.3 — B_END Diagnostic Builder Binding Repair' in guide
+          print('v0.64.3 admin assertions: PASS')
+          PY
+
+      - name: Remove one-shot release/admin tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f \
+            scripts/simcore-06403-b-end-builder-binding.py \
+            scripts/simcore-06403-admin.py \
+            .github/workflows/simcore-06403-b-end-builder-binding.yml \
+            .github/workflows/simcore-06403-admin.yml
+
+      - name: Commit synchronized memory and cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add product-manifest.json \
+            docs/CURRENT_DEVELOPMENT.md \
+            docs/SIMCORE_GUIDELINES.md \
+            docs/SIMCORE_NEXT_RELEASE_GATE_06403.md \
+            docs/SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md
+          git diff --cached --check
+          git commit -m 'docs: finalize SimCore v0.64.3 B_END Diagnostic Builder Binding Repair'
+          git pull --rebase origin main
+          git push origin HEAD:main

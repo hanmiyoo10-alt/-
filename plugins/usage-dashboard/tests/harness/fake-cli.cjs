@@ -37,6 +37,7 @@ function effectiveArgs(rawArgs) {
 function operationLabel(args) {
   if (args[0] === 'credits') return 'credits';
   if (args[0] === 'orgs') {
+    if (!process.env.DEVPASS_BRIDGE_CAPTURE_FILE) return 'organizations';
     const range = String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || '24h');
     return `devpass-capture-${range}`;
   }
@@ -48,6 +49,15 @@ function operationLabel(args) {
     return `usage-${range}-${by}`;
   }
   return 'unknown';
+}
+
+function priorStarts(label) {
+  try {
+    const text = fs.readFileSync(ledgerFile, 'utf8').trim();
+    if (!text) return 0;
+    return text.split('\n').map((line) => JSON.parse(line))
+      .filter((row) => row.type === 'start' && row.label === label).length;
+  } catch { return 0; }
 }
 
 function waitForGate(label, config) {
@@ -83,12 +93,19 @@ function activityPayload(range) {
   };
 }
 
-function capturePayload(range) {
-  return {
-    orgs:{organizations:[
+function capturePayload(range, config, callIndex) {
+  const activitySequence = config.captureActivityByCall?.[range];
+  const includeActivity = Array.isArray(activitySequence)
+    ? activitySequence[Math.min(callIndex, Math.max(0, activitySequence.length - 1))] !== false
+    : true;
+  const organizations = Array.isArray(config.captureOrganizations)
+    ? config.captureOrganizations
+    : [
       {id:'fixture-credits',name:'Fixture Credits',kind:'default',status:'active',credits:100},
       {id:'fixture-devpass',name:'Fixture DevPass',kind:'devpass',status:'active',devPlan:'pro'},
-    ]},
+    ];
+  return {
+    orgs:{organizations},
     devPlanStatus:{
       plan:'pro',
       projectId:'fixture-project',
@@ -96,7 +113,7 @@ function capturePayload(range) {
       devPlanCreditsUsed:5,
       devPlanCreditsLimit:100,
     },
-    devpassActivity:{range,payload:activityPayload(range)},
+    devpassActivity:includeActivity ? {range,payload:activityPayload(range)} : null,
   };
 }
 
@@ -104,10 +121,11 @@ const rawArgs = process.argv.slice(2);
 const args = effectiveArgs(rawArgs);
 const label = operationLabel(args);
 const config = readConfig();
+const callIndex = priorStarts(label);
 append({type:'start',label,args,rawArgs});
 
 try {
-  const failure = config.failureByLauncher?.[launcher];
+  const failure = config.failureByLabel?.[label] ?? config.failureByLauncher?.[launcher];
   if (failure) {
     append({type:'end',label,outcome:'failure',code:String(failure)});
     process.stderr.write(`fixture ${launcher} failure\n`);
@@ -118,12 +136,17 @@ try {
 
   let payload;
   if (args[0] === 'credits') {
-    payload = {organizations:[{id:'fixture-credits',credits:100}]};
+    payload = {organizations:Array.isArray(config.creditsRows)
+      ? config.creditsRows
+      : [{id:'fixture-credits',credits:100}]};
   } else if (args[0] === 'orgs') {
     const range = String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || '24h');
-    payload = {organizations:capturePayload(range).orgs.organizations};
+    const captured = capturePayload(range, config, callIndex);
+    payload = {organizations:process.env.DEVPASS_BRIDGE_CAPTURE_FILE
+      ? captured.orgs.organizations
+      : (Array.isArray(config.plainOrganizations) ? config.plainOrganizations : captured.orgs.organizations)};
     const captureFile = process.env.DEVPASS_BRIDGE_CAPTURE_FILE;
-    if (captureFile) fs.writeFileSync(captureFile, JSON.stringify(capturePayload(range)));
+    if (captureFile) fs.writeFileSync(captureFile, JSON.stringify(captured));
   } else if (args[0] === 'usage') {
     const rangeAt = args.indexOf('--range');
     payload = activityPayload(rangeAt >= 0 ? String(args[rangeAt + 1]) : '24h');

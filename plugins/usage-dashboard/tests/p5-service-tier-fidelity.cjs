@@ -1,11 +1,11 @@
+'use strict';
+
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
-const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
@@ -26,6 +26,7 @@ for (const marker of [
   'function requestServiceTierSummary(rows)',
   'requestedServiceTier:preferKnownServiceTier',
   'servedServiceTier:preferKnownServiceTier',
+  'function requestLedgerKey(row)',
   'Service tier fidelity:',
   'Service tier source fields:',
   'DevPass account tier:',
@@ -37,34 +38,7 @@ for (const marker of [
 ]) assert.ok(source.includes(marker), `missing plugin service tier marker: ${marker}`);
 
 assert.ok((source.match(/requestServiceTierText\(row\)/g) || []).length >= 2, 'recent and hourly request rows must both show tier');
-const keyStart = source.indexOf('  function requestLedgerKey(row) {');
-const keyEnd = source.indexOf('  function collectRecentRequestLedger(data) {', keyStart);
-assert.ok(keyStart >= 0 && keyEnd > keyStart, 'requestLedgerKey slice missing');
-const keySlice = source.slice(keyStart, keyEnd);
-assert.ok(!keySlice.includes('requestedServiceTier') && !keySlice.includes('servedServiceTier'), 'tier enrichment must not change request dedupe identity');
-
-const helperStart = source.indexOf('  function normalizeServiceTierValue(value) {');
-const helperEnd = source.indexOf('  function requestTimestampPrecision(timestamp, sourceKey, requestNumber) {', helperStart);
-assert.ok(helperStart >= 0 && helperEnd > helperStart, 'service tier helper slice missing');
-const context = {};
-vm.createContext(context);
-vm.runInContext(`${source.slice(helperStart, helperEnd)}\nthis.api={normalizeServiceTierValue,requestServiceTierText,requestServiceTierStats};`, context);
-assert.equal(context.api.normalizeServiceTierValue('flex'), 'flex');
-assert.equal(context.api.normalizeServiceTierValue('default'), 'standard');
-assert.equal(context.api.normalizeServiceTierValue('priority'), 'priority');
-assert.equal(context.api.requestServiceTierText({requestedServiceTier:'flex',servedServiceTier:'flex'}), 'FLEX');
-assert.equal(context.api.requestServiceTierText({requestedServiceTier:'flex',servedServiceTier:'default'}), '요청 FLEX → 실제 STANDARD');
-const stats = context.api.requestServiceTierStats([
-  {requestedServiceTier:'flex',servedServiceTier:'flex',requestedServiceTierSource:'requestedServiceTier',servedServiceTierSource:'usedServiceTier'},
-  {requestedServiceTier:'default',servedServiceTier:'default'},
-  {requestedServiceTier:'priority',servedServiceTier:''},
-]);
-assert.equal(stats.requestedKnown, 3);
-assert.equal(stats.servedKnown, 2);
-assert.equal(stats.flex, 1);
-assert.equal(stats.standard, 1);
-assert.equal(stats.unknown, 1);
-
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-console.log(`usage-dashboard P5 per-request service tier fidelity: OK · ${version} · engine ${requiredEngineVersion}`);
+
+console.log(`usage-dashboard P5 per-request service tier fidelity: OK · static tier/source/UI boundaries retained; normalization, display, stats, and dedupe identity delegated to production process harness · ${version} · engine ${requiredEngineVersion}`);

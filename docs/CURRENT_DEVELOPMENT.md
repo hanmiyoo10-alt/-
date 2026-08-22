@@ -35,9 +35,11 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.64.1` is the current production release. It is a bounded correctness insert on top of the still-active M2-2 Representation Ownership Split checkpoint: Lifecycle now classifies eligible Mode-C year-end summaries as `ANNUAL_ONLY`, `CUMULATIVE_YOY`, or fail-closed `NONE`, and Prompt serializes the resulting temporal authority. Recurrence may still guide structure/style but is explicitly below Summary Scope for factual target-year/baseline authority. Lineage/Recurrence implementations, Representation/Edit/Runtime Mirror, persistent schema, and the rest of the M2 frozen surface are unchanged.
+`v0.64.1` is the current production release and remains an M2-2 correctness insert. The v0.64.0 ownership split has direct live proof for ordinary exact carryover, natural Fresh mismatch fast reconcile, Representation ownership, Deferred Mirror safety, reload continuity, and B lifecycle. Summary Scope and natural B_END confirmations remain useful non-blocking evidence; neither should stall the next mechanical checkpoint.
 
-The v0.64.0 M2-2 natural mismatch pair already proved `REPRESENTATION_FAST_RECONCILED` after the ownership split. The remaining major M2-2 positive control is a genuine visible user edit on the v0.64.x line (`USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`). Summary Scope live validation is now the immediate mini-release gate before returning to that control and M2-3.
+The promoted mini is `v0.64.2 — Diagnostic Copy Resilience`. It must separate report construction from clipboard transport, build the report exactly once, reuse the identical string for the primary and fallback transports, expose four bounded results, and keep only bounded memory-only telemetry. `buildLastTurnDiagnosticReport()` itself remains frozen until a direct `REPORT_BUILD_FAILED` result attributes a builder defect.
+
+After one ordinary production copy returns `COPIED` or `COPIED_FALLBACK`, M2-3 Edit Reconcile extraction may begin. Direct v0.64.x/M2-3-line genuine visible-edit revalidation is deferred from the M2-3 start gate but remains mandatory before M2-3 closes or M2-4 begins. A natural B_END or Summary Scope confirmation should be captured when available without blocking M2.
 
 Historical precursor evidence retained below (not v0.64.0 live validation), observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -1094,18 +1096,28 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Validate v0.63.56 M2-1 — Recovery Boundary Split in natural long chat
+Release v0.64.2 — Diagnostic Copy Resilience.
+Then capture one ordinary production copy result before starting M2-3.
 ```
 
 Current success condition:
 
 ```text
-prior OUTPUT_MISMATCH + current == prior FRESH_CHAT EXACT
-→ REPRESENTATION_FAST_RECONCILED
-→ snapshot UNCHANGED
-→ no 4–6 s MANUAL_EDIT_REBUILT
+report build count 1
+primary/fallback payload EXACT
+COPIED or COPIED_FALLBACK in an ordinary live copy
+→ v0.64.2 live gate PASS
+→ M2-3 Edit Reconcile extraction may begin
 
-genuine user edit
-→ USER_EDIT_CANDIDATE
-→ MANUAL_EDIT_REBUILT preserved
+REPORT_BUILD_FAILED
+→ direct builder attribution
+→ separate narrow builder-repair mini
+
+CLIPBOARD_WRITE_FAILED
+→ builder succeeded
+→ PocketRisu/WebView clipboard transport scope
+
+genuine user edit control
+→ deferred from M2-3 start
+→ required before M2-3 close / M2-4 start
 ```

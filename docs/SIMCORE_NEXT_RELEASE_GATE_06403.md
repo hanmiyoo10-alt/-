@@ -2,7 +2,7 @@
 
 Date: 2026-08-22
 Current production: `v0.64.2 — Diagnostic Copy Resilience`
-Major checkpoint: M2-2 complete; M2-3 detailed design frozen and ready for later implementation.
+Major checkpoint: M2-2 complete; M2-3 detailed design frozen and **implementation already in progress on its own workstream**.
 
 ## Gate fired
 
@@ -22,19 +22,33 @@ time.narrativeTimestampSequence(kernel.textOfMessage(...))
 
 inside the outer runtime scope where neither `time` nor `kernel` is bound.
 
-The v0.64.2 release contract explicitly declared a natural `REPORT_BUILD_FAILED` to be the gate for a separate narrow builder-repair mini before M2-3.
+The defect requires a separate narrow builder repair. It does **not** require reopening M2-3 design and does **not** prohibit M2-3 implementation work from proceeding in parallel. Runtime/release integration must still keep the two changes isolated.
 
-## Immediate release order
+## Workstream state
 
 ```text
-CURRENT: v0.64.2 Diagnostic Copy Resilience
-NEXT:    v0.64.3 B_END Diagnostic Builder Binding Repair
-AFTER:   post-B_END C clock-authority gate review
-THEN:    v0.65.0 M2-3 Edit Reconcile Ownership Extraction
-         OR a narrow clock-authority mini first if the new gate is confirmed/design-frozen
+PRODUCTION: v0.64.2 Diagnostic Copy Resilience
+
+v0.64.3 workstream:
+B_END Diagnostic Builder Binding Repair
+→ STATIC RELEASED
+→ live current-turn B_END copy close gate PENDING
+
+M2-3 workstream:
+v0.65.0 Edit Reconcile Ownership Extraction
+→ detailed design FROZEN
+→ implementation ALREADY IN PROGRESS
+→ must preserve v0.64.x live controls mechanically
+
+POST_BEND_C_CLOCK_DOMAIN_GAP:
+→ separate evidence/watch
+→ not part of v0.64.3
+→ not part of M2-3
+→ does not stop ongoing M2-3 implementation
+→ disposition before any future clock-authority change
 ```
 
-`v0.65.0` detailed design remains valid and should not be reopened because of either diagnostic evidence family. The new post-B_END C clock evidence is explicitly outside M2-3 ownership.
+Do not merge unrelated semantic changes into either workstream merely because the work occurs concurrently.
 
 ## v0.64.3 scope
 
@@ -62,10 +76,10 @@ Store schema/call semantics
 Runtime Mirror / Deferred Mirror
 host/history/cache observers
 network/timer/host API surfaces
-POST_BEND_C_CLOCK_DOMAIN_GAP behavior (evidence only in this mini)
+POST_BEND_C_CLOCK_DOMAIN_GAP behavior
 ```
 
-## Required validation
+## Required v0.64.3 validation
 
 Static:
 
@@ -89,29 +103,50 @@ Broadcast closure / terminal coverage lines are present
 copy result COPIED or COPIED_FALLBACK
 ```
 
-## Newly preserved post-0.64.3 gate
+## M2-3 regression evidence accumulated during the live gate
 
-The first copied C diagnostic after the same natural B_END sequence exposed a separate cross-clock issue:
+The same v0.64.2 long-chat runtime has now supplied both sides of the Edit Reconcile decision boundary.
+
+Representation-drift controls:
+
+```text
+Prior OUTPUT_MISMATCH
+current == prior FRESH_CHAT exact
+→ REPRESENTATION_DRIFT_CORRELATED
+→ REPRESENTATION_FAST_RECONCILED
+→ snapshot UNCHANGED
+```
+
+Observed with tiny and large representation deltas, including `-1592 chars`.
+
+Genuine visible-edit control:
+
+```text
+Prior EXACT
+current matches neither canonical nor Fresh
+→ USER_EDIT_CANDIDATE
+→ MANUAL_EDIT_REBUILT · 11.678 s
+→ snapshot UPDATED
+```
+
+The genuine edit corrected the visible `@2081` timestamp to `2031-03-07 10:45 PM`, and the rebuilt state consumed that timestamp as the current narrative anchor on `@2082`.
+
+These are golden M2-3 differential fixtures. M2-3 may move ownership into `edit-reconcile`, but must not change their predicates or outcomes.
+
+## POST_BEND_C_CLOCK_DOMAIN_GAP
+
+The first C follow-up after the completed B_END originally exposed:
 
 ```text
 completed broadcast terminal: 2031-03-07 09:55 PM
-current C frame/commit:         2031-02-28 10:45 PM
-Stored broadcast: UNLOCKED at 2031-03-07 09:55 PM
-Narrative clock: SAME at old 2031-02-28 anchor
+original C frame/commit:       2031-02-28 10:45 PM
 ```
 
-The C request is a reaction to the completed March 7 broadcast, so the visible response timestamp predates the event it is reacting to. Current source keeps B broadcast airtime and non-B narrative time intentionally separate, but no post-B_END C handoff floor is currently observed.
+The user subsequently hand-corrected the visible C timestamp to `2031-03-07 10:45 PM`. The next request correctly treated this as a genuine user edit, performed `MANUAL_EDIT_REBUILT`, and adopted the corrected narrative anchor.
 
-This is recorded as `POST_BEND_C_CLOCK_DOMAIN_GAP` in `SIMCORE_POST_BEND_C_EVIDENCE_06402.md`.
+This proves the existing genuine-edit rebuild path can absorb a valid corrected timestamp. It does **not** by itself resolve the original automatic post-B_END clock-authority coverage gap.
 
-Do not widen v0.64.3 to repair it. Immediately after v0.64.3 live close, review/freeze the clock-authority contract. If confirmed, insert a separate narrow mini before M2-3; otherwise document dismissal with evidence and proceed to v0.65.0.
-
-Evidence:
-
-- `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md`
-- `SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md`
-- `SIMCORE_POST_BEND_C_EVIDENCE_06402.md`
-
+Keep this issue separate from M2-3 ownership extraction.
 
 ## Release status
 
@@ -121,6 +156,12 @@ Version: 0.64.3
 Release commit: d7fd45cd193ef1ff187c73761ded958d89558ebf
 Release blob: ff481aa904340b844ef29b0d89aa20bd6286286d
 Live close gate: PENDING natural current-turn B_END diagnostic copy
+M2-3 implementation: IN PROGRESS in separate workstream
 ```
 
-After the B_END live close gate, review the separately captured `POST_BEND_C_CLOCK_DOMAIN_GAP`. M2-3 remains blocked until that clock-authority disposition is explicit.
+Evidence:
+
+- `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md`
+- `SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md`
+- `SIMCORE_POST_BEND_C_EVIDENCE_06402.md`
+- `SIMCORE_M2_3_GENUINE_EDIT_LIVE_CONTROL_06402.md`

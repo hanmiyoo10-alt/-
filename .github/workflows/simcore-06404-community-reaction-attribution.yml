@@ -1,0 +1,195 @@
+name: SimCore v0.64.4 COMMUNITY Reaction Validator Attribution Build
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06404-community-reaction-attribution
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.pull_request.title == 'SimCore v0.64.4 COMMUNITY Reaction Validator Attribution build command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.64.4 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06404-community-reaction-attribution
+          fetch-depth: 0
+
+      - name: Load scoped patch and architecture tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06404-community-reaction-attribution.py > /tmp/simcore-06404.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-06404.py /tmp/simcore-architecture-check.py
+
+      - name: Capture frozen pre-patch surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          reaction_start = text.index('function parseReactionNumber(raw) {')
+          reaction_end = text.index('\nmodule.exports = {', reaction_start)
+          counts = {needle: text.count(needle) for needle in (
+              'pluginStorage.', 'setChat(', 'fetch(', 'setInterval(', 'setTimeout(',
+          )}
+          Path('/tmp/simcore-06404-reaction-tail.sha').write_text(
+              hashlib.sha256(text[reaction_start:reaction_end].encode()).hexdigest(), encoding='utf-8')
+          Path('/tmp/simcore-06404-surface-counts.json').write_text(
+              json.dumps(counts, sort_keys=True), encoding='utf-8')
+          old = "if (tags.length !== 1 || !reaction.REACTION_AT_END_RE.test(line)) reactionLineErrors += 1;"
+          if text.count(old) != 1:
+              raise SystemExit('expected legacy Structure reaction predicate missing before patch')
+          print('pre-patch frozen surfaces captured')
+          PY
+
+      - name: Apply v0.64.4 scoped attribution patch
+        run: python3 /tmp/simcore-06404.py
+
+      - name: Validate syntax identity architecture and protected controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.4$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.4';" plugins/simcore/latest.js
+          grep -q 'v0.64.4 COMMUNITY Reaction Validator Attribution' plugins/simcore/latest.js
+          grep -q 'function inspectCommentReactionLine(line)' plugins/simcore/latest.js
+          grep -q 'inspectCommentReactionLine,' plugins/simcore/latest.js
+          grep -q 'reaction.inspectCommentReactionLine(line)' plugins/simcore/latest.js
+          grep -q 'tail-format' plugins/simcore/latest.js
+          grep -q 'tail-visible' plugins/simcore/latest.js
+          grep -q 'tail-chars' plugins/simcore/latest.js
+          grep -q 'REPRESENTATION_FAST_RECONCILED' plugins/simcore/latest.js
+          grep -q 'USER_EDIT_CANDIDATE' plugins/simcore/latest.js
+          grep -q 'MANUAL_EDIT_REBUILT' plugins/simcore/latest.js
+          grep -q 'Broadcast closure:' plugins/simcore/latest.js
+          grep -q 'Narrative tail coverage:' plugins/simcore/latest.js
+          python3 /tmp/simcore-architecture-check.py \
+            --contract /tmp/simcore-architecture-v2.json \
+            --source plugins/simcore/latest.js \
+            --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Confirm normalization body and side-effect surfaces are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          reaction_start = text.index('function parseReactionNumber(raw) {')
+          reaction_end = text.index('\nmodule.exports = {', reaction_start)
+          before_hash = Path('/tmp/simcore-06404-reaction-tail.sha').read_text(encoding='utf-8')
+          after_hash = hashlib.sha256(text[reaction_start:reaction_end].encode()).hexdigest()
+          if before_hash != after_hash:
+              raise SystemExit('Reaction parser/normalization function bodies changed')
+          before_counts = json.loads(Path('/tmp/simcore-06404-surface-counts.json').read_text(encoding='utf-8'))
+          after_counts = {needle: text.count(needle) for needle in before_counts}
+          if before_counts != after_counts:
+              raise SystemExit(f'protected side-effect surface changed: {before_counts} -> {after_counts}')
+          print('Reaction normalization byte identity and side-effect counts: PASS')
+          PY
+
+      - name: Run reaction validator equivalence and attribution fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const start = text.indexOf('const REACTION_RE =');
+          const end = text.indexOf('\nfunction parseReactionNumber(raw) {', start);
+          if (start < 0 || end <= start) throw new Error('Reaction helper extraction failed');
+          const helper = new Function(`${text.slice(start, end)}\nreturn { REACTION_RE, REACTION_AT_END_RE, inspectCommentReactionLine };`)();
+          const { REACTION_RE, REACTION_AT_END_RE, inspectCommentReactionLine } = helper;
+          const oldOk = (line) => {
+            const tags = String(line || '').match(new RegExp(REACTION_RE.source, 'gi')) || [];
+            return tags.length === 1 && REACTION_AT_END_RE.test(String(line || ''));
+          };
+          const cases = [
+            ['gonggam', '- 댓글 [공감 12,345]', true, 'NONE', 'NONE'],
+            ['rt', '- comment [RT 55,523,920]', true, 'NONE', 'NONE'],
+            ['like', '- 댓글 [좋아요 9.5만]', true, 'NONE', 'NONE'],
+            ['recommend', '- 댓글 [추천 15,970,900]', true, 'NONE', 'NONE'],
+            ['poten', '- 댓글 [포텐 65,320,900]', true, 'NONE', 'NONE'],
+            ['upvote', '- comment [Upvote 1.2M]', true, 'NONE', 'NONE'],
+            ['spaces', '- 댓글 [공감 123]   ', true, 'NONE', 'WHITESPACE'],
+            ['missing', '- 댓글만 있음', false, 'MISSING', 'NO_TAG'],
+            ['multiple', '- 댓글 [공감 1] [추천 2]', false, 'MULTIPLE', 'NONE'],
+            ['visible-tail', '- 댓글 [공감 1] suffix', false, 'FINAL_TAIL', 'VISIBLE_OR_UNKNOWN'],
+            ['format-tail', '- 댓글 [공감 1]\u200B', false, 'FINAL_TAIL', 'FORMAT_ONLY'],
+            ['markdown-tail', '- 댓글 [공감 1]**', false, 'FINAL_TAIL', 'VISIBLE_OR_UNKNOWN'],
+          ];
+          for (const [name, line, expectedOk, expectedReason, expectedTail] of cases) {
+            const old = oldOk(line);
+            const got = inspectCommentReactionLine(line);
+            if (old !== expectedOk || got.ok !== expectedOk || got.ok !== old) {
+              throw new Error(`${name}: old/new acceptance mismatch old=${old} new=${got.ok}`);
+            }
+            if (got.failureReason !== expectedReason) throw new Error(`${name}: reason ${got.failureReason}`);
+            if (got.tailKind !== expectedTail) throw new Error(`${name}: tail ${got.tailKind}`);
+          }
+          const retainedVisibleEnds = [
+            '- fixture [공감 65,105,200]',
+            '- fixture [RT 55,523,920]',
+            '- fixture [포텐 65,320,900]',
+            '- fixture [좋아요 12,301,900]',
+            '- fixture [추천 15,970,900]',
+          ];
+          for (const line of retainedVisibleEnds) {
+            if (!oldOk(line) || !inspectCommentReactionLine(line).ok) {
+              throw new Error(`retained visible v0.64.3 suffix unexpectedly reproduces failure: ${line}`);
+            }
+          }
+          const z = inspectCommentReactionLine('- fixture [공감 1]\u200B');
+          if (z.trailingChars !== 1 || z.tailKind !== 'FORMAT_ONLY') throw new Error('zero-width attribution fixture failed');
+          console.log('Reaction validator equivalence + attribution fixtures: PASS');
+          console.log('Retained visible live suffixes: NON-REPRODUCER confirmed; repair tolerance remains blocked');
+          NODE
+
+      - name: Validate Structure remains judge-only and warning count shape stays singular
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const oldInline = "tags.length !== 1 || !reaction.REACTION_AT_END_RE.test(line)";
+          if (text.includes(oldInline)) throw new Error('legacy inline predicate still present');
+          if ((text.match(/reaction\.inspectCommentReactionLine\(line\)/g) || []).length !== 1) throw new Error('unexpected Structure helper consumer count');
+          const marker = '댓글 반응 태그 ${reactionLineErrors}줄 오류';
+          if ((text.match(new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 1) throw new Error('reaction warning template count changed');
+          const idx = text.indexOf(marker);
+          const sample = text.slice(idx, idx + 500);
+          for (const required of ['missing ${reactionFailureCounts.missing}', 'multiple ${reactionFailureCounts.multiple}', 'final-tail ${reactionFailureCounts.finalTail}', 'tail-format ${reactionFailureCounts.tailFormatOnly}', 'tail-visible ${reactionFailureCounts.tailVisibleOrUnknown}', 'tail-chars ${reactionFailureCounts.trailingChars}']) {
+            if (!sample.includes(required)) throw new Error(`missing bounded attribution ${required}`);
+          }
+          console.log('Structure judge-only attribution wiring: PASS');
+          NODE
+
+      - name: Commit validated implementation to work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --check
+          git commit -m 'SimCore v0.64.4 COMMUNITY Reaction Validator Attribution'
+          git push origin HEAD:simcore-06404-community-reaction-attribution

@@ -207,6 +207,14 @@ Maintenance PR 2 — Current Release Contract Fixture:
 - historical downgrade and divergence fixture versions remain immutable,
 - the remaining adapter is explicitly limited to behavior/source-shape compatibility shims.
 
+Maintenance follow-up — Legacy Release Caller Retirement:
+
+- completed stage publishers are registered in one archive manifest,
+- archived callers are manual, read-only no-ops with no materializer or publisher access,
+- only the current 5.66 caller responds to Usage Dashboard pull requests,
+- legacy validation remains available in git history without creating false-negative PR checks,
+- Product / Engine / Manager / contracts and the release channel remain unchanged.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)

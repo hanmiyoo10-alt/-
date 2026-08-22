@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "currentCaller": ".github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml",
+  "policy": "Completed release publishers are manual no-op archives and cannot write main or release-usage-dashboard.",
+  "archived": [
+    ".github/workflows/stage-usage-dashboard-536-multi-org.yml",
+    ".github/workflows/stage-usage-dashboard-537-engine-reconcile.yml",
+    ".github/workflows/stage-usage-dashboard-538-connection-lifecycle.yml",
+    ".github/workflows/stage-usage-dashboard-539-lifecycle-race.yml",
+    ".github/workflows/stage-usage-dashboard-540-bridge-control-sync.yml",
+    ".github/workflows/stage-usage-dashboard-541-service-tier-fidelity.yml",
+    ".github/workflows/stage-usage-dashboard-551-cache-fidelity.yml",
+    ".github/workflows/stage-usage-dashboard-552-cache-write-provenance.yml",
+    ".github/workflows/stage-usage-dashboard-553-cache-provenance-diagnostics.yml",
+    ".github/workflows/stage-usage-dashboard-554-runtime-recovery-fidelity.yml",
+    ".github/workflows/stage-usage-dashboard-555-snapshot-performance-attribution.yml",
+    ".github/workflows/stage-usage-dashboard-556-bounded-cli-parallelism.yml",
+    ".github/workflows/stage-usage-dashboard-557-organization-discovery-dedup.yml",
+    ".github/workflows/stage-usage-dashboard-558-shared-24h-capture.yml",
+    ".github/workflows/stage-usage-dashboard-559-scheduling-attribution.yml",
+    ".github/workflows/stage-usage-dashboard-560-monotonic-release-guard.yml",
+    ".github/workflows/stage-usage-dashboard-561-credits-usage-early-start.yml",
+    ".github/workflows/stage-usage-dashboard-562-snapshot-decision-attribution.yml",
+    ".github/workflows/stage-usage-dashboard-563-long-window-critical-path-decoupling.yml",
+    ".github/workflows/stage-usage-dashboard-564-foreground-cli-launcher-attribution.yml"
+  ]
+}
+

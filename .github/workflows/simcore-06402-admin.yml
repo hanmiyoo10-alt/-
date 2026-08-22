@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: simcore-06402-admin-finalizer
+  group: repo-main-write
   cancel-in-progress: false
 
 jobs:

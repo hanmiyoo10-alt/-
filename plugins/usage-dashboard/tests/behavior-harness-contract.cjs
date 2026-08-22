@@ -11,13 +11,18 @@ const behaviorTests = [
   'behavior-snapshot-scheduler.cjs',
   'behavior-snapshot-attribution.cjs',
   'behavior-organization-capture.cjs',
+  'behavior-cache-observer.cjs',
 ];
 const harnessFiles = [
   'harness/bridge-process.cjs',
   'harness/controlled-clock.mjs',
   'harness/fake-cli.cjs',
+  'harness/capture-tap-client.cjs',
+  'harness/capture-tap-process.cjs',
 ];
 const migratedIncidentTests = [
+  'p10-independent-cache-observer.cjs',
+  'p11-cache-fidelity.cjs',
   'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
   'p18-organization-discovery-dedup.cjs',
@@ -47,6 +52,8 @@ for (const name of migratedIncidentTests) {
 
 const bridgeHarness = fs.readFileSync('plugins/usage-dashboard/tests/harness/bridge-process.cjs', 'utf8');
 const fakeCli = fs.readFileSync('plugins/usage-dashboard/tests/harness/fake-cli.cjs', 'utf8');
+const captureTapClient = fs.readFileSync('plugins/usage-dashboard/tests/harness/capture-tap-client.cjs', 'utf8');
+const captureTapHarness = fs.readFileSync('plugins/usage-dashboard/tests/harness/capture-tap-process.cjs', 'utf8');
 assert.ok(bridgeHarness.includes("http://127.0.0.1:"));
 assert.ok(bridgeHarness.includes('PATH:bin'));
 assert.ok(bridgeHarness.includes("child.kill('SIGTERM')"));
@@ -58,6 +65,12 @@ assert.ok(!fakeCli.includes('fetch('));
 assert.ok(fakeCli.includes('failureByLabel'));
 assert.ok(fakeCli.includes('captureActivityByCall'));
 assert.ok(fakeCli.includes("return 'organizations'"));
+assert.match(captureTapClient, /\^http:\\\/\\\/127\\\.0\\\.0\\\.1:/);
+assert.ok(captureTapHarness.includes("server.listen(0, '127.0.0.1'"));
+assert.ok(!captureTapHarness.includes("server.listen(0, '0.0.0.0'"));
+assert.ok(captureTapHarness.includes("child.kill('SIGKILL')"));
+assert.ok(captureTapHarness.includes('.slice(-20_000)'));
+assert.ok(captureTapHarness.includes('capture tap must stay inside the isolated fixture root'));
 
 const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 assert.equal(fs.existsSync('plugins/usage-dashboard/tools/prepare_release_regressions.py'), false);

@@ -68,12 +68,27 @@
     if (!operations.length) return '—';
     return operations.map((item) => {
       const label = String(item?.label || 'cli');
+      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
       const start = Number.isFinite(Number(item?.startOffsetMs)) ? Math.round(Number(item.startOffsetMs)) : 0;
       const end = Number.isFinite(Number(item?.endOffsetMs)) ? Math.round(Number(item.endOffsetMs)) : start;
       const queue = Number.isFinite(Number(item?.queueWaitMs)) ? Math.round(Number(item.queueWaitMs)) : 0;
       const exec = Number.isFinite(Number(item?.executionMs)) ? Math.round(Number(item.executionMs)) : 0;
-      return `${label} ${start}→${end}ms · q${queue} · exec${exec}`;
+      return `${label} [${launcher}] ${start}→${end}ms · q${queue} · exec${exec}`;
     }).join(' · ');
+  }
+
+  function bridgeCliLauncherText(performance) {
+    const operations = Array.isArray(performance?.cliOperations) ? performance.cliOperations.slice(0, 8) : [];
+    if (!operations.length) return '—';
+    const counts = { direct:0, npxFallback:0, unknown:0, directEnoent:0 };
+    for (const item of operations) {
+      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+      if (launcher === 'direct') counts.direct += 1;
+      else if (launcher === 'npx-fallback') counts.npxFallback += 1;
+      else counts.unknown += 1;
+      if (launcher === 'npx-fallback' && String(item?.fallbackReason) === 'direct-enoent') counts.directEnoent += 1;
+    }
+    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · direct ENOENT ${counts.directEnoent}`;
   }
 
   function bridgeCreditsEarlyStartText(performance) {
@@ -220,6 +235,7 @@
       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot cache: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.cache, [['hits','hit'],['misses','miss'],['joins','join'],['loads','load'],['errors','errors'],['staleFallbacks','stale fallback']])}`,

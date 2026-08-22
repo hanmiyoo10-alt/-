@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.63`
-- Bridge Engine: `1.6.16`
+- Product: `3.0.0-alpha.5.64`
+- Bridge Engine: `1.6.17`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,37 +24,41 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`.
+Last verified real-device baseline: `3.0.0-alpha.5.63 — Long-window Critical Path Decoupling`.
 
-Verified 5.62 scheduling evidence:
+Verified 5.63 foreground evidence:
 
-- A full snapshot sample took about 30.259s while the foreground 24h usage path completed at about 22.241s and cold 7d/30d source work occupied the remaining critical path.
-- The evidence supports long-window contention attribution; it does not prove a fixed future latency or justify changing the 24h truth path.
-- Existing source fidelity remains mandatory: UNKNOWN stays distinct from known zero, and deferred values must be explicitly marked stale.
-- The shared `repo-main-write` lock and monotonic candidate/main/release guard remain mandatory.
+- A full foreground sample ended at about 16.738s. Credits ran from 0→8.124s, 24h account capture from about 0.071→9.602s, and 24h usage from about 8.125→16.724s.
+- Credits-to-usage handoff was about 1ms and post-CLI snapshot work was about 14ms, so the remaining 8–9.5s intervals are already inside existing CLI execution timing rather than obvious local scheduling or parsing delay.
+- The launcher used by each `execFileAsync()` operation remained UNKNOWN because 5.63 did not distinguish direct `llmgateway` from the existing `npx` fallback.
+- This evidence does not attribute any fixed portion of source latency to `npx`; it only justifies measuring the launcher branch.
 
-Current release implementation: `3.0.0-alpha.5.63 — Long-window Critical Path Decoupling`.
+Current release implementation: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`.
 
-5.63 release contract:
+5.64 release contract:
 
-- Product becomes `3.0.0-alpha.5.63`; Bridge Engine becomes `1.6.16`; Bridge Manager remains `1.2.6`; snapshot/recent-request contracts remain `1/1`.
-- Keep 24h usage and DevPass Activity on the foreground truth path. No 24h leaf may opt into normal-expiry deferral.
-- Only full-snapshot Analytics 7d/30d source leaves may return an expired last-good value immediately, and only inside the existing 30-minute stale ceiling.
-- Cold cache, missing last-good, too-old last-good, queue saturation, and standalone analytics endpoints retain the existing blocking behavior.
-- Runway may defer only an existing expired last-good runway object. Cold runway calculation remains blocking and never derives a new runway value from deferred 7d input.
-- Secondary refresh is bounded to one active job and 32 unique raw cache keys, preserves same-key/inFlight deduplication, and starts no new job while any foreground snapshot is active.
-- A running secondary job is not cancelled when a foreground snapshot begins; later secondary jobs remain held.
-- Deferred stale provenance must survive leaf merge, analytics windows/scopes, and module status.
-- Diagnostics expose only sanitized family/scope/range and bounded queue counters. Raw keys, organization IDs, tokens, payloads, headers, CLI args, paths, and arbitrary errors remain excluded.
-- No new `runCli()` call site, network endpoint, CLI concurrency, timeout, TTL, stale ceiling, circuit semantics, capture reuse, Request Ledger, updater, or release-guard change is allowed.
+- Product becomes `3.0.0-alpha.5.64`; Bridge Engine becomes `1.6.17`; Bridge Manager remains `1.2.6`; snapshot/recent-request contracts remain `1/1`.
+- Preserve the existing direct `llmgateway` attempt and fall back to `npx --yes @llmgateway/cli@1.9.0` only when the direct attempt fails with `ENOENT`.
+- Launcher attribution is measurement-only. It must not select, retry, reorder, cancel, or otherwise influence an execution path.
+- Launcher vocabulary is bounded to `direct`, `npx-fallback`, and `unknown`; fallback reason is bounded to `direct-enoent` and `none`.
+- CLI operation attribution remains capped at eight records and exposes no executable path, PATH, HOME, environment, CLI arguments, token, organization ID, payload, header, or arbitrary error.
+- Keep all five existing `runCli()` call sites and the single existing `execFileAsync()` source operation. Add no subprocess, network request, endpoint, or source operation.
+- No new `runCli()` call site, network endpoint, or CLI source operation is allowed.
+- Keep 24h usage and DevPass Activity on the foreground truth path.
+- Preserve the hard CLI concurrency cap and keep already-working behavior unchanged unless the release goal requires touching it.
+- Diagnostics expose only sanitized family/scope/range for cache decisions and bounded launcher vocabulary for CLI operations.
+- Keep UNKNOWN distinct from known zero.
+- Preserve CLI concurrency 2, the `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` rollback, 25-second timeout, 4MB buffer, Credits early-start, shared capture, all TTLs, 24h foreground truth, circuit/recovery, organization fallback, Request Ledger, Cache fidelity, updater, and the rule that UNKNOWN stays distinct from known zero.
+- Preserve every 5.63 long-window rule: secondary concurrency 1, 32-key bound, same-key/inFlight deduplication, foreground hold, 30-minute stale ceiling, leaf-only 7d/30d deferral, cold-cache blocking, standalone endpoint blocking, and stale provenance.
+- Keep the shared `repo-main-write` lock and monotonic candidate/main/release publisher guard.
 
-5.63 device success evidence to collect:
+5.64 device success evidence to collect:
 
-- Stable Readiness remains READY with Engine `1.6.16`, Manager `1.2.6`, and no active local runtime error.
-- Expired last-good 7d/30d decisions appear as `deferred(deferred-refresh)` and the related long-window CLI starts after foreground snapshot completion.
-- 24h CLI remains before response completion and never appears as deferred.
-- Stale 7d/30d values are visibly marked stale until a secondary refresh advances the cache timestamp; a later snapshot then observes the refreshed value.
-- Queue diagnostics keep limit 1, remain bounded, and expose no raw identifier.
+- Stable Readiness remains READY with Engine `1.6.17`, Manager `1.2.6`, and no active local runtime error.
+- Each bounded CLI timeline item displays exactly one launcher label: `direct`, `npx-fallback`, or `unknown`.
+- `Bridge CLI launcher` totals match the displayed bounded operation set and expose only the bounded vocabulary.
+- Snapshot duration remains in the normal 5.63 distribution; 5.64 makes no performance-improvement claim.
+- If `npx-fallback` is observed, launcher use is VERIFIED but its share of the 8–9s latency remains UNKNOWN. If `direct` is observed, the npx-launcher hypothesis is rejected for that sample.
 
 ## Long-term update roadmap
 

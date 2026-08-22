@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **M5-B IMPLEMENTED CANDIDATE — organization empty-fallback migration**
+Status: **M5-C IMPLEMENTED CANDIDATE — state/contract process harness**
 
 Recorded after:
 
@@ -15,6 +15,8 @@ This document tracks the approved maintenance direction. Maintenance PR 4 retire
 M5-A begins the remaining source-extraction retirement by exercising the exact Engine-generated capture tap through an isolated loopback process. It removes VM/function-body extraction from P10/P11 without adding test-only runtime exports or changing production artifacts.
 
 M5-B extends the existing real-Engine organization harness with capture-empty/fallback-empty and capture-empty/fallback-valid scenarios. It removes VM/function-body extraction from P19 while preserving the hard empty-result error and fallback provenance.
+
+M5-C executes the shipped `latest.js` unchanged inside a bounded headless Risuai/storage/nativeFetch process. It migrates `foundation`, P1 contract, P5 state compatibility, and P6 RC migration from VM/source extraction while preserving state hydration, contract normalization, privacy, and explicit-zero semantics. Remaining production VM tests drop from seven to three.
 
 ## Why this backlog exists
 
@@ -207,7 +209,7 @@ Still pending:
 
 - modularize Engine development sources in a later versioned runtime release,
 - split basic and detailed Diagnostics presentation,
-- migrate the remaining organization, state, contract, recovery, service-tier, and outcome VM fixtures in bounded M5 follow-ups.
+- migrate the remaining recovery, service-tier, and outcome VM fixtures in bounded M5 follow-ups.
 
 Maintenance PR 2 — Current Release Contract Fixture:
 
@@ -261,6 +263,16 @@ M5-B — Organization Empty-Fallback Migration:
 - removes VM/loadOrgs-body extraction from P19 while retaining narrow static ordering guards,
 - leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
 
+M5-C — State/Contract Process Harness:
+
+- executes the exact shipped `plugins/usage-dashboard/latest.js` in a bounded child process without adding production exports,
+- stubs only the Risuai storage, permission, and loopback fetch boundaries required for headless bootstrap,
+- verifies alpha.5.43, alpha.5.44 RC, and `state-v3` hydration/persistence through the real bootstrap path,
+- verifies P1 bridge modules/errors/cache semantics and foundation request/privacy/cache-zero normalization through the real initial refresh path,
+- keeps bridge credentials out of harness results and fails closed on unexpected fetch targets,
+- removes VM/source slicing from `foundation`, P1, P5 state compatibility, and P6 RC migration, reducing remaining production VM tests from `7` to `3`,
+- leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)
@@ -311,6 +323,6 @@ M5-B — Organization Empty-Fallback Migration:
 
 ## Next gate
 
-Merge M5-B only after the organization/capture behavior test is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, and all runtime/manifest hashes remain unchanged.
+Merge M5-C only after the state/contract process behavior is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, remaining production VM tests are `3`, and all runtime/manifest hashes remain unchanged.
 
-Continue with M5-C state/contract process harness after M5-B. Do not combine the remaining fixture migrations with Engine modularization, Diagnostics changes, or a product release.
+Continue with M5-D recovery process harness after M5-C. Do not combine the remaining fixture migrations with Engine modularization, Diagnostics changes, or a product release.

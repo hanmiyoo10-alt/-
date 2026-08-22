@@ -68,7 +68,7 @@
     if (!operations.length) return '—';
     return operations.map((item) => {
       const label = String(item?.label || 'cli');
-      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+      const launcher = ['managed-direct','direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
       const start = Number.isFinite(Number(item?.startOffsetMs)) ? Math.round(Number(item.startOffsetMs)) : 0;
       const end = Number.isFinite(Number(item?.endOffsetMs)) ? Math.round(Number(item.endOffsetMs)) : start;
       const queue = Number.isFinite(Number(item?.queueWaitMs)) ? Math.round(Number(item.queueWaitMs)) : 0;
@@ -80,11 +80,12 @@
   function bridgeCliLauncherText(performance) {
     const operations = Array.isArray(performance?.cliOperations) ? performance.cliOperations.slice(0, 8) : [];
     if (!operations.length) return '—';
-    const counts = { direct:0, npxFallback:0, unknown:0, directEnoent:0 };
+    const counts = { managedDirect:0, direct:0, npxFallback:0, unknown:0, directEnoent:0 };
     const npxPolicies = new Set();
     for (const item of operations) {
-      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
-      if (launcher === 'direct') counts.direct += 1;
+      const launcher = ['managed-direct','direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+      if (launcher === 'managed-direct') counts.managedDirect += 1;
+      else if (launcher === 'direct') counts.direct += 1;
       else if (launcher === 'npx-fallback') counts.npxFallback += 1;
       else counts.unknown += 1;
       if (launcher === 'npx-fallback' && String(item?.fallbackReason) === 'direct-enoent') counts.directEnoent += 1;
@@ -94,7 +95,16 @@
       }
     }
     const npxPolicy = npxPolicies.size === 1 ? [...npxPolicies][0] : 'not-applicable';
-    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
+    return `managed-direct ${counts.managedDirect} · direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
+  }
+
+  function bridgeCliRuntimeText(diagnostics) {
+    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
+    const manager = state.bridgeManagerRuntime || null;
+    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(String(runtime?.state || manager?.cliRuntimeState)) ? String(runtime?.state || manager?.cliRuntimeState) : 'unavailable';
+    const version = String(runtime?.version || manager?.cliRuntimeVersion || '');
+    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(runtime?.provisioning || manager?.cliRuntimeProvisioning)) ? String(runtime?.provisioning || manager?.cliRuntimeProvisioning) : 'unavailable';
+    return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
   }
 
   function bridgeCreditsEarlyStartText(performance) {
@@ -166,7 +176,7 @@
     if (bridgeDiag?.compatible !== true) blockers.push(`bridge compatibility ${bridgeDiag?.compatible === false ? 'no' : 'unknown'}`);
     if (String(bridgeDiag?.version || '') !== REQUIRED_BRIDGE_VERSION) blockers.push(`engine ${bridgeDiag?.version || '—'}`);
     if (!runtimeBridge?.managerInstalled) blockers.push('manager absent');
-    if (String(runtimeBridge?.managerVersion || '') !== '1.2.6') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
+    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
     const managerProduct = String(state.bridgeManagerRuntime?.productVersion || '');
     const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
     if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);
@@ -229,7 +239,7 @@
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
       `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'} · local recoveries ${Number(localRuntimeErrors.recoveredCount || 0)}`,
-      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.2.6 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
+      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.3.0 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
       `Health: ${h.status || '—'}`,
       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
@@ -241,6 +251,7 @@
       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge CLI runtime: ${bridgeCliRuntimeText(state.data?.bridge?.diagnostics)}`,
       `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,

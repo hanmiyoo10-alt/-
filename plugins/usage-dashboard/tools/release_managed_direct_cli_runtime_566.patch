@@ -1,0 +1,731 @@
+diff --git a/docs/USAGE_DASHBOARD_GUIDELINES.md b/docs/USAGE_DASHBOARD_GUIDELINES.md
+index 35b9ca1..445d9ae 100644
+--- a/docs/USAGE_DASHBOARD_GUIDELINES.md
++++ b/docs/USAGE_DASHBOARD_GUIDELINES.md
+@@ -13,9 +13,9 @@ Never infer the current production version from conversation memory. Read the ac
+ ## Current production snapshot
+ 
+ <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
+-- Product: `3.0.0-alpha.5.65`
+-- Bridge Engine: `1.6.18`
+-- Bridge Manager: `1.2.6`
++- Product: `3.0.0-alpha.5.66`
++- Bridge Engine: `1.6.19`
++- Bridge Manager: `1.3.0`
+ - Release branch: `release-usage-dashboard`
+ - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
+ <!-- USAGE_DASHBOARD_RELEASE_STATE_END -->
+@@ -32,19 +32,17 @@ Verified 5.64 foreground evidence:
+ - All three foreground source operations followed direct `llmgateway` ENOENT into the existing `npx` fallback, so routine npx-launcher use on the device is VERIFIED.
+ - The portion of each 7–8.6s interval attributable to npm metadata freshness checks remains UNKNOWN. Launcher attribution alone does not prove that npx is the dominant latency source.
+ 
+-Current release implementation: `3.0.0-alpha.5.65 — Npx Cache-First Launcher`.
++Current release implementation: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`.
+ 
+-5.65 release contract:
++5.66 release contract:
+ 
+-- Product becomes `3.0.0-alpha.5.65`; Bridge Engine becomes `1.6.18`; Bridge Manager remains `1.2.6`; snapshot/recent-request contracts remain `1/1`.
+-- Preserve the existing direct `llmgateway` attempt and fall back only when the direct attempt fails with `ENOENT`.
+-- The default fallback is exactly `npx --yes --prefer-offline @llmgateway/cli@1.9.0 <original args>`. The CLI package remains pinned to `1.9.0`.
+-- `DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` restores the exact 5.64 fallback, `npx --yes @llmgateway/cli@1.9.0 <original args>`.
+-- `prefer-offline` changes only npm package-acquisition freshness policy: cached data skips staleness checks, while missing data may still be fetched. It does not change Credits, Usage, DevPass, or dashboard cache semantics.
+-- Launcher vocabulary remains bounded to `direct`, `npx-fallback`, and `unknown`; fallback reason remains bounded to `direct-enoent` and `none`; npx policy is bounded to `prefer-offline`, `default`, and `not-applicable`.
+-- CLI operation attribution remains capped at eight records and exposes no executable path, PATH, HOME, npm cache path, package directory, environment, CLI arguments, token, organization ID, payload, header, or arbitrary error.
+-- Keep all five existing `runCli()` call sites, both existing `runProgram()` call sites, and the single existing `execFileAsync()` source operation. Add no subprocess, `npm install`, `npm cache` command, version probe, network request, endpoint, or source operation.
+-- No new `runCli()` call site, network endpoint, or CLI source operation is allowed.
++- Product becomes `3.0.0-alpha.5.66`; Bridge Engine becomes `1.6.19`; Bridge Manager becomes `1.3.0`; snapshot/recent-request contracts remain `1/1`.
++- Manager owns the exact `@llmgateway/cli@1.9.0` lifecycle outside snapshot and status/probe paths: startup-only scheduling, staging install, exact package/name/bin validation, realpath containment, and atomic promotion.
++- Provisioning failure is non-fatal. It persists a minimum 30-minute retry backoff and keeps the existing system-direct then `npx --yes --prefer-offline @llmgateway/cli@1.9.0` fallback available.
++- Engine launcher order is `managed-direct` → system `direct` → `npx-fallback`. Missing or invalid managed metadata permits fallback; once the managed command starts, its success or failure is authoritative and must never be replayed through another launcher.
++- `DEVPASS_BRIDGE_MANAGED_CLI=0` ignores the managed runtime and restores the 5.65 launcher sequence. `DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` continues to control only the final npx fallback policy.
++- Runtime and launcher diagnostics use bounded vocabulary and expose no executable path, install path, PATH, HOME, npm cache path, environment, CLI arguments, token, organization ID, payload, header, or raw provisioning error.
++- Keep all five existing `runCli()` source call sites and the single existing `execFileAsync()` source operation. Provisioning adds no snapshot source operation or endpoint.
+ - Keep 24h usage and DevPass Activity on the foreground truth path.
+ - Preserve the hard CLI concurrency cap and keep already-working behavior unchanged unless the release goal requires touching it.
+ - Diagnostics expose only sanitized family/scope/range for cache decisions and bounded launcher vocabulary for CLI operations.
+@@ -53,13 +51,12 @@ Current release implementation: `3.0.0-alpha.5.65 — Npx Cache-First Launcher`.
+ - Preserve every 5.63 long-window rule: secondary concurrency 1, 32-key bound, same-key/inFlight deduplication, foreground hold, 30-minute stale ceiling, leaf-only 7d/30d deferral, cold-cache blocking, standalone endpoint blocking, and stale provenance.
+ - Keep the shared `repo-main-write` lock and monotonic candidate/main/release publisher guard.
+ 
+-5.65 device success evidence to collect:
++5.66 device success evidence to collect:
+ 
+-- Stable Readiness remains READY with Engine `1.6.18`, Manager `1.2.6`, and no active local runtime error.
+-- Foreground operations show `npx-fallback`, the launcher summary shows `policy prefer-offline`, and the sample has zero new launcher errors.
+-- Compare several similar cold-ish timer snapshots against the 5.64 baseline. One faster sample is insufficient to claim causality.
+-- If source and snapshot timings repeatedly fall, npm freshness checking was likely material. If they remain near 5.64, conclude that metadata freshness was not the primary bottleneck and keep its exact latency share UNKNOWN.
+-- 5.65 makes no guaranteed performance claim; it is a bounded cache-policy experiment with an immediate rollback.
++- Stable Readiness remains READY with Engine `1.6.19`, Manager `1.3.0`, managed CLI runtime `ready`, CLI `v1.9.0`, and no active local runtime error.
++- Comparable foreground operations show `managed-direct`, with `npx-fallback 0` after provisioning succeeds.
++- Compare several similar cold-ish timer snapshots against the 5.64/5.65 baselines. One faster sample is insufficient to claim causality.
++- If managed-direct remains near the prior 7–13s source timings, conclude that npx is not the primary bottleneck and move attribution upstream without further launcher speculation.
+ 
+ ## Long-term update roadmap
+ 
+diff --git a/plugins/usage-dashboard/latest.js b/plugins/usage-dashboard/latest.js
+index 09340e5..6883ca7 100644
+--- a/plugins/usage-dashboard/latest.js
++++ b/plugins/usage-dashboard/latest.js
+@@ -1,13 +1,13 @@
+ //@name local_usage_dashboard_modular
+ //@display-name Local Usage Dashboard
+-//@version 3.0.0-alpha.5.65
++//@version 3.0.0-alpha.5.66
+ //@api 3.0
+ //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
+ 
+ (async () => {
+   'use strict';
+ 
+-  const VERSION = '3.0.0-alpha.5.65';
++  const VERSION = '3.0.0-alpha.5.66';
+   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
+   const STATE_KEY = 'local-usage-dashboard-v3';
+   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
+@@ -26,7 +26,7 @@
+   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
+   const RESUME_MAIN_THREAD_PROBE_MS = 80;
+   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
+-  const REQUIRED_BRIDGE_VERSION = '1.6.18';
++  const REQUIRED_BRIDGE_VERSION = '1.6.19';
+   const SNAPSHOT_SCHEMA_VERSION = 1;
+   const RECENT_REQUEST_SCHEMA_VERSION = 1;
+   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
+@@ -2121,6 +2121,9 @@ async function importLegacyTodayBaselines() {
+       engineBundleReady:raw.engineBundleReady === true || raw.engine_bundle_ready === true,
+       engineSourceMode:String(raw.engineSourceMode || raw.engine_source_mode || ''),
+       engineBundleVersion:String(raw.engineBundleVersion || raw.engine_bundle_version || ''),
++      cliRuntimeState:['ready','provisioning','unavailable','invalid'].includes(String(raw.cliRuntimeState || raw.cli_runtime_state)) ? String(raw.cliRuntimeState || raw.cli_runtime_state) : 'unavailable',
++      cliRuntimeVersion:String(raw.cliRuntimeVersion || raw.cli_runtime_version || ''),
++      cliRuntimeProvisioning:['ok','pending','backoff','disabled','unavailable'].includes(String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning)) ? String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning) : 'unavailable',
+       candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
+       adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
+       restartMode:String(raw.restartMode || raw.restart_mode || ''),
+@@ -2473,7 +2476,7 @@ async function importLegacyTodayBaselines() {
+     if (!operations.length) return '—';
+     return operations.map((item) => {
+       const label = String(item?.label || 'cli');
+-      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
++      const launcher = ['managed-direct','direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+       const start = Number.isFinite(Number(item?.startOffsetMs)) ? Math.round(Number(item.startOffsetMs)) : 0;
+       const end = Number.isFinite(Number(item?.endOffsetMs)) ? Math.round(Number(item.endOffsetMs)) : start;
+       const queue = Number.isFinite(Number(item?.queueWaitMs)) ? Math.round(Number(item.queueWaitMs)) : 0;
+@@ -2485,11 +2488,12 @@ async function importLegacyTodayBaselines() {
+   function bridgeCliLauncherText(performance) {
+     const operations = Array.isArray(performance?.cliOperations) ? performance.cliOperations.slice(0, 8) : [];
+     if (!operations.length) return '—';
+-    const counts = { direct:0, npxFallback:0, unknown:0, directEnoent:0 };
++    const counts = { managedDirect:0, direct:0, npxFallback:0, unknown:0, directEnoent:0 };
+     const npxPolicies = new Set();
+     for (const item of operations) {
+-      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+-      if (launcher === 'direct') counts.direct += 1;
++      const launcher = ['managed-direct','direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
++      if (launcher === 'managed-direct') counts.managedDirect += 1;
++      else if (launcher === 'direct') counts.direct += 1;
+       else if (launcher === 'npx-fallback') counts.npxFallback += 1;
+       else counts.unknown += 1;
+       if (launcher === 'npx-fallback' && String(item?.fallbackReason) === 'direct-enoent') counts.directEnoent += 1;
+@@ -2499,7 +2503,16 @@ async function importLegacyTodayBaselines() {
+       }
+     }
+     const npxPolicy = npxPolicies.size === 1 ? [...npxPolicies][0] : 'not-applicable';
+-    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
++    return `managed-direct ${counts.managedDirect} · direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
++  }
++
++  function bridgeCliRuntimeText(diagnostics) {
++    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
++    const manager = state.bridgeManagerRuntime || null;
++    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(String(runtime?.state || manager?.cliRuntimeState)) ? String(runtime?.state || manager?.cliRuntimeState) : 'unavailable';
++    const version = String(runtime?.version || manager?.cliRuntimeVersion || '');
++    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(runtime?.provisioning || manager?.cliRuntimeProvisioning)) ? String(runtime?.provisioning || manager?.cliRuntimeProvisioning) : 'unavailable';
++    return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
+   }
+ 
+   function bridgeCreditsEarlyStartText(performance) {
+@@ -2571,7 +2584,7 @@ async function importLegacyTodayBaselines() {
+     if (bridgeDiag?.compatible !== true) blockers.push(`bridge compatibility ${bridgeDiag?.compatible === false ? 'no' : 'unknown'}`);
+     if (String(bridgeDiag?.version || '') !== REQUIRED_BRIDGE_VERSION) blockers.push(`engine ${bridgeDiag?.version || '—'}`);
+     if (!runtimeBridge?.managerInstalled) blockers.push('manager absent');
+-    if (String(runtimeBridge?.managerVersion || '') !== '1.2.6') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
++    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
+     const managerProduct = String(state.bridgeManagerRuntime?.productVersion || '');
+     const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
+     if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);
+@@ -2634,7 +2647,7 @@ async function importLegacyTodayBaselines() {
+       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
+       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
+       `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'} · local recoveries ${Number(localRuntimeErrors.recoveredCount || 0)}`,
+-      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.2.6 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
++      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.3.0 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
+       `Health: ${h.status || '—'}`,
+       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
+       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
+@@ -2646,6 +2659,7 @@ async function importLegacyTodayBaselines() {
+       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
++      `Bridge CLI runtime: ${bridgeCliRuntimeText(state.data?.bridge?.diagnostics)}`,
+       `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,
+diff --git a/plugins/usage-dashboard/runtime/bridge-engine.mjs b/plugins/usage-dashboard/runtime/bridge-engine.mjs
+index edc2aa7..24fa566 100644
+--- a/plugins/usage-dashboard/runtime/bridge-engine.mjs
++++ b/plugins/usage-dashboard/runtime/bridge-engine.mjs
+@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
+ import { AsyncLocalStorage } from 'node:async_hooks';
+ 
+ const execFileAsync = promisify(execFile);
+-const VERSION = '1.6.18';
++const VERSION = '1.6.19';
+ const PROTOCOL_VERSION = 2;
+ const MIN_PLUGIN_VERSION = '2.5.4';
+ const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
+@@ -17,6 +17,11 @@ const HOST = '127.0.0.1';
+ const PORT = Number(process.env.DEVPASS_BRIDGE_PORT || 39117);
+ const CLI_VERSION = process.env.LLMGATEWAY_CLI_VERSION || '1.9.0';
+ const NPX_PREFER_OFFLINE = String(process.env.DEVPASS_BRIDGE_NPX_PREFER_OFFLINE || '1') !== '0';
++const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
++const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
++const MANAGED_CLI_VERSION_ROOT = path.join(MANAGED_CLI_ROOT, CLI_VERSION);
++const MANAGED_CLI_DESCRIPTOR = path.join(MANAGED_CLI_ROOT, 'managed-cli.json');
++const MANAGED_CLI_STATE = path.join(MANAGED_CLI_ROOT, 'managed-cli-state.json');
+ const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmgateway-devpass-bridge');
+ const TOKEN_FILE = path.join(CONFIG_DIR, 'token');
+ const UPDATE_READY_DIR = path.join(os.homedir(), 'PocketRisu', 'bridge', 'update-ready');
+@@ -230,7 +235,7 @@ function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt,
+   const queuedStart = Number(queuedAt || executionStartedAt || endedAt || base);
+   const execStart = Number(executionStartedAt || queuedStart);
+   const ended = Number(endedAt || execStart);
+-  const launcher = ['direct','npx-fallback'].includes(String(launcherMeta?.launcher))
++  const launcher = ['managed-direct','direct','npx-fallback'].includes(String(launcherMeta?.launcher))
+     ? String(launcherMeta.launcher)
+     : 'unknown';
+   const fallbackReason = launcher === 'npx-fallback' && String(launcherMeta?.fallbackReason) === 'direct-enoent'
+@@ -640,9 +645,68 @@ async function runProgram(program, args, extraEnv = {}) {
+   });
+ }
+ 
++function pathInside(root, candidate) {
++  const relative = path.relative(root, candidate);
++  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
++}
++
++async function readManagedCliState() {
++  try {
++    const value = JSON.parse(await fs.readFile(MANAGED_CLI_STATE, 'utf8'));
++    const state = ['ready','provisioning','unavailable','invalid'].includes(String(value?.state))
++      ? String(value.state)
++      : 'unavailable';
++    return {
++      state,
++      version:String(value?.version || '') === CLI_VERSION ? CLI_VERSION : '',
++      provisioning:['ok','pending','backoff','disabled','unavailable'].includes(String(value?.provisioning))
++        ? String(value.provisioning)
++        : 'unavailable',
++    };
++  } catch {
++    return {state:'unavailable',version:'',provisioning:'unavailable'};
++  }
++}
++
++async function managedCliRuntime() {
++  if (!MANAGED_CLI_ENABLED) return {state:'unavailable',version:'',provisioning:'disabled',entry:null};
++  let descriptor;
++  try { descriptor = JSON.parse(await fs.readFile(MANAGED_CLI_DESCRIPTOR, 'utf8')); }
++  catch {
++    const state = await readManagedCliState();
++    return state.state === 'ready'
++      ? {state:'invalid',version:'',provisioning:'unavailable',entry:null}
++      : {...state,entry:null};
++  }
++  if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== '@llmgateway/cli' || descriptor?.version !== CLI_VERSION) {
++    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
++  }
++  try {
++    const versionRoot = await fs.realpath(MANAGED_CLI_VERSION_ROOT);
++    const entry = await fs.realpath(String(descriptor.entry || ''));
++    if (!pathInside(versionRoot, entry)) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
++    const stat = await fs.stat(entry);
++    if (!stat.isFile()) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
++    return {state:'ready',version:CLI_VERSION,provisioning:'ok',entry};
++  } catch {
++    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
++  }
++}
++
++async function managedCliDiagnostics() {
++  const runtime = await managedCliRuntime();
++  return {state:runtime.state,version:runtime.version,provisioning:runtime.provisioning};
++}
++
+ async function runCliProcess(args, extraEnv = {}) {
+-  const launcherMeta = { launcher:'direct', fallbackReason:'none', npxPolicy:'not-applicable' };
++  const launcherMeta = { launcher:'unknown', fallbackReason:'none', npxPolicy:'not-applicable' };
+   return withCliSlot(cliOperationLabel(args, extraEnv), async () => {
++    const managed = await managedCliRuntime();
++    if (managed.state === 'ready' && managed.entry) {
++      launcherMeta.launcher = 'managed-direct';
++      return runProgram(process.execPath, [managed.entry, ...args], extraEnv);
++    }
++    launcherMeta.launcher = 'direct';
+     try {
+       return await runProgram('llmgateway', args, extraEnv);
+     } catch (error) {
+@@ -2738,6 +2802,7 @@ async function snapshotAttributed(profile = 'full', creditsOrgId = '', attributi
+     bridgeVersion: VERSION,
+     protocolVersion: PROTOCOL_VERSION,
+     cliVersion: CLI_VERSION,
++    cliRuntime: await managedCliDiagnostics(),
+     uptimeSec: Math.floor((Date.now() - STARTED_AT) / 1000),
+     snapshotProfile: normalizedProfile,
+     creditsOrganization: {requestedId: requestedCreditsOrgId || null, selectedId: creditsOrg?.id || null, fallback: creditsSelection.fallback, fallbackReason: creditsSelection.fallbackReason || null},
+diff --git a/plugins/usage-dashboard/runtime/bridge-manager.cjs b/plugins/usage-dashboard/runtime/bridge-manager.cjs
+index f3723c7..c1c5170 100644
+--- a/plugins/usage-dashboard/runtime/bridge-manager.cjs
++++ b/plugins/usage-dashboard/runtime/bridge-manager.cjs
+@@ -9,8 +9,8 @@ const path = require('node:path');
+ const crypto = require('node:crypto');
+ const {execFileSync, spawn} = require('node:child_process');
+ 
+-const MANAGER_VERSION = '1.2.6';
+-const PRODUCT_VERSION = '3.0.0-alpha.5.65';
++const MANAGER_VERSION = '1.3.0';
++const PRODUCT_VERSION = '3.0.0-alpha.5.66';
+ const PROTOCOL = 'bridge-manager-v1';
+ const HOST = '127.0.0.1';
+ const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
+@@ -28,8 +28,19 @@ const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-prelo
+ const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
+ const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
+ const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
+-const BUNDLED_ENGINE_VERSION = '1.6.18';
+-const BUNDLED_ENGINE_SHA256 = 'f5927cf9b406a7f678bf42d0feb0916af5fe4989e5d0109148a4a9bc11617f11';
++const BUNDLED_ENGINE_VERSION = '1.6.19';
++const BUNDLED_ENGINE_SHA256 = 'f17d689f39bd469bcadf1a2125313146cd6e04cb38299a5b4583d903a696cf09';
++const MANAGED_CLI_PACKAGE = '@llmgateway/cli';
++const MANAGED_CLI_VERSION = '1.9.0';
++const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
++const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
++const MANAGED_CLI_VERSION_ROOT = path.join(MANAGED_CLI_ROOT, MANAGED_CLI_VERSION);
++const MANAGED_CLI_DESCRIPTOR = path.join(MANAGED_CLI_ROOT, 'managed-cli.json');
++const MANAGED_CLI_STATE = path.join(MANAGED_CLI_ROOT, 'managed-cli-state.json');
++const MANAGED_CLI_LOCK = path.join(MANAGED_CLI_ROOT, 'managed-cli.lock');
++const MANAGED_CLI_RETRY_MS = 30 * 60 * 1000;
++const MANAGED_CLI_INSTALL_TIMEOUT_MS = 5 * 60 * 1000;
++let managedCliProvisioningPromise = null;
+ const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');
+ const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');
+ const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
+@@ -59,6 +70,149 @@ function authorized(req) {
+ function sha256(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
+ function shellQuote(value) { return `'${String(value).replace(/'/g, `'"'"'`)}'`; }
+ 
++function pathInside(root, candidate) {
++  const relative = path.relative(root, candidate);
++  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
++}
++function atomicJsonWrite(file, value) {
++  fs.mkdirSync(path.dirname(file), {recursive:true,mode:0o700});
++  const next = `${file}.next-${process.pid}`;
++  fs.writeFileSync(next, JSON.stringify(value, null, 2) + '\n', {mode:0o600});
++  fs.renameSync(next, file);
++  try { fs.chmodSync(file, 0o600); } catch (_) {}
++}
++function readManagedCliState() {
++  try {
++    const value = JSON.parse(fs.readFileSync(MANAGED_CLI_STATE, 'utf8'));
++    const state = ['ready','provisioning','unavailable','invalid'].includes(String(value?.state)) ? String(value.state) : 'unavailable';
++    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(value?.provisioning)) ? String(value.provisioning) : 'unavailable';
++    return {state,version:String(value?.version || '') === MANAGED_CLI_VERSION ? MANAGED_CLI_VERSION : '',provisioning,nextRetryAt:Number(value?.nextRetryAt || 0)};
++  } catch (_) { return {state:'unavailable',version:'',provisioning:'unavailable',nextRetryAt:0}; }
++}
++function writeManagedCliState(state, provisioning, nextRetryAt = 0) {
++  atomicJsonWrite(MANAGED_CLI_STATE, {format:1,state,version:state === 'ready' ? MANAGED_CLI_VERSION : '',provisioning,nextRetryAt:Number(nextRetryAt || 0),updatedAt:Date.now()});
++}
++function resolveManagedCliBin(packageJson) {
++  if (typeof packageJson?.bin === 'string') return packageJson.bin;
++  if (!packageJson?.bin || typeof packageJson.bin !== 'object') return '';
++  if (typeof packageJson.bin.llmgateway === 'string') return packageJson.bin.llmgateway;
++  if (typeof packageJson.bin.lg === 'string') return packageJson.bin.lg;
++  const values = Object.values(packageJson.bin).filter(value => typeof value === 'string');
++  return values.length === 1 ? values[0] : '';
++}
++function verifyManagedCliDirectory(root) {
++  const rootReal = fs.realpathSync(root);
++  const packageRoot = path.join(rootReal, 'node_modules', '@llmgateway', 'cli');
++  const packageReal = fs.realpathSync(packageRoot);
++  if (!pathInside(rootReal, packageReal)) throw new Error('managed CLI package escaped runtime root');
++  const packageJson = JSON.parse(fs.readFileSync(path.join(packageReal, 'package.json'), 'utf8'));
++  if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error('managed CLI package identity mismatch');
++  const bin = resolveManagedCliBin(packageJson);
++  if (!bin) throw new Error('managed CLI bin missing');
++  const entry = fs.realpathSync(path.resolve(packageReal, bin));
++  if (!pathInside(packageReal, entry) || !pathInside(rootReal, entry)) throw new Error('managed CLI entry escaped runtime root');
++  if (!fs.statSync(entry).isFile()) throw new Error('managed CLI entry is not a file');
++  return entry;
++}
++function managedCliRuntimeStatus() {
++  if (!MANAGED_CLI_ENABLED) return {cliRuntimeState:'unavailable',cliRuntimeVersion:'',cliRuntimeProvisioning:'disabled'};
++  try {
++    const descriptor = JSON.parse(fs.readFileSync(MANAGED_CLI_DESCRIPTOR, 'utf8'));
++    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
++    if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== MANAGED_CLI_PACKAGE || descriptor?.version !== MANAGED_CLI_VERSION || fs.realpathSync(String(descriptor.entry || '')) !== entry) throw new Error('managed CLI descriptor mismatch');
++    return {cliRuntimeState:'ready',cliRuntimeVersion:MANAGED_CLI_VERSION,cliRuntimeProvisioning:'ok'};
++  } catch (_) {
++    const state = readManagedCliState();
++    return state.state === 'ready'
++      ? {cliRuntimeState:'invalid',cliRuntimeVersion:'',cliRuntimeProvisioning:'unavailable'}
++      : {cliRuntimeState:state.state,cliRuntimeVersion:state.version,cliRuntimeProvisioning:state.provisioning};
++  }
++}
++function runNpmInstall(stage) {
++  return new Promise((resolve, reject) => {
++    let settled = false;
++    const child = spawn('npm', ['install','--ignore-scripts','--no-audit','--no-fund','--package-lock=true'], {cwd:stage,stdio:'ignore',env:{...process.env,NO_COLOR:'1',FORCE_COLOR:'0'}});
++    const finish = error => {
++      if (settled) return;
++      settled = true;
++      clearTimeout(timer);
++      error ? reject(error) : resolve();
++    };
++    const timer = setTimeout(() => {
++      try { child.kill('SIGTERM'); } catch (_) {}
++      const force = setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 2000);
++      force.unref?.();
++    }, MANAGED_CLI_INSTALL_TIMEOUT_MS);
++    timer.unref?.();
++    child.once('error', finish);
++    child.once('exit', (code, signal) => finish(code === 0 && !signal ? null : new Error('managed CLI install failed')));
++  });
++}
++function acquireManagedCliLock() {
++  fs.mkdirSync(MANAGED_CLI_ROOT, {recursive:true,mode:0o700});
++  try { return fs.openSync(MANAGED_CLI_LOCK, 'wx', 0o600); }
++  catch (error) {
++    if (error?.code !== 'EEXIST') throw error;
++    try {
++      if (Date.now() - fs.statSync(MANAGED_CLI_LOCK).mtimeMs > MANAGED_CLI_INSTALL_TIMEOUT_MS * 2) fs.unlinkSync(MANAGED_CLI_LOCK);
++      else return null;
++    } catch (_) { return null; }
++    return fs.openSync(MANAGED_CLI_LOCK, 'wx', 0o600);
++  }
++}
++async function provisionManagedCli() {
++  if (!MANAGED_CLI_ENABLED) {
++    writeManagedCliState('unavailable','disabled');
++    return;
++  }
++  try {
++    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
++    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry,promotedAt:Date.now()});
++    writeManagedCliState('ready','ok');
++    return;
++  } catch (_) {}
++  const prior = readManagedCliState();
++  if (prior.nextRetryAt > Date.now()) return;
++  const lockFd = acquireManagedCliLock();
++  if (lockFd === null) return;
++  const stage = path.join(MANAGED_CLI_ROOT, `cli-next-${process.pid}-${Date.now()}`);
++  const quarantine = path.join(MANAGED_CLI_ROOT, `cli-invalid-${process.pid}-${Date.now()}`);
++  let quarantined = false;
++  let promoted = false;
++  try {
++    writeManagedCliState('provisioning','pending');
++    fs.mkdirSync(stage, {recursive:false,mode:0o700});
++    fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({private:true,dependencies:{[MANAGED_CLI_PACKAGE]:MANAGED_CLI_VERSION}}, null, 2) + '\n', {mode:0o600});
++    await runNpmInstall(stage);
++    verifyManagedCliDirectory(stage);
++    if (fs.existsSync(MANAGED_CLI_VERSION_ROOT)) {
++      fs.renameSync(MANAGED_CLI_VERSION_ROOT, quarantine);
++      quarantined = true;
++    }
++    fs.renameSync(stage, MANAGED_CLI_VERSION_ROOT);
++    promoted = true;
++    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
++    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry,promotedAt:Date.now()});
++    writeManagedCliState('ready','ok');
++    if (quarantined) fs.rmSync(quarantine, {recursive:true,force:true});
++  } catch (_) {
++    try { if (fs.existsSync(stage)) fs.rmSync(stage, {recursive:true,force:true}); } catch (_) {}
++    if (quarantined) {
++      try { if (promoted && fs.existsSync(MANAGED_CLI_VERSION_ROOT)) fs.rmSync(MANAGED_CLI_VERSION_ROOT, {recursive:true,force:true}); } catch (_) {}
++      try { if (!fs.existsSync(MANAGED_CLI_VERSION_ROOT)) fs.renameSync(quarantine, MANAGED_CLI_VERSION_ROOT); } catch (_) {}
++    }
++    writeManagedCliState('unavailable','backoff',Date.now() + MANAGED_CLI_RETRY_MS);
++  } finally {
++    try { fs.closeSync(lockFd); } catch (_) {}
++    try { fs.unlinkSync(MANAGED_CLI_LOCK); } catch (_) {}
++  }
++}
++function scheduleManagedCliProvisioning() {
++  if (managedCliProvisioningPromise) return managedCliProvisioningPromise;
++  managedCliProvisioningPromise = provisionManagedCli().catch(() => {}).finally(() => { managedCliProvisioningPromise = null; });
++  return managedCliProvisioningPromise;
++}
++
+ function requestText(url, redirects = 0) {
+   return new Promise((resolve, reject) => {
+     if (!String(url).startsWith(RELEASE_PREFIX)) return reject(new Error('release URL denied'));
+@@ -261,18 +415,21 @@ function readDescriptor() {
+ function engineServiceLdPreloadLine() {
+   return fs.existsSync(TERMUX_EXEC_LD_PRELOAD) ? `export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}\n` : '';
+ }
++function engineServiceManagedCliLine() {
++  return `export DEVPASS_BRIDGE_MANAGED_CLI=${shellQuote(MANAGED_CLI_ENABLED ? '1' : '0')}\n`;
++}
+ function engineServiceEnvironmentReady() {
+-  if (!fs.existsSync(TERMUX_EXEC_LD_PRELOAD)) return true;
+   try {
+     const run = fs.readFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), 'utf8');
+-    return run.includes(`export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}`);
++    const preloadReady = !fs.existsSync(TERMUX_EXEC_LD_PRELOAD) || run.includes(`export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}`);
++    return preloadReady && run.includes(`export DEVPASS_BRIDGE_MANAGED_CLI=${shellQuote(MANAGED_CLI_ENABLED ? '1' : '0')}`);
+   } catch (_) { return false; }
+ }
+ function writeEngineService(candidate, down = true) {
+   fs.mkdirSync(ENGINE_SERVICE_DIR, {recursive:true});
+   const command = [candidate.exe, ...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs].map(shellQuote).join(' ');
+   const run = `#!/data/data/com.termux/files/usr/bin/sh
+-${engineServiceLdPreloadLine()}cd ${shellQuote(candidate.cwd)}
++${engineServiceLdPreloadLine()}${engineServiceManagedCliLine()}cd ${shellQuote(candidate.cwd)}
+ exec ${command}
+ `;
+   fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), run, {mode:0o700});
+@@ -558,7 +715,7 @@ const server = http.createServer(async (req, res) => {
+     const engine = await engineRuntimeStatus();
+     return send(res, 200, {
+       ok:true,protocol:PROTOCOL,version:MANAGER_VERSION,productVersion:PRODUCT_VERSION,selfUpdate:true,engineAdoption:true,
+-      ...engine,restartMode:RESTART_MODE,updateChannel:PRODUCT_MANIFEST_URL,bind:`${HOST}:${PORT}`,
++      ...engine,...managedCliRuntimeStatus(),restartMode:RESTART_MODE,updateChannel:PRODUCT_MANIFEST_URL,bind:`${HOST}:${PORT}`,
+       tokenSource:TOKEN_FILES.find(file => { try { return Boolean(fs.readFileSync(file, 'utf8').trim()); } catch (_) { return false; } }) ? 'existing-file' : 'missing'
+     });
+   }
+@@ -592,4 +749,7 @@ const server = http.createServer(async (req, res) => {
+   }
+ });
+ server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });
+-server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`));
++server.listen(PORT, HOST, () => {
++  console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`);
++  setImmediate(() => { scheduleManagedCliProvisioning(); });
++});
+diff --git a/plugins/usage-dashboard/runtime/product-manifest.json b/plugins/usage-dashboard/runtime/product-manifest.json
+index 902ae2a..c4726e0 100644
+--- a/plugins/usage-dashboard/runtime/product-manifest.json
++++ b/plugins/usage-dashboard/runtime/product-manifest.json
+@@ -1,32 +1,32 @@
+ {
+   "format": 1,
+   "product": "Local Usage Dashboard",
+-  "productVersion": "3.0.0-alpha.5.65",
++  "productVersion": "3.0.0-alpha.5.66",
+   "releaseBranch": "release-usage-dashboard",
+   "architecture": "single-product-modular-sidecar",
+   "components": {
+     "plugin": {
+       "mode": "bundled",
+-      "version": "3.0.0-alpha.5.65",
++      "version": "3.0.0-alpha.5.66",
+       "artifact": "plugins/usage-dashboard/latest.js"
+     },
+     "bridge": {
+       "mode": "sidecar",
+       "state": "managed-bundled",
+-      "requiredVersion": "1.6.18",
++      "requiredVersion": "1.6.19",
+       "managementProtocol": "bridge-manager-v1",
+       "managed": true,
+       "selfUpdate": false,
+       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-engine.mjs",
+       "lifecycleManaged": true,
+       "sourceBundled": true,
+-      "sha256": "f5927cf9b406a7f678bf42d0feb0916af5fe4989e5d0109148a4a9bc11617f11"
++      "sha256": "f17d689f39bd469bcadf1a2125313146cd6e04cb38299a5b4583d903a696cf09"
+     },
+     "bridgeManager": {
+       "mode": "sidecar-manager",
+       "state": "bundled-engine-ready",
+-      "version": "1.2.6",
+-      "productVersion": "3.0.0-alpha.5.65",
++      "version": "1.3.0",
++      "productVersion": "3.0.0-alpha.5.66",
+       "managementProtocol": "bridge-manager-v1",
+       "host": "127.0.0.1",
+       "port": 39119,
+@@ -34,7 +34,7 @@
+       "selfUpdate": true,
+       "engineManaged": true,
+       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
+-      "sha256": "97c46be202d327f47460d0b0ff85b76383e89b821e74a279a14615775fdecd83",
++      "sha256": "9f3530b882ecea7b9e0d407c7831c44487f218b5db9210a6709158a6315c36c0",
+       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
+       "bootstrapSha256": "4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c",
+       "service": "local-usage-runtime-manager",
+diff --git a/plugins/usage-dashboard/src/00-runtime-core.part.js b/plugins/usage-dashboard/src/00-runtime-core.part.js
+index 67ec957..7c71b61 100644
+--- a/plugins/usage-dashboard/src/00-runtime-core.part.js
++++ b/plugins/usage-dashboard/src/00-runtime-core.part.js
+@@ -1,13 +1,13 @@
+ //@name local_usage_dashboard_modular
+ //@display-name Local Usage Dashboard
+-//@version 3.0.0-alpha.5.65
++//@version 3.0.0-alpha.5.66
+ //@api 3.0
+ //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
+ 
+ (async () => {
+   'use strict';
+ 
+-  const VERSION = '3.0.0-alpha.5.65';
++  const VERSION = '3.0.0-alpha.5.66';
+   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
+   const STATE_KEY = 'local-usage-dashboard-v3';
+   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
+@@ -26,7 +26,7 @@
+   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
+   const RESUME_MAIN_THREAD_PROBE_MS = 80;
+   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
+-  const REQUIRED_BRIDGE_VERSION = '1.6.18';
++  const REQUIRED_BRIDGE_VERSION = '1.6.19';
+   const SNAPSHOT_SCHEMA_VERSION = 1;
+   const RECENT_REQUEST_SCHEMA_VERSION = 1;
+   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
+diff --git a/plugins/usage-dashboard/src/20-bridge-io.part.js b/plugins/usage-dashboard/src/20-bridge-io.part.js
+index 27cf2db..8f417ae 100644
+--- a/plugins/usage-dashboard/src/20-bridge-io.part.js
++++ b/plugins/usage-dashboard/src/20-bridge-io.part.js
+@@ -38,6 +38,9 @@
+       engineBundleReady:raw.engineBundleReady === true || raw.engine_bundle_ready === true,
+       engineSourceMode:String(raw.engineSourceMode || raw.engine_source_mode || ''),
+       engineBundleVersion:String(raw.engineBundleVersion || raw.engine_bundle_version || ''),
++      cliRuntimeState:['ready','provisioning','unavailable','invalid'].includes(String(raw.cliRuntimeState || raw.cli_runtime_state)) ? String(raw.cliRuntimeState || raw.cli_runtime_state) : 'unavailable',
++      cliRuntimeVersion:String(raw.cliRuntimeVersion || raw.cli_runtime_version || ''),
++      cliRuntimeProvisioning:['ok','pending','backoff','disabled','unavailable'].includes(String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning)) ? String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning) : 'unavailable',
+       candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
+       adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
+       restartMode:String(raw.restartMode || raw.restart_mode || ''),
+diff --git a/plugins/usage-dashboard/src/40-diagnostics.part.js b/plugins/usage-dashboard/src/40-diagnostics.part.js
+index d665013..72a3119 100644
+--- a/plugins/usage-dashboard/src/40-diagnostics.part.js
++++ b/plugins/usage-dashboard/src/40-diagnostics.part.js
+@@ -68,7 +68,7 @@
+     if (!operations.length) return '—';
+     return operations.map((item) => {
+       const label = String(item?.label || 'cli');
+-      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
++      const launcher = ['managed-direct','direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+       const start = Number.isFinite(Number(item?.startOffsetMs)) ? Math.round(Number(item.startOffsetMs)) : 0;
+       const end = Number.isFinite(Number(item?.endOffsetMs)) ? Math.round(Number(item.endOffsetMs)) : start;
+       const queue = Number.isFinite(Number(item?.queueWaitMs)) ? Math.round(Number(item.queueWaitMs)) : 0;
+@@ -80,11 +80,12 @@
+   function bridgeCliLauncherText(performance) {
+     const operations = Array.isArray(performance?.cliOperations) ? performance.cliOperations.slice(0, 8) : [];
+     if (!operations.length) return '—';
+-    const counts = { direct:0, npxFallback:0, unknown:0, directEnoent:0 };
++    const counts = { managedDirect:0, direct:0, npxFallback:0, unknown:0, directEnoent:0 };
+     const npxPolicies = new Set();
+     for (const item of operations) {
+-      const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
+-      if (launcher === 'direct') counts.direct += 1;
++      const launcher = ['managed-direct','direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
++      if (launcher === 'managed-direct') counts.managedDirect += 1;
++      else if (launcher === 'direct') counts.direct += 1;
+       else if (launcher === 'npx-fallback') counts.npxFallback += 1;
+       else counts.unknown += 1;
+       if (launcher === 'npx-fallback' && String(item?.fallbackReason) === 'direct-enoent') counts.directEnoent += 1;
+@@ -94,7 +95,16 @@
+       }
+     }
+     const npxPolicy = npxPolicies.size === 1 ? [...npxPolicies][0] : 'not-applicable';
+-    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
++    return `managed-direct ${counts.managedDirect} · direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
++  }
++
++  function bridgeCliRuntimeText(diagnostics) {
++    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
++    const manager = state.bridgeManagerRuntime || null;
++    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(String(runtime?.state || manager?.cliRuntimeState)) ? String(runtime?.state || manager?.cliRuntimeState) : 'unavailable';
++    const version = String(runtime?.version || manager?.cliRuntimeVersion || '');
++    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(runtime?.provisioning || manager?.cliRuntimeProvisioning)) ? String(runtime?.provisioning || manager?.cliRuntimeProvisioning) : 'unavailable';
++    return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
+   }
+ 
+   function bridgeCreditsEarlyStartText(performance) {
+@@ -166,7 +176,7 @@
+     if (bridgeDiag?.compatible !== true) blockers.push(`bridge compatibility ${bridgeDiag?.compatible === false ? 'no' : 'unknown'}`);
+     if (String(bridgeDiag?.version || '') !== REQUIRED_BRIDGE_VERSION) blockers.push(`engine ${bridgeDiag?.version || '—'}`);
+     if (!runtimeBridge?.managerInstalled) blockers.push('manager absent');
+-    if (String(runtimeBridge?.managerVersion || '') !== '1.2.6') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
++    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
+     const managerProduct = String(state.bridgeManagerRuntime?.productVersion || '');
+     const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
+     if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);
+@@ -229,7 +239,7 @@
+       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
+       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
+       `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'} · local recoveries ${Number(localRuntimeErrors.recoveredCount || 0)}`,
+-      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.2.6 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
++      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.3.0 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
+       `Health: ${h.status || '—'}`,
+       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
+       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,
+@@ -241,6 +251,7 @@
+       `Bridge snapshot jobs: ${bridgeSnapshotJobsText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
++      `Bridge CLI runtime: ${bridgeCliRuntimeText(state.data?.bridge?.diagnostics)}`,
+       `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
+       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,
+diff --git a/plugins/usage-dashboard/src/manifest.json b/plugins/usage-dashboard/src/manifest.json
+index 51e0b4f..4ac9f83 100644
+--- a/plugins/usage-dashboard/src/manifest.json
++++ b/plugins/usage-dashboard/src/manifest.json
+@@ -1,17 +1,17 @@
+ {
+   "format": 1,
+   "plugin": "Local Usage Dashboard",
+-  "version": "3.0.0-alpha.5.65",
++  "version": "3.0.0-alpha.5.66",
+   "source": "plugins/usage-dashboard/latest.js",
+   "sourceOfTruth": "modules",
+   "layout": "plugins/usage-dashboard/src/parts.cjs",
+-  "artifactSha256": "a08e75f4f06392e9c21df9b3cb13243e8e400327e9b09f9e812de31c0fc96715",
++  "artifactSha256": "2a463a5b4dc47f8dec25e0d03cb280cb20f8d111ded10341ffb83f3ecd4d3441",
+   "parts": [
+     {
+       "file": "00-runtime-core.part.js",
+       "label": "runtime/core",
+       "bytes": 13677,
+-      "sha256": "36fa14ac7cdf478eaef2d13d3f656625f00f96167a374438384756a8a984e4e8"
++      "sha256": "cf01452a7f446c3aeccf7ac60e3beadd2502a2f5a43822ae2b68021acfb0d5fa"
+     },
+     {
+       "file": "02-runtime-state.part.js",
+@@ -64,8 +64,8 @@
+     {
+       "file": "20-bridge-io.part.js",
+       "label": "bridge I/O",
+-      "bytes": 10001,
+-      "sha256": "53a27be0b88bcfccc35b34d16620072abe486b35f36ac0aec807da00bf9bbe86"
++      "bytes": 10539,
++      "sha256": "78ed1df0f1358717db8c48e3aa841bcccd402bca61cbca83f7028755841e7c9e"
+     },
+     {
+       "file": "30-refresh-runtime.part.js",
+@@ -76,8 +76,8 @@
+     {
+       "file": "40-diagnostics.part.js",
+       "label": "diagnostics + release hardening",
+-      "bytes": 42295,
+-      "sha256": "522dd37345f649bd1827c6dfdd648333597800cd47cf406b843c9ed4de1f129a"
++      "bytes": 43409,
++      "sha256": "fbfbd6e7d044b8b74f925491faa2a3ebc17300156da5c15f678e74511c6d9a61"
+     },
+     {
+       "file": "50-dashboard-context.part.js",
+

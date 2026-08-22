@@ -1,24 +1,26 @@
-name: Stage Usage Dashboard 3.0.0-alpha.5.65 Npx Cache-First Launcher
+name: Stage Usage Dashboard 3.0.0-alpha.5.66 Managed Direct CLI Runtime
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml'
-      - 'plugins/usage-dashboard/tools/release_npx_cache_first_launcher_565.py'
+      - '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'
+      - 'plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py'
       - 'plugins/usage-dashboard/tests/p24-snapshot-decision-attribution.cjs'
       - 'plugins/usage-dashboard/tests/p25-long-window-critical-path-decoupling.cjs'
       - 'plugins/usage-dashboard/tests/p26-foreground-cli-launcher-attribution.cjs'
       - 'plugins/usage-dashboard/tests/p27-npx-cache-first-launcher.cjs'
+      - 'plugins/usage-dashboard/tests/p28-managed-direct-cli-runtime.cjs'
   pull_request:
     branches: [main]
     paths:
-      - '.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml'
-      - 'plugins/usage-dashboard/tools/release_npx_cache_first_launcher_565.py'
+      - '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'
+      - 'plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py'
       - 'plugins/usage-dashboard/tests/p24-snapshot-decision-attribution.cjs'
       - 'plugins/usage-dashboard/tests/p25-long-window-critical-path-decoupling.cjs'
       - 'plugins/usage-dashboard/tests/p26-foreground-cli-launcher-attribution.cjs'
       - 'plugins/usage-dashboard/tests/p27-npx-cache-first-launcher.cjs'
+      - 'plugins/usage-dashboard/tests/p28-managed-direct-cli-runtime.cjs'
 
 permissions:
   contents: write
@@ -36,18 +38,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build and validate 5.65 Npx Cache-First Launcher candidate
+      - name: Build and validate 5.66 Managed Direct CLI Runtime candidate
         shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile \
             plugins/usage-dashboard/tools/check_release_monotonic.py \
-            plugins/usage-dashboard/tools/release_npx_cache_first_launcher_565.py
+            plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py
 
-          if grep -Fq "const VERSION = '3.0.0-alpha.5.65';" plugins/usage-dashboard/src/00-runtime-core.part.js; then
-            echo '5.65 candidate already materialized; skipping 5.64 -> 5.65 patch step'
+          if grep -Fq "const VERSION = '3.0.0-alpha.5.66';" plugins/usage-dashboard/src/00-runtime-core.part.js; then
+            echo '5.66 candidate already materialized; skipping 5.65 -> 5.66 patch step'
           else
-            python3 plugins/usage-dashboard/tools/release_npx_cache_first_launcher_565.py
+            python3 plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py
           fi
 
           # Historical regressions retain their original release fixtures. Adapt
@@ -56,10 +58,10 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           root = Path('plugins/usage-dashboard/tests')
-          product = '3.0.0-alpha.5.65'
-          engine = '1.6.18'
+          product = '3.0.0-alpha.5.66'
+          engine = '1.6.19'
           baseline = 'Last verified real-device baseline: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`'
-          current = 'Current release implementation: `3.0.0-alpha.5.65 — Npx Cache-First Launcher`'
+          current = 'Current release implementation: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`'
 
           def update(name, replacements):
               path = root / name
@@ -75,14 +77,21 @@ jobs:
           for name in ['p11-cache-fidelity.cjs','p13-cache-provenance-diagnostics.cjs','p15-runtime-recovery-fidelity.cjs','p16-snapshot-performance-attribution.cjs']:
               update(name, [('3.0.0-alpha.5.55', product), ('1.6.9', engine)])
 
+          for name in ['p8-provider-manager-cache-ipc.cjs','p9-provider-manager-cache-hardening.cjs']:
+              update(name, [('3.0.0-alpha.5.49', product), ('1.6.5', engine)])
+          update('p10-independent-cache-observer.cjs', [
+              ('3.0.0-alpha.5.50', product), ('1.6.6', engine),
+              ("Symbol.for('llmgateway.devpass.bridge.capture.v8')", "Symbol.for('llmgateway.devpass.bridge.capture.v10')"),
+          ])
+
           update('p15-runtime-recovery-fidelity.cjs', [
-              ('cumulative local persist history remained visible while `active 0` allowed `READY`', 'Stable Readiness remains READY with Engine `1.6.18`, Manager `1.2.6`, and no active local runtime error.'),
+              ('cumulative local persist history remained visible while `active 0` allowed `READY`', 'Stable Readiness remains READY with Engine `1.6.19`, Manager `1.3.0`, managed CLI runtime `ready`, CLI `v1.9.0`, and no active local runtime error.'),
           ])
 
           update('p16-snapshot-performance-attribution.cjs', [
               ("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 1)));", "const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"),
               ("const summaryContext = { Date: { now: () => 2000 } };", "const summaryContext = { Date: { now: () => 2000 }, CLI_CONCURRENCY: 2, Object, Array, secondaryRefreshSnapshot: () => ({}) };"),
-              ("Current release implementation: `3.0.0-alpha.5.65 — Snapshot Performance Attribution`", current),
+              ("Current release implementation: `3.0.0-alpha.5.66 — Snapshot Performance Attribution`", current),
               ('Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`', baseline),
               ("timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId))", "timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId, { deferLongWindow:true }))"),
           ])
@@ -90,14 +99,14 @@ jobs:
               ('3.0.0-alpha.5.56', product), ('1.6.10', engine),
               ('async function withCliSlot(label, task) {', 'async function withCliSlot(label, task, launcherMeta = null) {'),
               ('Last verified real-device baseline: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`', baseline),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Snapshot Performance Repair: Bounded CLI Parallelism`', current),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Snapshot Performance Repair: Bounded CLI Parallelism`', current),
               ('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode', 'Preserve the hard CLI concurrency cap'),
           ])
           update('p18-organization-discovery-dedup.cjs', [
               ('3.0.0-alpha.5.57', product), ('1.6.11', engine),
               ('Last verified real-device baseline: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`', baseline),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Organization Discovery Deduplication`', current),
-              ('cumulative local persist history remained visible while `active 0` allowed `READY`', 'Stable Readiness remains READY with Engine `1.6.18`, Manager `1.2.6`, and no active local runtime error.'),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Organization Discovery Deduplication`', current),
+              ('cumulative local persist history remained visible while `active 0` allowed `READY`', 'Stable Readiness remains READY with Engine `1.6.19`, Manager `1.3.0`, managed CLI runtime `ready`, CLI `v1.9.0`, and no active local runtime error.'),
               ('missing Write/TTL remained UNKNOWN and was never inferred', 'Keep UNKNOWN distinct from known zero'),
               ('fall back to the prior plain `orgs list --json` path', 'Keep already-working behavior unchanged unless the release goal requires touching it.'),
           ])
@@ -105,7 +114,7 @@ jobs:
           update('p20-shared-24h-capture.cjs', [
               ('3.0.0-alpha.5.58', product), ('1.6.12', engine),
               ('Last verified real-device baseline: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`', baseline),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Shared 24h Capture Coalescing`', current),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Shared 24h Capture Coalescing`', current),
               ('one queued for about 5.87s', 'Keep 24h usage and DevPass Activity on the foreground truth path.'),
               ('accountCapture` cache key, 30s TTL, no-stale behavior', 'shared capture behavior'),
               ("assert.ok(guidelines.includes('No organizations found in CLI output'));", "assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));"),
@@ -118,9 +127,9 @@ jobs:
               ("['endOffsetMs','executionMs','executionStartOffsetMs','label','queueWaitMs','startOffsetMs'].sort()", "['endOffsetMs','executionMs','executionStartOffsetMs','fallbackReason','label','launcher','npxPolicy','queueWaitMs','startOffsetMs'].sort()"),
               ("engine.includes('noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt)')", "engine.includes('noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta)')"),
               ('Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`', baseline),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Snapshot Scheduling Attribution`', current),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Snapshot Scheduling Attribution`', current),
               ('Bridge ran 3 CLI operations', 'Keep 24h usage and DevPass Activity on the foreground truth path.'),
-              ('Measurement only: do not change snapshot ordering', 'No new `runCli()` call site, network endpoint'),
+              ('Measurement only: do not change snapshot ordering', 'Provisioning adds no snapshot source operation or endpoint.'),
               ('missing Write/TTL remained UNKNOWN and was never inferred', 'Keep UNKNOWN distinct from known zero'),
               ('const summaryContext = { Date:{now:()=>2000}, CLI_CONCURRENCY:2, Number, Object, Array, Math, String };', 'const summaryContext = { Date:{now:()=>2000}, CLI_CONCURRENCY:2, Number, Object, Array, Math, String, secondaryRefreshSnapshot:()=>({}) };'),
           ])
@@ -129,18 +138,18 @@ jobs:
           text = p22.read_text()
           text = text.replace(
               "assert.ok(fs.readFileSync(enginePath, 'utf8').includes(\"const VERSION = '1.6.13';\"), '5.60 must keep Engine 1.6.13');",
-              "assert.ok(fs.readFileSync(enginePath, 'utf8').includes(\"const VERSION = '1.6.18';\"), '5.62 must use Engine 1.6.18');",
+              "assert.ok(fs.readFileSync(enginePath, 'utf8').includes(\"const VERSION = '1.6.19';\"), '5.62 must use Engine 1.6.19');",
           )
-          text = text.replace("assert.equal(productManifest.productVersion, '3.0.0-alpha.5.60');", "assert.equal(productManifest.productVersion, '3.0.0-alpha.5.65');")
-          text = text.replace("assert.equal(productManifest.components.bridge.requiredVersion, '1.6.13');", "assert.equal(productManifest.components.bridge.requiredVersion, '1.6.18');")
+          text = text.replace("assert.equal(productManifest.productVersion, '3.0.0-alpha.5.60');", "assert.equal(productManifest.productVersion, '3.0.0-alpha.5.66');")
+          text = text.replace("assert.equal(productManifest.components.bridge.requiredVersion, '1.6.13');", "assert.equal(productManifest.components.bridge.requiredVersion, '1.6.19');")
           p22.write_text(text)
 
           update('p23-credits-usage-early-start.cjs', [
-              ('.github/workflows/stage-usage-dashboard-561-credits-usage-early-start.yml', '.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml'),
+              ('.github/workflows/stage-usage-dashboard-561-credits-usage-early-start.yml', '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'),
               ('3.0.0-alpha.5.61', product),
-              ('3\\.0\\.0-alpha\\.5\\.61', '3\\.0\\.0-alpha\\.5\\.65'),
-              ('1\\.6\\.14', '1\\.6\\.18'), ('1.6.14', engine),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Credits Usage Early Start`', current),
+              ('3\\.0\\.0-alpha\\.5\\.61', '3\\.0\\.0-alpha\\.5\\.66'),
+              ('1\\.6\\.14', '1\\.6\\.19'), ('1.6.14', engine),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Credits Usage Early Start`', current),
               ('Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`', baseline),
               ('Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`', baseline),
               ('Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering', 'Keep already-working behavior unchanged unless the release goal requires touching it.'),
@@ -152,43 +161,63 @@ jobs:
               ("assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));", "assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));"),
           ])
           update('p24-snapshot-decision-attribution.cjs', [
-              ('.github/workflows/stage-usage-dashboard-562-snapshot-decision-attribution.yml', '.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml'),
+              ('.github/workflows/stage-usage-dashboard-562-snapshot-decision-attribution.yml', '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'),
               ('3.0.0-alpha.5.62', product),
-              ('3\\.0\\.0-alpha\\.5\\.62', '3\\.0\\.0-alpha\\.5\\.65'),
-              ('1\\.6\\.15', '1\\.6\\.18'), ('1.6.15', engine),
+              ('3\\.0\\.0-alpha\\.5\\.62', '3\\.0\\.0-alpha\\.5\\.66'),
+              ('1\\.6\\.15', '1\\.6\\.19'), ('1.6.15', engine),
               ("['hit','miss','join','load','stale','blocked','error']", "['hit','miss','join','load','stale','deferred','blocked','error']"),
               ("['empty','expired','loaded','circuit-open','refresh-error']", "['empty','expired','loaded','deferred-refresh','circuit-open','refresh-error']"),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Snapshot Decision Attribution`', current),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Snapshot Decision Attribution`', current),
               ('Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`', baseline),
-              ("assert.ok(guidelines.includes('The new attribution must add zero CLI/network requests.'));", "assert.ok(guidelines.includes('No new `runCli()` call site, network endpoint'));"),
+              ("assert.ok(guidelines.includes('The new attribution must add zero CLI/network requests.'));", "assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));"),
               ("assert.ok(guidelines.includes('about 17.17s because long-window analytics work became cold'));", "assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));"),
               ("assert.ok(guidelines.includes('exact skip reason is UNKNOWN in 5.61 diagnostics'));", "assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/range'));"),
           ])
           update('p25-long-window-critical-path-decoupling.cjs', [
-              ('.github/workflows/stage-usage-dashboard-563-long-window-critical-path-decoupling.yml', '.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml'),
+              ('.github/workflows/stage-usage-dashboard-563-long-window-critical-path-decoupling.yml', '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'),
               ('3.0.0-alpha.5.63', product),
-              ('3\\.0\\.0-alpha\\.5\\.63', '3\\.0\\.0-alpha\\.5\\.65'),
-              ('1\\.6\\.16', '1\\.6\\.18'), ('1.6.16', engine),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Long-window Critical Path Decoupling`', current),
+              ('3\\.0\\.0-alpha\\.5\\.63', '3\\.0\\.0-alpha\\.5\\.66'),
+              ('1\\.6\\.16', '1\\.6\\.19'), ('1.6.16', engine),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Long-window Critical Path Decoupling`', current),
               ('Last verified real-device baseline: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`', baseline),
           ])
           update('p26-foreground-cli-launcher-attribution.cjs', [
-              ('.github/workflows/stage-usage-dashboard-564-foreground-cli-launcher-attribution.yml', '.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml'),
+              ('.github/workflows/stage-usage-dashboard-564-foreground-cli-launcher-attribution.yml', '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'),
               ('3.0.0-alpha.5.64', product),
-              ('3\\.0\\.0-alpha\\.5\\.64', '3\\.0\\.0-alpha\\.5\\.65'),
-              ('1\\.6\\.17', '1\\.6\\.18'), ('1.6.17', engine),
-              ('const processContext = {', 'const processContext = {\n  NPX_PREFER_OFFLINE: true,'),
+              ('3\\.0\\.0-alpha\\.5\\.64', '3\\.0\\.0-alpha\\.5\\.66'),
+              ('1\\.6\\.17', '1\\.6\\.19'), ('1.6.17', engine),
+              ('const processContext = {', "const processContext = {\n  process:{execPath:'/safe/node'},\n  managedCliRuntime:async()=>({state:'unavailable',entry:null}),\n  NPX_PREFER_OFFLINE: true,"),
               ('const diagContext = {Array,Number,String,Math};', 'const diagContext = {Array,Number,String,Math,Set};'),
+              ("assert.equal(runProgramOccurrences - runProgramDefinitions, 2, 'direct and npx must remain the only runProgram call sites');", "assert.equal(runProgramOccurrences - runProgramDefinitions, 3, 'managed, direct, and npx remain the only runProgram call sites');"),
+              ("['direct','npx-fallback']", "['managed-direct','direct','npx-fallback']"),
               ('const fallbackAt = processSource.indexOf("runProgram(\'npx\', [\'--yes\', `@llmgateway/cli@${CLI_VERSION}`, ...args], extraEnv)");', 'const fallbackAt = processSource.indexOf("runProgram(\'npx\', npxArgs, extraEnv)");'),
               ("{launcher:'direct',fallbackReason:'none'}", "{launcher:'direct',fallbackReason:'none',npxPolicy:'not-applicable'}"),
               ("{launcher:'npx-fallback',fallbackReason:'direct-enoent'}", "{launcher:'npx-fallback',fallbackReason:'direct-enoent',npxPolicy:'prefer-offline'}"),
               ("['--yes','@llmgateway/cli@1.9.0','credits','--json']", "['--yes','--prefer-offline','@llmgateway/cli@1.9.0','credits','--json']"),
-              ('direct 1 · npx-fallback 1 · unknown 1 · direct ENOENT 1', 'direct 1 · npx-fallback 1 · unknown 1 · policy not-applicable · direct ENOENT 1'),
-              ('Current release implementation: `3.0.0-alpha.5.65 — Foreground CLI Launcher Attribution`', current),
-              ('Launcher attribution is measurement-only', 'Preserve the existing direct `llmgateway` attempt and fall back only when the direct attempt fails with `ENOENT`.'),
-              ('Keep all five existing `runCli()` call sites and the single existing `execFileAsync()` source operation', 'Keep all five existing `runCli()` call sites, both existing `runProgram()` call sites, and the single existing `execFileAsync()` source operation'),
-              ('its share of the 8–9s latency remains UNKNOWN', 'keep its exact latency share UNKNOWN'),
+              ('direct 1 · npx-fallback 1 · unknown 1 · direct ENOENT 1', 'managed-direct 0 · direct 1 · npx-fallback 1 · unknown 1 · policy not-applicable · direct ENOENT 1'),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Foreground CLI Launcher Attribution`', current),
+              ('Launcher attribution is measurement-only', 'Engine launcher order is `managed-direct` → system `direct` → `npx-fallback`.'),
+              ('Keep all five existing `runCli()` call sites and the single existing `execFileAsync()` source operation', 'Keep all five existing `runCli()` source call sites and the single existing `execFileAsync()` source operation'),
+              ('its share of the 8–9s latency remains UNKNOWN', 'If managed-direct remains near the prior 7–13s source timings'),
           ])
+
+          update('p27-npx-cache-first-launcher.cjs', [
+              ('.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml', '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'),
+              ('3.0.0-alpha.5.65', product), ('3\\.0\\.0-alpha\\.5\\.65', '3\\.0\\.0-alpha\\.5\\.66'),
+              ('1.6.18', engine), ('1\\.6\\.18', '1\\.6\\.19'),
+              ("assert.equal(runProgramOccurrences - runProgramDefinitions, 2, 'direct and npx must remain the only runProgram call sites');", "assert.equal(runProgramOccurrences - runProgramDefinitions, 3, 'managed, direct, and npx remain the only runProgram call sites');"),
+              ('const context = {', "const context = {\n    process:{execPath:'/safe/node'},\n    managedCliRuntime:async()=>({state:'unavailable',entry:null}),"),
+              ("['direct','npx-fallback']", "['managed-direct','direct','npx-fallback']"),
+              ('direct 1 · npx-fallback 1 · unknown 0 · policy prefer-offline · direct ENOENT 1', 'managed-direct 0 · direct 1 · npx-fallback 1 · unknown 0 · policy prefer-offline · direct ENOENT 1'),
+              ('direct 0 · npx-fallback 1 · unknown 0 · policy not-applicable · direct ENOENT 1', 'managed-direct 0 · direct 0 · npx-fallback 1 · unknown 0 · policy not-applicable · direct ENOENT 1'),
+              ('Current release implementation: `3.0.0-alpha.5.66 — Npx Cache-First Launcher`', current),
+              ('`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` restores the exact 5.64 fallback', '`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` continues to control only the final npx fallback policy'),
+              ('5.65 makes no guaranteed performance claim', 'One faster sample is insufficient to claim causality'),
+          ])
+
+          for path in root.glob('*.cjs'):
+              text = path.read_text().replace('1.2.6', '1.3.0').replace('1\\.2\\.6', '1\\.3\\.0')
+              path.write_text(text)
           PY
 
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
@@ -212,21 +241,21 @@ jobs:
             p18-organization-discovery-dedup.cjs p19-organization-empty-fallback-fidelity.cjs p20-shared-24h-capture.cjs
             p21-snapshot-scheduling-attribution.cjs p22-monotonic-release-integrity.cjs p23-credits-usage-early-start.cjs
             p24-snapshot-decision-attribution.cjs p25-long-window-critical-path-decoupling.cjs p26-foreground-cli-launcher-attribution.cjs
-            p27-npx-cache-first-launcher.cjs
+            p27-npx-cache-first-launcher.cjs p28-managed-direct-cli-runtime.cjs
           )
           for test in "${tests[@]}"; do node "plugins/usage-dashboard/tests/$test"; done
 
           git diff --check
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq 22
-          grep -Fq '//@version 3.0.0-alpha.5.65' plugins/usage-dashboard/latest.js
-          grep -Fq "const VERSION = '3.0.0-alpha.5.65';" plugins/usage-dashboard/latest.js
-          grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.18';" plugins/usage-dashboard/latest.js
-          grep -Fq "const VERSION = '1.6.18';" plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq "const MANAGER_VERSION = '1.2.6';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.65';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.18';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.65"' plugins/usage-dashboard/runtime/product-manifest.json
-          grep -Fq '"requiredVersion": "1.6.18"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '//@version 3.0.0-alpha.5.66' plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '3.0.0-alpha.5.66';" plugins/usage-dashboard/latest.js
+          grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.19';" plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '1.6.19';" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "const MANAGER_VERSION = '1.3.0';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.66';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq "const BUNDLED_ENGINE_VERSION = '1.6.19';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.66"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '"requiredVersion": "1.6.19"' plugins/usage-dashboard/runtime/product-manifest.json
           grep -Fq 'creditsEarlyStart' plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq 'cacheDecisions' plugins/usage-dashboard/runtime/bridge-engine.mjs
           grep -Fq 'SECONDARY_REFRESH_CONCURRENCY = 1' plugins/usage-dashboard/runtime/bridge-engine.mjs
@@ -240,30 +269,15 @@ jobs:
           grep -Fq 'Bridge snapshot cache decisions:' plugins/usage-dashboard/latest.js
           grep -Fq 'parser provider-usage-v3' plugins/usage-dashboard/latest.js
           grep -Fq 'unknown stays unknown' plugins/usage-dashboard/latest.js
-          grep -Fq 'Current release implementation: `3.0.0-alpha.5.65 — Npx Cache-First Launcher`' docs/USAGE_DASHBOARD_GUIDELINES.md
+          grep -Fq 'Current release implementation: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`' docs/USAGE_DASHBOARD_GUIDELINES.md
           grep -Fq 'Last verified real-device baseline: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`' docs/USAGE_DASHBOARD_GUIDELINES.md
           grep -Fq '## Long-term update roadmap' docs/USAGE_DASHBOARD_GUIDELINES.md
           grep -Fq 'STALE_CANDIDATE_MAIN' plugins/usage-dashboard/tools/check_release_monotonic.py
           grep -Fq 'SAME_VERSION_ARTIFACT_DIVERGENCE' plugins/usage-dashboard/tools/check_release_monotonic.py
 
-          git checkout -- \
-            plugins/usage-dashboard/tests/p5-bundled-engine.cjs \
-            plugins/usage-dashboard/tests/p11-cache-fidelity.cjs \
-            plugins/usage-dashboard/tests/p13-cache-provenance-diagnostics.cjs \
-            plugins/usage-dashboard/tests/p15-runtime-recovery-fidelity.cjs \
-            plugins/usage-dashboard/tests/p16-snapshot-performance-attribution.cjs \
-            plugins/usage-dashboard/tests/p17-bounded-cli-parallelism.cjs \
-            plugins/usage-dashboard/tests/p18-organization-discovery-dedup.cjs \
-            plugins/usage-dashboard/tests/p19-organization-empty-fallback-fidelity.cjs \
-            plugins/usage-dashboard/tests/p20-shared-24h-capture.cjs \
-            plugins/usage-dashboard/tests/p21-snapshot-scheduling-attribution.cjs \
-            plugins/usage-dashboard/tests/p22-monotonic-release-integrity.cjs \
-            plugins/usage-dashboard/tests/p23-credits-usage-early-start.cjs \
-            plugins/usage-dashboard/tests/p24-snapshot-decision-attribution.cjs \
-            plugins/usage-dashboard/tests/p25-long-window-critical-path-decoupling.cjs \
-            plugins/usage-dashboard/tests/p26-foreground-cli-launcher-attribution.cjs
+          git checkout -- plugins/usage-dashboard/tests
 
-      - name: Commit validated 5.65 candidate to main
+      - name: Commit validated 5.66 candidate to main
         if: github.event_name == 'push'
         shell: bash
         run: |
@@ -279,14 +293,14 @@ jobs:
             docs/USAGE_DASHBOARD_GUIDELINES.md
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo 'main already matches 3.0.0-alpha.5.65'
+            echo 'main already matches 3.0.0-alpha.5.66'
           else
-            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.65 Npx Cache-First Launcher'
+            git commit -m 'release: Local Usage Dashboard 3.0.0-alpha.5.66 Managed Direct CLI Runtime'
             git pull --rebase origin main
             git push origin HEAD:main
           fi
 
-      - name: Publish 5.65 candidate monotonically to release channel
+      - name: Publish 5.66 candidate monotonically to release channel
         if: github.event_name == 'push'
         shell: bash
         run: |
@@ -318,7 +332,7 @@ jobs:
           echo "$GUARD_OUTPUT"
           if [ "$GUARD_RC" -eq 2 ]; then echo 'STALE_CANDIDATE: publish skipped without touching release-usage-dashboard'; exit 0; fi
           if [ "$GUARD_RC" -ne 0 ]; then echo "monotonic release guard failed closed with rc=$GUARD_RC" >&2; exit "$GUARD_RC"; fi
-          if printf '%s\n' "$GUARD_OUTPUT" | grep -Fq 'NOOP_IDENTICAL:'; then echo 'release-usage-dashboard already contains identical 5.65 artifacts'; exit 0; fi
+          if printf '%s\n' "$GUARD_OUTPUT" | grep -Fq 'NOOP_IDENTICAL:'; then echo 'release-usage-dashboard already contains identical 5.66 artifacts'; exit 0; fi
 
           RELEASE_BASE="$(git rev-parse origin/release-usage-dashboard)"
           git config user.name 'github-actions[bot]'
@@ -334,11 +348,11 @@ jobs:
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq '//@version 3.0.0-alpha.5.65' plugins/usage-dashboard/latest.js
-          grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.18';" plugins/usage-dashboard/latest.js
-          grep -Fq "const VERSION = '1.6.18';" plugins/usage-dashboard/runtime/bridge-engine.mjs
-          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.65';" plugins/usage-dashboard/runtime/bridge-manager.cjs
-          grep -Fq '"productVersion": "3.0.0-alpha.5.65"' plugins/usage-dashboard/runtime/product-manifest.json
+          grep -Fq '//@version 3.0.0-alpha.5.66' plugins/usage-dashboard/latest.js
+          grep -Fq "const REQUIRED_BRIDGE_VERSION = '1.6.19';" plugins/usage-dashboard/latest.js
+          grep -Fq "const VERSION = '1.6.19';" plugins/usage-dashboard/runtime/bridge-engine.mjs
+          grep -Fq "const PRODUCT_VERSION = '3.0.0-alpha.5.66';" plugins/usage-dashboard/runtime/bridge-manager.cjs
+          grep -Fq '"productVersion": "3.0.0-alpha.5.66"' plugins/usage-dashboard/runtime/product-manifest.json
 
           git fetch origin main release-usage-dashboard
           test "$(git rev-parse origin/release-usage-dashboard)" = "$RELEASE_BASE" || { echo 'RELEASE_REF_MOVED: refusing stale release base' >&2; exit 1; }
@@ -347,6 +361,6 @@ jobs:
 
           git add -- plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime
           git diff --cached --check
-          if git diff --cached --quiet; then echo 'release-usage-dashboard already matches 3.0.0-alpha.5.65'; exit 0; fi
-          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.65 product artifacts'
+          if git diff --cached --quiet; then echo 'release-usage-dashboard already matches 3.0.0-alpha.5.66'; exit 0; fi
+          git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.66 product artifacts'
           git push origin HEAD:release-usage-dashboard

@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.18';
+const VERSION = '1.6.19';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -17,6 +17,11 @@ const HOST = '127.0.0.1';
 const PORT = Number(process.env.DEVPASS_BRIDGE_PORT || 39117);
 const CLI_VERSION = process.env.LLMGATEWAY_CLI_VERSION || '1.9.0';
 const NPX_PREFER_OFFLINE = String(process.env.DEVPASS_BRIDGE_NPX_PREFER_OFFLINE || '1') !== '0';
+const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
+const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
+const MANAGED_CLI_VERSION_ROOT = path.join(MANAGED_CLI_ROOT, CLI_VERSION);
+const MANAGED_CLI_DESCRIPTOR = path.join(MANAGED_CLI_ROOT, 'managed-cli.json');
+const MANAGED_CLI_STATE = path.join(MANAGED_CLI_ROOT, 'managed-cli-state.json');
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmgateway-devpass-bridge');
 const TOKEN_FILE = path.join(CONFIG_DIR, 'token');
 const UPDATE_READY_DIR = path.join(os.homedir(), 'PocketRisu', 'bridge', 'update-ready');
@@ -230,7 +235,7 @@ function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, 
   const queuedStart = Number(queuedAt || executionStartedAt || endedAt || base);
   const execStart = Number(executionStartedAt || queuedStart);
   const ended = Number(endedAt || execStart);
-  const launcher = ['direct','npx-fallback'].includes(String(launcherMeta?.launcher))
+  const launcher = ['managed-direct','direct','npx-fallback'].includes(String(launcherMeta?.launcher))
     ? String(launcherMeta.launcher)
     : 'unknown';
   const fallbackReason = launcher === 'npx-fallback' && String(launcherMeta?.fallbackReason) === 'direct-enoent'
@@ -640,9 +645,68 @@ async function runProgram(program, args, extraEnv = {}) {
   });
 }
 
+function pathInside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function readManagedCliState() {
+  try {
+    const value = JSON.parse(await fs.readFile(MANAGED_CLI_STATE, 'utf8'));
+    const state = ['ready','provisioning','unavailable','invalid'].includes(String(value?.state))
+      ? String(value.state)
+      : 'unavailable';
+    return {
+      state,
+      version:String(value?.version || '') === CLI_VERSION ? CLI_VERSION : '',
+      provisioning:['ok','pending','backoff','disabled','unavailable'].includes(String(value?.provisioning))
+        ? String(value.provisioning)
+        : 'unavailable',
+    };
+  } catch {
+    return {state:'unavailable',version:'',provisioning:'unavailable'};
+  }
+}
+
+async function managedCliRuntime() {
+  if (!MANAGED_CLI_ENABLED) return {state:'unavailable',version:'',provisioning:'disabled',entry:null};
+  let descriptor;
+  try { descriptor = JSON.parse(await fs.readFile(MANAGED_CLI_DESCRIPTOR, 'utf8')); }
+  catch {
+    const state = await readManagedCliState();
+    return state.state === 'ready'
+      ? {state:'invalid',version:'',provisioning:'unavailable',entry:null}
+      : {...state,entry:null};
+  }
+  if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== '@llmgateway/cli' || descriptor?.version !== CLI_VERSION) {
+    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+  }
+  try {
+    const versionRoot = await fs.realpath(MANAGED_CLI_VERSION_ROOT);
+    const entry = await fs.realpath(String(descriptor.entry || ''));
+    if (!pathInside(versionRoot, entry)) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+    const stat = await fs.stat(entry);
+    if (!stat.isFile()) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+    return {state:'ready',version:CLI_VERSION,provisioning:'ok',entry};
+  } catch {
+    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+  }
+}
+
+async function managedCliDiagnostics() {
+  const runtime = await managedCliRuntime();
+  return {state:runtime.state,version:runtime.version,provisioning:runtime.provisioning};
+}
+
 async function runCliProcess(args, extraEnv = {}) {
-  const launcherMeta = { launcher:'direct', fallbackReason:'none', npxPolicy:'not-applicable' };
+  const launcherMeta = { launcher:'unknown', fallbackReason:'none', npxPolicy:'not-applicable' };
   return withCliSlot(cliOperationLabel(args, extraEnv), async () => {
+    const managed = await managedCliRuntime();
+    if (managed.state === 'ready' && managed.entry) {
+      launcherMeta.launcher = 'managed-direct';
+      return runProgram(process.execPath, [managed.entry, ...args], extraEnv);
+    }
+    launcherMeta.launcher = 'direct';
     try {
       return await runProgram('llmgateway', args, extraEnv);
     } catch (error) {
@@ -2738,6 +2802,7 @@ async function snapshotAttributed(profile = 'full', creditsOrgId = '', attributi
     bridgeVersion: VERSION,
     protocolVersion: PROTOCOL_VERSION,
     cliVersion: CLI_VERSION,
+    cliRuntime: await managedCliDiagnostics(),
     uptimeSec: Math.floor((Date.now() - STARTED_AT) / 1000),
     snapshotProfile: normalizedProfile,
     creditsOrganization: {requestedId: requestedCreditsOrgId || null, selectedId: creditsOrg?.id || null, fallback: creditsSelection.fallback, fallbackReason: creditsSelection.fallbackReason || null},

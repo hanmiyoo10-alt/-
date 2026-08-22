@@ -15,6 +15,7 @@ MANAGER = RUNTIME / 'bridge-manager.cjs'
 ENGINE = RUNTIME / 'bridge-engine.mjs'
 MANIFEST = RUNTIME / 'product-manifest.json'
 BOOTSTRAP = RUNTIME / 'bootstrap-bridge-manager.sh'
+GUIDELINES = Path('docs/USAGE_DASHBOARD_GUIDELINES.md')
 
 BASE_VERSION = '3.0.0-alpha.5.66'
 TARGET_VERSION = '3.0.0-alpha.5.67'
@@ -74,6 +75,19 @@ expected_manager = manager_before.replace(
 )
 if manager_after != expected_manager:
     raise SystemExit('Manager functional body changed beyond product-version synchronization')
+
+replace_once(
+    GUIDELINES,
+    'Last verified real-device baseline: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`.',
+    'Last verified real-device baseline: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`.',
+    'verified real-device baseline memory',
+)
+replace_once(
+    GUIDELINES,
+    'Current release implementation: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`.',
+    'Current release implementation: `3.0.0-alpha.5.67 — Diagnostics Workspace Overhaul`.',
+    'current release implementation memory',
+)
 
 manifest['productVersion'] = TARGET_VERSION
 manifest['components']['plugin']['version'] = TARGET_VERSION

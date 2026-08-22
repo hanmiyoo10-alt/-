@@ -13,7 +13,6 @@ const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const reusable = fs.readFileSync(reusablePath, 'utf8');
 const caller = fs.readFileSync(callerPath, 'utf8');
-const adapter = fs.readFileSync(adapterPath, 'utf8');
 const validator = fs.readFileSync(validatorPath, 'utf8');
 
 assert.deepEqual(
@@ -31,6 +30,12 @@ assert.match(reusable, /RELEASE_REF_MOVED/);
 assert.match(reusable, /MAIN_MANIFEST_MOVED/);
 assert.match(reusable, /inputs\.publish/);
 assert.doesNotMatch(reusable, /product\s*=\s*['"]3\.0\.0-alpha\./, 'historical adapter must not remain inline');
+assert.equal(fs.existsSync(adapterPath), false, 'historical regression adapter must be retired');
+assert.ok(!reusable.includes('prepare_release_regressions.py'));
+assert.ok(!reusable.includes('git checkout -- plugins/usage-dashboard/tests'));
+assert.match(reusable, /status="\$\(git status --porcelain --untracked-files=all -- plugins\/usage-dashboard\/tests\)"/);
+assert.match(reusable, /TEST_TREE_MUTATED/);
+assert.equal((reusable.match(/assert_test_tree_clean/g) || []).length, 3, 'test-tree guard must be defined once and run twice');
 
 assert.ok(caller.length < 2200, 'release caller must remain small');
 assert.match(caller, /uses: \.\/\.github\/workflows\/reusable-usage-dashboard-release\.yml/);
@@ -41,9 +46,7 @@ for (const forbidden of ['git switch', 'git push', 'text.replace', 'check_releas
   assert.ok(!caller.includes(forbidden), `caller must not duplicate ${forbidden}`);
 }
 
-assert.match(adapter, /parser\.add_argument\('--spec', required=True\)/);
-assert.doesNotMatch(adapter, /text\.replace\([^\n]*(?:productVersion|engineVersion|managerVersion|Current release implementation|stage-usage-dashboard-5)/);
 assert.match(validator, /sha256 mismatch/);
 assert.match(validator, /snapshot contract/);
 
-console.log('Usage Dashboard release infrastructure foundation: OK · reusable workflow, release spec, bounded maintenance caller');
+console.log('Usage Dashboard release infrastructure foundation: OK · immutable regressions, reusable workflow, release spec, bounded maintenance caller');

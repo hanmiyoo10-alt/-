@@ -45,21 +45,6 @@ for (const name of migratedIncidentTests) {
   assert.ok(!/\b(?:engine|manager|diagnostics)\.slice\(/.test(source), `${name} must not slice runtime function bodies`);
 }
 
-const adapter = fs.readFileSync('plugins/usage-dashboard/tools/prepare_release_regressions.py', 'utf8');
-for (const name of [
-  'p16-snapshot-performance-attribution.cjs',
-  'p17-bounded-cli-parallelism.cjs',
-  'p18-organization-discovery-dedup.cjs',
-  'p20-shared-24h-capture.cjs',
-  'p21-snapshot-scheduling-attribution.cjs',
-  'p23-credits-usage-early-start.cjs',
-  'p24-snapshot-decision-attribution.cjs',
-  'p26-foreground-cli-launcher-attribution.cjs',
-  'p27-npx-cache-first-launcher.cjs',
-]) {
-  assert.ok(!adapter.includes(`update('${name}'`), `${name} must no longer need a release adapter shim`);
-}
-
 const bridgeHarness = fs.readFileSync('plugins/usage-dashboard/tests/harness/bridge-process.cjs', 'utf8');
 const fakeCli = fs.readFileSync('plugins/usage-dashboard/tests/harness/fake-cli.cjs', 'utf8');
 assert.ok(bridgeHarness.includes("http://127.0.0.1:"));
@@ -75,6 +60,10 @@ assert.ok(fakeCli.includes('captureActivityByCall'));
 assert.ok(fakeCli.includes("return 'organizations'"));
 
 const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
+assert.equal(fs.existsSync('plugins/usage-dashboard/tools/prepare_release_regressions.py'), false);
+assert.ok(!workflow.includes('prepare_release_regressions.py'));
+assert.ok(!workflow.includes('git checkout -- plugins/usage-dashboard/tests'));
+assert.match(workflow, /TEST_TREE_MUTATED/);
 for (const name of ['behavior-harness-contract.cjs', ...behaviorTests]) {
   assert.ok(workflow.includes(name), `${name} must run in the authoritative workflow`);
 }
@@ -82,4 +71,4 @@ for (const name of harnessFiles) {
   assert.ok(fs.existsSync(`plugins/usage-dashboard/tests/${name}`));
 }
 
-console.log('usage-dashboard behavior harness contract: OK · black-box tests are local-only, bounded, and free of VM source extraction');
+console.log('usage-dashboard behavior harness contract: OK · black-box tests are local-only, bounded, adapter-free, and immutable in CI');

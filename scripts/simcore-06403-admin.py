@@ -48,7 +48,7 @@ new_prod = '''## Production verdict
 
 `v0.64.3` is the current production release. It is a narrow diagnostic-only repair for the confirmed v0.64.2 natural B_END `REPORT_BUILD_FAILED`: the outer runtime now binds the existing Kernel and Time modules used by `buildLastTurnDiagnosticReport()`. The report-builder body, B_END terminal-coverage calculation, clipboard transport contract, request/output hot paths, Broadcast/Time semantics, persistent state, M2-2 behavior, and the frozen v0.65.0 M2-3 design are unchanged.
 
-The live close gate is one natural current-turn B_END diagnostic copy with `output COMMITTED`, report construction success, Broadcast closure / terminal coverage lines present, and copy result `COPIED` or `COPIED_FALLBACK`. Only after that result should v0.65.0 M2-3 Edit Reconcile Ownership Extraction begin. The genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
+The live close gate is one natural current-turn B_END diagnostic copy with `output COMMITTED`, report construction success, Broadcast closure / terminal coverage lines present, and copy result `COPIED` or `COPIED_FALLBACK`. After that gate, review the separately preserved `POST_BEND_C_CLOCK_DOMAIN_GAP` evidence before starting M2-3; if the clock-authority contract is confirmed, ship a separate narrow clock mini first. M2-3 implementation remains blocked until that disposition is explicit. The genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
 '''
 dev = dev[:prod_start] + new_prod + dev[prod_end:]
 
@@ -94,7 +94,7 @@ Broadcast closure / terminal coverage lines present
 copy result COPIED or COPIED_FALLBACK
 ```
 
-Only after this live close gate passes should v0.65.0 M2-3 implementation begin.
+After the live close gate, review `POST_BEND_C_CLOCK_DOMAIN_GAP` as a separate correctness contract. Do not fold it into v0.64.3 or M2-3; if confirmed, release a narrow post-B_END clock-authority mini before v0.65.0. M2-3 remains blocked until that review is resolved.
 
 '''
     dev = dev.replace(section_anchor, section + section_anchor, 1)
@@ -112,13 +112,13 @@ guide_path.write_text(guide, encoding='utf-8')
 gate_path = Path('docs/SIMCORE_NEXT_RELEASE_GATE_06403.md')
 gate = gate_path.read_text(encoding='utf-8')
 if '## Release status' not in gate:
-    gate += f'''\n\n## Release status\n\n```text\nSTATIC RELEASED\nVersion: 0.64.3\nRelease commit: {release_commit}\nRelease blob: {release_blob}\nLive close gate: PENDING natural current-turn B_END diagnostic copy\n```\n\nM2-3 remains blocked until the natural B_END close gate passes.\n'''
+    gate += f'''\n\n## Release status\n\n```text\nSTATIC RELEASED\nVersion: 0.64.3\nRelease commit: {release_commit}\nRelease blob: {release_blob}\nLive close gate: PENDING natural current-turn B_END diagnostic copy\n```\n\nAfter the B_END live close gate, review the separately captured `POST_BEND_C_CLOCK_DOMAIN_GAP`. M2-3 remains blocked until that clock-authority disposition is explicit.\n'''
 gate_path.write_text(gate, encoding='utf-8')
 
 watch_path = Path('docs/SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md')
 watch = watch_path.read_text(encoding='utf-8')
 if '## v0.64.3 builder-binding repair' not in watch:
-    watch += f'''\n\n## v0.64.3 builder-binding repair\n\nProduction `v0.64.3 — B_END Diagnostic Builder Binding Repair` is statically released at `{release_commit}` / blob `{release_blob}`. The confirmed v0.64.2 `REPORT_BUILD_FAILED` source defect is repaired by binding the existing Kernel and Time modules in the outer diagnostic runtime scope while keeping the report-builder body and clipboard transport contract unchanged. Natural current-turn B_END copy remains the close gate before M2-3.\n'''
+    watch += f'''\n\n## v0.64.3 builder-binding repair\n\nProduction `v0.64.3 — B_END Diagnostic Builder Binding Repair` is statically released at `{release_commit}` / blob `{release_blob}`. The confirmed v0.64.2 `REPORT_BUILD_FAILED` source defect is repaired by binding the existing Kernel and Time modules in the outer diagnostic runtime scope while keeping the report-builder body and clipboard transport contract unchanged. Natural current-turn B_END copy remains this mini's close gate. The separate `POST_BEND_C_CLOCK_DOMAIN_GAP` must be reviewed after that close gate before M2-3 is allowed to start.\n'''
 watch_path.write_text(watch, encoding='utf-8')
 
 print('SimCore v0.64.3 durable memory synchronized')

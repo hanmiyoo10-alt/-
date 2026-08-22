@@ -25,6 +25,12 @@ function refreshComplete(result, initialState) {
   return Number(state.refreshCount || 0) > Number(initialState?.refreshCount || 0);
 }
 
+function viewsComplete(result, expectedViews) {
+  return Array.isArray(result?.views)
+    && result.views.length >= Math.max(1, Number(expectedViews || 1))
+    && Number(result?.viewCapturePending || 0) === 0;
+}
+
 async function stopChild(child) {
   if (child.exitCode !== null) return;
   child.kill('SIGTERM');
@@ -47,6 +53,8 @@ async function runDashboard(options = {}) {
     snapshotStatus:Number(options.snapshotStatus || 200),
     managerStatus:Number(options.managerStatus || 503),
     managerResponse:options.managerResponse || {ok:false},
+    failStateWrites:Math.max(0, Number(options.failStateWrites || 0)),
+    captureSettingsViews:options.captureSettingsViews === true,
   }));
 
   const child = spawn(process.execPath, ['--require', preloadPath, dashboardPath], {
@@ -63,21 +71,29 @@ async function runDashboard(options = {}) {
   child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-20_000); });
 
   const timeoutMs = Math.max(500, Number(options.timeoutMs || 5_000));
-  const waitFor = options.waitFor === 'refresh' ? 'refresh' : 'state-write';
+  const waitFor = options.waitFor === 'refresh' ? 'refresh' : options.waitFor === 'views' ? 'views' : 'state-write';
+  const expectedViews = Math.max(1, Number(options.expectedViews || 1));
   const startedAt = Date.now();
   let result = null;
   try {
     while (Date.now() - startedAt < timeoutMs) {
       result = readResult(resultFile);
       const stateWrite = result?.writes?.includes('local-usage-dashboard-v3');
-      if (waitFor === 'refresh' ? refreshComplete(result, initialState) : stateWrite) break;
+      const ready = waitFor === 'refresh'
+        ? refreshComplete(result, initialState)
+        : waitFor === 'views'
+          ? viewsComplete(result, expectedViews)
+          : stateWrite;
+      if (ready) break;
       if (child.exitCode !== null) break;
       await delay(10);
     }
     result = readResult(resultFile);
     const ready = waitFor === 'refresh'
       ? refreshComplete(result, initialState)
-      : result?.writes?.includes('local-usage-dashboard-v3');
+      : waitFor === 'views'
+        ? viewsComplete(result, expectedViews)
+        : result?.writes?.includes('local-usage-dashboard-v3');
     if (!ready) {
       throw new Error(`dashboard process did not reach ${waitFor}\nstdout:\n${stdout}\nstderr:\n${stderr}\nresult:\n${JSON.stringify(result, null, 2)}`);
     }

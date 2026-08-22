@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **M5-C IMPLEMENTED CANDIDATE — state/contract process harness**
+Status: **M5-D IMPLEMENTED CANDIDATE — runtime recovery process harness**
 
 Recorded after:
 
@@ -17,6 +17,8 @@ M5-A begins the remaining source-extraction retirement by exercising the exact E
 M5-B extends the existing real-Engine organization harness with capture-empty/fallback-empty and capture-empty/fallback-valid scenarios. It removes VM/function-body extraction from P19 while preserving the hard empty-result error and fallback provenance.
 
 M5-C executes the shipped `latest.js` unchanged inside a bounded headless Risuai/storage/nativeFetch process. It migrates `foundation`, P1 contract, P5 state compatibility, and P6 RC migration from VM/source extraction while preserving state hydration, contract normalization, privacy, and explicit-zero semantics. Remaining production VM tests drop from seven to three.
+
+M5-D extends that shipped-dashboard process harness with deterministic test-only state-persist fault injection and observes the real `openSettings()` → `#copy-diag` → `copyDiag()` → clipboard diagnostic path. It proves an active local persist error blocks Stable Readiness, a later timer refresh clears the active incident, cumulative failure/recovery history remains visible, and P15 no longer needs VM extraction. Remaining production VM tests drop from three to two.
 
 ## Why this backlog exists
 
@@ -209,7 +211,7 @@ Still pending:
 
 - modularize Engine development sources in a later versioned runtime release,
 - split basic and detailed Diagnostics presentation,
-- migrate the remaining recovery, service-tier, and outcome VM fixtures in bounded M5 follow-ups.
+- migrate the remaining service-tier and outcome VM fixtures in the final bounded M5 follow-up.
 
 Maintenance PR 2 — Current Release Contract Fixture:
 
@@ -273,6 +275,16 @@ M5-C — State/Contract Process Harness:
 - removes VM/source slicing from `foundation`, P1, P5 state compatibility, and P6 RC migration, reducing remaining production VM tests from `7` to `3`,
 - leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
 
+M5-D — Runtime Recovery Process Harness:
+
+- runs the exact shipped `plugins/usage-dashboard/latest.js` with a test-preload-only first state-persist failure and no production runtime hooks,
+- lets the production refresh loop continue into a later timer refresh and verifies the bridge remains connected while the local persist incident is active,
+- captures the real Diagnostics output through `openSettings()` → bound `#copy-diag` handler → `copyDiag()` → clipboard rather than inferring readiness from Settings HTML,
+- verifies `Stable readiness: BLOCKED` with `active local errors 1`, then `Stable readiness: READY` after recovery,
+- verifies cumulative local failure history remains `total 1` while active drops to `0` and recoveries rises to `1`,
+- removes VM/source extraction from P15 and reduces remaining production VM tests from `3` to `2`,
+- leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)
@@ -323,6 +335,6 @@ M5-C — State/Contract Process Harness:
 
 ## Next gate
 
-Merge M5-C only after the state/contract process behavior is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, remaining production VM tests are `3`, and all runtime/manifest hashes remain unchanged.
+Merge M5-D only after the runtime-recovery process behavior is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, remaining production VM tests are `2`, and all runtime/manifest hashes remain unchanged.
 
-Continue with M5-D recovery process harness after M5-C. Do not combine the remaining fixture migrations with Engine modularization, Diagnostics changes, or a product release.
+Continue with M5-E service-tier/outcome process harness after M5-D. Do not combine the final fixture migration with Engine modularization, Diagnostics changes, or a product release.

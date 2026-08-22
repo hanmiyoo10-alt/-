@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **M5-D IMPLEMENTED CANDIDATE — runtime recovery process harness**
+Status: **M5-E IMPLEMENTED CANDIDATE — service-tier/outcome process harness**
 
 Recorded after:
 
@@ -19,6 +19,8 @@ M5-B extends the existing real-Engine organization harness with capture-empty/fa
 M5-C executes the shipped `latest.js` unchanged inside a bounded headless Risuai/storage/nativeFetch process. It migrates `foundation`, P1 contract, P5 state compatibility, and P6 RC migration from VM/source extraction while preserving state hydration, contract normalization, privacy, and explicit-zero semantics. Remaining production VM tests drop from seven to three.
 
 M5-D extends that shipped-dashboard process harness with deterministic test-only state-persist fault injection and observes the real `openSettings()` → `#copy-diag` → `copyDiag()` → clipboard diagnostic path. It proves an active local persist error blocks Stable Readiness, a later timer refresh clears the active incident, cumulative failure/recovery history remains visible, and P15 no longer needs VM extraction. Remaining production VM tests drop from three to two.
+
+M5-E drives raw all/DevPass recent-request rows through the same shipped-dashboard refresh path and observes the real Diagnostics/UI result. It proves service-tier alias normalization, source provenance, UNKNOWN preservation, cross-scope request identity, and success/error/cancelled/unknown outcome precedence without VM extraction. Remaining production VM tests drop from two to zero.
 
 ## Why this backlog exists
 
@@ -205,13 +207,14 @@ Completed across the maintenance series:
 - dependency-injected launcher/cache/scheduler behavior harnesses exercise the real Engine process boundary,
 - migrated incident regressions no longer depend on VM function-body extraction,
 - the historical regression adapter is removed completely,
-- materializer and test execution are forbidden from mutating the committed test tree.
+- materializer and test execution are forbidden from mutating the committed test tree,
+- production incident regressions no longer execute sliced production helpers through `node:vm`.
 
-Still pending:
+Still pending after M5-E:
 
-- modularize Engine development sources in a later versioned runtime release,
-- split basic and detailed Diagnostics presentation,
-- migrate the remaining service-tier and outcome VM fixtures in the final bounded M5 follow-up.
+- modularize Engine development sources only in a later versioned runtime release if separately justified,
+- split basic and detailed Diagnostics presentation only as a separate product/UI change,
+- choose the next maintenance target from fresh repo evidence after the M5 series is merged and re-baselined.
 
 Maintenance PR 2 — Current Release Contract Fixture:
 
@@ -285,6 +288,15 @@ M5-D — Runtime Recovery Process Harness:
 - removes VM/source extraction from P15 and reduces remaining production VM tests from `3` to `2`,
 - leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
 
+M5-E — Service Tier / Outcome Process Harness:
+
+- feeds the exact shipped `plugins/usage-dashboard/latest.js` raw recent-request aliases through both `all` and `devpass` scopes and captures post-refresh Diagnostics/UI through the bounded dashboard harness,
+- verifies `default` normalizes to `standard`, FLEX/PRIORITY remain exact, missing served tier remains unknown, and requested/served source-field provenance remains explicit,
+- verifies the same request identity observed in both scopes and enriched from legacy STANDARD to fresh FLEX remains one ledger row, so service tier never changes request dedupe identity,
+- verifies outcome precedence keeps `timeout + success:true` as error, `cancelled + success:true` as cancelled, completed rows as success, and an explicitly retained history row as unknown,
+- removes VM/source extraction from P5 service-tier fidelity and P6 release hardening, reducing remaining production VM tests from `2` to `0`,
+- leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)
@@ -327,6 +339,7 @@ M5-D — Runtime Recovery Process Harness:
 - A release-specific workflow/caller contains no copied publisher implementation.
 - Product/Engine/Manager/contracts are declared once per candidate.
 - Historical tests do not require current release-title prose.
+- Production incident regressions execute behavior through bounded process harnesses instead of `node:vm` source slicing.
 - Source-operation counts do not count function declarations.
 - P22 downgrade, divergence, moved-main, and moved-release protections remain GREEN.
 - A docs-only or CI-only maintenance PR does not bump Product, Engine, or Manager and does not publish runtime artifacts.
@@ -335,6 +348,6 @@ M5-D — Runtime Recovery Process Harness:
 
 ## Next gate
 
-Merge M5-D only after the runtime-recovery process behavior is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, remaining production VM tests are `2`, and all runtime/manifest hashes remain unchanged.
+Merge M5-E only after the service-tier/outcome process behavior is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, remaining production VM tests are `0`, and all runtime/manifest hashes remain unchanged.
 
-Continue with M5-E service-tier/outcome process harness after M5-D. Do not combine the final fixture migration with Engine modularization, Diagnostics changes, or a product release.
+After M5-E, close the M5 VM/source-extraction retirement series and re-baseline from merged `main` before designing the next maintenance target. Do not combine Engine modularization, Diagnostics changes, or a product release into this final fixture migration.

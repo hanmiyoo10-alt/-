@@ -14,6 +14,7 @@ const behaviorTests = [
   'behavior-cache-observer.cjs',
   'behavior-state-contract.cjs',
   'behavior-runtime-recovery.cjs',
+  'behavior-service-tier-outcome.cjs',
 ];
 const harnessFiles = [
   'harness/bridge-process.cjs',
@@ -27,8 +28,10 @@ const harnessFiles = [
 const migratedIncidentTests = [
   'foundation.cjs',
   'p1-contract.cjs',
+  'p5-service-tier-fidelity.cjs',
   'p5-state-compatibility.cjs',
   'p6-rc-migration.cjs',
+  'p6-release-hardening.cjs',
   'p10-independent-cache-observer.cjs',
   'p11-cache-fidelity.cjs',
   'p15-runtime-recovery-fidelity.cjs',
@@ -89,9 +92,11 @@ assert.ok(dashboardHarness.includes("child.kill('SIGKILL')"));
 assert.ok(dashboardHarness.includes('.slice(-20_000)'));
 assert.ok(dashboardHarness.includes('fs.rmSync(fixtureRoot, {recursive:true,force:true})'));
 assert.ok(dashboardHarness.includes("options.waitFor === 'views'"));
+assert.ok(dashboardHarness.includes('captureRefreshViews:options.captureRefreshViews === true'));
 assert.ok(dashboardPreload.includes('headless dashboard harness must not request main DOM'));
 assert.ok(dashboardPreload.includes('failStateWrites'));
 assert.ok(dashboardPreload.includes('captureSettingsViews'));
+assert.ok(dashboardPreload.includes('captureRefreshViews'));
 assert.ok(dashboardPreload.includes("selector === '#copy-diag'"));
 assert.ok(dashboardPreload.includes("Object.defineProperty(globalThis.navigator, 'clipboard'"));
 assert.ok(dashboardPreload.includes("target.startsWith('http://127.0.0.1:39119/')"));

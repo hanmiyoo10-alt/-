@@ -9,13 +9,14 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.17';
+const VERSION = '1.6.18';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.DEVPASS_BRIDGE_PORT || 39117);
 const CLI_VERSION = process.env.LLMGATEWAY_CLI_VERSION || '1.9.0';
+const NPX_PREFER_OFFLINE = String(process.env.DEVPASS_BRIDGE_NPX_PREFER_OFFLINE || '1') !== '0';
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmgateway-devpass-bridge');
 const TOKEN_FILE = path.join(CONFIG_DIR, 'token');
 const UPDATE_READY_DIR = path.join(os.homedir(), 'PocketRisu', 'bridge', 'update-ready');
@@ -235,10 +236,14 @@ function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, 
   const fallbackReason = launcher === 'npx-fallback' && String(launcherMeta?.fallbackReason) === 'direct-enoent'
     ? 'direct-enoent'
     : 'none';
+  const npxPolicy = launcher === 'npx-fallback' && ['prefer-offline','default'].includes(String(launcherMeta?.npxPolicy))
+    ? String(launcherMeta.npxPolicy)
+    : 'not-applicable';
   attribution.cliOperations.push({
     label: String(label || 'cli'),
     launcher,
     fallbackReason,
+    npxPolicy,
     startOffsetMs: Math.max(0, queuedStart - base),
     executionStartOffsetMs: Math.max(0, execStart - base),
     endOffsetMs: Math.max(0, ended - base),
@@ -636,7 +641,7 @@ async function runProgram(program, args, extraEnv = {}) {
 }
 
 async function runCliProcess(args, extraEnv = {}) {
-  const launcherMeta = { launcher:'direct', fallbackReason:'none' };
+  const launcherMeta = { launcher:'direct', fallbackReason:'none', npxPolicy:'not-applicable' };
   return withCliSlot(cliOperationLabel(args, extraEnv), async () => {
     try {
       return await runProgram('llmgateway', args, extraEnv);
@@ -644,8 +649,12 @@ async function runCliProcess(args, extraEnv = {}) {
       if (error?.code !== 'ENOENT') throw error;
       launcherMeta.launcher = 'npx-fallback';
       launcherMeta.fallbackReason = 'direct-enoent';
+      launcherMeta.npxPolicy = NPX_PREFER_OFFLINE ? 'prefer-offline' : 'default';
     }
-    return runProgram('npx', ['--yes', `@llmgateway/cli@${CLI_VERSION}`, ...args], extraEnv);
+    const npxArgs = NPX_PREFER_OFFLINE
+      ? ['--yes', '--prefer-offline', `@llmgateway/cli@${CLI_VERSION}`, ...args]
+      : ['--yes', `@llmgateway/cli@${CLI_VERSION}`, ...args];
+    return runProgram('npx', npxArgs, extraEnv);
   }, launcherMeta);
 }
 

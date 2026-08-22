@@ -22,6 +22,13 @@ let unloadHandler = null;
 let settingHandler = null;
 let stateWriteAttempts = 0;
 let viewCapturePending = 0;
+let clipboardText = '';
+
+const copyDiagButton = {
+  textContent:'진단 복사',
+  isConnected:true,
+  onclick:null,
+};
 
 function writeResult(reason) {
   const state = clone(storage.get(STATE_KEY));
@@ -55,10 +62,20 @@ function queueSettingsView(reason) {
   setTimeout(async () => {
     try {
       if (typeof settingHandler !== 'function') throw new Error('settings handler unavailable');
+      clipboardText = '';
+      copyDiagButton.onclick = null;
+      copyDiagButton.textContent = '진단 복사';
       await settingHandler();
-      views.push({reason:String(reason || ''),html:String(documentStub.body.innerHTML || '').slice(0, 250_000)});
+      if (typeof copyDiagButton.onclick !== 'function') throw new Error('diagnostics copy handler unavailable');
+      await copyDiagButton.onclick({currentTarget:copyDiagButton});
+      if (!clipboardText) throw new Error('diagnostics clipboard remained empty');
+      views.push({
+        reason:String(reason || ''),
+        html:String(documentStub.body.innerHTML || '').slice(0, 250_000),
+        diag:String(clipboardText).slice(0, 250_000),
+      });
     } catch (error) {
-      views.push({reason:String(reason || ''),error:error?.message || String(error),html:''});
+      views.push({reason:String(reason || ''),error:error?.message || String(error),html:'',diag:''});
     } finally {
       viewCapturePending = Math.max(0, viewCapturePending - 1);
       writeResult(`view:${reason}`);
@@ -106,7 +123,7 @@ const documentStub = {
   body,
   addEventListener() {},
   removeEventListener() {},
-  querySelector() { return null; },
+  querySelector(selector) { return selector === '#copy-diag' ? copyDiagButton : null; },
   querySelectorAll() { return []; },
   createElement() { return {innerHTML:'',firstElementChild:null}; },
 };
@@ -118,6 +135,18 @@ globalThis.window = {
   innerWidth:1280,
   innerHeight:800,
 };
+
+const clipboard = {
+  async writeText(text) { clipboardText = String(text || ''); },
+};
+if (!globalThis.navigator) {
+  Object.defineProperty(globalThis, 'navigator', {configurable:true,value:{}});
+}
+try {
+  Object.defineProperty(globalThis.navigator, 'clipboard', {configurable:true,value:clipboard});
+} catch (_) {
+  globalThis.navigator.clipboard = clipboard;
+}
 
 globalThis.Risuai = {
   async getLocalPluginStorage() { return store; },

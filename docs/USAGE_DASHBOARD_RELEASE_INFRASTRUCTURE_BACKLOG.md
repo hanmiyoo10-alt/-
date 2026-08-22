@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **MAINTENANCE PR 1 IN PROGRESS — workflow foundation**
+Status: **MAINTENANCE PR 1 COMPLETE — workflow foundation merged in #70**
 
 Recorded after:
 
@@ -182,7 +182,7 @@ Completed before this maintenance series:
 - 5.65 real-device evidence was collected.
 - 5.66 Managed Direct CLI Runtime shipped as Product 5.66 / Engine 1.6.19 / Manager 1.3.0 with P28 and the existing P22 monotonic publisher guard.
 
-Included in Maintenance PR 1:
+Completed in Maintenance PR 1:
 
 - one reusable Usage Dashboard build/test/publish workflow,
 - one 5.66 release spec as the single current candidate tuple,
@@ -248,7 +248,6 @@ Still pending:
 
 ## Next gate
 
-Maintenance PR 1 is complete when its PR suite passes, the PR merges to `main`, the post-merge validation run passes, and `release-usage-dashboard` remains byte-identical at 5.66.
+Maintenance PR 1 passed its PR suite, merged as #70, and left `release-usage-dashboard` byte-identical at 5.66.
 
-After that, start Maintenance PR 2 separately. Do not combine its historical-test fixture cleanup with Engine modularization, Diagnostics changes, or a product release.
-
+Start Maintenance PR 2 separately. Do not combine its historical-test fixture cleanup with Engine modularization, Diagnostics changes, or a product release.

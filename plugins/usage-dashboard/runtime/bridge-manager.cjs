@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.2.6';
-const PRODUCT_VERSION = '3.0.0-alpha.5.65';
+const MANAGER_VERSION = '1.3.0';
+const PRODUCT_VERSION = '3.0.0-alpha.5.66';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -28,8 +28,19 @@ const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-prelo
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
-const BUNDLED_ENGINE_VERSION = '1.6.18';
-const BUNDLED_ENGINE_SHA256 = 'f5927cf9b406a7f678bf42d0feb0916af5fe4989e5d0109148a4a9bc11617f11';
+const BUNDLED_ENGINE_VERSION = '1.6.19';
+const BUNDLED_ENGINE_SHA256 = 'f17d689f39bd469bcadf1a2125313146cd6e04cb38299a5b4583d903a696cf09';
+const MANAGED_CLI_PACKAGE = '@llmgateway/cli';
+const MANAGED_CLI_VERSION = '1.9.0';
+const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
+const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
+const MANAGED_CLI_VERSION_ROOT = path.join(MANAGED_CLI_ROOT, MANAGED_CLI_VERSION);
+const MANAGED_CLI_DESCRIPTOR = path.join(MANAGED_CLI_ROOT, 'managed-cli.json');
+const MANAGED_CLI_STATE = path.join(MANAGED_CLI_ROOT, 'managed-cli-state.json');
+const MANAGED_CLI_LOCK = path.join(MANAGED_CLI_ROOT, 'managed-cli.lock');
+const MANAGED_CLI_RETRY_MS = 30 * 60 * 1000;
+const MANAGED_CLI_INSTALL_TIMEOUT_MS = 5 * 60 * 1000;
+let managedCliProvisioningPromise = null;
 const LEGACY_ENGINE_PID_FILE = path.join(os.homedir(), 'PocketRisu/bridge/run/llmgateway-devpass-bridge.pid');
 const LEGACY_ENGINE_SCRIPT = path.join(os.homedir(), 'PocketRisu/bridge/llmgateway-termux-bridge.mjs');
 const RESTART_MODE = String(process.env.LUD_MANAGER_RESTART_MODE || 'manual');
@@ -58,6 +69,149 @@ function authorized(req) {
 }
 function sha256(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 function shellQuote(value) { return `'${String(value).replace(/'/g, `'"'"'`)}'`; }
+
+function pathInside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+function atomicJsonWrite(file, value) {
+  fs.mkdirSync(path.dirname(file), {recursive:true,mode:0o700});
+  const next = `${file}.next-${process.pid}`;
+  fs.writeFileSync(next, JSON.stringify(value, null, 2) + '\n', {mode:0o600});
+  fs.renameSync(next, file);
+  try { fs.chmodSync(file, 0o600); } catch (_) {}
+}
+function readManagedCliState() {
+  try {
+    const value = JSON.parse(fs.readFileSync(MANAGED_CLI_STATE, 'utf8'));
+    const state = ['ready','provisioning','unavailable','invalid'].includes(String(value?.state)) ? String(value.state) : 'unavailable';
+    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(value?.provisioning)) ? String(value.provisioning) : 'unavailable';
+    return {state,version:String(value?.version || '') === MANAGED_CLI_VERSION ? MANAGED_CLI_VERSION : '',provisioning,nextRetryAt:Number(value?.nextRetryAt || 0)};
+  } catch (_) { return {state:'unavailable',version:'',provisioning:'unavailable',nextRetryAt:0}; }
+}
+function writeManagedCliState(state, provisioning, nextRetryAt = 0) {
+  atomicJsonWrite(MANAGED_CLI_STATE, {format:1,state,version:state === 'ready' ? MANAGED_CLI_VERSION : '',provisioning,nextRetryAt:Number(nextRetryAt || 0),updatedAt:Date.now()});
+}
+function resolveManagedCliBin(packageJson) {
+  if (typeof packageJson?.bin === 'string') return packageJson.bin;
+  if (!packageJson?.bin || typeof packageJson.bin !== 'object') return '';
+  if (typeof packageJson.bin.llmgateway === 'string') return packageJson.bin.llmgateway;
+  if (typeof packageJson.bin.lg === 'string') return packageJson.bin.lg;
+  const values = Object.values(packageJson.bin).filter(value => typeof value === 'string');
+  return values.length === 1 ? values[0] : '';
+}
+function verifyManagedCliDirectory(root) {
+  const rootReal = fs.realpathSync(root);
+  const packageRoot = path.join(rootReal, 'node_modules', '@llmgateway', 'cli');
+  const packageReal = fs.realpathSync(packageRoot);
+  if (!pathInside(rootReal, packageReal)) throw new Error('managed CLI package escaped runtime root');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(packageReal, 'package.json'), 'utf8'));
+  if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error('managed CLI package identity mismatch');
+  const bin = resolveManagedCliBin(packageJson);
+  if (!bin) throw new Error('managed CLI bin missing');
+  const entry = fs.realpathSync(path.resolve(packageReal, bin));
+  if (!pathInside(packageReal, entry) || !pathInside(rootReal, entry)) throw new Error('managed CLI entry escaped runtime root');
+  if (!fs.statSync(entry).isFile()) throw new Error('managed CLI entry is not a file');
+  return entry;
+}
+function managedCliRuntimeStatus() {
+  if (!MANAGED_CLI_ENABLED) return {cliRuntimeState:'unavailable',cliRuntimeVersion:'',cliRuntimeProvisioning:'disabled'};
+  try {
+    const descriptor = JSON.parse(fs.readFileSync(MANAGED_CLI_DESCRIPTOR, 'utf8'));
+    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
+    if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== MANAGED_CLI_PACKAGE || descriptor?.version !== MANAGED_CLI_VERSION || fs.realpathSync(String(descriptor.entry || '')) !== entry) throw new Error('managed CLI descriptor mismatch');
+    return {cliRuntimeState:'ready',cliRuntimeVersion:MANAGED_CLI_VERSION,cliRuntimeProvisioning:'ok'};
+  } catch (_) {
+    const state = readManagedCliState();
+    return state.state === 'ready'
+      ? {cliRuntimeState:'invalid',cliRuntimeVersion:'',cliRuntimeProvisioning:'unavailable'}
+      : {cliRuntimeState:state.state,cliRuntimeVersion:state.version,cliRuntimeProvisioning:state.provisioning};
+  }
+}
+function runNpmInstall(stage) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const child = spawn('npm', ['install','--ignore-scripts','--no-audit','--no-fund','--package-lock=true'], {cwd:stage,stdio:'ignore',env:{...process.env,NO_COLOR:'1',FORCE_COLOR:'0'}});
+    const finish = error => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      error ? reject(error) : resolve();
+    };
+    const timer = setTimeout(() => {
+      try { child.kill('SIGTERM'); } catch (_) {}
+      const force = setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 2000);
+      force.unref?.();
+    }, MANAGED_CLI_INSTALL_TIMEOUT_MS);
+    timer.unref?.();
+    child.once('error', finish);
+    child.once('exit', (code, signal) => finish(code === 0 && !signal ? null : new Error('managed CLI install failed')));
+  });
+}
+function acquireManagedCliLock() {
+  fs.mkdirSync(MANAGED_CLI_ROOT, {recursive:true,mode:0o700});
+  try { return fs.openSync(MANAGED_CLI_LOCK, 'wx', 0o600); }
+  catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+    try {
+      if (Date.now() - fs.statSync(MANAGED_CLI_LOCK).mtimeMs > MANAGED_CLI_INSTALL_TIMEOUT_MS * 2) fs.unlinkSync(MANAGED_CLI_LOCK);
+      else return null;
+    } catch (_) { return null; }
+    return fs.openSync(MANAGED_CLI_LOCK, 'wx', 0o600);
+  }
+}
+async function provisionManagedCli() {
+  if (!MANAGED_CLI_ENABLED) {
+    writeManagedCliState('unavailable','disabled');
+    return;
+  }
+  try {
+    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
+    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry,promotedAt:Date.now()});
+    writeManagedCliState('ready','ok');
+    return;
+  } catch (_) {}
+  const prior = readManagedCliState();
+  if (prior.nextRetryAt > Date.now()) return;
+  const lockFd = acquireManagedCliLock();
+  if (lockFd === null) return;
+  const stage = path.join(MANAGED_CLI_ROOT, `cli-next-${process.pid}-${Date.now()}`);
+  const quarantine = path.join(MANAGED_CLI_ROOT, `cli-invalid-${process.pid}-${Date.now()}`);
+  let quarantined = false;
+  let promoted = false;
+  try {
+    writeManagedCliState('provisioning','pending');
+    fs.mkdirSync(stage, {recursive:false,mode:0o700});
+    fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({private:true,dependencies:{[MANAGED_CLI_PACKAGE]:MANAGED_CLI_VERSION}}, null, 2) + '\n', {mode:0o600});
+    await runNpmInstall(stage);
+    verifyManagedCliDirectory(stage);
+    if (fs.existsSync(MANAGED_CLI_VERSION_ROOT)) {
+      fs.renameSync(MANAGED_CLI_VERSION_ROOT, quarantine);
+      quarantined = true;
+    }
+    fs.renameSync(stage, MANAGED_CLI_VERSION_ROOT);
+    promoted = true;
+    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
+    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry,promotedAt:Date.now()});
+    writeManagedCliState('ready','ok');
+    if (quarantined) fs.rmSync(quarantine, {recursive:true,force:true});
+  } catch (_) {
+    try { if (fs.existsSync(stage)) fs.rmSync(stage, {recursive:true,force:true}); } catch (_) {}
+    if (quarantined) {
+      try { if (promoted && fs.existsSync(MANAGED_CLI_VERSION_ROOT)) fs.rmSync(MANAGED_CLI_VERSION_ROOT, {recursive:true,force:true}); } catch (_) {}
+      try { if (!fs.existsSync(MANAGED_CLI_VERSION_ROOT)) fs.renameSync(quarantine, MANAGED_CLI_VERSION_ROOT); } catch (_) {}
+    }
+    writeManagedCliState('unavailable','backoff',Date.now() + MANAGED_CLI_RETRY_MS);
+  } finally {
+    try { fs.closeSync(lockFd); } catch (_) {}
+    try { fs.unlinkSync(MANAGED_CLI_LOCK); } catch (_) {}
+  }
+}
+function scheduleManagedCliProvisioning() {
+  if (managedCliProvisioningPromise) return managedCliProvisioningPromise;
+  managedCliProvisioningPromise = provisionManagedCli().catch(() => {}).finally(() => { managedCliProvisioningPromise = null; });
+  return managedCliProvisioningPromise;
+}
 
 function requestText(url, redirects = 0) {
   return new Promise((resolve, reject) => {
@@ -261,18 +415,21 @@ function readDescriptor() {
 function engineServiceLdPreloadLine() {
   return fs.existsSync(TERMUX_EXEC_LD_PRELOAD) ? `export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}\n` : '';
 }
+function engineServiceManagedCliLine() {
+  return `export DEVPASS_BRIDGE_MANAGED_CLI=${shellQuote(MANAGED_CLI_ENABLED ? '1' : '0')}\n`;
+}
 function engineServiceEnvironmentReady() {
-  if (!fs.existsSync(TERMUX_EXEC_LD_PRELOAD)) return true;
   try {
     const run = fs.readFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), 'utf8');
-    return run.includes(`export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}`);
+    const preloadReady = !fs.existsSync(TERMUX_EXEC_LD_PRELOAD) || run.includes(`export LD_PRELOAD=${shellQuote(TERMUX_EXEC_LD_PRELOAD)}`);
+    return preloadReady && run.includes(`export DEVPASS_BRIDGE_MANAGED_CLI=${shellQuote(MANAGED_CLI_ENABLED ? '1' : '0')}`);
   } catch (_) { return false; }
 }
 function writeEngineService(candidate, down = true) {
   fs.mkdirSync(ENGINE_SERVICE_DIR, {recursive:true});
   const command = [candidate.exe, ...candidate.nodeArgs, candidate.script, ...candidate.scriptArgs].map(shellQuote).join(' ');
   const run = `#!/data/data/com.termux/files/usr/bin/sh
-${engineServiceLdPreloadLine()}cd ${shellQuote(candidate.cwd)}
+${engineServiceLdPreloadLine()}${engineServiceManagedCliLine()}cd ${shellQuote(candidate.cwd)}
 exec ${command}
 `;
   fs.writeFileSync(path.join(ENGINE_SERVICE_DIR, 'run'), run, {mode:0o700});
@@ -558,7 +715,7 @@ const server = http.createServer(async (req, res) => {
     const engine = await engineRuntimeStatus();
     return send(res, 200, {
       ok:true,protocol:PROTOCOL,version:MANAGER_VERSION,productVersion:PRODUCT_VERSION,selfUpdate:true,engineAdoption:true,
-      ...engine,restartMode:RESTART_MODE,updateChannel:PRODUCT_MANIFEST_URL,bind:`${HOST}:${PORT}`,
+      ...engine,...managedCliRuntimeStatus(),restartMode:RESTART_MODE,updateChannel:PRODUCT_MANIFEST_URL,bind:`${HOST}:${PORT}`,
       tokenSource:TOKEN_FILES.find(file => { try { return Boolean(fs.readFileSync(file, 'utf8').trim()); } catch (_) { return false; } }) ? 'existing-file' : 'missing'
     });
   }
@@ -592,4 +749,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.on('error', error => { console.error(`[Local Usage Runtime Manager] ${error?.message || error}`); process.exitCode = 1; });
-server.listen(PORT, HOST, () => console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`));
+server.listen(PORT, HOST, () => {
+  console.log(`[Local Usage Runtime Manager] ${MANAGER_VERSION} · ${HOST}:${PORT} · ${RESTART_MODE} · bundled-engine`);
+  setImmediate(() => { scheduleManagedCliProvisioning(); });
+});

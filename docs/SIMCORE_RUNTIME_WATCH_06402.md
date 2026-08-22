@@ -41,7 +41,29 @@ Hook activity: request 1 · output 1
 
 The plugin runtime and hooks were alive, but the current request did not expose the Core handshake to SimCore. The request therefore failed closed to an inactive Core runtime instead of inheriting the prior active state.
 
-The user reported that an immediately subsequent new request worked normally again without intentionally changing the plugin toggle or prompt configuration. No copied follow-up diagnostic was captured yet, so exact recovered-turn handshake/topology fields remain unavailable.
+The user reported that an immediately subsequent new request worked normally again without intentionally changing the plugin toggle or prompt configuration.
+
+### Adjacent recovered-turn evidence
+
+A later copied diagnostic from the same runtime generation directly confirms recovery without runtime reload:
+
+```text
+Version: 0.64.2
+Runtime boot: 2026-08-22T11:46:59.379Z
+Runtime generation: mt4bcgc3-5556z8
+Request user @2064 → output assistant @2065
+Request hook: SEEN
+Core handshake: FOUND
+Runtime status: ACTIVE · output COMMITTED
+Mode: C
+Stored last mode: C
+Stability: PASS · binding BOUND · out COMMITTED · mirror COMMITTED
+Pre snapshot: FORWARD · SKIPPED
+Warnings: 0
+Compatibility diagnostics: 0
+```
+
+This upgrades the recovery evidence from user report to direct same-runtime diagnostic evidence. The miss is therefore demonstrably transient in this session. It does not establish whether the affected request lacked the handshake in host-composed messages or whether another request-composition boundary caused the scanner not to receive it.
 
 ### Current classification
 
@@ -50,7 +72,7 @@ status: WATCH_ONLY / DIRECT_EVIDENCE_FOR_TRANSIENT_MISS
 runtime hooks: ACTIVE
 Core runtime for affected turn: INACTIVE / FAIL-CLOSED
 recurrence: NOT YET ESTABLISHED
-recovery: USER-REPORTED IMMEDIATE NEXT REQUEST NORMAL
+recovery: DIRECTLY CONFIRMED IN SAME RUNTIME
 cause: UNESTABLISHED
 working attribution: HOST/PROMPT COMPOSITION WATCH
 v0.64.2 diagnostic-copy causality: NOT SUPPORTED
@@ -128,7 +150,24 @@ copy click
 → copyLastTurnDiagnostic(captured chat, captured state)
 ```
 
-This establishes a plausible observability-level freshness boundary, but it does **not** yet prove whether this specimen came from a panel-open snapshot becoming stale, an actual visible-chat rewind/branch movement, host snapshot timing, or another composition transition.
+This establishes a plausible observability-level freshness boundary.
+
+### Adjacent follow-up evidence
+
+The subsequent active diagnostic from the same runtime generation reports:
+
+```text
+Probe context: CURRENT TURN
+Request user @2064 → output assistant @2065
+Core handshake: FOUND
+Runtime status: ACTIVE · output COMMITTED
+Mode: C
+Pre snapshot: FORWARD · SKIPPED
+```
+
+Its copied RAW predecessor is the earlier `@2062 → @2063` C turn. Therefore the later report again sees the `@2062/@2063` turn that the stale report's chat snapshot failed to expose as current-visible history. No `REWIND` restore appears in the subsequent active request.
+
+This substantially strengthens the panel/chat-snapshot freshness interpretation relative to a durable visible-chat rewind. It still does not prove whether the stale object originated specifically from panel-open timing, host `getChat()` snapshot timing, UI branch navigation, or another transient host snapshot boundary, so attribution remains observability/host-freshness rather than a confirmed exact root cause.
 
 ### Existing safety behavior
 
@@ -140,7 +179,7 @@ probe @2062 != current visible user @2060
 → do not bind request/output/runtime-mode diagnostics to the visible turn
 ```
 
-SimCore Session also has a separate request-side rewind restore path (`sendIndex < previousOutputIndex → restoreReason=rewind`), so a genuine visible-chat rewind should be distinguished from panel/report snapshot staleness using a subsequent active request diagnostic.
+No stale request data was falsely presented as current-turn authority.
 
 ### Current classification
 
@@ -150,26 +189,98 @@ surface: OBSERVABILITY
 runtime correctness defect: NOT ESTABLISHED
 state corruption: NOT OBSERVED
 stale data falsely presented as current: PREVENTED
-cause: PARTIALLY ESTABLISHED / MULTIPLE PLAUSIBLE SOURCES
+likely family: PANEL / HOST CHAT SNAPSHOT FRESHNESS
+exact root cause: UNESTABLISHED
+actual durable rewind: NOT SUPPORTED BY ADJACENT FOLLOW-UP
 M2 blocker: NO
 ```
 
-### Resolution discriminator
+### Recurrence / repair discriminator
 
-On the next natural active request after a similar specimen, inspect:
+If the mismatch recurs, capture whether the panel remained open across a request and compare the chat snapshot at panel-open versus copy-click time if diagnostics are extended later.
+
+A future diagnostic-only repair candidate is:
 
 ```text
-Pre snapshot: REWIND · READ HIT/MISS
-vs
-Pre snapshot: FORWARD
+copy click
+→ refresh current indices
+→ refresh host.getChat()
+→ refresh current Core state
+→ build report from the newly bound snapshot
 ```
 
-Interpretation:
+Do not implement that solely from this specimen while M2 runtime semantics remain frozen. Promote only if recurrence confirms that copied diagnostics repeatedly become stale without an actual user-visible rewind.
 
-- `REWIND` supports an actual visible-chat branch/rewind event handled by Session restore logic.
-- `FORWARD` while copied diagnostics again show an older visible chat strongly increases the probability of panel/chat snapshot freshness debt.
+---
 
-If the mismatch recurs without an actual rewind, consider a diagnostic-only repair that refreshes `host.getChat()` and current Core state immediately before report construction. Keep that work separate from M2 runtime semantics.
+## ACTIVE_C_STORAGE_DOMINANCE_SAMPLE
+
+First observed: 2026-08-22
+Production: `v0.64.2 — Diagnostic Copy Resilience`
+Runtime generation: `mt4bcgc3-5556z8`
+Turn: user `@2064` → assistant `@2065`
+
+### Direct performance evidence
+
+Healthy active Mode C request/output semantics were accompanied by storage-dominated local plugin timing:
+
+```text
+Request total: 213 ms
+Turn storage: 22,253 chars · set 181 ms · set/1K 8.13 ms
+Request hotspot: TURN_STORAGE · 181 ms · 85.4%
+
+Output handler total: 365 ms
+Output process: 347 ms
+Out storage: 341 ms
+Output hotspot: OUT_STORAGE · 341 ms · 93.4%
+```
+
+The immediately preceding inactive specimen had also shown a larger one-off turn-storage cost (`19,945 chars · set 680 ms · 90.5%`). The new active sample therefore establishes that storage can remain the dominant measured SimCore-local cost even when the absolute latency is much lower and runtime semantics are healthy.
+
+### Current classification
+
+```text
+status: WATCH_ONLY / PERFORMANCE EVIDENCE
+correctness defect: NO
+storage corruption: NO
+request semantic regression: NO
+provider cache attribution: NONE
+recurrence family: STORAGE DOMINANCE OBSERVED ACROSS >1 SAMPLE
+M2 blocker: NO
+```
+
+Do not optimize storage from these samples alone. Preserve payload size, set latency, set/1K cost, request/output hotspot share, and runtime mode on future samples. Promote only if repeated natural evidence establishes materially harmful latency with a narrow storage-side optimization boundary.
+
+---
+
+## v0.64.2 healthy compatibility regression control — C @2064
+
+The same active C turn provides a useful positive control for several frozen paths:
+
+```text
+Edit reconcile: SAME_FAST · 0 ms · snapshot UNCHANGED
+Prior representation: EXACT
+current == canonical == Fresh
+Deferred mirror: COMMITTED
+Output representation: EXACT
+Warnings: 0
+Compatibility diagnostics: 0
+Frame sequence: PASS
+Frame guard: PASS
+Continuity summary: PASS
+```
+
+The host output also contained a large Thoughts-compatible preamble that was stripped successfully:
+
+```text
+Preamble provenance: THOUGHTS_COMPAT · chars 2833 · action STRIPPED · policy SILENT_COMPAT
+HOST_RAW 5001 chars
+CANONICAL 2165 chars
+FRESH_CHAT 2165 chars
+CANONICAL == FRESH_CHAT · EXACT
+```
+
+This is positive natural evidence that the existing Thoughts/SILENT_COMPAT envelope handling can remove a large host preamble while converging to exact canonical/Fresh identity. Preserve it as a regression control; it does not by itself justify broadening compatibility normalization.
 
 ---
 

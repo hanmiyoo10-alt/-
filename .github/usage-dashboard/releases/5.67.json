@@ -10,6 +10,7 @@
   "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`",
   "materializer": "plugins/usage-dashboard/tools/release_diagnostics_workspace_567.py",
   "callerWorkflow": ".github/workflows/release-usage-dashboard-567-diagnostics-workspace.yml",
+  "releaseCommandWorkflow": ".github/workflows/release-command-usage-dashboard-567.yml",
   "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-release.yml",
   "newTests": [
     "p29-diagnostics-workspace-separation.cjs"

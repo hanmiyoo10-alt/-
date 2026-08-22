@@ -15,12 +15,35 @@ const harnessFiles = [
   'harness/controlled-clock.mjs',
   'harness/fake-cli.cjs',
 ];
+const migratedIncidentTests = [
+  'p17-bounded-cli-parallelism.cjs',
+  'p25-long-window-critical-path-decoupling.cjs',
+  'p26-foreground-cli-launcher-attribution.cjs',
+  'p27-npx-cache-first-launcher.cjs',
+  'p28-managed-direct-cli-runtime.cjs',
+];
 
 for (const name of behaviorTests) {
   const source = fs.readFileSync(`plugins/usage-dashboard/tests/${name}`, 'utf8');
   assert.ok(!source.includes("node:vm"), `${name} must not use VM extraction`);
   assert.ok(!source.includes('runInContext'), `${name} must not execute sliced source`);
   assert.ok(!source.includes("bridge-engine.mjs', 'utf8'"), `${name} must exercise the process boundary`);
+}
+
+for (const name of migratedIncidentTests) {
+  const source = fs.readFileSync(`plugins/usage-dashboard/tests/${name}`, 'utf8');
+  assert.ok(!source.includes("node:vm"), `${name} must not use VM extraction`);
+  assert.ok(!source.includes('runInContext'), `${name} must not execute sliced source`);
+  assert.ok(!/\b(?:engine|manager|diagnostics)\.slice\(/.test(source), `${name} must not slice runtime function bodies`);
+}
+
+const adapter = fs.readFileSync('plugins/usage-dashboard/tools/prepare_release_regressions.py', 'utf8');
+for (const name of [
+  'p17-bounded-cli-parallelism.cjs',
+  'p26-foreground-cli-launcher-attribution.cjs',
+  'p27-npx-cache-first-launcher.cjs',
+]) {
+  assert.ok(!adapter.includes(`update('${name}'`), `${name} must no longer need a release adapter shim`);
 }
 
 const bridgeHarness = fs.readFileSync('plugins/usage-dashboard/tests/harness/bridge-process.cjs', 'utf8');
@@ -43,4 +66,3 @@ for (const name of harnessFiles) {
 }
 
 console.log('usage-dashboard behavior harness contract: OK · black-box tests are local-only, bounded, and free of VM source extraction');
-

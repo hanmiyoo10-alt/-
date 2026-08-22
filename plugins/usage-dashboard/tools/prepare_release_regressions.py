@@ -52,10 +52,6 @@ update('p16-snapshot-performance-attribution.cjs', [
     ("const summaryContext = { Date: { now: () => 2000 } };", "const summaryContext = { Date: { now: () => 2000 }, CLI_CONCURRENCY: 2, Object, Array, secondaryRefreshSnapshot: () => ({}) };"),
     ("timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId))", "timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId, { deferLongWindow:true }))"),
 ])
-update('p17-bounded-cli-parallelism.cjs', [
-    ('async function withCliSlot(label, task) {', 'async function withCliSlot(label, task, launcherMeta = null) {'),
-    ('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode', 'Preserve the hard CLI concurrency cap'),
-])
 update('p18-organization-discovery-dedup.cjs', [
     ('missing Write/TTL remained UNKNOWN and was never inferred', 'Keep UNKNOWN distinct from known zero'),
     ('fall back to the prior plain `orgs list --json` path', 'Keep already-working behavior unchanged unless the release goal requires touching it.'),
@@ -92,28 +88,4 @@ update('p24-snapshot-decision-attribution.cjs', [
     ("assert.ok(guidelines.includes('about 17.17s because long-window analytics work became cold'));", "assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));"),
     ("assert.ok(guidelines.includes('exact skip reason is UNKNOWN in 5.61 diagnostics'));", "assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/range'));"),
 ])
-update('p26-foreground-cli-launcher-attribution.cjs', [
-    ('const processContext = {', "const processContext = {\n  process:{execPath:'/safe/node'},\n  managedCliRuntime:async()=>({state:'unavailable',entry:null}),\n  NPX_PREFER_OFFLINE: true,"),
-    ('const diagContext = {Array,Number,String,Math};', 'const diagContext = {Array,Number,String,Math,Set};'),
-    ("assert.equal(runProgramOccurrences - runProgramDefinitions, 2, 'direct and npx must remain the only runProgram call sites');", "assert.equal(runProgramOccurrences - runProgramDefinitions, 3, 'managed, direct, and npx remain the only runProgram call sites');"),
-    ("['direct','npx-fallback']", "['managed-direct','direct','npx-fallback']"),
-    ('const fallbackAt = processSource.indexOf("runProgram(\'npx\', [\'--yes\', `@llmgateway/cli@${CLI_VERSION}`, ...args], extraEnv)");', 'const fallbackAt = processSource.indexOf("runProgram(\'npx\', npxArgs, extraEnv)");'),
-    ("{launcher:'direct',fallbackReason:'none'}", "{launcher:'direct',fallbackReason:'none',npxPolicy:'not-applicable'}"),
-    ("{launcher:'npx-fallback',fallbackReason:'direct-enoent'}", "{launcher:'npx-fallback',fallbackReason:'direct-enoent',npxPolicy:'prefer-offline'}"),
-    ("['--yes','@llmgateway/cli@1.9.0','credits','--json']", "['--yes','--prefer-offline','@llmgateway/cli@1.9.0','credits','--json']"),
-    ('direct 1 · npx-fallback 1 · unknown 1 · direct ENOENT 1', 'managed-direct 0 · direct 1 · npx-fallback 1 · unknown 1 · policy not-applicable · direct ENOENT 1'),
-    ('Launcher attribution is measurement-only', 'Engine launcher order is `managed-direct` → system `direct` → `npx-fallback`.'),
-    ('Keep all five existing `runCli()` call sites and the single existing `execFileAsync()` source operation', 'Keep all five existing `runCli()` source call sites and the single existing `execFileAsync()` source operation'),
-    ('its share of the 8–9s latency remains UNKNOWN', 'If managed-direct remains near the prior 7–13s source timings'),
-])
-update('p27-npx-cache-first-launcher.cjs', [
-    ("assert.equal(runProgramOccurrences - runProgramDefinitions, 2, 'direct and npx must remain the only runProgram call sites');", "assert.equal(runProgramOccurrences - runProgramDefinitions, 3, 'managed, direct, and npx remain the only runProgram call sites');"),
-    ('const context = {', "const context = {\n    process:{execPath:'/safe/node'},\n    managedCliRuntime:async()=>({state:'unavailable',entry:null}),"),
-    ("['direct','npx-fallback']", "['managed-direct','direct','npx-fallback']"),
-    ('direct 1 · npx-fallback 1 · unknown 0 · policy prefer-offline · direct ENOENT 1', 'managed-direct 0 · direct 1 · npx-fallback 1 · unknown 0 · policy prefer-offline · direct ENOENT 1'),
-    ('direct 0 · npx-fallback 1 · unknown 0 · policy not-applicable · direct ENOENT 1', 'managed-direct 0 · direct 0 · npx-fallback 1 · unknown 0 · policy not-applicable · direct ENOENT 1'),
-    ('`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` restores the exact 5.64 fallback', '`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` continues to control only the final npx fallback policy'),
-    ('5.65 makes no guaranteed performance claim', 'One faster sample is insufficient to claim causality'),
-])
-
 print('behavior-only regression adapter: ' + (', '.join(changed) if changed else 'no changes'))

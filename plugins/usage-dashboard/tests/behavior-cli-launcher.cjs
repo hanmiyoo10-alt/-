@@ -24,6 +24,13 @@ async function withBridge(options, task) {
     assert.deepEqual(calls.map((row) => row.launcher), ['managed'], 'managed execution failure must be authoritative');
   });
 
+  await withBridge({managed:true,managedEntryOutside:true,direct:true}, async (bridge) => {
+    const response = await bridge.request('/devpass-status');
+    assert.equal(response.status, 200);
+    const calls = bridge.ledger().filter((row) => row.type === 'start');
+    assert.deepEqual(calls.map((row) => row.launcher), ['direct'], 'descriptor entries outside the managed root must be rejected before execution');
+  });
+
   await withBridge({managed:false,direct:true,config:{failureByLauncher:{direct:17}}}, async (bridge) => {
     const response = await bridge.request('/devpass-status');
     assert.equal(response.status, 502);
@@ -58,4 +65,3 @@ async function withBridge(options, task) {
   console.error(error);
   process.exit(1);
 });
-

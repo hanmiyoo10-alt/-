@@ -59,7 +59,9 @@ async function startBridge(options = {}) {
   if (options.managed === true) {
     const cliRoot = path.join(home, '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
     const versionRoot = path.join(cliRoot, '1.9.0');
-    const entry = path.join(versionRoot, 'fixture-managed.cjs');
+    const entry = options.managedEntryOutside === true
+      ? path.join(fixtureRoot, 'fixture-managed-outside.cjs')
+      : path.join(versionRoot, 'fixture-managed.cjs');
     fs.mkdirSync(versionRoot, {recursive:true});
     fs.writeFileSync(entry, [
       `process.env.UD_BEHAVIOR_LAUNCHER = 'managed';`,

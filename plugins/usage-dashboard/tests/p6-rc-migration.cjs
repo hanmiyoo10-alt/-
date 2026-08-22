@@ -1,22 +1,22 @@
-const fs = require('node:fs');
-const vm = require('node:vm');
+'use strict';
+
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+
+const currentRelease = assertCurrentReleaseArtifacts();
 const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
-const saved = JSON.parse(fs.readFileSync('plugins/usage-dashboard/tests/fixtures/alpha544-rc-state.json', 'utf8'));
-const defaultsStart = source.indexOf('  const DEFAULTS = {');
-const defaultsEnd = source.indexOf('\n  };', defaultsStart);
-const hydrateStart = source.indexOf('  function hydrateState(saved) {');
-const hydrateEnd = source.indexOf('\n\n  function normalizeBridgeError', hydrateStart);
-assert.ok(defaultsStart >= 0 && defaultsEnd > defaultsStart && hydrateStart >= 0 && hydrateEnd > hydrateStart);
-const context = {DEFAULT_BRIDGE:'http://127.0.0.1:39117'};
-vm.createContext(context);
-vm.runInContext(`${source.slice(defaultsStart, defaultsEnd + 5)}\n${source.slice(hydrateStart, hydrateEnd)}\nthis.api={DEFAULTS,hydrateState};`, context);
-const hydrated = context.api.hydrateState(saved);
-for (const [key, value] of Object.entries(saved)) assert.deepEqual(hydrated[key], value, `5.44 state field lost in RC: ${key}`);
+const fixture = JSON.parse(fs.readFileSync('plugins/usage-dashboard/tests/fixtures/alpha544-rc-state.json', 'utf8'));
+const behavior = fs.readFileSync('plugins/usage-dashboard/tests/behavior-state-contract.cjs', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
+
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"), 'state key changed');
 assert.ok(source.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"), 'token storage key changed');
-assert.equal(hydrated.widgetDockSide, 'right');
-assert.equal(hydrated.dashboardView, 'settings');
-assert.equal(hydrated.selectedCreditsOrgId, 'org-rc-migration');
-assert.equal(hydrated.requestLedger[0].servedServiceTier, 'flex');
-console.log('usage-dashboard P6 RC migration: OK · alpha.5.44 state survives rc.1');
+assert.equal(fixture.widgetDockSide, 'right');
+assert.equal(fixture.dashboardView, 'settings');
+assert.equal(fixture.selectedCreditsOrgId, 'org-rc-migration');
+assert.equal(fixture.requestLedger[0].servedServiceTier, 'flex');
+assert.ok(behavior.includes("json('tests/fixtures/alpha544-rc-state.json')"), 'RC migration fixture must stay exercised by the production process harness');
+assert.ok(workflow.includes('behavior-state-contract.cjs'));
+
+console.log('usage-dashboard P6 RC migration: OK · storage keys and RC fixture retained; migration behavior delegated to production process harness');

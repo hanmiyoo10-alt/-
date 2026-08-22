@@ -1111,6 +1111,18 @@ Main-writing workflows use the shared `repo-main-write` concurrency contract whe
 
 ---
 
+## Future infrastructure plan — Release System v2
+
+Status: **PLANNED · NOT ACTIVE · SEPARATE FROM THE CURRENT RELEASE ORDER**
+
+Canonical plan:
+
+- [SIMCORE_RELEASE_SYSTEM_V2_PLAN.md](./SIMCORE_RELEASE_SYSTEM_V2_PLAN.md)
+
+This is a future repository/release-infrastructure plan. It does not describe production runtime behavior, does not start M2-3, and does not replace the current promoted action. The current action remains one ordinary v0.64.2 diagnostic-copy live result. After that result, decide explicitly whether RS2-1 durable-test extraction should be promoted before active M2-3 implementation; the plan must not reorder the roadmap merely by existing.
+
+---
+
 # 10. Quick Resume Checklist
 
 When continuing development in a new conversation:

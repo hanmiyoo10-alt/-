@@ -45,6 +45,32 @@ function starts(bridge, label) {
     assert.equal(starts(bridge, 'organizations').length, 1, 'capture failure must own one plain organization fallback');
   });
 
+  await withBridge({managed:false,direct:true,config:{
+    captureOrganizations:[],
+    plainOrganizations:[],
+  }}, async (bridge) => {
+    const response = await bridge.request('/orgs');
+    assert.equal(response.status, 502, 'empty capture and empty fallback must preserve the hard organization error');
+    assert.equal(starts(bridge, 'credits').length, 1);
+    assert.equal(starts(bridge, 'devpass-capture-24h').length, 1);
+    assert.equal(starts(bridge, 'organizations').length, 1, 'empty capture must try one plain organization fallback');
+  });
+
+  await withBridge({managed:false,direct:true,config:{
+    captureOrganizations:[],
+    plainOrganizations:[{id:'fallback-ok',kind:'default',status:'active'}],
+  }}, async (bridge) => {
+    const response = await bridge.request('/orgs');
+    assert.equal(response.status, 200);
+    assert.equal(response.body?.organizations?.[0]?.id, 'fallback-ok');
+    assert.deepEqual(response.body?.organizationDiscovery, {
+      mode:'plain-orgs-fallback',fallbackCount:1,sharedAccountCapture:true,captureErrorCode:null,
+    });
+    assert.equal(starts(bridge, 'credits').length, 1);
+    assert.equal(starts(bridge, 'devpass-capture-24h').length, 1);
+    assert.equal(starts(bridge, 'organizations').length, 1, 'valid fallback must remain a single source call');
+  });
+
   await withBridge({managed:false,direct:true,config:{failureByLabel:{credits:17}}}, async (bridge) => {
     const response = await bridge.request('/orgs');
     assert.equal(response.status, 502);
@@ -110,7 +136,7 @@ function starts(bridge, label) {
     assert.equal(performance.cli.peakActive, 1);
   });
 
-  console.log('usage-dashboard organization/capture behavior: OK · primary, fallback, shared capture, safe early-start, ambiguity, and serial rollback verified');
+  console.log('usage-dashboard organization/capture behavior: OK · primary, empty/error fallback, shared capture, safe early-start, ambiguity, and serial rollback verified');
 })().catch((error) => {
   console.error(error);
   process.exit(1);

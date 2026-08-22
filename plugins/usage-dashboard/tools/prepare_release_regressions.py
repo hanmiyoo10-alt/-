@@ -47,11 +47,6 @@ update('p5-bundled-engine.cjs', [
 update('p10-independent-cache-observer.cjs', [
     ("Symbol.for('llmgateway.devpass.bridge.capture.v8')", "Symbol.for('llmgateway.devpass.bridge.capture.v10')"),
 ])
-update('p16-snapshot-performance-attribution.cjs', [
-    ("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 1)));", "const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"),
-    ("const summaryContext = { Date: { now: () => 2000 } };", "const summaryContext = { Date: { now: () => 2000 }, CLI_CONCURRENCY: 2, Object, Array, secondaryRefreshSnapshot: () => ({}) };"),
-    ("timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId))", "timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId, { deferLongWindow:true }))"),
-])
 update('p18-organization-discovery-dedup.cjs', [
     ('missing Write/TTL remained UNKNOWN and was never inferred', 'Keep UNKNOWN distinct from known zero'),
     ('fall back to the prior plain `orgs list --json` path', 'Keep already-working behavior unchanged unless the release goal requires touching it.'),
@@ -63,15 +58,6 @@ update('p20-shared-24h-capture.cjs', [
     ('missing Write/TTL remained UNKNOWN and was never inferred', 'Keep UNKNOWN distinct from known zero'),
     ("async function devPassActivityForRange(range = '24h')", "async function devPassActivityForRange(range = '24h', options = {})"),
 ])
-update('p21-snapshot-scheduling-attribution.cjs', [
-    ('function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) {', 'function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta = null) {'),
-    ("['endOffsetMs','executionMs','executionStartOffsetMs','label','queueWaitMs','startOffsetMs'].sort()", "['endOffsetMs','executionMs','executionStartOffsetMs','fallbackReason','label','launcher','npxPolicy','queueWaitMs','startOffsetMs'].sort()"),
-    ("engine.includes('noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt)')", "engine.includes('noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta)')"),
-    ('Bridge ran 3 CLI operations', 'Keep 24h usage and DevPass Activity on the foreground truth path.'),
-    ('Measurement only: do not change snapshot ordering', 'Provisioning adds no snapshot source operation or endpoint.'),
-    ('missing Write/TTL remained UNKNOWN and was never inferred', 'Keep UNKNOWN distinct from known zero'),
-    ('const summaryContext = { Date:{now:()=>2000}, CLI_CONCURRENCY:2, Number, Object, Array, Math, String };', 'const summaryContext = { Date:{now:()=>2000}, CLI_CONCURRENCY:2, Number, Object, Array, Math, String, secondaryRefreshSnapshot:()=>({}) };'),
-])
 update('p23-credits-usage-early-start.cjs', [
     ('Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering', 'Keep already-working behavior unchanged unless the release goal requires touching it.'),
     ('fall back to the prior plain `orgs list --json` path', 'Keep already-working behavior unchanged unless the release goal requires touching it.'),
@@ -80,12 +66,5 @@ update('p23-credits-usage-early-start.cjs', [
     ("assert.ok(guidelines.includes('Ambiguous/missing IDs keep the 5.60 root-gated path.'));", "assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));"),
     ("assert.ok(guidelines.includes('dedicated circuit family must not double-count failures against the existing organizations circuit'));", "assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));"),
     ("assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));", "assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));"),
-])
-update('p24-snapshot-decision-attribution.cjs', [
-    ("['hit','miss','join','load','stale','blocked','error']", "['hit','miss','join','load','stale','deferred','blocked','error']"),
-    ("['empty','expired','loaded','circuit-open','refresh-error']", "['empty','expired','loaded','deferred-refresh','circuit-open','refresh-error']"),
-    ("assert.ok(guidelines.includes('The new attribution must add zero CLI/network requests.'));", "assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));"),
-    ("assert.ok(guidelines.includes('about 17.17s because long-window analytics work became cold'));", "assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));"),
-    ("assert.ok(guidelines.includes('exact skip reason is UNKNOWN in 5.61 diagnostics'));", "assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/range'));"),
 ])
 print('behavior-only regression adapter: ' + (', '.join(changed) if changed else 'no changes'))

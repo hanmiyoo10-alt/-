@@ -1,0 +1,5 @@
+SimCore v0.64.4 COMMUNITY Reaction Validator Attribution work-branch build command.
+
+Target work branch: simcore-06404-community-reaction-attribution
+Production parent: release-simcore @ d7fd45cd193ef1ff187c73761ded958d89558ebf
+Scope: attribution-only; no validator tolerance.

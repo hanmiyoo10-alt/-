@@ -13,6 +13,7 @@ const behaviorTests = [
   'behavior-organization-capture.cjs',
   'behavior-cache-observer.cjs',
   'behavior-state-contract.cjs',
+  'behavior-runtime-recovery.cjs',
 ];
 const harnessFiles = [
   'harness/bridge-process.cjs',
@@ -30,6 +31,7 @@ const migratedIncidentTests = [
   'p6-rc-migration.cjs',
   'p10-independent-cache-observer.cjs',
   'p11-cache-fidelity.cjs',
+  'p15-runtime-recovery-fidelity.cjs',
   'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
   'p18-organization-discovery-dedup.cjs',
@@ -86,7 +88,11 @@ assert.ok(dashboardHarness.includes("child.kill('SIGTERM')"));
 assert.ok(dashboardHarness.includes("child.kill('SIGKILL')"));
 assert.ok(dashboardHarness.includes('.slice(-20_000)'));
 assert.ok(dashboardHarness.includes('fs.rmSync(fixtureRoot, {recursive:true,force:true})'));
+assert.ok(dashboardHarness.includes("options.waitFor === 'views'"));
 assert.ok(dashboardPreload.includes('headless dashboard harness must not request main DOM'));
+assert.ok(dashboardPreload.includes('failStateWrites'));
+assert.ok(dashboardPreload.includes('captureSettingsViews'));
+assert.ok(dashboardPreload.includes("target.startsWith('http://127.0.0.1:39119/')"));
 assert.ok(!dashboardPreload.includes('0.0.0.0'));
 
 const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');

@@ -1,0 +1,17 @@
+name: Release Command Usage Dashboard 3.0.0-alpha.5.67
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-command-usage-dashboard-567.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/reusable-usage-dashboard-release.yml
+    with:
+      release_spec: .github/usage-dashboard/releases/5.67.json
+      publish: true

@@ -73,20 +73,18 @@ function recoverySnapshot() {
   assert.ok(failure && !failure.error, `failure diagnostics view missing: ${failure?.error || 'not captured'}`);
   assert.ok(recovered && !recovered.error, `recovery diagnostics view missing: ${recovered?.error || 'not captured'}`);
 
-  assert.ok(failure.html.includes('active local errors 1'), 'active local persist error must block stable readiness');
-  assert.ok(failure.html.includes('Stable readiness:'), 'failure view must expose stable readiness diagnostics');
-  assert.ok(!failure.html.includes('Stable readiness: READY'), 'active local error must not report READY');
+  assert.ok(failure.diag.includes('Stable readiness: BLOCKED'), 'active local persist error must block stable readiness');
+  assert.ok(failure.diag.includes('active local errors 1'), 'stable readiness blocker must name the active local error');
+  assert.ok(failure.diag.includes('Local runtime errors: total 1 · active 1 · recoveries 0'), 'failure diagnostics must show one active incident and no recovery yet');
 
-  assert.ok(recovered.html.includes('Stable readiness: READY'), 'successful persist recovery must restore READY');
-  assert.ok(recovered.html.includes('active 0'), 'recovered diagnostics must report zero active local errors');
-  assert.ok(recovered.html.includes('recoveries 1'), 'recovered diagnostics must retain recovery history');
-  assert.ok(recovered.html.includes('total 1'), 'recovered diagnostics must retain cumulative failure history');
+  assert.ok(recovered.diag.includes('Stable readiness: READY'), 'successful persist recovery must restore READY');
+  assert.ok(recovered.diag.includes('Local runtime errors: total 1 · active 0 · recoveries 1'), 'recovered diagnostics must retain cumulative failure history while clearing active state');
 
   assert.equal(run.tokenStored, true);
   assert.ok(run.fetches.filter(row => row.url.includes('/snapshot')).length >= 2, 'recovery must use a later production snapshot refresh');
   assert.ok(!JSON.stringify(run).includes('runtime-recovery-fixture-token'), 'harness output must not retain the bridge token');
 
-  console.log('usage-dashboard runtime recovery behavior: OK · actual dashboard process blocks on active persist error and returns READY after recovery while retaining history');
+  console.log('usage-dashboard runtime recovery behavior: OK · actual dashboard diagnostics block on active persist error and return READY after recovery while retaining history');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

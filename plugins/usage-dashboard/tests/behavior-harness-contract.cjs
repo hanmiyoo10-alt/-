@@ -9,6 +9,7 @@ const behaviorTests = [
   'behavior-cli-launcher.cjs',
   'behavior-cache-runtime.cjs',
   'behavior-snapshot-scheduler.cjs',
+  'behavior-snapshot-attribution.cjs',
 ];
 const harnessFiles = [
   'harness/bridge-process.cjs',
@@ -16,7 +17,10 @@ const harnessFiles = [
   'harness/fake-cli.cjs',
 ];
 const migratedIncidentTests = [
+  'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
+  'p21-snapshot-scheduling-attribution.cjs',
+  'p24-snapshot-decision-attribution.cjs',
   'p25-long-window-critical-path-decoupling.cjs',
   'p26-foreground-cli-launcher-attribution.cjs',
   'p27-npx-cache-first-launcher.cjs',
@@ -39,7 +43,10 @@ for (const name of migratedIncidentTests) {
 
 const adapter = fs.readFileSync('plugins/usage-dashboard/tools/prepare_release_regressions.py', 'utf8');
 for (const name of [
+  'p16-snapshot-performance-attribution.cjs',
   'p17-bounded-cli-parallelism.cjs',
+  'p21-snapshot-scheduling-attribution.cjs',
+  'p24-snapshot-decision-attribution.cjs',
   'p26-foreground-cli-launcher-attribution.cjs',
   'p27-npx-cache-first-launcher.cjs',
 ]) {

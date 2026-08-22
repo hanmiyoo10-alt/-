@@ -60,9 +60,9 @@ Operational rule:
 ## Current baseline
 
 ```text
-Production: v0.64.1 — Summary Scope Authority (M2-2 correctness insert)
+Production: v0.64.2 — Diagnostic Copy Resilience (M2-2 diagnostic hardening)
 Primary current phase: M2-2 final live validation + v0.64.1 summary-scope validation
-Next physical move: Edit Reconcile extraction may begin after diagnostic-copy hardening
+Next physical move: M2-3 Edit Reconcile extraction may begin after one successful v0.64.2 live copy result
 v0.64.x genuine-edit direct revalidation: DEFERRED_NON_BLOCKING; required before M2-3 closes or M2-4 begins
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 ```

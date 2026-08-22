@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.64.1",
-  "release_name": "Summary Scope Authority",
+  "production_version": "0.64.2",
+  "release_name": "Diagnostic Copy Resilience",
   "release_branch": "release-simcore",
-  "release_commit": "0cd0b01440e0d8654a84b64362541a9fbfcb03b3",
-  "release_blob": "2d5d0acf4d2da52874aafaa5bbd074a81c7f7b52",
+  "release_commit": "7a1f1692920abbc890c6663b40e38a24676c3de9",
+  "release_blob": "3058e5bafa7f3abd15277ceabd0bd9d8518f52dc",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06401_SUMMARY_SCOPE_AUTHORITY_LIVE_VALIDATION",
+  "current_priority": "06402_DIAGNOSTIC_COPY_LIVE_VALIDATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

@@ -17,13 +17,13 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.1`
-- Release: `Summary Scope Authority`
+- Version: `0.64.2`
+- Release: `Diagnostic Copy Resilience`
 - Release branch: `release-simcore`
-- Release commit: `0cd0b01440e0d8654a84b64362541a9fbfcb03b3`
-- Release blob: `2d5d0acf4d2da52874aafaa5bbd074a81c7f7b52`
+- Release commit: `7a1f1692920abbc890c6663b40e38a24676c3de9`
+- Release blob: `3058e5bafa7f3abd15277ceabd0bd9d8518f52dc`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `06401_SUMMARY_SCOPE_AUTHORITY_LIVE_VALIDATION`
+- Primary optimization target: `06402_DIAGNOSTIC_COPY_LIVE_VALIDATION`
 - Provider cache: `UNVERIFIED`
 
 This block is machine-managed after each production release update.
@@ -35,11 +35,9 @@ This block is machine-managed after each production release update.
 
 ## Production verdict
 
-`v0.64.1` is the current production release and remains an M2-2 correctness insert. The v0.64.0 ownership split has direct live proof for ordinary exact carryover, natural Fresh mismatch fast reconcile, Representation ownership, Deferred Mirror safety, reload continuity, and B lifecycle. Summary Scope and natural B_END confirmations remain useful non-blocking evidence; neither should stall the next mechanical checkpoint.
+`v0.64.2` is the current production release. It hardens only the manual diagnostic-copy path: report construction runs exactly once, Clipboard API transport is isolated, a DOM-local textarea fallback is available, and the UI exposes `COPIED`, `COPIED_FALLBACK`, `REPORT_BUILD_FAILED`, or `CLIPBOARD_WRITE_FAILED`. `buildLastTurnDiagnosticReport()` remains byte-identical to v0.64.1, and no request/output hot-path, persistent state, generation, M2-2, Summary Scope, Broadcast, Time, Representation, Recovery, Prompt, or Store behavior changed.
 
-The promoted mini is `v0.64.2 — Diagnostic Copy Resilience`. It must separate report construction from clipboard transport, build the report exactly once, reuse the identical string for the primary and fallback transports, expose four bounded results, and keep only bounded memory-only telemetry. `buildLastTurnDiagnosticReport()` itself remains frozen until a direct `REPORT_BUILD_FAILED` result attributes a builder defect.
-
-After one ordinary production copy returns `COPIED` or `COPIED_FALLBACK`, M2-3 Edit Reconcile extraction may begin. Direct v0.64.x/M2-3-line genuine visible-edit revalidation is deferred from the M2-3 start gate but remains mandatory before M2-3 closes or M2-4 begins. A natural B_END or Summary Scope confirmation should be captured when available without blocking M2.
+The ordinary live gate is one successful `COPIED` or `COPIED_FALLBACK` result. A future natural B_END `REPORT_BUILD_FAILED` directly attributes a builder defect and must be handled in a separate narrow mini; `CLIPBOARD_WRITE_FAILED` instead narrows the problem to WebView clipboard transport. This one live result is the only remaining diagnostic-copy gate before starting M2-3 Edit Reconcile extraction. The v0.64.x/M2-3-line genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
 
 Historical precursor evidence retained below (not v0.64.0 live validation), observed in runtime `mt19j4wz-2a7t5e`:
 
@@ -91,6 +89,40 @@ v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural l
 ---
 
 # 2. Current Validation Release
+
+## v0.64.2 — Diagnostic Copy Resilience
+
+Status: **PRODUCTION · PENDING ONE LIVE COPY RESULT**
+
+```text
+Version: 0.64.2
+Release: Diagnostic Copy Resilience
+Release commit: 7a1f1692920abbc890c6663b40e38a24676c3de9
+Release blob: 3058e5bafa7f3abd15277ceabd0bd9d8518f52dc
+Parent: v0.64.1 Summary Scope Authority
+Major checkpoint: M2-2 unchanged
+```
+
+Primary contract:
+
+```text
+BUILD exactly once
+primary Clipboard API
+fallback temporary textarea + execCommand('copy')
+results: COPIED / COPIED_FALLBACK / REPORT_BUILD_FAILED / CLIPBOARD_WRITE_FAILED
+bounded memory-only probe; no raw report retention
+builder body byte-identical; runtime semantics unchanged
+```
+
+Static CI verifies report build count, primary/fallback exact payload identity, builder-failure short circuit, fallback cleanup/focus restoration, latest/install equality, architecture contracts, Summary Scope fixtures, frozen M2 markers, and unchanged storage/chat/network/timer call counts.
+
+Live routing:
+
+```text
+COPIED or COPIED_FALLBACK -> v0.64.2 live gate PASS; proceed with M2-3
+REPORT_BUILD_FAILED       -> separate builder-repair mini before M2-3
+CLIPBOARD_WRITE_FAILED    -> PocketRisu/WebView clipboard transport scope
+```
 
 ## v0.64.1 — Summary Scope Authority
 

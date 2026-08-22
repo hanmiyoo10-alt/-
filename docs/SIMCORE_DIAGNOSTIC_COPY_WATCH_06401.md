@@ -68,3 +68,9 @@ Do not mix this with M2-3 Edit Reconcile behavior. If patched, keep it UI/observ
 ## Current decision
 
 This defect blocks convenient evidence collection, not SimCore runtime correctness. It should not by itself block M2 progression, but it is worth fixing before future high-value diagnostic gates because the current single `복사 실패` result hides whether report generation or clipboard transport failed.
+
+## v0.64.2 production response
+
+Status: `PATCHED / LIVE ATTRIBUTION PENDING`
+
+The report builder remains byte-identical. Report construction and clipboard transport are now separate, the report is built exactly once, primary/fallback payloads are identical, DOM cleanup is unconditional, and four bounded UI results expose the failed stage. A natural B_END builder repair remains forbidden until `REPORT_BUILD_FAILED` directly attributes the failure.

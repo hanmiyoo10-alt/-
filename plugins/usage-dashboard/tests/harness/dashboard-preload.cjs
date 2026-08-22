@@ -82,7 +82,6 @@ globalThis.window = {
   innerWidth:1280,
   innerHeight:800,
 };
-globalThis.navigator = globalThis.navigator || {};
 
 globalThis.Risuai = {
   async getLocalPluginStorage() { return store; },

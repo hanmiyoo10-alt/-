@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **M5-A IMPLEMENTED CANDIDATE — cache observer capture-tap harness**
+Status: **M5-B IMPLEMENTED CANDIDATE — organization empty-fallback migration**
 
 Recorded after:
 
@@ -13,6 +13,8 @@ Recorded after:
 This document tracks the approved maintenance direction. Maintenance PR 4 retires the final workflow-time regression adapter and makes the committed test tree fail-closed immutable while leaving production artifacts, runtime behavior, and the 5.66 version tuple unchanged.
 
 M5-A begins the remaining source-extraction retirement by exercising the exact Engine-generated capture tap through an isolated loopback process. It removes VM/function-body extraction from P10/P11 without adding test-only runtime exports or changing production artifacts.
+
+M5-B extends the existing real-Engine organization harness with capture-empty/fallback-empty and capture-empty/fallback-valid scenarios. It removes VM/function-body extraction from P19 while preserving the hard empty-result error and fallback provenance.
 
 ## Why this backlog exists
 
@@ -251,6 +253,14 @@ M5-A — Cache Observer Capture-Tap Harness:
 - removes VM/parser-body extraction from P10/P11 while retaining narrow static security boundaries,
 - leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
 
+M5-B — Organization Empty-Fallback Migration:
+
+- verifies capture-empty plus plain-fallback-empty remains a hard organization error,
+- verifies capture-empty plus a valid plain fallback succeeds with bounded provenance,
+- verifies Credits, capture, and plain fallback each retain single-source ownership,
+- removes VM/loadOrgs-body extraction from P19 while retaining narrow static ordering guards,
+- leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)
@@ -301,6 +311,6 @@ M5-A — Cache Observer Capture-Tap Harness:
 
 ## Next gate
 
-Merge M5-A only after the capture-tap behavior test is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, and all runtime/manifest hashes remain unchanged.
+Merge M5-B only after the organization/capture behavior test is repeatable, the direct P1–P28 suite remains GREEN, materialization and test execution leave the test tree byte-identical, and all runtime/manifest hashes remain unchanged.
 
-Continue with M5-B organization-empty fallback after M5-A. Do not combine the remaining fixture migrations with Engine modularization, Diagnostics changes, or a product release.
+Continue with M5-C state/contract process harness after M5-B. Do not combine the remaining fixture migrations with Engine modularization, Diagnostics changes, or a product release.

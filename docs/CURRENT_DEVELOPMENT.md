@@ -84,7 +84,7 @@ This has been reproduced with both a tiny and a larger representation delta:
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat and now serves as a frozen regression control. The active major checkpoint remains M2-2, while current production is the v0.64.1 Summary Scope Authority correctness insert; preserve the validated Representation fast path and genuine-user-edit behavior while completing summary-scope live validation and the final M2-2 positive control.
+v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat and now serves as a frozen regression control. The active major checkpoint remains M2-2, while current production is the v0.64.2 Diagnostic Copy Resilience hardening release; preserve the validated Representation fast path, Summary Scope authority, and genuine-user-edit behavior while capturing the single ordinary diagnostic-copy live result before M2-3.
 
 ---
 
@@ -1128,8 +1128,8 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Release v0.64.2 — Diagnostic Copy Resilience.
-Then capture one ordinary production copy result before starting M2-3.
+Capture one ordinary v0.64.2 production copy result.
+If it is COPIED or COPIED_FALLBACK, mark the live gate PASS and start M2-3.
 ```
 
 Current success condition:

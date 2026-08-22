@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.66
+//@version 3.0.0-alpha.5.67
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.66';
+  const VERSION = '3.0.0-alpha.5.67';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -46,6 +46,7 @@
     requestLedgerStartedAt: null,
     analyticsScopeView: 'all',
     dashboardView: 'overview',
+    diagnosticsMode: 'basic',
     selectedCreditsOrgId: '',
     creditsOrgFallbackCount: 0,
     creditsOrgLastFallbackFrom: '',

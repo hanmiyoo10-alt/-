@@ -13,7 +13,7 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.66`
+- Product: `3.0.0-alpha.5.67`
 - Bridge Engine: `1.6.19`
 - Bridge Manager: `1.3.0`
 - Release branch: `release-usage-dashboard`
@@ -24,7 +24,7 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`.
+Last verified real-device baseline: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`.
 
 Verified 5.64 foreground evidence:
 
@@ -32,7 +32,7 @@ Verified 5.64 foreground evidence:
 - All three foreground source operations followed direct `llmgateway` ENOENT into the existing `npx` fallback, so routine npx-launcher use on the device is VERIFIED.
 - The portion of each 7–8.6s interval attributable to npm metadata freshness checks remains UNKNOWN. Launcher attribution alone does not prove that npx is the dominant latency source.
 
-Current release implementation: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`.
+Current release implementation: `3.0.0-alpha.5.67 — Diagnostics Workspace Overhaul`.
 
 5.66 release contract:
 

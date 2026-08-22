@@ -29,10 +29,12 @@ The v0.64.2 release contract explicitly declared a natural `REPORT_BUILD_FAILED`
 ```text
 CURRENT: v0.64.2 Diagnostic Copy Resilience
 NEXT:    v0.64.3 B_END Diagnostic Builder Binding Repair
+AFTER:   post-B_END C clock-authority gate review
 THEN:    v0.65.0 M2-3 Edit Reconcile Ownership Extraction
+         OR a narrow clock-authority mini first if the new gate is confirmed/design-frozen
 ```
 
-`v0.65.0` detailed design remains valid and should not be reopened because of this diagnostic-only defect.
+`v0.65.0` detailed design remains valid and should not be reopened because of either diagnostic evidence family. The new post-B_END C clock evidence is explicitly outside M2-3 ownership.
 
 ## v0.64.3 scope
 
@@ -60,6 +62,7 @@ Store schema/call semantics
 Runtime Mirror / Deferred Mirror
 host/history/cache observers
 network/timer/host API surfaces
+POST_BEND_C_CLOCK_DOMAIN_GAP behavior (evidence only in this mini)
 ```
 
 ## Required validation
@@ -86,6 +89,25 @@ Broadcast closure / terminal coverage lines are present
 copy result COPIED or COPIED_FALLBACK
 ```
 
-Only after this mini passes should M2-3 implementation begin.
+## Newly preserved post-0.64.3 gate
 
-Evidence: `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md` and `SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md`.
+The first copied C diagnostic after the same natural B_END sequence exposed a separate cross-clock issue:
+
+```text
+completed broadcast terminal: 2031-03-07 09:55 PM
+current C frame/commit:         2031-02-28 10:45 PM
+Stored broadcast: UNLOCKED at 2031-03-07 09:55 PM
+Narrative clock: SAME at old 2031-02-28 anchor
+```
+
+The C request is a reaction to the completed March 7 broadcast, so the visible response timestamp predates the event it is reacting to. Current source keeps B broadcast airtime and non-B narrative time intentionally separate, but no post-B_END C handoff floor is currently observed.
+
+This is recorded as `POST_BEND_C_CLOCK_DOMAIN_GAP` in `SIMCORE_POST_BEND_C_EVIDENCE_06402.md`.
+
+Do not widen v0.64.3 to repair it. Immediately after v0.64.3 live close, review/freeze the clock-authority contract. If confirmed, insert a separate narrow mini before M2-3; otherwise document dismissal with evidence and proceed to v0.65.0.
+
+Evidence:
+
+- `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md`
+- `SIMCORE_DIAGNOSTIC_COPY_WATCH_06401.md`
+- `SIMCORE_POST_BEND_C_EVIDENCE_06402.md`

@@ -74,3 +74,104 @@ This defect blocks convenient evidence collection, not SimCore runtime correctne
 Status: `PATCHED / LIVE ATTRIBUTION PENDING`
 
 The report builder remains byte-identical. Report construction and clipboard transport are now separate, the report is built exactly once, primary/fallback payloads are identical, DOM cleanup is unconditional, and four bounded UI results expose the failed stage. A natural B_END builder repair remains forbidden until `REPORT_BUILD_FAILED` directly attributes the failure.
+
+---
+
+## v0.64.2 live attribution — B_END report builder failure CONFIRMED
+
+Captured: 2026-08-22
+Runtime generation: `mt4bcgc3-5556z8`
+Production: `v0.64.2 — Diagnostic Copy Resilience`
+
+The required natural discriminator has now occurred.
+
+Earlier diagnostic reports in the same runtime generation were copied successfully for ordinary C and active B_START/B_CONTINUE turns. The final natural B_END panel remained fully renderable, but clicking the copy control changed the button text to:
+
+```text
+진단 생성 실패
+```
+
+In v0.64.2 this label maps only to:
+
+```text
+REPORT_BUILD_FAILED
+```
+
+The copy implementation performs report construction inside its own guarded step and returns `REPORT_BUILD_FAILED` before Clipboard API or textarea fallback transport when the builder throws. Therefore the old v0.64.1 ambiguity is now resolved: this B_END failure is a **report-builder exception**, not a generic clipboard transport failure.
+
+### B_END screenshot evidence
+
+```text
+SimCore v0.64.2
+MODE B_END
+RUNTIME ACTIVE
+Stored last mode B_END
+Broadcast UNLOCKED
+Last broadcast airtime 2031-03-07 09:55 PM
+ROOT B@2066 · PARENT B@2078 · B@current
+Volume 77→77 SAME
+Chapter 4→4 SAME
+Chatindex 1010→1011 ADVANCED
+FRAME REGRESSION: NONE
+Warnings: 4
+Compatibility diagnostics: 0
+Runtime prompt: 2,670 chars / 52 lines · mode B_END
+```
+
+### Root-cause source correlation
+
+The current B_END-only builder branch is:
+
+```js
+const broadcastTerminal = outputFresh && runtimeMode === 'B_END' && latestAssistantIndex >= 0
+  ? time.narrativeTimestampSequence(kernel.textOfMessage(messages[latestAssistantIndex]))
+  : null;
+```
+
+The outer runtime scope does not bind either `time` or `kernel` through `SimCore.require(...)`.
+
+Consequently:
+
+```text
+non-B_END
+→ conditional branch false
+→ undefined identifiers are not evaluated
+→ report may build normally
+
+current committed B_END
+→ conditional branch true
+→ evaluate `time...` first
+→ ReferenceError before report string exists
+→ REPORT_BUILD_FAILED
+```
+
+Even if `time` alone were bound, `kernel` is also unbound in the same expression; both bindings must be corrected or the branch must call an already-owned exported helper.
+
+### Updated classification
+
+```text
+v0.64.1 failure attribution: RESOLVED
+v0.64.2 transport split: WORKING AS DESIGNED
+B_END report-builder defect: CONFIRMED
+clipboard primary/fallback defect: NOT INDICATED BY THIS SAMPLE
+runtime correctness: UNAFFECTED
+surface: OBSERVABILITY ONLY
+cause: UNBOUND B_END-ONLY REPORT-BUILDER DEPENDENCIES
+```
+
+### Release gate consequence
+
+The v0.64.2 source contract explicitly states that a future natural `REPORT_BUILD_FAILED` is the gate for a separate builder-repair mini. That gate is now satisfied.
+
+Required ordering:
+
+```text
+1. freeze completed M2-3 detailed design
+2. ship one narrow diagnostic builder repair mini before M2-3 implementation
+3. directly re-test a current-turn B_END report build/copy
+4. resume M2-3 implementation after that mini passes
+```
+
+Do not combine this repair with Edit Reconcile, Broadcast semantics, Structure/COMMUNITY behavior, Store performance, Prompt, or host-history work.
+
+Full natural B_START→B_END sequence evidence is preserved in `SIMCORE_LIVE_06402_BROADCAST_SEQUENCE.md`.

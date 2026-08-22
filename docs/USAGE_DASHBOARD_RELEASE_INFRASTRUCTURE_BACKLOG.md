@@ -1,0 +1,234 @@
+# Local Usage Dashboard — Release Infrastructure Improvement Backlog
+
+Status: **DEFERRED — revisit after 3.0.0-alpha.5.65 real-device validation**
+
+Recorded after:
+
+- Product: `3.0.0-alpha.5.65`
+- Bridge Engine: `1.6.18`
+- Bridge Manager: `1.2.6`
+- Snapshot / recent-request contracts: `1 / 1`
+- Release PR: [#66](https://github.com/hanmiyoo10-alt/-/pull/66)
+
+This document records a future maintenance direction. It does not authorize implementation, change production behavior, or assign the next product version. Revisit it only after 5.65 device evidence has been collected and the user explicitly approves a maintenance update.
+
+## Why this backlog exists
+
+Local Usage Dashboard runtime behavior is increasingly well-protected, but the release/test harness has accumulated avoidable coupling.
+
+The recurring problem is not primarily an unstable product. Historical regressions are frequently adapted to the current release by workflow-time string replacement. This makes harmless changes to versions, prose, function signatures, diagnostic fields, or source layout capable of failing a PR even when runtime behavior is correct.
+
+Confirmed examples include:
+
+- 5.62 P23 retained an escaped 5.61 product-version expectation and required [a compatibility correction](https://github.com/hanmiyoo10-alt/-/commit/0b7a3b1967329649a4a8d1b0e13b6dd6aefa74b0).
+- 5.62 P24 counted the `runCli` function definition as a call site, producing `6 !== 5`, and required [an actual-call-site correction](https://github.com/hanmiyoo10-alt/-/commit/5cf0e2a6c0273f18f0d04daea4e96d1e7a981cef).
+- 5.65 pre-PR validation initially exposed P26 coupling to an old diagnostics sample and old guidelines wording. Product behavior was correct; the historical test adapter was incomplete.
+- Repository history contains repeated matcher, patch-target, workflow-syntax, memory-wording, and digest corrections, showing that this is a structural maintenance cost rather than a one-off typo.
+
+GitHub Actions from other products may appear as skipped or cancelled beside a Usage Dashboard PR. Those are not automatically Usage Dashboard product failures and must be distinguished from the failing Usage Dashboard job.
+
+## Goals
+
+1. Reduce false-positive PR failures without weakening runtime protection.
+2. Preserve every production incident regression represented by P1–P27.
+3. Keep the shared `repo-main-write` lock and P22 monotonic fail-closed publisher.
+4. Keep routine device updates on the PocketRisu `+` path.
+5. Make release-specific files small enough to review without reconstructing previous workflows.
+6. Separate current release identity from historical behavior assertions.
+7. Preserve exact source-fidelity, UNKNOWN, cache, recovery, updater, and contract guarantees.
+
+## Non-goals
+
+This maintenance direction must not be combined with:
+
+- snapshot scheduling or CLI concurrency changes,
+- TTL or stale-policy changes,
+- direct CLI provisioning,
+- Manager lifecycle changes,
+- new endpoints or source operations,
+- UI redesign,
+- Product, Engine, or Manager version bumps unless runtime artifacts actually change.
+
+The 5.65 performance experiment and any later launcher repair remain separate evidence-led work.
+
+## Proposed design
+
+### A. Reusable release workflow
+
+Create one reusable Usage Dashboard release workflow that owns:
+
+- checkout and preflight,
+- materializer execution,
+- source build and parity checks,
+- the complete test command,
+- artifact and manifest integrity checks,
+- candidate-to-main materialization,
+- monotonic publication to `release-usage-dashboard`.
+
+A release-specific caller should provide only bounded inputs such as:
+
+- release title,
+- materializer path,
+- newly introduced regression test,
+- expected Product / Engine / Manager / contract versions.
+
+The reusable workflow must retain:
+
+- `concurrency.group: repo-main-write`,
+- `cancel-in-progress: false`,
+- expected main/release ref checks,
+- P22 stale-candidate and same-version-divergence guards,
+- fail-closed publication.
+
+Per-release materializers may remain separate because their source transformations are intentionally release-specific. The duplicated publisher and historical-test adapter should not.
+
+### B. Test layers
+
+Organize the existing suite conceptually into three layers without deleting incident history.
+
+#### Contract tests
+
+Own:
+
+- manifest and artifact versions,
+- component SHA-256 values,
+- contract versions,
+- updater URLs and release branch,
+- Manager/Engine adoption boundaries.
+
+Current versions should come from the current manifest or one current-release fixture rather than being rewritten inside every historical test.
+
+#### Behavior tests
+
+Own executable semantics such as:
+
+- direct launcher success,
+- ENOENT-only fallback,
+- non-ENOENT failure,
+- npx rollback argv,
+- cache hit/stale/deferred rules,
+- CLI lane limits,
+- foreground/secondary scheduling,
+- circuit and recovery behavior.
+
+Prefer dependency injection and exported helpers over slicing function bodies from source text.
+
+#### Incident regressions
+
+P1–P27 remain durable records of production incidents and guarantees. They should assert the behavior that prevented recurrence, not the current release title or an unrelated exact guidelines sentence.
+
+Historical fixtures should remain immutable unless the historical contract itself was wrong.
+
+### C. Remove workflow-time historical string rewriting
+
+Gradually eliminate the large Python `text.replace()` adapter embedded in each release workflow.
+
+Priority order:
+
+1. Product and Engine version rewrites.
+2. Current-memory title and baseline sentence rewrites.
+3. Exact diagnostics prose rewrites.
+4. Function-signature rewrites.
+5. Expected object-key rewrites caused only by later bounded metadata.
+
+A current release must eventually be able to run P1–P27 directly after materialization, without modifying the committed test files in the CI workspace.
+
+### D. Stronger source-operation guards
+
+Where call-site count is a protected invariant:
+
+- distinguish function definitions from calls,
+- prefer a small parser or explicitly registered source-operation inventory,
+- continue to verify the exact five `runCli()` call sites, two `runProgram()` call sites, and one `execFileAsync()` source operation while those remain the production contract,
+- do not rely on a raw substring count that changes when a declaration or comment changes.
+
+Source-shape assertions should be retained only where shape itself is an operational or security boundary.
+
+### E. Materializer preflight
+
+Keep exact, fail-closed transformations, but make failures easier to diagnose.
+
+Each materializer should report:
+
+- expected production baseline,
+- failed target label,
+- expected match count and actual count,
+- whether the candidate is already materialized,
+- final Product / Engine / Manager / contract tuple,
+- final artifact integrity verification.
+
+Do not make patch matching permissive enough to edit an ambiguous source location.
+
+### F. Engine source modularization — later, separate release
+
+Only after release/test consolidation, consider splitting development source into focused modules such as:
+
+- CLI launcher,
+- cache runtime,
+- snapshot scheduler,
+- secondary refresh,
+- diagnostics,
+- Credits source,
+- DevPass source.
+
+Continue publishing one bundled `bridge-engine.mjs` so Manager behavior and the `+` update path remain unchanged.
+
+This is a separate runtime refactor and must not be included in the initial infrastructure maintenance PR.
+
+## Suggested execution sequence
+
+### Maintenance PR 1 — workflow foundation
+
+- Add the reusable workflow.
+- Convert one future release caller to use it.
+- Preserve the existing publisher byte-for-byte where practical.
+- No production artifact or version change.
+
+### Maintenance PR 2 — current-release contract fixture
+
+- Centralize the current version tuple.
+- Remove version/title rewrites from historical tests.
+- Keep P1–P27 GREEN.
+
+### Maintenance PR 3 — behavioral harness
+
+- Add dependency-injected launcher/cache/scheduler harnesses.
+- Replace fragile source extraction only after behavior parity is proven.
+- Retain narrow source-operation guards.
+
+### Maintenance PR 4 — adapter removal
+
+- Remove remaining workflow-time mutation of historical tests.
+- Require P1–P27 to run directly from committed files.
+- Document any intentionally retained source-shape assertions.
+
+### Later product release — optional Engine modularization
+
+- Bump Product and Engine only because the runtime artifact changes.
+- Preserve external contracts and Manager version unless evidence requires otherwise.
+- Validate on the real device before choosing additional refactors.
+
+## Acceptance criteria for the infrastructure work
+
+- P1–P27 pass without CI modifying historical test files.
+- One shared Usage Dashboard publisher owns main materialization and release publication.
+- A release-specific workflow/caller contains no copied publisher implementation.
+- Product/Engine/Manager/contracts are declared once per candidate.
+- Historical tests do not require current release-title prose.
+- Source-operation counts do not count function declarations.
+- P22 downgrade, divergence, moved-main, and moved-release protections remain GREEN.
+- A docs-only or CI-only maintenance PR does not bump Product, Engine, or Manager and does not publish runtime artifacts.
+- PocketRisu users still update normally with `+`.
+- No Local Usage Dashboard runtime, cache, scheduling, source, or payload semantics change during the initial consolidation.
+
+## Revisit trigger
+
+Revisit this backlog only after:
+
+1. 5.65 is installed through the normal `+` flow.
+2. Stable Readiness reports Product 5.65 / Engine 1.6.18 / Manager 1.2.6.
+3. Several comparable device snapshots establish whether `prefer-offline` materially changes launcher/source latency.
+4. Any 5.65 regression is resolved or explicitly classified.
+5. The user explicitly approves starting a release-infrastructure maintenance update.
+
+Until then, keep this document as a deferred design record and do not let it expand the scope of performance work.

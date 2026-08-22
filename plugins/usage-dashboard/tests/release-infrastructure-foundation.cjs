@@ -46,7 +46,21 @@ for (const forbidden of ['git switch', 'git push', 'text.replace', 'check_releas
   assert.ok(!caller.includes(forbidden), `caller must not duplicate ${forbidden}`);
 }
 
+if (spec.releaseCommandWorkflow) {
+  const command = fs.readFileSync(spec.releaseCommandWorkflow, 'utf8');
+  assert.ok(command.length < 1400, 'release command must remain a bounded reusable-workflow caller');
+  assert.match(command, /push:/);
+  assert.match(command, /branches: \[main\]/);
+  assert.ok(command.includes(`- '${spec.releaseCommandWorkflow}'`), 'release command must trigger only from its own main materialization');
+  assert.match(command, /uses: \.\/\.github\/workflows\/reusable-usage-dashboard-release\.yml/);
+  assert.ok(command.includes(`release_spec: ${currentRelease.specPath}`));
+  assert.match(command, /publish: true/);
+  for (const forbidden of ['git switch', 'git push', 'text.replace', 'check_release_monotonic.py']) {
+    assert.ok(!command.includes(forbidden), `release command must not duplicate ${forbidden}`);
+  }
+}
+
 assert.match(validator, /sha256 mismatch/);
 assert.match(validator, /snapshot contract/);
 
-console.log('Usage Dashboard release infrastructure foundation: OK · immutable regressions, reusable workflow, release spec, bounded maintenance caller');
+console.log('Usage Dashboard release infrastructure foundation: OK · immutable regressions, reusable workflow, bounded stage/release authority');

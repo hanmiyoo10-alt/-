@@ -5,7 +5,6 @@ const source = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const version = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const alpha = version.match(/^3\.0\.0-alpha\.(\d+)\.(\d+)$/);
 assert.ok(alpha ? (Number(alpha[1]) > 4 || (Number(alpha[1]) === 4 && Number(alpha[2]) >= 3)) : /^(3\.0\.0-beta\.|3\.0\.0-rc\.|3\.0\.0$)/.test(version), `P3 UI requires alpha.4.3+/RC/stable; got ${version}`);
-assert.ok(source.includes(`const VERSION = '${version}';`), 'runtime version must match metadata');
 
 for (const marker of [
   'Provider · 요청 / 비용 / 효율',
@@ -80,3 +79,4 @@ assert.ok(source.includes('Resume route: requested'), 'resume diagnostics regres
 assert.ok(source.includes('Bridge module freshness:'), 'bridge diagnostics regression');
 
 console.log(`usage-dashboard P3 UI regression: OK · ${version}`);
+

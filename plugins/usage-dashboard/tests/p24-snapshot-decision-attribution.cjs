@@ -2,21 +2,16 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/stage-usage-dashboard-562-snapshot-decision-attribution.yml', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
-assert.match(engine, /const VERSION = '1\.6\.15';/);
-assert.match(manager, /const MANAGER_VERSION = '1\.2\.6';/);
-assert.match(manager, /const PRODUCT_VERSION = '3\.0\.0-alpha\.5\.62';/);
-assert.match(manager, /const BUNDLED_ENGINE_VERSION = '1\.6\.15';/);
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.62');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.15');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 
 // 5.62 is measurement-only: preserve all protected runtime knobs from 5.61.
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number\(process\.env\.DEVPASS_BRIDGE_CLI_CONCURRENCY \|\| 2\)\)\);/);
@@ -40,8 +35,8 @@ assert.ok(engine.includes("throw new Error('No organizations found in CLI output
 assert.ok(engine.includes("creditsEarlyStart: { decision:'not-evaluated', reason:'', candidateMode:'', result:'none' }"));
 assert.ok(engine.includes('cacheDecisions: []'));
 assert.ok(engine.includes('attribution.cacheDecisions.length >= 64'));
-assert.ok(engine.includes("['hit','miss','join','load','stale','blocked','error']"));
-assert.ok(engine.includes("['empty','expired','loaded','circuit-open','refresh-error']"));
+assert.ok(engine.includes("['hit','miss','join','load','stale','deferred','blocked','error']"));
+assert.ok(engine.includes("['empty','expired','loaded','deferred-refresh','circuit-open','refresh-error']"));
 assert.ok(engine.includes("decision:'skipped', reason:'serial-mode'"));
 assert.ok(engine.includes("decision:'skipped', reason:'no-safe-candidate'"));
 assert.ok(engine.includes("reason:'prefetch-error', result:'failed'"));
@@ -63,7 +58,7 @@ const descriptorContext = {};
 vm.createContext(descriptorContext);
 vm.runInContext(`${descriptorSource}\nthis.snapshotCacheDescriptor = snapshotCacheDescriptor;`, descriptorContext);
 const describe = descriptorContext.snapshotCacheDescriptor;
-const secret = 'SECRET-ORG-9f6a';
+const secret = 'TEST_ORG_ID_DO_NOT_LOG';
 for (const key of [
   `usage:${secret}:24h`,
   `activity:credits:${secret}:30d`,
@@ -102,11 +97,11 @@ assert.ok(!cacheText.includes(secret));
 
 assert.ok(latest.includes('Bridge Credits early-start:'));
 assert.ok(latest.includes('Bridge snapshot cache decisions:'));
-assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));
-assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));
-assert.ok(guidelines.includes('The new attribution must add zero CLI/network requests.'));
-assert.ok(guidelines.includes('about 17.17s because long-window analytics work became cold'));
-assert.ok(guidelines.includes('exact skip reason is UNKNOWN in 5.61 diagnostics'));
+assert.ok(guidelines.includes(currentRelease.currentMemory));
+assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));
+assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
+assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/range'));
 assert.ok(guidelines.includes('## Long-term update roadmap'), 'durable roadmap must remain');
 assert.ok(guidelines.includes('Evidence outranks roadmap order.'), 'evidence-first roadmap rule must remain');
 
@@ -116,6 +111,6 @@ assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
 assert.match(workflow, /p23-credits-usage-early-start\.cjs/);
 assert.match(workflow, /p24-snapshot-decision-attribution\.cjs/);
-assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf("git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.62 product artifacts'"));
+assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf('git commit -m "release: publish Local Usage Dashboard $UD_PRODUCT_VERSION product artifacts"'));
 
 console.log('usage-dashboard P24 Snapshot Decision Attribution: OK · early-start reason + sanitized cache decisions observed with zero new CLI call sites');

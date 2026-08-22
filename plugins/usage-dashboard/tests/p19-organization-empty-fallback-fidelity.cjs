@@ -8,11 +8,6 @@ const vm = require('node:vm');
   const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
   const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-  assert.ok(engine.includes("const VERSION = '1.6.11';"));
-  assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.57';"));
-  assert.equal(manifest.productVersion, '3.0.0-alpha.5.57');
-  assert.equal(manifest.components.bridge.requiredVersion, '1.6.11');
-  assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 
   const failureLine = "if (!organizations.length) throw new Error('No organizations found in CLI output');";
   assert.ok(engine.includes(failureLine), 'empty organization result must preserve the pre-5.57 failure contract');

@@ -10,20 +10,7 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.9';"));
-assert.ok(source.includes('//@version 3.0.0-alpha.5.55'));
-assert.ok(source.includes("const VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(engine.includes("const VERSION = '1.6.9';"));
 assert.ok(engine.includes("Symbol.for('llmgateway.devpass.bridge.capture.v10')"));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.9';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.9');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.55');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 assert.ok(diagnostics.includes('parser provider-usage-v3'));
@@ -153,3 +140,4 @@ assert.ok(sanitizeBlock.includes("cacheWriteTelemetry: cacheUsage?.cacheWriteTel
 assert.ok(sanitizeBlock.includes("cacheTtlTelemetry: cacheUsage?.cacheTtlTelemetry"));
 
 console.log('usage-dashboard P11 cache fidelity: OK · official write aliases + provenance preserve unknown without inference');
+

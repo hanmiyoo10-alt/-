@@ -2,24 +2,18 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/stage-usage-dashboard-564-foreground-cli-launcher-attribution.yml', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
-assert.match(engine, /const VERSION = '1\.6\.17';/);
-assert.match(manager, /const MANAGER_VERSION = '1\.2\.6';/);
-assert.match(manager, /const PRODUCT_VERSION = '3\.0\.0-alpha\.5\.64';/);
-assert.match(manager, /const BUNDLED_ENGINE_VERSION = '1\.6\.17';/);
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.64');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.17');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-assert.ok(latest.includes('//@version 3.0.0-alpha.5.64'));
 
 // Measurement only: keep the exact source-operation surface and execution guards.
 const runCliOccurrences = (engine.match(/\brunCli\(/g) || []).length;
@@ -29,7 +23,7 @@ assert.equal(runCliOccurrences - runCliDefinitions, 5, '5.64 must keep exactly f
 const runProgramOccurrences = (engine.match(/\brunProgram\(/g) || []).length;
 const runProgramDefinitions = (engine.match(/async function runProgram\(/g) || []).length;
 assert.equal(runProgramDefinitions, 1);
-assert.equal(runProgramOccurrences - runProgramDefinitions, 2, 'direct and npx must remain the only runProgram call sites');
+assert.equal(runProgramOccurrences - runProgramDefinitions, 3, 'managed, direct, and npx remain the only runProgram call sites');
 assert.equal((engine.match(/\bexecFileAsync\(/g) || []).length, 1, 'runProgram must remain the only execFileAsync source operation');
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number\(process\.env\.DEVPASS_BRIDGE_CLI_CONCURRENCY \|\| 2\)\)\);/);
 assert.match(engine, /timeout: 25_000/);
@@ -42,7 +36,7 @@ assert.ok(processStart >= 0 && processEnd > processStart);
 const processSource = engine.slice(processStart, processEnd);
 const directAt = processSource.indexOf("runProgram('llmgateway', args, extraEnv)");
 const enoentAt = processSource.indexOf("if (error?.code !== 'ENOENT') throw error;");
-const fallbackAt = processSource.indexOf("runProgram('npx', ['--yes', `@llmgateway/cli@${CLI_VERSION}`, ...args], extraEnv)");
+const fallbackAt = processSource.indexOf("runProgram('npx', npxArgs, extraEnv)");
 assert.ok(directAt >= 0 && enoentAt > directAt && fallbackAt > enoentAt);
 assert.ok(processSource.includes("launcherMeta.launcher = 'npx-fallback';"));
 assert.ok(processSource.includes("launcherMeta.fallbackReason = 'direct-enoent';"));
@@ -52,6 +46,12 @@ const calls = [];
 let mode = 'direct';
 let capturedMeta = null;
 const processContext = {
+  process:{execPath:'/safe/node'},
+  managedCliRuntime:async()=>({state:'unavailable',entry:null}),
+  NPX_PREFER_OFFLINE: true,
+  process:{execPath:'/safe/node'},
+  managedCliRuntime:async()=>({state:'unavailable',entry:null}),
+  NPX_PREFER_OFFLINE: true,
   CLI_VERSION: '1.9.0',
   cliOperationLabel: () => 'credits',
   withCliSlot: async (_label, task, meta) => {
@@ -81,11 +81,11 @@ const diagStart = diagnostics.indexOf('  function bridgeCliOperationsText(');
 const diagEnd = diagnostics.indexOf('\n  function bridgeCreditsEarlyStartText(', diagStart);
 assert.ok(diagStart >= 0 && diagEnd > diagStart);
 const diagSource = diagnostics.slice(diagStart, diagEnd);
-assert.ok(diagSource.includes("['direct','npx-fallback']"));
+assert.ok(diagSource.includes("['managed-direct','direct','npx-fallback']"));
 assert.ok(diagSource.includes("? String(item.launcher) : 'unknown'"));
 assert.ok(diagSource.includes("String(item?.fallbackReason) === 'direct-enoent'"));
 assert.ok(!/process\.env|extraEnv|executable|CLI_VERSION|\.args\b/.test(diagSource));
-const diagContext = {Array,Number,String,Math};
+const diagContext = {Array,Number,String,Math,Set};
 vm.createContext(diagContext);
 vm.runInContext(`${diagSource}\nthis.operationsText = bridgeCliOperationsText; this.launcherText = bridgeCliLauncherText;`, diagContext);
 const sample = {
@@ -96,7 +96,7 @@ const sample = {
   ],
 };
 assert.equal(diagContext.operationsText(sample), 'credits [direct] 0→10ms · q0 · exec10 · capture [npx-fallback] 1→12ms · q0 · exec11 · legacy [unknown] 2→13ms · q1 · exec10');
-assert.equal(diagContext.launcherText(sample), 'direct 1 · npx-fallback 1 · unknown 1 · direct ENOENT 1');
+assert.equal(diagContext.launcherText(sample), 'managed-direct 0 · direct 1 · npx-fallback 1 · unknown 1 · policy not-applicable · direct ENOENT 1');
 assert.ok(diagnostics.includes('Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}'));
 assert.ok(latest.includes('Bridge CLI launcher:'));
 
@@ -112,10 +112,10 @@ assert.ok(engine.includes("return json(res, 200, await analyticsScopes(creditsOr
 assert.ok(engine.includes("return json(res, 200, await runwayFor(decodeURIComponent(match[1])))"));
 assert.ok(!/usageForOrg\([^\n]*'24h'[^\n]*deferExpired:true/.test(engine));
 
-assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`'));
-assert.ok(guidelines.includes('Launcher attribution is measurement-only'));
-assert.ok(guidelines.includes('Keep all five existing `runCli()` call sites and the single existing `execFileAsync()` source operation'));
-assert.ok(guidelines.includes('its share of the 8–9s latency remains UNKNOWN'));
+assert.ok(guidelines.includes(currentRelease.currentMemory));
+assert.ok(guidelines.includes('Engine launcher order is `managed-direct` → system `direct` → `npx-fallback`.'));
+assert.ok(guidelines.includes('Keep all five existing `runCli()` source call sites and the single existing `execFileAsync()` source operation'));
+assert.ok(guidelines.includes('If managed-direct remains near the prior 7–13s source timings'));
 assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 
@@ -125,21 +125,21 @@ assert.ok(workflow.includes('check_release_monotonic.py'));
   const direct = await processContext.runCliProcess(['credits','--json'], {SAFE:'1'});
   assert.equal(direct.stdout, '{}');
   assert.deepEqual(calls.map(item => item.program), ['llmgateway']);
-  assert.deepEqual(capturedMeta, {launcher:'direct',fallbackReason:'none'});
+  assert.deepEqual(capturedMeta, {launcher:'direct',fallbackReason:'none',npxPolicy:'not-applicable'});
 
   calls.length = 0;
   mode = 'enoent';
   const fallback = await processContext.runCliProcess(['credits','--json'], {SAFE:'1'});
   assert.equal(fallback.stdout, '{}');
   assert.deepEqual(calls.map(item => item.program), ['llmgateway','npx']);
-  assert.deepEqual(calls[1].args, ['--yes','@llmgateway/cli@1.9.0','credits','--json']);
-  assert.deepEqual(capturedMeta, {launcher:'npx-fallback',fallbackReason:'direct-enoent'});
+  assert.deepEqual(calls[1].args, ['--yes','--prefer-offline','@llmgateway/cli@1.9.0','credits','--json']);
+  assert.deepEqual(capturedMeta, {launcher:'npx-fallback',fallbackReason:'direct-enoent',npxPolicy:'prefer-offline'});
 
   calls.length = 0;
   mode = 'failure';
   await assert.rejects(() => processContext.runCliProcess(['credits','--json']), /direct failed/);
   assert.deepEqual(calls.map(item => item.program), ['llmgateway'], 'non-ENOENT direct failures must never fall back to npx');
-  assert.deepEqual(capturedMeta, {launcher:'direct',fallbackReason:'none'});
+  assert.deepEqual(capturedMeta, {launcher:'direct',fallbackReason:'none',npxPolicy:'not-applicable'});
 
   console.log('P26 Foreground CLI Launcher Attribution: OK');
 })().catch((error) => {

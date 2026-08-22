@@ -11,7 +11,6 @@ const latest = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.49';"));
 assert.ok(core.includes('const PROVIDER_MANAGER_CACHE_TIMEOUT_MS = 1200;'));
 assert.ok(core.includes('const PROVIDER_MANAGER_CACHE_MAX_BACKOFF_MS = 300000;'));
 assert.ok(core.includes('const PROVIDER_MANAGER_CACHE_SIDE_PROBE_DELAY_MS = 250;'));
@@ -57,12 +56,7 @@ for (const marker of [
   'providerManagerCacheRuntime.inFlight=false;'
 ]) assert.ok(bootstrap.includes(marker) || latest.includes(marker), `missing cache probe cleanup marker: ${marker}`);
 
-assert.ok(latest.includes('//@version 3.0.0-alpha.5.49'));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.49';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.49');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.5');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 console.log('usage-dashboard P9 Provider Manager cache hardening: OK · primary refresh isolated from optional IPC');
+

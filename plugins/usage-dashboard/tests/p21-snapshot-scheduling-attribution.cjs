@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 (async () => {
   const root = 'plugins/usage-dashboard';
   const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
@@ -12,17 +14,6 @@ const vm = require('node:vm');
   const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
   const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 
-  assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.59';"));
-  assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.13';"));
-  assert.ok(source.includes('//@version 3.0.0-alpha.5.59'));
-  assert.ok(engine.includes("const VERSION = '1.6.13';"));
-  assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.59';"));
-  assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.13';"));
-  assert.equal(manifest.productVersion, '3.0.0-alpha.5.59');
-  assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.59');
-  assert.equal(manifest.components.bridge.requiredVersion, '1.6.13');
-  assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-  assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.59');
 
   // Measurement-only contract: freeze the 5.58 behavior/safety envelope.
   assert.ok(engine.includes("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"));
@@ -76,7 +67,7 @@ const vm = require('node:vm');
   assert.equal(taskAttribution.taskTimeline.organizations.durationMs, 300);
 
   // CLI operation timeline is bounded and stores timing plus sanitized label only.
-  const opStart = engine.indexOf('function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) {');
+  const opStart = engine.indexOf('function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta = null) {');
   const opEnd = engine.indexOf('\n\nfunction snapshotAttributionSummary', opStart);
   assert.ok(opStart >= 0 && opEnd > opStart, 'CLI operation recorder must be extractable');
   const opBlock = engine.slice(opStart, opEnd);
@@ -97,7 +88,7 @@ const vm = require('node:vm');
   assert.equal(cliAttribution.cliOperations.length, 8, 'operation timeline must be bounded to 8 entries');
   assert.deepEqual(
     Object.keys(cliAttribution.cliOperations[0]).sort(),
-    ['endOffsetMs','executionMs','executionStartOffsetMs','label','queueWaitMs','startOffsetMs'].sort(),
+    ['endOffsetMs','executionMs','executionStartOffsetMs','fallbackReason','label','launcher','npxPolicy','queueWaitMs','startOffsetMs'].sort(),
   );
   assert.equal(cliAttribution.cliOperations[0].startOffsetMs, 100);
   assert.equal(cliAttribution.cliOperations[0].executionStartOffsetMs, 120);
@@ -109,7 +100,7 @@ const vm = require('node:vm');
   assert.ok(!opBlock.includes('runCli('));
   assert.ok(!opBlock.includes('runCliProcess('));
   assert.ok(!opBlock.includes('fetch('));
-  assert.ok(engine.includes('noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt)'));
+  assert.ok(engine.includes('noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta)'));
 
   // Existing sanitizer remains the only source of operation labels.
   const labelStart = engine.indexOf('function cliOperationLabel(args, extraEnv = {}) {');
@@ -118,7 +109,7 @@ const vm = require('node:vm');
   const labelContext = {};
   vm.createContext(labelContext);
   vm.runInContext(`${labelBlock}\nthis.cliOperationLabel = cliOperationLabel;`, labelContext);
-  const secretOrg = 'Fp4OAsGzWARiXmUqx1HW';
+  const secretOrg = 'TEST_ORG_ID_DO_NOT_LOG';
   const sanitized = labelContext.cliOperationLabel(['usage','--org',secretOrg,'--by','model','--range','7d','--json'], {});
   assert.equal(sanitized, 'usage-7d-model');
   assert.ok(!sanitized.includes(secretOrg));
@@ -128,7 +119,7 @@ const vm = require('node:vm');
   const summaryEnd = engine.indexOf('\n\nasync function withCliSlot', summaryStart);
   assert.ok(summaryStart >= 0 && summaryEnd > summaryStart, 'summary helper must be extractable');
   const summaryBlock = engine.slice(summaryStart, summaryEnd);
-  const summaryContext = { Date:{now:()=>2000}, CLI_CONCURRENCY:2, Number, Object, Array, Math, String };
+  const summaryContext = { Date:{now:()=>2000}, CLI_CONCURRENCY:2, Number, Object, Array, Math, String, secondaryRefreshSnapshot:()=>({}) };
   vm.createContext(summaryContext);
   vm.runInContext(`${summaryBlock}\nthis.snapshotAttributionSummary = snapshotAttributionSummary;`, summaryContext);
   const summary = summaryContext.snapshotAttributionSummary({
@@ -174,11 +165,11 @@ const vm = require('node:vm');
   assert.ok(diagnostics.includes('Bridge snapshot attribution:'));
   assert.ok(diagnostics.includes('Bridge CLI timing:'));
 
-  assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`'));
-  assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`'));
-  assert.ok(guidelines.includes('Bridge ran 3 CLI operations'));
-  assert.ok(guidelines.includes('Measurement only: do not change snapshot ordering'));
-  assert.ok(guidelines.includes('missing Write/TTL remained UNKNOWN and was never inferred'));
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+  assert.ok(guidelines.includes(currentRelease.currentMemory));
+  assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
+  assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));
+  assert.ok(guidelines.includes('Keep UNKNOWN distinct from known zero'));
 
   console.log('usage-dashboard P21 snapshot scheduling attribution: OK · bounded task/CLI timelines add evidence without changing scheduling or source semantics');
 })().catch(error => {

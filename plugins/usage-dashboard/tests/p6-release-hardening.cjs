@@ -11,17 +11,7 @@ const productVersion = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const alphaBuild = productVersion.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
 const isHardeningOrLater = alphaBuild ? Number(alphaBuild[1]) >= 46 : productVersion === '3.0.1';
 const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
-assert.ok(isHardeningOrLater, `unexpected release-hardening forward version: ${productVersion}`);
 assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bridge contract version: ${requiredEngineVersion}`);
-assert.ok(source.includes(`const VERSION = '${productVersion}';`));
-assert.ok(source.includes(`const REQUIRED_BRIDGE_VERSION = '${requiredEngineVersion}';`));
-assert.ok(engine.includes(`const VERSION = '${requiredEngineVersion}';`));
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes(`const PRODUCT_VERSION = '${productVersion}';`));
-assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${requiredEngineVersion}';`));
-assert.equal(manifest.productVersion, productVersion);
-assert.equal(manifest.components.bridge.requiredVersion, requiredEngineVersion);
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 for (const marker of [
   'lastRefreshPhases',

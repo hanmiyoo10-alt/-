@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 (async () => {
   const root = 'plugins/usage-dashboard';
   const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
@@ -12,17 +14,6 @@ const vm = require('node:vm');
   const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
   const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 
-  assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.58';"));
-  assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.12';"));
-  assert.ok(source.includes('//@version 3.0.0-alpha.5.58'));
-  assert.ok(engine.includes("const VERSION = '1.6.12';"));
-  assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.58';"));
-  assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.12';"));
-  assert.equal(manifest.productVersion, '3.0.0-alpha.5.58');
-  assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.58');
-  assert.equal(manifest.components.bridge.requiredVersion, '1.6.12');
-  assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-  assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.58');
 
   // Freeze the verified performance/safety envelope. 5.58 removes one normal
   // capture, not by widening concurrency or changing timeout/cache behavior.
@@ -49,7 +40,7 @@ const vm = require('node:vm');
 
   // 24h DevPass activity attempts the shared account capture first. Dedicated
   // capture survives only as a fallback. 7d/30d remain independent.
-  const activityStart = engine.indexOf("async function devPassActivityForRange(range = '24h') {");
+  const activityStart = engine.indexOf("async function devPassActivityForRange(range = '24h', options = {}) {");
   const activityEnd = engine.indexOf('\nfunction legacyDevPassUsageOrganization', activityStart);
   assert.ok(activityStart >= 0 && activityEnd > activityStart, 'devPassActivityForRange must be extractable');
   const activityBlock = engine.slice(activityStart, activityEnd);
@@ -189,15 +180,16 @@ const vm = require('node:vm');
   assert.ok(diagnostics.includes('Bridge snapshot attribution:'));
   assert.ok(diagnostics.includes('Bridge CLI timing:'));
 
-  assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`'));
-  assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.58 — Shared 24h Capture Coalescing`'));
-  assert.ok(guidelines.includes('one queued for about 5.87s'));
-  assert.ok(guidelines.includes('accountCapture` cache key, 30s TTL, no-stale behavior'));
-  assert.ok(guidelines.includes('No organizations found in CLI output'));
-  assert.ok(guidelines.includes('missing Write/TTL remained UNKNOWN and was never inferred'));
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+  assert.ok(guidelines.includes(currentRelease.currentMemory));
+  assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
+  assert.ok(guidelines.includes('shared capture behavior'));
+  assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));
+  assert.ok(guidelines.includes('Keep UNKNOWN distinct from known zero'));
 
   console.log('usage-dashboard P20 shared 24h capture: OK · account/status/activity share 24h bootstrap, dedicated fallback preserved, 7d/30d unchanged');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
 });
+

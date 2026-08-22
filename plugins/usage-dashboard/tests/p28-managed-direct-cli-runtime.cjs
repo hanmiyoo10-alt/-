@@ -4,25 +4,19 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/reusable-usage-dashboard-release.yml', 'utf8');
-const workflowCaller = fs.readFileSync('.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml', 'utf8');
-const materializer = fs.readFileSync('plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
+const workflowCaller = fs.readFileSync(currentRelease.callerWorkflow, 'utf8');
+const materializer = fs.readFileSync(currentRelease.materializer, 'utf8');
 
-assert.match(engine, /const VERSION = '1\.6\.19';/);
-assert.match(manager, /const MANAGER_VERSION = '1\.3\.0';/);
-assert.match(manager, /const PRODUCT_VERSION = '3\.0\.0-alpha\.5\.66';/);
-assert.match(manager, /const BUNDLED_ENGINE_VERSION = '1\.6\.19';/);
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.66');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.19');
-assert.equal(manifest.components.bridgeManager.version, '1.3.0');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
-assert.ok(latest.includes('//@version 3.0.0-alpha.5.66'));
 
 const runCliOccurrences = (engine.match(/\brunCli\(/g) || []).length;
 const runCliDefinitions = (engine.match(/async function runCli\(/g) || []).length;
@@ -135,15 +129,13 @@ try {
 assert.ok(diagnostics.includes("['managed-direct','direct','npx-fallback']"));
 assert.ok(diagnostics.includes('Bridge CLI runtime: ${bridgeCliRuntimeText'));
 assert.ok(!/npm cache path|raw npm error/.test(diagnostics));
-assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.66 — Managed Direct CLI Runtime`'));
+assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('once the managed command starts, its success or failure is authoritative'));
 assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 assert.ok(workflow.includes('p28-managed-direct-cli-runtime.cjs'));
-assert.ok(workflowCaller.includes('uses: ./.github/workflows/reusable-usage-dashboard-release.yml'));
+assert.ok(workflowCaller.includes(`uses: ./${currentRelease.sharedWorkflow}`));
 assert.ok(workflowCaller.includes('publish: false'));
-assert.ok(materializer.includes("BASE_VERSION = '3.0.0-alpha.5.65'"));
-assert.ok(materializer.includes("TARGET_VERSION = '3.0.0-alpha.5.66'"));
 
 console.log('P28 Managed Direct CLI Runtime: OK');
 })().catch(error => {

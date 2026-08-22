@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.64`
-- Bridge Engine: `1.6.17`
+- Product: `3.0.0-alpha.5.65`
+- Bridge Engine: `1.6.18`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,25 +24,26 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.63 — Long-window Critical Path Decoupling`.
+Last verified real-device baseline: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`.
 
-Verified 5.63 foreground evidence:
+Verified 5.64 foreground evidence:
 
-- A full foreground sample ended at about 16.738s. Credits ran from 0→8.124s, 24h account capture from about 0.071→9.602s, and 24h usage from about 8.125→16.724s.
-- Credits-to-usage handoff was about 1ms and post-CLI snapshot work was about 14ms, so the remaining 8–9.5s intervals are already inside existing CLI execution timing rather than obvious local scheduling or parsing delay.
-- The launcher used by each `execFileAsync()` operation remained UNKNOWN because 5.63 did not distinguish direct `llmgateway` from the existing `npx` fallback.
-- This evidence does not attribute any fixed portion of source latency to `npx`; it only justifies measuring the launcher branch.
+- A comparable foreground sample ended at about 14.570s. Credits took about 6.967s, 24h account capture about 8.575s, and 24h usage about 7.587s.
+- All three foreground source operations followed direct `llmgateway` ENOENT into the existing `npx` fallback, so routine npx-launcher use on the device is VERIFIED.
+- The portion of each 7–8.6s interval attributable to npm metadata freshness checks remains UNKNOWN. Launcher attribution alone does not prove that npx is the dominant latency source.
 
-Current release implementation: `3.0.0-alpha.5.64 — Foreground CLI Launcher Attribution`.
+Current release implementation: `3.0.0-alpha.5.65 — Npx Cache-First Launcher`.
 
-5.64 release contract:
+5.65 release contract:
 
-- Product becomes `3.0.0-alpha.5.64`; Bridge Engine becomes `1.6.17`; Bridge Manager remains `1.2.6`; snapshot/recent-request contracts remain `1/1`.
-- Preserve the existing direct `llmgateway` attempt and fall back to `npx --yes @llmgateway/cli@1.9.0` only when the direct attempt fails with `ENOENT`.
-- Launcher attribution is measurement-only. It must not select, retry, reorder, cancel, or otherwise influence an execution path.
-- Launcher vocabulary is bounded to `direct`, `npx-fallback`, and `unknown`; fallback reason is bounded to `direct-enoent` and `none`.
-- CLI operation attribution remains capped at eight records and exposes no executable path, PATH, HOME, environment, CLI arguments, token, organization ID, payload, header, or arbitrary error.
-- Keep all five existing `runCli()` call sites and the single existing `execFileAsync()` source operation. Add no subprocess, network request, endpoint, or source operation.
+- Product becomes `3.0.0-alpha.5.65`; Bridge Engine becomes `1.6.18`; Bridge Manager remains `1.2.6`; snapshot/recent-request contracts remain `1/1`.
+- Preserve the existing direct `llmgateway` attempt and fall back only when the direct attempt fails with `ENOENT`.
+- The default fallback is exactly `npx --yes --prefer-offline @llmgateway/cli@1.9.0 <original args>`. The CLI package remains pinned to `1.9.0`.
+- `DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` restores the exact 5.64 fallback, `npx --yes @llmgateway/cli@1.9.0 <original args>`.
+- `prefer-offline` changes only npm package-acquisition freshness policy: cached data skips staleness checks, while missing data may still be fetched. It does not change Credits, Usage, DevPass, or dashboard cache semantics.
+- Launcher vocabulary remains bounded to `direct`, `npx-fallback`, and `unknown`; fallback reason remains bounded to `direct-enoent` and `none`; npx policy is bounded to `prefer-offline`, `default`, and `not-applicable`.
+- CLI operation attribution remains capped at eight records and exposes no executable path, PATH, HOME, npm cache path, package directory, environment, CLI arguments, token, organization ID, payload, header, or arbitrary error.
+- Keep all five existing `runCli()` call sites, both existing `runProgram()` call sites, and the single existing `execFileAsync()` source operation. Add no subprocess, `npm install`, `npm cache` command, version probe, network request, endpoint, or source operation.
 - No new `runCli()` call site, network endpoint, or CLI source operation is allowed.
 - Keep 24h usage and DevPass Activity on the foreground truth path.
 - Preserve the hard CLI concurrency cap and keep already-working behavior unchanged unless the release goal requires touching it.
@@ -52,13 +53,13 @@ Current release implementation: `3.0.0-alpha.5.64 — Foreground CLI Launcher At
 - Preserve every 5.63 long-window rule: secondary concurrency 1, 32-key bound, same-key/inFlight deduplication, foreground hold, 30-minute stale ceiling, leaf-only 7d/30d deferral, cold-cache blocking, standalone endpoint blocking, and stale provenance.
 - Keep the shared `repo-main-write` lock and monotonic candidate/main/release publisher guard.
 
-5.64 device success evidence to collect:
+5.65 device success evidence to collect:
 
-- Stable Readiness remains READY with Engine `1.6.17`, Manager `1.2.6`, and no active local runtime error.
-- Each bounded CLI timeline item displays exactly one launcher label: `direct`, `npx-fallback`, or `unknown`.
-- `Bridge CLI launcher` totals match the displayed bounded operation set and expose only the bounded vocabulary.
-- Snapshot duration remains in the normal 5.63 distribution; 5.64 makes no performance-improvement claim.
-- If `npx-fallback` is observed, launcher use is VERIFIED but its share of the 8–9s latency remains UNKNOWN. If `direct` is observed, the npx-launcher hypothesis is rejected for that sample.
+- Stable Readiness remains READY with Engine `1.6.18`, Manager `1.2.6`, and no active local runtime error.
+- Foreground operations show `npx-fallback`, the launcher summary shows `policy prefer-offline`, and the sample has zero new launcher errors.
+- Compare several similar cold-ish timer snapshots against the 5.64 baseline. One faster sample is insufficient to claim causality.
+- If source and snapshot timings repeatedly fall, npm freshness checking was likely material. If they remain near 5.64, conclude that metadata freshness was not the primary bottleneck and keep its exact latency share UNKNOWN.
+- 5.65 makes no guaranteed performance claim; it is a bounded cache-policy experiment with an immediate rollback.
 
 ## Long-term update roadmap
 

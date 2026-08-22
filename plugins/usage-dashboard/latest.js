@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.64
+//@version 3.0.0-alpha.5.65
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.64';
+  const VERSION = '3.0.0-alpha.5.65';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.17';
+  const REQUIRED_BRIDGE_VERSION = '1.6.18';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -2486,14 +2486,20 @@ async function importLegacyTodayBaselines() {
     const operations = Array.isArray(performance?.cliOperations) ? performance.cliOperations.slice(0, 8) : [];
     if (!operations.length) return '—';
     const counts = { direct:0, npxFallback:0, unknown:0, directEnoent:0 };
+    const npxPolicies = new Set();
     for (const item of operations) {
       const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
       if (launcher === 'direct') counts.direct += 1;
       else if (launcher === 'npx-fallback') counts.npxFallback += 1;
       else counts.unknown += 1;
       if (launcher === 'npx-fallback' && String(item?.fallbackReason) === 'direct-enoent') counts.directEnoent += 1;
+      if (launcher === 'npx-fallback') {
+        const policy = ['prefer-offline','default'].includes(String(item?.npxPolicy)) ? String(item.npxPolicy) : 'not-applicable';
+        npxPolicies.add(policy);
+      }
     }
-    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · direct ENOENT ${counts.directEnoent}`;
+    const npxPolicy = npxPolicies.size === 1 ? [...npxPolicies][0] : 'not-applicable';
+    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
   }
 
   function bridgeCreditsEarlyStartText(performance) {

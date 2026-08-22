@@ -81,14 +81,20 @@
     const operations = Array.isArray(performance?.cliOperations) ? performance.cliOperations.slice(0, 8) : [];
     if (!operations.length) return '—';
     const counts = { direct:0, npxFallback:0, unknown:0, directEnoent:0 };
+    const npxPolicies = new Set();
     for (const item of operations) {
       const launcher = ['direct','npx-fallback'].includes(String(item?.launcher)) ? String(item.launcher) : 'unknown';
       if (launcher === 'direct') counts.direct += 1;
       else if (launcher === 'npx-fallback') counts.npxFallback += 1;
       else counts.unknown += 1;
       if (launcher === 'npx-fallback' && String(item?.fallbackReason) === 'direct-enoent') counts.directEnoent += 1;
+      if (launcher === 'npx-fallback') {
+        const policy = ['prefer-offline','default'].includes(String(item?.npxPolicy)) ? String(item.npxPolicy) : 'not-applicable';
+        npxPolicies.add(policy);
+      }
     }
-    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · direct ENOENT ${counts.directEnoent}`;
+    const npxPolicy = npxPolicies.size === 1 ? [...npxPolicies][0] : 'not-applicable';
+    return `direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
   }
 
   function bridgeCreditsEarlyStartText(performance) {

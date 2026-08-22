@@ -1,4 +1,0 @@
-Local Usage Dashboard 3.0.0-alpha.5.3
-Bridge Manager 1.2.0
-Bridge 1.6.1 SHA256 fbcc3f73dc06922a71ee3d817771c6c613bf374b8c2232cfdd8e99ac7bc07b8d
-Recovery path: direct main/release parity verified

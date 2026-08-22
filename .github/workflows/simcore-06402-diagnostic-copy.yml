@@ -1,0 +1,223 @@
+name: SimCore v0.64.2 Diagnostic Copy Resilience
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06402-diagnostic-copy
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.pull_request.title == 'SimCore v0.64.2 Diagnostic Copy Resilience release command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout production release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-simcore
+          fetch-depth: 0
+
+      - name: Load patch and architecture tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06402-diagnostic-copy.py > /tmp/simcore-06402-diagnostic-copy.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-06402-diagnostic-copy.py /tmp/simcore-architecture-check.py
+
+      - name: Capture frozen pre-patch surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          start = text.index('  function buildLastTurnDiagnosticReport(')
+          end = text.index('\n  async function copyLastTurnDiagnostic(', start)
+          counts = {needle: text.count(needle) for needle in (
+              'pluginStorage.', 'setChat(', 'fetch(', 'setInterval(', 'setTimeout(',
+          )}
+          Path('/tmp/simcore-06402-builder.sha').write_text(
+              hashlib.sha256(text[start:end].encode()).hexdigest(), encoding='utf-8')
+          Path('/tmp/simcore-06402-surface-counts.json').write_text(
+              json.dumps(counts, sort_keys=True), encoding='utf-8')
+          PY
+
+      - name: Apply scoped mini patch
+        run: python3 /tmp/simcore-06402-diagnostic-copy.py
+
+      - name: Validate production source and frozen controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.2$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.2';" plugins/simcore/latest.js
+          grep -q 'v0.64.2 Diagnostic Copy Resilience' plugins/simcore/latest.js
+          grep -q 'function fallbackCopyText' plugins/simcore/latest.js
+          grep -q 'async function runDiagnosticCopy' plugins/simcore/latest.js
+          grep -q "diagnosticCopyResult('REPORT_BUILD_FAILED'" plugins/simcore/latest.js
+          grep -q "diagnosticCopyResult('CLIPBOARD_WRITE_FAILED'" plugins/simcore/latest.js
+          grep -q "case 'COPIED_FALLBACK': return '복사됨 (대체 방식) ✓';" plugins/simcore/latest.js
+          grep -q 'lastDiagnosticCopyProbe = Object.freeze' plugins/simcore/latest.js
+
+          # M2-2 and v0.64.1 behavior markers remain frozen.
+          grep -q 'Representation ownership: REPRESENTATION' plugins/simcore/latest.js
+          grep -q 'REPRESENTATION_FAST_RECONCILED' plugins/simcore/latest.js
+          grep -q 'USER_EDIT_CANDIDATE' plugins/simcore/latest.js
+          grep -q 'MANUAL_EDIT_REBUILT' plugins/simcore/latest.js
+          grep -q 'Broadcast closure:' plugins/simcore/latest.js
+          grep -q 'Narrative tail coverage:' plugins/simcore/latest.js
+          grep -q 'summary_scope=ANNUAL_ONLY' plugins/simcore/latest.js
+          grep -q 'summary_scope=CUMULATIVE_YOY' plugins/simcore/latest.js
+          grep -q "return stabilizationResult('OBSERVE_ONLY'" plugins/simcore/latest.js
+
+          python3 /tmp/simcore-architecture-check.py \
+            --contract /tmp/simcore-architecture-v2.json \
+            --source plugins/simcore/latest.js \
+            --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Confirm builder and protected side-effect surfaces are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          start = text.index('  function buildLastTurnDiagnosticReport(')
+          end = text.index('\n  function diagnosticCopyErrorName(', start)
+          before_hash = Path('/tmp/simcore-06402-builder.sha').read_text(encoding='utf-8')
+          after_hash = hashlib.sha256(text[start:end].encode()).hexdigest()
+          if before_hash != after_hash:
+              raise SystemExit('buildLastTurnDiagnosticReport changed')
+          before_counts = json.loads(Path('/tmp/simcore-06402-surface-counts.json').read_text(encoding='utf-8'))
+          after_counts = {needle: text.count(needle) for needle in before_counts}
+          if before_counts != after_counts:
+              raise SystemExit(f'protected side-effect surface changed: {before_counts} -> {after_counts}')
+          print('builder byte identity and protected side-effect counts: PASS')
+          PY
+
+      - name: Run deterministic diagnostic-copy fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const start = text.indexOf('  function diagnosticCopyErrorName(');
+          const end = text.indexOf('\n  function diagnosticCopyButtonText(', start);
+          if (start < 0 || end <= start) throw new Error('copy helper extraction failed');
+          const helpers = new Function(`${text.slice(start, end)}\nreturn { fallbackCopyText, runDiagnosticCopy };`)();
+          const { fallbackCopyText, runDiagnosticCopy } = helpers;
+
+          (async () => {
+            let builds = 0;
+            let primaryCalls = 0;
+            let fallbackCalls = 0;
+            let primaryPayload = null;
+            let fallbackPayload = null;
+            const build = () => { builds += 1; return 'EXACT REPORT'; };
+
+            let got = await runDiagnosticCopy(build, async (payload) => {
+              primaryCalls += 1; primaryPayload = payload;
+            }, async () => { fallbackCalls += 1; return true; });
+            if (got.status !== 'COPIED' || builds !== 1 || primaryCalls !== 1 || fallbackCalls !== 0) throw new Error('primary fixture failed');
+
+            builds = primaryCalls = fallbackCalls = 0;
+            got = await runDiagnosticCopy(build, null, async (payload) => {
+              fallbackCalls += 1; fallbackPayload = payload; return true;
+            });
+            if (got.status !== 'COPIED_FALLBACK' || builds !== 1 || primaryCalls !== 0 || fallbackCalls !== 1) throw new Error('unavailable-primary fixture failed');
+
+            builds = primaryCalls = fallbackCalls = 0;
+            got = await runDiagnosticCopy(build, async (payload) => {
+              primaryCalls += 1; primaryPayload = payload;
+              const error = new Error('blocked'); error.name = 'NotAllowedError'; throw error;
+            }, async (payload) => {
+              fallbackCalls += 1; fallbackPayload = payload; return true;
+            });
+            if (got.status !== 'COPIED_FALLBACK' || builds !== 1 || primaryCalls !== 1 || fallbackCalls !== 1) throw new Error('rejected-primary fixture failed');
+            if (primaryPayload !== fallbackPayload || primaryPayload !== 'EXACT REPORT') throw new Error('primary/fallback payload diverged');
+
+            builds = primaryCalls = fallbackCalls = 0;
+            got = await runDiagnosticCopy(() => { builds += 1; throw new Error('builder'); }, async () => { primaryCalls += 1; }, async () => { fallbackCalls += 1; return true; });
+            if (got.status !== 'REPORT_BUILD_FAILED' || builds !== 1 || primaryCalls !== 0 || fallbackCalls !== 0) throw new Error('builder-failure fixture failed');
+
+            got = await runDiagnosticCopy(build, async () => { throw new Error('primary'); }, async () => false);
+            if (got.status !== 'CLIPBOARD_WRITE_FAILED' || got.fallbackErrorName !== 'CopyCommandFalse') throw new Error('fallback-false fixture failed');
+
+            got = await runDiagnosticCopy(build, async () => { throw new Error('primary'); }, async () => { const error = new Error('fallback'); error.name = 'AbortError'; throw error; });
+            if (got.status !== 'CLIPBOARD_WRITE_FAILED' || got.fallbackErrorName !== 'AbortError') throw new Error('fallback-throw fixture failed');
+
+            const oldDocument = global.document;
+            let removed = false;
+            let restored = false;
+            let textarea;
+            const activeElement = { isConnected: true, focus() { restored = true; } };
+            global.document = {
+              activeElement,
+              body: { appendChild(node) { textarea = node; node.parentNode = this; }, removeChild(node) { if (node !== textarea) throw new Error('wrong node'); node.parentNode = null; removed = true; } },
+              createElement() { return { value: '', style: {}, setAttribute() {}, focus() {}, select() {}, setSelectionRange() {} }; },
+              execCommand() { const error = new Error('copy'); error.name = 'NotAllowedError'; throw error; },
+            };
+            try { fallbackCopyText('EXACT REPORT'); } catch (_) {}
+            finally { global.document = oldDocument; }
+            if (!removed || !restored || textarea.value !== 'EXACT REPORT') throw new Error('fallback cleanup fixture failed');
+            console.log('Diagnostic-copy fixtures PASS (7)');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Run deterministic summary-scope regression fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const start = text.indexOf("const SUMMARY_SCOPE_NONE = 'NONE';");
+          const end = text.indexOf('function prepareTurn(', start);
+          if (start < 0 || end <= start) throw new Error('classifier extraction failed');
+          const classify = new Function(`${text.slice(start, end)}\nreturn classifySummaryScope;`)();
+          const cases = [
+            ['[커뮤니티] 2030.1.1.~12.31. 활동 성과 총정리', 'C', 'ANNUAL_ONLY', 2030, null],
+            ['[커뮤니티] 2030년 한 해 수상 성과 총정리', 'C', 'ANNUAL_ONLY', 2030, null],
+            ['[커뮤니티] 2029.12.31 수치를 기준점으로 2030.12.31 누적 수치 증가량 증가율 비교', 'C', 'CUMULATIVE_YOY', 2030, 2029],
+            ['[커뮤니티] 2030년 성과와 2029년 대비 증가폭', 'C', 'CUMULATIVE_YOY', 2030, 2029],
+            ['[커뮤니티] 2030년 활동 성과 총정리. 2025년에 시작한 계약 기간도 표시', 'C', 'ANNUAL_ONLY', 2030, null],
+            ['[커뮤니티] 슈퍼볼 무대 반응', 'C', 'NONE', null, null],
+            ['[커뮤니티] 2028~2030 활동 총정리', 'C', 'NONE', null, null],
+            ['[커뮤니티] 누적 구독자 알려줘', 'C', 'NONE', null, null],
+            ['[커뮤니티] 2030년 한 해 수상 성과 총정리', 'A', 'NONE', null, null],
+          ];
+          for (const [input, mode, scope, target, comparison] of cases) {
+            const got = classify(input, mode);
+            if (got.scope !== scope || got.targetYear !== target || got.comparisonYear !== comparison) process.exit(1);
+          }
+          console.log(`Summary-scope regression fixtures PASS (${cases.length})`);
+          NODE
+
+      - name: Commit and push production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'v0.64.2 production is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git commit -m 'SimCore v0.64.2 Diagnostic Copy Resilience'
+          git push origin HEAD:release-simcore

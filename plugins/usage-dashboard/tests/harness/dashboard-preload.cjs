@@ -17,7 +17,11 @@ if (config.token) storage.set(TOKEN_KEY, String(config.token));
 
 const writes = [];
 const fetches = [];
+const views = [];
 let unloadHandler = null;
+let settingHandler = null;
+let stateWriteAttempts = 0;
+let viewCapturePending = 0;
 
 function writeResult(reason) {
   const state = clone(storage.get(STATE_KEY));
@@ -26,6 +30,9 @@ function writeResult(reason) {
     state,
     writes:[...writes],
     fetches:[...fetches],
+    views:clone(views),
+    stateWriteAttempts,
+    viewCapturePending,
     storageKeys:[...storage.keys()].filter(key => key !== TOKEN_KEY),
     tokenStored:storage.has(TOKEN_KEY) && Boolean(String(storage.get(TOKEN_KEY) || '').trim()),
   };
@@ -41,12 +48,41 @@ function response(status, body) {
   };
 }
 
+function queueSettingsView(reason) {
+  if (config.captureSettingsViews !== true) return;
+  viewCapturePending += 1;
+  writeResult(`view-queued:${reason}`);
+  setTimeout(async () => {
+    try {
+      if (typeof settingHandler !== 'function') throw new Error('settings handler unavailable');
+      await settingHandler();
+      views.push({reason:String(reason || ''),html:String(documentStub.body.innerHTML || '').slice(0, 250_000)});
+    } catch (error) {
+      views.push({reason:String(reason || ''),error:error?.message || String(error),html:''});
+    } finally {
+      viewCapturePending = Math.max(0, viewCapturePending - 1);
+      writeResult(`view:${reason}`);
+    }
+  }, 0);
+}
+
 const store = {
   async getItem(key) {
     return clone(storage.get(String(key)));
   },
   async setItem(key, value) {
     const normalizedKey = String(key);
+    if (normalizedKey === STATE_KEY) {
+      stateWriteAttempts += 1;
+      const failures = Math.max(0, Number(config.failStateWrites || 0));
+      if (stateWriteAttempts <= failures) {
+        writes.push(`[state-write-failed:${stateWriteAttempts}]`);
+        writeResult(`fail:${STATE_KEY}:${stateWriteAttempts}`);
+        queueSettingsView(`state-write-failed:${stateWriteAttempts}`);
+        throw new Error(`dashboard harness injected state persist failure ${stateWriteAttempts}`);
+      }
+      if (failures > 0 && stateWriteAttempts === failures + 1) queueSettingsView('state-write-recovered');
+    }
     storage.set(normalizedKey, clone(value));
     writes.push(normalizedKey === TOKEN_KEY ? '[token]' : normalizedKey);
     writeResult(`set:${normalizedKey === TOKEN_KEY ? '[token]' : normalizedKey}`);
@@ -87,7 +123,7 @@ globalThis.Risuai = {
   async getLocalPluginStorage() { return store; },
   async requestPluginPermission() { return false; },
   async getRootDocument() { throw new Error('headless dashboard harness must not request main DOM'); },
-  async registerSetting() { return {id:'usage-dashboard-harness-setting'}; },
+  async registerSetting(_name, handler) { settingHandler = handler; return {id:'usage-dashboard-harness-setting'}; },
   async registerButton() { return {id:'usage-dashboard-harness-button'}; },
   async unregisterUIPart() {},
   async showContainer() {},

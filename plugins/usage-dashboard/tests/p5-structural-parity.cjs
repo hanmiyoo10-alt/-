@@ -17,7 +17,6 @@ if (version === '3.0.0-alpha.5.44') {
   assert.ok(isPost544, `unexpected post-5.44 version: ${version}`);
 }
 assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bridge contract version: ${requiredEngineVersion}`);
-assert.ok(source.includes(`const REQUIRED_BRIDGE_VERSION = '${requiredEngineVersion}';`));
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
 assert.ok(source.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));
 console.log(`usage-dashboard P5 structural artifact parity: OK · 5.43 → ${version} · engine ${requiredEngineVersion}`);

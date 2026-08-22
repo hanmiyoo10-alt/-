@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 (async () => {
   const root = 'plugins/usage-dashboard';
   const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
@@ -12,17 +14,6 @@ const vm = require('node:vm');
   const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
   const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 
-  assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.57';"));
-  assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.11';"));
-  assert.ok(source.includes('//@version 3.0.0-alpha.5.57'));
-  assert.ok(engine.includes("const VERSION = '1.6.11';"));
-  assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.57';"));
-  assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.11';"));
-  assert.equal(manifest.productVersion, '3.0.0-alpha.5.57');
-  assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.57');
-  assert.equal(manifest.components.bridge.requiredVersion, '1.6.11');
-  assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-  assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.57');
 
   // Freeze the 5.56 repair. This release must not widen concurrency or change
   // timeouts/TTLs while removing the duplicate organization launch.
@@ -186,11 +177,11 @@ const vm = require('node:vm');
   assert.ok(engine.includes('limit: CLI_CONCURRENCY'));
   assert.ok(engine.includes('peakActive: runs > 0 ? Number(cli.maxActive || 0) : null'));
 
-  assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`'));
-  assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.57 — Organization Discovery Deduplication`'));
-  assert.ok(guidelines.includes('cumulative local persist history remained visible while `active 0` allowed `READY`'));
-  assert.ok(guidelines.includes('missing Write/TTL remained UNKNOWN and was never inferred'));
-  assert.ok(guidelines.includes('fall back to the prior plain `orgs list --json` path'));
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+  assert.ok(guidelines.includes(currentRelease.currentMemory));
+  assert.ok(guidelines.includes(`Stable Readiness remains READY with Engine \`${currentRelease.engineVersion}\`, Manager \`${currentRelease.managerVersion}\`, managed CLI runtime \`ready\`, CLI \`v${currentRelease.cliVersion}\`, and no active local runtime error.`));
+  assert.ok(guidelines.includes('Keep UNKNOWN distinct from known zero'));
+  assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));
 
   console.log('usage-dashboard P18 organization discovery deduplication: OK · capture-primary shares org/status source, plain orgs remains fallback, Credits semantics preserved');
 })().catch(error => {

@@ -22,9 +22,7 @@ for (const marker of [
 ]) assert.ok(source.includes(marker), `missing unified runtime marker: ${marker}`);
 
 assert.equal(manifest.format, 1);
-assert.equal(manifest.productVersion, version);
 assert.equal(manifest.architecture, 'single-product-modular-sidecar');
-assert.equal(manifest.components.plugin.version, version);
 assert.equal(manifest.components.plugin.mode, 'bundled');
 assert.equal(manifest.components.bridge.mode, 'sidecar');
 if (/^3\.0\.0-alpha\.5\.[01]$/.test(version)) assert.equal(manifest.components.bridge.state, 'legacy-external');
@@ -40,3 +38,4 @@ assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
 
 console.log(`usage-dashboard P5 unified runtime regression: OK · ${version}`);
+

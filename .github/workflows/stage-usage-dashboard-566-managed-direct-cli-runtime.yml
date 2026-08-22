@@ -10,8 +10,7 @@ on:
       - 'plugins/usage-dashboard/tools/prepare_release_regressions.py'
       - 'plugins/usage-dashboard/tools/validate_release_candidate.py'
       - 'plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py'
-      - 'plugins/usage-dashboard/tests/release-infrastructure-foundation.cjs'
-      - 'plugins/usage-dashboard/tests/p28-managed-direct-cli-runtime.cjs'
+      - 'plugins/usage-dashboard/tests/**'
   pull_request:
     branches: [main]
     paths: *release_paths

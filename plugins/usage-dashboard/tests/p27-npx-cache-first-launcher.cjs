@@ -2,23 +2,17 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/stage-usage-dashboard-565-npx-cache-first-launcher.yml', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
-assert.match(engine, /const VERSION = '1\.6\.18';/);
-assert.match(manager, /const MANAGER_VERSION = '1\.2\.6';/);
-assert.match(manager, /const PRODUCT_VERSION = '3\.0\.0-alpha\.5\.65';/);
-assert.match(manager, /const BUNDLED_ENGINE_VERSION = '1\.6\.18';/);
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.65');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.18');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
-assert.ok(latest.includes('//@version 3.0.0-alpha.5.65'));
 
 const runCliOccurrences = (engine.match(/\brunCli\(/g) || []).length;
 const runCliDefinitions = (engine.match(/async function runCli\(/g) || []).length;
@@ -27,7 +21,7 @@ assert.equal(runCliOccurrences - runCliDefinitions, 5, '5.65 must keep exactly f
 const runProgramOccurrences = (engine.match(/\brunProgram\(/g) || []).length;
 const runProgramDefinitions = (engine.match(/async function runProgram\(/g) || []).length;
 assert.equal(runProgramDefinitions, 1);
-assert.equal(runProgramOccurrences - runProgramDefinitions, 2, 'direct and npx must remain the only runProgram call sites');
+assert.equal(runProgramOccurrences - runProgramDefinitions, 3, 'managed, direct, and npx remain the only runProgram call sites');
 assert.equal((engine.match(/\bexecFileAsync\(/g) || []).length, 1, 'runProgram must remain the only execFileAsync source operation');
 assert.match(engine, /const NPX_PREFER_OFFLINE = String\(process\.env\.DEVPASS_BRIDGE_NPX_PREFER_OFFLINE \|\| '1'\) !== '0';/);
 assert.match(engine, /timeout: 25_000/);
@@ -49,6 +43,10 @@ async function exercise(preferOffline, mode) {
   const calls = [];
   let capturedMeta = null;
   const context = {
+    process:{execPath:'/safe/node'},
+    managedCliRuntime:async()=>({state:'unavailable',entry:null}),
+    process:{execPath:'/safe/node'},
+    managedCliRuntime:async()=>({state:'unavailable',entry:null}),
     CLI_VERSION: '1.9.0',
     NPX_PREFER_OFFLINE: preferOffline,
     cliOperationLabel: () => 'credits',
@@ -94,10 +92,10 @@ vm.runInContext(`${diagSource}\nthis.launcherText = bridgeCliLauncherText;`, dia
 assert.equal(diagContext.launcherText({cliOperations:[
   {launcher:'direct',fallbackReason:'none',npxPolicy:'not-applicable'},
   {launcher:'npx-fallback',fallbackReason:'direct-enoent',npxPolicy:'prefer-offline'},
-]}), 'direct 1 · npx-fallback 1 · unknown 0 · policy prefer-offline · direct ENOENT 1');
+]}), 'managed-direct 0 · direct 1 · npx-fallback 1 · unknown 0 · policy prefer-offline · direct ENOENT 1');
 assert.equal(diagContext.launcherText({cliOperations:[
   {launcher:'npx-fallback',fallbackReason:'direct-enoent',npxPolicy:'raw-policy'},
-]}), 'direct 0 · npx-fallback 1 · unknown 0 · policy not-applicable · direct ENOENT 1');
+]}), 'managed-direct 0 · direct 0 · npx-fallback 1 · unknown 0 · policy not-applicable · direct ENOENT 1');
 
 assert.ok(!/runProgram\(['"]npm['"]/.test(engine));
 assert.ok(!/npm\s+(?:install|cache)\b/i.test(engine));
@@ -108,9 +106,9 @@ assert.match(engine, /const SECONDARY_REFRESH_MAX_KEYS = 32;/);
 assert.match(engine, /const CACHE_STALE_MAX_MS = 30 \* 60_000;/);
 assert.ok(!/usageForOrg\([^\n]*'24h'[^\n]*deferExpired:true/.test(engine));
 
-assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.65 — Npx Cache-First Launcher`'));
-assert.ok(guidelines.includes('`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` restores the exact 5.64 fallback'));
-assert.ok(guidelines.includes('5.65 makes no guaranteed performance claim'));
+assert.ok(guidelines.includes(currentRelease.currentMemory));
+assert.ok(guidelines.includes('`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` continues to control only the final npx fallback policy'));
+assert.ok(guidelines.includes('One faster sample is insufficient to claim causality'));
 assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 

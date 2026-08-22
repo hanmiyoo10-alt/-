@@ -2,6 +2,8 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
@@ -10,15 +12,8 @@ const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/pro
 const snapshotContract = JSON.parse(fs.readFileSync('plugins/usage-dashboard/contracts/snapshot-v1.schema.json', 'utf8'));
 const recentContract = JSON.parse(fs.readFileSync('plugins/usage-dashboard/contracts/recent-request-v1.schema.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/stage-usage-dashboard-563-long-window-critical-path-decoupling.yml', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
-assert.match(engine, /const VERSION = '1\.6\.16';/);
-assert.match(manager, /const MANAGER_VERSION = '1\.2\.6';/);
-assert.match(manager, /const PRODUCT_VERSION = '3\.0\.0-alpha\.5\.63';/);
-assert.match(manager, /const BUNDLED_ENGINE_VERSION = '1\.6\.16';/);
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.63');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.16');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
 assert.ok(snapshotContract && recentContract);
@@ -238,15 +233,15 @@ vm.runInContext(`${cacheSource}\nthis.cached = cached; this.drainSecondaryRefres
   const secondaryTextSource = diagnostics.slice(secondaryTextStart, secondaryTextEnd);
   assert.ok(!/organizationId|orgId|rawKey|cacheKey|\.key\b/.test(secondaryTextSource), 'secondary diagnostics must not expose raw identity');
 
-  assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.63 — Long-window Critical Path Decoupling`'));
-  assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`'));
+  assert.ok(guidelines.includes(currentRelease.currentMemory));
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
   assert.match(workflow, /group: repo-main-write/);
   assert.match(workflow, /check_release_monotonic\.py/);
   assert.match(workflow, /--check-artifacts/);
   assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
   assert.match(workflow, /p24-snapshot-decision-attribution\.cjs/);
   assert.match(workflow, /p25-long-window-critical-path-decoupling\.cjs/);
-  assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf("git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.63 product artifacts'"));
+  assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf('git commit -m "release: publish Local Usage Dashboard $UD_PRODUCT_VERSION product artifacts"'));
   assert.ok(guidelines.includes('UNKNOWN stays distinct from known zero'));
   assert.ok(guidelines.includes('## Long-term update roadmap'));
 

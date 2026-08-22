@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const core = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
@@ -12,18 +14,9 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(source.includes('//@version 3.0.0-alpha.5.55'));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.55';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.9');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.55');
 
 // The recovery contract must remain intact across later releases. Keep the
 // verified cache/parser semantics while allowing newer engine telemetry.
-assert.ok(engine.includes("const VERSION = '1.6.9';"));
 assert.ok(diagnostics.includes('parser provider-usage-v3'));
 assert.ok(diagnostics.includes('unknown stays unknown'));
 assert.ok(diagnostics.includes('missing Write/TTL is never inferred from price/provider'));
@@ -87,11 +80,11 @@ const readyEnd = diagnostics.indexOf('\n  function cacheObserverDiagnosticText',
 assert.ok(readyStart >= 0 && readyEnd > readyStart, 'stable readiness function must be extractable');
 const readyBlock = diagnostics.slice(readyStart, readyEnd);
 const readyContext = {
-  VERSION:'3.0.0-alpha.5.55',
-  REQUIRED_BRIDGE_VERSION:'1.6.9',
+  VERSION:currentRelease.productVersion,
+  REQUIRED_BRIDGE_VERSION:currentRelease.engineVersion,
   state:{
-    bridgeManagerRuntime:{productVersion:'3.0.0-alpha.5.55'},
-    bridgeManagerSyncedProductVersion:'3.0.0-alpha.5.55',
+    bridgeManagerRuntime:{productVersion:currentRelease.productVersion},
+    bridgeManagerSyncedProductVersion:currentRelease.productVersion,
     consecutiveFailures:0,
   },
   localRuntimeErrors:{count:7},
@@ -102,8 +95,8 @@ readyContext.localRuntimeActiveCount = () => readyContext.activeLocalCount;
 readyContext.bridgeLifecycleMode = () => readyContext.lifecycle;
 vm.createContext(readyContext);
 vm.runInContext(`${readyBlock}\nthis.stableReadinessSnapshot = stableReadinessSnapshot;`, readyContext);
-const bridgeDiag = {compatible:true,version:'1.6.9'};
-const runtimeBridge = {managerInstalled:true,managerVersion:'1.2.6'};
+const bridgeDiag = {compatible:true,version:currentRelease.engineVersion};
+const runtimeBridge = {managerInstalled:true,managerVersion:currentRelease.managerVersion};
 assert.equal(readyContext.stableReadinessSnapshot(bridgeDiag, runtimeBridge).ready, true, 'recovered cumulative history alone must not block readiness');
 readyContext.activeLocalCount = 1;
 let result = readyContext.stableReadinessSnapshot(bridgeDiag, runtimeBridge);
@@ -116,6 +109,7 @@ assert.equal(result.ready, false, 'existing refresh failure blocker must remain 
 assert.ok(result.blockers.includes('refresh failures 1'));
 
 assert.ok(guidelines.includes('Runtime Recovery Fidelity'));
-assert.ok(guidelines.includes('cumulative local persist history remained visible while `active 0` allowed `READY`'));
+assert.ok(guidelines.includes(`Stable Readiness remains READY with Engine \`${currentRelease.engineVersion}\`, Manager \`${currentRelease.managerVersion}\`, managed CLI runtime \`ready\`, CLI \`v${currentRelease.cliVersion}\`, and no active local runtime error.`));
 
 console.log('usage-dashboard P15 runtime recovery fidelity: OK · active errors block, recovered history stays visible');
+

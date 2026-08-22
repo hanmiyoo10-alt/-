@@ -5,20 +5,17 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const ROOT = process.cwd();
 const helper = path.join(ROOT, 'plugins/usage-dashboard/tools/check_release_monotonic.py');
 const manifestPath = path.join(ROOT, 'plugins/usage-dashboard/runtime/product-manifest.json');
 const enginePath = path.join(ROOT, 'plugins/usage-dashboard/runtime/bridge-engine.mjs');
 const managerPath = path.join(ROOT, 'plugins/usage-dashboard/runtime/bridge-manager.cjs');
-const workflowPath = path.join(ROOT, '.github/workflows/stage-usage-dashboard-560-monotonic-release-guard.yml');
+const workflowPath = path.join(ROOT, currentRelease.sharedWorkflow);
 
 assert.ok(fs.existsSync(helper), 'monotonic publisher helper missing');
-assert.ok(fs.readFileSync(enginePath, 'utf8').includes("const VERSION = '1.6.13';"), '5.60 must keep Engine 1.6.13');
-assert.ok(fs.readFileSync(managerPath, 'utf8').includes("const MANAGER_VERSION = '1.2.6';"), '5.60 must keep Manager 1.2.6');
 const productManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-assert.equal(productManifest.productVersion, '3.0.0-alpha.5.60');
-assert.equal(productManifest.components.bridge.requiredVersion, '1.6.13');
-assert.equal(productManifest.components.bridgeManager.version, '1.2.6');
 
 const hash = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'usage-dashboard-p22-'));
@@ -176,7 +173,7 @@ assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /git fetch origin main release-usage-dashboard/);
 assert.match(workflow, /STALE_CANDIDATE/);
-assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf("git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.60 product artifacts'"));
+assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf('git commit -m "release: publish Local Usage Dashboard $UD_PRODUCT_VERSION product artifacts"'));
 
 fs.rmSync(temp, {recursive: true, force: true});
 console.log('usage-dashboard P22 monotonic release integrity: OK · downgrade blocked, same-version divergence blocked, recent stale publishers archived');

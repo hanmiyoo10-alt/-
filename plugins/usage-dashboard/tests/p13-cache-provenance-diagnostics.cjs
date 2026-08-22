@@ -10,17 +10,8 @@ const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(source.includes('//@version 3.0.0-alpha.5.55'));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.55';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.9');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.55');
 
 // 5.53 must be diagnostics-only: keep the 5.52 provider parser and engine version intact.
-assert.ok(engine.includes("const VERSION = '1.6.9';"));
 assert.ok(engine.includes('cacheWriteTelemetry'));
 assert.ok(engine.includes('cacheTtlTelemetry'));
 assert.ok(diagnostics.includes('parser provider-usage-v3'));
@@ -45,3 +36,4 @@ assert.ok(!ledger.includes("cacheWriteTelemetry:'not-reported'"));
 assert.ok(!ledger.includes("cacheTtlTelemetry:'not-reported'"));
 
 console.log('usage-dashboard P13 cache provenance diagnostics: OK · provenance and observable row shape are separated without inference');
+

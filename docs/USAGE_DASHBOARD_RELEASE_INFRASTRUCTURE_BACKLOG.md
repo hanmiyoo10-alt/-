@@ -199,6 +199,14 @@ Still pending:
 - modularize Engine development sources in a later versioned runtime release,
 - split basic and detailed Diagnostics presentation.
 
+Maintenance PR 2 — Current Release Contract Fixture:
+
+- current Product / Engine / Manager / contract identity is loaded from the release spec,
+- one shared test helper validates current source, runtime, manifest, workflow, and artifact hashes,
+- incident regressions no longer require workflow-time version, release-title, baseline, or workflow-path rewrites,
+- historical downgrade and divergence fixture versions remain immutable,
+- the remaining adapter is explicitly limited to behavior/source-shape compatibility shims.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)

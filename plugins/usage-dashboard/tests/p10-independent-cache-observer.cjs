@@ -16,8 +16,6 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.50';"));
-assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.6';"));
 assert.ok(!core.includes('//@allowed-ipc provider-manager'));
 assert.ok(!source.includes('providerManagerCache'));
 assert.ok(!bridgeIo.includes('providerManagerCache'));
@@ -27,8 +25,7 @@ assert.ok(!diagnostics.includes('Provider Manager cache IPC'));
 assert.ok(!source.includes("op:'cacheObservability'"));
 assert.ok(!source.includes('pm_request_logs'));
 
-assert.ok(engine.includes("const VERSION = '1.6.6';"));
-assert.ok(engine.includes("Symbol.for('llmgateway.devpass.bridge.capture.v8')"));
+assert.ok(engine.includes("Symbol.for('llmgateway.devpass.bridge.capture.v10')"));
 assert.ok(engine.includes('// CACHE_OBSERVER_PARSER_START'));
 assert.ok(engine.includes('// CACHE_OBSERVER_PARSER_END'));
 assert.ok(engine.includes('const normalizeProviderCacheUsage = (row) =>'));
@@ -41,14 +38,6 @@ assert.ok(engine.includes('prompt_tokens_details.cached_tokens'));
 assert.ok(engine.includes('cacheMetricSource: cacheUsage?.source'));
 assert.ok(engine.includes('cacheMetricSource: String(row.cacheMetricSource ||'));
 
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.50';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.6';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.50');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.50');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.6');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.50');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 // The Dashboard must preserve generic cached totals without claiming they are
@@ -73,7 +62,7 @@ assert.ok(!analytics.includes('cacheReadInputTokens ?? raw.cache_read_input_toke
 assert.ok(ledger.includes('Cached ${cached} · Read ${read}'));
 assert.ok(ledger.includes('cacheMetricSource:String('));
 assert.ok(diagnostics.includes('Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}'));
-assert.ok(diagnostics.includes('cached total != explicit Read'));
+assert.ok(diagnostics.includes('cached total = Read + Write when both are known'));
 
 // Evaluate the clean-room provider parser in isolation. The marker block is
 // deliberately dependency-free so these fixtures lock semantics, not minified

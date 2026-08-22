@@ -34,10 +34,10 @@ for (let i = 0; i < PARTS.length; i += 1) {
 const built = chunks.join('');
 assert.equal(built, latest, 'latest.js must be byte-identical to modular source bundle');
 assert.equal(manifest.artifactSha256, hash(built));
-assert.equal(manifest.version, (built.match(/^\/\/@version (.+)$/m) || [])[1]);
 assert.match(built, /const STATE_KEY = 'local-usage-dashboard-v3';/);
 assert.match(built, /^\/\/@update-url https:\/\/raw\.githubusercontent\.com\/hanmiyoo10-alt\/-\/release-usage-dashboard\/plugins\/usage-dashboard\/latest\.js$/m);
 assert.match(built, /Local runtime errors:/);
 assert.match(built, /Refresh requests:/);
 
 console.log(`usage-dashboard modular build v2: OK · ${PARTS.length} modules · ${manifest.version}`);
+

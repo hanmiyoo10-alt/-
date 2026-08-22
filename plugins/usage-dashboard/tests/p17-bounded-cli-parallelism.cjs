@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 (async () => {
   const root = 'plugins/usage-dashboard';
   const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
@@ -12,17 +14,6 @@ const vm = require('node:vm');
   const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
   const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 
-  assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.56';"));
-  assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.10';"));
-  assert.ok(source.includes('//@version 3.0.0-alpha.5.56'));
-  assert.ok(engine.includes("const VERSION = '1.6.10';"));
-  assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.56';"));
-  assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.10';"));
-  assert.equal(manifest.productVersion, '3.0.0-alpha.5.56');
-  assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.56');
-  assert.equal(manifest.components.bridge.requiredVersion, '1.6.10');
-  assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-  assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.56');
 
   // One repair only: default CLI concurrency 1 -> bounded 2.
   const concurrencyLine = "const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));";
@@ -64,7 +55,7 @@ const vm = require('node:vm');
 
   // Exercise the shipped limiter directly: four jobs may use two slots, never three,
   // and completion/error cleanup must leave no active/queued slot behind.
-  const slotStart = engine.indexOf('async function withCliSlot(label, task) {');
+  const slotStart = engine.indexOf('async function withCliSlot(label, task, launcherMeta = null) {');
   const slotEnd = engine.indexOf('\nconst logThrottle', slotStart);
   assert.ok(slotStart >= 0 && slotEnd > slotStart, 'withCliSlot must be extractable');
   const slotBlock = engine.slice(slotStart, slotEnd);
@@ -122,12 +113,13 @@ const vm = require('node:vm');
   assert.ok(!engine.includes('snapshotPerformance.commandOutput'));
   assert.ok(!diagnostics.includes('DEVPASS_BRIDGE_CAPTURE_FILE'));
 
-  assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`'));
-  assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.56 — Snapshot Performance Repair: Bounded CLI Parallelism`'));
-  assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode'));
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+  assert.ok(guidelines.includes(currentRelease.currentMemory));
+  assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
 
   console.log('usage-dashboard P17 bounded CLI parallelism: OK · default two lanes, hard cap two, env=1 rollback, no slot leak');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
 });
+

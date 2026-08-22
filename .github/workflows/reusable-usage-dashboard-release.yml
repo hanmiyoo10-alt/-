@@ -34,6 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_SPEC='${{ inputs.release_spec }}'
+          export UD_RELEASE_SPEC="$RELEASE_SPEC"
           case "$RELEASE_SPEC" in
             .github/usage-dashboard/releases/*.json) ;;
             *) echo "release spec path denied: $RELEASE_SPEC" >&2; exit 1 ;;
@@ -90,7 +91,7 @@ jobs:
           python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
 
           tests=(
-            foundation.cjs release-infrastructure-foundation.cjs
+            foundation.cjs release-infrastructure-foundation.cjs current-release-contract.cjs
             p1-contract.cjs p2-build.cjs p3-ui.cjs p3-recent.cjs
             p4-render.cjs p4-partial.cjs p4-hourly-drilldown.cjs p4-hourly-detail.cjs p4-request-fidelity.cjs
             p5-unified-runtime.cjs p5-bridge-manager.cjs p5-engine-adoption.cjs p5-bundled-engine.cjs

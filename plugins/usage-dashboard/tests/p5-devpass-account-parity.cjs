@@ -11,7 +11,6 @@ const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
 
-assert.match(source, /^\/\/@version 3\.0\.0(?:-alpha\.[^\s]+|-beta\.[^\s]+|-rc\.\d+)?$/m);
 for (const marker of [
   'cycle:ds.cycle',
   'billingCycleStart:ds.billingCycleStart',
@@ -48,10 +47,6 @@ assert.ok(ui.includes("dashboardView === 'devpass' ? devpassAccountDetailHtml : 
 assert.ok(diagnostics.includes('DevPass account detail:'), 'DevPass account detail diagnostics missing');
 assert.ok(!ui.includes('<span>Organization ID</span>') && !ui.includes('<span>Project ID</span>'), 'internal identifiers must remain hidden');
 assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bridge contract version: ${requiredEngineVersion}`);
-assert.ok(engine.includes(`const VERSION = '${requiredEngineVersion}';`), 'Engine semantic version must match product manifest');
-assert.ok(manager.includes("const MANAGER_VERSION = '1.2.6';"), 'Manager semantic version should remain 1.2.6');
-assert.equal(manifest.components.bridge.requiredVersion, requiredEngineVersion);
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
 console.log(`usage-dashboard P5 DevPass account detail parity: OK · engine ${requiredEngineVersion}`);

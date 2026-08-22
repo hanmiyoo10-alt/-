@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const core = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
@@ -12,20 +14,9 @@ const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.9';"));
-assert.ok(source.includes('//@version 3.0.0-alpha.5.55'));
-assert.ok(engine.includes("const VERSION = '1.6.9';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.55';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.9';"));
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.55');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.9');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.55');
 
 // Attribution only: do not change the controls that could alter runtime behavior.
-assert.ok(engine.includes("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 1)));"));
+assert.ok(engine.includes("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"));
 assert.ok(engine.includes('timeout: 25_000'));
 assert.ok(engine.includes("orgs: 30_000"));
 assert.ok(engine.includes("'activity:24h': 60_000"));
@@ -44,7 +35,7 @@ assert.ok(engine.includes('function timedSnapshotTask(name, task)'));
 assert.ok(engine.includes("timedSnapshotTask('organizations', () => loadOrgs())"));
 assert.ok(engine.includes("timedSnapshotTask('devpassStatus', () => loadDevPassStatus())"));
 assert.ok(engine.includes("timedSnapshotTask('usageScopes', () => usageScopes(resolvedCreditsOrgId))"));
-assert.ok(engine.includes("timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId))"));
+assert.ok(engine.includes("timedSnapshotTask('analyticsScopes', () => analyticsScopes(resolvedCreditsOrgId, { deferLongWindow:true }))"));
 assert.ok(engine.includes("timedSnapshotTask(`usage.${scope}`"));
 assert.ok(engine.includes("timedSnapshotTask(`analytics.${normalizedScope}.${range}`"));
 assert.ok(engine.includes('result.diagnostics.snapshotPerformance = snapshotAttributionSummary(attribution);'));
@@ -93,13 +84,13 @@ const labelBlock = engine.slice(labelStart, labelEnd);
 const labelContext = {};
 vm.createContext(labelContext);
 vm.runInContext(`${labelBlock}\nthis.cliOperationLabel = cliOperationLabel;`, labelContext);
-const secretOrg = 'Fp4OAsGzWARiXmUqx1HW';
+const secretOrg = 'TEST_ORG_ID_DO_NOT_LOG';
 assert.equal(
   labelContext.cliOperationLabel(['usage','--org',secretOrg,'--by','model','--range','7d','--json'], {}),
   'usage-7d-model',
 );
 assert.equal(
-  labelContext.cliOperationLabel(['orgs','list','--json'], {DEVPASS_BRIDGE_CAPTURE_FILE:'/tmp/private.json',DEVPASS_BRIDGE_ACTIVITY_RANGE:'24h'}),
+  labelContext.cliOperationLabel(['orgs','list','--json'], {DEVPASS_BRIDGE_CAPTURE_FILE:'fixtures/test-capture.json',DEVPASS_BRIDGE_ACTIVITY_RANGE:'24h'}),
   'devpass-capture-24h',
 );
 assert.equal(labelContext.cliOperationLabel(['credits','--json'], {}), 'credits');
@@ -111,7 +102,7 @@ const summaryStart = engine.indexOf('function snapshotAttributionSummary(attribu
 const summaryEnd = engine.indexOf('\n\nasync function withCliSlot', summaryStart);
 assert.ok(summaryStart >= 0 && summaryEnd > summaryStart, 'snapshot summary helper must be extractable');
 const summaryBlock = engine.slice(summaryStart, summaryEnd);
-const summaryContext = { Date: { now: () => 2000 } };
+const summaryContext = { Date: { now: () => 2000 }, CLI_CONCURRENCY: 2, Object, Array, secondaryRefreshSnapshot: () => ({}) };
 vm.createContext(summaryContext);
 vm.runInContext(`${summaryBlock}\nthis.snapshotAttributionSummary = snapshotAttributionSummary;`, summaryContext);
 let summary = summaryContext.snapshotAttributionSummary({
@@ -141,7 +132,7 @@ assert.equal(summary.cli.slowestLabel, 'usage-30d-model');
 assert.equal(summary.slowestTask, 'analytics.devpass.30d');
 assert.equal(summary.slowestTaskMs, 900);
 
-assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.55 — Snapshot Performance Attribution`'));
-assert.ok(guidelines.includes('Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`'));
+assert.ok(guidelines.includes(currentRelease.currentMemory));
+assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
 
 console.log('usage-dashboard P16 snapshot performance attribution: OK · snapshot/module/CLI/cache/circuit timing is measurable without changing behavior');

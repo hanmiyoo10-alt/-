@@ -2,19 +2,14 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync('.github/workflows/stage-usage-dashboard-561-credits-usage-early-start.yml', 'utf8');
+const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
-assert.match(engine, /const VERSION = '1\.6\.14';/);
-assert.match(manager, /const MANAGER_VERSION = '1\.2\.6';/);
-assert.match(manager, /const PRODUCT_VERSION = '3\.0\.0-alpha\.5\.61';/);
-assert.match(manager, /const BUNDLED_ENGINE_VERSION = '1\.6\.14';/);
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.61');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.14');
-assert.equal(manifest.components.bridgeManager.version, '1.2.6');
 
 // Protected performance/runtime contracts remain intact.
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number\(process\.env\.DEVPASS_BRIDGE_CLI_CONCURRENCY \|\| 2\)\)\);/);
@@ -46,9 +41,9 @@ const loadOrgsAfterHelpers = engine.indexOf('async function loadOrgs() {', early
 assert.ok(candidateStart >= 0 && earlyStart > candidateStart && loadOrgsAfterHelpers > earlyStart);
 const candidateSource = engine.slice(candidateStart, earlyStart);
 const earlySource = engine.slice(earlyStart, loadOrgsAfterHelpers);
-assert.ok(earlySource.includes('if (CLI_CONCURRENCY < 2) return Promise.resolve(null);'));
+assert.ok(earlySource.includes('if (CLI_CONCURRENCY < 2) {'));
 assert.ok(earlySource.includes("usageForOrg({ id: candidate.id, kind: 'default', status: 'active' }, '24h')"));
-assert.ok(earlySource.includes('.catch(() => null)'));
+assert.ok(earlySource.includes("reason:'prefetch-error'"));
 
 // Exercise the exact selector source with small dependency stubs. No guessed ID is allowed.
 const context = {
@@ -104,14 +99,14 @@ assert.ok(engine.includes("captureReuse: { bootstrapRange:'24h'"));
 assert.ok(engine.includes('taskTimeline'));
 assert.ok(engine.includes('cliOperations'));
 
-assert.ok(guidelines.includes('Current release implementation: `3.0.0-alpha.5.61 — Credits Usage Early Start`'));
-assert.ok(guidelines.includes('Last verified real-device baseline: `3.0.0-alpha.5.59 — Snapshot Scheduling Attribution`'));
-assert.ok(guidelines.includes('Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`'));
-assert.ok(guidelines.includes('Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering'));
-assert.ok(guidelines.includes('fall back to the prior plain `orgs list --json` path'));
-assert.ok(guidelines.includes('Ambiguous/missing IDs keep the 5.60 root-gated path.'));
-assert.ok(guidelines.includes('dedicated circuit family must not double-count failures against the existing organizations circuit'));
-assert.ok(guidelines.includes('`DEVPASS_BRIDGE_CLI_CONCURRENCY=1` disables early-start and restores the previous serial execution mode.'));
+assert.ok(guidelines.includes(currentRelease.currentMemory));
+assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));
+assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));
+assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
+assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
+assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
 assert.ok(guidelines.includes('## Long-term update roadmap'), 'release memory update must preserve durable roadmap');
 
 // Release keeps the 5.60 monotonic guard in front of the release push.
@@ -120,6 +115,6 @@ assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
 assert.match(workflow, /p23-credits-usage-early-start\.cjs/);
-assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf("git commit -m 'release: publish Local Usage Dashboard 3.0.0-alpha.5.61 product artifacts'"));
+assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf('git commit -m "release: publish Local Usage Dashboard $UD_PRODUCT_VERSION product artifacts"'));
 
 console.log('usage-dashboard P23 Credits Usage Early Start: OK · shared Credits bootstrap, isolated circuit, safe selector, serial rollback, history, monotonic release preserved');

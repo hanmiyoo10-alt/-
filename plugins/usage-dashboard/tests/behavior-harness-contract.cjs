@@ -92,6 +92,8 @@ assert.ok(dashboardHarness.includes("options.waitFor === 'views'"));
 assert.ok(dashboardPreload.includes('headless dashboard harness must not request main DOM'));
 assert.ok(dashboardPreload.includes('failStateWrites'));
 assert.ok(dashboardPreload.includes('captureSettingsViews'));
+assert.ok(dashboardPreload.includes("selector === '#copy-diag'"));
+assert.ok(dashboardPreload.includes("Object.defineProperty(globalThis.navigator, 'clipboard'"));
 assert.ok(dashboardPreload.includes("target.startsWith('http://127.0.0.1:39119/')"));
 assert.ok(!dashboardPreload.includes('0.0.0.0'));
 

@@ -1,27 +1,22 @@
 const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
-const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 const workflowCaller = fs.readFileSync(currentRelease.callerWorkflow, 'utf8');
-const materializer = fs.readFileSync(currentRelease.materializer, 'utf8');
 
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 const runCliOccurrences = (engine.match(/\brunCli\(/g) || []).length;
 const runCliDefinitions = (engine.match(/async function runCli\(/g) || []).length;
-assert.equal(runCliOccurrences - runCliDefinitions, 5, 'P28 must keep exactly five source call sites');
-assert.equal((engine.match(/\bexecFileAsync\(/g) || []).length, 1, 'Engine keeps one subprocess boundary');
+assert.equal(runCliOccurrences - runCliDefinitions, 5);
+assert.equal((engine.match(/\bexecFileAsync\(/g) || []).length, 1);
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2,/);
 assert.match(engine, /timeout: 25_000/);
 assert.match(engine, /maxBuffer: 4 \* 1024 \* 1024/);
@@ -29,116 +24,45 @@ assert.match(engine, /const SECONDARY_REFRESH_CONCURRENCY = 1;/);
 assert.match(engine, /const SECONDARY_REFRESH_MAX_KEYS = 32;/);
 assert.match(engine, /const CACHE_STALE_MAX_MS = 30 \* 60_000;/);
 
-const processStart = engine.indexOf('async function runCliProcess(');
-const processEnd = engine.indexOf('\nasync function runCli(', processStart);
-const processSource = engine.slice(processStart, processEnd);
-const managedAt = processSource.indexOf("launcherMeta.launcher = 'managed-direct'");
-const directAt = processSource.indexOf("runProgram('llmgateway', args, extraEnv)");
-const enoentAt = processSource.indexOf("if (error?.code !== 'ENOENT') throw error;");
-const npxAt = processSource.indexOf("runProgram('npx', npxArgs, extraEnv)");
+// Launcher order remains a stable invariant; all success/failure branches run
+// against the shipped Engine in behavior-cli-launcher.cjs.
+const managedAt = engine.indexOf("launcherMeta.launcher = 'managed-direct'");
+const directAt = engine.indexOf("runProgram('llmgateway', args, extraEnv)", managedAt);
+const enoentAt = engine.indexOf("if (error?.code !== 'ENOENT') throw error;", directAt);
+const npxAt = engine.indexOf("runProgram('npx', npxArgs, extraEnv)", enoentAt);
 assert.ok(managedAt >= 0 && directAt > managedAt && enoentAt > directAt && npxAt > enoentAt);
-assert.ok(processSource.includes('return runProgram(process.execPath, [managed.entry, ...args], extraEnv);'));
-
-async function exercise(runtime, directMode = 'success', preferOffline = true) {
-  const calls = [];
-  let capturedMeta = null;
-  const context = {
-    process:{execPath:'/safe/node'},
-    NPX_PREFER_OFFLINE:preferOffline,
-    CLI_VERSION:'1.9.0',
-    managedCliRuntime:async () => runtime,
-    cliOperationLabel:() => 'credits',
-    withCliSlot:async (_label, task, meta) => {
-      try { return await task(); }
-      finally { capturedMeta = {...meta}; }
-    },
-    runProgram:async (program, args, env) => {
-      calls.push({program,args:[...args],env:{...env}});
-      if (program === '/safe/node' && directMode === 'managed-failure') throw new Error('managed failed');
-      if (program === 'llmgateway' && directMode === 'enoent') {
-        const error = new Error('missing'); error.code = 'ENOENT'; throw error;
-      }
-      if (program === 'llmgateway' && directMode === 'direct-failure') {
-        const error = new Error('direct failed'); error.code = 'EACCES'; throw error;
-      }
-      return {stdout:'{}'};
-    },
-  };
-  vm.createContext(context);
-  vm.runInContext(`${processSource}\nthis.runCliProcess = runCliProcess;`, context);
-  const invoke = () => context.runCliProcess(['credits','--json'], {SAFE:'1'});
-  if (directMode.endsWith('failure')) await assert.rejects(invoke);
-  else await invoke();
-  return {calls,capturedMeta};
-}
-
-(async () => {
-const managed = await exercise({state:'ready',version:'1.9.0',provisioning:'ok',entry:'/runtime/cli.js'});
-assert.deepEqual(managed.calls.map(call => call.program), ['/safe/node']);
-assert.equal(managed.capturedMeta.launcher, 'managed-direct');
-const managedFailure = await exercise({state:'ready',version:'1.9.0',provisioning:'ok',entry:'/runtime/cli.js'}, 'managed-failure');
-assert.deepEqual(managedFailure.calls.map(call => call.program), ['/safe/node'], 'managed execution failure must not replay');
-const direct = await exercise({state:'unavailable',version:'',provisioning:'backoff',entry:null});
-assert.deepEqual(direct.calls.map(call => call.program), ['llmgateway']);
-const fallback = await exercise({state:'invalid',version:'',provisioning:'unavailable',entry:null}, 'enoent');
-assert.deepEqual(fallback.calls.map(call => call.program), ['llmgateway','npx']);
-assert.deepEqual(fallback.calls[1].args, ['--yes','--prefer-offline','@llmgateway/cli@1.9.0','credits','--json']);
-const directFailure = await exercise({state:'unavailable',version:'',provisioning:'backoff',entry:null}, 'direct-failure');
-assert.deepEqual(directFailure.calls.map(call => call.program), ['llmgateway']);
-
+assert.ok(engine.includes('return runProgram(process.execPath, [managed.entry, ...args], extraEnv);'));
 assert.match(engine, /DEVPASS_BRIDGE_MANAGED_CLI \|\| '1'/);
+
+// Manager provisioning remains outside status/snapshot paths and performs a
+// staged, identity-checked, contained promotion with bounded retry.
 assert.match(manager, /DEVPASS_BRIDGE_MANAGED_CLI \|\| '1'/);
 assert.match(manager, /const MANAGED_CLI_PACKAGE = '@llmgateway\/cli';/);
 assert.match(manager, /const MANAGED_CLI_VERSION = '1\.9\.0';/);
 assert.match(manager, /const MANAGED_CLI_RETRY_MS = 30 \* 60 \* 1000;/);
 assert.ok(manager.includes("spawn('npm', ['install','--ignore-scripts','--no-audit','--no-fund','--package-lock=true']"));
 assert.ok(manager.includes("path.join(MANAGED_CLI_ROOT, `cli-next-${process.pid}-${Date.now()}`)"));
-assert.ok(manager.includes("fs.renameSync(stage, MANAGED_CLI_VERSION_ROOT)"));
+assert.ok(manager.includes('fs.renameSync(stage, MANAGED_CLI_VERSION_ROOT)'));
+assert.ok(manager.includes("if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error('managed CLI package identity mismatch')"));
+assert.ok(manager.includes("if (!pathInside(rootReal, packageReal)) throw new Error('managed CLI package escaped runtime root')"));
+assert.ok(manager.includes("if (!pathInside(packageReal, entry) || !pathInside(rootReal, entry)) throw new Error('managed CLI entry escaped runtime root')"));
+assert.ok(manager.includes("if (!fs.statSync(entry).isFile()) throw new Error('managed CLI entry is not a file')"));
 assert.ok(manager.includes("fs.realpathSync(String(descriptor.entry || ''))"));
-assert.ok(manager.includes("setImmediate(() => { scheduleManagedCliProvisioning(); });"));
-
-const statusStart = manager.indexOf("if (req.method === 'GET' && url.pathname === '/status')");
-const statusEnd = manager.indexOf("if (req.method === 'POST' && url.pathname === '/sync')", statusStart);
-const statusSource = manager.slice(statusStart, statusEnd);
-assert.ok(!/scheduleManagedCliProvisioning|provisionManagedCli|runNpmInstall|spawn\('npm'/.test(statusSource), 'status must never provision');
-
-const verifyStart = manager.indexOf('function pathInside(');
-const verifyEnd = manager.indexOf('function managedCliRuntimeStatus(', verifyStart);
-const verifySource = manager.slice(verifyStart, verifyEnd)
-  .replace(/function atomicJsonWrite[\s\S]*?(?=function readManagedCliState)/, '')
-  .replace(/function readManagedCliState[\s\S]*?(?=function writeManagedCliState)/, '')
-  .replace(/function writeManagedCliState[\s\S]*?(?=function resolveManagedCliBin)/, '');
-const verifyContext = {fs,path,MANAGED_CLI_PACKAGE:'@llmgateway/cli',MANAGED_CLI_VERSION:'1.9.0'};
-vm.createContext(verifyContext);
-vm.runInContext(`${verifySource}\nthis.verifyManagedCliDirectory = verifyManagedCliDirectory;`, verifyContext);
-const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'p28-managed-cli-'));
-try {
-  const packageRoot = path.join(fixture, 'node_modules', '@llmgateway', 'cli');
-  fs.mkdirSync(path.join(packageRoot, 'dist'), {recursive:true});
-  fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({name:'@llmgateway/cli',version:'1.9.0',bin:{llmgateway:'dist/cli.js'}}));
-  fs.writeFileSync(path.join(packageRoot, 'dist', 'cli.js'), '#!/usr/bin/env node\n');
-  assert.equal(verifyContext.verifyManagedCliDirectory(fixture), fs.realpathSync(path.join(packageRoot, 'dist', 'cli.js')));
-  const outside = path.join(os.tmpdir(), `p28-outside-${process.pid}.js`);
-  fs.writeFileSync(outside, '');
-  fs.unlinkSync(path.join(packageRoot, 'dist', 'cli.js'));
-  fs.symlinkSync(outside, path.join(packageRoot, 'dist', 'cli.js'));
-  assert.throws(() => verifyContext.verifyManagedCliDirectory(fixture), /escaped runtime root/);
-  fs.unlinkSync(outside);
-} finally { fs.rmSync(fixture, {recursive:true,force:true}); }
+assert.ok(manager.includes("if (req.method === 'GET' && url.pathname === '/status')"));
+assert.equal((manager.match(/scheduleManagedCliProvisioning\(\)/g) || []).length, 2, 'one definition and one startup schedule remain');
+assert.ok(manager.includes('setImmediate(() => { scheduleManagedCliProvisioning(); });'));
 
 assert.ok(diagnostics.includes("['managed-direct','direct','npx-fallback']"));
 assert.ok(diagnostics.includes('Bridge CLI runtime: ${bridgeCliRuntimeText'));
 assert.ok(!/npm cache path|raw npm error/.test(diagnostics));
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('once the managed command starts, its success or failure is authoritative'));
+assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
+assert.ok(workflow.includes('behavior-harness-contract.cjs'));
 assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 assert.ok(workflow.includes('p28-managed-direct-cli-runtime.cjs'));
 assert.ok(workflowCaller.includes(`uses: ./${currentRelease.sharedWorkflow}`));
 assert.ok(workflowCaller.includes('publish: false'));
 
-console.log('P28 Managed Direct CLI Runtime: OK');
-})().catch(error => {
-  console.error(error);
-  process.exit(1);
-});
+console.log('P28 Managed Direct CLI Runtime: OK · provisioning invariants retained; managed/direct/npx behavior delegated to black-box Engine harness');

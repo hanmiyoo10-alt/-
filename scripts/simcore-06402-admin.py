@@ -54,7 +54,7 @@ verdict = f'''## Production verdict
 
 `v{VERSION}` is the current production release. It hardens only the manual diagnostic-copy path: report construction runs exactly once, Clipboard API transport is isolated, a DOM-local textarea fallback is available, and the UI exposes `COPIED`, `COPIED_FALLBACK`, `REPORT_BUILD_FAILED`, or `CLIPBOARD_WRITE_FAILED`. `buildLastTurnDiagnosticReport()` remains byte-identical to v0.64.1, and no request/output hot-path, persistent state, generation, M2-2, Summary Scope, Broadcast, Time, Representation, Recovery, Prompt, or Store behavior changed.
 
-The ordinary live gate is one successful `COPIED` or `COPIED_FALLBACK` result. A future natural B_END `REPORT_BUILD_FAILED` directly attributes a builder defect and must be handled in a separate narrow mini; `CLIPBOARD_WRITE_FAILED` instead narrows the problem to WebView clipboard transport. Diagnostic-copy hardening no longer blocks starting M2-3 Edit Reconcile extraction. The v0.64.x/M2-3-line genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
+The ordinary live gate is one successful `COPIED` or `COPIED_FALLBACK` result. A future natural B_END `REPORT_BUILD_FAILED` directly attributes a builder defect and must be handled in a separate narrow mini; `CLIPBOARD_WRITE_FAILED` instead narrows the problem to WebView clipboard transport. This one live result is the only remaining diagnostic-copy gate before starting M2-3 Edit Reconcile extraction. The v0.64.x/M2-3-line genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
 '''
 dev, n = re.subn(r'## Production verdict\n\n.*?(?=\nHistorical precursor evidence retained below)', verdict.rstrip() + '\n', dev, count=1, flags=re.S)
 if n != 1:

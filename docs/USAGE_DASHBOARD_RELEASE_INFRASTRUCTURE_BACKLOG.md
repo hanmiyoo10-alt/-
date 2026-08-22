@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **MAINTENANCE PR 1 COMPLETE — workflow foundation merged in #70**
+Status: **MAINTENANCE PR 4 IMPLEMENTED CANDIDATE — immutable regression pipeline**
 
 Recorded after:
 
@@ -10,7 +10,7 @@ Recorded after:
 - Snapshot / recent-request contracts: `1 / 1`
 - Release PR: [#69](https://github.com/hanmiyoo10-alt/-/pull/69)
 
-This document tracks the approved maintenance direction. Maintenance PR 1 implements only the reusable workflow foundation and leaves production artifacts, runtime behavior, and the 5.66 version tuple unchanged.
+This document tracks the approved maintenance direction. Maintenance PR 4 retires the final workflow-time regression adapter and makes the committed test tree fail-closed immutable while leaving production artifacts, runtime behavior, and the 5.66 version tuple unchanged.
 
 ## Why this backlog exists
 
@@ -191,13 +191,19 @@ Completed in Maintenance PR 1:
 - a spec-driven candidate integrity validator,
 - publication disabled for this maintenance-only caller.
 
+Completed across the maintenance series:
+
+- current release identity and artifact validation are centralized,
+- dependency-injected launcher/cache/scheduler behavior harnesses exercise the real Engine process boundary,
+- migrated incident regressions no longer depend on VM function-body extraction,
+- the historical regression adapter is removed completely,
+- materializer and test execution are forbidden from mutating the committed test tree.
+
 Still pending:
 
-- remove version/title rewrites from historical tests,
-- introduce dependency-injected launcher/cache/scheduler behavior harnesses,
-- remove the historical test adapter completely,
 - modularize Engine development sources in a later versioned runtime release,
-- split basic and detailed Diagnostics presentation.
+- split basic and detailed Diagnostics presentation,
+- separately review intentionally retained parser/source-shape fixtures before modularization.
 
 Maintenance PR 2 — Current Release Contract Fixture:
 
@@ -215,6 +221,25 @@ Maintenance follow-up — Legacy Release Caller Retirement:
 - legacy validation remains available in git history without creating false-negative PR checks,
 - Product / Engine / Manager / contracts and the release channel remain unchanged.
 
+Maintenance PR 3 — Black-box Runtime Behavior Harness:
+
+- launches the real Bridge Engine against an isolated temporary HOME, port, token, PATH, and managed runtime,
+- injects deterministic fake managed/direct/npx launchers without changing production runtime source,
+- controls cache time through a child-process-only clock preload,
+- uses gate files and an invocation ledger to prove CLI hard caps and secondary one-lane ordering without latency thresholds,
+- verifies launcher authority, npx rollback, cold/fresh/expired cache behavior, 24h foreground blocking, and 7d/30d deferred response behavior,
+- runs alongside the historical VM/source-shape regressions until behavior parity is proven,
+- leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
+
+Maintenance PR 4 — Immutable Regression Pipeline:
+
+- removes the final behavior-only regression adapter and its workflow invocation,
+- removes the cleanup checkout that previously discarded test mutations,
+- checks tracked and untracked test-tree changes after materialization and after the full suite,
+- runs P1–P28 directly from committed files,
+- preserves intentionally retained parser/source-shape fixtures for a separate focused refactor,
+- leaves Product / Engine / Manager / contracts, runtime artifacts, and the release channel unchanged.
+
 ## Suggested execution sequence
 
 ### Maintenance PR 1 — workflow foundation (implemented)
@@ -231,17 +256,18 @@ Maintenance follow-up — Legacy Release Caller Retirement:
 - Remove version/title rewrites from historical tests.
 - Keep P1–P27 GREEN.
 
-### Maintenance PR 3 — behavioral harness
+### Maintenance PR 3 — behavioral harness (implemented candidate)
 
-- Add dependency-injected launcher/cache/scheduler harnesses.
-- Replace fragile source extraction only after behavior parity is proven.
-- Retain narrow source-operation guards.
+- Add process-boundary injected launcher/cache/scheduler harnesses.
+- Run them beside fragile source extraction until behavior parity is proven.
+- Retain narrow source-operation guards for the following adapter-removal PR.
 
-### Maintenance PR 4 — adapter removal
+### Maintenance PR 4 — immutable regression pipeline (implemented candidate)
 
-- Remove remaining workflow-time mutation of historical tests.
-- Require P1–P27 to run directly from committed files.
-- Document any intentionally retained source-shape assertions.
+- Removed remaining workflow-time mutation of historical tests.
+- Required P1–P28 to run directly from committed files.
+- Replaced cleanup checkout with two fail-closed test-tree integrity gates.
+- Documented intentionally retained source-shape assertions as separate future work.
 
 ### Later product release — optional Engine modularization
 
@@ -264,6 +290,6 @@ Maintenance follow-up — Legacy Release Caller Retirement:
 
 ## Next gate
 
-Maintenance PR 1 passed its PR suite, merged as #70, and left `release-usage-dashboard` byte-identical at 5.66.
+Merge Maintenance PR 4 only after the direct P1–P28 suite proves that materialization and test execution leave the test tree byte-identical and all runtime/manifest hashes remain unchanged.
 
-Start Maintenance PR 2 separately. Do not combine its historical-test fixture cleanup with Engine modularization, Diagnostics changes, or a product release.
+After adapter retirement, review the remaining parser/source-shape fixtures separately before any versioned Engine modularization. Do not combine that review with Diagnostics changes or a product release.

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.2
+//@version 0.64.3
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -29,6 +29,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.3 B_END Diagnostic Builder Binding Repair:
+// - Repairs the confirmed v0.64.2 B_END-only diagnostic report construction failure where buildLastTurnDiagnosticReport referenced Time/Kernel through unbound outer-runtime identifiers
+// - Binds the existing Kernel and Time modules once in the outer runtime scope; the diagnostic report-builder body and its B_END terminal-coverage expression remain byte-identical
+// - Adds no new host/storage/network/timer call, persistent state, request/output hot-path work, Broadcast/Time semantic change, or clipboard transport behavior
+// - Keeps COPIED / COPIED_FALLBACK / REPORT_BUILD_FAILED / CLIPBOARD_WRITE_FAILED unchanged and leaves M2-2 plus the frozen v0.65.0 M2-3 design untouched
 //
 // v0.64.2 Diagnostic Copy Resilience:
 // - Separates one-time diagnostic report construction from clipboard transport so report-builder failures and clipboard failures no longer collapse into one boolean result
@@ -589,7 +595,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.64.2';
+const SIMCORE_RUNTIME_VERSION = '0.64.3';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6398,6 +6404,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 });
 
 (async () => {
+  const kernel = SimCore.require('kernel');
+  const time = SimCore.require('time');
   const coreRules = SimCore.require('session');
   const recurrenceRules = SimCore.require('recurrence');
   const evidenceRules = SimCore.require('evidence');

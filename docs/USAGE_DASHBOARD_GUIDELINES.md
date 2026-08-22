@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.62`
-- Bridge Engine: `1.6.15`
+- Product: `3.0.0-alpha.5.63`
+- Bridge Engine: `1.6.16`
 - Bridge Manager: `1.2.6`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
@@ -24,50 +24,37 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.61 — Credits Usage Early Start`.
+Last verified real-device baseline: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`.
 
-Verified from the 5.61 device diagnostics on 2026-08-20/21 KST:
+Verified 5.62 scheduling evidence:
 
-- Stable Readiness stayed `READY`; Bridge Engine `1.6.14` and Bridge Manager `1.2.6` remained healthy with no local runtime errors or failures.
-- Organization discovery stayed `capture-primary · fallback 0 · shared account capture yes`; shared 24h reuse stayed active with dedicated 24h fallback 0.
-- Eligible 3-operation cold samples verified Credits early-start twice. One sample started `usage-24h-model` at 5790ms before organizations ended at 6866ms (about 1.08s overlap); a later sample started usage at 4895ms before organizations ended at 6802ms (about 1.91s overlap).
-- The later eligible sample completed the Bridge snapshot in about 9.21s with `credits 0→4895ms`, `devpass-capture-24h 21→6795ms`, `usage-24h-model 4895→9204ms`, limit 2, peak active 2, runs 3, queued 0. Bridge ran 3 CLI operations in that verified cold sample.
-- Another visibility sample took about 17.17s because long-window analytics work became cold: `usage-30d-model` and `devpass-capture-7d` joined the snapshot; the 7d capture queued about 5.52s behind the two-lane limit. This verified a separate long-window contention shape, not a persistent 5.61 regression.
-- In that 17.17s sample early-start was absent, while later eligible samples re-enabled it. The exact skip reason is UNKNOWN in 5.61 diagnostics and is an explicit 5.62 measurement target.
-- A one-off Manager probe latency of about 4.15s later returned to about 313ms with manager connected/sync none/errors none; no persistent Manager regression is verified.
-- Latest Request Ledger sample was exact 158/163 with 5 bucket rows. Bucket rows remain explicitly lower-fidelity and are not promoted to exact identity.
-- Cache/source fidelity remained intact: missing Write/TTL remained UNKNOWN and was never inferred. Missing provider Cache Write/TTL stayed UNKNOWN; no inferred zero or provider-based estimate was introduced.
-- Runtime Recovery Fidelity remained verified: cumulative local persist history remained visible while `active 0` allowed `READY`.
-- Next candidate after the 5.55 real-device diagnostic: `3.0.0-alpha.5.56 — Snapshot Performance Repair`.
-- Historical 5.59 contract remains recorded: Measurement only: do not change snapshot ordering, CLI concurrency, CLI timeout, cache TTLs, stale/circuit behavior, capture reuse, fallback behavior, payload semantics, or updater flow.
-- Keep 5.58 shared 24h capture coalescing unchanged, including the dedicated 24h fallback only when shared activity is absent.
-- `DEVPASS_BRIDGE_CLI_CONCURRENCY=1` restores the previous serial execution mode.
-- Preserve the 5.57 organization recovery contract: if account capture fails or has no usable organization rows, fall back to the prior plain `orgs list --json` path; if capture and that fallback are both empty, `No organizations found in CLI output` remains an error.
+- A full snapshot sample took about 30.259s while the foreground 24h usage path completed at about 22.241s and cold 7d/30d source work occupied the remaining critical path.
+- The evidence supports long-window contention attribution; it does not prove a fixed future latency or justify changing the 24h truth path.
+- Existing source fidelity remains mandatory: UNKNOWN stays distinct from known zero, and deferred values must be explicitly marked stale.
+- The shared `repo-main-write` lock and monotonic candidate/main/release guard remain mandatory.
 
-Verified release-infrastructure state from 5.60+:
+Current release implementation: `3.0.0-alpha.5.63 — Long-window Critical Path Decoupling`.
 
-- The shared `repo-main-write` lock and monotonic candidate/main/release guard remain mandatory for every later publisher.
-- P22 continues to verify stale-candidate blocking, same-version artifact divergence failure, and archived older automatic publishers.
+5.63 release contract:
 
-Current release implementation: `3.0.0-alpha.5.62 — Snapshot Decision Attribution`.
+- Product becomes `3.0.0-alpha.5.63`; Bridge Engine becomes `1.6.16`; Bridge Manager remains `1.2.6`; snapshot/recent-request contracts remain `1/1`.
+- Keep 24h usage and DevPass Activity on the foreground truth path. No 24h leaf may opt into normal-expiry deferral.
+- Only full-snapshot Analytics 7d/30d source leaves may return an expired last-good value immediately, and only inside the existing 30-minute stale ceiling.
+- Cold cache, missing last-good, too-old last-good, queue saturation, and standalone analytics endpoints retain the existing blocking behavior.
+- Runway may defer only an existing expired last-good runway object. Cold runway calculation remains blocking and never derives a new runway value from deferred 7d input.
+- Secondary refresh is bounded to one active job and 32 unique raw cache keys, preserves same-key/inFlight deduplication, and starts no new job while any foreground snapshot is active.
+- A running secondary job is not cancelled when a foreground snapshot begins; later secondary jobs remain held.
+- Deferred stale provenance must survive leaf merge, analytics windows/scopes, and module status.
+- Diagnostics expose only sanitized family/scope/range and bounded queue counters. Raw keys, organization IDs, tokens, payloads, headers, CLI args, paths, and arbitrary errors remain excluded.
+- No new `runCli()` call site, network endpoint, CLI concurrency, timeout, TTL, stale ceiling, circuit semantics, capture reuse, Request Ledger, updater, or release-guard change is allowed.
 
-5.62 release contract:
+5.63 device success evidence to collect:
 
-- Bridge Engine becomes `1.6.15`; Bridge Manager remains `1.2.6`.
-- Measurement only: preserve 5.61 scheduling, Credits early-start selection/prefetch behavior, CLI concurrency limit 2, CLI timeout 25s, cache TTLs, cache/stale/circuit semantics, shared capture, payload semantics, Request Ledger, updater flow, and monotonic release integrity.
-- Add snapshot-local Credits early-start decision attribution: `started` or `skipped`, safe candidate mode, result, and a bounded reason vocabulary (`serial-mode`, `no-safe-candidate`, `prefetch-error`, `bootstrap-error`). Never expose the candidate organization ID.
-- Add bounded snapshot-local cache decision attribution with only sanitized family/scope/range plus `hit`, `miss`, `join`, `load`, `stale`, `blocked`, or `error`, and actual cache age/TTL when available.
-- Raw cache keys, organization IDs, CLI args, payloads, headers, tokens, capture paths, and arbitrary error text must never enter the new decision attribution.
-- Diagnostics must group cache decisions by sanitized family/scope/range so 7d/30d TTL expiry/load and queue contention can be correlated without changing source behavior.
-- The new attribution must add zero CLI/network requests. Normal-path `runCli()` call sites remain unchanged from 5.61.
-
-5.62 device success evidence to collect:
-
-- Functional health remains READY/ok with no new active runtime errors.
-- An eligible early-start sample reports `decision started`; a skipped sample reports a bounded reason instead of leaving the cause UNKNOWN.
-- A normal 3-operation sample identifies long-window 7d/30d entries as cache hits when they are warm.
-- When a long-window refresh spike recurs, diagnostics identify which 7d/30d families expired/loaded/joined while the existing CLI timeline independently shows the resulting lane/queue shape.
-- No raw organization identifier or cache key appears in the new attribution lines.
+- Stable Readiness remains READY with Engine `1.6.16`, Manager `1.2.6`, and no active local runtime error.
+- Expired last-good 7d/30d decisions appear as `deferred(deferred-refresh)` and the related long-window CLI starts after foreground snapshot completion.
+- 24h CLI remains before response completion and never appears as deferred.
+- Stale 7d/30d values are visibly marked stale until a secondary refresh advances the cache timestamp; a later snapshot then observes the refreshed value.
+- Queue diagnostics keep limit 1, remain bounded, and expose no raw identifier.
 
 ## Long-term update roadmap
 

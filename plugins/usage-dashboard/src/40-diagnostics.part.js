@@ -101,8 +101,8 @@
       const key = [family, scope, range].filter(Boolean).join('/');
       if (!groups.has(key)) groups.set(key, { family, scope, range, actions:[], ageMs:null, ttlMs:null });
       const group = groups.get(key);
-      const action = ['hit','miss','join','load','stale','blocked','error'].includes(String(item?.action)) ? String(item.action) : 'other';
-      const reason = ['empty','expired','circuit-open','refresh-error'].includes(String(item?.reason)) ? String(item.reason) : '';
+      const action = ['hit','miss','join','load','stale','deferred','blocked','error'].includes(String(item?.action)) ? String(item.action) : 'other';
+      const reason = ['empty','expired','deferred-refresh','circuit-open','refresh-error'].includes(String(item?.reason)) ? String(item.reason) : '';
       const actionText = reason ? `${action}(${reason})` : action;
       if (group.actions.at(-1) !== actionText) group.actions.push(actionText);
       if (Number.isFinite(Number(item?.ageMs))) group.ageMs = Math.max(0, Number(item.ageMs));
@@ -125,6 +125,17 @@
         return `${label} ${group.actions.join('→') || '—'}${ageText}${ttlText}`;
       });
     return rows.join(' · ') || '—';
+  }
+
+  function bridgeSecondaryRefreshText(performance) {
+    const secondary = performance?.secondaryRefresh && typeof performance.secondaryRefresh === 'object'
+      ? performance.secondaryRefresh
+      : null;
+    if (!secondary) return '—';
+    const after = Number.isFinite(Number(secondary.lastStartAfterForegroundMs))
+      ? `+${Math.round(Number(secondary.lastStartAfterForegroundMs))}ms`
+      : '—';
+    return `limit ${Number(secondary.limit || 1)} · queued ${Number(secondary.queued || 0)} · running ${Number(secondary.running || 0)} · served stale ${Number(secondary.servedStale || 0)} · completed ${Number(secondary.completed || 0)} · errors ${Number(secondary.errors || 0)} · blocked ${Number(secondary.blocked || 0)} · superseded ${Number(secondary.superseded || 0)} · foreground held ${Number(secondary.foregroundHeld || 0)} · dropped ${Number(secondary.dropped || 0)} · last start after foreground ${after}`;
   }
 
   function stableReadinessSnapshot(bridgeDiag, runtimeBridge) {
@@ -213,6 +224,7 @@
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot cache: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.cache, [['hits','hit'],['misses','miss'],['joins','join'],['loads','load'],['errors','errors'],['staleFallbacks','stale fallback']])}`,
       `Bridge snapshot cache decisions: ${bridgeSnapshotCacheDecisionsText(bridgeDiag.snapshotPerformance)}`,
+      `Bridge secondary refresh: ${bridgeSecondaryRefreshText(bridgeDiag.snapshotPerformance)}`,
       `Bridge snapshot circuit: ${bridgeSnapshotCounterText(bridgeDiag.snapshotPerformance?.circuits, [['opens','opened'],['blocked','blocked'],['recoveries','recoveries']])}`,
       `Bridge partial: modules ${bridgeDiag.partialModules ?? '—'} · usage ${countErrorMap(d.usageScopes?.errors)} · analytics ${countErrorMap(d.analyticsScopes?.errors)}`,
       `Bridge cache: hit ${bridgeDiag.cacheHitRate === null ? '—' : `${bridgeDiag.cacheHitRate.toFixed(0)}%`} · entries ${bridgeDiag.cacheEntries ?? '—'} · in-flight ${bridgeDiag.inFlight ?? '—'} · stale fallback ${bridgeDiag.staleFallbacks ?? '—'}`,

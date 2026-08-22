@@ -1,16 +1,16 @@
 # Local Usage Dashboard — Release Infrastructure Improvement Backlog
 
-Status: **DEFERRED — revisit after 3.0.0-alpha.5.65 real-device validation**
+Status: **MAINTENANCE PR 1 IN PROGRESS — workflow foundation**
 
 Recorded after:
 
-- Product: `3.0.0-alpha.5.65`
-- Bridge Engine: `1.6.18`
-- Bridge Manager: `1.2.6`
+- Product: `3.0.0-alpha.5.66`
+- Bridge Engine: `1.6.19`
+- Bridge Manager: `1.3.0`
 - Snapshot / recent-request contracts: `1 / 1`
-- Release PR: [#66](https://github.com/hanmiyoo10-alt/-/pull/66)
+- Release PR: [#69](https://github.com/hanmiyoo10-alt/-/pull/69)
 
-This document records a future maintenance direction. It does not authorize implementation, change production behavior, or assign the next product version. Revisit it only after 5.65 device evidence has been collected and the user explicitly approves a maintenance update.
+This document tracks the approved maintenance direction. Maintenance PR 1 implements only the reusable workflow foundation and leaves production artifacts, runtime behavior, and the 5.66 version tuple unchanged.
 
 ## Why this backlog exists
 
@@ -175,14 +175,39 @@ Continue publishing one bundled `bridge-engine.mjs` so Manager behavior and the 
 
 This is a separate runtime refactor and must not be included in the initial infrastructure maintenance PR.
 
+## Current progress
+
+Completed before this maintenance series:
+
+- 5.65 real-device evidence was collected.
+- 5.66 Managed Direct CLI Runtime shipped as Product 5.66 / Engine 1.6.19 / Manager 1.3.0 with P28 and the existing P22 monotonic publisher guard.
+
+Included in Maintenance PR 1:
+
+- one reusable Usage Dashboard build/test/publish workflow,
+- one 5.66 release spec as the single current candidate tuple,
+- the current release workflow reduced to a bounded caller,
+- the historical regression adapter moved out of workflow YAML into a shared tool,
+- a spec-driven candidate integrity validator,
+- publication disabled for this maintenance-only caller.
+
+Still pending:
+
+- remove version/title rewrites from historical tests,
+- introduce dependency-injected launcher/cache/scheduler behavior harnesses,
+- remove the historical test adapter completely,
+- modularize Engine development sources in a later versioned runtime release,
+- split basic and detailed Diagnostics presentation.
+
 ## Suggested execution sequence
 
-### Maintenance PR 1 — workflow foundation
+### Maintenance PR 1 — workflow foundation (implemented)
 
-- Add the reusable workflow.
-- Convert one future release caller to use it.
-- Preserve the existing publisher byte-for-byte where practical.
-- No production artifact or version change.
+- Added the reusable workflow.
+- Converted the current 5.66 workflow into a small caller with publication disabled.
+- Preserved the shared `repo-main-write` lock and monotonic publisher protections.
+- Added one release spec and shared adapter/validator tools.
+- Made no production artifact or version change.
 
 ### Maintenance PR 2 — current-release contract fixture
 
@@ -221,14 +246,9 @@ This is a separate runtime refactor and must not be included in the initial infr
 - PocketRisu users still update normally with `+`.
 - No Local Usage Dashboard runtime, cache, scheduling, source, or payload semantics change during the initial consolidation.
 
-## Revisit trigger
+## Next gate
 
-Revisit this backlog only after:
+Maintenance PR 1 is complete when its PR suite passes, the PR merges to `main`, the post-merge validation run passes, and `release-usage-dashboard` remains byte-identical at 5.66.
 
-1. 5.65 is installed through the normal `+` flow.
-2. Stable Readiness reports Product 5.65 / Engine 1.6.18 / Manager 1.2.6.
-3. Several comparable device snapshots establish whether `prefer-offline` materially changes launcher/source latency.
-4. Any 5.65 regression is resolved or explicitly classified.
-5. The user explicitly approves starting a release-infrastructure maintenance update.
+After that, start Maintenance PR 2 separately. Do not combine its historical-test fixture cleanup with Engine modularization, Diagnostics changes, or a product release.
 
-Until then, keep this document as a deferred design record and do not let it expand the scope of performance work.

@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.16';
+const VERSION = '1.6.17';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -221,7 +221,7 @@ function noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs) {
   }
 }
 
-function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) {
+function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta = null) {
   const attribution = currentSnapshotAttribution();
   if (!attribution || !Array.isArray(attribution.cliOperations)) return;
   if (attribution.cliOperations.length >= 8) return;
@@ -229,8 +229,16 @@ function noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt) 
   const queuedStart = Number(queuedAt || executionStartedAt || endedAt || base);
   const execStart = Number(executionStartedAt || queuedStart);
   const ended = Number(endedAt || execStart);
+  const launcher = ['direct','npx-fallback'].includes(String(launcherMeta?.launcher))
+    ? String(launcherMeta.launcher)
+    : 'unknown';
+  const fallbackReason = launcher === 'npx-fallback' && String(launcherMeta?.fallbackReason) === 'direct-enoent'
+    ? 'direct-enoent'
+    : 'none';
   attribution.cliOperations.push({
     label: String(label || 'cli'),
+    launcher,
+    fallbackReason,
     startOffsetMs: Math.max(0, queuedStart - base),
     executionStartOffsetMs: Math.max(0, execStart - base),
     endOffsetMs: Math.max(0, ended - base),
@@ -297,7 +305,7 @@ function snapshotAttributionSummary(attribution) {
   };
 }
 
-async function withCliSlot(label, task) {
+async function withCliSlot(label, task, launcherMeta = null) {
   const queuedAt = Date.now();
   let queued = false;
   if (cliStats.active >= CLI_CONCURRENCY) {
@@ -320,7 +328,7 @@ async function withCliSlot(label, task) {
     const executionMs = Math.max(0, endedAt - executionStartedAt);
     noteSnapshotCliTiming(label, queued, queueWaitMs, executionMs);
     if (typeof noteSnapshotCliOperation === 'function') {
-      noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt);
+      noteSnapshotCliOperation(label, queuedAt, executionStartedAt, endedAt, launcherMeta);
     }
     cliStats.active = Math.max(0, cliStats.active - 1);
     const next = cliWaiters.shift();
@@ -628,14 +636,17 @@ async function runProgram(program, args, extraEnv = {}) {
 }
 
 async function runCliProcess(args, extraEnv = {}) {
+  const launcherMeta = { launcher:'direct', fallbackReason:'none' };
   return withCliSlot(cliOperationLabel(args, extraEnv), async () => {
     try {
       return await runProgram('llmgateway', args, extraEnv);
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
+      launcherMeta.launcher = 'npx-fallback';
+      launcherMeta.fallbackReason = 'direct-enoent';
     }
     return runProgram('npx', ['--yes', `@llmgateway/cli@${CLI_VERSION}`, ...args], extraEnv);
-  });
+  }, launcherMeta);
 }
 
 async function runCli(args) {

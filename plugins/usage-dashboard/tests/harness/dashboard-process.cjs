@@ -55,6 +55,7 @@ async function runDashboard(options = {}) {
     managerResponse:options.managerResponse || {ok:false},
     failStateWrites:Math.max(0, Number(options.failStateWrites || 0)),
     captureSettingsViews:options.captureSettingsViews === true,
+    captureRefreshViews:options.captureRefreshViews === true,
   }));
 
   const child = spawn(process.execPath, ['--require', preloadPath, dashboardPath], {

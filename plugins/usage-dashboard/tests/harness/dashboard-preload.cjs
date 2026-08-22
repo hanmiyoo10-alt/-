@@ -18,6 +18,7 @@ if (config.token) storage.set(TOKEN_KEY, String(config.token));
 const writes = [];
 const fetches = [];
 const views = [];
+const capturedRefreshCounts = new Set();
 let unloadHandler = null;
 let settingHandler = null;
 let stateWriteAttempts = 0;
@@ -103,6 +104,13 @@ const store = {
     storage.set(normalizedKey, clone(value));
     writes.push(normalizedKey === TOKEN_KEY ? '[token]' : normalizedKey);
     writeResult(`set:${normalizedKey === TOKEN_KEY ? '[token]' : normalizedKey}`);
+    if (normalizedKey === STATE_KEY && config.captureRefreshViews === true) {
+      const refreshCount = Number(value?.refreshCount || 0);
+      if (refreshCount > 0 && value?.data && value?.lastRefreshReason && !capturedRefreshCounts.has(refreshCount)) {
+        capturedRefreshCounts.add(refreshCount);
+        queueSettingsView(`refresh:${String(value.lastRefreshReason)}:${refreshCount}`);
+      }
+    }
   },
   async removeItem(key) {
     const normalizedKey = String(key);

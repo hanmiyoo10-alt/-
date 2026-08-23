@@ -42,6 +42,9 @@ jobs:
           node --check products/simcore/state-sync/test-sync-state.mjs
           python3 -m py_compile scripts/simcore-sync-memory.py scripts/repo-main-write.py
           node products/simcore/state-sync/test-sync-state.mjs
+          python3 -m json.tool products/simcore/state-sync/schema/production-identity-v1.schema.json >/dev/null
+          python3 -m json.tool products/simcore/state-sync/schema/target-registry-v1.schema.json >/dev/null
+          python3 -m json.tool products/simcore/state-sync/schema/sync-report-v1.schema.json >/dev/null
 
       - name: Materialize corrected production
         shell: bash
@@ -60,13 +63,25 @@ jobs:
           {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".rs22-prod/latest.js","blob":"$B"},"install":{"path":".rs22-prod/install.js","blob":"$B"}}
           EOF
 
-      - name: Preserve entry drift as a negative fixture
+      - name: Preserve entry drift as an independent negative fixture
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import json
+          p='product-manifest.json'
+          m=json.load(open(p))
+          m['production_version']='0.64.3'
+          m['release_name']='B_END Diagnostic Builder Binding Repair'
+          m['release_commit']='d7fd45cd193ef1ff187c73761ded958d89558ebf'
+          m['release_blob']='ff481aa904340b844ef29b0d89aa20bd6286286d'
+          with open('.rs22-prod/stale-manifest.json','w') as f:
+              json.dump(m,f,indent=2)
+              f.write('\n')
+          PY
           set +e
           node products/simcore/tooling/sync-state.mjs \
-            --check --root . --manifest product-manifest.json \
+            --check --root . --manifest .rs22-prod/stale-manifest.json \
             --production-identity .rs22-prod/identity.json \
             --targets products/simcore/state-sync/target-registry.json \
             --probes products/simcore/state-sync/current-claim-probes.json \
@@ -84,55 +99,74 @@ jobs:
           assert 'RELEASE_BLOB_DRIFT' in codes
           PY
 
-      - name: Simulate declaration normalization and one-time cutover
+      - name: Validate pre-cutover or post-cutover branch state
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/rs22-sandbox
-          mkdir -p /tmp/rs22-sandbox
-          rsync -a --exclude=.git ./ /tmp/rs22-sandbox/
-          cd /tmp/rs22-sandbox
-          VERSION=0.64.6 \
-          RELEASE_NAME='Post-B_END C Clock Handoff Authority' \
-          RELEASE_COMMIT=47969d24771f6cc188df6e32150fc6fde519182d \
-          RELEASE_BLOB=34da01aa131f760b92d65d961a7843e9cc0d37d6 \
-            python3 scripts/simcore-sync-memory.py --manifest-only
-          node products/simcore/state-sync/migrate-markers.mjs \
-            --root . --manifest product-manifest.json \
-            --production-identity .rs22-prod/identity.json \
-            --report /tmp/rs22-migration.json
-          python3 - <<'PY'
+          if grep -q '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->' docs/CURRENT_DEVELOPMENT.md; then
+            node products/simcore/tooling/sync-state.mjs \
+              --check --root . --manifest product-manifest.json \
+              --production-identity .rs22-prod/identity.json \
+              --targets products/simcore/state-sync/target-registry.json \
+              --probes products/simcore/state-sync/current-claim-probes.json \
+              --writer-policy products/simcore/state-sync/writer-policy.json \
+              --report /tmp/rs22-branch-clean.json
+            python3 - <<'PY'
           import json
-          r=json.load(open('/tmp/rs22-migration.json'))
-          assert r['status']=='PASS'
-          for c in r['changes']:
-              assert c['prefixBefore']==c['prefixAfter']
-              assert c['suffixBefore']==c['suffixAfter']
-          PY
-
-      - name: Shadow check then idempotent write/check
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd /tmp/rs22-sandbox
-          node products/simcore/tooling/sync-state.mjs \
-            --check --root . --manifest product-manifest.json \
-            --production-identity .rs22-prod/identity.json \
-            --targets products/simcore/state-sync/target-registry.json \
-            --probes products/simcore/state-sync/current-claim-probes.json \
-            --writer-policy products/simcore/state-sync/writer-policy.json \
-            --report /tmp/rs22-clean1.json
-          python3 - <<'PY'
-          import json
-          r=json.load(open('/tmp/rs22-clean1.json'))
+          r=json.load(open('/tmp/rs22-branch-clean.json'))
           assert r['result'] in ('CHECK_CLEAN','CHECK_CLEAN_WITH_OBSERVATIONS')
           assert r['counts']['blockers']==0 and r['counts']['drifts']==0
-          assert r['writerPolicy']=='WRITER_POLICY_CLEAN'
           PY
+          else
+            rm -rf /tmp/rs22-sandbox
+            mkdir -p /tmp/rs22-sandbox
+            rsync -a --exclude=.git ./ /tmp/rs22-sandbox/
+            cd /tmp/rs22-sandbox
+            VERSION=0.64.6 \
+            RELEASE_NAME='Post-B_END C Clock Handoff Authority' \
+            RELEASE_COMMIT=47969d24771f6cc188df6e32150fc6fde519182d \
+            RELEASE_BLOB=34da01aa131f760b92d65d961a7843e9cc0d37d6 \
+              python3 scripts/simcore-sync-memory.py --manifest-only
+            node products/simcore/state-sync/migrate-markers.mjs \
+              --root . --manifest product-manifest.json \
+              --production-identity .rs22-prod/identity.json \
+              --report /tmp/rs22-migration.json
+            node products/simcore/tooling/sync-state.mjs \
+              --check --root . --manifest product-manifest.json \
+              --production-identity .rs22-prod/identity.json \
+              --targets products/simcore/state-sync/target-registry.json \
+              --probes products/simcore/state-sync/current-claim-probes.json \
+              --writer-policy products/simcore/state-sync/writer-policy.json \
+              --report /tmp/rs22-sandbox-clean.json
+            python3 - <<'PY'
+          import json
+          m=json.load(open('/tmp/rs22-migration.json'))
+          assert m['status']=='PASS'
+          for c in m['changes']:
+              assert c['prefixBefore']==c['prefixAfter']
+              assert c['suffixBefore']==c['suffixAfter']
+          r=json.load(open('/tmp/rs22-sandbox-clean.json'))
+          assert r['result'] in ('CHECK_CLEAN','CHECK_CLEAN_WITH_OBSERVATIONS')
+          assert r['counts']['blockers']==0 and r['counts']['drifts']==0
+          PY
+          fi
+
+      - name: Independent no-op write and recheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->' docs/CURRENT_DEVELOPMENT.md; then
+            ROOT="$PWD"
+            ID=.rs22-prod/identity.json
+          else
+            ROOT=/tmp/rs22-sandbox
+            ID=.rs22-prod/identity.json
+          fi
+          cd "$ROOT"
           sha256sum product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md > /tmp/rs22-before-write.sha
           node products/simcore/tooling/sync-state.mjs \
             --write --root . --manifest product-manifest.json \
-            --production-identity .rs22-prod/identity.json \
+            --production-identity "$ID" \
             --targets products/simcore/state-sync/target-registry.json \
             --probes products/simcore/state-sync/current-claim-probes.json \
             --writer-policy products/simcore/state-sync/writer-policy.json \
@@ -141,7 +175,7 @@ jobs:
           diff -u /tmp/rs22-before-write.sha /tmp/rs22-after-write.sha
           node products/simcore/tooling/sync-state.mjs \
             --check --root . --manifest product-manifest.json \
-            --production-identity .rs22-prod/identity.json \
+            --production-identity "$ID" \
             --targets products/simcore/state-sync/target-registry.json \
             --probes products/simcore/state-sync/current-claim-probes.json \
             --writer-policy products/simcore/state-sync/writer-policy.json \

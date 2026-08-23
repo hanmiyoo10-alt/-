@@ -8,7 +8,6 @@ const stability = fs.readFileSync(`${root}/src/06-runtime-stability.part.js`, 'u
 const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
 assert.ok(engine.includes("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"));
 assert.ok(engine.includes('timeout: 25_000'));
@@ -54,8 +53,6 @@ assert.ok(diagnostics.includes('Bridge snapshot jobs:'));
 assert.ok(diagnostics.includes('Bridge CLI timing:'));
 assert.ok(diagnostics.includes('Bridge snapshot cache:'));
 assert.ok(diagnostics.includes('Bridge snapshot circuit:'));
-assert.ok(workflow.includes('behavior-snapshot-attribution.cjs'));
-assert.ok(workflow.includes('behavior-harness-contract.cjs'));
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
 

@@ -64,7 +64,8 @@ assert.ok(!workflow.includes('group: repo-main-write'));
 assert.ok(workflow.includes('scripts/repo-main-write.py'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 assert.ok(workflow.includes('p28-managed-direct-cli-runtime.cjs'));
-assert.ok(workflowCaller.includes(`uses: ./${currentRelease.sharedWorkflow}`));
-assert.ok(workflowCaller.includes('publish: false'));
+assert.ok(workflowCaller.includes(`uses: ./${currentRelease.validatorWorkflow}`));
+assert.ok(!workflowCaller.includes('publish: true'));
+assert.ok(workflowCaller.includes('contents: read'));
 
 console.log('P28 Managed Direct CLI Runtime: OK · provisioning invariants retained; managed/direct/npx behavior delegated to black-box Engine harness');

@@ -1,0 +1,155 @@
+name: SimCore RS2-2 Implementation Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simcore-rs2-2-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scope guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main release-simcore
+          git diff --name-only origin/main...HEAD > /tmp/rs22-changed.txt
+          cat /tmp/rs22-changed.txt
+          if grep -E '^plugins/simcore/' /tmp/rs22-changed.txt; then
+            echo 'RS2-2 scope violation: runtime changed' >&2
+            exit 1
+          fi
+
+      - name: Static checks and sync-state self-test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check products/simcore/tooling/sync-state.mjs
+          node --check products/simcore/state-sync/migrate-markers.mjs
+          node --check products/simcore/state-sync/test-sync-state.mjs
+          python3 -m py_compile scripts/simcore-sync-memory.py scripts/repo-main-write.py
+          node products/simcore/state-sync/test-sync-state.mjs
+
+      - name: Materialize corrected production
+        shell: bash
+        run: |
+          set -euo pipefail
+          P=47969d24771f6cc188df6e32150fc6fde519182d
+          B=34da01aa131f760b92d65d961a7843e9cc0d37d6
+          test "$(git rev-parse origin/release-simcore)" = "$P"
+          test "$(git rev-parse origin/release-simcore:plugins/simcore/latest.js)" = "$B"
+          test "$(git rev-parse origin/release-simcore:plugins/simcore/install.js)" = "$B"
+          mkdir -p .rs22-prod
+          git show origin/release-simcore:plugins/simcore/latest.js > .rs22-prod/latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > .rs22-prod/install.js
+          cmp -s .rs22-prod/latest.js .rs22-prod/install.js
+          cat > .rs22-prod/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".rs22-prod/latest.js","blob":"$B"},"install":{"path":".rs22-prod/install.js","blob":"$B"}}
+          EOF
+
+      - name: Preserve entry drift as a negative fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          node products/simcore/tooling/sync-state.mjs \
+            --check --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/entry-drift.json
+          code=$?
+          set -e
+          test "$code" = 2
+          python3 - <<'PY'
+          import json
+          r=json.load(open('/tmp/entry-drift.json'))
+          assert r['result']=='CHECK_BLOCKED'
+          codes={x['code'] for x in r['findings']}
+          assert 'RELEASE_COMMIT_DRIFT' in codes
+          assert 'RELEASE_BLOB_DRIFT' in codes
+          PY
+
+      - name: Simulate declaration normalization and one-time cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/rs22-sandbox
+          mkdir -p /tmp/rs22-sandbox
+          rsync -a --exclude=.git ./ /tmp/rs22-sandbox/
+          cd /tmp/rs22-sandbox
+          VERSION=0.64.6 \
+          RELEASE_NAME='Post-B_END C Clock Handoff Authority' \
+          RELEASE_COMMIT=47969d24771f6cc188df6e32150fc6fde519182d \
+          RELEASE_BLOB=34da01aa131f760b92d65d961a7843e9cc0d37d6 \
+            python3 scripts/simcore-sync-memory.py --manifest-only
+          node products/simcore/state-sync/migrate-markers.mjs \
+            --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --report /tmp/rs22-migration.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('/tmp/rs22-migration.json'))
+          assert r['status']=='PASS'
+          for c in r['changes']:
+              assert c['prefixBefore']==c['prefixAfter']
+              assert c['suffixBefore']==c['suffixAfter']
+          PY
+
+      - name: Shadow check then idempotent write/check
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/rs22-sandbox
+          node products/simcore/tooling/sync-state.mjs \
+            --check --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/rs22-clean1.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('/tmp/rs22-clean1.json'))
+          assert r['result'] in ('CHECK_CLEAN','CHECK_CLEAN_WITH_OBSERVATIONS')
+          assert r['counts']['blockers']==0 and r['counts']['drifts']==0
+          assert r['writerPolicy']=='WRITER_POLICY_CLEAN'
+          PY
+          sha256sum product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md > /tmp/rs22-before-write.sha
+          node products/simcore/tooling/sync-state.mjs \
+            --write --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/rs22-write.json
+          sha256sum product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md > /tmp/rs22-after-write.sha
+          diff -u /tmp/rs22-before-write.sha /tmp/rs22-after-write.sha
+          node products/simcore/tooling/sync-state.mjs \
+            --check --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/rs22-clean2.json
+
+      - name: Production branch remained unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse origin/release-simcore)" = 47969d24771f6cc188df6e32150fc6fde519182d
+          echo 'RS2-2 implementation validation completed read-only against production.'

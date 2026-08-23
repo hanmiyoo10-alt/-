@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "phase": "RS2-3",
+  "phaseStatus": "PROMOTION_READY",
+  "permanentCiAvailable": true,
+  "permanentCiShadowVerified": true,
+  "requiredCiActive": false,
+  "requiredCiEnforcementVerified": false,
+  "requiredCheckName": "SimCore CI / Required",
+  "workflowPath": ".github/workflows/simcore-ci.yml",
+  "verifierCommit": "233c7f088967a3a2b655020de2c0271c9f20fa0f",
+  "installedMainHealthEvidence": {
+    "baseCommit": "233c7f088967a3a2b655020de2c0271c9f20fa0f",
+    "observedViaPrRun": 32638742650,
+    "result": "PASS",
+    "gates": [
+      "GATE_STATIC",
+      "GATE_ARCH",
+      "GATE_REGRESSION",
+      "GATE_STATE",
+      "GATE_COORDINATION",
+      "GATE_LEGACY_COMPAT"
+    ]
+  },
+  "legacyGateMapSha256": "732ee4e82fab3cb8c9d8fc12f7be1f34764411684420fe298ac03f1ea894cb75",
+  "shadowEquivalenceSha256": "d3a961ced4899f9453fb2909389f57ef7857f4b067526a0598e185c810c82dca",
+  "pureCheckPredecessorsRetired": [],
+  "pureCheckPredecessorsRetirementEligible": [
+    ".github/workflows/simcore-architecture-contracts.yml"
+  ],
+  "mixedValidationReplaced": [
+    ".github/workflows/simcore-m2-2-representation.yml",
+    ".github/workflows/simcore-06404-community-reaction-attribution.yml",
+    ".github/workflows/simcore-06405-community-multiline-reaction-unit.yml",
+    ".github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml",
+    ".github/workflows/simcore-06406-closure-completion-gate-v2.yml"
+  ],
+  "legacyCompatIds": [
+    "timeline-closure-robust-25",
+    "summary-scope-execution-control"
+  ],
+  "releaseWriteDisposition": "RS2_4_PENDING",
+  "stateWriteDisposition": "RS2_2_OWNED",
+  "candidateRequiredInterface": "READY",
+  "candidateRequiredReleaseAuthority": "RESERVED_FOR_RS2_4",
+  "rs2_3Closed": false,
+  "rs2_4EntryAuthorized": false,
+  "blockers": [
+    "REQUIRED_CI_ENFORCEMENT_ADMIN_CAPABILITY_GAP"
+  ],
+  "nextPromotionStep": "P4_CONFIGURE_REQUIRED_CHECK_ENFORCEMENT",
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "representation-fast.relations",
+  "suite": "representation-fast",
+  "input": {
+    "cases": [
+      {"id":"exact-same-fast","current":"10:aaa","row":{"fingerprintMatch":"CANONICAL","canonicalFingerprint":"10:aaa","freshFingerprint":"10:aaa","hostRawFingerprint":"10:aaa"}},
+      {"id":"output-mismatch-fresh-exact","current":"10:fresh","row":{"fingerprintMatch":"OUTPUT_MISMATCH","canonicalFingerprint":"11:canon","freshFingerprint":"10:fresh","hostRawFingerprint":""}}
+    ]
+  },
+  "expected": {
+    "exact-same-fast":{"priorRepresentation":"EXACT","currentMatch":"FRESH_CHAT"},
+    "output-mismatch-fresh-exact":{"priorRepresentation":"OUTPUT_MISMATCH","currentMatch":"FRESH_CHAT","deltaShape":"FRESH_EXACT_CARRYOVER"}
+  },
+  "meta":{"goldenGate":true,"coverageExpectation":"HYBRID_TRANSITIONAL","migrationFrom":"v0.63.55 / v0.64.6 legacy regression"}
+}

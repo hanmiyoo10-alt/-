@@ -45,6 +45,10 @@ assert.throws(() => promoter.decidePromotion({...manifest('3.0.0-alpha.5.70'),pr
 assert.deepEqual(promoter.treeEntries(candidate).map((entry) => entry.path), expectedAllowlist);
 assert.throws(() => promoter.treeEntries({...candidate,[expectedAllowlist[0]]:{type:'blob'}}), /INVALID_CANDIDATE_TREE_ENTRY/);
 
+assert.equal(promoter.classifyPostVerifyRef('new-sha', 'old-sha', 'new-sha'), 'verified');
+assert.equal(promoter.classifyPostVerifyRef('old-sha', 'old-sha', 'new-sha'), 'retry');
+assert.equal(promoter.classifyPostVerifyRef('third-party-sha', 'old-sha', 'new-sha'), 'mismatch');
+
 const engine = Buffer.from("const VERSION = '1.6.20';\n");
 const manager = Buffer.from("const MANAGER_VERSION = '1.3.0';\nconst PRODUCT_VERSION = '3.0.0-alpha.5.69';\n");
 const bootstrap = Buffer.from('#!/bin/sh\n');
@@ -82,9 +86,15 @@ assert.ok(tool.includes('base_tree:releaseCommit.tree.sha'));
 assert.ok(tool.includes('parents:[releaseBase]'));
 assert.ok(tool.includes('force:false'));
 assert.ok(tool.includes('RELEASE_REF_MOVED'));
+assert.ok(tool.includes('RELEASE_REF_UPDATE_ACK_MISMATCH'));
+assert.ok(tool.includes('RELEASE_REF_POSTVERIFY_RETRY'));
+assert.ok(tool.includes('RELEASE_REF_POSTVERIFY_MISMATCH'));
+assert.ok(tool.includes('/git/ref/heads/'));
+assert.ok(tool.includes('attempts = 5'));
+assert.ok(tool.includes('delayMs = 250'));
 assert.ok(tool.includes('RELEASE_BLOB_IDENTITY_MISMATCH'));
 assert.ok(tool.includes('RELEASE_RUNTIME_SOURCE_PRESENT'));
 assert.ok(tool.includes('UNEXPECTED_RELEASE_PATHS'));
 assert.ok(tool.includes('SAME_VERSION_ARTIFACT_DIVERGENCE'));
 
-console.log('usage-dashboard P32 exact-byte release promotion: OK · allowlist, monotonic decisions, Git-tree promotion, no-rebuild authority locked');
+console.log('usage-dashboard P32 exact-byte release promotion: OK · allowlist, monotonic decisions, bounded Git-ref postverify, Git-tree promotion, no-rebuild authority locked');

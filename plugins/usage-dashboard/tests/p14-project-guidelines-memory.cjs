@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 const productVision = fs.readFileSync('docs/USAGE_DASHBOARD_PRODUCT_VISION.md', 'utf8');
+const anomalyReview = fs.readFileSync('docs/USAGE_DASHBOARD_PR_CI_ANOMALY_REVIEW.md', 'utf8');
 
 const productVersion = String(manifest.productVersion || '');
 const engineVersion = String(manifest.components?.bridge?.requiredVersion || '');
@@ -23,6 +24,16 @@ assert.ok(guidelines.includes('Do **not** begin the next release, modify code, c
 assert.ok(guidelines.includes('One release, one primary goal'));
 assert.ok(guidelines.includes('Each version update must also refresh this document\'s Current production snapshot.'));
 assert.ok(guidelines.includes('Do not fabricate unknown data.'));
+
+// Durable PR/CI anomaly review memory must survive later GREEN reruns and chat/session changes.
+assert.ok(anomalyReview.includes('# Local Usage Dashboard — PR / CI Anomaly Review Contract'));
+assert.ok(anomalyReview.includes('a later GREEN result must not erase an earlier abnormal PR or Actions result'));
+assert.ok(anomalyReview.includes('The user should not have to notice or ask about failed PR checks manually.'));
+assert.ok(anomalyReview.includes('**Production mutation**'));
+assert.ok(anomalyReview.includes('Do not retry a release blindly when production mutation is UNKNOWN.'));
+assert.ok(anomalyReview.includes('RELEASE_REF_POSTVERIFY_MISMATCH'));
+assert.ok(anomalyReview.includes('NOOP_IDENTICAL'));
+assert.ok(anomalyReview.includes('User involvement remains limited to real Android/PocketRisu validation'));
 
 // Durable strategic roadmap memory must survive chat/session changes and routine release edits.
 assert.ok(guidelines.includes('## Long-term update roadmap'), 'long-term roadmap section must remain present');
@@ -62,5 +73,5 @@ assert.ok(productVision.includes('Read `docs/USAGE_DASHBOARD_GUIDELINES.md`'), '
 assert.ok(productVision.includes('Read this Product Vision'), 'cross-chat recovery must include product-level memory');
 assert.ok(productVision.includes('The vision supplies direction, not permission to ignore contradictory production evidence.'));
 
-console.log(`usage-dashboard P14 project memory: OK · ${productVersion} / engine ${engineVersion} / manager ${managerVersion} · roadmap + product vision locked`);
+console.log(`usage-dashboard P14 project memory: OK · ${productVersion} / engine ${engineVersion} / manager ${managerVersion} · roadmap + product vision + PR/CI anomaly review locked`);
 

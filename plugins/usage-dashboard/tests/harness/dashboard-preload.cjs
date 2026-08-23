@@ -30,6 +30,11 @@ const copyDiagButton = {
   isConnected:true,
   onclick:null,
 };
+const copySummaryButton = {
+  textContent:'요약 복사',
+  isConnected:true,
+  onclick:null,
+};
 
 function writeResult(reason) {
   const state = clone(storage.get(STATE_KEY));
@@ -66,17 +71,27 @@ function queueSettingsView(reason) {
       clipboardText = '';
       copyDiagButton.onclick = null;
       copyDiagButton.textContent = '진단 복사';
+      copySummaryButton.onclick = null;
+      copySummaryButton.textContent = '요약 복사';
       await settingHandler();
+      let summary = '';
+      if (typeof copySummaryButton.onclick === 'function') {
+        clipboardText = '';
+        await copySummaryButton.onclick({currentTarget:copySummaryButton});
+        summary = String(clipboardText || '').slice(0, 250_000);
+      }
       if (typeof copyDiagButton.onclick !== 'function') throw new Error('diagnostics copy handler unavailable');
+      clipboardText = '';
       await copyDiagButton.onclick({currentTarget:copyDiagButton});
       if (!clipboardText) throw new Error('diagnostics clipboard remained empty');
       views.push({
         reason:String(reason || ''),
         html:String(documentStub.body.innerHTML || '').slice(0, 250_000),
+        summary,
         diag:String(clipboardText).slice(0, 250_000),
       });
     } catch (error) {
-      views.push({reason:String(reason || ''),error:error?.message || String(error),html:'',diag:''});
+      views.push({reason:String(reason || ''),error:error?.message || String(error),html:'',summary:'',diag:''});
     } finally {
       viewCapturePending = Math.max(0, viewCapturePending - 1);
       writeResult(`view:${reason}`);
@@ -131,7 +146,11 @@ const documentStub = {
   body,
   addEventListener() {},
   removeEventListener() {},
-  querySelector(selector) { return selector === '#copy-diag' ? copyDiagButton : null; },
+  querySelector(selector) {
+    if (selector === '#copy-diag') return copyDiagButton;
+    if (selector === '#copy-diag-summary') return copySummaryButton;
+    return null;
+  },
   querySelectorAll() { return []; },
   createElement() { return {innerHTML:'',firstElementChild:null}; },
 };
@@ -160,7 +179,11 @@ globalThis.Risuai = {
   async getLocalPluginStorage() { return store; },
   async requestPluginPermission() { return false; },
   async getRootDocument() { throw new Error('headless dashboard harness must not request main DOM'); },
-  async registerSetting(_name, handler) { settingHandler = handler; return {id:'usage-dashboard-harness-setting'}; },
+  async registerSetting(_name, handler) {
+    settingHandler = handler;
+    if (config.captureInitialSettingsView === true) queueSettingsView('initial-state');
+    return {id:'usage-dashboard-harness-setting'};
+  },
   async registerButton() { return {id:'usage-dashboard-harness-button'}; },
   async unregisterUIPart() {},
   async showContainer() {},

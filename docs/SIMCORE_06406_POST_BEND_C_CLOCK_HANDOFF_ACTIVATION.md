@@ -340,3 +340,44 @@ Do not mix either into v0.64.6.
 - `SIMCORE_LIVE_06403_BROADCAST_SEQUENCE.md`
 - `SIMCORE_LIVE_06405_VALIDATION.md`
 - `SIMCORE_M2_3_GENUINE_EDIT_LIVE_CONTROL_06402.md`
+
+---
+
+## 11. v0.64.6 consolidated deferred-item disposition
+
+The implementation scope remains one narrow semantic repair: `POST_BEND_C_CLOCK_DOMAIN_GAP`. However, v0.64.6 is also the consolidation point for previously deferred chronology controls that share the same current-time authority boundary.
+
+Classification for this release:
+
+```text
+FIX
+- POST_BEND_C_CLOCK_DOMAIN_GAP
+
+REGRESSION_CLOSE / STATIC+LIVE CONTROL
+- CURRENT_TIMELINE_AUTHORITY
+- NARRATIVE_TAIL_TIME_CONTRACT
+- B_END_TERMINAL_AIRTIME_AUTHORITY
+- EXPLICIT_PAST_SCENE_ALLOWANCE
+- CURRENT_CALENDAR_BASELINE
+
+WATCH_ONLY / OBSERVE DURING LIVE GATE
+- reload-boundary MANUAL_EDIT_REBUILT latency
+- Turn/Out Store latency dominance
+- PRE_SIMCORE host/history frontier mutation
+- Reaction stale_scale_fallback
+- COMMUNITY platform-family diversity
+- generation semantic excursion
+- diagnostic repaired RAW/frame wording
+
+EXCLUDE FROM v0.64.6 CODE
+- M2-3 Edit Reconcile ownership movement
+- Representation taxonomy/ledger changes
+- Summary Scope / Lineage / Recurrence redesign
+- Bootstrap Migration ownership/schema
+- Reaction normalization behavior
+- COMMUNITY structure behavior
+- host/cache stabilization
+- diagnostic-copy transport
+```
+
+This keeps one code axis while allowing the live campaign to close or promote adjacent deferred controls without mixing their implementations into this mini release.

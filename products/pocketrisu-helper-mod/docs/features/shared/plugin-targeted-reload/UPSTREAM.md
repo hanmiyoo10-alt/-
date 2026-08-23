@@ -18,13 +18,16 @@ Known touch areas:
 
 The old mixed history must not be split surgically; rebuild the behavior on current upstream APIs.
 
+## Minimal upstream scope
+Add a targeted V3 reload path that tears down and reinitializes only the changed plugin while preserving unrelated V2/V3 runtime state. Keep persistence-order fixes, fetch fallback work and NodeOnly save changes outside this PR unless already provided by upstream.
+
 ## Clean rebuild boundary
 Required behavior only:
 1. Identify the exact V3 plugin instance/runtime by stable plugin identity.
 2. Tear down/unregister only that plugin's V3-owned runtime resources.
 3. Load/reinitialize only the changed V3 plugin.
 4. Preserve unrelated V2/V3 plugin runtime state and avoid full `loadPlugins()` unless a safe targeted fallback is impossible.
-5. Ensure failed targeted reload leaves a defined recovery path (error + safe fallback or previous state), not a half-registered plugin.
+5. Ensure failed targeted reload leaves a defined recovery path, not a half-registered plugin.
 
 ## Persistence ordering invariant
 Plugin runtime must never be refreshed from a version that has not been durably persisted yet.
@@ -46,6 +49,9 @@ Do not bundle:
 - Existing plugin persistence contract.
 
 If persistence ordering requires code changes, create/land the separate prerequisite first.
+
+## Verification evidence
+Legacy project verification established the intended targeted-reload behavior as an active local feature. At rebuild time, the authoritative acceptance evidence is the regression matrix below, especially unrelated-plugin preservation, cleanup of plugin-owned registrations, and restart persistence.
 
 ## Rebuild test plan
 - Update one V3 plugin -> only that plugin runtime is reinitialized.

@@ -38,7 +38,7 @@ for (const workflowPath of registry.archived) {
 
 const current = fs.readFileSync(currentPath, 'utf8');
 assert.match(current, /^  pull_request:/m);
-assert.ok(current.includes(`uses: ./${release.sharedWorkflow}`));
+assert.ok(current.includes(`uses: ./${release.validatorWorkflow}`));
 assert.ok(current.includes(`release_spec: ${release.specPath}`));
 assert.match(current, /^permissions:\n  contents: read$/m);
 assert.ok(!current.includes('publish: true'));

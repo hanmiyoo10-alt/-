@@ -38,9 +38,11 @@ for (const workflowPath of registry.archived) {
 
 const current = fs.readFileSync(currentPath, 'utf8');
 assert.match(current, /^  pull_request:/m);
-assert.ok(current.includes('uses: ./.github/workflows/reusable-usage-dashboard-release.yml'));
+assert.ok(current.includes(`uses: ./${release.sharedWorkflow}`));
 assert.ok(current.includes(`release_spec: ${release.specPath}`));
-assert.ok(current.includes('publish: false'));
+assert.match(current, /^permissions:\n  contents: read$/m);
+assert.ok(!current.includes('publish: true'));
+assert.ok(!current.includes('contents: write'));
 assert.ok(!/^  push:/m.test(current), 'current stage caller must remain validation-only');
 
-console.log(`usage-dashboard legacy release workflow archive: OK · completed publishers are manual read-only no-ops and ${release.productVersion} stage validation is authoritative`);
+console.log(`usage-dashboard legacy release workflow archive: OK · completed publishers are manual read-only no-ops and ${release.productVersion} read-only stage validation is authoritative`);

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.69
+//@version 3.0.0-alpha.5.70
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.69';
+  const VERSION = '3.0.0-alpha.5.70';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.20';
+  const REQUIRED_BRIDGE_VERSION = '1.6.21';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -1182,6 +1182,36 @@ async function importLegacyTodayBaselines() {
     return {key:'', value:null};
   }
 
+  function requestDurationKnown(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  }
+
+  function requestDurationMetadata(row) {
+    const value = recentRequestValue(row, ['durationMs'], null);
+    const source = String(recentRequestValue(row, ['durationSource'], '') || '');
+    const fidelity = String(recentRequestValue(row, ['durationFidelity'], 'unknown') || 'unknown');
+    const explicit = requestDurationKnown(value) && source === 'llmgateway-log-duration' && fidelity === 'explicit';
+    return {
+      durationMs: explicit ? Number(value) : null,
+      durationSource: explicit ? source : '',
+      durationFidelity: explicit ? 'explicit' : 'unknown'
+    };
+  }
+
+  function formatRequestDurationMs(value) {
+    if (!requestDurationKnown(value)) return '—';
+    const ms = Number(value);
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    if (ms < 10000) return `${(ms / 1000).toFixed(2).replace(/\.?0+$/, '')}s`;
+    return `${(ms / 1000).toFixed(1).replace(/\.0$/, '')}s`;
+  }
+
+  function requestDurationText(row) {
+    return row?.durationFidelity === 'explicit' && requestDurationKnown(row?.durationMs)
+      ? formatRequestDurationMs(row.durationMs)
+      : '—';
+  }
+
   function requestCacheSignal(row) {
     const explicit = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
     const text = typeof explicit === 'string' ? explicit.trim().toLowerCase() : '';
@@ -1363,6 +1393,7 @@ async function importLegacyTodayBaselines() {
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
+      const duration = requestDurationMetadata(row);
       const requestedTierField = recentRequestField(row, [
         'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
         'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
@@ -1400,6 +1431,9 @@ async function importLegacyTodayBaselines() {
         inputTokens:cacheMetrics.inputTokens,
         outputTokens:cacheMetrics.outputTokens,
         cacheHit:requestCacheSignal(row),
+        durationMs:duration.durationMs,
+        durationSource:duration.durationSource,
+        durationFidelity:duration.durationFidelity,
         cachedInputTokens:cacheMetrics.cachedInputTokens,
         cacheReadInputTokens:cacheMetrics.cacheReadInputTokens,
         cacheCreationInputTokens:cacheMetrics.cacheCreationInputTokens,
@@ -1438,6 +1472,26 @@ async function importLegacyTodayBaselines() {
       stats.rows += 1;
       stats[outcome] += 1;
     }
+    return stats;
+  }
+
+  function requestDurationStats(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const stats = {rows:list.length, explicit:0, unknown:0, totalMs:0, averageMs:null, slowestMs:null, sources:[]};
+    const sources = new Set();
+    for (const row of list) {
+      const explicit = row?.durationFidelity === 'explicit'
+        && row?.durationSource === 'llmgateway-log-duration'
+        && requestDurationKnown(row?.durationMs);
+      if (!explicit) { stats.unknown += 1; continue; }
+      const value = Number(row.durationMs);
+      stats.explicit += 1;
+      stats.totalMs += value;
+      stats.slowestMs = stats.slowestMs === null ? value : Math.max(stats.slowestMs, value);
+      sources.add('llmgateway-log-duration');
+    }
+    stats.averageMs = stats.explicit ? stats.totalMs / stats.explicit : null;
+    stats.sources = [...sources].sort();
     return stats;
   }
 
@@ -1532,6 +1586,9 @@ async function importLegacyTodayBaselines() {
         if (!row || !num(row.timestamp) || Number(row.timestamp) < cutoff) continue;
         const key = requestLedgerKey(row);
         const current = byKey.get(key) || null;
+        const incomingDuration = requestDurationMetadata(row);
+        const currentDuration = requestDurationMetadata(current || {});
+        const duration = incomingDuration.durationFidelity === 'explicit' ? incomingDuration : currentDuration;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
         byKey.set(key, {
           ...(current || {}),
@@ -1540,6 +1597,9 @@ async function importLegacyTodayBaselines() {
           totalTokens:num(row.totalTokens) ? Number(row.totalTokens) : (num(current?.totalTokens) ? Number(current.totalTokens) : null),
           inputTokens:num(row.inputTokens) ? Number(row.inputTokens) : (num(current?.inputTokens) ? Number(current.inputTokens) : null),
           outputTokens:num(row.outputTokens) ? Number(row.outputTokens) : (num(current?.outputTokens) ? Number(current.outputTokens) : null),
+          durationMs:duration.durationMs,
+          durationSource:duration.durationSource,
+          durationFidelity:duration.durationFidelity,
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
           cachedInputTokens:num(row.cachedInputTokens) ? Number(row.cachedInputTokens) : (num(current?.cachedInputTokens) ? Number(current.cachedInputTokens) : null),
           cacheReadInputTokens:num(row.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : (num(current?.cacheReadInputTokens) ? Number(current.cacheReadInputTokens) : null),
@@ -1671,6 +1731,7 @@ async function importLegacyTodayBaselines() {
     const rows = requestLedgerRowsForScope(scopeKey);
     const coverageText = requestLedgerCoverageText();
     const fidelity = requestLedgerCapabilities(rows);
+    const durationFidelity = requestDurationStats(rows);
     if (!rows.length) {
       return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>0건</span></div><p>${esc(coverageText)} · 아직 누적된 요청 메타데이터가 없어.</p></div>`;
     }
@@ -1694,7 +1755,11 @@ async function importLegacyTodayBaselines() {
         : `캐시 ${cacheRate.toFixed(1)}% · 정보 ${cacheRows.length}/${hour.length}`;
       const errorText = errors ? ` · 오류 ${errors}` : '';
       const tierText = requestServiceTierSummary(hour);
-      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText} · ${tierText}${errorText}</em></button>`;
+      const duration = requestDurationStats(hour);
+      const durationText = duration.explicit
+        ? `Duration ${duration.explicit}/${duration.rows} · avg ${formatRequestDurationMs(duration.averageMs)}`
+        : `Duration 0/${duration.rows}`;
+      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText} · ${tierText} · ${durationText}${errorText}</em></button>`;
     }).join('');
 
     let selectedHtml = '';
@@ -1709,6 +1774,10 @@ async function importLegacyTodayBaselines() {
       const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
       const errors = selected.filter(row => row.success === false).length;
       const tierSummary = requestServiceTierSummary(selected);
+      const durationSummary = requestDurationStats(selected);
+      const durationText = durationSummary.explicit
+        ? `Duration known ${durationSummary.explicit}/${durationSummary.rows} · average ${formatRequestDurationMs(durationSummary.averageMs)} · slowest ${formatRequestDurationMs(durationSummary.slowestMs)}`
+        : `Duration known 0/${durationSummary.rows} · average — · slowest —`;
       const cacheSummary = cacheRate === null
         ? `캐시 정보 0/${selected.length} · 비율 —`
         : `캐시 ${cacheRate.toFixed(1)}% · HIT ${cacheHits}/${cacheRows.length} · 정보 ${cacheRows.length}/${selected.length}`;
@@ -1718,6 +1787,7 @@ async function importLegacyTodayBaselines() {
         tokenRows.length ? `${totalTokens.toLocaleString()} tok` : '토큰 —',
         cacheSummary,
         tierSummary,
+        durationText,
         errors ? `오류 ${errors}` : '오류 0'
       ].join(' · ');
       const providerSummary = aggregateSelectedHour(selected, 'provider');
@@ -1731,14 +1801,15 @@ async function importLegacyTodayBaselines() {
           : '성공';
         const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
-        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
+        const durationText = `Duration ${requestDurationText(row)}`;
+        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
       selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${aggregates}<div class="hour-request-list">${detailRows}</div>${truncated}</div>`;
     }
 
-    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · tier 실제 ${fidelity.tier.servedKnown}/${fidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
+    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · tier 실제 ${fidelity.tier.servedKnown}/${fidelity.rows} · Duration explicit ${durationFidelity.explicit}/${durationFidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
   }
 
   function scopeUsageDetailsHtml(scopeActivity) {
@@ -1773,7 +1844,8 @@ async function importLegacyTodayBaselines() {
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
       const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
-      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
+      const durationText = `Duration ${requestDurationText(row)}`;
+      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
@@ -2623,6 +2695,7 @@ async function importLegacyTodayBaselines() {
     const diagLedgerHours = new Set(diagLedgerRows.map(row => requestHourKey(row.timestamp)).filter(Boolean)).size;
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     const diagCacheObservability = requestCacheObservabilityStats(diagLedgerRows);
+    const diagDurationFidelity = requestDurationStats(diagLedgerRows);
     const diagDevpassRows = requestLedgerRowsForScope('devpass');
     const diagTierFidelity = requestServiceTierStats(diagDevpassRows);
     const diagOutcome = requestOutcomeStats(diagDevpassRows);
@@ -2678,6 +2751,7 @@ async function importLegacyTodayBaselines() {
       `Recent UI: filter ${['all','success','error'].includes(String(state.recentRequestFilter)) ? state.recentRequestFilter : 'all'} · aggregate chips · mobile compact`,
       `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source ${diagUsage?.recentSourceKey || 'none'} · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
+      `Request duration fidelity: explicit ${diagDurationFidelity.explicit}/${diagDurationFidelity.rows} · unknown ${diagDurationFidelity.unknown}/${diagDurationFidelity.rows} · source ${diagDurationFidelity.sources.join(',') || 'none'} · average ${formatRequestDurationMs(diagDurationFidelity.averageMs)} · slowest ${formatRequestDurationMs(diagDurationFidelity.slowestMs)}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
       `Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}`,
       `Cache write telemetry: reported ${diagCacheObservability.writeReported}/${diagCacheObservability.rows} · not-reported ${diagCacheObservability.writeNotReported}/${diagCacheObservability.rows} · unknown-on-cache ${diagCacheObservability.writeUnknownOnCache}/${diagCacheObservability.rows} · read/no-write-value ${diagCacheObservability.readWithoutWriteValue}/${diagCacheObservability.rows} · TTL reported ${diagCacheObservability.ttlReported}/${diagCacheObservability.rows} · TTL unreported-after-write ${diagCacheObservability.ttlNotReported}/${diagCacheObservability.rows} · TTL unknown-after-write ${diagCacheObservability.ttlUnknownAfterWrite}/${diagCacheObservability.rows}`,

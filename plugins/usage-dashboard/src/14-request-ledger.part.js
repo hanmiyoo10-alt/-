@@ -22,6 +22,7 @@
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
+      const duration = requestDurationMetadata(row);
       const requestedTierField = recentRequestField(row, [
         'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
         'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
@@ -59,6 +60,9 @@
         inputTokens:cacheMetrics.inputTokens,
         outputTokens:cacheMetrics.outputTokens,
         cacheHit:requestCacheSignal(row),
+        durationMs:duration.durationMs,
+        durationSource:duration.durationSource,
+        durationFidelity:duration.durationFidelity,
         cachedInputTokens:cacheMetrics.cachedInputTokens,
         cacheReadInputTokens:cacheMetrics.cacheReadInputTokens,
         cacheCreationInputTokens:cacheMetrics.cacheCreationInputTokens,
@@ -97,6 +101,26 @@
       stats.rows += 1;
       stats[outcome] += 1;
     }
+    return stats;
+  }
+
+  function requestDurationStats(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const stats = {rows:list.length, explicit:0, unknown:0, totalMs:0, averageMs:null, slowestMs:null, sources:[]};
+    const sources = new Set();
+    for (const row of list) {
+      const explicit = row?.durationFidelity === 'explicit'
+        && row?.durationSource === 'llmgateway-log-duration'
+        && requestDurationKnown(row?.durationMs);
+      if (!explicit) { stats.unknown += 1; continue; }
+      const value = Number(row.durationMs);
+      stats.explicit += 1;
+      stats.totalMs += value;
+      stats.slowestMs = stats.slowestMs === null ? value : Math.max(stats.slowestMs, value);
+      sources.add('llmgateway-log-duration');
+    }
+    stats.averageMs = stats.explicit ? stats.totalMs / stats.explicit : null;
+    stats.sources = [...sources].sort();
     return stats;
   }
 
@@ -191,6 +215,9 @@
         if (!row || !num(row.timestamp) || Number(row.timestamp) < cutoff) continue;
         const key = requestLedgerKey(row);
         const current = byKey.get(key) || null;
+        const incomingDuration = requestDurationMetadata(row);
+        const currentDuration = requestDurationMetadata(current || {});
+        const duration = incomingDuration.durationFidelity === 'explicit' ? incomingDuration : currentDuration;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
         byKey.set(key, {
           ...(current || {}),
@@ -199,6 +226,9 @@
           totalTokens:num(row.totalTokens) ? Number(row.totalTokens) : (num(current?.totalTokens) ? Number(current.totalTokens) : null),
           inputTokens:num(row.inputTokens) ? Number(row.inputTokens) : (num(current?.inputTokens) ? Number(current.inputTokens) : null),
           outputTokens:num(row.outputTokens) ? Number(row.outputTokens) : (num(current?.outputTokens) ? Number(current.outputTokens) : null),
+          durationMs:duration.durationMs,
+          durationSource:duration.durationSource,
+          durationFidelity:duration.durationFidelity,
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
           cachedInputTokens:num(row.cachedInputTokens) ? Number(row.cachedInputTokens) : (num(current?.cachedInputTokens) ? Number(current.cachedInputTokens) : null),
           cacheReadInputTokens:num(row.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : (num(current?.cacheReadInputTokens) ? Number(current.cacheReadInputTokens) : null),
@@ -330,6 +360,7 @@
     const rows = requestLedgerRowsForScope(scopeKey);
     const coverageText = requestLedgerCoverageText();
     const fidelity = requestLedgerCapabilities(rows);
+    const durationFidelity = requestDurationStats(rows);
     if (!rows.length) {
       return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>0건</span></div><p>${esc(coverageText)} · 아직 누적된 요청 메타데이터가 없어.</p></div>`;
     }
@@ -353,7 +384,11 @@
         : `캐시 ${cacheRate.toFixed(1)}% · 정보 ${cacheRows.length}/${hour.length}`;
       const errorText = errors ? ` · 오류 ${errors}` : '';
       const tierText = requestServiceTierSummary(hour);
-      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText} · ${tierText}${errorText}</em></button>`;
+      const duration = requestDurationStats(hour);
+      const durationText = duration.explicit
+        ? `Duration ${duration.explicit}/${duration.rows} · avg ${formatRequestDurationMs(duration.averageMs)}`
+        : `Duration 0/${duration.rows}`;
+      return `<button class="hour-row ${selectedKey===key?'active':''}" data-usage-hour="${esc(key)}"><span><b>${esc(requestHourLabel(key))}</b><small>${hour.length}회 · ${costRows.length ? money(totalCost,4) : '비용 —'}</small></span><em>${cacheText} · ${tierText} · ${durationText}${errorText}</em></button>`;
     }).join('');
 
     let selectedHtml = '';
@@ -368,6 +403,10 @@
       const cacheRate = cacheRows.length ? cacheHits / cacheRows.length * 100 : null;
       const errors = selected.filter(row => row.success === false).length;
       const tierSummary = requestServiceTierSummary(selected);
+      const durationSummary = requestDurationStats(selected);
+      const durationText = durationSummary.explicit
+        ? `Duration known ${durationSummary.explicit}/${durationSummary.rows} · average ${formatRequestDurationMs(durationSummary.averageMs)} · slowest ${formatRequestDurationMs(durationSummary.slowestMs)}`
+        : `Duration known 0/${durationSummary.rows} · average — · slowest —`;
       const cacheSummary = cacheRate === null
         ? `캐시 정보 0/${selected.length} · 비율 —`
         : `캐시 ${cacheRate.toFixed(1)}% · HIT ${cacheHits}/${cacheRows.length} · 정보 ${cacheRows.length}/${selected.length}`;
@@ -377,6 +416,7 @@
         tokenRows.length ? `${totalTokens.toLocaleString()} tok` : '토큰 —',
         cacheSummary,
         tierSummary,
+        durationText,
         errors ? `오류 ${errors}` : '오류 0'
       ].join(' · ');
       const providerSummary = aggregateSelectedHour(selected, 'provider');
@@ -390,14 +430,15 @@
           : '성공';
         const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
-        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
+        const durationText = `Duration ${requestDurationText(row)}`;
+        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
       selectedHtml = `<div class="hour-detail"><div class="recent-head"><h3>${esc(requestHourLabel(selectedKey))} 요청별 상세</h3><span>${esc(summary)}</span></div>${aggregates}<div class="hour-request-list">${detailRows}</div>${truncated}</div>`;
     }
 
-    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · tier 실제 ${fidelity.tier.servedKnown}/${fidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
+    return `<div class="usage-detail-box hourly-ledger"><div class="recent-head"><h3>시간별 요청 · 24h 로컬 관측</h3><span>${rows.length}건 · ${groups.size}시간</span></div><p>${esc(coverageText)} · 시각 exact ${fidelity.exact}/${fidelity.rows} · 버킷 ${fidelity.bucket}/${fidelity.rows} · 캐시 정보 ${fidelity.cacheKnown}/${fidelity.rows} · tier 실제 ${fidelity.tier.servedKnown}/${fidelity.rows} · Duration explicit ${durationFidelity.explicit}/${durationFidelity.rows} · 프롬프트/응답 미저장</p><div class="hour-list">${hourRows}</div>${selectedHtml}</div>`;
   }
 
   function scopeUsageDetailsHtml(scopeActivity) {
@@ -432,7 +473,8 @@
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
       const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
-      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, cacheText].filter(Boolean).join(' · ');
+      const durationText = `Duration ${requestDurationText(row)}`;
+      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);

@@ -666,6 +666,9 @@ function normalizeCapturedRecentLogs(root) {
     if (!row || typeof row !== 'object') return null;
     const timestamp = timestampMs(row.timestamp);
     const requestNumber = String(row.requestNumber || '');
+    const durationExplicit = typeof row.durationMs === 'number' && Number.isFinite(row.durationMs) && row.durationMs >= 0
+      && String(row.durationSource || '') === 'llmgateway-log-duration'
+      && String(row.durationFidelity || '') === 'explicit';
     if (timestamp === null || !requestNumber) return null;
     return {
       timestamp,
@@ -682,6 +685,9 @@ function normalizeCapturedRecentLogs(root) {
       cacheCreation1hTokens: finite(row.cacheCreation1hTokens),
       cacheMetricSource: String(row.cacheMetricSource || ''),
       cacheHit: typeof row.cacheHit === 'boolean' ? row.cacheHit : null,
+      durationMs: durationExplicit ? Number(row.durationMs) : null,
+      durationSource: durationExplicit ? 'llmgateway-log-duration' : '',
+      durationFidelity: durationExplicit ? 'explicit' : 'unknown',
       requestedServiceTier: row.requestedServiceTier ?? null,
       servedServiceTier: row.servedServiceTier ?? null,
       requestedServiceTierSource: String(row.requestedServiceTierSource || ''),

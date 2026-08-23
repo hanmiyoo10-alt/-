@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.69",
+  "version": "3.0.0-alpha.5.70",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "a26398c5e97043e484beeda6f2afcfb23dc3e41c5df2ddb2c84d4a6d6d31425a",
+  "artifactSha256": "2f296c0978e0279e0e59941e157cd4dba92bafeedbf5fb2563c6dd977eadae13",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "e6bf604fbb667a98bbeb93487a46b47f3231577155c5b28ddcac0bd75f5217cd"
+      "sha256": "1b5d2dcf425925a33f604eab1bc9879c6e16aa4f214495d2c96e7204fddc7353"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -40,8 +40,8 @@
     {
       "file": "10-request-normalize.part.js",
       "label": "request normalization",
-      "bytes": 6993,
-      "sha256": "d21ecdcdf3233f8680d82119af734b13cfb5eac273d0b0de6150d54d6dcd9580"
+      "bytes": 8218,
+      "sha256": "9ceef1cf8cf0ea06088dd4d50ed90ca67bfa2fdf7a80d1e8b47b48273b0cd971"
     },
     {
       "file": "12-service-tier.part.js",
@@ -52,8 +52,8 @@
     {
       "file": "14-request-ledger.part.js",
       "label": "request ledger + drilldown",
-      "bytes": 32382,
-      "sha256": "4ca6c0ff704160708e8ee99ce191405109bb663b04819fa97178009dc54544b7"
+      "bytes": 34843,
+      "sha256": "a200ac69fbf7bed1c1898e47f5e027374b5fe902b0e8c5980b6eb2bc6b13be92"
     },
     {
       "file": "16-usage-analytics.part.js",
@@ -76,8 +76,8 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 43531,
-      "sha256": "507c1eb303c747533ab0aacf7c53220a2ec8bf496608d1ca308570fcc65e462d"
+      "bytes": 43983,
+      "sha256": "c98ca837fc8aa9f010c82728b6f42230e0819acbebb1d5a4f01ca3e34ebecfd9"
     },
     {
       "file": "50-dashboard-context.part.js",

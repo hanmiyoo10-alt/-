@@ -32,11 +32,12 @@ Observed server semantics:
 - a newly active user-driven session may take ownership according to the lock policy;
 - stale writer status can be surfaced without treating a logical client-session boot as a Node server restart.
 
-## Clean rebuild boundary
-This feature is one end-to-end protocol, but reviewability should be preserved with an explicit client/server contract.
+## Minimal upstream scope
+Define and implement the smallest end-to-end client/server writer-lock protocol needed to distinguish background automatic writes from real user-active writes, with stable per-tab session identity and stale-session protection. Keep browser-runtime diagnostics and general auth redesign outside the feature.
 
+## Clean rebuild boundary
 ### Client contract
-1. Give each browser tab/session a stable per-tab identity that survives reload/OS restoration of the same tab when the platform storage permits it.
+1. Give each browser tab/session a stable per-tab identity that survives reload/OS restoration of the same tab when platform storage permits it.
 2. Send that identity with Node/self-host storage operations that participate in writer ownership.
 3. Mark only writes following a real user gesture as user-active; timers, boot housekeeping, background persistence and visibility/page lifecycle work must not count as activity.
 4. Preserve retry-safe session initialization: failed `/api/session` initialization may retry without minting false writer activity.
@@ -61,6 +62,14 @@ The current investigation into why Firefox may recreate the JS runtime while vis
 
 ## Critical guardrail
 Do **not** reintroduce forced full DB flushes or writer-lock movement from hide/pagehide/background housekeeping. The local `flushServerDbKeepalive()` no-op policy must not be silently reversed as part of this feature.
+
+## Dependencies
+- Current Node/self-host auth/session request path.
+- Storage write endpoints capable of receiving session/activity metadata.
+- Existing stale/ETag/database consistency behavior.
+
+## Verification evidence
+The verified local implementation has shown the intended per-tab identity, `/api/session`, user-gesture gating and writer-lock behavior in real use. Rebuild acceptance is the explicit background-vs-user-active and stale-session regression matrix below; the Firefox runtime-recreation investigation remains separate.
 
 ## Rebuild test plan
 - Same tab normal reload -> per-tab identity remains stable when `sessionStorage` survives.

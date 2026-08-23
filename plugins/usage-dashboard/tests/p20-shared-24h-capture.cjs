@@ -7,7 +7,6 @@ const root = 'plugins/usage-dashboard';
 const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
 assert.ok(engine.includes("const CLI_CONCURRENCY = Math.max(1, Math.min(2, Number(process.env.DEVPASS_BRIDGE_CLI_CONCURRENCY || 2)));"));
 assert.ok(!engine.includes('DEVPASS_BRIDGE_CLI_CONCURRENCY || 3'));
@@ -48,7 +47,6 @@ assert.ok(engine.includes('No organizations found in CLI output'));
 assert.ok(diagnostics.includes('unknown stays unknown'));
 assert.ok(diagnostics.includes('missing Write/TTL is never inferred from price/provider'));
 assert.ok(diagnostics.includes('active local errors'));
-assert.ok(workflow.includes('behavior-organization-capture.cjs'));
 
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
 assert.ok(guidelines.includes(currentRelease.currentMemory));

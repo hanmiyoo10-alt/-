@@ -32,8 +32,6 @@ assert.ok(engine.includes("captureReuse: { bootstrapRange:'24h'"));
 assert.ok(engine.includes("runCli(['orgs', 'list', '--json'])"));
 assert.ok(engine.includes("throw new Error('No organizations found in CLI output')"));
 
-// Queue topology and completion accounting stay source-level invariants. Actual
-// timing, stale serving, dedupe and one-lane execution run in the black-box tests.
 assert.match(engine, /const SECONDARY_REFRESH_CONCURRENCY = 1;/);
 assert.match(engine, /const SECONDARY_REFRESH_MAX_KEYS = 32;/);
 assert.ok(engine.includes('if (secondaryDrainScheduled || secondaryRefreshRunning || foregroundSnapshotsActive > 0 || !secondaryRefreshQueue.length) return;'));
@@ -55,7 +53,6 @@ assert.ok(engine.includes("options?.deferExpired === true && ['7d','30d'].includ
 assert.ok(engine.includes("options?.deferExpired === true && ['7d','30d'].includes(normalizedRange)"));
 assert.ok(!/usageForOrg\([^\n]*'24h'[^\n]*deferExpired:true/.test(engine));
 
-// Runway may defer only its own last-good value. Its cold loader uses blocking leaves.
 assert.ok(engine.includes('}, { deferExpired:options?.deferExpired === true });'));
 assert.ok(engine.includes("const usage = await usageForOrg(org, '7d');"));
 assert.ok(!engine.includes("usageForOrg(org, '7d',"));
@@ -64,7 +61,6 @@ assert.ok(!engine.includes("activityForScope('7d', 'credits', orgId,"));
 assert.ok(engine.includes("if (valueIsStale(usage)) throw new Error('Runway usage source is stale')"));
 assert.ok(engine.includes("if (valueIsStale(creditsOnly)) throw new Error('Runway activity source is stale')"));
 
-// Bounded stale provenance must survive leaf -> aggregate -> scopes -> module status.
 assert.ok(engine.includes('if (valueIsStale(value))'));
 assert.ok(engine.includes('if (value?._cache?.stale === true) metadata.push(value._cache);'));
 assert.ok(engine.includes("if (value.windows && typeof value.windows === 'object')"));
@@ -87,7 +83,7 @@ assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
 assert.match(workflow, /group: usage-dashboard-release/);
 assert.doesNotMatch(workflow, /group: repo-main-write/);
-assert.match(workflow, /scripts\/repo-main-write\.py/);
+assert.doesNotMatch(workflow, /scripts\/repo-main-write\.py/);
 assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);

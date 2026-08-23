@@ -49,7 +49,9 @@ assert.ok(guidelines.includes('`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` continues t
 assert.ok(guidelines.includes('One faster sample is insufficient to claim causality'));
 assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
-assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
+assert.ok(workflow.includes('concurrency:\n  group: usage-dashboard-release'));
+assert.ok(!workflow.includes('group: repo-main-write'));
+assert.ok(workflow.includes('scripts/repo-main-write.py'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 
 console.log('P27 Npx Cache-First Launcher: OK · argv invariants retained; prefer-offline and rollback behavior delegated to black-box Engine harness');

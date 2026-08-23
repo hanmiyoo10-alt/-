@@ -23,6 +23,30 @@
 - reconnect watcher 구축 및 실전 `DOWN → UP` 복구 알림 성공.
 - 서버폰 Android 알림 금지.
 
+## 레거시 upstream rebuild 준비 — DONE
+
+과거 Git history에서 기능이 섞여 정식 PR 분리가 어려웠던 5개 기능을 **옛 커밋 수술이 아니라 최신 upstream 재구성 방식**으로 정리 완료.
+
+`PR_READY_REBUILD + REBUILD_PLAN_ISOLATED`:
+- `restore-last-active-chat`
+- `response-notification`
+- `plugin-targeted-reload`
+- `session-write-lock`
+- `db-save-optimization`
+
+각 기능 `UPSTREAM.md`에 최소 upstream scope, 의존성, 제외 범위, 검증 근거, rebuild 테스트/순서를 기록했고, 각자 독립 PR로 문서화했다.
+
+첫 dossier CI에서 canonical marker 누락으로 실패한 사실도 각 기능 `FAILURES.md`에 `FAILURE -> FIXED`로 남겼고 후속 `PocketRisu helper docs` 검증은 모두 성공했다.
+
+의미:
+- 앞으로 정식 upstream PR을 만들 때 섞인 옛 branch를 억지로 분해하지 않는다.
+- 최신 official upstream에서 해당 Feature-ID만 새 branch로 재구성한다.
+- DB/save optimization은 한 번에 제출하지 않고 dossier의 staged PR series를 따른다.
+- plugin persistence ordering이 별도 코드 변경을 요구하면 `plugin-update-persistence-order`라는 별도 Feature-ID로 분리한다.
+
+다음 한 단계:
+- 실제 정식 upstream PR을 원할 때 원하는 Feature-ID 하나를 고르고 그 기능 `UPSTREAM.md` recipe로 최신 upstream에서 rebuild를 시작한다.
+
 ## 현재 P0 — 전화/이어폰 알림 무한소리
 
 상태: **TODO**

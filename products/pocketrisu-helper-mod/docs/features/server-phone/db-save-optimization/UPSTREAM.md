@@ -2,9 +2,12 @@
 
 Feature-ID: `db-save-optimization`
 Area: `server-phone`
-PR status: `PR_READY_REBUILD`
-Isolation status: `REBUILD_PLAN_ISOLATED`
+PR status: `VALIDATING`
+Isolation status: `CLEAN`
+Dependencies status: `RESOLVED`
 Deployment status: `NOT_READY`
+Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`
+Current head: `5f3cf377c52826715ab6c3f402331fede55f0920`
 
 ## Problem / motivation
 Large `/api/patch` requests paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On large saves/pluginCustomStorage this produced roughly 1.1–1.8s patch latency in the verified local workload.
@@ -100,9 +103,9 @@ Known remaining bottlenecks (worker structured clone before worker launch; synch
 - Do not require `sqlite3` CLI; local validation uses Node + `better-sqlite3` when DB inspection is needed.
 
 ## Dependencies
-- Current upstream `server/node/server.cjs` or equivalent `/api/patch` implementation.
-- Existing patch/hash/save/ETag semantics as inspected at rebuild time.
-- Later staged PRs depend only on the earlier still-applicable stages in this feature series.
+- Current upstream `server/node/server.cjs` or equivalent `/api/patch` implementation: resolved for PR A against base `e57c0435018646800566f2158fd1a9fa12caa9e2`.
+- Existing patch/hash/save/ETag semantics as inspected at rebuild time: resolved for the isolated PR A diff.
+- Later staged PRs depend only on the earlier still-applicable stages in this feature series and remain out of scope for PR #4.
 
 ## Verification evidence
 ### Correctness from the verified legacy implementation
@@ -167,4 +170,9 @@ Large self-host databases should not pay whole-database hash/clone/ETag costs fo
 - dossier reconstruction: COMPLETE
 - legacy Git-history surgery: NOT REQUIRED
 - upstream strategy: STAGED_PR_SERIES
-- next action: at submission time inspect the current upstream `/api/patch` pipeline, then rebuild only the earliest still-relevant stage and benchmark it independently.
+- local PR #4: OPEN / MERGEABLE / NOT_DRAFT
+- isolation: CLEAN — current diff changes only `server/node/server.cjs` for PR A (+4/-2)
+- reviews: none; unresolved review threads: none
+- CI/checks: MISSING — no relevant workflow run or status check exists for head `5f3cf377c52826715ab6c3f402331fede55f0920`; absence of checks is not GREEN
+- official upstream PR: NOT_CREATED — connected integration previously returned HTTP 403 when attempting cross-repository PR creation
+- next action: obtain at least one relevant successful CI/check for the exact current head, then re-evaluate GREEN eligibility; do not merge while checks are absent.

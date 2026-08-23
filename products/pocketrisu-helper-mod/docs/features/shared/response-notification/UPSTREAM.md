@@ -17,6 +17,9 @@ Known legacy touch areas:
 - `server/node/server.cjs` — local/self-host transport endpoint or bridge-side handling.
 - main-phone Termux notification relay — deployment-specific and **not** part of an upstream code PR.
 
+## Minimal upstream scope
+Add only a generic, optional, failure-isolated response-completion event/hook at the canonical successful completion boundary. Keep Termux/Android relay, phone audio policy and local network/token wiring outside the official upstream PR.
+
 ## Clean rebuild boundary
 Split the feature into two layers.
 
@@ -37,7 +40,7 @@ The local-only layer stays in `main-notification-relay` / `audio-notification`; 
 ## Explicitly out of scope
 Do not bundle:
 - reconnect watcher;
-- server-phone Android notifications (forbidden locally and unnecessary upstream);
+- server-phone Android notifications;
 - phone/earphone sound fixes;
 - DB/save optimization;
 - session/write-lock changes;
@@ -48,15 +51,18 @@ Upstream core should depend only on the existing generation completion lifecycle
 
 Local deployment may depend on `main-notification-relay`, but that dependency is not required for upstream acceptance.
 
+## Verification evidence
+The current local setup has demonstrated real main-phone completion notifications. For upstream reconstruction, acceptance is the exactly-once/non-fatal regression matrix below plus proof that no Termux/Android-specific code is included in the source PR.
+
 ## Rebuild test plan
 - One normal completed assistant response -> exactly one completion event.
 - Streaming response -> event only after final completion, not per chunk.
 - Retry/regenerate -> one event per actually completed response.
-- User stop/cancel before completion -> no false success-completion event unless upstream semantics explicitly define a separate cancelled event.
+- User stop/cancel before completion -> no false success event unless upstream explicitly defines a separate cancelled event.
 - Provider/request error -> notification hook failure does not mask the original error.
 - Completion transport unavailable -> generation/save still succeeds normally.
-- Multiple chats/tabs -> event contains only generic context required by the chosen API; no private conversation body is sent by default.
-- Local relay integration test -> main phone receives the event; server phone creates no Android notification.
+- Multiple chats/tabs -> event exposes only minimal generic context; no private conversation body is sent by default.
+- Local relay integration -> main phone receives event; server phone creates no Android notification.
 
 ## Privacy/security boundary
 Do not send full chat text, auth secrets, tokens or DB content merely to produce a completion notification. Prefer minimal metadata or an event with no conversation content.

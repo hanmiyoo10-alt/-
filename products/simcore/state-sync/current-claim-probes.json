@@ -1,0 +1,17 @@
+{
+  "probeVersion": 1,
+  "probes": [
+    {
+      "id": "current-development-production-verdict",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "parser": "current-production-sentence-v1",
+      "severity": "OBSERVATION"
+    },
+    {
+      "id": "current-development-validation-release-heading",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "parser": "current-validation-release-heading-v1",
+      "severity": "OBSERVATION"
+    }
+  ]
+}

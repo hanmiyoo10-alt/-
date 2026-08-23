@@ -1,0 +1,38 @@
+{
+  "registryVersion": 1,
+  "targets": [
+    {
+      "id": "current-development-production-snapshot",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "blockId": "PRODUCTION_SNAPSHOT",
+      "renderer": "current-development-production-snapshot-v1",
+      "markerProfile": "canonical-v1",
+      "lineEnding": "LF",
+      "sourceFields": [
+        "product",
+        "production_version",
+        "release_name",
+        "release_branch",
+        "release_commit",
+        "release_blob",
+        "validation_status",
+        "major_update_milestone",
+        "major_update_phase",
+        "major_update_checkpoint"
+      ]
+    },
+    {
+      "id": "guidelines-production-baseline",
+      "path": "docs/SIMCORE_GUIDELINES.md",
+      "blockId": "PRODUCTION_BASELINE",
+      "renderer": "guidelines-production-baseline-v1",
+      "markerProfile": "canonical-v1",
+      "lineEnding": "LF",
+      "sourceFields": [
+        "production_version",
+        "release_name",
+        "release_commit"
+      ]
+    }
+  ]
+}

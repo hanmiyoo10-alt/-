@@ -32,6 +32,17 @@ for base in roots:
             t=fl.read_text(encoding='utf-8',errors='replace'); expected=f'Feature-ID: `{fid}`'
             if expected not in t: errors.append(f'{fl.relative_to(REPO)} must contain {expected}')
             if 'PR_REVIEW' not in t or 'DEPLOY' not in t: errors.append(f'{fl.relative_to(REPO)} missing failure stage vocabulary')
+
+# Real device deployment is fail-closed. The machine-readable gate may not
+# disappear accidentally, and VERIFIED must remain explicit.
+safe_updater=ROOT/'docs/features/server-phone/safe-updater/UPSTREAM.md'
+if safe_updater.is_file():
+    t=safe_updater.read_text(encoding='utf-8',errors='replace')
+    if 'AUTO_DEPLOY_GATE:' not in t: errors.append('safe-updater UPSTREAM.md missing AUTO_DEPLOY_GATE')
+    if 'AUTO_DEPLOY_VERIFIED:' not in t: errors.append('safe-updater UPSTREAM.md missing AUTO_DEPLOY_VERIFIED')
+    if 'AUTO_DEPLOY_GATE: `ENABLED`' in t and 'AUTO_DEPLOY_VERIFIED: `YES`' not in t:
+        errors.append('AUTO_DEPLOY_GATE cannot be ENABLED unless AUTO_DEPLOY_VERIFIED is YES')
+
 forbidden=[re.compile(r'\.log$'),re.compile(r'\.pid$'),re.compile(r'\.bak(?:-|$)'),re.compile(r'\.(?:sqlite|sqlite3|db)(?:-|$)'),re.compile(r'snapshot.*\.json$',re.I),re.compile(r'(?:^|/)\.local_usage_bridge_token$')]
 for p in ROOT.rglob('*'):
     if p.is_file() and any(x.search(p.relative_to(ROOT).as_posix()) for x in forbidden): errors.append(f'forbidden runtime/secret-like file: {p.relative_to(ROOT)}')
@@ -52,4 +63,4 @@ for md in ROOT.rglob('*.md'):
         if not resolved.exists(): errors.append(f'{md.relative_to(REPO)}: broken relative link: {raw}')
 if errors:
     [print(f'ERROR: {e}') for e in errors]; sys.exit(1)
-print(f'PocketRisu helper docs OK: {count} feature modules + PR lifecycle + failure ledgers')
+print(f'PocketRisu helper docs OK: {count} feature modules + PR lifecycle + failure ledgers + deploy gate')

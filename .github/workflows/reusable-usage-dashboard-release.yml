@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       publish:
-        description: Materialize main and publish release artifacts on push
+        description: Publish already-materialized main artifacts to the release channel
         required: false
         default: false
         type: boolean
@@ -132,28 +132,6 @@ jobs:
           node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
           grep -Fq 'STALE_CANDIDATE_MAIN' plugins/usage-dashboard/tools/check_release_monotonic.py
           grep -Fq 'SAME_VERSION_ARTIFACT_DIVERGENCE' plugins/usage-dashboard/tools/check_release_monotonic.py
-
-      - name: Commit validated candidate to main
-        if: github.event_name == 'push' && inputs.publish
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- plugins/usage-dashboard/src plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime plugins/usage-dashboard/runtime-src docs/USAGE_DASHBOARD_GUIDELINES.md
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo "main already matches $UD_PRODUCT_VERSION"
-          else
-            git commit -m "release: Local Usage Dashboard $UD_PRODUCT_VERSION $UD_RELEASE_TITLE"
-            PAYLOAD_COMMIT="$(git rev-parse HEAD)"
-            python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
-              --allow plugins/usage-dashboard/src/ \
-              --allow plugins/usage-dashboard/latest.js \
-              --allow plugins/usage-dashboard/runtime/ \
-              --allow plugins/usage-dashboard/runtime-src/ \
-              --allow docs/USAGE_DASHBOARD_GUIDELINES.md
-          fi
 
       - name: Publish candidate monotonically to release channel
         if: github.event_name == 'push' && inputs.publish

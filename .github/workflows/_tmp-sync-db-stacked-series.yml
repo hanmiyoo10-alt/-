@@ -1,0 +1,102 @@
+name: Temporary DB optimization stacked series sync
+
+on:
+  push:
+    branches:
+      - feat/db-save-optimization-stacked-series-record
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/db-save-optimization-stacked-series-record
+          fetch-depth: 0
+
+      - name: Sync feature and project state
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('products/pocketrisu-helper-mod')
+          feature = root / 'docs/features/server-phone/db-save-optimization'
+
+          # README — record the clean upstream stack without mixing runtime evidence.
+          p = feature / 'README.md'
+          s = p.read_text()
+          marker = '## 남은 별도 병목 — HOLD\n'
+          insert = '''## 정식 upstream staged PR series — IN PROGRESS\n- Stage A: official `PocketRisu/PocketRisu#67` — OPEN / mergeable / review·check 대기.\n- Stage B: local draft `hanmiyoo10-alt/PocketRisu#5` — compositional DB patch hash cache.\n- Stage C: local draft `#6` — top-level selective clone.\n- Stage D: local draft `#7` — pluginCustomStorage direct-child hash/clone.\n- Stage E: local draft `#8` — depth-3 lazy subchild hash/selective clone.\n\n모든 B~E는 직전 단계 위 **1 clean commit**으로 분리되어 있고, 공식 단계가 merge/reimplement/reject될 때마다 최신 `develop`을 다시 검사한 뒤 다음 단계만 rebase/rebuild한다. 중복되거나 구조 충돌이 생긴 단계는 건너뛴다.\n\n'''
+          if s.count(marker) != 1:
+              raise SystemExit(f'README marker count={s.count(marker)}')
+          p.write_text(s.replace(marker, insert + marker, 1))
+
+          # UPSTREAM — protect stacked dependencies and list exact local PRs.
+          p = feature / 'UPSTREAM.md'
+          s = p.read_text()
+          old = 'Dependencies status: `RESOLVED`'
+          if s.count(old) != 1:
+              raise SystemExit(f'UPSTREAM dependency marker count={s.count(old)}')
+          s = s.replace(old, 'Dependencies status: `STAGED_WAITING_ON_UPSTREAM`', 1)
+
+          marker = '## Problem / motivation\n'
+          stack = '''## Clean staged branches / PRs\n- Stage A — empty patch fast path + opaque ETag: official `PocketRisu/PocketRisu#67`; clean head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; 1 commit / 1 file.\n- Stage B — compositional DB patch hash cache: local draft `hanmiyoo10-alt/PocketRisu#5`; clean head `04992dcdc47b144d14fbc8df6c6c1c2c7cadec7c`; 1 commit / 3 files.\n- Stage C — top-level selective clone: local draft `#6`; clean head `0d0c8104246a662d9601cffcddb832fd52f7d6f1`; 1 commit / 3 files.\n- Stage D — pluginCustomStorage direct-child hash/clone: local draft `#7`; clean head `c3ec3b5e63f7f0bcdb6888d8475f836cc9f31ca3`; 1 commit / 3 files.\n- Stage E — pluginCustomStorage depth-3 lazy subchild hash/clone: local draft `#8`; clean head `1a937bc680658df732aab75632f0e030c2005f53`; 1 commit / 3 files.\n\nDependency rule: B waits for A; C waits for B; D waits for C; E waits for D. Draft state is intentional. Never merge a later local stage into an earlier stage branch while the earlier branch backs an official upstream PR.\n\n'''
+          if s.count(marker) != 1:
+              raise SystemExit(f'UPSTREAM stack marker count={s.count(marker)}')
+          s = s.replace(marker, stack + marker, 1)
+
+          old = '- upstream strategy: STAGED_PR_SERIES\n'
+          new = '''- upstream strategy: STAGED_PR_SERIES\n- Stage B local draft: `hanmiyoo10-alt/PocketRisu#5` — clean / validated / waiting on Stage A.\n- Stage C local draft: `#6` — clean / validated / waiting on Stage B.\n- Stage D local draft: `#7` — clean / validated / waiting on Stage C.\n- Stage E local draft: `#8` — clean / validated / waiting on Stage D.\n'''
+          if s.count(old) != 1:
+              raise SystemExit(f'UPSTREAM review marker count={s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+
+          # FAILURES — close the earlier submission block and preserve Stage-D builder failure.
+          p = feature / 'FAILURES.md'
+          s = p.read_text()
+          old = '- re-validation: local fork PR #4 is mergeable and remains the source of the exact proposed diff; no official upstream PR number exists yet.'
+          new = '- re-validation: `RECOVERED` — the user submitted the exact clean branch through the GitHub UI, creating official `PocketRisu/PocketRisu#67`; the connector permission limitation remains a tooling constraint, not a code failure.'
+          if s.count(old) != 1:
+              raise SystemExit(f'FAILURES 403 marker count={s.count(old)}')
+          s = s.replace(old, new, 1)
+
+          marker = '\nHistorical synthetic/atomicity/performance verification remains preserved in README/UPSTREAM; runtime failures must continue to be recorded separately from documentation CI failures.\n'
+          entry = '''\n### 2026-08-23 — Stage D validation builder marker mismatch\n- stage: `CI`\n- source branch: `hanmiyoo10-alt/PocketRisu:feat/db-save-optimization-plugin-storage-child`\n- final local draft PR: `hanmiyoo10-alt/PocketRisu#7`\n- failed diagnostic head: `19f8e7bfb9594b04332a09fa0c39bfa4bf6a3e7b`\n- result: `FAILURE -> FIXED`\n- cause: `CONFIRMED`\n- confirmed facts: dependency installation succeeded (`install_status=0`), but the builder searched for `function isPlainPatchRoot(value)` while the validated Stage-C helper actually declared `function isPlainPatchRoot(database)`. Wiring stopped at `collector marker count=0`; tests and syntax checks were intentionally skipped, and the Stage-C clone helper remained unchanged.\n- feedback/fix: rebuild the validation step from the exact current Stage-C source marker instead of guessing the function signature; do not treat the failed builder as an algorithm failure.\n- re-validation: `PASS` — the corrected run applied direct-child selective clone support, ran Stage B+C+D Vitest suites plus `node --check` for both helpers and `server.cjs`, removed diagnostics/temp workflow, and the verified result was rebuilt as clean Stage-D commit `c3ec3b5e63f7f0bcdb6888d8475f836cc9f31ca3`.\n- rollback: unvalidated runtime wiring was never committed/deployed; no server phone or DB state changed.\n'''
+          if s.count(marker) != 1:
+              raise SystemExit(f'FAILURES footer count={s.count(marker)}')
+          p.write_text(s.replace(marker, entry + marker, 1))
+
+          # CURRENT — make the current upstream state unambiguous.
+          p = root / 'CURRENT.md'
+          s = p.read_text()
+          marker = '## 현재 P0 — 전화/이어폰 알림 무한소리\n'
+          section = '''## 정식 upstream 기여 — DB/save staged series 진행 중\n\n- Stage A: official `PocketRisu/PocketRisu#67` OPEN. 현재 mergeable이며 review/check 결과 대기.\n- Stage B: local draft `hanmiyoo10-alt/PocketRisu#5` — clean 1-commit hash-cache stage.\n- Stage C: local draft `#6` — clean 1-commit selective-clone stage.\n- Stage D: local draft `#7` — clean 1-commit pluginCustomStorage direct-child stage.\n- Stage E: local draft `#8` — clean 1-commit depth-3 stage.\n- B~E는 의도적으로 draft이며 앞 단계가 공식에서 결정되기 전에는 promotion/merge하지 않는다.\n- 매 공식 결과 후 최신 `develop`을 다시 읽고, 이미 구현된 단계나 구조 충돌 단계는 건너뛴다.\n\n다음 한 단계:\n- official PR #67의 maintainer review/check 결과를 기다린다. 결과가 나오면 최신 `develop`에서 Stage B 중복/충돌을 다시 검사한 뒤에만 다음 정식 PR을 준비한다.\n\n'''
+          if s.count(marker) != 1:
+              raise SystemExit(f'CURRENT marker count={s.count(marker)}')
+          p.write_text(s.replace(marker, section + marker, 1))
+
+          # ROADMAP — promote the staged series from generic rebuild-ready to active upstream work.
+          p = root / 'ROADMAP.md'
+          s = p.read_text()
+          marker = '## P0\n'
+          section = '''## 진행 중 — DB/save 정식 upstream staged PR series\n\n- A `PocketRisu/PocketRisu#67`: OPEN — empty patch fast path + opaque patch ETag.\n- B `hanmiyoo10-alt/PocketRisu#5`: DRAFT / READY — compositional server DB patch hash cache.\n- C `#6`: DRAFT / READY — top-level selective clone.\n- D `#7`: DRAFT / READY — pluginCustomStorage direct-child hash/selective clone.\n- E `#8`: DRAFT / READY — depth-3 lazy subchild hash/selective clone.\n\n고정 순서: `A 결과 → latest develop 재검사 → B → 재검사 → C → D → E`.\n중복 구현, upstream 구조 변경, 의미 있는 충돌이 발견된 단계는 억지 포팅하지 않고 `SKIP/HOLD`로 기록한다.\nWorker pre-launch structured clone과 chunk-store CDC/hash/SQLite commit은 이 series 범위 밖이며 별도 Feature-ID 전까지 HOLD.\n\n'''
+          if s.count(marker) != 1:
+              raise SystemExit(f'ROADMAP marker count={s.count(marker)}')
+          p.write_text(s.replace(marker, section + marker, 1))
+          PY
+
+      - name: Validate helper docs
+        run: python3 products/pocketrisu-helper-mod/ci/validate_docs.py
+
+      - name: Commit synced state and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add products/pocketrisu-helper-mod
+          git rm .github/workflows/_tmp-sync-db-stacked-series.yml
+          git commit -m 'docs(db-save-optimization): record clean staged PR series'
+          git push origin HEAD:feat/db-save-optimization-stacked-series-record

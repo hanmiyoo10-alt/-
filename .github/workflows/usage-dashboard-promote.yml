@@ -1,0 +1,27 @@
+name: Usage Dashboard Exact-Byte Promotion
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+    paths:
+      - 'plugins/usage-dashboard/**'
+      - '.github/usage-dashboard/releases/**'
+      - '.github/usage-dashboard/archived-release-workflows.json'
+      - '.github/workflows/usage-dashboard-validate.yml'
+      - '.github/workflows/usage-dashboard-promote.yml'
+      - '.github/workflows/reusable-usage-dashboard-validate.yml'
+      - '.github/workflows/reusable-usage-dashboard-promote.yml'
+      - 'docs/USAGE_DASHBOARD_GUIDELINES.md'
+      - 'docs/USAGE_DASHBOARD_RELEASE_PIPELINE_V2*.md'
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    if: github.event.pull_request.merged == true
+    uses: ./.github/workflows/reusable-usage-dashboard-promote.yml
+    with:
+      candidate_sha: ${{ github.event.pull_request.merge_commit_sha }}
+      release_branch: release-usage-dashboard

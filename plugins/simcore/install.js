@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.4
+//@version 0.64.5
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -29,6 +29,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.5 COMMUNITY Multiline Reaction Unit Validation Repair:
+// - Follows v0.64.4 natural B_CONTINUE/B_END evidence where bilingual X(EN) comments repeatedly attributed missing 5: each logical comment/reply had its valid [RT N] tag on a translation continuation line while Structure inspected only the physical starter line
+// - Adds Community.commentUnits() as a pure structural grouping helper and makes Structure inspect each complete logical comment/reply unit; 4-top + 1-reply cardinality checks remain byte-equivalent and Structure stays judge-only
+// - Reuses the existing Reaction grammar and inspectCommentReactionLine() unchanged: one valid tag at logical-unit end passes, while missing, multiple, and visible trailing content continue to fail
+// - Adds no output repair, reaction synthesis, grammar tolerance, normalization change, Broadcast/Time/Frame semantic change, persistent state, host/storage/network/timer call, or Edit Reconcile ownership movement
+// - Preserves the v0.64.4 bounded warning attribution fields so future malformed units remain diagnosable without retaining raw comment text
 //
 // v0.64.4 COMMUNITY Reaction Validator Attribution:
 // - Follows recurrent v0.64.3 B_START/B_CONTINUE/B_END COMMUNITY reaction-tail warnings whose retained visible suffix examples are accepted by the current Reaction regex and therefore do not statically reproduce the live failure
@@ -602,7 +609,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.64.4';
+const SIMCORE_RUNTIME_VERSION = '0.64.5';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -906,6 +913,31 @@ function sectionCommunityParts(section) {
   };
 }
 
+function commentUnits(commentScope) {
+  const lines = String(commentScope || '').split(/\r?\n/);
+  const units = [];
+  let current = null;
+
+  const flush = () => {
+    if (!current) return;
+    units.push({ kind: current.kind, text: current.lines.join('\n') });
+    current = null;
+  };
+
+  for (const line of lines) {
+    const top = /^\s*-\s+/.test(line);
+    const reply = !top && /^\s*ㄴ\s+/.test(line);
+    if (top || reply) {
+      flush();
+      current = { kind: top ? 'TOP' : 'REPLY', lines: [line] };
+      continue;
+    }
+    if (current) current.lines.push(line);
+  }
+  flush();
+  return units;
+}
+
 
 module.exports = {
   COMMUNITY_RE,
@@ -919,6 +951,7 @@ module.exports = {
   splitCommunity,
   sectionHeader,
   sectionCommunityParts,
+  commentUnits,
 };
 });
 
@@ -3278,7 +3311,7 @@ function validateStructure(content, pending) {
       if (tops !== 4) issues.push(`COMMUNITY ${bi + 1}-${si + 1}: 상위 댓글 ${tops}개 (필요 4개)`);
       if (replies !== 1) issues.push(`COMMUNITY ${bi + 1}-${si + 1}: 대댓글 ${replies}개 (필요 1개)`);
 
-      const commentLines = commentScope.split(/\r?\n/).filter((line) => /^\s*(?:-\s+|ㄴ\s+)/.test(line));
+      const commentUnits = community.commentUnits(commentScope);
       let reactionLineErrors = 0;
       const reactionFailureCounts = {
         missing: 0,
@@ -3289,8 +3322,8 @@ function validateStructure(content, pending) {
         tailOther: 0,
         trailingChars: 0,
       };
-      for (const line of commentLines) {
-        const inspection = reaction.inspectCommentReactionLine(line);
+      for (const unit of commentUnits) {
+        const inspection = reaction.inspectCommentReactionLine(unit.text);
         if (inspection.ok) continue;
         reactionLineErrors += 1;
         if (inspection.failureReason === 'MISSING') reactionFailureCounts.missing += 1;

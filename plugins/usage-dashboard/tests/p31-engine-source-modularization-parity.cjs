@@ -120,6 +120,8 @@ for (const behaviorTest of [
   'p28-managed-direct-cli-runtime.cjs',
 ]) assert.ok(workflow.includes(behaviorTest), `process/incident regression must remain active: ${behaviorTest}`);
 assert.equal(workflow.includes('cp -R plugins/usage-dashboard/runtime-src /tmp/usage-dashboard-candidate'), false, 'development source tree must not become a release artifact');
-assert.equal(fs.readFileSync(__filename, 'utf8').includes('node:vm'), false, 'P31 must not reintroduce VM/source-body execution');
+const selfSource = fs.readFileSync(__filename, 'utf8');
+const vmModule = ['node', 'vm'].join(':');
+assert.equal(selfSource.includes(`require('${vmModule}')`) || selfSource.includes(`require("${vmModule}")`), false, 'P31 must not import a VM execution module');
 
 console.log(`P31 Engine Source Modularization Parity: OK · ${expectedParts.length} shared-lexical parts rebuild Engine ${targetEngine}; normalized runtime bytes equal ${baselineEngine}; Manager 1.3.0 lifecycle body and 1/1 contracts preserved`);

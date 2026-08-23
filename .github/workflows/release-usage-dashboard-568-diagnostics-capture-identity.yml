@@ -1,25 +1,14 @@
-name: Stage Usage Dashboard 3.0.0-alpha.5.68 Diagnostics Capture Identity
+name: Stage Usage Dashboard 3.0.0-alpha.5.68 Diagnostics Capture Identity (archived)
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - '.github/workflows/release-usage-dashboard-568-diagnostics-capture-identity.yml'
-      - '.github/workflows/reusable-usage-dashboard-release.yml'
-      - '.github/usage-dashboard/releases/5.68.json'
-      - '.github/workflows/release-command-usage-dashboard-568.yml'
-      - 'plugins/usage-dashboard/tools/release_diagnostics_capture_identity_568.py'
-      - 'plugins/usage-dashboard/tools/validate_release_candidate.py'
-      - 'plugins/usage-dashboard/tools/sync_project_guidelines.py'
-      - 'plugins/usage-dashboard/tests/**'
-      - 'docs/USAGE_DASHBOARD_DEVICE_EVIDENCE_567.md'
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    uses: ./.github/workflows/reusable-usage-dashboard-release.yml
-    with:
-      release_spec: .github/usage-dashboard/releases/5.68.json
-      publish: false
+  archived:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain archive
+        run: echo 'Archived release validator. Historical validation remains in git history; this workflow cannot write main or the release channel.'

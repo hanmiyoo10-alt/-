@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simcore-state-target-registry-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["registryVersion", "targets"],
+  "properties": {
+    "registryVersion": {"const": 1},
+    "targets": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "blockId", "renderer", "markerProfile", "lineEnding", "sourceFields"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "blockId": {"enum": ["PRODUCTION_SNAPSHOT", "PRODUCTION_BASELINE"]},
+          "renderer": {"enum": ["current-development-production-snapshot-v1", "guidelines-production-baseline-v1"]},
+          "markerProfile": {"const": "canonical-v1"},
+          "lineEnding": {"const": "LF"},
+          "sourceFields": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true}
+        }
+      }
+    }
+  }
+}

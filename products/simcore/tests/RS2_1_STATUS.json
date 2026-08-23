@@ -1,0 +1,39 @@
+{
+  "statusVersion": 1,
+  "phase": "RS2-1",
+  "harnessStatus": "PASS",
+  "batchAStatus": "PASS",
+  "equivalenceStatus": "PARTIAL_REPLACEMENT_ONLY",
+  "durableTestsAvailable": true,
+  "partialReplacementAuthorized": true,
+  "fullReplacementAuthorized": false,
+  "rs2_1Closed": true,
+  "retirementEligibleAssertionIds": [
+    "community.multiline-bilingual-logical-unit-pass",
+    "diagnostic-copy.transport-state-and-fallback"
+  ],
+  "retainedControlIds": [
+    "representation-fast.decision-path",
+    "genuine-edit.rebuild-path",
+    "broadcast-closure.state-transition"
+  ],
+  "productionSourceIdentity": {
+    "authority": "release-simcore",
+    "commit": "47969d24771f6cc188df6e32150fc6fde519182d",
+    "version": "0.64.6",
+    "latestBlob": "34da01aa131f760b92d65d961a7843e9cc0d37d6",
+    "installBlob": "34da01aa131f760b92d65d961a7843e9cc0d37d6",
+    "sha256": "1f07668f418faf0029c37409c31545f146c27592ac37eff39fea8cdd0e599aac"
+  },
+  "proof": {
+    "workflowRun": 32634645909,
+    "workflowJob": 97182455929,
+    "permanentBatchA": "PASS",
+    "communityHistoricalDifferential": "PASS",
+    "diagnosticCopyHistoricalOwnerEquivalence": "PASS",
+    "legacyRobustFixtures1To25": "PASS",
+    "productionMutation": "NONE"
+  },
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_1_IMPLEMENTATION_EVIDENCE.md",
+  "closedAt": "2026-08-23T19:52:00+09:00"
+}

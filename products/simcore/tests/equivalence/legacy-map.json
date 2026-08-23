@@ -1,0 +1,42 @@
+{
+  "mapVersion": 1,
+  "phase": "RS2-1",
+  "pack": "batch-a",
+  "entries": [
+    {
+      "legacyAssertionId": "community.multiline-bilingual-logical-unit-pass",
+      "permanentSuite": "community-reaction",
+      "fixtureIds": ["community-reaction.batch-a"],
+      "requiredDimensions": ["input", "outcome", "negative", "execution"],
+      "retirementPolicy": "MAPPED_BEHAVIORAL_ASSERTION_ONLY"
+    },
+    {
+      "legacyAssertionId": "diagnostic-copy.transport-state-and-fallback",
+      "permanentSuite": "diagnostic-copy",
+      "fixtureIds": ["diagnostic-copy.batch-a"],
+      "requiredDimensions": ["input", "outcome", "negative", "execution"],
+      "retirementPolicy": "MAPPED_DETERMINISTIC_ASSERTION_ONLY"
+    },
+    {
+      "legacyAssertionId": "representation-fast.decision-path",
+      "permanentSuite": "representation-fast",
+      "fixtureIds": ["representation-fast.relations"],
+      "requiredDimensions": ["input", "outcome", "execution"],
+      "retirementPolicy": "RETAIN_UNTIL_EXECUTABLE_OWNER_BOUNDARY"
+    },
+    {
+      "legacyAssertionId": "genuine-edit.rebuild-path",
+      "permanentSuite": "genuine-edit",
+      "fixtureIds": ["genuine-edit.visible-third-representation"],
+      "requiredDimensions": ["input", "outcome", "execution"],
+      "retirementPolicy": "RETAIN_UNTIL_EDIT_RECONCILE_EXECUTABLE"
+    },
+    {
+      "legacyAssertionId": "broadcast-closure.state-transition",
+      "permanentSuite": "broadcast-closure",
+      "fixtureIds": ["broadcast-closure.batch-a"],
+      "requiredDimensions": ["input", "outcome", "negative", "execution"],
+      "retirementPolicy": "RETAIN_UNTIL_B_END_STATE_COMMIT_AND_UNLOCK_EXECUTABLE"
+    }
+  ]
+}

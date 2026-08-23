@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "phase": "RS2-1",
+  "pack": "batch-a",
+  "controls": [
+    {
+      "id": "representation-fast.decision-path",
+      "suite": "representation-fast",
+      "status": "ACTIVE_REQUIRED",
+      "reasonRetained": "Final Representation Fast decision path still crosses the outer Edit Reconcile sequence and is not directly executable through an isolated application owner.",
+      "missingExecutableSurface": "OUTER_RECONCILE_SEQUENCE",
+      "upgradeTrigger": "M2-3 edit-reconcile service becomes independently executable",
+      "authorityType": "HISTORICAL_ASSERTION_PLUS_REAL_HOST_LIVE_CONTROL"
+    },
+    {
+      "id": "genuine-edit.rebuild-path",
+      "suite": "genuine-edit",
+      "status": "ACTIVE_REQUIRED",
+      "reasonRetained": "State-changing rebuild/save/commit behavior still crosses the outer Edit Reconcile sequence and cannot yet be replaced by the deterministic Representation-only control.",
+      "missingExecutableSurface": "OUTER_EDIT_RECONCILE_SEQUENCE",
+      "upgradeTrigger": "M2-3 edit-reconcile service becomes independently executable with Store and Session Port stubs",
+      "authorityType": "HISTORICAL_ASSERTION_PLUS_REAL_HOST_LIVE_CONTROL"
+    },
+    {
+      "id": "broadcast-closure.state-transition",
+      "suite": "broadcast-closure",
+      "status": "ACTIVE_REQUIRED",
+      "reasonRetained": "Terminal and Structure predicates are deterministic, but real B_END lifecycle unlock/state transition remains integrated and retains live authority.",
+      "missingExecutableSurface": "B_END_STATE_COMMIT_AND_UNLOCK",
+      "upgradeTrigger": "A later explicit executable lifecycle/state boundary or separate formal disposition",
+      "authorityType": "HISTORICAL_ASSERTION_PLUS_REAL_HOST_LIVE_CONTROL"
+    }
+  ]
+}

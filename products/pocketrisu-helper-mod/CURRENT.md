@@ -4,6 +4,15 @@
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
+## 운영 루틴 — ACTIVE
+
+- `ROUTINE.md` 기준으로 작업 시작/종료.
+- **기능 하나 = 폴더 하나 = PR 후보 하나 = 배포 단위 하나**.
+- 모든 기능 폴더에 `README.md + UPSTREAM.md + FAILURES.md`.
+- PR/CI/review/deploy 실패는 기능별 실패 장부에 남기고 다음 수정 피드백으로 사용.
+- 개인 포크 PR은 green + 기능 경계 통과 후에만 자동 merge 후보.
+- 서버폰 실제 자동 배포는 `safe-updater`가 검증되기 전까지 `DEPLOY_READY`에서 멈춤.
+
 ## 안정적으로 사용 중
 
 - 메인폰 SSH core tunnel.
@@ -61,7 +70,11 @@
 원칙:
 `fetch → backup → compatibility check → safe apply → syntax/build/health/service verify → failure rollback → main-phone notify`
 
-naive periodic `git pull` 금지.
+추가 목표:
+- green으로 merge된 **Feature-ID 단위** 변경만 pull-based로 배포.
+- 배포 실패는 해당 기능 `FAILURES.md`에 기록.
+- 성공 후 post-deploy verify.
+- naive periodic `git pull` 금지.
 
 ## 금지/주의
 

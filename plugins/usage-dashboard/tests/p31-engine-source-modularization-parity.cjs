@@ -72,17 +72,21 @@ assert.equal(
   baselineEngineSha,
   '5.69 Engine runtime bytes may differ from verified 1.6.19 only by the Engine VERSION literal',
 );
+const candidateEngineSha = sha256(artifact);
 
 const manager = fs.readFileSync(managerPath, 'utf8');
-const normalizedManager = manager.replace(
-  `const PRODUCT_VERSION = '${targetProduct}';`,
-  `const PRODUCT_VERSION = '${baselineProduct}';`,
-);
+assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${targetEngine}';`));
+assert.ok(manager.includes(`const BUNDLED_ENGINE_SHA256 = '${candidateEngineSha}';`));
+const normalizedManager = manager
+  .replace(`const PRODUCT_VERSION = '${targetProduct}';`, `const PRODUCT_VERSION = '${baselineProduct}';`)
+  .replace(`const BUNDLED_ENGINE_VERSION = '${targetEngine}';`, `const BUNDLED_ENGINE_VERSION = '${baselineEngine}';`)
+  .replace(`const BUNDLED_ENGINE_SHA256 = '${candidateEngineSha}';`, `const BUNDLED_ENGINE_SHA256 = '${baselineEngineSha}';`);
 assert.ok(normalizedManager.includes(`const PRODUCT_VERSION = '${baselineProduct}';`));
+assert.ok(normalizedManager.includes(`const BUNDLED_ENGINE_VERSION = '${baselineEngine}';`));
 assert.equal(
   sha256(Buffer.from(normalizedManager, 'utf8')),
   baselineManagerSha,
-  'Manager functional body may differ only by Product-version synchronization',
+  'Manager functional body may differ only by Product and bundled-Engine identity synchronization',
 );
 
 for (const marker of [
@@ -93,7 +97,7 @@ for (const marker of [
   "launcherMeta.launcher = 'managed-direct';",
   "launcherMeta.launcher = 'direct';",
   "launcherMeta.launcher = 'npx-fallback';",
-  "if (CLI_CONCURRENCY < 2)",
+  'if (CLI_CONCURRENCY < 2)',
   "['7d','30d'].includes(String(range))",
   'foregroundSnapshotsActive > 0',
 ]) {
@@ -118,4 +122,4 @@ for (const behaviorTest of [
 assert.equal(workflow.includes('cp -R plugins/usage-dashboard/runtime-src /tmp/usage-dashboard-candidate'), false, 'development source tree must not become a release artifact');
 assert.equal(fs.readFileSync(__filename, 'utf8').includes('node:vm'), false, 'P31 must not reintroduce VM/source-body execution');
 
-console.log(`P31 Engine Source Modularization Parity: OK · ${expectedParts.length} shared-lexical parts rebuild Engine ${targetEngine}; normalized runtime bytes equal ${baselineEngine}; Manager 1.3.0 and 1/1 contracts preserved`);
+console.log(`P31 Engine Source Modularization Parity: OK · ${expectedParts.length} shared-lexical parts rebuild Engine ${targetEngine}; normalized runtime bytes equal ${baselineEngine}; Manager 1.3.0 lifecycle body and 1/1 contracts preserved`);

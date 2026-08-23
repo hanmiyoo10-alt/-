@@ -7,17 +7,17 @@ Isolation status: `CLEAN`
 Dependencies status: `STAGED_WAITING_ON_UPSTREAM`
 Deployment status: `NOT_READY`
 Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`
-Official upstream PR: `https://github.com/PocketRisu/PocketRisu/pull/67`
-Current head: `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`
+Official upstream PRs: `https://github.com/PocketRisu/PocketRisu/pull/67`, `https://github.com/PocketRisu/PocketRisu/pull/68`, `https://github.com/PocketRisu/PocketRisu/pull/69`
+Current tracked upstream heads: A `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; B `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; C `f60e0618d1776d6918eec9e634b2e90f333e1bf2`
 
 ## Clean staged branches / PRs
-- Stage A — empty patch fast path + opaque ETag: official `PocketRisu/PocketRisu#67`; clean head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; 1 commit / 1 file.
-- Stage B — compositional DB patch hash cache: local draft `hanmiyoo10-alt/PocketRisu#5`; clean head `04992dcdc47b144d14fbc8df6c6c1c2c7cadec7c`; 1 commit / 3 files.
-- Stage C — top-level selective clone: local draft `#6`; clean head `0d0c8104246a662d9601cffcddb832fd52f7d6f1`; 1 commit / 3 files.
+- Stage A — empty patch fast path + opaque ETag: official `PocketRisu/PocketRisu#67`; head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; 1 commit / 1 file.
+- Stage B — compositional DB patch hash cache: official `PocketRisu/PocketRisu#68`; head `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; 1 commit / 3 files. Original stacked local draft remains `hanmiyoo10-alt/PocketRisu#5` at `04992dcdc47b144d14fbc8df6c6c1c2c7cadec7c`.
+- Stage C — top-level selective clone: official `PocketRisu/PocketRisu#69`; head `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; 1 commit / 3 files. Original stacked local draft remains `hanmiyoo10-alt/PocketRisu#6` at `0d0c8104246a662d9601cffcddb832fd52f7d6f1`.
 - Stage D — pluginCustomStorage direct-child hash/clone: local draft `#7`; clean head `c3ec3b5e63f7f0bcdb6888d8475f836cc9f31ca3`; 1 commit / 3 files.
 - Stage E — pluginCustomStorage depth-3 lazy subchild hash/clone: local draft `#8`; clean head `1a937bc680658df732aab75632f0e030c2005f53`; 1 commit / 3 files.
 
-Dependency rule: B waits for A; C waits for B; D waits for C; E waits for D. Draft state is intentional. Never merge a later local stage into an earlier stage branch while the earlier branch backs an official upstream PR.
+Local stacked draft dependency rule remains B after A, C after B, D after C, E after D. Official A/B/C were independently rebased/submitted against `develop` as separate reviewable PRs; D/E remain staged and must not be promoted until the upstream result is re-inspected. Never merge a later local stage into an earlier stage branch while the earlier branch backs an official upstream PR.
 
 ## Problem / motivation
 Large `/api/patch` requests paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On large saves/pluginCustomStorage this produced roughly 1.1–1.8s patch latency in the verified local workload.
@@ -113,9 +113,10 @@ Known remaining bottlenecks (worker structured clone before worker launch; synch
 - Do not require `sqlite3` CLI; local validation uses Node + `better-sqlite3` when DB inspection is needed.
 
 ## Dependencies
-- Current upstream `server/node/server.cjs` or equivalent `/api/patch` implementation: resolved for PR A against base `e57c0435018646800566f2158fd1a9fa12caa9e2`.
-- Existing patch/hash/save/ETag semantics as inspected at rebuild time: resolved for the isolated PR A diff.
-- Later staged PRs depend only on the earlier still-applicable stages in this feature series and remain out of scope for PR #4.
+- Current upstream `server/node/server.cjs` or equivalent `/api/patch` implementation: resolved for submitted PRs A/B/C against their recorded `develop` bases.
+- Existing patch/hash/save/ETag semantics as inspected at rebuild time: resolved for the isolated A/B/C diffs.
+- Stage D remains dependent on the final accepted/rebased Stage C shape; Stage E remains dependent on Stage D.
+- No official upstream PR should be auto-merged by this automation.
 
 ## Verification evidence
 ### Correctness from the verified legacy implementation
@@ -180,13 +181,12 @@ Large self-host databases should not pay whole-database hash/clone/ETag costs fo
 - dossier reconstruction: COMPLETE
 - legacy Git-history surgery: NOT REQUIRED
 - upstream strategy: STAGED_PR_SERIES
-- Stage B local draft: `hanmiyoo10-alt/PocketRisu#5` — clean / validated / waiting on Stage A.
-- Stage C local draft: `#6` — clean / validated / waiting on Stage B.
-- Stage D local draft: `#7` — clean / validated / waiting on Stage C.
-- Stage E local draft: `#8` — clean / validated / waiting on Stage D.
-- local PR #4: OPEN / MERGEABLE / NOT_DRAFT
-- isolation: CLEAN — official Stage A is one commit / one file (`server/node/server.cjs`, +23/-2)
-- reviews: none; unresolved review threads: none
-- CI/checks: MISSING — no relevant workflow run or status check is currently observed for official PR #67 head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; absence of checks is not GREEN
-- official upstream PR: OPEN / MERGEABLE / NOT_DRAFT — `PocketRisu/PocketRisu#67`
-- next action: monitor official PR #67 review/check state. Keep Stage B (`hanmiyoo10-alt/PocketRisu#5`) and Stage C (`#6`) as dependent drafts until Stage A is accepted/rebased; after any upstream result, re-inspect latest `develop` before promoting the next stage.
+- local PR #4: OPEN / MERGEABLE / NOT_DRAFT; head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; relevant workflow runs: none, so it is not GREEN and must not be auto-merged.
+- local PRs #5-#8: OPEN / MERGEABLE / DRAFT; draft state blocks auto-merge. Their currently observed head workflow runs are also absent.
+- isolation: CLEAN — official Stage A is 1 commit / 1 file; official Stages B and C are each 1 commit / 3 files.
+- official reviews: none on #67, #68, or #69; unresolved review threads: none on #67, #68, or #69.
+- official CI/checks: MISSING — no relevant pull-request workflow run is observed for #67 head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`, #68 head `8756113790b84c0a1bc6bd40b1229f21fa7ce137`, or #69 head `f60e0618d1776d6918eec9e634b2e90f333e1bf2`. Absence of checks is not GREEN.
+- official upstream PR #67: OPEN / MERGEABLE / NOT_DRAFT — Stage A.
+- official upstream PR #68: OPEN / MERGEABLE / NOT_DRAFT — Stage B.
+- official upstream PR #69: OPEN / MERGEABLE / NOT_DRAFT — Stage C.
+- next action: monitor official #67/#68/#69 CI and review state. Do not promote D/E yet; after any upstream merge/rebase/review result, re-inspect latest `develop` and the accepted A/B/C shape before preparing the next stage.

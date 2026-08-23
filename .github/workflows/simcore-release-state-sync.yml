@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: repo-main-write
+  group: simcore-main-state-sync
   cancel-in-progress: false
 
 jobs:
@@ -98,8 +98,11 @@ jobs:
             echo 'Durable memory already synchronized.'
           else
             git commit -m "docs: sync SimCore v${VERSION} production memory"
-            git pull --rebase origin main
-            git push origin HEAD:main
+            PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+            python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
+              --allow product-manifest.json \
+              --allow docs/CURRENT_DEVELOPMENT.md \
+              --allow docs/SIMCORE_GUIDELINES.md
           fi
 
       - name: Build project-source snapshot

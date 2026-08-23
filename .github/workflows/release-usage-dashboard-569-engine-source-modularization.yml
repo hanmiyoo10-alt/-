@@ -5,24 +5,20 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/release-usage-dashboard-569-engine-source-modularization.yml'
+      - '.github/workflows/reusable-usage-dashboard-validate.yml'
       - '.github/workflows/reusable-usage-dashboard-release.yml'
       - '.github/usage-dashboard/releases/5.69.json'
       - '.github/usage-dashboard/archived-release-workflows.json'
       - '.github/workflows/release-command-usage-dashboard-569.yml'
-      - 'plugins/usage-dashboard/runtime-src/**'
-      - 'plugins/usage-dashboard/tools/build_bridge_engine.cjs'
-      - 'plugins/usage-dashboard/tools/release_engine_source_modularization_569.py'
-      - 'plugins/usage-dashboard/tools/validate_release_candidate.py'
-      - 'plugins/usage-dashboard/tools/sync_project_guidelines.py'
-      - 'plugins/usage-dashboard/tests/**'
-      - 'docs/USAGE_DASHBOARD_ENGINE_SOURCE_MODULARIZATION_569.md'
+      - 'plugins/usage-dashboard/**'
+      - 'docs/USAGE_DASHBOARD_GUIDELINES.md'
+      - 'docs/USAGE_DASHBOARD_RELEASE_PIPELINE_V2*.md'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    uses: ./.github/workflows/reusable-usage-dashboard-release.yml
+  validate:
+    uses: ./.github/workflows/reusable-usage-dashboard-validate.yml
     with:
       release_spec: .github/usage-dashboard/releases/5.69.json
-      publish: false

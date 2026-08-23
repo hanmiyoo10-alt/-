@@ -12,7 +12,7 @@ const helper = path.join(ROOT, 'plugins/usage-dashboard/tools/check_release_mono
 const manifestPath = path.join(ROOT, 'plugins/usage-dashboard/runtime/product-manifest.json');
 const enginePath = path.join(ROOT, 'plugins/usage-dashboard/runtime/bridge-engine.mjs');
 const managerPath = path.join(ROOT, 'plugins/usage-dashboard/runtime/bridge-manager.cjs');
-const workflowPath = path.join(ROOT, currentRelease.sharedWorkflow);
+const workflowPath = path.join(ROOT, currentRelease.publisherWorkflow || currentRelease.sharedWorkflow);
 
 assert.ok(fs.existsSync(helper), 'monotonic publisher helper missing');
 const productManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));

@@ -6,16 +6,22 @@ const {loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/c
 const release = assertCurrentReleaseArtifacts();
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 const caller = fs.readFileSync(release.callerWorkflow, 'utf8');
-const shared = fs.readFileSync(release.sharedWorkflow, 'utf8');
+const validator = fs.readFileSync(release.validatorWorkflow, 'utf8');
+const publisher = fs.readFileSync(release.publisherWorkflow || release.sharedWorkflow, 'utf8');
 
 assert.ok(guidelines.includes(release.currentMemory));
 assert.ok(guidelines.includes(release.verifiedBaseline));
 assert.ok(caller.includes(`release_spec: ${release.specPath}`));
-assert.ok(caller.includes(`uses: ./${release.sharedWorkflow}`));
-assert.ok(shared.includes('group: usage-dashboard-release'));
-assert.ok(!shared.includes('group: repo-main-write'));
-assert.ok(shared.includes('scripts/repo-main-write.py'));
-assert.ok(shared.includes('check_release_monotonic.py'));
+assert.ok(caller.includes(`uses: ./${release.validatorWorkflow}`));
+assert.match(validator, /permissions:\s*\n\s*contents: read/);
+assert.ok(!validator.includes('group: repo-main-write'));
+assert.ok(!validator.includes('scripts/repo-main-write.py'));
+assert.ok(!validator.includes('git push'));
+assert.ok(validator.includes('CANDIDATE_NOT_MATERIALIZED'));
+assert.ok(fs.existsSync(release.publisherWorkflow || release.sharedWorkflow));
+assert.match(publisher, /group: usage-dashboard-release/);
+assert.ok(publisher.includes('scripts/repo-main-write.py'));
+assert.ok(publisher.includes('check_release_monotonic.py'));
 
 const loadedAgain = loadCurrentRelease();
 assert.deepEqual(loadedAgain, release);

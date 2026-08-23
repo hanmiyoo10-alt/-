@@ -12,6 +12,8 @@
   "callerWorkflow": ".github/workflows/release-usage-dashboard-569-engine-source-modularization.yml",
   "releaseCommandWorkflow": ".github/workflows/release-command-usage-dashboard-569.yml",
   "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-release.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-release.yml",
   "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
   "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
   "newTests": [

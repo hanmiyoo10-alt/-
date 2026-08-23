@@ -222,6 +222,7 @@
     return [
       `Local Usage Dashboard v${VERSION}`,
       `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
+      `Diagnostic refresh identity: ${diagnosticsCaptureIdentityText(diagnosticsCaptureIdentity(diagnosticCapturedAt))}`,
       `Runtime loaded at: ${diagnosticTimestamp(RUNTIME_LOADED_AT)}`,
       `Runtime uptime: ${diagnosticUptime(diagnosticCapturedAt - RUNTIME_LOADED_AT)}`,
       `Unified runtime: schema v${PRODUCT_RUNTIME_SCHEMA_VERSION} · product ${VERSION} · plugin bundled · bridge ${runtimeBridge.mode} · manager ${runtimeBridge.managerInstalled ? 'installed' : 'absent'}`,

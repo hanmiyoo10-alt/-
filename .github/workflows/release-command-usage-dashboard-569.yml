@@ -1,9 +1,7 @@
 name: Release Command Usage Dashboard 3.0.0-alpha.5.69
 
-# Retry marker: re-emit the one-shot release trigger after the PR #106 merge
-# overlapped an independent main writer. The shared monotonic guard remains
-# authoritative if an earlier publish attempt later completes.
-# Deployment trigger: post-#114 product-local main-write coordination
+# Stage C transition trigger. This version-specific command is temporary and
+# will be retired by Stage D after the generic controller is proven.
 on:
   push:
     branches: [main]
@@ -14,8 +12,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    uses: ./.github/workflows/reusable-usage-dashboard-release.yml
+  promote:
+    uses: ./.github/workflows/reusable-usage-dashboard-promote.yml
     with:
-      release_spec: .github/usage-dashboard/releases/5.69.json
-      publish: true
+      candidate_sha: ${{ github.sha }}
+      release_branch: release-usage-dashboard

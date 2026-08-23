@@ -8,6 +8,7 @@ const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs')
 
 const root = 'plugins/usage-dashboard';
 const baselineVersion = '3.0.0-alpha.5.66';
+const baselineEngineVersion = '1.6.19';
 const baselineEngineSha = 'f17d689f39bd469bcadf1a2125313146cd6e04cb38299a5b4583d903a696cf09';
 const baselineManagerSha = '9f3530b882ecea7b9e0d407c7831c44487f218b5db9210a6709158a6315c36c0';
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -16,12 +17,14 @@ const clone = value => JSON.parse(JSON.stringify(value));
 
 const currentRelease = assertCurrentReleaseArtifacts();
 const targetVersion = currentRelease.productVersion;
-if (!['3.0.0-alpha.5.67','3.0.0-alpha.5.68'].includes(targetVersion)) {
-  console.log(`P29 Diagnostics Workspace Separation: SKIP · candidate ${targetVersion} is outside the locked Diagnostics workspace releases`);
+const modularizationRelease = targetVersion === '3.0.0-alpha.5.69';
+if (!['3.0.0-alpha.5.67','3.0.0-alpha.5.68','3.0.0-alpha.5.69'].includes(targetVersion)) {
+  console.log(`P29 Diagnostics Workspace Separation: SKIP · candidate ${targetVersion} is outside the locked Diagnostics workspace lineage`);
   process.exit(0);
 }
 
-assert.equal(currentRelease.engineVersion, '1.6.19');
+const expectedEngineVersion = modularizationRelease ? '1.6.20' : baselineEngineVersion;
+assert.equal(currentRelease.engineVersion, expectedEngineVersion);
 assert.equal(currentRelease.managerVersion, '1.3.0');
 assert.equal(currentRelease.snapshotContract, 1);
 assert.equal(currentRelease.recentRequestContract, 1);
@@ -33,14 +36,28 @@ const workspace = fs.readFileSync(`${root}/src/62-diagnostics-workspace.part.js`
 const manifest = json('runtime/product-manifest.json');
 const {PARTS} = require('../src/parts.cjs');
 
-assert.equal(sha256(engine), baselineEngineSha, 'Diagnostics-only release must keep the 5.66 Engine artifact byte-identical');
-const normalizedManager = manager.replace(
+const engineSha = sha256(engine);
+if (modularizationRelease) {
+  const normalizedEngine = engine.toString('utf8').replace(
+    "const VERSION = '1.6.20';",
+    "const VERSION = '1.6.19';",
+  );
+  assert.equal(sha256(Buffer.from(normalizedEngine, 'utf8')), baselineEngineSha, '5.69 Engine must preserve Diagnostics-era runtime bytes beyond the Engine VERSION literal');
+} else {
+  assert.equal(engineSha, baselineEngineSha, 'Diagnostics-only release must keep the 5.66 Engine artifact byte-identical');
+}
+let normalizedManager = manager.replace(
   `const PRODUCT_VERSION = '${targetVersion}';`,
   `const PRODUCT_VERSION = '${baselineVersion}';`,
 );
+if (modularizationRelease) {
+  normalizedManager = normalizedManager
+    .replace("const BUNDLED_ENGINE_VERSION = '1.6.20';", "const BUNDLED_ENGINE_VERSION = '1.6.19';")
+    .replace(`const BUNDLED_ENGINE_SHA256 = '${engineSha}';`, `const BUNDLED_ENGINE_SHA256 = '${baselineEngineSha}';`);
+}
 assert.ok(normalizedManager.includes(`const PRODUCT_VERSION = '${baselineVersion}';`));
-assert.equal(sha256(normalizedManager), baselineManagerSha, 'Manager functional body may change only by product-version synchronization');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.19');
+assert.equal(sha256(normalizedManager), baselineManagerSha, 'Manager functional body may change only by release and bundled-Engine identity synchronization');
+assert.equal(manifest.components.bridge.requiredVersion, expectedEngineVersion);
 assert.equal(manifest.components.bridgeManager.version, '1.3.0');
 assert.equal(manifest.components.bridgeManager.productVersion, targetVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});

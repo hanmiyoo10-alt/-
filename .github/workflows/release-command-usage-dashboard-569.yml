@@ -1,11 +1,12 @@
 name: Release Command Usage Dashboard 3.0.0-alpha.5.69
 
-# One-shot publish command branch. This branch is not merged; the reusable
-# release workflow validates, materializes main through repo-main-write.py,
-# then publishes product artifacts monotonically to release-usage-dashboard.
+# Retry marker: re-emit the one-shot release trigger after the PR #106 merge
+# overlapped an independent main writer. The shared monotonic guard remains
+# authoritative if an earlier publish attempt later completes.
+# Deployment trigger: post-#114 product-local main-write coordination
 on:
   push:
-    branches: [release/usage-dashboard-569-publish-command]
+    branches: [main]
     paths:
       - '.github/workflows/release-command-usage-dashboard-569.yml'
 

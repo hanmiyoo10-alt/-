@@ -7,12 +7,16 @@ on:
       - 'plugins/usage-dashboard/**'
       - '.github/usage-dashboard/releases/**'
       - '.github/usage-dashboard/archived-release-workflows.json'
+      - '.github/usage-dashboard/legacy-release-authority.json'
       - '.github/workflows/usage-dashboard-validate.yml'
+      - '.github/workflows/usage-dashboard-candidate-ready.yml'
+      - '.github/workflows/usage-dashboard-prepare-candidate.yml'
       - '.github/workflows/usage-dashboard-promote.yml'
       - '.github/workflows/reusable-usage-dashboard-validate.yml'
       - '.github/workflows/reusable-usage-dashboard-promote.yml'
       - 'docs/USAGE_DASHBOARD_GUIDELINES.md'
       - 'docs/USAGE_DASHBOARD_RELEASE_PIPELINE_V2*.md'
+      - 'docs/USAGE_DASHBOARD_PR_LIFECYCLE_E*.md'
 
 permissions:
   contents: read

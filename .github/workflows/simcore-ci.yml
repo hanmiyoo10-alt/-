@@ -1,0 +1,319 @@
+name: SimCore CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Read-only execution profile
+        required: true
+        default: MAIN_HEALTH
+        type: choice
+        options: [MAIN_HEALTH, CANDIDATE_SHADOW]
+      candidate_commit:
+        description: Immutable 40-hex candidate commit for CANDIDATE_SHADOW
+        required: false
+        type: string
+      candidate_fetch_ref:
+        description: Optional same-origin fetch hint
+        required: false
+        type: string
+      expected_production_commit:
+        description: Optional expected deployed production commit
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      profile:
+        required: true
+        type: string
+      candidate_commit:
+        required: false
+        type: string
+      candidate_fetch_ref:
+        required: false
+        type: string
+      expected_production_commit:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simcore-ci-${{ inputs.profile || github.event_name }}-${{ inputs.candidate_commit || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.profile != 'CANDIDATE_REQUIRED' }}
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      conclusion: ${{ steps.outcome.outputs.conclusion }}
+      profile: ${{ steps.profile.outputs.profile }}
+    steps:
+      - name: Checkout verifier source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+          cache: ''
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.x'
+          cache: ''
+
+      - name: Resolve profile and immutable identities
+        id: profile
+        shell: bash
+        env:
+          INPUT_PROFILE: ${{ inputs.profile }}
+          INPUT_CANDIDATE: ${{ inputs.candidate_commit }}
+          INPUT_FETCH_REF: ${{ inputs.candidate_fetch_ref }}
+          INPUT_EXPECTED_PRODUCTION: ${{ inputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          case "${GITHUB_EVENT_NAME}" in
+            pull_request) PROFILE=PR_MAIN ;;
+            push) PROFILE=MAIN_HEALTH ;;
+            workflow_dispatch) PROFILE="${INPUT_PROFILE:-MAIN_HEALTH}" ;;
+            workflow_call) PROFILE="${INPUT_PROFILE}" ;;
+            *) echo 'CI_PROFILE_INVALID: event' >&2; exit 2 ;;
+          esac
+          case "$PROFILE" in
+            PR_MAIN|MAIN_HEALTH|CANDIDATE_SHADOW|CANDIDATE_REQUIRED) ;;
+            *) echo 'CI_PROFILE_INVALID: profile' >&2; exit 2 ;;
+          esac
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$PROFILE" == CANDIDATE_REQUIRED ]]; then
+            echo 'CI_PROFILE_INVALID: manual CANDIDATE_REQUIRED forbidden' >&2
+            exit 2
+          fi
+          CANDIDATE="${INPUT_CANDIDATE:-}"
+          if [[ "$PROFILE" == CANDIDATE_* ]]; then
+            [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]] || { echo 'CANDIDATE_IDENTITY_INVALID' >&2; exit 2; }
+          fi
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "candidate_commit=$CANDIDATE" >> "$GITHUB_OUTPUT"
+          echo "candidate_fetch_ref=${INPUT_FETCH_REF:-}" >> "$GITHUB_OUTPUT"
+          echo "expected_production_commit=${INPUT_EXPECTED_PRODUCTION:-}" >> "$GITHUB_OUTPUT"
+
+      - name: Classify pull request paths
+        id: classify
+        if: steps.profile.outputs.profile == 'PR_MAIN'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" > /tmp/simcore-ci-paths.txt
+          mkdir -p .simcore-ci
+          node products/simcore/tooling/ci/classify.mjs --paths-file /tmp/simcore-ci-paths.txt --report .simcore-ci/scope.json > /tmp/scope-line.json
+          LABELS="$(python3 - <<'PY'
+          import json
+          x=json.load(open('.simcore-ci/scope.json'))
+          print(','.join(x['labels']))
+          PY
+          )"
+          echo "labels=$LABELS" >> "$GITHUB_OUTPUT"
+          cat /tmp/scope-line.json
+
+      - name: Create full-baseline scope record
+        if: steps.profile.outputs.profile != 'PR_MAIN'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .simcore-ci
+          cat > .simcore-ci/scope.json <<'EOF'
+          {"schemaVersion":1,"labels":["FULL_BASELINE"],"unrelated":false,"docOnly":false,"paths":[]}
+          EOF
+
+      - name: Materialize deployed production exactly once
+        id: production
+        shell: bash
+        env:
+          EXPECTED_PRODUCTION: ${{ steps.profile.outputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          P="$(git rev-parse origin/release-simcore)"
+          if [[ -n "${EXPECTED_PRODUCTION:-}" && "$P" != "$EXPECTED_PRODUCTION" ]]; then
+            echo 'PRODUCTION_PARENT_MOVED' >&2
+            exit 2
+          fi
+          L="$(git rev-parse "$P:plugins/simcore/latest.js")"
+          I="$(git rev-parse "$P:plugins/simcore/install.js")"
+          mkdir -p .simcore-ci/production
+          git show "$P:plugins/simcore/latest.js" > .simcore-ci/production/latest.js
+          git show "$P:plugins/simcore/install.js" > .simcore-ci/production/install.js
+          cat > .simcore-ci/production-identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".simcore-ci/production/latest.js","blob":"$L"},"install":{"path":".simcore-ci/production/install.js","blob":"$I"}}
+          EOF
+          echo "production_commit=$P" >> "$GITHUB_OUTPUT"
+          echo "production_blob=$L" >> "$GITHUB_OUTPUT"
+
+      - name: Materialize immutable candidate
+        if: steps.profile.outputs.profile == 'CANDIDATE_SHADOW' || steps.profile.outputs.profile == 'CANDIDATE_REQUIRED'
+        shell: bash
+        env:
+          CANDIDATE: ${{ steps.profile.outputs.candidate_commit }}
+          FETCH_REF: ${{ steps.profile.outputs.candidate_fetch_ref }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${FETCH_REF:-}" ]]; then
+            git fetch --no-tags origin "$FETCH_REF"
+          fi
+          git cat-file -e "$CANDIDATE^{commit}"
+          git show "$CANDIDATE:plugins/simcore/latest.js" > .simcore-ci/candidate-latest.js
+          git show "$CANDIDATE:plugins/simcore/install.js" > .simcore-ci/candidate-install.js
+
+      - name: Select source under test
+        id: source
+        shell: bash
+        env:
+          PROFILE: ${{ steps.profile.outputs.profile }}
+        run: |
+          set -euo pipefail
+          case "$PROFILE" in
+            CANDIDATE_SHADOW|CANDIDATE_REQUIRED)
+              echo 'latest=.simcore-ci/candidate-latest.js' >> "$GITHUB_OUTPUT"
+              echo 'install=.simcore-ci/candidate-install.js' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo 'latest=.simcore-ci/production/latest.js' >> "$GITHUB_OUTPUT"
+              echo 'install=.simcore-ci/production/install.js' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Current trusted lane for CI self-change
+        if: steps.profile.outputs.profile == 'PR_MAIN' && contains(steps.classify.outputs.labels, 'CI_SELF')
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PRODUCTION_COMMIT: ${{ steps.production.outputs.production_commit }}
+          PRODUCTION_BLOB: ${{ steps.production.outputs.production_blob }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/simcore-ci-trusted
+          git worktree add --detach /tmp/simcore-ci-trusted "$BASE_SHA"
+          if [[ -f /tmp/simcore-ci-trusted/products/simcore/tooling/check.mjs ]]; then
+            cd /tmp/simcore-ci-trusted
+            mkdir -p .simcore-ci/production
+            git show "$PRODUCTION_COMMIT:plugins/simcore/latest.js" > .simcore-ci/production/latest.js
+            git show "$PRODUCTION_COMMIT:plugins/simcore/install.js" > .simcore-ci/production/install.js
+            cat > .simcore-ci/production-identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$PRODUCTION_COMMIT","latest":{"path":".simcore-ci/production/latest.js","blob":"$PRODUCTION_BLOB"},"install":{"path":".simcore-ci/production/install.js","blob":"$PRODUCTION_BLOB"}}
+          EOF
+            node products/simcore/tooling/check.mjs --profile MAIN_HEALTH \
+              --source .simcore-ci/production/latest.js --mirror-source .simcore-ci/production/install.js \
+              --production-identity .simcore-ci/production-identity.json \
+              --verifier-commit "$BASE_SHA" --report .simcore-ci/trusted-report.json
+          else
+            echo 'Initial permanent-CI installation: no predecessor permanent verifier on base.'
+          fi
+
+      - name: Run proposed permanent verifier
+        id: check
+        shell: bash
+        env:
+          PROFILE: ${{ steps.profile.outputs.profile }}
+          CANDIDATE: ${{ steps.profile.outputs.candidate_commit }}
+          EXPECTED_PRODUCTION: ${{ steps.profile.outputs.expected_production_commit }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          set +e
+          node products/simcore/tooling/check.mjs \
+            --profile "$PROFILE" \
+            --source '${{ steps.source.outputs.latest }}' \
+            --mirror-source '${{ steps.source.outputs.install }}' \
+            --production-identity .simcore-ci/production-identity.json \
+            --scope-file .simcore-ci/scope.json \
+            --verifier-commit "$GITHUB_SHA" \
+            --candidate-commit "${CANDIDATE:-}" \
+            --expected-production-commit "${EXPECTED_PRODUCTION:-}" \
+            --pr-base-commit "${BASE_SHA:-}" \
+            --pr-head-commit "${HEAD_SHA:-}" \
+            --report .simcore-ci/simcore-ci-report.json
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve bounded conclusion
+        id: outcome
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f .simcore-ci/simcore-ci-report.json ]]; then
+            bytes="$(wc -c < .simcore-ci/simcore-ci-report.json)"
+            test "$bytes" -le 262144
+            conclusion="$(python3 - <<'PY'
+          import json
+          print(json.load(open('.simcore-ci/simcore-ci-report.json'))['conclusion'])
+          PY
+          )"
+          else
+            conclusion=INFRA_ERROR
+            mkdir -p .simcore-ci
+            printf '%s\n' '{"schemaVersion":1,"profile":"UNKNOWN","conclusion":"INFRA_ERROR","reasonCodes":["REPORT_MISSING"]}' > .simcore-ci/simcore-ci-report.json
+          fi
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          cat .simcore-ci/simcore-ci-report.json
+
+      - name: Upload bounded CI report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simcore-ci-report-${{ github.run_id }}
+          path: .simcore-ci/simcore-ci-report.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce verifier conclusion
+        if: always()
+        shell: bash
+        env:
+          EXIT_CODE: ${{ steps.check.outputs.exit_code }}
+          CONCLUSION: ${{ steps.outcome.outputs.conclusion }}
+        run: |
+          set -euo pipefail
+          case "$CONCLUSION" in
+            PASS|NOOP) exit 0 ;;
+            FAIL) exit 1 ;;
+            *) exit 2 ;;
+          esac
+
+  required:
+    name: Required
+    if: always()
+    needs: [verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Aggregate stable SimCore gate
+        shell: bash
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          CONCLUSION: ${{ needs.verify.outputs.conclusion }}
+          PROFILE: ${{ needs.verify.outputs.profile }}
+        run: |
+          set -euo pipefail
+          echo "profile=${PROFILE:-UNKNOWN} conclusion=${CONCLUSION:-MISSING} verify=${VERIFY_RESULT}"
+          if [[ "$VERIFY_RESULT" == success && ("$CONCLUSION" == PASS || "$CONCLUSION" == NOOP) ]]; then
+            exit 0
+          fi
+          exit 1

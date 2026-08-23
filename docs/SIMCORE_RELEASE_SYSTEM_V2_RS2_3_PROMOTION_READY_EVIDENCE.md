@@ -29,6 +29,41 @@ run 32638395972  Verify SUCCESS  Required SUCCESS
 
 The temporary shadow workflow, temporary shadow collector, and implementation-branch shadow hook were removed before installation.
 
+## Installed-main full baseline proof
+
+Promotion-record PR `#154` ran the installed permanent workflow against exact base main `233c7f088967a3a2b655020de2c0271c9f20fa0f` in its current-trusted lane.
+
+```text
+workflow run = 32638742650
+base main    = 233c7f088967a3a2b655020de2c0271c9f20fa0f
+profile      = MAIN_HEALTH
+result       = PASS
+```
+
+Full baseline gates on that installed main:
+
+```text
+GATE_STATIC        PASS
+GATE_ARCH          PASS
+GATE_REGRESSION    PASS
+GATE_STATE         PASS
+GATE_COORDINATION  PASS
+GATE_LEGACY_COMPAT PASS
+```
+
+The same PR run independently classified its two proposed files as `CI_SELF + SIMCORE_DOC_ONLY` and passed:
+
+```text
+GATE_CI_SELF    PASS
+GATE_STATIC     PASS
+GATE_ARCH       PASS
+GATE_REGRESSION PASS
+Verify          SUCCESS
+Required        SUCCESS
+```
+
+This is bounded evidence that the verifier installed by #151 can execute its full `MAIN_HEALTH` baseline from canonical main while remaining read-only.
+
 ## Shadow authority
 
 ```text

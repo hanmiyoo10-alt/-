@@ -144,6 +144,33 @@ async function assertNoRuntimeSource(repository, releaseBranch, token) {
   if (found) throw new Error('RELEASE_RUNTIME_SOURCE_PRESENT');
 }
 
+function classifyPostVerifyRef(observedSha, releaseBase, expectedSha) {
+  if (observedSha === expectedSha) return 'verified';
+  if (observedSha === releaseBase) return 'retry';
+  return 'mismatch';
+}
+
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+async function readGitRefSha(repository, releaseBranch, token) {
+  const ref = await api('GET', repository, `/git/ref/heads/${encodeURIComponent(releaseBranch)}`, token);
+  return String(ref?.object?.sha || '');
+}
+
+async function verifyReleaseRefAfterUpdate({repository, releaseBranch, token, releaseBase, expectedSha, attempts = 5, delayMs = 250}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const observedSha = await readGitRefSha(repository, releaseBranch, token);
+    const state = classifyPostVerifyRef(observedSha, releaseBase, expectedSha);
+    if (state === 'verified') return observedSha;
+    if (state === 'mismatch') throw new Error(`RELEASE_REF_POSTVERIFY_MISMATCH:${observedSha}`);
+    if (attempt < attempts) {
+      console.log(`RELEASE_REF_POSTVERIFY_RETRY:${attempt}/${attempts}:${observedSha}`);
+      await sleep(delayMs);
+    }
+  }
+  throw new Error('RELEASE_REF_POSTVERIFY_MISMATCH:stale-after-retries');
+}
+
 async function promote({repository, candidateSha, releaseBranch, token}) {
   const candidate = await readArtifactSet(repository, candidateSha, token);
   const candidateManifest = manifestFrom(candidate);
@@ -173,12 +200,12 @@ async function promote({repository, candidateSha, releaseBranch, token}) {
     parents:[releaseBase],
   });
 
-  const beforeUpdate = await api('GET', repository, `/branches/${encodeURIComponent(releaseBranch)}`, token);
-  if (beforeUpdate.commit.sha !== releaseBase) throw new Error('RELEASE_REF_MOVED');
-  await api('PATCH', repository, `/git/refs/heads/${encodeURIComponent(releaseBranch)}`, token, {sha:newCommit.sha, force:false});
+  const beforeUpdateSha = await readGitRefSha(repository, releaseBranch, token);
+  if (beforeUpdateSha !== releaseBase) throw new Error('RELEASE_REF_MOVED');
+  const updatedRef = await api('PATCH', repository, `/git/refs/heads/${encodeURIComponent(releaseBranch)}`, token, {sha:newCommit.sha, force:false});
+  if (updatedRef?.object?.sha && updatedRef.object.sha !== newCommit.sha) throw new Error('RELEASE_REF_UPDATE_ACK_MISMATCH');
 
-  const after = await api('GET', repository, `/branches/${encodeURIComponent(releaseBranch)}`, token);
-  if (after.commit.sha !== newCommit.sha) throw new Error('RELEASE_REF_POSTVERIFY_MISMATCH');
+  await verifyReleaseRefAfterUpdate({repository, releaseBranch, token, releaseBase, expectedSha:newCommit.sha});
   const published = await readArtifactSet(repository, newCommit.sha, token);
   if (!sameBlobs(candidate, published)) throw new Error('RELEASE_BLOB_IDENTITY_MISMATCH');
   const publishedManifest = manifestFrom(published);
@@ -204,5 +231,5 @@ async function main() {
   if (result.status === 'stale') process.exitCode = 0;
 }
 
-module.exports = {ALLOWLIST, parseVersion, compareVersions, tuple, sameBlobs, decidePromotion, validateCandidate, treeEntries};
+module.exports = {ALLOWLIST, parseVersion, compareVersions, tuple, sameBlobs, decidePromotion, validateCandidate, treeEntries, classifyPostVerifyRef};
 if (require.main === module) main().catch((error) => { console.error(error?.stack || String(error)); process.exitCode = 1; });

@@ -30,6 +30,13 @@ jobs:
           ref: ${{ inputs.candidate_sha }}
           fetch-depth: 1
 
+      - name: Resolve candidate release contract
+        run: |
+          set -euo pipefail
+          node --check plugins/usage-dashboard/tools/resolve_release_spec.cjs
+          RELEASE_SPEC="$(node plugins/usage-dashboard/tools/resolve_release_spec.cjs --manifest plugins/usage-dashboard/runtime/product-manifest.json)"
+          echo "Resolved release contract: $RELEASE_SPEC"
+
       - name: Promote exact tested Git blobs
         env:
           GITHUB_TOKEN: ${{ github.token }}

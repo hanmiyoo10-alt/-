@@ -35,6 +35,7 @@
 // - Adds a request-scoped POST_B_END_CURRENT_TIME_FLOOR only for the direct first C after B_END; Lifecycle owns eligibility, Time owns timestamp validation/comparison/floor selection, Prompt serializes the resulting current-frame authority, and finalization reuses the existing Narrative floor primitive
 // - Keeps Broadcast airtime and Narrative/event time as separate domains: no B_END-time Narrative mutation, no persistent Broadcast→Narrative coupling, no invented offset, and explicit user-requested historical/flashback timestamps remain allowed below the current-frame floor
 // - Source Handoff eligibility is intentionally not a clock prerequisite; a recurrence-owned Source Handoff may still receive the post-B_END clock bridge when lifecycle/lineage conditions are direct and valid
+// - Pre-live closure hardening reconstructs bounded facts from the directly preceding visible B_END output and requires Structure-clean closure plus an explicit monotonic terminal timestamp; Time also requires that visible terminal to equal the stored B_END airtime before the floor can apply
 // - Consolidates regression checks for Current Timeline Authority, Narrative Tail Time, B_END terminal airtime authority, explicit past-scene allowance, current calendar baseline, Representation/Edit controls, Summary Scope, and v0.64.5 COMMUNITY multiline behavior without changing those owners
 // - Adds no persistent schema/key, host read/write, network call, timer, request-history mutation, Representation taxonomy change, Edit Reconcile movement, Reaction normalization change, COMMUNITY structure change, Bootstrap Migration change, or cache/provider claim
 //
@@ -2147,6 +2148,28 @@ function resolvePostBEndCurrentTimeFloor(narrativeTimestamp, eligibility) {
     });
   }
 
+  const stored = parseTimestamp(base.storedBroadcastAirtime);
+  if (!stored) {
+    return Object.freeze({
+      disposition: 'INVALID_SOURCE',
+      source: base.source || 'B_END_TERMINAL',
+      reason: 'missing-or-invalid-stored-b-end-airtime',
+      terminalTimestamp: terminal.raw,
+      narrativeTimestamp: narrativeRaw,
+      effectiveFloor: narrativeRaw,
+    });
+  }
+  if (stored.minuteKey !== terminal.minuteKey) {
+    return Object.freeze({
+      disposition: 'INVALID_SOURCE',
+      source: base.source || 'B_END_TERMINAL',
+      reason: 'terminal-stored-airtime-mismatch',
+      terminalTimestamp: terminal.raw,
+      narrativeTimestamp: narrativeRaw,
+      effectiveFloor: narrativeRaw,
+    });
+  }
+
   const narrative = narrativeRaw ? parseTimestamp(narrativeRaw) : null;
   if (!narrative || terminal.minuteKey > narrative.minuteKey) {
     return Object.freeze({
@@ -2659,21 +2682,44 @@ function classifySummaryScope(input, mode = 'A') {
   });
 }
 
-function derivePostBEndClockEligibility(mode, previousMode, state, requestLineage) {
-  if (String(mode || '') !== 'C') return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'not-c' });
-  if (String(previousMode || '') !== 'B_END') return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'not-direct-post-b-end-c' });
-  if (state?.broadcastLocked) return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'broadcast-still-locked' });
-  const floorTimestamp = typeof state?.broadcastAirtime === 'string' && state.broadcastAirtime.trim() ? state.broadcastAirtime.trim() : null;
-  if (!floorTimestamp) return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'missing-b-end-terminal' });
+function derivePostBEndClockEligibility(mode, previousMode, state, requestLineage, previousOutputFacts = null, sendIndex = -1) {
+  if (String(mode || '') !== 'C') return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: 'not-c' });
+  if (String(previousMode || '') !== 'B_END') return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: 'not-direct-post-b-end-c' });
+  if (state?.broadcastLocked) return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: 'broadcast-still-locked' });
+  const currentSendIndex = Number(sendIndex);
+  if (!Number.isInteger(currentSendIndex) || currentSendIndex < 2) {
+    return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: 'invalid-current-send-index' });
+  }
   const priorFamily = String(requestLineage?.lastRequestMode || '');
   const priorIndex = Number(requestLineage?.lastRequestIndex);
-  if (priorFamily !== 'B' || !Number.isInteger(priorIndex) || priorIndex < 0) {
-    return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'previous-request-not-b' });
+  if (priorFamily !== 'B' || !Number.isInteger(priorIndex) || priorIndex !== currentSendIndex - 2) {
+    return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: 'previous-request-not-direct-b' });
   }
-  return Object.freeze({ eligible: true, floorTimestamp, source: 'B_END_TERMINAL', reason: 'eligible-direct-post-b-end-c' });
+  const facts = previousOutputFacts && typeof previousOutputFacts === 'object' ? previousOutputFacts : null;
+  if (!facts?.available) {
+    return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: facts?.reason || 'previous-b-end-output-unavailable' });
+  }
+  if (Number(facts.outIndex) !== currentSendIndex - 1) {
+    return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: null, source: 'NONE', reason: 'previous-output-not-direct' });
+  }
+  if (!facts.closureComplete) {
+    return Object.freeze({ eligible: false, floorTimestamp: facts.terminalTimestamp || null, storedBroadcastAirtime: state?.broadcastAirtime || null, source: 'NONE', reason: 'previous-b-end-closure-incomplete' });
+  }
+  const floorTimestamp = typeof facts.terminalTimestamp === 'string' && facts.terminalTimestamp.trim() ? facts.terminalTimestamp.trim() : null;
+  if (!floorTimestamp) {
+    return Object.freeze({ eligible: false, floorTimestamp: null, storedBroadcastAirtime: state?.broadcastAirtime || null, source: 'NONE', reason: 'missing-b-end-terminal' });
+  }
+  const storedBroadcastAirtime = typeof state?.broadcastAirtime === 'string' && state.broadcastAirtime.trim() ? state.broadcastAirtime.trim() : null;
+  return Object.freeze({
+    eligible: true,
+    floorTimestamp,
+    storedBroadcastAirtime,
+    source: 'B_END_TERMINAL',
+    reason: 'eligible-direct-complete-post-b-end-c',
+  });
 }
 
-function prepareTurn(baseState, userText, promptProbe, sendIndex) {
+function prepareTurn(baseState, userText, promptProbe, sendIndex, previousOutputFacts = null) {
   const state = kernel.reconcileState(kernel.clone(baseState));
   const probe = promptProbe && typeof promptProbe === 'object' && promptProbe.__simcorePromptProbe
     ? promptProbe
@@ -2697,7 +2743,14 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const secondaryActive = secondaryConfigured && input.includes(config.secondaryKeyword);
   const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
   const previousMode = state.lastMode || 'A';
-  const postBEndClockEligibility = derivePostBEndClockEligibility(c.mode, previousMode, state, state.requestLineage);
+  const postBEndClockEligibility = derivePostBEndClockEligibility(
+    c.mode,
+    previousMode,
+    state,
+    state.requestLineage,
+    previousOutputFacts,
+    sendIndex,
+  );
   const postBEndClockHandoff = time.resolvePostBEndCurrentTimeFloor(narrativeTimestampPrevious, postBEndClockEligibility);
   const narrativeCurrentTimeFloor = postBEndClockHandoff.effectiveFloor || narrativeTimestampPrevious || null;
   const narrativeCalendarTarget = /^B_/.test(c.mode)
@@ -4277,6 +4330,51 @@ function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
 const renderRuntimePrompt = prompt.renderRuntimePrompt;
 const compileRuntimePromptParts = prompt.compileRuntimePromptParts;
 
+function inspectPreviousBEndOutput(historyMessages, sendIndex) {
+  const rows = Array.isArray(historyMessages) ? historyMessages : [];
+  const currentSendIndex = Number(sendIndex);
+  const outIndex = Number.isInteger(currentSendIndex) ? currentSendIndex - 1 : -1;
+  const unavailable = (reason) => Object.freeze({
+    available: false,
+    outIndex,
+    closureComplete: false,
+    terminalExplicit: false,
+    terminalTimestamp: null,
+    structureClean: false,
+    issueCount: 0,
+    reason,
+  });
+  if (!Number.isInteger(currentSendIndex) || currentSendIndex < 1 || outIndex < 0 || outIndex >= rows.length) {
+    return unavailable('previous-output-index-unavailable');
+  }
+  const row = rows[outIndex];
+  if (row?.role !== 'assistant' && row?.role !== 'char') return unavailable('previous-output-not-assistant');
+  const raw = kernel.textOfMessage(row);
+  if (!raw) return unavailable('previous-output-empty');
+  const canonicalized = time.canonicalizeTimestampSyntax(raw);
+  const content = canonicalized.content;
+  const pending = Object.freeze({ active: true, mode: 'B_END' });
+  const integrity = structure.responseEnvelopeIntegrity(content, pending);
+  const issues = structure.validateStructure(content, pending);
+  const terminal = time.narrativeTimestampSequence(content);
+  const terminalExplicit = !!(terminal
+    && terminal.sceneCount > 0
+    && terminal.tailStatus === 'MONOTONIC'
+    && terminal.candidate);
+  const structureClean = !!integrity?.safe && issues.length === 0;
+  const closureComplete = terminalExplicit && structureClean;
+  return Object.freeze({
+    available: true,
+    outIndex,
+    closureComplete,
+    terminalExplicit,
+    terminalTimestamp: terminalExplicit ? terminal.candidate : null,
+    structureClean,
+    issueCount: issues.length,
+    reason: closureComplete ? 'complete' : (!terminalExplicit ? 'terminal-invalid' : 'structure-not-clean'),
+  });
+}
+
 function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   const state = kernel.reconcileState(kernel.clone(baseState));
   const p = state.pending;
@@ -4714,7 +4812,10 @@ class CoreRulesetSession {
     }
 
     t = sessionNow();
-    const state = lifecycle.prepareTurn(base, userText, promptProbe, sendIndex);
+    const previousOutputFacts = base?.lastMode === 'B_END'
+      ? inspectPreviousBEndOutput(historyMessages, sendIndex)
+      : null;
+    const state = lifecycle.prepareTurn(base, userText, promptProbe, sendIndex, previousOutputFacts);
     if (state.pending?.active) {
       state.pending.frameFloor = frame.capturePreviousFrame(historyMessages, sendIndex, kernel.textOfMessage);
     }
@@ -5143,6 +5244,7 @@ class CoreRulesetSession {
 
 module.exports = {
   CoreRulesetSession,
+  inspectPreviousBEndOutput,
   latestUserIndex: kernel.latestUserIndex,
   latestUserText: kernel.latestUserText,
   renderRuntimePrompt,

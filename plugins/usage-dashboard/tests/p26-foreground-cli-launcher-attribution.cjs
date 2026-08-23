@@ -26,8 +26,6 @@ assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number
 assert.match(engine, /timeout: 25_000/);
 assert.match(engine, /maxBuffer: 4 \* 1024 \* 1024/);
 
-// Stable source boundaries stay guarded here. Branch semantics run against the
-// actual Engine process in behavior-cli-launcher.cjs.
 const managedAt = engine.indexOf("launcherMeta.launcher = 'managed-direct'");
 const directAt = engine.indexOf("runProgram('llmgateway', args, extraEnv)", managedAt);
 const enoentAt = engine.indexOf("if (error?.code !== 'ENOENT') throw error;", directAt);
@@ -61,7 +59,7 @@ assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
 assert.ok(workflow.includes('concurrency:\n  group: usage-dashboard-release'));
 assert.ok(!workflow.includes('group: repo-main-write'));
-assert.ok(workflow.includes('scripts/repo-main-write.py'));
+assert.ok(!workflow.includes('scripts/repo-main-write.py'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 
 console.log('P26 Foreground CLI Launcher Attribution: OK · static boundaries retained; launcher behavior delegated to black-box Engine harness');

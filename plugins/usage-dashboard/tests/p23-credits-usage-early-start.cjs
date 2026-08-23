@@ -56,7 +56,7 @@ assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
 assert.ok(guidelines.includes('## Long-term update roadmap'));
 assert.match(workflow, /group: usage-dashboard-release/);
 assert.doesNotMatch(workflow, /group: repo-main-write/);
-assert.match(workflow, /scripts\/repo-main-write\.py/);
+assert.doesNotMatch(workflow, /scripts\/repo-main-write\.py/);
 assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);

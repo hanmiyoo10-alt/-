@@ -24,8 +24,6 @@ assert.match(engine, /const SECONDARY_REFRESH_CONCURRENCY = 1;/);
 assert.match(engine, /const SECONDARY_REFRESH_MAX_KEYS = 32;/);
 assert.match(engine, /const CACHE_STALE_MAX_MS = 30 \* 60_000;/);
 
-// Launcher order remains a stable invariant; all success/failure branches run
-// against the shipped Engine in behavior-cli-launcher.cjs.
 const managedAt = engine.indexOf("launcherMeta.launcher = 'managed-direct'");
 const directAt = engine.indexOf("runProgram('llmgateway', args, extraEnv)", managedAt);
 const enoentAt = engine.indexOf("if (error?.code !== 'ENOENT') throw error;", directAt);
@@ -34,8 +32,6 @@ assert.ok(managedAt >= 0 && directAt > managedAt && enoentAt > directAt && npxAt
 assert.ok(engine.includes('return runProgram(process.execPath, [managed.entry, ...args], extraEnv);'));
 assert.match(engine, /DEVPASS_BRIDGE_MANAGED_CLI \|\| '1'/);
 
-// Manager provisioning remains outside status/snapshot paths and performs a
-// staged, identity-checked, contained promotion with bounded retry.
 assert.match(manager, /DEVPASS_BRIDGE_MANAGED_CLI \|\| '1'/);
 assert.match(manager, /const MANAGED_CLI_PACKAGE = '@llmgateway\/cli';/);
 assert.match(manager, /const MANAGED_CLI_VERSION = '1\.9\.0';/);
@@ -61,7 +57,7 @@ assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
 assert.ok(workflow.includes('concurrency:\n  group: usage-dashboard-release'));
 assert.ok(!workflow.includes('group: repo-main-write'));
-assert.ok(workflow.includes('scripts/repo-main-write.py'));
+assert.ok(!workflow.includes('scripts/repo-main-write.py'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 assert.ok(workflow.includes('p28-managed-direct-cli-runtime.cjs'));
 assert.ok(workflowCaller.includes(`uses: ./${currentRelease.validatorWorkflow}`));

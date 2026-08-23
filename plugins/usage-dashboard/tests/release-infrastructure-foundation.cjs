@@ -47,12 +47,15 @@ for (const forbidden of ['contents: write', 'git switch', 'git push', 'text.repl
   assert.ok(!caller.includes(forbidden), `validation caller must not contain ${forbidden}`);
 }
 
-assert.ok(publisherPath, 'Stage A must preserve the legacy publisher as rollback');
+assert.ok(publisherPath, 'Stage B must preserve release publishing while removing main writes');
 assert.match(publisher, /workflow_call:/);
 assert.match(publisher, /group: usage-dashboard-release/);
 assert.doesNotMatch(publisher, /group: repo-main-write/, 'Usage Dashboard must not share a cross-product cancellation domain');
 assert.match(publisher, /cancel-in-progress: false/);
-assert.match(publisher, /scripts\/repo-main-write\.py --commit "\$PAYLOAD_COMMIT"/);
+assert.doesNotMatch(publisher, /repo-main-write\.py/, 'Stage B publisher must not invoke repository main-write tooling');
+assert.doesNotMatch(publisher, /PAYLOAD_COMMIT/, 'Stage B publisher must not build a main-write payload');
+assert.doesNotMatch(publisher, /Commit validated candidate to main/);
+assert.doesNotMatch(publisher, /git push origin HEAD:main/);
 assert.match(publisher, /check_release_monotonic\.py/);
 assert.match(publisher, /--check-artifacts/);
 assert.match(publisher, /RELEASE_REF_MOVED/);
@@ -66,7 +69,7 @@ assert.match(validatorWorkflow, /TEST_TREE_MUTATED/);
 
 if (spec.releaseCommandWorkflow) {
   const command = fs.readFileSync(spec.releaseCommandWorkflow, 'utf8');
-  assert.ok(command.length < 1400, 'release command must remain a bounded legacy publisher caller during Stage A');
+  assert.ok(command.length < 1400, 'release command must remain a bounded publisher caller during Stage B');
   assert.match(command, /push:/);
   assert.match(command, /branches: \[main\]/);
   assert.match(command, /uses: \.\/\.github\/workflows\/reusable-usage-dashboard-release\.yml/);
@@ -77,4 +80,4 @@ if (spec.releaseCommandWorkflow) {
 assert.match(candidateValidator, /sha256 mismatch/);
 assert.match(candidateValidator, /snapshot contract/);
 
-console.log('Usage Dashboard release infrastructure foundation: OK · Stage A read-only validation boundary + legacy publisher rollback');
+console.log('Usage Dashboard release infrastructure foundation: OK · Stage B merge-is-materialization + release-only legacy publisher');

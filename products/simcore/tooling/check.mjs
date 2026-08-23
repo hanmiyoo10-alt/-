@@ -140,22 +140,6 @@ function main() {
     setGate('GATE_LEGACY_COMPAT', resultClass(r, 'LEGACY_COMPAT_SEMANTIC_FAIL', 'LEGACY_COMPAT_ERROR'), r);
   }
 
-  if (process.env.GITHUB_HEAD_REF === 'infra/simcore-rs2-3-permanent-ci' && process.env.RS23_SHADOW_CHILD !== '1' && args.profile === 'PR_MAIN') {
-    const shadowPath = '.simcore-ci/rs2-3-shadow-summary.json';
-    const r = run(process.execPath, [
-      'products/simcore/tooling/ci/rs2-3-shadow-proof.mjs',
-      args['production-identity'], args['verifier-commit'] || process.env.GITHUB_SHA || 'UNKNOWN', shadowPath,
-    ], 900000, { env:{...process.env,RS23_SHADOW_CHILD:'1'} });
-    if (r.status === 0) {
-      const shadow = JSON.parse(fs.readFileSync(shadowPath,'utf8'));
-      details.RS2_3_SHADOW_PROOF = shadow;
-      observations.push('RS2_3_SHADOW_PROOF_PASS');
-      console.log(`RS2-3 shadow proof PASS positives=${shadow.positives.length} negatives=${shadow.negativeParity.length}`);
-    } else {
-      setGate('GATE_CI_SELF', {status:'FAIL',reasonCode:'RS2_3_SHADOW_PROOF_FAIL'}, r);
-    }
-  }
-
   const planned = Object.values(gates).filter((x) => x.planned);
   const infra = planned.some((x) => x.status === 'INFRA_ERROR');
   const failed = planned.some((x) => x.status === 'FAIL');

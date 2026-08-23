@@ -1,0 +1,254 @@
+name: SimCore v0.64.5 COMMUNITY Multiline Reaction Unit Repair Build
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06405-community-multiline-reaction-unit
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.pull_request.title == 'SimCore v0.64.5 COMMUNITY Multiline Reaction Unit Validation Repair build command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.64.5 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06405-community-multiline-reaction-unit
+          fetch-depth: 0
+
+      - name: Load scoped patch and architecture tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06405-community-multiline-reaction-unit.py > /tmp/simcore-06405.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-06405.py /tmp/simcore-architecture-check.py
+
+      - name: Capture frozen pre-patch surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def module_hash(name, next_name):
+              start = text.index(f'SimCore.define("{name}"')
+              end = text.index(f'SimCore.define("{next_name}"', start)
+              return hashlib.sha256(text[start:end].encode()).hexdigest()
+          frozen = {
+              'time': module_hash('time', 'lifecycle'),
+              'lifecycle': module_hash('lifecycle', 'reaction'),
+              'reaction': module_hash('reaction', 'frame'),
+          }
+          Path('/tmp/simcore-06405-frozen.json').write_text(json.dumps(frozen, sort_keys=True), encoding='utf-8')
+          counts = {needle: text.count(needle) for needle in (
+              'pluginStorage.', 'setChat(', 'fetch(', 'setInterval(', 'setTimeout(',
+          )}
+          Path('/tmp/simcore-06405-surface-counts.json').write_text(json.dumps(counts, sort_keys=True), encoding='utf-8')
+          required = [
+              'const tops = (commentScope.match(/^\\s*-\\s+/gm) || []).length;',
+              'const replies = (commentScope.match(/^\\s*ㄴ\\s+/gm) || []).length;',
+              'const commentLines = commentScope.split(/\\r?\\n/).filter((line) => /^\\s*(?:-\\s+|ㄴ\\s+)/.test(line));',
+              'const inspection = reaction.inspectCommentReactionLine(line);',
+          ]
+          for marker in required:
+              if text.count(marker) != 1:
+                  raise SystemExit(f'expected v0.64.4 marker count != 1: {marker}')
+          print('pre-patch frozen surfaces captured')
+          PY
+
+      - name: Apply v0.64.5 scoped repair
+        run: python3 /tmp/simcore-06405.py
+
+      - name: Validate syntax identity architecture and protected controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.5$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.5';" plugins/simcore/latest.js
+          grep -q 'v0.64.5 COMMUNITY Multiline Reaction Unit Validation Repair' plugins/simcore/latest.js
+          grep -q 'function commentUnits(commentScope)' plugins/simcore/latest.js
+          grep -q '  commentUnits,' plugins/simcore/latest.js
+          grep -q 'community.commentUnits(commentScope)' plugins/simcore/latest.js
+          grep -q 'reaction.inspectCommentReactionLine(unit.text)' plugins/simcore/latest.js
+          grep -q 'REPRESENTATION_FAST_RECONCILED' plugins/simcore/latest.js
+          grep -q 'USER_EDIT_CANDIDATE' plugins/simcore/latest.js
+          grep -q 'MANUAL_EDIT_REBUILT' plugins/simcore/latest.js
+          grep -q 'Broadcast closure:' plugins/simcore/latest.js
+          grep -q 'Broadcast terminal coverage:' plugins/simcore/latest.js
+          grep -q 'missing ${reactionFailureCounts.missing}' plugins/simcore/latest.js
+          grep -q 'multiple ${reactionFailureCounts.multiple}' plugins/simcore/latest.js
+          grep -q 'final-tail ${reactionFailureCounts.finalTail}' plugins/simcore/latest.js
+          python3 /tmp/simcore-architecture-check.py \
+            --contract /tmp/simcore-architecture-v2.json \
+            --source plugins/simcore/latest.js \
+            --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Confirm frozen modules and side-effect surfaces are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def module_hash(name, next_name):
+              start = text.index(f'SimCore.define("{name}"')
+              end = text.index(f'SimCore.define("{next_name}"', start)
+              return hashlib.sha256(text[start:end].encode()).hexdigest()
+          before = json.loads(Path('/tmp/simcore-06405-frozen.json').read_text(encoding='utf-8'))
+          after = {
+              'time': module_hash('time', 'lifecycle'),
+              'lifecycle': module_hash('lifecycle', 'reaction'),
+              'reaction': module_hash('reaction', 'frame'),
+          }
+          if before != after:
+              raise SystemExit(f'frozen module changed: {before} -> {after}')
+          before_counts = json.loads(Path('/tmp/simcore-06405-surface-counts.json').read_text(encoding='utf-8'))
+          after_counts = {needle: text.count(needle) for needle in before_counts}
+          if before_counts != after_counts:
+              raise SystemExit(f'protected side-effect surface changed: {before_counts} -> {after_counts}')
+          cardinality = [
+              'const tops = (commentScope.match(/^\\s*-\\s+/gm) || []).length;',
+              'const replies = (commentScope.match(/^\\s*ㄴ\\s+/gm) || []).length;',
+          ]
+          for marker in cardinality:
+              if text.count(marker) != 1:
+                  raise SystemExit(f'cardinality logic changed: {marker}')
+          print('Time/Lifecycle/Reaction hashes, cardinality, and side-effect counts: PASS')
+          PY
+
+      - name: Run logical comment unit differential fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+
+          const cuStart = text.indexOf('function commentUnits(commentScope) {');
+          const cuEnd = text.indexOf('\n\nmodule.exports = {', cuStart);
+          if (cuStart < 0 || cuEnd <= cuStart) throw new Error('Community commentUnits extraction failed');
+          const commentUnits = new Function(`${text.slice(cuStart, cuEnd)}\nreturn commentUnits;`)();
+
+          const rStart = text.indexOf('const REACTION_RE =');
+          const rEnd = text.indexOf('\nfunction parseReactionNumber(raw) {', rStart);
+          if (rStart < 0 || rEnd <= rStart) throw new Error('Reaction inspector extraction failed');
+          const reaction = new Function(`${text.slice(rStart, rEnd)}\nreturn { REACTION_RE, REACTION_AT_END_RE, inspectCommentReactionLine };`)();
+
+          const inspect = reaction.inspectCommentReactionLine;
+          const oldUnits = (scope) => String(scope || '').split(/\r?\n/).filter((line) => /^\s*(?:-\s+|ㄴ\s+)/.test(line));
+          const failures = (rows) => rows.map((row) => inspect(typeof row === 'string' ? row : row.text)).filter((x) => !x.ok);
+
+          const bilingual = [
+            '- @a: English top one',
+            '(번역 하나) [RT 1,001]',
+            'ㄴ @b: English reply',
+            '(답글 번역) [RT 1,002]',
+            '- @c: English top two',
+            '(번역 둘) [RT 1,003]',
+            '- @d: English top three',
+            '(번역 셋) [RT 1,004]',
+            '- @e: English top four',
+            '(번역 넷) [RT 1,005]',
+          ].join('\n');
+
+          const old = failures(oldUnits(bilingual));
+          if (old.length !== 5 || old.some((x) => x.failureReason !== 'MISSING')) {
+            throw new Error(`v0.64.4 reproducer failed: expected MISSING x5, got ${JSON.stringify(old)}`);
+          }
+
+          const logical = commentUnits(bilingual);
+          if (logical.length !== 5) throw new Error(`expected 5 logical units, got ${logical.length}`);
+          if (logical.filter((x) => x.kind === 'TOP').length !== 4 || logical.filter((x) => x.kind === 'REPLY').length !== 1) {
+            throw new Error(`logical unit kinds wrong: ${JSON.stringify(logical.map((x) => x.kind))}`);
+          }
+          const repaired = failures(logical);
+          if (repaired.length !== 0) throw new Error(`v0.64.5 bilingual repair failed: ${JSON.stringify(repaired)}`);
+
+          const topCount = (bilingual.match(/^\s*-\s+/gm) || []).length;
+          const replyCount = (bilingual.match(/^\s*ㄴ\s+/gm) || []).length;
+          if (topCount !== 4 || replyCount !== 1) throw new Error('historical cardinality fixture changed');
+
+          const singleLine = [
+            '- a [공감 1,000]',
+            'ㄴ b [추천 1,001]',
+            '- c [좋아요 1,002]',
+            '- d [포텐 1,003]',
+            '- e [Upvote 1.2M]',
+          ].join('\n');
+          if (failures(commentUnits(singleLine)).length !== 0) throw new Error('single-line historical format regressed');
+
+          const trailingBlank = '- a\n(번역) [RT 1]\n\n';
+          if (!inspect(commentUnits(trailingBlank)[0].text).ok) throw new Error('accepted trailing whitespace regressed');
+
+          const negative = [
+            ['missing', '- a\n(translation only)', 'MISSING'],
+            ['multiple', '- a [RT 1]\n(translation) [RT 2]', 'MULTIPLE'],
+            ['tag-before-continuation', '- a [RT 1]\n(translation without final tag)', 'FINAL_TAIL'],
+            ['visible-after-tag', '- a\n(translation) [RT 1] extra', 'FINAL_TAIL'],
+            ['unrelated-bracket', '- a\n[not reaction]', 'MISSING'],
+          ];
+          for (const [name, scope, reason] of negative) {
+            const units = commentUnits(scope);
+            if (units.length !== 1) throw new Error(`${name}: unit count ${units.length}`);
+            const got = inspect(units[0].text);
+            if (got.ok || got.failureReason !== reason) throw new Error(`${name}: expected ${reason}, got ${JSON.stringify(got)}`);
+          }
+
+          console.log('v0.64.4 physical-line reproducer: MISSING x5 PASS');
+          console.log('v0.64.5 logical-unit bilingual fixture: PASS');
+          console.log('single-line + missing/multiple/final-tail negative fixtures: PASS');
+          NODE
+
+      - name: Validate Structure wiring and v0.64.4 attribution compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const legacyFraming = 'const commentLines = commentScope.split(/\\r?\\n/).filter((line) => /^\\s*(?:-\\s+|ㄴ\\s+)/.test(line));';
+          if (text.includes(legacyFraming)) throw new Error('legacy physical-line framing still present');
+          if ((text.match(/community\.commentUnits\(commentScope\)/g) || []).length !== 1) throw new Error('unexpected Community unit consumer count');
+          if ((text.match(/reaction\.inspectCommentReactionLine\(unit\.text\)/g) || []).length !== 1) throw new Error('unexpected logical-unit Reaction inspection count');
+          for (const marker of [
+            'missing ${reactionFailureCounts.missing}',
+            'multiple ${reactionFailureCounts.multiple}',
+            'final-tail ${reactionFailureCounts.finalTail}',
+            'tail-format ${reactionFailureCounts.tailFormatOnly}',
+            'tail-visible ${reactionFailureCounts.tailVisibleOrUnknown}',
+            'tail-other ${reactionFailureCounts.tailOther}',
+            'tail-chars ${reactionFailureCounts.trailingChars}',
+          ]) {
+            if (!text.includes(marker)) throw new Error(`v0.64.4 attribution marker missing: ${marker}`);
+          }
+          if (!text.includes("pending.mode === 'B_END'")) throw new Error('B_END Structure branch missing');
+          if (!text.includes('Broadcast closure:')) throw new Error('Broadcast closure diagnostic missing');
+          if (!text.includes('Broadcast terminal coverage:')) throw new Error('Broadcast terminal coverage diagnostic missing');
+          console.log('Structure judge-only wiring + v0.64.4 attribution + B_END diagnostic controls: PASS');
+          NODE
+
+      - name: Commit validated implementation to work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --check
+          git commit -m 'SimCore v0.64.5 COMMUNITY Multiline Reaction Unit Validation Repair'
+          git push origin HEAD:simcore-06405-community-multiline-reaction-unit

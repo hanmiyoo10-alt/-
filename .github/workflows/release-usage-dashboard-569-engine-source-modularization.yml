@@ -1,24 +1,13 @@
-name: Stage Usage Dashboard 3.0.0-alpha.5.69 Engine Development Source Modularization
+name: Archived Usage Dashboard 3.0.0-alpha.5.69 Engine Development Source Modularization
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - '.github/workflows/release-usage-dashboard-569-engine-source-modularization.yml'
-      - '.github/workflows/reusable-usage-dashboard-validate.yml'
-      - '.github/workflows/reusable-usage-dashboard-release.yml'
-      - '.github/usage-dashboard/releases/5.69.json'
-      - '.github/usage-dashboard/archived-release-workflows.json'
-      - '.github/workflows/release-command-usage-dashboard-569.yml'
-      - 'plugins/usage-dashboard/**'
-      - 'docs/USAGE_DASHBOARD_GUIDELINES.md'
-      - 'docs/USAGE_DASHBOARD_RELEASE_PIPELINE_V2*.md'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  validate:
-    uses: ./.github/workflows/reusable-usage-dashboard-validate.yml
-    with:
-      release_spec: .github/usage-dashboard/releases/5.69.json
+  archived:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Archived 5.69 stage caller. Generic Usage Dashboard validation/promotion is authoritative.'

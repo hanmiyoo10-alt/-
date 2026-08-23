@@ -8,7 +8,7 @@ const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
+const workflow = fs.readFileSync(currentRelease.validatorWorkflow, 'utf8');
 const workflowCaller = fs.readFileSync(currentRelease.callerWorkflow, 'utf8');
 
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
@@ -55,13 +55,16 @@ assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('once the managed command starts, its success or failure is authoritative'));
 assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
-assert.ok(workflow.includes('concurrency:\n  group: usage-dashboard-release'));
+assert.match(workflow, /permissions:\s*\n\s*contents: read/);
 assert.ok(!workflow.includes('group: repo-main-write'));
 assert.ok(!workflow.includes('scripts/repo-main-write.py'));
-assert.ok(workflow.includes('check_release_monotonic.py'));
+assert.ok(!workflow.includes('contents: write'));
 assert.ok(workflow.includes('p28-managed-direct-cli-runtime.cjs'));
+assert.ok(workflow.includes('p33-generic-release-controller.cjs'));
 assert.ok(workflowCaller.includes(`uses: ./${currentRelease.validatorWorkflow}`));
+assert.ok(!workflowCaller.includes('release_spec:'));
 assert.ok(!workflowCaller.includes('publish: true'));
 assert.ok(workflowCaller.includes('contents: read'));
+assert.ok(!workflowCaller.includes(currentRelease.productVersion));
 
 console.log('P28 Managed Direct CLI Runtime: OK · provisioning invariants retained; managed/direct/npx behavior delegated to black-box Engine harness');

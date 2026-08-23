@@ -1,0 +1,49 @@
+name: Temporary DB optimization PR 67 record sync
+
+on:
+  push:
+    branches:
+      - feat/db-save-optimization-pr67-record
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/db-save-optimization-pr67-record
+          fetch-depth: 0
+      - name: Update official PR state
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('products/pocketrisu-helper-mod/docs/features/server-phone/db-save-optimization/UPSTREAM.md')
+          s = p.read_text()
+          replacements = {
+              'PR status: `VALIDATING`': 'PR status: `UPSTREAM_OPEN`',
+              'Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`\nCurrent head: `5f3cf377c52826715ab6c3f402331fede55f0920`': 'Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`\nOfficial upstream PR: `https://github.com/PocketRisu/PocketRisu/pull/67`\nCurrent head: `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`',
+              '- isolation: CLEAN — current diff changes only `server/node/server.cjs` for PR A (+4/-2)': '- isolation: CLEAN — official Stage A is one commit / one file (`server/node/server.cjs`, +23/-2)',
+              '- CI/checks: MISSING — no relevant workflow run or status check exists for head `5f3cf377c52826715ab6c3f402331fede55f0920`; absence of checks is not GREEN': '- CI/checks: MISSING — no relevant workflow run or status check is currently observed for official PR #67 head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; absence of checks is not GREEN',
+              '- official upstream PR: NOT_CREATED — connected integration previously returned HTTP 403 when attempting cross-repository PR creation': '- official upstream PR: OPEN / MERGEABLE / NOT_DRAFT — `PocketRisu/PocketRisu#67`',
+              '- next action: obtain at least one relevant successful CI/check for the exact current head, then re-evaluate GREEN eligibility; do not merge while checks are absent.': '- next action: monitor official PR #67 review/check state. Keep Stage B (`hanmiyoo10-alt/PocketRisu#5`) and Stage C (`#6`) as dependent drafts until Stage A is accepted/rebased; after any upstream result, re-inspect latest `develop` before promoting the next stage.'
+          }
+          for old, new in replacements.items():
+              if s.count(old) != 1:
+                  raise SystemExit(f'marker mismatch: {old!r} count={s.count(old)}')
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+      - name: Validate helper docs
+        run: python3 products/pocketrisu-helper-mod/ci/validate_docs.py
+      - name: Commit synced state and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add products/pocketrisu-helper-mod/docs/features/server-phone/db-save-optimization/UPSTREAM.md
+          git rm .github/workflows/_tmp-record-db-pr67.yml
+          git commit -m 'docs(db-save-optimization): link official PR 67'
+          git push origin HEAD:feat/db-save-optimization-pr67-record

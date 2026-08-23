@@ -47,6 +47,19 @@
 다음 한 단계:
 - 실제 정식 upstream PR을 원할 때 원하는 Feature-ID 하나를 고르고 그 기능 `UPSTREAM.md` recipe로 최신 upstream에서 rebuild를 시작한다.
 
+## 정식 upstream 기여 — DB/save staged series 진행 중
+
+- Stage A: official `PocketRisu/PocketRisu#67` OPEN. 현재 mergeable이며 review/check 결과 대기.
+- Stage B: local draft `hanmiyoo10-alt/PocketRisu#5` — clean 1-commit hash-cache stage.
+- Stage C: local draft `#6` — clean 1-commit selective-clone stage.
+- Stage D: local draft `#7` — clean 1-commit pluginCustomStorage direct-child stage.
+- Stage E: local draft `#8` — clean 1-commit depth-3 stage.
+- B~E는 의도적으로 draft이며 앞 단계가 공식에서 결정되기 전에는 promotion/merge하지 않는다.
+- 매 공식 결과 후 최신 `develop`을 다시 읽고, 이미 구현된 단계나 구조 충돌 단계는 건너뛴다.
+
+다음 한 단계:
+- official PR #67의 maintainer review/check 결과를 기다린다. 결과가 나오면 최신 `develop`에서 Stage B 중복/충돌을 다시 검사한 뒤에만 다음 정식 PR을 준비한다.
+
 ## 현재 P0 — 전화/이어폰 알림 무한소리
 
 상태: **TODO**

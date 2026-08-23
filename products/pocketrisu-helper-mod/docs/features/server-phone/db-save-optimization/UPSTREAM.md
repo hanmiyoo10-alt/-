@@ -4,11 +4,20 @@ Feature-ID: `db-save-optimization`
 Area: `server-phone`
 PR status: `UPSTREAM_OPEN`
 Isolation status: `CLEAN`
-Dependencies status: `RESOLVED`
+Dependencies status: `STAGED_WAITING_ON_UPSTREAM`
 Deployment status: `NOT_READY`
 Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`
 Official upstream PR: `https://github.com/PocketRisu/PocketRisu/pull/67`
 Current head: `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`
+
+## Clean staged branches / PRs
+- Stage A — empty patch fast path + opaque ETag: official `PocketRisu/PocketRisu#67`; clean head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; 1 commit / 1 file.
+- Stage B — compositional DB patch hash cache: local draft `hanmiyoo10-alt/PocketRisu#5`; clean head `04992dcdc47b144d14fbc8df6c6c1c2c7cadec7c`; 1 commit / 3 files.
+- Stage C — top-level selective clone: local draft `#6`; clean head `0d0c8104246a662d9601cffcddb832fd52f7d6f1`; 1 commit / 3 files.
+- Stage D — pluginCustomStorage direct-child hash/clone: local draft `#7`; clean head `c3ec3b5e63f7f0bcdb6888d8475f836cc9f31ca3`; 1 commit / 3 files.
+- Stage E — pluginCustomStorage depth-3 lazy subchild hash/clone: local draft `#8`; clean head `1a937bc680658df732aab75632f0e030c2005f53`; 1 commit / 3 files.
+
+Dependency rule: B waits for A; C waits for B; D waits for C; E waits for D. Draft state is intentional. Never merge a later local stage into an earlier stage branch while the earlier branch backs an official upstream PR.
 
 ## Problem / motivation
 Large `/api/patch` requests paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On large saves/pluginCustomStorage this produced roughly 1.1–1.8s patch latency in the verified local workload.
@@ -171,6 +180,10 @@ Large self-host databases should not pay whole-database hash/clone/ETag costs fo
 - dossier reconstruction: COMPLETE
 - legacy Git-history surgery: NOT REQUIRED
 - upstream strategy: STAGED_PR_SERIES
+- Stage B local draft: `hanmiyoo10-alt/PocketRisu#5` — clean / validated / waiting on Stage A.
+- Stage C local draft: `#6` — clean / validated / waiting on Stage B.
+- Stage D local draft: `#7` — clean / validated / waiting on Stage C.
+- Stage E local draft: `#8` — clean / validated / waiting on Stage D.
 - local PR #4: OPEN / MERGEABLE / NOT_DRAFT
 - isolation: CLEAN — official Stage A is one commit / one file (`server/node/server.cjs`, +23/-2)
 - reviews: none; unresolved review threads: none

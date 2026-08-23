@@ -26,6 +26,18 @@
 - `db-save-optimization`은 staged upstream PR series로 제출 후보를 나눈다.
 - `plugin-targeted-reload` rebuild에서 persistence-order 변경이 별도로 필요하면 새 Feature-ID `plugin-update-persistence-order`로 분리한다.
 
+## 진행 중 — DB/save 정식 upstream staged PR series
+
+- A `PocketRisu/PocketRisu#67`: OPEN — empty patch fast path + opaque patch ETag.
+- B `hanmiyoo10-alt/PocketRisu#5`: DRAFT / READY — compositional server DB patch hash cache.
+- C `#6`: DRAFT / READY — top-level selective clone.
+- D `#7`: DRAFT / READY — pluginCustomStorage direct-child hash/selective clone.
+- E `#8`: DRAFT / READY — depth-3 lazy subchild hash/selective clone.
+
+고정 순서: `A 결과 → latest develop 재검사 → B → 재검사 → C → D → E`.
+중복 구현, upstream 구조 변경, 의미 있는 충돌이 발견된 단계는 억지 포팅하지 않고 `SKIP/HOLD`로 기록한다.
+Worker pre-launch structured clone과 chunk-store CDC/hash/SQLite commit은 이 series 범위 밖이며 별도 Feature-ID 전까지 HOLD.
+
 ## P0
 
 ### 전화/이어폰 알림 무한소리 — TODO

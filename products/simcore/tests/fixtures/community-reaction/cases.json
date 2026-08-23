@@ -6,9 +6,16 @@
     "cases": [
       {"id":"multiline-bilingual-valid","text":"- @a: English comment\n(한국어 번역) [RT 1,001]","kind":"TOP"},
       {"id":"multiline-bilingual-reply-valid","text":"ㄴ @b: English reply\n(한국어 번역) [RT 1,002]","kind":"REPLY"},
+      {"id":"single-gonggam-valid","text":"- @a: comment [공감 1]"},
+      {"id":"single-rt-valid","text":"- @a: comment [RT 1]"},
+      {"id":"single-like-valid","text":"- @a: comment [좋아요 1]"},
+      {"id":"single-recommend-valid","text":"- @a: comment [추천 1]"},
+      {"id":"single-poten-valid","text":"- @a: comment [포텐 1]"},
+      {"id":"single-upvote-valid","text":"- @a: comment [Upvote 1]"},
       {"id":"missing","text":"- @a: English comment\n(한국어 번역)"},
       {"id":"multiple","text":"- @a: English comment [RT 1]\n(한국어 번역) [RT 2]"},
       {"id":"final-tail-continuation","text":"- @a: English comment\n(한국어 번역) [RT 3]\nvisible tail"},
+      {"id":"final-tail-visible","text":"- @a: English comment [RT 3] trailing visible text"},
       {"id":"unrelated-bracket","text":"- @a: English comment [memo]"}
     ],
     "section4Top1Reply":"- @a: top\n(번역) [RT 1,001]\nㄴ @b: reply\n(답글) [RT 1,002]\n- @c: top\n(번역) [RT 1,003]\n- @d: top\n(번역) [RT 1,004]\n- @e: top\n(번역) [RT 1,005]"
@@ -16,9 +23,16 @@
   "expected": {
     "multiline-bilingual-valid":"PASS",
     "multiline-bilingual-reply-valid":"PASS",
+    "single-gonggam-valid":"PASS",
+    "single-rt-valid":"PASS",
+    "single-like-valid":"PASS",
+    "single-recommend-valid":"PASS",
+    "single-poten-valid":"PASS",
+    "single-upvote-valid":"PASS",
     "missing":"MISSING",
     "multiple":"MULTIPLE",
     "final-tail-continuation":"FINAL_TAIL",
+    "final-tail-visible":"FINAL_TAIL",
     "unrelated-bracket":"MISSING",
     "sectionCounts":{"units":5,"top":4,"reply":1,"failures":0}
   },

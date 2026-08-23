@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const workflowDir = '.github/workflows';
+const candidateWriterPath = '.github/workflows/usage-dashboard-prepare-candidate.yml';
 const allowedProductionWriters = new Set([
   '.github/workflows/usage-dashboard-promote.yml',
   '.github/workflows/reusable-usage-dashboard-promote.yml',
@@ -23,8 +24,19 @@ for (const item of inventory.retired) {
 const workflowNames = fs.readdirSync(workflowDir).filter((name) => /\.ya?ml$/.test(name));
 assert.deepEqual(workflowNames.filter((name) => /^release-local-usage-.*\.ya?ml$/.test(name)), [], 'legacy release-local-usage workflows must stay absent');
 
+const candidateWriter = fs.readFileSync(candidateWriterPath,'utf8');
+assert.match(candidateWriter, /^permissions:\n  contents: read$/m);
+assert.equal((candidateWriter.match(/contents: write/g) || []).length, 1, 'candidate writer has one privileged job only');
+assert.match(candidateWriter, /\^release\/usage-dashboard-/);
+assert.match(candidateWriter, /main\|release-usage-dashboard\|release-simcore/);
+assert.match(candidateWriter, /git push origin "\$PAYLOAD_SHA:refs\/heads\/\$TARGET_BRANCH"/);
+assert.doesNotMatch(candidateWriter, /git push[^\n]*(?:main|release-usage-dashboard)/);
+assert.doesNotMatch(candidateWriter, /git switch[^\n]*(?:main|release-usage-dashboard)/);
+assert.doesNotMatch(candidateWriter, /--force(?:-with-lease)?/);
+
 for (const name of workflowNames) {
   const file = path.join(workflowDir, name).replace(/\\/g,'/');
+  if (file === candidateWriterPath) continue;
   const source = fs.readFileSync(file,'utf8');
   const touchesRelease = source.includes('release-usage-dashboard');
   const writeCapable = /contents:\s*write/.test(source) || /git\s+push[^\n]*release-usage-dashboard/.test(source) || /git\s+switch[^\n]*release-usage-dashboard/.test(source);
@@ -41,4 +53,4 @@ assert.match(reusable, /^permissions:\n  contents: write$/m);
 assert.match(reusable, /promote_release_blobs\.cjs/);
 assert.doesNotMatch(reusable, /git switch|git push|cp -R|repo-main-write\.py/);
 
-console.log('usage-dashboard release authority contract: OK · 16 legacy writers retired, exact-byte promoter is sole production write authority');
+console.log('usage-dashboard release authority contract: OK · production exact-byte writer isolated from constrained candidate-branch writer');

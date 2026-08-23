@@ -1,0 +1,117 @@
+name: SimCore v0.64.6 Closure Completion Gate Build v2
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06406-closure-completion-gate-v2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.pull_request.title == 'SimCore v0.64.6 closure-completion gate build command v2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.64.6 closure work branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06406-closure-completion-gate
+          fetch-depth: 0
+
+      - name: Load correction, architecture contract, and robust fixture runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06406-closure-completion-gate.py > /tmp/simcore-06406-closure.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          git show origin/main:scripts/simcore-06406-closure-completion-gate-test.mjs > /tmp/simcore-06406-closure-test.mjs
+          python3 -m py_compile /tmp/simcore-06406-closure.py /tmp/simcore-architecture-check.py
+          node --check /tmp/simcore-06406-closure-test.mjs
+
+      - name: Capture frozen surfaces and side-effect counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          if '//@version 0.64.6' not in text:
+              raise SystemExit('expected initial v0.64.6 candidate parent')
+          def region(a,b):
+              s=text.index(a); e=text.index(b,s)
+              return hashlib.sha256(text[s:e].encode()).hexdigest()
+          frozen={
+              'community_family':region('SimCore.define("community"','SimCore.define("time"'),
+              'reaction':region('SimCore.define("reaction"','SimCore.define("frame"'),
+              'representation':region('SimCore.define("representation"','SimCore.define("runtime-mirror"'),
+              'output_compat':region('SimCore.define("output-compat"','SimCore.define("bootstrap-migration"'),
+          }
+          counts={x:text.count(x) for x in ('pluginStorage.','setChat(','fetch(','setInterval(','setTimeout(')}
+          Path('/tmp/frozen.json').write_text(json.dumps(frozen,sort_keys=True),encoding='utf-8')
+          Path('/tmp/counts.json').write_text(json.dumps(counts,sort_keys=True),encoding='utf-8')
+          PY
+
+      - name: Apply closure-completion correction
+        run: python3 /tmp/simcore-06406-closure.py
+
+      - name: Static architecture and identity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.6$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.6';" plugins/simcore/latest.js
+          grep -q 'function inspectPreviousBEndOutput' plugins/simcore/latest.js
+          grep -q 'previous-b-end-closure-incomplete' plugins/simcore/latest.js
+          grep -q 'terminal-stored-airtime-mismatch' plugins/simcore/latest.js
+          grep -q 'eligible-direct-complete-post-b-end-c' plugins/simcore/latest.js
+          python3 /tmp/simcore-architecture-check.py --contract /tmp/simcore-architecture-v2.json --source plugins/simcore/latest.js --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Run robust clock and closure fixtures 1-25
+        run: node /tmp/simcore-06406-closure-test.mjs plugins/simcore/latest.js
+
+      - name: Verify frozen surfaces and side-effect counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def region(a,b):
+              s=text.index(a); e=text.index(b,s)
+              return hashlib.sha256(text[s:e].encode()).hexdigest()
+          frozen={
+              'community_family':region('SimCore.define("community"','SimCore.define("time"'),
+              'reaction':region('SimCore.define("reaction"','SimCore.define("frame"'),
+              'representation':region('SimCore.define("representation"','SimCore.define("runtime-mirror"'),
+              'output_compat':region('SimCore.define("output-compat"','SimCore.define("bootstrap-migration"'),
+          }
+          counts={x:text.count(x) for x in ('pluginStorage.','setChat(','fetch(','setInterval(','setTimeout(')}
+          if frozen != json.loads(Path('/tmp/frozen.json').read_text()):
+              raise SystemExit('frozen subsystem surface changed')
+          if counts != json.loads(Path('/tmp/counts.json').read_text()):
+              raise SystemExit('protected side-effect count changed')
+          print('frozen surfaces and side-effect counts: PASS')
+          PY
+
+      - name: Commit validated corrected candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --check
+          git commit -m 'fix(simcore): harden v0.64.6 post-B_END closure eligibility'
+          git push origin HEAD:simcore-06406-closure-completion-gate

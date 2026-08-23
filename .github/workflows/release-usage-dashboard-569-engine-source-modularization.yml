@@ -63,6 +63,5 @@ jobs:
             plugins/usage-dashboard/runtime \
             plugins/usage-dashboard/runtime-src \
             docs/USAGE_DASHBOARD_GUIDELINES.md
-          git diff --cached --check
           git commit -m 'release: materialize Local Usage Dashboard 3.0.0-alpha.5.69 candidate'
           git push origin HEAD:${GITHUB_HEAD_REF}

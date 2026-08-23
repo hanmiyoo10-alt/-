@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "status": "COLLECTING",
+  "requiredPositivePerRetirementUnit": 3,
+  "requiredDistinctEvidenceIdentities": 2,
+  "records": [],
+  "negativeParity": [],
+  "openMismatchIds": []
+}

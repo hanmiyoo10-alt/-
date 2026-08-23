@@ -1,0 +1,17 @@
+{
+  "policyVersion": 1,
+  "cutoverState": "CANONICAL_ACTIVE",
+  "surfaces": {
+    "legacyScript": "scripts/simcore-sync-memory.py",
+    "stateSyncWorkflow": ".github/workflows/simcore-release-state-sync.yml",
+    "mainWriter": "scripts/repo-main-write.py"
+  },
+  "requirements": {
+    "legacyOrdinaryMode": "manifest-only",
+    "legacyFullMode": "rollback-only",
+    "implicitLegacyFullForbidden": true,
+    "documentOwner": "sync-state",
+    "mainIntegration": "repo-main-write.py",
+    "directMainPushForbidden": true
+  }
+}

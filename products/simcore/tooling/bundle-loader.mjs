@@ -59,7 +59,31 @@ export function extractFunctionSource(source, name) {
   if (matches.length === 0) throw new HarnessError('FUNCTION_EXTRACTION_FAILED', `function missing: ${name}`);
   if (matches.length !== 1) throw new HarnessError('FUNCTION_EXTRACTION_AMBIGUOUS', `function duplicate: ${name}`);
   const start = matches[0].index;
-  const open = source.indexOf('{', start + matches[0][0].length);
+  const paren = source.indexOf('(', start);
+  let depth = 0;
+  let closeParen = -1;
+  let state = 'code';
+  for (let i = paren; i < source.length; i += 1) {
+    const c = source[i];
+    const n = source[i + 1];
+    if (state === 'line') { if (c === '\n') state = 'code'; continue; }
+    if (state === 'block') { if (c === '*' && n === '/') { state = 'code'; i += 1; } continue; }
+    if (state === 'single') { if (c === '\\') { i += 1; continue; } if (c === "'") state = 'code'; continue; }
+    if (state === 'double') { if (c === '\\') { i += 1; continue; } if (c === '"') state = 'code'; continue; }
+    if (state === 'template') { if (c === '\\') { i += 1; continue; } if (c === '`') state = 'code'; continue; }
+    if (c === '/' && n === '/') { state = 'line'; i += 1; continue; }
+    if (c === '/' && n === '*') { state = 'block'; i += 1; continue; }
+    if (c === "'") { state = 'single'; continue; }
+    if (c === '"') { state = 'double'; continue; }
+    if (c === '`') { state = 'template'; continue; }
+    if (c === '(') depth += 1;
+    if (c === ')') {
+      depth -= 1;
+      if (depth === 0) { closeParen = i; break; }
+    }
+  }
+  if (closeParen < 0) throw new HarnessError('FUNCTION_EXTRACTION_FAILED', `function parameters incomplete: ${name}`);
+  const open = source.indexOf('{', closeParen + 1);
   if (open < 0) throw new HarnessError('FUNCTION_EXTRACTION_FAILED', `function body missing: ${name}`);
   const end = matchingBrace(source, open);
   return source.slice(start, end + 1);

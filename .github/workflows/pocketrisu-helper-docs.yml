@@ -1,0 +1,23 @@
+name: PocketRisu helper docs
+
+on:
+  push:
+    paths:
+      - "products/pocketrisu-helper-mod/**"
+      - ".github/workflows/pocketrisu-helper-docs.yml"
+  pull_request:
+    paths:
+      - "products/pocketrisu-helper-mod/**"
+      - ".github/workflows/pocketrisu-helper-docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PocketRisu helper product memory
+        run: python3 products/pocketrisu-helper-mod/ci/validate_docs.py

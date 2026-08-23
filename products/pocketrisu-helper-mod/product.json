@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "product": "PocketRisu Helper Mod",
+  "product_root": "products/pocketrisu-helper-mod",
+  "source_repo": "hanmiyoo10-alt/PocketRisu",
+  "current_state": "products/pocketrisu-helper-mod/CURRENT.md",
+  "roadmap": "products/pocketrisu-helper-mod/ROADMAP.md",
+  "history": "products/pocketrisu-helper-mod/docs/history.md",
+  "decisions": "products/pocketrisu-helper-mod/docs/decisions.md",
+  "features": "products/pocketrisu-helper-mod/docs/features/README.md",
+  "current_priority": "MAIN_PHONE_AUDIO_NOTIFICATION_CALL_HEADSET",
+  "validation_status": "ACTIVE",
+  "ci": ".github/workflows/pocketrisu-helper-docs.yml"
+}

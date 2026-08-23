@@ -6,6 +6,7 @@ Product ownership is separated under:
 
 - `products/simcore/`
 - `products/usage-dashboard/`
+- `products/pocketrisu-helper-mod/`
 
 The product roots define ownership and release boundaries. Existing runtime/install paths remain unchanged for compatibility.
 
@@ -25,5 +26,6 @@ Release channels remain independent:
 
 - SimCore → `release-simcore`
 - Local Usage Dashboard → `release-usage-dashboard`
+- PocketRisu Helper Mod → documentation/operations product root; no automatic release-channel writes
 
 Do not move or merge release-channel ownership across product roots.

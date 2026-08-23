@@ -143,7 +143,9 @@ The base branch had no permanent predecessor verifier, so the current-trusted-la
 
 The stable GitHub job name `Required` is operational. Repository enforcement is still inactive and is not inferred from the successful check.
 
-## Shadow proof anomaly preserved before repair
+## Shadow proof anomalies preserved before repair
+
+### A. Unsupported legacy stdout detail
 
 Observed run:
 
@@ -172,9 +174,45 @@ RS2_3_SHADOW_EVIDENCE_PARSER_ASSUMPTION
 = FIX / TEST_EVIDENCE / NON_RUNTIME
 ```
 
-This is **not** classified as `PERMANENT_GATE_WEAKER`: the permanent static, architecture, and durable regression gates were all green in the same run. The failed assertion belongs only to the temporary evidence collector and assumed an unsupported stdout presentation detail from the legacy robust runner.
+Source inspection established the actual stable legacy output contract:
 
-Secondary evidence from the same run:
+```text
+all 1-25 assertions pass
+→ stdout: `v0.64.6 closure + timeline regression fixtures 1-25: PASS`
+```
+
+Fixture 21 itself directly asserts `INVALID_SOURCE` with reason `terminal-stored-airtime-mismatch`; the repair therefore checks the aggregate PASS signal rather than inventing per-fixture presentation output.
+
+### B. Over-destructive COMMUNITY negative fixture
+
+Observed run:
+
+```text
+workflow       = SimCore CI
+run            = 32637534610
+Verify job     = 97189427435 / FAILURE
+permanent core = STATIC PASS / ARCH PASS / REGRESSION PASS
+failure gate   = GATE_CI_SELF
+reason         = RS2_3_SHADOW_PROOF_FAIL
+```
+
+The first parser repair worked far enough to reach the controlled COMMUNITY negative. That negative renamed the entire `reaction` module, causing the durable harness loader to lose a required module and correctly classify the case as infrastructure/fixture failure:
+
+```text
+expected proof result = semantic FAIL / exit 1
+actual harness result = infrastructure error / exit 2
+```
+
+Classification:
+
+```text
+RS2_3_SHADOW_NEGATIVE_FIXTURE_OVERDESTRUCTIVE
+= FIX / TEST_EVIDENCE / NON_RUNTIME
+```
+
+This again is **not** `PERMANENT_GATE_WEAKER`: the permanent core gates remained green in the same run. The repair preserves module loadability and mutates only the reaction predicate so both the durable suite and legacy semantic control reject the same behavior as a semantic failure.
+
+Secondary evidence from both failed proof runs:
 
 ```text
 Required receives Verify failure transitively
@@ -187,10 +225,9 @@ Repair rule:
 
 ```text
 do not change runtime
- do not weaken permanent gates
- inspect legacy runner's actual stable output/exit contract
- repair only the temporary shadow evidence parser
- rerun full shadow + negative parity
+do not weaken permanent gates
+repair only temporary evidence fixtures/parsers
+rerun full shadow + negative parity
 ```
 
 ## Validation record
@@ -198,3 +235,4 @@ do not change runtime
 Permanent PR execution: **PASS**.
 Shadow equivalence and negative parity: **COLLECTING**.
 Shadow evidence parser anomaly: **FIX / PRESERVED**.
+Shadow semantic-negative fixture anomaly: **FIX / PRESERVED**.

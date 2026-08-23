@@ -34,7 +34,8 @@ assert.match(validatorWorkflow, /CANDIDATE_NOT_MATERIALIZED/);
 assert.match(validatorWorkflow, /resolve_release_spec\.cjs/);
 assert.match(validatorWorkflow, /build_bridge_engine\.cjs --write/);
 assert.match(validatorWorkflow, /build_usage_dashboard\.cjs --write/);
-assert.match(validatorWorkflow, /p33-generic-release-controller\.cjs/);
+assert.match(validatorWorkflow, /tests\/run-all\.cjs/);
+assert.doesNotMatch(validatorWorkflow, /\btests=\(/, 'validator must delegate test discovery to the registry runner');
 assert.doesNotMatch(validatorWorkflow, /product\s*=\s*['"]3\.0\.0-alpha\./, 'validator must remain version-generic');
 
 assert.ok(caller.length < 2400, 'generic validation caller must remain small');
@@ -70,4 +71,4 @@ assert.equal(fs.existsSync(adapterPath), false, 'historical regression adapter m
 assert.match(candidateValidator, /sha256 mismatch/);
 assert.match(candidateValidator, /snapshot contract/);
 
-console.log('Usage Dashboard release infrastructure foundation: OK · Stage D generic validation + merged exact-byte promotion');
+console.log('Usage Dashboard release infrastructure foundation: OK · generic registry validation + merged exact-byte promotion');

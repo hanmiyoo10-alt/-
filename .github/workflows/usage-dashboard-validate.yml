@@ -40,7 +40,7 @@ jobs:
           node plugins/usage-dashboard/tests/behavior-request-duration.cjs
           node plugins/usage-dashboard/tests/p34-request-duration-fidelity.cjs
           git diff --check
-      - name: Commit candidate artifacts
+      - name: Commit candidate product bytes
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
@@ -50,11 +50,10 @@ jobs:
             plugins/usage-dashboard/runtime-src \
             plugins/usage-dashboard/runtime \
             plugins/usage-dashboard/latest.js \
-            docs/USAGE_DASHBOARD_GUIDELINES.md \
-            .github/workflows/reusable-usage-dashboard-validate.yml
+            docs/USAGE_DASHBOARD_GUIDELINES.md
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo '5.70 candidate already materialized'
+            echo '5.70 product candidate already materialized'
             exit 0
           fi
           git commit -m 'release: materialize Local Usage Dashboard 5.70 candidate'

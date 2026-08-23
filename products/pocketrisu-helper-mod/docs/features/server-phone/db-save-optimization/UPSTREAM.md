@@ -19,13 +19,16 @@ Verified local rollback anchors are documented in this feature README; backup fi
 
 ## Baseline cost model to re-check on current upstream
 Historical original `/api/patch` path:
-1. recursive whole stripped-DB hash (`calculateHash`-style work);
+1. recursive whole stripped-DB hash;
 2. whole DB JSON stringify/parse deep clone;
 3. JSON patch apply;
 4. cache/mutation/save bookkeeping;
 5. full server encode + MD5 content ETag.
 
 Current upstream may have changed this pipeline. Before rebuilding, instrument/inspect first and only port stages that still exist.
+
+## Minimal upstream scope
+Rebuild the optimization as a sequence of independent, correctness-first PRs against the current upstream `/api/patch` implementation. Each PR removes one measurable whole-DB cost while preserving atomicity, fallback behavior and persistent DB integrity; do not bundle unrelated worker/chunk-store/session/notification work.
 
 ## Upstream PR split plan
 This feature is intentionally **not** one giant PR. Prepare small prerequisite-sized PRs in this order when still applicable.
@@ -96,8 +99,13 @@ Known remaining bottlenecks (worker structured clone before worker launch; synch
 - Preserve the intentional `flushServerDbKeepalive()` no-op policy unless a separate feature with evidence replaces it.
 - Do not require `sqlite3` CLI; local validation uses Node + `better-sqlite3` when DB inspection is needed.
 
-## Verification evidence from legacy implementation
-### Correctness
+## Dependencies
+- Current upstream `server/node/server.cjs` or equivalent `/api/patch` implementation.
+- Existing patch/hash/save/ETag semantics as inspected at rebuild time.
+- Later staged PRs depend only on the earlier still-applicable stages in this feature series.
+
+## Verification evidence
+### Correctness from the verified legacy implementation
 Synthetic hash tests:
 - all reference/cache comparisons reported `MATCH=YES`.
 

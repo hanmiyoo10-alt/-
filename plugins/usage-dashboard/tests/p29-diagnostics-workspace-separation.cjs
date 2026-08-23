@@ -7,7 +7,6 @@ const {runDashboard} = require('./harness/dashboard-process.cjs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
 const root = 'plugins/usage-dashboard';
-const targetVersion = '3.0.0-alpha.5.67';
 const baselineVersion = '3.0.0-alpha.5.66';
 const baselineEngineSha = 'f17d689f39bd469bcadf1a2125313146cd6e04cb38299a5b4583d903a696cf09';
 const baselineManagerSha = '9f3530b882ecea7b9e0d407c7831c44487f218b5db9210a6709158a6315c36c0';
@@ -16,8 +15,9 @@ const json = relative => JSON.parse(fs.readFileSync(`${root}/${relative}`, 'utf8
 const clone = value => JSON.parse(JSON.stringify(value));
 
 const currentRelease = assertCurrentReleaseArtifacts();
-if (currentRelease.productVersion !== targetVersion) {
-  console.log(`P29 Diagnostics Workspace Separation: SKIP · candidate ${currentRelease.productVersion} is not ${targetVersion}`);
+const targetVersion = currentRelease.productVersion;
+if (!['3.0.0-alpha.5.67','3.0.0-alpha.5.68'].includes(targetVersion)) {
+  console.log(`P29 Diagnostics Workspace Separation: SKIP · candidate ${targetVersion} is outside the locked Diagnostics workspace releases`);
   process.exit(0);
 }
 
@@ -144,7 +144,7 @@ async function runMode(mode) {
   assert.ok(basicView && !basicView.error, `Basic Diagnostics view missing: ${basicView?.error || 'not captured'}`);
   assert.ok(detailedView && !detailedView.error, `Detailed Diagnostics view missing: ${detailedView?.error || 'not captured'}`);
 
-  assert.equal(basic.state.diagnosticsMode, 'basic', '5.66 state without a Diagnostics preference must hydrate to Basic');
+  assert.equal(basic.state.diagnosticsMode, 'basic', 'preference-free state must hydrate to Basic');
   assert.equal(detailed.state.diagnosticsMode, 'detailed', 'Detailed preference must survive state hydration and refresh persistence');
   assert.ok(basicView.html.includes('id="diagnostics-mode-basic" class="active"'));
   assert.ok(basicView.html.includes('<span>Status</span>'));
@@ -177,7 +177,7 @@ async function runMode(mode) {
   assert.ok(!JSON.stringify(basic).includes('p29-diagnostics-fixture-token'));
   assert.ok(!JSON.stringify(detailed).includes('p29-diagnostics-fixture-token'));
 
-  console.log('P29 Diagnostics Workspace Separation: OK · Basic is cheap, Detailed is lazy/grouped, Full Copy preserves evidence, and Engine/network behavior is unchanged');
+  console.log(`P29 Diagnostics Workspace Separation: OK · ${targetVersion} keeps Basic cheap, Detailed lazy/grouped, Full Copy compatible, and Engine/network behavior unchanged`);
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

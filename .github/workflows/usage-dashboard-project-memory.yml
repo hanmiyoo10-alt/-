@@ -22,6 +22,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: usage-dashboard-project-memory
+  cancel-in-progress: false
+
 jobs:
   project-memory:
     runs-on: ubuntu-latest
@@ -53,5 +57,6 @@ jobs:
             exit 0
           fi
           git commit -m 'docs: sync Usage Dashboard production memory'
-          git pull --rebase origin main
-          git push origin HEAD:main
+          PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+          python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
+            --allow docs/USAGE_DASHBOARD_GUIDELINES.md

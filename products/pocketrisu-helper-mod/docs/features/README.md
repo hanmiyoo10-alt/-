@@ -32,5 +32,6 @@
 - [V3 plugin targeted reload](shared/plugin-targeted-reload/README.md)
 - [session/write-lock](shared/session-write-lock/README.md)
 - [long-chat refresh stall](shared/long-chat-refresh-stall/README.md)
+- [PR lifecycle automation](shared/pr-lifecycle-automation/README.md)
 
 기능이 커지면 `DIAGNOSTICS.md`, `ROLLBACK.md`, `scripts/`를 추가한다. PR 준비/실패 기록은 `UPSTREAM.md`, `FAILURES.md`에 유지한다.

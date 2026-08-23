@@ -4,8 +4,9 @@ on:
   workflow_call:
     inputs:
       release_spec:
-        description: Repository-relative release specification path
-        required: true
+        description: Optional repository-relative release specification path; when empty resolve from candidate manifest tuple
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -27,6 +28,9 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_SPEC='${{ inputs.release_spec }}'
+          if [[ -z "$RELEASE_SPEC" ]]; then
+            RELEASE_SPEC="$(node plugins/usage-dashboard/tools/resolve_release_spec.cjs --manifest plugins/usage-dashboard/runtime/product-manifest.json)"
+          fi
           export UD_RELEASE_SPEC="$RELEASE_SPEC"
           case "$RELEASE_SPEC" in
             .github/usage-dashboard/releases/*.json) ;;
@@ -83,7 +87,7 @@ jobs:
             p5-unified-runtime.cjs p5-bridge-manager.cjs p5-engine-adoption.cjs p5-bundled-engine.cjs p5-lifecycle-race.cjs p5-bridge-control-sync.cjs p5-service-tier-fidelity.cjs p5-devpass-account-parity.cjs p5-floating-widget-ux.cjs p5-module-layout.cjs p5-structural-parity.cjs p5-state-compatibility.cjs
             p6-rc-migration.cjs p6-rc-contract.cjs p6-release-hardening.cjs p7-cache-observability.cjs p11-cache-fidelity.cjs p12-gh-bootstrap.cjs p13-cache-provenance-diagnostics.cjs p14-project-guidelines-memory.cjs
             p15-runtime-recovery-fidelity.cjs p16-snapshot-performance-attribution.cjs p17-bounded-cli-parallelism.cjs p18-organization-discovery-dedup.cjs p19-organization-empty-fallback-fidelity.cjs p20-shared-24h-capture.cjs
-            p21-snapshot-scheduling-attribution.cjs p22-monotonic-release-integrity.cjs p23-credits-usage-early-start.cjs p24-snapshot-decision-attribution.cjs p25-long-window-critical-path-decoupling.cjs p26-foreground-cli-launcher-attribution.cjs p27-npx-cache-first-launcher.cjs p28-managed-direct-cli-runtime.cjs p29-diagnostics-workspace-separation.cjs p30-diagnostics-capture-identity.cjs p31-engine-source-modularization-parity.cjs p32-exact-byte-release-promotion.cjs
+            p21-snapshot-scheduling-attribution.cjs p22-monotonic-release-integrity.cjs p23-credits-usage-early-start.cjs p24-snapshot-decision-attribution.cjs p25-long-window-critical-path-decoupling.cjs p26-foreground-cli-launcher-attribution.cjs p27-npx-cache-first-launcher.cjs p28-managed-direct-cli-runtime.cjs p29-diagnostics-workspace-separation.cjs p30-diagnostics-capture-identity.cjs p31-engine-source-modularization-parity.cjs p32-exact-byte-release-promotion.cjs p33-generic-release-controller.cjs
           )
           for test in "${tests[@]}"; do node "plugins/usage-dashboard/tests/$test"; done
           assert_test_tree_clean

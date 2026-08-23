@@ -9,6 +9,19 @@
   "requiredCheckName": "SimCore CI / Required",
   "workflowPath": ".github/workflows/simcore-ci.yml",
   "verifierCommit": "233c7f088967a3a2b655020de2c0271c9f20fa0f",
+  "installedMainHealthEvidence": {
+    "baseCommit": "233c7f088967a3a2b655020de2c0271c9f20fa0f",
+    "observedViaPrRun": 32638742650,
+    "result": "PASS",
+    "gates": [
+      "GATE_STATIC",
+      "GATE_ARCH",
+      "GATE_REGRESSION",
+      "GATE_STATE",
+      "GATE_COORDINATION",
+      "GATE_LEGACY_COMPAT"
+    ]
+  },
   "legacyGateMapSha256": "732ee4e82fab3cb8c9d8fc12f7be1f34764411684420fe298ac03f1ea894cb75",
   "shadowEquivalenceSha256": "d3a961ced4899f9453fb2909389f57ef7857f4b067526a0598e185c810c82dca",
   "pureCheckPredecessorsRetired": [],

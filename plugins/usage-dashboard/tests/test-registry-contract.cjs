@@ -22,6 +22,19 @@ assert.ok(current.ordered.includes('p34-request-duration-fidelity.cjs'));
 assert.ok(current.ordered.indexOf('foundation.cjs') < current.ordered.indexOf('behavior-request-duration.cjs'));
 assert.ok(current.ordered.indexOf('behavior-request-duration.cjs') < current.ordered.indexOf('p1-contract.cjs'));
 
+const retired = JSON.parse(fs.readFileSync(path.join(__dirname, 'retired-regressions.json'), 'utf8'));
+assert.equal(retired.format, 1);
+assert.deepEqual(retired.retired.map((item) => item.test).sort(), [
+  'p8-provider-manager-cache-ipc.cjs',
+  'p9-provider-manager-cache-hardening.cjs',
+]);
+for (const item of retired.retired) {
+  assert.ok(item.reason && item.supersededBy, `retirement provenance missing for ${item.test}`);
+  assert.equal(fs.existsSync(path.join(__dirname, item.test)), false, `${item.test} must stay retired rather than silently skipped`);
+  assert.ok(!current.ordered.includes(item.test), `${item.test} must not re-enter active discovery`);
+}
+assert.ok(current.ordered.includes('p10-independent-cache-observer.cjs'), 'P10 must remain the active cache-observer authority');
+
 withTemp(['foundation.cjs','registry.cjs','run-all.cjs','behavior-z.cjs','behavior-a.cjs','p10-z.cjs','p2-z.cjs','p2-a.cjs'], (dir) => {
   const suite = discoverTests({testDir:dir, foundationTests:['foundation.cjs'], infrastructureFiles:['registry.cjs','run-all.cjs']});
   assert.deepEqual(suite.behavior, ['behavior-a.cjs','behavior-z.cjs']);
@@ -50,4 +63,4 @@ assert.equal(regressionNumber('p1-a.cjs'), 1);
 assert.equal(regressionNumber('p10-a.cjs'), 10);
 assert.equal(regressionNumber('behavior-a.cjs'), null);
 
-console.log('usage-dashboard test registry contract: OK · hybrid discovery, fail-closed classification, numeric P ordering');
+console.log('usage-dashboard test registry contract: OK · hybrid discovery, fail-closed classification, numeric P ordering, explicit P8/P9 retirement');

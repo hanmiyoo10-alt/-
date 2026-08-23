@@ -1,0 +1,215 @@
+name: Usage Dashboard Safe Candidate Preparation
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Candidate branch in release/usage-dashboard-* namespace
+        required: true
+        type: string
+      expected_head_sha:
+        description: Exact current candidate branch head SHA
+        required: true
+        type: string
+      release_spec:
+        description: Explicit target release spec path under .github/usage-dashboard/releases
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.materialize.outputs.has_changes }}
+      candidate_sha: ${{ steps.materialize.outputs.candidate_sha }}
+      bundle_sha256: ${{ steps.materialize.outputs.bundle_sha256 }}
+    steps:
+      - name: Require main workflow trust root
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo "CANDIDATE_PREP_UNTRUSTED_WORKFLOW_REF:$GITHUB_REF"; exit 1; }
+          [[ '${{ inputs.target_branch }}' =~ ^release/usage-dashboard-[A-Za-z0-9._-]+$ ]] || { echo 'CANDIDATE_PREP_TARGET_DENIED'; exit 1; }
+          case '${{ inputs.target_branch }}' in main|release-usage-dashboard|release-simcore) echo 'CANDIDATE_PREP_TARGET_DENIED'; exit 1;; esac
+          [[ '${{ inputs.expected_head_sha }}' =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'CANDIDATE_PREP_INVALID_SHA'; exit 1; }
+          case '${{ inputs.release_spec }}' in .github/usage-dashboard/releases/*.json) ;; *) echo 'CANDIDATE_PREP_RELEASE_SPEC_DENIED'; exit 1;; esac
+
+      - name: Checkout exact candidate base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify candidate branch still matches expected head
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          [[ "$ACTUAL_SHA" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_PREP_CHECKOUT_MISMATCH:$ACTUAL_SHA"; exit 1; }
+          RESPONSE="$(curl --fail-with-body --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH")"
+          REMOTE_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("object",{}).get("sha",""))' <<< "$RESPONSE")"
+          [[ "$REMOTE_SHA" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_SHA:expected=$EXPECTED_HEAD_SHA"; exit 1; }
+
+      - name: Materialize candidate without repository credentials
+        id: materialize
+        shell: bash
+        env:
+          PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          RELEASE_SPEC: ${{ inputs.release_spec }}
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
+          test -f "$RELEASE_SPEC"
+          UD_MATERIALIZER="$(python3 - "$RELEASE_SPEC" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+          spec = json.loads(Path(sys.argv[1]).read_text())
+          path = str(spec.get('materializer', ''))
+          if not re.fullmatch(r'plugins/usage-dashboard/tools/[A-Za-z0-9_.-]+\.py', path):
+              raise SystemExit('CANDIDATE_PREP_MATERIALIZER_DENIED')
+          print(path)
+          PY
+          )"
+          python3 -m py_compile "$UD_MATERIALIZER" plugins/usage-dashboard/tools/validate_release_candidate.py
+          python3 "$UD_MATERIALIZER"
+          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --write
+          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-worktree
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
+          python3 plugins/usage-dashboard/tools/validate_release_candidate.py --spec "$RELEASE_SPEC"
+          git diff --check
+
+          if [[ -z "$(git status --porcelain --untracked-files=all)" ]]; then
+            echo 'has_changes=false' >> "$GITHUB_OUTPUT"
+            echo "candidate_sha=$EXPECTED_HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo 'bundle_sha256=' >> "$GITHUB_OUTPUT"
+            echo "CANDIDATE_PREP_NO_CHANGES:$TARGET_BRANCH:$EXPECTED_HEAD_SHA"
+            exit 0
+          fi
+
+          git config user.name 'usage-dashboard-candidate-prep'
+          git config user.email 'usage-dashboard-candidate-prep@users.noreply.github.com'
+          git add -A -- \
+            plugins/usage-dashboard/src \
+            plugins/usage-dashboard/runtime-src \
+            plugins/usage-dashboard/runtime \
+            plugins/usage-dashboard/latest.js \
+            docs/USAGE_DASHBOARD_GUIDELINES.md
+          git diff --cached --quiet && { echo 'CANDIDATE_PREP_EMPTY_STAGE'; exit 1; }
+          [[ -z "$(git diff --name-only)" ]] || { echo 'CANDIDATE_PREP_UNSTAGED_OUTPUT'; git diff --name-only; exit 1; }
+          [[ -z "$(git ls-files --others --exclude-standard)" ]] || { echo 'CANDIDATE_PREP_UNTRACKED_OUTPUT'; git ls-files --others --exclude-standard; exit 1; }
+
+          git commit -m "materialize: Usage Dashboard candidate from $RELEASE_SPEC"
+          PAYLOAD_SHA="$(git rev-parse HEAD)"
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --verify-payload "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA"
+
+          git branch -f candidate-payload "$PAYLOAD_SHA"
+          BUNDLE="$RUNNER_TEMP/usage-dashboard-candidate.bundle"
+          META="$RUNNER_TEMP/usage-dashboard-candidate.json"
+          git bundle create "$BUNDLE" refs/heads/candidate-payload ^"$EXPECTED_HEAD_SHA"
+          git bundle verify "$BUNDLE"
+          BUNDLE_SHA256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+          node - "$META" "$TARGET_BRANCH" "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA" "$RELEASE_SPEC" "$BUNDLE_SHA256" <<'NODE'
+          const fs=require('node:fs');
+          const [file,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256]=process.argv.slice(2);
+          fs.writeFileSync(file, JSON.stringify({schemaVersion:1,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256},null,2)+'\n');
+          NODE
+          echo 'has_changes=true' >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$PAYLOAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha256=$BUNDLE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_PREP_BUNDLE_READY:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$PAYLOAD_SHA"
+
+      - name: Upload immutable candidate payload
+        if: steps.materialize.outputs.has_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: usage-dashboard-candidate-payload
+          path: |
+            ${{ runner.temp }}/usage-dashboard-candidate.bundle
+            ${{ runner.temp }}/usage-dashboard-candidate.json
+          retention-days: 1
+          if-no-files-found: error
+
+  commit-candidate:
+    needs: prepare
+    if: needs.prepare.outputs.has_changes == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout immutable trusted control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Download candidate Git bundle only
+        uses: actions/download-artifact@v4
+        with:
+          name: usage-dashboard-candidate-payload
+          path: ${{ runner.temp }}/usage-dashboard-candidate-payload
+
+      - name: Verify payload and fast-forward candidate branch
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          PAYLOAD_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+          EXPECTED_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle_sha256 }}
+          RELEASE_SPEC: ${{ inputs.release_spec }}
+        run: |
+          set -euo pipefail
+          BUNDLE="$RUNNER_TEMP/usage-dashboard-candidate-payload/usage-dashboard-candidate.bundle"
+          META="$RUNNER_TEMP/usage-dashboard-candidate-payload/usage-dashboard-candidate.json"
+          test -f "$BUNDLE" && test -f "$META"
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
+
+          ACTUAL_BUNDLE_SHA256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+          [[ "$ACTUAL_BUNDLE_SHA256" == "$EXPECTED_BUNDLE_SHA256" ]] || { echo 'CANDIDATE_BUNDLE_SHA256_MISMATCH'; exit 1; }
+          node - "$META" "$TARGET_BRANCH" "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA" "$RELEASE_SPEC" "$EXPECTED_BUNDLE_SHA256" <<'NODE'
+          const fs=require('node:fs');
+          const [file,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256]=process.argv.slice(2);
+          const data=JSON.parse(fs.readFileSync(file,'utf8'));
+          if(data.schemaVersion!==1 || data.targetBranch!==targetBranch || data.expectedHeadSha!==expectedHeadSha || data.payloadSha!==payloadSha || data.releaseSpec!==releaseSpec || data.bundleSha256!==bundleSha256) throw new Error('CANDIDATE_BUNDLE_METADATA_MISMATCH');
+          NODE
+
+          git fetch --no-tags origin "refs/heads/$TARGET_BRANCH:refs/remotes/origin/candidate-target"
+          REMOTE_BASE="$(git rev-parse refs/remotes/origin/candidate-target)"
+          [[ "$REMOTE_BASE" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_BASE:expected=$EXPECTED_HEAD_SHA"; exit 1; }
+
+          git bundle verify "$BUNDLE"
+          git fetch "$BUNDLE" 'refs/heads/candidate-payload:refs/candidate/payload'
+          IMPORTED_SHA="$(git rev-parse refs/candidate/payload)"
+          [[ "$IMPORTED_SHA" == "$PAYLOAD_SHA" ]] || { echo "CANDIDATE_PAYLOAD_SHA_MISMATCH:$IMPORTED_SHA"; exit 1; }
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --verify-payload "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA"
+
+          REMOTE_BEFORE="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$REMOTE_BEFORE" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_BEFORE:expected=$EXPECTED_HEAD_SHA"; exit 1; }
+          git push origin "$PAYLOAD_SHA:refs/heads/$TARGET_BRANCH"
+          REMOTE_AFTER="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$REMOTE_AFTER" == "$PAYLOAD_SHA" ]] || { echo "CANDIDATE_BRANCH_POSTVERIFY_MISMATCH:$REMOTE_AFTER"; exit 1; }
+          echo "CANDIDATE_MATERIALIZED branch=$TARGET_BRANCH base=$EXPECTED_HEAD_SHA candidate=$PAYLOAD_SHA"

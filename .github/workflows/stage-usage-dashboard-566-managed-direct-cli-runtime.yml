@@ -1,26 +1,14 @@
-name: Stage Usage Dashboard 3.0.0-alpha.5.66 Managed Direct CLI Runtime
+name: Stage Usage Dashboard 3.0.0-alpha.5.66 Managed Direct CLI Runtime (archived)
 
 on:
-  push:
-    branches: [main]
-    paths: &release_paths
-      - '.github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml'
-      - '.github/workflows/reusable-usage-dashboard-release.yml'
-      - '.github/usage-dashboard/releases/5.66.json'
-      - 'plugins/usage-dashboard/tools/prepare_release_regressions.py'
-      - 'plugins/usage-dashboard/tools/validate_release_candidate.py'
-      - 'plugins/usage-dashboard/tools/release_managed_direct_cli_runtime_566.py'
-      - 'plugins/usage-dashboard/tests/**'
-  pull_request:
-    branches: [main]
-    paths: *release_paths
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    uses: ./.github/workflows/reusable-usage-dashboard-release.yml
-    with:
-      release_spec: .github/usage-dashboard/releases/5.66.json
-      publish: false
+  archived:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain archive
+        run: echo 'Archived release publisher. Historical validation remains in git history; this workflow cannot write main or the release channel.'

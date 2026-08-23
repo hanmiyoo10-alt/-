@@ -143,7 +143,58 @@ The base branch had no permanent predecessor verifier, so the current-trusted-la
 
 The stable GitHub job name `Required` is operational. Repository enforcement is still inactive and is not inferred from the successful check.
 
+## Shadow proof anomaly preserved before repair
+
+Observed run:
+
+```text
+workflow       = SimCore CI
+run            = 32637377662
+Verify job     = 97189053827 / FAILURE
+profile        = PR_MAIN
+permanent core = STATIC PASS / ARCH PASS / REGRESSION PASS
+failure gate   = GATE_CI_SELF
+reason         = RS2_3_SHADOW_PROOF_FAIL
+```
+
+Direct runner evidence showed the temporary shadow proof aborted only on this assertion:
+
+```text
+legacy robust runner exit = 0
+proof parser expectation  = stdout contains literal `fixture 21: PASS`
+actual result              = literal marker absent
+```
+
+Classification:
+
+```text
+RS2_3_SHADOW_EVIDENCE_PARSER_ASSUMPTION
+= FIX / TEST_EVIDENCE / NON_RUNTIME
+```
+
+This is **not** classified as `PERMANENT_GATE_WEAKER`: the permanent static, architecture, and durable regression gates were all green in the same run. The failed assertion belongs only to the temporary evidence collector and assumed an unsupported stdout presentation detail from the legacy robust runner.
+
+Secondary evidence from the same run:
+
+```text
+Required receives Verify failure transitively
+→ stable required job cannot report success when Verify fails
+```
+
+This proves fail propagation of the workflow graph. It does **not** prove repository merge enforcement because `main` remains unprotected.
+
+Repair rule:
+
+```text
+do not change runtime
+ do not weaken permanent gates
+ inspect legacy runner's actual stable output/exit contract
+ repair only the temporary shadow evidence parser
+ rerun full shadow + negative parity
+```
+
 ## Validation record
 
 Permanent PR execution: **PASS**.
 Shadow equivalence and negative parity: **COLLECTING**.
+Shadow evidence parser anomaly: **FIX / PRESERVED**.

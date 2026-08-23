@@ -4,9 +4,9 @@ const assert = require('node:assert/strict');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 const currentRelease = assertCurrentReleaseArtifacts();
 const specPath = currentRelease.specPath;
-const validatorPath = currentRelease.sharedWorkflow;
+const validatorPath = currentRelease.validatorWorkflow;
 const callerPath = currentRelease.callerWorkflow;
-const publisherPath = currentRelease.publisherWorkflow;
+const publisherPath = currentRelease.publisherWorkflow || currentRelease.sharedWorkflow;
 const adapterPath = 'plugins/usage-dashboard/tools/prepare_release_regressions.py';
 const candidateValidatorPath = 'plugins/usage-dashboard/tools/validate_release_candidate.py';
 
@@ -41,7 +41,7 @@ assert.doesNotMatch(validatorWorkflow, /product\s*=\s*['"]3\.0\.0-alpha\./, 'val
 
 assert.ok(caller.length < 2400, 'release caller must remain small');
 assert.match(caller, /permissions:\s*\n\s*contents: read/);
-assert.match(caller, /uses: \.\/\.github\/workflows\/reusable-usage-dashboard-validate\.yml/);
+assert.ok(caller.includes(`uses: ./${currentRelease.validatorWorkflow}`));
 assert.ok(caller.includes(`release_spec: ${currentRelease.specPath}`));
 for (const forbidden of ['contents: write', 'git switch', 'git push', 'text.replace', 'check_release_monotonic.py', 'publish: true']) {
   assert.ok(!caller.includes(forbidden), `validation caller must not contain ${forbidden}`);

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "broadcast-closure.batch-a",
+  "suite": "broadcast-closure",
+  "input": {
+    "previous":"⏱️[2031-03-28 (Fri) 09:45 PM]",
+    "terminal":"⏱️[2031-03-28 (Fri) 10:15 PM]",
+    "validBody":"⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 진행\n⏱️[2031-03-28 (Fri) 10:15 PM]",
+    "nonMonotonic":"⏱️[2031-03-28 (Fri) 09:45 PM]\n⏱️[2031-03-28 (Fri) 09:30 PM]"
+  },
+  "expected":{"terminalCommit":"⏱️[2031-03-28 (Fri) 10:15 PM]","missingExecutableSurface":"B_END_STATE_COMMIT_AND_UNLOCK"},
+  "meta":{"goldenGate":true,"coverageExpectation":"HYBRID_TRANSITIONAL","migrationFrom":"v0.63.59 / v0.64.6 fixture12+19"}
+}

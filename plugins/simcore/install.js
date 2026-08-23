@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.5
+//@version 0.64.6
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -29,6 +29,14 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.6 Post-B_END C Clock Handoff Authority:
+// - Repairs the directly recurrent POST_BEND_C_CLOCK_DOMAIN_GAP: the first direct Mode C after a completed B_END may no longer use a stale Narrative current-time anchor earlier than the completed broadcast terminal airtime
+// - Adds a request-scoped POST_B_END_CURRENT_TIME_FLOOR only for the direct first C after B_END; Lifecycle owns eligibility, Time owns timestamp validation/comparison/floor selection, Prompt serializes the resulting current-frame authority, and finalization reuses the existing Narrative floor primitive
+// - Keeps Broadcast airtime and Narrative/event time as separate domains: no B_END-time Narrative mutation, no persistent Broadcast→Narrative coupling, no invented offset, and explicit user-requested historical/flashback timestamps remain allowed below the current-frame floor
+// - Source Handoff eligibility is intentionally not a clock prerequisite; a recurrence-owned Source Handoff may still receive the post-B_END clock bridge when lifecycle/lineage conditions are direct and valid
+// - Consolidates regression checks for Current Timeline Authority, Narrative Tail Time, B_END terminal airtime authority, explicit past-scene allowance, current calendar baseline, Representation/Edit controls, Summary Scope, and v0.64.5 COMMUNITY multiline behavior without changing those owners
+// - Adds no persistent schema/key, host read/write, network call, timer, request-history mutation, Representation taxonomy change, Edit Reconcile movement, Reaction normalization change, COMMUNITY structure change, Bootstrap Migration change, or cache/provider claim
 //
 // v0.64.5 COMMUNITY Multiline Reaction Unit Validation Repair:
 // - Follows v0.64.4 natural B_CONTINUE/B_END evidence where bilingual X(EN) comments repeatedly attributed missing 5: each logical comment/reply had its valid [RT N] tag on a translation continuation line while Structure inspected only the physical starter line
@@ -609,7 +617,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.64.5';
+const SIMCORE_RUNTIME_VERSION = '0.64.6';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -2113,6 +2121,54 @@ function compareTimestamps(a, b) {
   return pa.minuteKey === pb.minuteKey ? 0 : (pa.minuteKey > pb.minuteKey ? 1 : -1);
 }
 
+function resolvePostBEndCurrentTimeFloor(narrativeTimestamp, eligibility) {
+  const narrativeRaw = typeof narrativeTimestamp === 'string' && narrativeTimestamp.trim() ? narrativeTimestamp.trim() : null;
+  const base = eligibility && typeof eligibility === 'object' ? eligibility : { eligible: false, reason: 'not-eligible' };
+  if (!base.eligible) {
+    return Object.freeze({
+      disposition: 'INELIGIBLE',
+      source: base.source || 'NONE',
+      reason: base.reason || 'not-eligible',
+      terminalTimestamp: base.floorTimestamp || null,
+      narrativeTimestamp: narrativeRaw,
+      effectiveFloor: narrativeRaw,
+    });
+  }
+
+  const terminal = parseTimestamp(base.floorTimestamp);
+  if (!terminal) {
+    return Object.freeze({
+      disposition: 'INVALID_SOURCE',
+      source: base.source || 'B_END_TERMINAL',
+      reason: 'invalid-b-end-terminal',
+      terminalTimestamp: base.floorTimestamp || null,
+      narrativeTimestamp: narrativeRaw,
+      effectiveFloor: narrativeRaw,
+    });
+  }
+
+  const narrative = narrativeRaw ? parseTimestamp(narrativeRaw) : null;
+  if (!narrative || terminal.minuteKey > narrative.minuteKey) {
+    return Object.freeze({
+      disposition: 'APPLIED',
+      source: base.source || 'B_END_TERMINAL',
+      reason: narrative ? 'b-end-terminal-after-narrative' : 'narrative-missing',
+      terminalTimestamp: terminal.raw,
+      narrativeTimestamp: narrative ? narrative.raw : narrativeRaw,
+      effectiveFloor: terminal.raw,
+    });
+  }
+
+  return Object.freeze({
+    disposition: 'ALREADY_SATISFIED',
+    source: base.source || 'B_END_TERMINAL',
+    reason: terminal.minuteKey === narrative.minuteKey ? 'narrative-equals-terminal' : 'narrative-after-terminal',
+    terminalTimestamp: terminal.raw,
+    narrativeTimestamp: narrative.raw,
+    effectiveFloor: narrative.raw,
+  });
+}
+
 function elapsedMinutes(start, current) {
   const a = parseTimestamp(start);
   const b = parseTimestamp(current);
@@ -2481,6 +2537,7 @@ module.exports = {
   parseTimestamp,
   timestampYear,
   compareTimestamps,
+  resolvePostBEndCurrentTimeFloor,
   elapsedMinutes,
   resolveCalendarTransition,
   enforceNarrativeCalendarTarget,
@@ -2602,6 +2659,20 @@ function classifySummaryScope(input, mode = 'A') {
   });
 }
 
+function derivePostBEndClockEligibility(mode, previousMode, state, requestLineage) {
+  if (String(mode || '') !== 'C') return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'not-c' });
+  if (String(previousMode || '') !== 'B_END') return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'not-direct-post-b-end-c' });
+  if (state?.broadcastLocked) return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'broadcast-still-locked' });
+  const floorTimestamp = typeof state?.broadcastAirtime === 'string' && state.broadcastAirtime.trim() ? state.broadcastAirtime.trim() : null;
+  if (!floorTimestamp) return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'missing-b-end-terminal' });
+  const priorFamily = String(requestLineage?.lastRequestMode || '');
+  const priorIndex = Number(requestLineage?.lastRequestIndex);
+  if (priorFamily !== 'B' || !Number.isInteger(priorIndex) || priorIndex < 0) {
+    return Object.freeze({ eligible: false, floorTimestamp: null, source: 'NONE', reason: 'previous-request-not-b' });
+  }
+  return Object.freeze({ eligible: true, floorTimestamp, source: 'B_END_TERMINAL', reason: 'eligible-direct-post-b-end-c' });
+}
+
 function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const state = kernel.reconcileState(kernel.clone(baseState));
   const probe = promptProbe && typeof promptProbe === 'object' && promptProbe.__simcorePromptProbe
@@ -2625,13 +2696,17 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
   const secondaryConfigured = !!(config.secondaryName && config.secondaryKeyword);
   const secondaryActive = secondaryConfigured && input.includes(config.secondaryKeyword);
   const narrativeTimestampPrevious = /^B_/.test(c.mode) ? null : (state.narrativeTimestamp || null);
+  const previousMode = state.lastMode || 'A';
+  const postBEndClockEligibility = derivePostBEndClockEligibility(c.mode, previousMode, state, state.requestLineage);
+  const postBEndClockHandoff = time.resolvePostBEndCurrentTimeFloor(narrativeTimestampPrevious, postBEndClockEligibility);
+  const narrativeCurrentTimeFloor = postBEndClockHandoff.effectiveFloor || narrativeTimestampPrevious || null;
   const narrativeCalendarTarget = /^B_/.test(c.mode)
     ? { eligible: false, reason: 'BROADCAST', targetDate: null }
-    : time.resolveCalendarTransition(input, narrativeTimestampPrevious, state.worldYear);
+    : time.resolveCalendarTransition(input, narrativeCurrentTimeFloor, state.worldYear);
   const narrativeProgression = /^B_/.test(c.mode)
     ? { active: false, reason: 'broadcast' }
     : (narrativeCalendarTarget.eligible ? { active: true, reason: 'calendar-resolved' } : time.narrativeProgressionHint(input));
-  const narrativeClockGuard = !!(narrativeProgression.active && narrativeTimestampPrevious);
+  const narrativeClockGuard = !!((narrativeProgression.active || postBEndClockHandoff.disposition === 'APPLIED') && narrativeCurrentTimeFloor);
   const templateRecurrence = recurrence.observe(state, input, c.mode);
   const requestLineage = lineage.observe(state, input, c.mode, sendIndex);
   const communitySourceHandoff = handoff.observe(state, input, c.mode, requestLineage, templateRecurrence);
@@ -2664,8 +2739,14 @@ function prepareTurn(baseState, userText, promptProbe, sendIndex) {
     narrativeProgressionActive: !!narrativeProgression.active,
     narrativeProgressionReason: narrativeProgression.reason || 'none',
     narrativeTimestampPrevious,
+    narrativeCurrentTimeFloor,
     narrativeClockGuard,
     narrativeCalendarTarget,
+    postBEndClockEligible: !!postBEndClockEligibility.eligible,
+    postBEndClockDisposition: postBEndClockHandoff.disposition || 'INELIGIBLE',
+    postBEndClockFloor: postBEndClockHandoff.terminalTimestamp || postBEndClockEligibility.floorTimestamp || null,
+    postBEndClockReason: postBEndClockHandoff.reason || postBEndClockEligibility.reason || 'unknown',
+    currentTimeAuthority: postBEndClockHandoff.disposition === 'APPLIED' ? 'POST_B_END_FLOOR' : 'NARRATIVE',
     templateRecurrenceEligible: !!templateRecurrence.eligible,
     templateRecurrenceRepeated: !!templateRecurrence.repeated,
     templateRecurrenceHash: templateRecurrence.hash == null ? null : Number(templateRecurrence.hash),
@@ -2707,7 +2788,7 @@ function expectedCommunityBlocks(mode) {
     : (mode === 'B_START' || mode === 'B_CONTINUE' || mode === 'C') ? 1 : 0;
 }
 
-module.exports = { classifyMode, classifySummaryScope, prepareTurn, expectedCommunityBlocks };
+module.exports = { classifyMode, classifySummaryScope, derivePostBEndClockEligibility, prepareTurn, expectedCommunityBlocks };
 });
 
 SimCore.define("reaction", function (require, module, exports) {
@@ -3994,10 +4075,17 @@ function compileConditionalGuidance(s, p, communityExpected) {
     lines.push('broadcast_end_basis=explicit_B_END_lifecycle');
   }
   if (p.mode === 'C') lines.push('mode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1');
-  if (!/^B_/.test(String(p.mode || '')) && p.narrativeTimestampPrevious) {
-    lines.push(`current_timeline_anchor=${p.narrativeTimestampPrevious}`);
+  const currentTimelineAnchor = p.narrativeCurrentTimeFloor || p.narrativeTimestampPrevious || null;
+  if (!/^B_/.test(String(p.mode || '')) && currentTimelineAnchor) {
+    lines.push(`current_timeline_anchor=${currentTimelineAnchor}`);
     lines.push('current_timeline_authority=1;historical_context_reference_only=1;explicit_user_requested_past_scene_or_flashback_may_depart=1');
     lines.push('current_character_age_and_status_follow_current_timeline=1;past_event_age_or_status_not_current=1');
+  }
+  if (p.mode === 'C' && (p.postBEndClockDisposition === 'APPLIED' || p.postBEndClockDisposition === 'ALREADY_SATISFIED')) {
+    lines.push(`post_b_end_current_time_floor=${p.postBEndClockFloor || currentTimelineAnchor}`);
+    lines.push(`post_b_end_clock_handoff=${p.postBEndClockDisposition}`);
+    lines.push('post_b_end_floor_is_current_frame_minimum_only=1;broadcast_airtime_is_not_depicted_event_time=1');
+    lines.push('explicit_user_requested_past_scene_or_flashback_may_predate_post_b_end_floor=1');
   }
   if (!/^B_/.test(String(p.mode || ''))) {
     lines.push('narrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1');
@@ -4013,9 +4101,10 @@ function compileConditionalGuidance(s, p, communityExpected) {
       lines.push(`narrative_calendar_weekday=${p.narrativeCalendarTarget.weekday || 'unknown'}`);
       lines.push('narrative_calendar_target_is_current_date=1;time_of_day_unspecified_by_calendar_target=1');
     }
-    if (p.narrativeClockGuard && p.narrativeTimestampPrevious) {
-      lines.push(`narrative_timestamp_previous=${p.narrativeTimestampPrevious}`);
-      lines.push('narrative_timestamp_must_not_precede_previous=1');
+    if (p.narrativeClockGuard && (p.narrativeCurrentTimeFloor || p.narrativeTimestampPrevious)) {
+      lines.push(`narrative_timestamp_previous=${p.narrativeTimestampPrevious || 'n/a'}`);
+      lines.push(`narrative_current_time_floor=${p.narrativeCurrentTimeFloor || p.narrativeTimestampPrevious}`);
+      lines.push('narrative_timestamp_must_not_precede_current_time_floor=1');
     }
   }
   if (/^B_/.test(String(p.mode || ''))) {
@@ -4227,7 +4316,7 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
     finalText = sceneRolloverRepair.content;
     narrativeFloor = time.enforceNarrativeCurrentTimeFloor(
       finalText,
-      p.narrativeTimestampPrevious || state.narrativeTimestamp || null,
+      p.narrativeCurrentTimeFloor || p.narrativeTimestampPrevious || state.narrativeTimestamp || null,
     );
     finalText = narrativeFloor.content;
   }
@@ -7140,6 +7229,11 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
           guardActive: !!pendingProbe.narrativeClockGuard,
           trigger: pendingProbe.narrativeProgressionReason || 'none',
           previousAnchor: pendingProbe.narrativeTimestampPrevious || null,
+          effectiveFloor: pendingProbe.narrativeCurrentTimeFloor || pendingProbe.narrativeTimestampPrevious || null,
+          postBEndClockDisposition: pendingProbe.postBEndClockDisposition || 'INELIGIBLE',
+          postBEndClockFloor: pendingProbe.postBEndClockFloor || null,
+          postBEndClockReason: pendingProbe.postBEndClockReason || 'unknown',
+          currentTimeAuthority: pendingProbe.currentTimeAuthority || 'NARRATIVE',
           outputTimestamp: null,
           commitStatus: 'PENDING',
           commitReason: 'pending',
@@ -7285,6 +7379,11 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         ...result.narrativeClockProbe,
         phase: 'output',
         previousMode: priorProbe?.previousMode || null,
+        effectiveFloor: priorProbe?.effectiveFloor || result.narrativeClockProbe.previous || null,
+        postBEndClockDisposition: priorProbe?.postBEndClockDisposition || 'INELIGIBLE',
+        postBEndClockFloor: priorProbe?.postBEndClockFloor || null,
+        postBEndClockReason: priorProbe?.postBEndClockReason || 'unknown',
+        currentTimeAuthority: priorProbe?.currentTimeAuthority || 'NARRATIVE',
       };
     }
     const quarantineIssues = result.stateCommit?.communitySafe === false ? [result.stateCommit.reason] : [];
@@ -7828,6 +7927,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Evidence root fence: ${evidenceFence?.rootFence ? `${evidenceFence.rootFence.status} · request @${evidenceFence.rootFence.requestIndex >= 0 ? evidenceFence.rootFence.requestIndex : 'n/a'} role ${evidenceFence.rootFence.role || 'n/a'} · shape ${evidenceFence.rootFence.shape || 'n/a'} · delta ${evidenceFence.rootFence.normDelta == null ? 'n/a' : evidenceFence.rootFence.normDelta} · ${evidenceFence.rootFence.reason || 'n/a'}` : 'n/a'}`,
       `Evidence source fence: ${evidenceFence?.sourceFence ? `${evidenceFence.sourceFence.status} · request @${evidenceFence.sourceFence.requestIndex >= 0 ? evidenceFence.sourceFence.requestIndex : 'n/a'} role ${evidenceFence.sourceFence.role || 'n/a'} · shape ${evidenceFence.sourceFence.shape || 'n/a'} · delta ${evidenceFence.sourceFence.normDelta == null ? 'n/a' : evidenceFence.sourceFence.normDelta} · ${evidenceFence.sourceFence.reason || 'n/a'}` : 'n/a'}`,
       `Narrative clock: ${probeFresh && narrative ? `${narrative.commitStatus || 'n/a'} · previous ${narrative.previousAnchor || 'n/a'} · frame ${narrative.frameTimestamp || narrative.observedTimestamp || 'n/a'} · committed ${narrative.outputTimestamp || 'n/a'} · scenes ${Number(narrative.sceneCount || 0)} · tail ${narrative.tailStatus || 'n/a'}` : 'n/a'}`,
+      `Post-B_END clock handoff: ${probeFresh && narrative ? `${narrative.postBEndClockDisposition || 'INELIGIBLE'} · floor ${narrative.postBEndClockFloor || 'n/a'} · narrative ${narrative.previousAnchor || 'n/a'} · effective ${narrative.effectiveFloor || narrative.previousAnchor || 'n/a'} · reason ${narrative.postBEndClockReason || 'unknown'}` : 'n/a'}`,
+      `Current-time authority: ${probeFresh && narrative ? (narrative.currentTimeAuthority || 'NARRATIVE') : 'n/a'}`,
       `Narrative tail coverage: ${probeFresh && narrative ? (/^FRAME_ONLY/.test(String(narrative.tailStatus || '')) ? 'FRAME_ONLY · no explicit terminal timestamp beyond frame · RAW prose cross-check required for elapsed/current/end-time cues' : (narrative.tailPromoted ? 'EXPLICIT_TAIL · terminal timestamp observed and committed' : `NO_TAIL_PROMOTION · ${narrative.tailStatus || 'n/a'}`)) : 'n/a'}`,
       `Visible chronology: ${probeFresh && narrative ? (narrative.tailStatus === 'SKIPPED_NON_MONOTONIC' ? 'NON_MONOTONIC_VISIBLE_SEQUENCE · state floor protected · body unchanged' : (narrative.tailStatus === 'SKIPPED_MALFORMED' ? 'MALFORMED_VISIBLE_SEQUENCE · state floor protected · body unchanged' : 'PASS_OR_NOT_APPLICABLE')) : 'n/a'}`,
       `Stored broadcast: ${state?.broadcastLocked ? 'LOCKED' : 'UNLOCKED'} · airtime ${state?.broadcastAirtime || 'n/a'} · start ${state?.broadcastAirtimeStart || 'n/a'}`,

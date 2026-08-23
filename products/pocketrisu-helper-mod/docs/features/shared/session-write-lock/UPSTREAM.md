@@ -2,40 +2,52 @@
 
 Feature-ID: `session-write-lock`
 Area: `shared`
-PR status: `PR_READY_REBUILD`
-Isolation status: `REBUILD_PLAN_ISOLATED`
-Deployment status: `NOT_READY`
+PR status: `ALREADY_UPSTREAM`
+Isolation status: `UPSTREAM_IMPLEMENTED`
+Deployment status: `UPSTREAM_PRESENT`
+
+## Official upstream status
+
+This feature is already implemented in official `PocketRisu/PocketRisu` and must **not** be submitted as a duplicate PR.
+
+- Official commit: `94353fa155b28a07f2d901a88df86587a7cb9a5d`
+- Commit title: `fix: stop spurious cross-device session kicks with gesture-gated writer lock`
+- Commit date: 2026-07-28
+- Current official `main` still contains the protocol.
+
+Confirmed official implementation includes:
+- stable per-tab `sessionId` persisted through `sessionStorage` when available;
+- `x-session-id` on Node/self-host requests;
+- recent real-user-gesture tracking and `x-user-active` gating;
+- deduplicated/retry-safe `/api/session` initialization;
+- server-side `session-lock.cjs` state machine;
+- registration that does not steal an existing writer lock;
+- user-active takeover for a fresh session;
+- stale-session rejection;
+- side-effect-free `/api/session/lock-status`;
+- focused session-lock tests, including background/automatic-write regression coverage.
+
+The previous `PR_READY_REBUILD` classification was therefore incorrect. The candidate was discovered to be already upstream while preparing a new official PR on 2026-08-23. No duplicate source branch or official PR was created.
 
 ## Problem / motivation
 Prevent a stale/background/restored tab from silently taking cross-device write ownership merely because it performs automatic housekeeping, while still allowing the actively used session to take the writer lock when a real user action leads to a write.
 
 ## Legacy evidence
-This feature exists in the current local PocketRisu server/client working implementation but was developed together with other Node/self-host changes and is not represented by one clean Git commit. Rebuild from the documented invariants and current upstream session/write APIs rather than trying to split old history.
+The local PocketRisu implementation and the official upstream implementation share the same core contract. Historical local investigation remains useful for diagnostics, but this feature no longer needs an upstream rebuild dossier for submission.
 
 Known client touch area:
 - `src/ts/storage/nodeStorage.ts`
 
 Known server touch area:
-- `server/node/server.cjs` session registration/write-lock policy.
-
-Observed client primitives from the verified local implementation:
-- per-tab `sessionId` persisted in `sessionStorage` under `risu-writer-session-id`;
-- `sessionInitialized` / `sessionPending` guarding `/api/session` initialization;
-- `x-session-id` on Node storage requests;
-- recent-user-gesture tracking with a bounded window (local implementation used 15 seconds);
-- `x-user-active` only when a write follows a real recent user gesture.
-
-Observed server semantics:
-- `/api/session` registers a client session boot;
-- writer ownership is associated with client session identity;
-- automatic/background writes must not steal ownership from the actually active writer;
-- a newly active user-driven session may take ownership according to the lock policy;
-- stale writer status can be surfaced without treating a logical client-session boot as a Node server restart.
+- `server/node/server.cjs`
+- `server/node/session-lock.cjs`
 
 ## Minimal upstream scope
-Define and implement the smallest end-to-end client/server writer-lock protocol needed to distinguish background automatic writes from real user-active writes, with stable per-tab session identity and stale-session protection. Keep browser-runtime diagnostics and general auth redesign outside the feature.
+Already satisfied upstream: distinguish background automatic writes from real user-active writes, keep stable per-tab session identity, prevent page/session registration from stealing active writer ownership, and reject stale writers before they overwrite newer state.
 
-## Clean rebuild boundary
+Any future change must be based on a **new confirmed gap or regression** and should receive a new Feature-ID rather than reopening this feature as if it were absent upstream.
+
+## Current upstream contract
 ### Client contract
 1. Give each browser tab/session a stable per-tab identity that survives reload/OS restoration of the same tab when platform storage permits it.
 2. Send that identity with Node/self-host storage operations that participate in writer ownership.
@@ -45,9 +57,9 @@ Define and implement the smallest end-to-end client/server writer-lock protocol 
 ### Server contract
 1. Register logical client sessions separately from Node process lifetime.
 2. Do not transfer writer ownership merely because a client session registers/boots.
-3. Transfer/take over writer ownership only under the explicit user-active write policy.
+3. Transfer/take over writer ownership only under the explicit user-active write policy for a fresh session.
 4. Detect/report stale sessions consistently so an outdated in-memory DB does not overwrite a newer writer's state.
-5. Keep auth/session-cookie behavior separate from writer-lock policy where practical.
+5. Keep lock-state inspection side-effect free.
 
 ## Explicitly out of scope
 Do not bundle:
@@ -58,20 +70,22 @@ Do not bundle:
 - forced save/flush on `visibilitychange` or `pagehide`;
 - general authentication redesign.
 
-The current investigation into why Firefox may recreate the JS runtime while visually restoring the same tab is a diagnostic follow-up, not a prerequisite for reconstructing the lock protocol.
+The investigation into why Firefox may recreate the JS runtime while visually restoring the same tab remains a separate diagnostic topic.
 
 ## Critical guardrail
-Do **not** reintroduce forced full DB flushes or writer-lock movement from hide/pagehide/background housekeeping. The local `flushServerDbKeepalive()` no-op policy must not be silently reversed as part of this feature.
+Do **not** use this already-upstream feature as justification to reintroduce forced full DB flushes or writer-lock movement from hide/pagehide/background housekeeping. Any separate save/flush change must be reviewed under its own Feature-ID.
 
 ## Dependencies
 - Current Node/self-host auth/session request path.
-- Storage write endpoints capable of receiving session/activity metadata.
-- Existing stale/ETag/database consistency behavior.
+- Storage write endpoints receiving session/activity metadata.
+- Existing stale/database consistency behavior.
 
 ## Verification evidence
-The verified local implementation has shown the intended per-tab identity, `/api/session`, user-gesture gating and writer-lock behavior in real use. Rebuild acceptance is the explicit background-vs-user-active and stale-session regression matrix below; the Firefox runtime-recreation investigation remains separate.
+Official commit `94353fa155b28a07f2d901a88df86587a7cb9a5d` contains the server writer-lock state machine and regression tests, and official `main` currently contains the client session identity, user-gesture gating, session initialization and lock-status request path.
 
-## Rebuild test plan
+Previously documented local real-world observations remain useful as supplementary evidence but are not needed to justify another upstream PR.
+
+## Regression matrix for future changes
 - Same tab normal reload -> per-tab identity remains stable when `sessionStorage` survives.
 - New tab -> receives a distinct identity.
 - Background tab automatic write/housekeeping -> does not steal writer ownership.
@@ -80,31 +94,16 @@ The verified local implementation has shown the intended per-tab identity, `/api
 - Another device writes -> old session is reported stale before it can overwrite newer state.
 - `/api/session` network failure -> retry works and does not create false activity.
 - Multiple concurrent `initSession()` callers -> one pending initialization, no duplicate race.
-- Logical `Session boot registered` -> does not imply/relabel a Node server process restart.
+- Logical `Session boot registered` -> does not imply a Node server process restart.
 - Auth failure remains auth failure; lock logic must not bypass authentication.
-- Restart/server recovery -> session/lock behavior is deterministic and DB integrity preserved.
-
-## PR construction recipe
-1. Create fresh `feat/session-write-lock` from latest official upstream.
-2. Inspect current Node/self-host session/auth and write endpoints; document the exact protocol before editing.
-3. Implement/restore stable client session identity and request headers with focused tests.
-4. Implement server writer-lock transition rules with explicit tests for background vs user-active writes.
-5. Add stale-state regression coverage.
-6. Verify no visibility/pagehide full-flush behavior is introduced.
-7. Keep Firefox runtime-recreation instrumentation out of the production PR unless it becomes a separately justified feature.
-
-## Possible upstream PR split
-If the full client/server diff is too large for review, split without breaking Feature-ID ownership:
-- PR A: session identity + request metadata contract.
-- PR B: server writer-lock transition/stale policy using PR A.
-
-Both remain part of this feature dossier, but each upstream PR must be independently testable and clearly dependent on the prior one.
+- Restart/server recovery -> session/lock behavior remains deterministic.
 
 ## Upstream pitch
-Safer Node/self-host multi-device editing: background/restored tabs cannot silently become the writer just because they perform automatic work, while real user-driven writes can still take control predictably.
+Already accepted in substance by official upstream as a safer Node/self-host multi-device writer-lock protocol. No new pitch is required unless a distinct regression or missing behavior is discovered.
 
 ## Review / PR state
-- dossier reconstruction: COMPLETE
-- legacy Git-history surgery: NOT REQUIRED
-- Firefox sessionInitialized/runtime-recreation investigation: SEPARATE_DIAGNOSTIC
-- next action: rebuild protocol from latest upstream Node storage/session APIs and run the background-vs-user-active regression matrix.
+- official upstream implementation: `94353fa155b28a07f2d901a88df86587a7cb9a5d`
+- duplicate PR submission: `DO_NOT_SUBMIT`
+- previous rebuild classification: `SUPERSEDED`
+- Firefox sessionInitialized/runtime-recreation investigation: `SEPARATE_DIAGNOSTIC`
+- next action: remove `session-write-lock` from new-PR candidate lists; create a new Feature-ID only for a newly confirmed gap/regression.

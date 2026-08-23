@@ -10,10 +10,17 @@ PocketRisu를 **메인폰 + 서버폰** 구조로 운영하면서 만든 보조 
 ## 먼저 읽기
 
 1. [`CURRENT.md`](CURRENT.md) — 지금 상태와 다음 한 단계
-2. [`ROADMAP.md`](ROADMAP.md) — 앞으로 할 일
-3. [`docs/history.md`](docs/history.md) — 지금까지 과정
-4. [`docs/decisions.md`](docs/decisions.md) — 왜 그렇게 결정했는지
-5. [`docs/features/README.md`](docs/features/README.md) — 기능별 독립 모듈
+2. [`ROUTINE.md`](ROUTINE.md) — 작업 시작/진행/종료 고정 루틴
+3. [`ROADMAP.md`](ROADMAP.md) — 앞으로 할 일
+4. [`docs/history.md`](docs/history.md) — 지금까지 과정
+5. [`docs/decisions.md`](docs/decisions.md) — 왜 그렇게 결정했는지
+6. [`docs/features/README.md`](docs/features/README.md) — 기능별 독립 모듈
+
+## 기본 작업 루틴
+
+> **읽기 → 검사 → 백업 → 한 단계 수정 → 검증 → 기능 문서 → CURRENT → ROADMAP → CI**
+
+새 채팅/작업을 시작하면 `CURRENT.md`와 해당 기능 문서를 먼저 읽고, 작업 종료 시 실제 상태를 제품 문서에 다시 동기화한다. 상세 규칙은 [`ROUTINE.md`](ROUTINE.md)를 기준으로 한다.
 
 ## 기기 역할
 

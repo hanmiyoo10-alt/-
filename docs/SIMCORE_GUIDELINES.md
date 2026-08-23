@@ -881,9 +881,12 @@ unless a deliberate narrow connector-backed change has a safer direct path.
 
 Current production family at the time this document was created:
 
+<!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.3 — B_END Diagnostic Builder Binding Repair
+SimCore v0.64.6 — Post-B_END C Clock Handoff Authority
+Release commit: 47969d24771f6cc188df6e32150fc6fde519182d
 ```
+<!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 
 Do not treat this number as permanently current; update this section when production advances.
 

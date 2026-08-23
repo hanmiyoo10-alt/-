@@ -13,21 +13,22 @@
 
 ---
 
-<!-- SIMCORE_PRODUCTION_SNAPSHOT:BEGIN -->
+<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.3`
-- Release: `B_END Diagnostic Builder Binding Repair`
+- Version: `0.64.6`
+- Release: `Post-B_END C Clock Handoff Authority`
 - Release branch: `release-simcore`
-- Release commit: `d7fd45cd193ef1ff187c73761ded958d89558ebf`
-- Release blob: `ff481aa904340b844ef29b0d89aa20bd6286286d`
-- Validation status: `PENDING_REAL_LONG_CHAT`
-- Primary optimization target: `06403_B_END_DIAGNOSTIC_BUILDER_LIVE_VALIDATION`
-- Provider cache: `UNVERIFIED`
+- Release commit: `47969d24771f6cc188df6e32150fc6fde519182d`
+- Release blob: `34da01aa131f760b92d65d961a7843e9cc0d37d6`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
+- Major update milestone: `2.0M`
+- Major update phase: `M2`
+- Major update checkpoint: `M2-2`
 
-This block is machine-managed after each production release update.
-<!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->
+This block is machine-managed from verified declared release state. It does not determine the immediate next action.
+<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
 ---
 

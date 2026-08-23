@@ -2,12 +2,13 @@
 
 Feature-ID: `db-save-optimization`
 Area: `server-phone`
-PR status: `VALIDATING`
+PR status: `UPSTREAM_OPEN`
 Isolation status: `CLEAN`
 Dependencies status: `RESOLVED`
 Deployment status: `NOT_READY`
 Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`
-Current head: `5f3cf377c52826715ab6c3f402331fede55f0920`
+Official upstream PR: `https://github.com/PocketRisu/PocketRisu/pull/67`
+Current head: `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`
 
 ## Problem / motivation
 Large `/api/patch` requests paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On large saves/pluginCustomStorage this produced roughly 1.1–1.8s patch latency in the verified local workload.
@@ -171,8 +172,8 @@ Large self-host databases should not pay whole-database hash/clone/ETag costs fo
 - legacy Git-history surgery: NOT REQUIRED
 - upstream strategy: STAGED_PR_SERIES
 - local PR #4: OPEN / MERGEABLE / NOT_DRAFT
-- isolation: CLEAN — current diff changes only `server/node/server.cjs` for PR A (+4/-2)
+- isolation: CLEAN — official Stage A is one commit / one file (`server/node/server.cjs`, +23/-2)
 - reviews: none; unresolved review threads: none
-- CI/checks: MISSING — no relevant workflow run or status check exists for head `5f3cf377c52826715ab6c3f402331fede55f0920`; absence of checks is not GREEN
-- official upstream PR: NOT_CREATED — connected integration previously returned HTTP 403 when attempting cross-repository PR creation
-- next action: obtain at least one relevant successful CI/check for the exact current head, then re-evaluate GREEN eligibility; do not merge while checks are absent.
+- CI/checks: MISSING — no relevant workflow run or status check is currently observed for official PR #67 head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; absence of checks is not GREEN
+- official upstream PR: OPEN / MERGEABLE / NOT_DRAFT — `PocketRisu/PocketRisu#67`
+- next action: monitor official PR #67 review/check state. Keep Stage B (`hanmiyoo10-alt/PocketRisu#5`) and Stage C (`#6`) as dependent drafts until Stage A is accepted/rebased; after any upstream result, re-inspect latest `develop` before promoting the next stage.

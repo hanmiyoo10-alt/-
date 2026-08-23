@@ -20,7 +20,9 @@ assert.ok(!validator.includes('git push'));
 assert.ok(validator.includes('CANDIDATE_NOT_MATERIALIZED'));
 assert.ok(fs.existsSync(release.publisherWorkflow || release.sharedWorkflow));
 assert.match(publisher, /group: usage-dashboard-release/);
-assert.ok(publisher.includes('scripts/repo-main-write.py'));
+assert.ok(!publisher.includes('scripts/repo-main-write.py'), 'Stage B publisher must never write main');
+assert.ok(!publisher.includes('PAYLOAD_COMMIT'), 'Stage B publisher must not create a main-write payload');
+assert.ok(!publisher.includes('git push origin HEAD:main'), 'Stage B publisher must never push main directly');
 assert.ok(publisher.includes('check_release_monotonic.py'));
 
 const loadedAgain = loadCurrentRelease();

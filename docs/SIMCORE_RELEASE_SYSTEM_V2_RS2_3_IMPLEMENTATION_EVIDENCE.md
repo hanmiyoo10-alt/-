@@ -1,8 +1,9 @@
 # SimCore Release System v2 — RS2-3 Permanent CI Implementation Evidence
 
 Date: 2026-08-23
-Status: **IMPLEMENTING · NON-RUNTIME**
+Status: **SHADOW VERIFIED · INSTALLATION READY · NON-RUNTIME**
 Phase: `RS2-3 — Permanent CI`
+Implementation PR: `#151`
 Design authority:
 - `docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_3A_PERMANENT_CI_TOPOLOGY_TRUST_BOUNDARY.md`
 - `docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_3B_TRIGGER_CHECK_MATRIX_PATH_CLASSIFICATION.md`
@@ -14,120 +15,220 @@ Design authority:
 
 ```text
 implementation base main = 1dcf86a8af4ba3feb3a17d5a1817da647ce6137e
-RS2-2 phase            = CLOSED
-RS2-3 entry authorized = YES
-release-simcore        = 47969d24771f6cc188df6e32150fc6fde519182d
-production version     = 0.64.6
-production blob        = 34da01aa131f760b92d65d961a7843e9cc0d37d6
+RS2-2 phase               = CLOSED
+release-simcore           = 47969d24771f6cc188df6e32150fc6fde519182d
+production version        = 0.64.6
+production blob           = 34da01aa131f760b92d65d961a7843e9cc0d37d6
 ```
 
-`release-simcore` is read-only input to this work item. No runtime/plugin source mutation is authorized.
+`release-simcore` remained read-only throughout RS2-3 implementation. No runtime/plugin source mutation was authorized or performed.
 
-## Scope lock
-
-Allowed:
+## Permanent CI installed by this work item
 
 ```text
 .github/workflows/simcore-ci.yml
-products/simcore/ci/**
 products/simcore/tooling/check.mjs
-products/simcore/tooling/ci/**
-permanent-harness enrollment needed to preserve existing verification strength
-RS2-3 implementation / shadow / promotion evidence
-pure check-only predecessor retirement only after its frozen parity gate is satisfied
+products/simcore/tooling/ci/classify.mjs
+products/simcore/tooling/ci/legacy-compat.mjs
+products/simcore/tooling/ci/self-test.mjs
+products/simcore/ci/legacy-compat.json
+products/simcore/ci/legacy-gate-map.json
+products/simcore/ci/shadow-equivalence.json
 ```
 
-Forbidden:
+Permanent properties:
 
 ```text
-plugins/simcore/latest.js mutation
-plugins/simcore/install.js mutation
-release-simcore mutation
-runtime semantic change
-product-manifest repair by CI
-sync-state --write from permanent CI
-repo-main-write.py from permanent CI
-repository ref mutation by permanent CI
-release transaction replacement
-RS2-4 implementation
+public check                     = SimCore CI / Required
+repository permission            = contents: read
+secrets                          = none
+repository/ref writes            = none
+sync-state --write               = forbidden
+repo-main-write.py               = forbidden
+external actions                 = full-SHA pinned
+bounded report maximum           = 256 KiB
+PR unrelated/doc-only conclusion = NOOP success
+MAIN_HEALTH                      = full baseline
+CANDIDATE_SHADOW                 = immutable candidate check
+CANDIDATE_REQUIRED               = interface present, caller authority reserved for RS2-4
 ```
 
-## Entry administration evidence
-
-At implementation start, GitHub reports:
+## First permanent execution
 
 ```text
-main protected = false
-required status checks = off
+run          = 32637087508
+Verify       = 97188369974 / SUCCESS
+Required     = 97188394793 / SUCCESS
+profile      = PR_MAIN
+production   = 47969d24771f6cc188df6e32150fc6fde519182d
+Node         = 22.23
+Python       = 3.12
+artifact     = 9492595979
 ```
 
-The available repository connector exposes no branch-protection or repository-ruleset mutation action.
-
-Classification:
+Executed gates:
 
 ```text
-REQUIRED_CI_ENFORCEMENT_ADMIN_CAPABILITY_GAP
-= BLOCKER / ADMINISTRATION / TOOL_SURFACE
+GATE_CI_SELF    PASS
+GATE_STATIC     PASS
+GATE_ARCH       PASS
+GATE_REGRESSION PASS
 ```
 
-This does **not** block installing and shadow-verifying permanent read-only CI. It blocks only the RS2-3E claims that require actual repository enforcement:
+## Preserved shadow-proof anomalies
+
+Two evidence-collector defects were discovered during RS2-3D and preserved before repair.
+
+### `RS2_3_SHADOW_EVIDENCE_PARSER_ASSUMPTION`
 
 ```text
-REQUIRED_CI_ACTIVE = YES
-REQUIRED_CI_ENFORCEMENT_VERIFIED = YES
-RS2_3_CLOSED = YES
-RS2_4_ENTRY_AUTHORIZED = YES
+classification = FIX / TEST_EVIDENCE / NON_RUNTIME
+run            = 32637377662
 ```
 
-The implementation therefore proceeds through the frozen `PROMOTION_READY` boundary and must not fabricate enforcement evidence.
-
-## Permanent action pins selected
+The temporary proof expected a nonexistent per-fixture stdout string. The legacy robust runner's stable contract is aggregate exit 0 plus:
 
 ```text
-actions/checkout   = 11d5960a326750d5838078e36cf38b85af677262
-actions/setup-node = 49933ea5288caeca8642d1e84afbd3f7d6820020
-actions/setup-python = a26af69be951a213d495a4c3e4e4022e16d87065
-actions/upload-artifact = ea165f8d65b6e75b540449e92b4886f43607fa02
+v0.64.6 closure + timeline regression fixtures 1-25: PASS
 ```
 
-All permanent workflow external actions must remain full-SHA pinned.
+No permanent product gate was weaker in that run.
 
-## Required implementation outcomes before PROMOTION_READY
+### `RS2_3_SHADOW_NEGATIVE_FIXTURE_OVERDESTRUCTIVE`
 
 ```text
-permanent workflow installed                      PASS required
-contents:read / no secrets / no writes            PASS required
-PR classifier + explicit NOOP                      PASS required
-MAIN_HEALTH full baseline                          PASS required
-immutable candidate profiles                       PASS required
-Batch A permanent regression                       PASS required
-architecture/static gate                           PASS required
-RS2-2 sync-state --check                           PASS required
-legacy responsibility map complete                 PASS required
-bounded legacy-compat ownership                    PASS required
-3 positive shadows / diversity rules               PASS required
-mandatory negative parity                          PASS required
-no PERMANENT_GATE_WEAKER                           PASS required
-runtime diff                                        NONE required
-release-simcore diff                                NONE required
+classification = FIX / TEST_EVIDENCE / NON_RUNTIME
+run            = 32637534610
 ```
 
-## Permanent CI first execution
+The temporary COMMUNITY negative removed the whole Reaction module and therefore produced a harness infrastructure error instead of a semantic failure. The repaired negative preserved module loadability and changed only the reaction predicate. No permanent product gate was weakened.
 
-Implementation PR: `#151`
+Both failed runs also demonstrated fail propagation:
 
 ```text
-workflow       = SimCore CI
-run            = 32637087508
-Verify job     = 97188369974 / SUCCESS
-Required job   = 97188394793 / SUCCESS
+Verify failure -> Required failure
+```
+
+This proves workflow graph propagation only; it does not prove repository enforcement.
+
+## Shadow equivalence — complete
+
+Qualifying successful runs:
+
+```text
+run 32637669371
+  verifier = bdfcfdc5533a701fe5dd7624d1f928af2ec37c61
+  Verify   = SUCCESS
+  Required = SUCCESS
+
+run 32637743955
+  verifier = fbe326d07767a676c3835fb929dc9541e3efef0f
+  Verify   = SUCCESS
+  Required = SUCCESS
+```
+
+Each run checked both immutable positive identities:
+
+```text
+DEPLOYED_PRODUCTION
+  source = 47969d24771f6cc188df6e32150fc6fde519182d
+
+HISTORICAL_CORRECTION_CANDIDATE
+  source = db14a61862c3730582ad102a70d109348b7e1cb7
+```
+
+For each positive identity:
+
+```text
+permanent CANDIDATE_SHADOW = PASS
+legacy architecture        = PASS
+legacy robust 1-25         = PASS
+```
+
+Resulting evidence diversity:
+
+```text
+positive records                    = 4
+minimum required                    = 3
+distinct verifier identities        = 2
+minimum distinct verifier identities= 2
+```
+
+Mandatory negative parity:
+
+```text
+latest/install mismatch          legacy FAIL · permanent FAIL · LATEST_INSTALL_MISMATCH
+forbidden architecture module    legacy FAIL · permanent FAIL · ARCH_CONTRACT_FAIL
+COMMUNITY predicate broken       legacy FAIL · permanent FAIL · SEMANTIC_FAIL
+terminal/stored mismatch #21     legacy/permanent expected INVALID_SOURCE
+```
+
+Canonical ledger:
+
+```text
+products/simcore/ci/shadow-equivalence.json
+status = SHADOW_VERIFIED
+openMismatchIds = []
+permanentStrength = EQUIVALENT_OR_STRICTER_WITH_DURABLE_BATCH_A_PLUS_BOUNDED_LEGACY_COMPAT
+```
+
+No `PERMANENT_GATE_WEAKER` or `ASSERTION_STRENGTH_GAP` blocker remains open.
+
+## Legacy validation authority migration
+
+Canonical map:
+
+```text
+products/simcore/ci/legacy-gate-map.json
+status = SHADOW_VERIFIED
+```
+
+Disposition:
+
+```text
+CHECK_ONLY_PREDECESSOR
+  architecture contracts
+  shadow status          = SHADOW_VERIFIED
+  retirementEligibility  = YES
+  physical retirement    = HELD_FOR_REQUIRED_ENFORCEMENT
+
+MIXED_BUILD_VALIDATOR
+  validation responsibility = VALIDATION_REPLACED
+  build/write responsibility = RS2_4_PENDING
+  normal invocation          = FORBIDDEN_AFTER_VALIDATION_REPLACEMENT
+
+ADMIN_STATE_WRITER / RELEASE_WRITER
+  write authority = outside RS2-3 retirement authority
+```
+
+The pure architecture predecessor is intentionally not physically removed before required-check enforcement, preserving the frozen no-authority-gap sequence.
+
+## Temporary shadow infrastructure retirement
+
+After shadow evidence became durable:
+
+```text
+.github/workflows/rs2-3-simcore-shadow-proof.yml      REMOVED
+products/simcore/tooling/ci/rs2-3-shadow-proof.mjs  REMOVED
+branch-specific shadow hook in check.mjs             REMOVED
+```
+
+No temporary proof collector remains in the permanent implementation.
+
+## Permanent-only pre-merge proof
+
+Final substantive implementation head before evidence-only close notes:
+
+```text
+branch head    = da0d231fa986df4f688952897f5738c7f852248c
+workflow run   = 32638328493
+Verify job     = 97191324976 / SUCCESS
+Required job   = 97191357029 / SUCCESS
+report artifact= 9492903249
+report bytes   = 791
 profile        = PR_MAIN
 scope          = CI_SELF + HARNESS + SIMCORE_DOC_ONLY
 production     = 47969d24771f6cc188df6e32150fc6fde519182d
-source sha256  = 1f07668f418faf0029c37409c31545f146c27592ac37eff39fea8cdd0e599aac
-Node           = 22.23
-Python         = 3.12
-report artifact= 9492595979
 ```
 
 Executed permanent gates:
@@ -139,163 +240,52 @@ GATE_ARCH       PASS
 GATE_REGRESSION PASS
 ```
 
-The base branch had no permanent predecessor verifier, so the current-trusted-lane step correctly recorded an initial-install condition rather than inventing a base permanent result.
+This run contains no temporary shadow hook or collector.
 
-The stable GitHub job name `Required` is operational. Repository enforcement is still inactive and is not inferred from the successful check.
+## Administrative enforcement blocker
 
-## Shadow proof anomalies preserved before repair
-
-### A. Unsupported legacy stdout detail
-
-Observed run:
+Repository fact remains:
 
 ```text
-workflow       = SimCore CI
-run            = 32637377662
-Verify job     = 97189053827 / FAILURE
-profile        = PR_MAIN
-permanent core = STATIC PASS / ARCH PASS / REGRESSION PASS
-failure gate   = GATE_CI_SELF
-reason         = RS2_3_SHADOW_PROOF_FAIL
+main protected         = false
+required status checks = off
 ```
 
-Direct runner evidence showed the temporary shadow proof aborted only on this assertion:
-
-```text
-legacy robust runner exit = 0
-proof parser expectation  = stdout contains literal `fixture 21: PASS`
-actual result              = literal marker absent
-```
+The available repository connector exposes no branch-protection/ruleset mutation action.
 
 Classification:
 
 ```text
-RS2_3_SHADOW_EVIDENCE_PARSER_ASSUMPTION
-= FIX / TEST_EVIDENCE / NON_RUNTIME
+REQUIRED_CI_ENFORCEMENT_ADMIN_CAPABILITY_GAP
+= BLOCKER / ADMINISTRATION / TOOL_SURFACE
 ```
 
-Source inspection established the actual stable legacy output contract:
+This blocks only RS2-3E P4+ claims:
 
 ```text
-all 1-25 assertions pass
-→ stdout: `v0.64.6 closure + timeline regression fixtures 1-25: PASS`
+REQUIRED_CI_ACTIVE = YES
+REQUIRED_CI_ENFORCEMENT_VERIFIED = YES
+PURE_CHECK_PREDECESSORS_RETIRED = YES
+RS2_3_CLOSED = YES
+RS2_4_ENTRY_AUTHORIZED = YES
 ```
 
-Fixture 21 itself directly asserts `INVALID_SOURCE` with reason `terminal-stored-airtime-mismatch`; the repair therefore checks the aggregate PASS signal rather than inventing per-fixture presentation output.
+It does not block installing permanent CI or reaching the frozen P3 `PROMOTION_READY` state.
 
-### B. Over-destructive COMMUNITY negative fixture
-
-Observed run:
+## Current implementation conclusion
 
 ```text
-workflow       = SimCore CI
-run            = 32637534610
-Verify job     = 97189427435 / FAILURE
-permanent core = STATIC PASS / ARCH PASS / REGRESSION PASS
-failure gate   = GATE_CI_SELF
-reason         = RS2_3_SHADOW_PROOF_FAIL
+RS2-3A topology implementation                 PASS
+RS2-3B trigger/classifier/profile matrix       PASS
+RS2-3C permission/artifact safety              PASS
+RS2-3D responsibility map                      PASS
+RS2-3D shadow equivalence                      PASS
+RS2-3D negative parity                         PASS
+legacy compatibility                           BOUNDED / TRANSITIONAL
+permanent-only pre-merge CI                    PASS
+runtime diff                                   NONE
+release-simcore diff                           NONE
+production deployment                          NONE
 ```
 
-The first parser repair worked far enough to reach the controlled COMMUNITY negative. That negative renamed the entire `reaction` module, causing the durable harness loader to lose a required module and correctly classify the case as infrastructure/fixture failure:
-
-```text
-expected proof result = semantic FAIL / exit 1
-actual harness result = infrastructure error / exit 2
-```
-
-Classification:
-
-```text
-RS2_3_SHADOW_NEGATIVE_FIXTURE_OVERDESTRUCTIVE
-= FIX / TEST_EVIDENCE / NON_RUNTIME
-```
-
-This again is **not** `PERMANENT_GATE_WEAKER`: the permanent core gates remained green in the same run. The repair preserves module loadability and mutates only the reaction predicate so both the durable suite and legacy semantic control reject the same behavior as a semantic failure.
-
-Secondary evidence from both failed proof runs:
-
-```text
-Required receives Verify failure transitively
-→ stable required job cannot report success when Verify fails
-```
-
-This proves fail propagation of the workflow graph. It does **not** prove repository merge enforcement because `main` remains unprotected.
-
-Repair rule:
-
-```text
-do not change runtime
-do not weaken permanent gates
-repair only temporary evidence fixtures/parsers
-rerun full shadow + negative parity
-```
-
-## First complete shadow parity pass
-
-Observed run:
-
-```text
-workflow       = SimCore CI
-run            = 32637669371
-Verify job     = 97189755999 / SUCCESS
-Required job   = 97189808457 / SUCCESS
-verifier       = bdfcfdc5533a701fe5dd7624d1f928af2ec37c61
-report artifact= 9492748252
-```
-
-Positive shadow identities:
-
-```text
-DEPLOYED_PRODUCTION
-  source = 47969d24771f6cc188df6e32150fc6fde519182d
-  permanent CANDIDATE_SHADOW = PASS
-  legacy architecture       = PASS
-  legacy robust 1-25        = PASS
-
-HISTORICAL_CORRECTION_CANDIDATE
-  source = db14a61862c3730582ad102a70d109348b7e1cb7
-  permanent CANDIDATE_SHADOW = PASS
-  legacy architecture       = PASS
-  legacy robust 1-25        = PASS
-```
-
-Mandatory negative parity:
-
-```text
-latest/install mismatch            legacy FAIL · permanent FAIL · LATEST_INSTALL_MISMATCH
-forbidden architecture module      legacy FAIL · permanent FAIL · ARCH_CONTRACT_FAIL
-COMMUNITY reaction predicate       legacy FAIL · permanent FAIL · SEMANTIC_FAIL
-closure terminal/stored mismatch   legacy expected INVALID_SOURCE · permanent expected INVALID_SOURCE
-```
-
-The permanent candidate profile used by the proof is the full candidate baseline, including:
-
-```text
-GATE_STATIC
-GATE_ARCH
-GATE_REGRESSION
-GATE_STATE
-GATE_COORDINATION
-GATE_LEGACY_COMPAT
-```
-
-The proof records:
-
-```text
-permanentStrength = EQUIVALENT_OR_STRICTER_WITH_DURABLE_BATCH_A_PLUS_BOUNDED_LEGACY_COMPAT
-runtimeMutation   = NONE
-repositoryWrite   = NONE
-```
-
-This supplies two qualifying positive records under one verifier identity. The frozen diversity rule still requires another independent verifier identity before shadow verification can be promoted.
-
-## Validation record
-
-Permanent PR execution: **PASS**.
-Shadow positive records: **2 qualifying**.
-Shadow verifier identities: **1 qualifying**.
-Mandatory negative parity: **PASS**.
-`PERMANENT_GATE_WEAKER`: **NONE OBSERVED**.
-Shadow equivalence status: **COLLECTING — diversity proof pending**.
-Shadow evidence parser anomaly: **FIX / PRESERVED**.
-Shadow semantic-negative fixture anomaly: **FIX / PRESERVED**.
+Next repository operation is additive installation of PR #151 into `main`, followed by canonical `MAIN_HEALTH` and a bounded `products/simcore/ci/RS2_3_STATUS.json` promotion-ready record. Required-check activation remains an explicit later administration step and must not be inferred from installation.

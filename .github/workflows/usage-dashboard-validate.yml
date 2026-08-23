@@ -14,54 +14,9 @@ on:
       - 'docs/USAGE_DASHBOARD_GUIDELINES.md'
       - 'docs/USAGE_DASHBOARD_RELEASE_PIPELINE_V2*.md'
 
-# Temporary feature-branch staging authority. This write job is removed before
-# the release PR becomes mergeable; the reusable validator remains read-only.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  materialize_570:
-    if: github.head_ref == 'release/usage-dashboard-570-request-duration-fidelity'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-      - name: Materialize 5.70 candidate
-        env:
-          PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
-        run: |
-          set -euo pipefail
-          python3 plugins/usage-dashboard/tools/release_request_duration_fidelity_570.py
-          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
-          node plugins/usage-dashboard/tests/behavior-request-duration.cjs
-          node plugins/usage-dashboard/tests/p34-request-duration-fidelity.cjs
-          git diff --check
-      - name: Commit candidate product bytes
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- \
-            plugins/usage-dashboard/src \
-            plugins/usage-dashboard/runtime-src \
-            plugins/usage-dashboard/runtime \
-            plugins/usage-dashboard/latest.js \
-            docs/USAGE_DASHBOARD_GUIDELINES.md
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo '5.70 product candidate already materialized'
-            exit 0
-          fi
-          git commit -m 'release: materialize Local Usage Dashboard 5.70 candidate'
-          git push origin HEAD:${{ github.head_ref }}
-
   validate:
-    needs: materialize_570
-    if: always() && needs.materialize_570.result == 'success'
-    permissions:
-      contents: read
     uses: ./.github/workflows/reusable-usage-dashboard-validate.yml

@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "status": "SHADOW_VERIFIED",
+  "workflows": [
+    {
+      "legacyWorkflow": ".github/workflows/simcore-architecture-contracts.yml",
+      "class": "CHECK_ONLY_PREDECESSOR",
+      "status": "SHADOW_VERIFIED",
+      "responsibilities": [
+        {"responsibilityId":"architecture.static-identity","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_STATIC"],"permanentSuiteIds":[]},
+        {"responsibilityId":"architecture.contract-v2","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH"],"permanentSuiteIds":[]}
+      ],
+      "retirementEligibility": "YES",
+      "physicalRetirement": "HELD_FOR_REQUIRED_ENFORCEMENT",
+      "physicalDisposition": "RETIRE_AFTER_EQUIVALENCE_AND_ENFORCEMENT",
+      "rollbackSource": "git history before RS2-3 retirement"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-m2-2-representation.yml",
+      "class": "MIXED_BUILD_VALIDATOR",
+      "status": "VALIDATION_REPLACED",
+      "responsibilities": [
+        {"responsibilityId":"m2-2.representation-fast","disposition":"PERMANENT_TEST","permanentOwners":["GATE_REGRESSION"],"permanentSuiteIds":["representation-fast"]},
+        {"responsibilityId":"m2-2.genuine-edit","disposition":"PERMANENT_TEST","permanentOwners":["GATE_REGRESSION"],"permanentSuiteIds":["genuine-edit"]},
+        {"responsibilityId":"m2-2.architecture","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH"],"permanentSuiteIds":[]},
+        {"responsibilityId":"m2-2.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
+      ],
+      "writeDisposition": "RS2_4_PENDING",
+      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-06404-community-reaction-attribution.yml",
+      "class": "MIXED_BUILD_VALIDATOR",
+      "status": "VALIDATION_REPLACED",
+      "responsibilities": [
+        {"responsibilityId":"06404.reaction-attribution","disposition":"PERMANENT_TEST","permanentOwners":["GATE_REGRESSION"],"permanentSuiteIds":["community-reaction"]},
+        {"responsibilityId":"06404.structure-and-frozen-surfaces","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH","GATE_REGRESSION"],"permanentSuiteIds":[]},
+        {"responsibilityId":"06404.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
+      ],
+      "writeDisposition": "RS2_4_PENDING",
+      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-06405-community-multiline-reaction-unit.yml",
+      "class": "MIXED_BUILD_VALIDATOR",
+      "status": "VALIDATION_REPLACED",
+      "responsibilities": [
+        {"responsibilityId":"06405.community-logical-unit","disposition":"PERMANENT_TEST","permanentOwners":["GATE_REGRESSION"],"permanentSuiteIds":["community-reaction"]},
+        {"responsibilityId":"06405.frozen-surfaces","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH","GATE_REGRESSION"],"permanentSuiteIds":[]},
+        {"responsibilityId":"06405.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
+      ],
+      "writeDisposition": "RS2_4_PENDING",
+      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-06406-post-bend-c-clock-handoff.yml",
+      "class": "SUPERSEDED_HARNESS_OR_BUILD",
+      "status": "SUPERSEDED_NO_AUTHORITY",
+      "replacementWorkflow": ".github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml",
+      "notes": "Earlier harness revision retained only as provenance; no independent current verification authority."
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml",
+      "class": "MIXED_BUILD_VALIDATOR",
+      "status": "VALIDATION_REPLACED",
+      "responsibilities": [
+        {"responsibilityId":"06406.timeline-1-18","disposition":"LEGACY_COMPAT_TRANSITIONAL","permanentOwners":["GATE_LEGACY_COMPAT","GATE_REGRESSION"],"permanentSuiteIds":["broadcast-closure","representation-fast","community-reaction"]},
+        {"responsibilityId":"06406.summary-scope","disposition":"LEGACY_COMPAT_TRANSITIONAL","permanentOwners":["GATE_LEGACY_COMPAT"],"permanentSuiteIds":[]},
+        {"responsibilityId":"06406.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
+      ],
+      "writeDisposition": "RS2_4_PENDING",
+      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-06406-closure-completion-gate.yml",
+      "class": "SUPERSEDED_HARNESS_OR_BUILD",
+      "status": "SUPERSEDED_NO_AUTHORITY",
+      "replacementWorkflow": ".github/workflows/simcore-06406-closure-completion-gate-v2.yml",
+      "notes": "Known earlier loader/harness path superseded by robust v2 evidence."
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-06406-closure-completion-gate-v2.yml",
+      "class": "MIXED_BUILD_VALIDATOR",
+      "status": "VALIDATION_REPLACED",
+      "responsibilities": [
+        {"responsibilityId":"06406.closure-completion-19-25","disposition":"LEGACY_COMPAT_TRANSITIONAL","permanentOwners":["GATE_LEGACY_COMPAT","GATE_REGRESSION"],"permanentSuiteIds":["broadcast-closure"]},
+        {"responsibilityId":"06406.current-retained-controls","disposition":"PERMANENT_TEST","permanentOwners":["GATE_REGRESSION"],"permanentSuiteIds":["representation-fast","genuine-edit","community-reaction","broadcast-closure","diagnostic-copy"]},
+        {"responsibilityId":"06406.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
+      ],
+      "writeDisposition": "RS2_4_PENDING",
+      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-memory-sync-06359.yml",
+      "class": "ADMIN_STATE_WRITER",
+      "status": "OUTSIDE_RS2_3",
+      "responsibilities": [{"responsibilityId":"memory.admin-write","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}],
+      "writeDisposition": "HISTORICAL_ADMIN"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-release-command.yml",
+      "class": "RELEASE_WRITER",
+      "status": "OUTSIDE_RS2_3",
+      "responsibilities": [
+        {"responsibilityId":"release.generic-static-validation","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_STATIC","GATE_ARCH"],"permanentSuiteIds":[]},
+        {"responsibilityId":"release.transaction-write","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
+      ],
+      "writeDisposition": "RS2_4_PENDING"
+    },
+    {
+      "legacyWorkflow": ".github/workflows/simcore-release-state-sync.yml",
+      "class": "ADMIN_STATE_WRITER",
+      "status": "OUTSIDE_RS2_3",
+      "responsibilities": [{"responsibilityId":"state-sync.admin-write","disposition":"RELEASE_GLUE","permanentOwners":["RS2-2"],"permanentSuiteIds":[]}],
+      "writeDisposition": "RS2_2_OWNED"
+    }
+  ]
+}

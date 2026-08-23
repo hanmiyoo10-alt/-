@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "status": "TRANSITIONAL_BOUNDED",
+  "assertions": [
+    {
+      "id": "timeline-closure-robust-25",
+      "sourceAdapter": "scripts/simcore-06406-closure-completion-gate-test.mjs",
+      "execution": "READ_ONLY_SOURCE_ARGUMENT",
+      "reasonClass": "SEMANTIC_FAIL",
+      "futurePermanentOwner": "broadcast-closure executable suite expansion",
+      "targetMilestone": "M2-3-or-later-harness-promotion",
+      "nonBlockingForRelease": true
+    },
+    {
+      "id": "summary-scope-execution-control",
+      "sourceAdapter": "scripts/simcore-06406-closure-completion-gate-test.mjs",
+      "execution": "READ_ONLY_SOURCE_ARGUMENT",
+      "reasonClass": "SEMANTIC_FAIL",
+      "futurePermanentOwner": "summary-scope permanent suite or contract",
+      "targetMilestone": "M2-3-or-later-harness-promotion",
+      "nonBlockingForRelease": true
+    }
+  ],
+  "forbidden": [
+    "source patching",
+    "repository writes",
+    "ref mutation",
+    "version-named workflow dependency"
+  ]
+}

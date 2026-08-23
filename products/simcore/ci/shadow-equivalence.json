@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "status": "SHADOW_VERIFIED",
+  "requiredPositivePerRetirementUnit": 3,
+  "requiredDistinctEvidenceIdentities": 2,
+  "evidenceRuns": [32637669371, 32637743955],
+  "records": [
+    {
+      "workflowRun": 32637669371,
+      "verifierCommit": "bdfcfdc5533a701fe5dd7624d1f928af2ec37c61",
+      "sourceCommit": "47969d24771f6cc188df6e32150fc6fde519182d",
+      "sourceRole": "DEPLOYED_PRODUCTION",
+      "coverageScope": "ALL_CURRENT_VALIDATION_RESPONSIBILITIES",
+      "permanent": "PASS",
+      "legacyArchitecture": "PASS",
+      "legacyRobust25": "PASS"
+    },
+    {
+      "workflowRun": 32637669371,
+      "verifierCommit": "bdfcfdc5533a701fe5dd7624d1f928af2ec37c61",
+      "sourceCommit": "db14a61862c3730582ad102a70d109348b7e1cb7",
+      "sourceRole": "HISTORICAL_CORRECTION_CANDIDATE",
+      "coverageScope": "ALL_CURRENT_VALIDATION_RESPONSIBILITIES",
+      "permanent": "PASS",
+      "legacyArchitecture": "PASS",
+      "legacyRobust25": "PASS"
+    },
+    {
+      "workflowRun": 32637743955,
+      "verifierCommit": "fbe326d07767a676c3835fb929dc9541e3efef0f",
+      "sourceCommit": "47969d24771f6cc188df6e32150fc6fde519182d",
+      "sourceRole": "DEPLOYED_PRODUCTION",
+      "coverageScope": "ALL_CURRENT_VALIDATION_RESPONSIBILITIES",
+      "permanent": "PASS",
+      "legacyArchitecture": "PASS",
+      "legacyRobust25": "PASS"
+    },
+    {
+      "workflowRun": 32637743955,
+      "verifierCommit": "fbe326d07767a676c3835fb929dc9541e3efef0f",
+      "sourceCommit": "db14a61862c3730582ad102a70d109348b7e1cb7",
+      "sourceRole": "HISTORICAL_CORRECTION_CANDIDATE",
+      "coverageScope": "ALL_CURRENT_VALIDATION_RESPONSIBILITIES",
+      "permanent": "PASS",
+      "legacyArchitecture": "PASS",
+      "legacyRobust25": "PASS"
+    }
+  ],
+  "negativeParity": [
+    {
+      "id": "latest-install-mismatch",
+      "legacy": "FAIL",
+      "permanent": "FAIL",
+      "reason": "LATEST_INSTALL_MISMATCH"
+    },
+    {
+      "id": "forbidden-architecture-module",
+      "legacy": "FAIL",
+      "permanent": "FAIL",
+      "reason": "ARCH_CONTRACT_FAIL"
+    },
+    {
+      "id": "community-reaction-predicate-broken",
+      "legacy": "FAIL",
+      "permanent": "FAIL",
+      "reason": "SEMANTIC_FAIL"
+    },
+    {
+      "id": "closure-terminal-stored-mismatch-fixture21",
+      "legacy": "INVALID_SOURCE_EXPECTED_PASS",
+      "permanent": "INVALID_SOURCE_EXPECTED_PASS",
+      "reason": "INVALID_SOURCE",
+      "evidence": "robust-fixtures-1-25-aggregate-pass"
+    }
+  ],
+  "permanentStrength": "EQUIVALENT_OR_STRICTER_WITH_DURABLE_BATCH_A_PLUS_BOUNDED_LEGACY_COMPAT",
+  "openMismatchIds": [],
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

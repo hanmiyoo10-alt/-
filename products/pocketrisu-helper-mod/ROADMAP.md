@@ -2,6 +2,30 @@
 
 기준: 2026-08-23
 
+## 완료 — legacy upstream PR rebuild 준비
+
+과거 여러 개조가 Git history에서 섞여 정식 PR 분리가 어려웠던 기능 중 다음 5개는 `PR_READY_REBUILD` 상태까지 사전 분해 조사 완료:
+
+- `restore-last-active-chat`
+- `response-notification`
+- `plugin-targeted-reload`
+- `session-write-lock`
+- `db-save-optimization`
+
+완료 기준:
+- 기능별 독립 `UPSTREAM.md` rebuild recipe.
+- `Minimal upstream scope / Dependencies / Verification evidence / Upstream pitch` 명시.
+- 명시적 out-of-scope 경계.
+- 최신 upstream에서 다시 만드는 테스트/순서.
+- 기능별 독립 helper PR.
+- 첫 CI 실패와 수정/재검증 성공을 각 `FAILURES.md`에 영구 기록.
+
+정식 upstream PR 시에는 옛 mixed commit을 억지로 쪼개지 않고 **최신 official upstream + Feature-ID 하나**로 rebuild한다.
+
+특기:
+- `db-save-optimization`은 staged upstream PR series로 제출 후보를 나눈다.
+- `plugin-targeted-reload` rebuild에서 persistence-order 변경이 별도로 필요하면 새 Feature-ID `plugin-update-persistence-order`로 분리한다.
+
 ## P0
 
 ### 전화/이어폰 알림 무한소리 — TODO

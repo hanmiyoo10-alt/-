@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "retiredAtStage": "E4-A Legacy Release Writer Quarantine",
+  "productionWriterAuthority": [
+    ".github/workflows/usage-dashboard-promote.yml",
+    ".github/workflows/reusable-usage-dashboard-promote.yml"
+  ],
+  "retired": [
+    {"path":".github/workflows/release-local-usage-dashboard.yml","blobSha":"c5677c2041554756d27e8c57c1d7051020170536","classification":"ACTIVE_LEGACY_WRITER","reason":"push:main watched current Usage Dashboard product paths and could directly push release-usage-dashboard"},
+    {"path":".github/workflows/release-local-usage-53-bundled-engine-final.yml","blobSha":"6f80360e67571dcecb2ca5ac966cb4ae3e978bef","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-53-bundled-engine-r2.yml","blobSha":"b612e9617508e3577d6d4a4c5fa9427597372b15","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-53-bundled-engine-r3.yml","blobSha":"3b8846931c4662768df2545a1939880c989a97ac","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-53-bundled-engine.yml","blobSha":"d13c868bf7f1c1c0f84ba6ce4753ed5c887855b2","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha38.yml","blobSha":"c88e52e9f48dd358705bda4362a856a13ea79a62","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha335.yml","blobSha":"64fda5ab8f33fd2b8b4de2eb75e6732d02f8ffa8","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha336.yml","blobSha":"a00f6f218b3aa18e531501e6be74ee399b0647e9","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha337.yml","blobSha":"95f3dea1f4c833d2c078caeccb779a3fd4dd46aa","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha340.yml","blobSha":"a5831d2998dffaad665591b1b2ca7f35a6b89c66","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha341.yml","blobSha":"50f356a28c7f82a4b27f95b1a84aefc1107b9fda","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha400.yml","blobSha":"566ee54df764069d352d46e984a3abfd6eb1fd29","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha401.yml","blobSha":"9ca14c3abafd1527629b60d8921d5031eddad104","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha402.yml","blobSha":"b2ade2b3e66a690cc0cb59df0bac73a6232f8552","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha403.yml","blobSha":"9ce7bb5e77c62053cd566e69757129de2d10a121","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/release-local-usage-alpha404.yml","blobSha":"5bb70a8b060c7f5adae0cd32ef5d33b2b8ad4ce2","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"}
+  ]
+}

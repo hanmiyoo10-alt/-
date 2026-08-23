@@ -11,6 +11,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'legacy-release-workflow-archive.cjs',
   'behavior-harness-contract.cjs',
   'test-registry-contract.cjs',
+  'candidate-ready-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([
   'registry.cjs',

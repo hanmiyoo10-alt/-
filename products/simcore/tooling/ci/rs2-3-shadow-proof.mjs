@@ -92,16 +92,16 @@ must(r.status === 1, `permanent arch negative exit=${r.status}`);
 must(report('.rs23-shadow/negative-arch.json').reasonCodes.includes('ARCH_CONTRACT_FAIL'),'arch reason missing');
 negatives.push({id:'forbidden-architecture-module',legacy:'FAIL',permanent:'FAIL',reason:'ARCH_CONTRACT_FAIL'});
 
-// COMMUNITY semantic negative parity.
+// COMMUNITY semantic negative parity: preserve the module/export shape and break only the predicate.
 const src = fs.readFileSync('.rs23-shadow/production/latest.js','utf8');
-const needle='SimCore.define("reaction", function';
-must(src.includes(needle),'reaction module marker missing');
-fs.writeFileSync('.rs23-shadow/negative-community.js',src.replace(needle,'SimCore.define("reaction-broken", function',1));
+const predicate = 'const ok = tagCount === 1 && finalTagValid;';
+must(src.includes(predicate),'reaction predicate marker missing');
+fs.writeFileSync('.rs23-shadow/negative-community.js',src.replace(predicate,'const ok = false;',1));
 const permanentCommunity=run(process.execPath,['products/simcore/tooling/test.mjs','--source','.rs23-shadow/negative-community.js','--suite','community-reaction','--report','.rs23-shadow/negative-community-permanent.json']);
 const legacyCommunity=run(process.execPath,['scripts/simcore-06406-closure-completion-gate-test.mjs','.rs23-shadow/negative-community.js']);
-must(permanentCommunity.status === 1, `community permanent negative exit=${permanentCommunity.status}`);
+must(permanentCommunity.status === 1, `community permanent negative exit=${permanentCommunity.status}; stderr=${permanentCommunity.stderr}`);
 must(legacyCommunity.status !== 0, `community legacy negative unexpectedly passed`);
-negatives.push({id:'community-reaction-owner-missing',legacy:'FAIL',permanent:'FAIL',reason:'SEMANTIC_FAIL'});
+negatives.push({id:'community-reaction-predicate-broken',legacy:'FAIL',permanent:'FAIL',reason:'SEMANTIC_FAIL'});
 
 // Fixture 21 parity is asserted inside the robust 1-25 legacy adapter. Aggregate exit 0 proves
 // terminal/stored mismatch reaches INVALID_SOURCE with reason terminal-stored-airtime-mismatch.

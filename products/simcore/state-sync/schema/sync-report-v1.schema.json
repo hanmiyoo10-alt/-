@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simcore-sync-report-v1",
+  "type": "object",
+  "required": ["schemaVersion", "tool", "result", "exitCode", "findings"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "tool": {"const": "sync-state"},
+    "mode": {"enum": ["check", "render", "write"]},
+    "result": {"enum": ["CHECK_CLEAN", "CHECK_CLEAN_WITH_OBSERVATIONS", "CHECK_DRIFT", "CHECK_BLOCKED"]},
+    "exitCode": {"enum": [0, 1, 2]},
+    "source": {"type": "object"},
+    "registry": {"type": "object"},
+    "writerPolicy": {"type": "string"},
+    "targets": {"type": "array"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "severity"],
+        "properties": {
+          "code": {"type": "string"},
+          "severity": {"enum": ["BLOCKER", "DRIFT", "OBSERVATION"]}
+        }
+      }
+    },
+    "counts": {"type": "object"},
+    "writes": {"type": "array"}
+  }
+}

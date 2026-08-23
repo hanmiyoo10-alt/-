@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "diagnostic-copy.batch-a",
+  "suite": "diagnostic-copy",
+  "input":{"payload":"synthetic diagnostic payload"},
+  "expected":{"primary-success":"COPIED","fallback-success":"COPIED_FALLBACK","report-build-failed":"REPORT_BUILD_FAILED","clipboard-write-failed":"CLIPBOARD_WRITE_FAILED"},
+  "meta":{"goldenGate":true,"coverageExpectation":"EXECUTABLE","migrationFrom":"v0.64.2 Diagnostic Copy Resilience"}
+}

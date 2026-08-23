@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "genuine-edit.visible-third-representation",
+  "suite": "genuine-edit",
+  "input": {"current":"10:edited","row":{"fingerprintMatch":"CANONICAL","canonicalFingerprint":"10:aaa","freshFingerprint":"10:aaa","hostRawFingerprint":"10:aaa"}},
+  "expected": {"priorRepresentation":"EXACT","currentMatch":"NONE","deltaShape":"NEW_VISIBLE_REPRESENTATION"},
+  "meta":{"goldenGate":true,"coverageExpectation":"HYBRID_TRANSITIONAL","migrationFrom":"v0.64.0 / v0.64.6 legacy regression"}
+}

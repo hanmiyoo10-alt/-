@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "contract": "RS2-1 Batch A frozen surfaces",
+  "requiredModules": ["representation","community","reaction","time","structure"],
+  "requiredFunctions": ["diagnosticCopyErrorName","diagnosticCopyResult","runDiagnosticCopy","fallbackCopyText"],
+  "requiredSourceMarkers": [
+    "REPRESENTATION_FAST_RECONCILED",
+    "USER_EDIT_CANDIDATE",
+    "MANUAL_EDIT_REBUILT",
+    "failureReason = 'MISSING'",
+    "failureReason = 'MULTIPLE'",
+    "failureReason = 'FINAL_TAIL'",
+    "REPORT_BUILD_FAILED",
+    "CLIPBOARD_WRITE_FAILED"
+  ],
+  "closeBaseline": {
+    "branch":"release-simcore",
+    "commit":"47969d24771f6cc188df6e32150fc6fde519182d",
+    "gitBlobSha1":"34da01aa131f760b92d65d961a7843e9cc0d37d6",
+    "version":"0.64.6"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simcore-fixture-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "suite", "input", "expected", "meta"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "suite": { "type": "string", "minLength": 1 },
+    "input": {},
+    "expected": {},
+    "meta": {
+      "type": "object",
+      "required": ["goldenGate", "coverageExpectation"],
+      "properties": {
+        "goldenGate": { "type": "boolean" },
+        "coverageExpectation": { "enum": ["EXECUTABLE", "HYBRID_TRANSITIONAL"] },
+        "migrationFrom": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

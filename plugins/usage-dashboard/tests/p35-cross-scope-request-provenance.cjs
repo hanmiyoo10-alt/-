@@ -14,6 +14,7 @@ assert.equal(release.recentRequestContract, 1);
 const capture = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs', 'utf8');
 const provenance = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/55-request-provenance.part.mjs', 'utf8');
 const cliRuntime = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/30-cli-runtime.part.mjs', 'utf8');
+const engineSources = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs', 'utf8');
 const engineCore = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/00-core.part.mjs', 'utf8');
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const pluginProvenance = fs.readFileSync('plugins/usage-dashboard/src/15-request-provenance.part.js', 'utf8');
@@ -44,6 +45,8 @@ assert.ok(cliRuntime.includes('safe.slice(0, 100)'));
 assert.equal((cliRuntime.match(/pathname = \(prefix \+ '\/logs'\)/g) || []).length, 1, '5.71 must reuse the single /logs capture path');
 assert.ok(cliRuntime.includes('Prompt/response bodies,'));
 assert.ok(cliRuntime.includes('messages, custom headers, cookies, and auth material are never persisted.'));
+assert.ok(engineSources.includes('try { await fs.unlink(captureFile); } catch {}'), 'ephemeral account capture file must be removed in finally');
+assert.ok(engineSources.includes("return cached('accountCapture'"), 'provenance must reuse the existing accountCapture TTL/circuit family');
 
 const classifierStart = provenance.indexOf('function classifyRequestAccountScope');
 const classifierEnd = provenance.indexOf('\n\nfunction classifiedAccountRecentRequests', classifierStart);

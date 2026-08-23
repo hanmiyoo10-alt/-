@@ -1,0 +1,97 @@
+name: SimCore RS2-2 Cutover Applicator
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-rs2-2-cutover-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    if: github.event.pull_request.title == 'infra(simcore): implement RS2-2 state synchronization'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Detect already-applied cutover
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->' docs/CURRENT_DEVELOPMENT.md && \
+             grep -q '<!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->' docs/SIMCORE_GUIDELINES.md; then
+            echo 'applied=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'applied=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Materialize production
+        if: steps.state.outputs.applied != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          P=47969d24771f6cc188df6e32150fc6fde519182d
+          B=34da01aa131f760b92d65d961a7843e9cc0d37d6
+          test "$(git rev-parse origin/release-simcore)" = "$P"
+          mkdir -p .rs22-prod
+          git show origin/release-simcore:plugins/simcore/latest.js > .rs22-prod/latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > .rs22-prod/install.js
+          test "$(git rev-parse origin/release-simcore:plugins/simcore/latest.js)" = "$B"
+          test "$(git rev-parse origin/release-simcore:plugins/simcore/install.js)" = "$B"
+          cmp -s .rs22-prod/latest.js .rs22-prod/install.js
+          cat > .rs22-prod/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".rs22-prod/latest.js","blob":"$B"},"install":{"path":".rs22-prod/install.js","blob":"$B"}}
+          EOF
+
+      - name: Normalize declaration through legacy owner
+        if: steps.state.outputs.applied != 'true'
+        env:
+          VERSION: '0.64.6'
+          RELEASE_NAME: 'Post-B_END C Clock Handoff Authority'
+          RELEASE_COMMIT: '47969d24771f6cc188df6e32150fc6fde519182d'
+          RELEASE_BLOB: '34da01aa131f760b92d65d961a7843e9cc0d37d6'
+        run: python3 scripts/simcore-sync-memory.py --manifest-only
+
+      - name: Apply one-time canonical marker migration
+        if: steps.state.outputs.applied != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/state-sync/migrate-markers.mjs \
+            --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --report .rs22-prod/migration.json
+          node products/simcore/tooling/sync-state.mjs \
+            --check --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report .rs22-prod/check.json
+          git diff --check
+
+      - name: Commit only cutover-owned files
+        if: steps.state.outputs.applied != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .rs22-prod
+          git diff --name-only > /tmp/cutover-files.txt
+          cat /tmp/cutover-files.txt
+          test "$(sort /tmp/cutover-files.txt | tr '\n' ' ')" = 'docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md product-manifest.json '
+          git config user.name 'hanmiyoo10-alt'
+          git config user.email 'hanmiyoo10@gmail.com'
+          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md
+          git commit -m 'infra(simcore): apply RS2-2 state-sync cutover'
+          git push origin "HEAD:${GITHUB_HEAD_REF}"

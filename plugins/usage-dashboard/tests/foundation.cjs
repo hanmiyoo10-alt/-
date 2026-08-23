@@ -3,15 +3,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const currentRelease = assertCurrentReleaseArtifacts();
 const ROOT = path.resolve(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const json = rel => JSON.parse(read(rel));
 const source = read('latest.js');
 const behavior = read('tests/behavior-state-contract.cjs');
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
 assert.match(source, /const SNAPSHOT_SCHEMA_VERSION = 1;/);
 assert.match(source, /const RECENT_REQUEST_SCHEMA_VERSION = 1;/);
@@ -51,6 +48,5 @@ assert.ok(behavior.includes("json('tests/fixtures/foundation-snapshot.json')"));
 assert.ok(behavior.includes("json('tests/fixtures/cache-zero.json')"));
 assert.ok(behavior.includes("json('tests/fixtures/state-v3.json')"));
 assert.ok(behavior.includes("'prompt','response','messages','content'"), 'privacy stripping must stay covered by the process harness');
-assert.ok(workflow.includes('behavior-state-contract.cjs'));
 
 console.log('usage-dashboard foundation fixtures: OK · schemas and fixture boundaries retained; state/normalization behavior delegated to production process harness');

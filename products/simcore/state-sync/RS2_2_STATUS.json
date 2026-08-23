@@ -1,0 +1,55 @@
+{
+  "statusVersion": 1,
+  "phase": "RS2-2",
+  "phaseStatus": "CLOSED",
+  "stateSyncAvailable": true,
+  "documentSyncCutoverComplete": true,
+  "legacyFullMode": "ROLLBACK_ONLY",
+  "manifestDeclaration": "TRANSITIONAL_UNTIL_RS2_4",
+  "rs2_3EntryAuthorized": true,
+  "sourceIdentityStatus": "IDENTITY_VERIFIED",
+  "managedTargetsStatus": "CLEAN",
+  "writerPolicyStatus": "WRITER_POLICY_CLEAN",
+  "documentOwner": "sync-state",
+  "mainIntegration": "repo-main-write.py",
+  "productionSourceIdentity": {
+    "authority": "release-simcore",
+    "commit": "47969d24771f6cc188df6e32150fc6fde519182d",
+    "version": "0.64.6",
+    "latestBlob": "34da01aa131f760b92d65d961a7843e9cc0d37d6",
+    "installBlob": "34da01aa131f760b92d65d961a7843e9cc0d37d6",
+    "sha256": "1f07668f418faf0029c37409c31545f146c27592ac37eff39fea8cdd0e599aac"
+  },
+  "cutover": {
+    "implementationPr": 146,
+    "implementationMergeCommit": "d463871f1e858551276ea207c48a18b170ff0b2d",
+    "canonicalMainCommit": "0e9bb560bf1b52983dbf37c5adbdc39468a79912",
+    "entryDriftClassification": "FIX / DIRECT_EVIDENCE / INFRASTRUCTURE",
+    "manifestNormalizedBy": "scripts/simcore-sync-memory.py --manifest-only",
+    "markerMigration": "products/simcore/state-sync/migrate-markers.mjs"
+  },
+  "cleanProof": {
+    "evidencePr": 148,
+    "workflowRun": 32636108262,
+    "clean1Job": 97186003801,
+    "clean2Job": 97186003817,
+    "canonicalMainCommit": "0e9bb560bf1b52983dbf37c5adbdc39468a79912",
+    "clean1": "CHECK_CLEAN_WITH_OBSERVATIONS",
+    "clean2": "CHECK_CLEAN_WITH_OBSERVATIONS",
+    "clean2Writes": 0,
+    "blockers": 0,
+    "drifts": 0
+  },
+  "openObservationIds": [
+    "HUMAN_CURRENT_PRODUCTION_CLAIM_STALE",
+    "HUMAN_CURRENT_RELEASE_SECTION_STALE"
+  ],
+  "observationDisposition": "REPORT_ONLY_DOES_NOT_BLOCK_RS2_2_CLOSE",
+  "tool": "products/simcore/tooling/sync-state.mjs",
+  "targetRegistry": "products/simcore/state-sync/target-registry.json",
+  "writerPolicy": "products/simcore/state-sync/writer-policy.json",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_2_IMPLEMENTATION_EVIDENCE.md",
+  "runtimeDiff": "NONE",
+  "releaseSimcoreDiff": "NONE",
+  "closedAt": "2026-08-23T20:18:42+09:00"
+}

@@ -7,7 +7,7 @@ const release = assertCurrentReleaseArtifacts();
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 const caller = fs.readFileSync(release.callerWorkflow, 'utf8');
 const validator = fs.readFileSync(release.validatorWorkflow, 'utf8');
-const publisher = fs.readFileSync(release.publisherWorkflow || release.sharedWorkflow, 'utf8');
+const publisher = fs.readFileSync(release.publisherWorkflow, 'utf8');
 
 assert.ok(guidelines.includes(release.currentMemory));
 assert.ok(guidelines.includes(release.verifiedBaseline));
@@ -18,12 +18,12 @@ assert.ok(!validator.includes('group: repo-main-write'));
 assert.ok(!validator.includes('scripts/repo-main-write.py'));
 assert.ok(!validator.includes('git push'));
 assert.ok(validator.includes('CANDIDATE_NOT_MATERIALIZED'));
-assert.ok(fs.existsSync(release.publisherWorkflow || release.sharedWorkflow));
+assert.ok(fs.existsSync(release.publisherWorkflow));
 assert.match(publisher, /group: usage-dashboard-release/);
-assert.ok(!publisher.includes('scripts/repo-main-write.py'), 'Stage B publisher must never write main');
-assert.ok(!publisher.includes('PAYLOAD_COMMIT'), 'Stage B publisher must not create a main-write payload');
-assert.ok(!publisher.includes('git push origin HEAD:main'), 'Stage B publisher must never push main directly');
-assert.ok(publisher.includes('check_release_monotonic.py'));
+assert.match(publisher, /promote_release_blobs\.cjs/);
+for (const forbidden of ['scripts/repo-main-write.py','PAYLOAD_COMMIT','git push origin HEAD:main','git switch','cp -R','build_bridge_engine.cjs','build_usage_dashboard.cjs']) {
+  assert.ok(!publisher.includes(forbidden), `Stage C promoter must not contain ${forbidden}`);
+}
 
 const loadedAgain = loadCurrentRelease();
 assert.deepEqual(loadedAgain, release);

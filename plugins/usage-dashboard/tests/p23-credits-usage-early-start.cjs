@@ -54,7 +54,9 @@ assert.ok(guidelines.includes('Keep already-working behavior unchanged unless th
 assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
 assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
 assert.ok(guidelines.includes('## Long-term update roadmap'));
-assert.match(workflow, /group: repo-main-write/);
+assert.match(workflow, /group: usage-dashboard-release/);
+assert.doesNotMatch(workflow, /group: repo-main-write/);
+assert.match(workflow, /scripts\/repo-main-write\.py/);
 assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);

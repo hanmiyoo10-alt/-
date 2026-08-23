@@ -59,7 +59,9 @@ assert.ok(guidelines.includes('Keep all five existing `runCli()` source call sit
 assert.ok(guidelines.includes('If managed-direct remains near the prior 7–13s source timings'));
 assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
-assert.ok(workflow.includes('concurrency:\n  group: repo-main-write'));
+assert.ok(workflow.includes('concurrency:\n  group: usage-dashboard-release'));
+assert.ok(!workflow.includes('group: repo-main-write'));
+assert.ok(workflow.includes('scripts/repo-main-write.py'));
 assert.ok(workflow.includes('check_release_monotonic.py'));
 
 console.log('P26 Foreground CLI Launcher Attribution: OK · static boundaries retained; launcher behavior delegated to black-box Engine harness');

@@ -12,7 +12,9 @@ assert.ok(guidelines.includes(release.currentMemory));
 assert.ok(guidelines.includes(release.verifiedBaseline));
 assert.ok(caller.includes(`release_spec: ${release.specPath}`));
 assert.ok(caller.includes(`uses: ./${release.sharedWorkflow}`));
-assert.ok(shared.includes('group: repo-main-write'));
+assert.ok(shared.includes('group: usage-dashboard-release'));
+assert.ok(!shared.includes('group: repo-main-write'));
+assert.ok(shared.includes('scripts/repo-main-write.py'));
 assert.ok(shared.includes('check_release_monotonic.py'));
 
 const loadedAgain = loadCurrentRelease();

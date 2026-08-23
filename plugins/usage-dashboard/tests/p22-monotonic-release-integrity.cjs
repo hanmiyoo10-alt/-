@@ -168,7 +168,9 @@ for (const file of [
 }
 
 const workflow = fs.readFileSync(workflowPath, 'utf8');
-assert.match(workflow, /group: repo-main-write/);
+assert.match(workflow, /group: usage-dashboard-release/);
+assert.doesNotMatch(workflow, /group: repo-main-write/);
+assert.match(workflow, /scripts\/repo-main-write\.py/);
 assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /git fetch origin main release-usage-dashboard/);

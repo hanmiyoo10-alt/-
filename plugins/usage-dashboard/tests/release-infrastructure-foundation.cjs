@@ -22,8 +22,20 @@ assert.deepEqual(
   'release spec and product manifest must describe one candidate',
 );
 assert.match(reusable, /workflow_call:/);
-assert.match(reusable, /group: repo-main-write/);
+assert.match(reusable, /group: usage-dashboard-release/);
+assert.doesNotMatch(reusable, /group: repo-main-write/, 'Usage Dashboard must not share a cross-product cancellation domain');
 assert.match(reusable, /cancel-in-progress: false/);
+assert.match(reusable, /scripts\/repo-main-write\.py --commit "\$PAYLOAD_COMMIT"/);
+for (const ownedPath of [
+  'plugins/usage-dashboard/src/',
+  'plugins/usage-dashboard/latest.js',
+  'plugins/usage-dashboard/runtime/',
+  'plugins/usage-dashboard/runtime-src/',
+  'docs/USAGE_DASHBOARD_GUIDELINES.md',
+]) {
+  assert.ok(reusable.includes(`--allow ${ownedPath}`), `main-write helper must retain Usage Dashboard ownership for ${ownedPath}`);
+}
+assert.ok(!reusable.includes('git push origin HEAD:main'), 'release writer must not directly push main');
 assert.match(reusable, /check_release_monotonic\.py/);
 assert.match(reusable, /--check-artifacts/);
 assert.match(reusable, /RELEASE_REF_MOVED/);
@@ -63,4 +75,4 @@ if (spec.releaseCommandWorkflow) {
 assert.match(validator, /sha256 mismatch/);
 assert.match(validator, /snapshot contract/);
 
-console.log('Usage Dashboard release infrastructure foundation: OK · immutable regressions, reusable workflow, bounded stage/release authority');
+console.log('Usage Dashboard release infrastructure foundation: OK · immutable regressions, product-local main-write integration, bounded stage/release authority');

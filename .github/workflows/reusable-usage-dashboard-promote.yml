@@ -1,0 +1,42 @@
+name: Reusable Usage Dashboard Exact-Byte Promotion
+
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        description: Immutable merged main commit containing the validated candidate
+        required: true
+        type: string
+      release_branch:
+        description: Production release branch
+        required: false
+        default: release-usage-dashboard
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: usage-dashboard-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 1
+
+      - name: Promote exact tested Git blobs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --check plugins/usage-dashboard/tools/promote_release_blobs.cjs
+          node plugins/usage-dashboard/tools/promote_release_blobs.cjs \
+            --repository "${{ github.repository }}" \
+            --candidate-sha "${{ inputs.candidate_sha }}" \
+            --release-branch "${{ inputs.release_branch }}"

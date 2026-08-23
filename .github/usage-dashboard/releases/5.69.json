@@ -13,10 +13,11 @@
   "releaseCommandWorkflow": ".github/workflows/release-command-usage-dashboard-569.yml",
   "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-release.yml",
   "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
-  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-release.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
   "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
   "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
   "newTests": [
-    "p31-engine-source-modularization-parity.cjs"
+    "p31-engine-source-modularization-parity.cjs",
+    "p32-exact-byte-release-promotion.cjs"
   ]
 }

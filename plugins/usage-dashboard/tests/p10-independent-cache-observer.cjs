@@ -2,9 +2,7 @@
 
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
-const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const currentRelease = assertCurrentReleaseArtifacts();
 const root = 'plugins/usage-dashboard';
 const source = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const core = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
@@ -17,7 +15,6 @@ const analytics = fs.readFileSync(`${root}/src/16-usage-analytics.part.js`, 'utf
 const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
 assert.ok(!core.includes('//@allowed-ipc provider-manager'));
 assert.ok(!source.includes('providerManagerCache'));
@@ -43,7 +40,6 @@ assert.ok(engine.includes('state.devpassLogs = { range: String(range), rows: saf
 
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
-// Generic cached totals remain separate from explicit provider cache reads.
 assert.ok(requestNormalize.includes("'cacheReadInputTokens','cache_read_input_tokens','usage.cacheReadInputTokens','usage.cache_read_input_tokens'"));
 assert.ok(requestNormalize.includes("'cachedContentTokenCount','cached_content_token_count','usage.cachedContentTokenCount','usage.cached_content_token_count'"));
 assert.ok(requestNormalize.includes("'usage.input_tokens_details.cached_tokens','usage.prompt_tokens_details.cached_tokens'"));
@@ -54,5 +50,4 @@ assert.ok(ledger.includes('cacheMetricSource:String('));
 assert.ok(diagnostics.includes('Cache observer: ${cacheObserverDiagnosticText(diagLedgerRows)}'));
 assert.ok(diagnostics.includes('cached total = Read + Write when both are known'));
 
-assert.ok(workflow.includes('behavior-cache-observer.cjs'));
 console.log('usage-dashboard P10 independent cache observer: OK · static independence boundaries retained; exact parser behavior delegated to capture-tap harness');

@@ -7,7 +7,6 @@ const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mj
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.validatorWorkflow, 'utf8');
 
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number\(process\.env\.DEVPASS_BRIDGE_CLI_CONCURRENCY \|\| 2\)\)\);/);
 assert.match(engine, /timeout: 25_000/);
@@ -50,17 +49,11 @@ assert.ok(diagnostics.includes('Bridge snapshot cache decisions:'));
 assert.ok(latest.includes('Bridge Credits early-start:'));
 assert.ok(latest.includes('Bridge snapshot cache decisions:'));
 
-assert.ok(workflow.includes('behavior-snapshot-attribution.cjs'));
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
 assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));
 assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
 assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/range'));
 assert.ok(guidelines.includes('Evidence outranks roadmap order.'));
-assert.match(workflow, /permissions:\s*\n\s*contents: read/);
-assert.doesNotMatch(workflow, /contents: write|group: repo-main-write|scripts\/repo-main-write\.py|git push/);
-assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
-assert.match(workflow, /p24-snapshot-decision-attribution\.cjs/);
-assert.match(workflow, /p33-generic-release-controller\.cjs/);
 
 console.log('usage-dashboard P24 Snapshot Decision Attribution: OK · decision invariants retained; sanitized cache behavior delegated to black-box Engine harness');

@@ -3,19 +3,11 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const {discoverTests} = require('./registry.cjs');
 
 const currentRelease = assertCurrentReleaseArtifacts();
-const behaviorTests = [
-  'behavior-cli-launcher.cjs',
-  'behavior-cache-runtime.cjs',
-  'behavior-snapshot-scheduler.cjs',
-  'behavior-snapshot-attribution.cjs',
-  'behavior-organization-capture.cjs',
-  'behavior-cache-observer.cjs',
-  'behavior-state-contract.cjs',
-  'behavior-runtime-recovery.cjs',
-  'behavior-service-tier-outcome.cjs',
-];
+const discovered = discoverTests();
+const behaviorTests = discovered.behavior;
 const harnessFiles = [
   'harness/bridge-process.cjs',
   'harness/controlled-clock.mjs',
@@ -49,6 +41,8 @@ const migratedIncidentTests = [
   'p28-managed-direct-cli-runtime.cjs',
 ];
 
+assert.ok(behaviorTests.includes('behavior-state-contract.cjs'));
+assert.ok(behaviorTests.includes('behavior-request-duration.cjs'));
 for (const name of behaviorTests) {
   const source = fs.readFileSync(`plugins/usage-dashboard/tests/${name}`, 'utf8');
   assert.ok(!source.includes("node:vm"), `${name} must not use VM extraction`);
@@ -107,11 +101,10 @@ assert.equal(fs.existsSync('plugins/usage-dashboard/tools/prepare_release_regres
 assert.ok(!workflow.includes('prepare_release_regressions.py'));
 assert.ok(!workflow.includes('git checkout -- plugins/usage-dashboard/tests'));
 assert.match(workflow, /TEST_TREE_MUTATED/);
-for (const name of ['behavior-harness-contract.cjs', ...behaviorTests]) {
-  assert.ok(workflow.includes(name), `${name} must run in the authoritative workflow`);
-}
+assert.match(workflow, /tests\/run-all\.cjs/);
+assert.ok(!workflow.includes('tests=('), 'authoritative workflow must delegate test selection to registry');
 for (const name of harnessFiles) {
   assert.ok(fs.existsSync(`plugins/usage-dashboard/tests/${name}`));
 }
 
-console.log('usage-dashboard behavior harness contract: OK · black-box tests are local-only, bounded, adapter-free, and immutable in CI');
+console.log('usage-dashboard behavior harness contract: OK · registry-selected black-box tests are local-only, bounded, adapter-free, and immutable in CI');

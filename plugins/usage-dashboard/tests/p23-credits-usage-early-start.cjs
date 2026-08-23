@@ -5,7 +5,6 @@ const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs')
 const currentRelease = assertCurrentReleaseArtifacts();
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.validatorWorkflow, 'utf8');
 
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2, Number\(process\.env\.DEVPASS_BRIDGE_CLI_CONCURRENCY \|\| 2\)\)\);/);
 assert.match(engine, /timeout: 25_000/);
@@ -46,7 +45,6 @@ assert.ok(engine.includes("captureAccountDetailsViaCliSession('24h')"));
 assert.ok(engine.includes("captureReuse: { bootstrapRange:'24h'"));
 assert.ok(engine.includes('taskTimeline'));
 assert.ok(engine.includes('cliOperations'));
-assert.ok(workflow.includes('behavior-organization-capture.cjs'));
 
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
@@ -54,9 +52,5 @@ assert.ok(guidelines.includes('Keep already-working behavior unchanged unless th
 assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
 assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
 assert.ok(guidelines.includes('## Long-term update roadmap'));
-assert.match(workflow, /permissions:\s*\n\s*contents: read/);
-assert.doesNotMatch(workflow, /contents: write|group: repo-main-write|scripts\/repo-main-write\.py|git push/);
-assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
-assert.match(workflow, /p33-generic-release-controller\.cjs/);
 
 console.log('usage-dashboard P23 Credits Usage Early Start: OK · source invariants retained; safe candidate and rollback behavior delegated to black-box Engine harness');

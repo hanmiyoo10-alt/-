@@ -62,7 +62,8 @@ assert.match(reusableValidate, /release_spec:[\s\S]*required: false[\s\S]*defaul
 assert.match(reusableValidate, /resolve_release_spec\.cjs --manifest plugins\/usage-dashboard\/runtime\/product-manifest\.json/);
 assert.match(reusableValidate, /^permissions:\n  contents: read$/m);
 assert.ok(reusableValidate.includes('CANDIDATE_NOT_MATERIALIZED'));
-assert.ok(reusableValidate.includes('p33-generic-release-controller.cjs'));
+assert.ok(reusableValidate.includes('plugins/usage-dashboard/tests/run-all.cjs'));
+assert.ok(!reusableValidate.includes('tests=('), 'generic validator must not own the complete test list');
 for (const forbidden of ['contents: write','repo-main-write.py','git push','inputs.publish']) {
   assert.ok(!reusableValidate.includes(forbidden), `generic validator must not contain ${forbidden}`);
 }
@@ -108,4 +109,4 @@ for (const archived of registry.archived) {
   assert.ok(!/^  push:/m.test(source), `${archived} must not auto-publish`);
 }
 
-console.log('usage-dashboard P33 generic release controller: OK · tuple resolver, generic validation, merged exact-byte promotion, and version-workflow retirement locked');
+console.log('usage-dashboard P33 generic release controller: OK · tuple resolver, registry-backed validation, merged exact-byte promotion, and version-workflow retirement locked');

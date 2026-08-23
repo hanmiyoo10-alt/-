@@ -2,14 +2,11 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const currentRelease = assertCurrentReleaseArtifacts();
 const root = 'plugins/usage-dashboard';
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
 
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 assert.ok(engine.includes("const capturedRawOrgs = captured?.orgs ?? captured;"));
@@ -28,6 +25,5 @@ assert.ok(engine.includes('fallbackCount = 1;'));
 assert.ok(engine.includes('sharedAccountCapture: Boolean(captured)'));
 assert.ok(engine.includes('captureErrorCode: captureResult.error ? classifyError(captureResult.error) : null'));
 assert.ok(diagnostics.includes('Bridge organization discovery:'));
-assert.ok(workflow.includes('behavior-organization-capture.cjs'));
 
 console.log('usage-dashboard P19 organization empty fallback fidelity: OK · static failure/provenance boundaries retained; empty and valid fallback behavior delegated to Engine harness');

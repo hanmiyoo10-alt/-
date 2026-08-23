@@ -17,7 +17,6 @@ const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mj
 const requestNormalize = fs.readFileSync('plugins/usage-dashboard/src/10-request-normalize.part.js', 'utf8');
 const ledger = fs.readFileSync('plugins/usage-dashboard/src/14-request-ledger.part.js', 'utf8');
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
-const validator = fs.readFileSync(release.validatorWorkflow, 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 
 assert.ok(cliRuntime.includes("typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0"), 'capture must accept only explicit numeric non-negative /logs duration');
@@ -71,10 +70,6 @@ assert.ok(engine.includes("accountCapture: 30_000"));
 assert.ok(engine.includes("'activity:24h': 60_000"));
 assert.ok(engine.includes("if (CLI_CONCURRENCY < 2)"));
 
-assert.ok(validator.includes('behavior-request-duration.cjs'));
-assert.ok(validator.includes('p34-request-duration-fidelity.cjs'));
-assert.match(validator, /permissions:\s*\n\s*contents: read/);
-assert.doesNotMatch(validator, /repo-main-write\.py|git push|contents: write/);
 assert.ok(manager.includes("const MANAGER_VERSION = '1.3.0';"));
 assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.70';"));
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.21';"));

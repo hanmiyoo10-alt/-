@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "product": "Local Usage Dashboard",
+  "retired": [
+    {
+      "test": "p8-provider-manager-cache-ipc.cjs",
+      "reason": "Superseded by P10 Independent Cache Observer. Current production intentionally removes Provider Manager cache IPC and P10 locks that absence.",
+      "supersededBy": "p10-independent-cache-observer.cjs"
+    },
+    {
+      "test": "p9-provider-manager-cache-hardening.cjs",
+      "reason": "Superseded with the Provider Manager cache IPC path by P10 Independent Cache Observer. Its circuit/backoff contract no longer represents production authority.",
+      "supersededBy": "p10-independent-cache-observer.cjs"
+    }
+  ]
+}

@@ -8,7 +8,6 @@ const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.
 const latest = fs.readFileSync('plugins/usage-dashboard/latest.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.validatorWorkflow, 'utf8');
 
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
@@ -55,12 +54,5 @@ assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('Engine launcher order is `managed-direct` → system `direct` → `npx-fallback`.'));
 assert.ok(guidelines.includes('Keep all five existing `runCli()` source call sites and the single existing `execFileAsync()` source operation'));
 assert.ok(guidelines.includes('If managed-direct remains near the prior 7–13s source timings'));
-assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
-assert.ok(workflow.includes('behavior-harness-contract.cjs'));
-assert.match(workflow, /permissions:\s*\n\s*contents: read/);
-assert.ok(!workflow.includes('group: repo-main-write'));
-assert.ok(!workflow.includes('scripts/repo-main-write.py'));
-assert.ok(!workflow.includes('contents: write'));
-assert.ok(workflow.includes('p33-generic-release-controller.cjs'));
 
 console.log('P26 Foreground CLI Launcher Attribution: OK · static boundaries retained; launcher behavior delegated to black-box Engine harness');

@@ -87,8 +87,8 @@ function snapshot() {
 }
 
 (async () => {
-  assert.equal(currentRelease.productVersion, '3.0.0-alpha.5.70');
-  assert.equal(currentRelease.engineVersion, '1.6.21');
+  assert.equal(currentRelease.productVersion, '3.0.0-alpha.5.71');
+  assert.equal(currentRelease.engineVersion, '1.6.22');
   assert.equal(currentRelease.managerVersion, '1.3.0');
 
   const run = await runDashboard({

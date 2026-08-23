@@ -230,9 +230,72 @@ repair only temporary evidence fixtures/parsers
 rerun full shadow + negative parity
 ```
 
+## First complete shadow parity pass
+
+Observed run:
+
+```text
+workflow       = SimCore CI
+run            = 32637669371
+Verify job     = 97189755999 / SUCCESS
+Required job   = 97189808457 / SUCCESS
+verifier       = bdfcfdc5533a701fe5dd7624d1f928af2ec37c61
+report artifact= 9492748252
+```
+
+Positive shadow identities:
+
+```text
+DEPLOYED_PRODUCTION
+  source = 47969d24771f6cc188df6e32150fc6fde519182d
+  permanent CANDIDATE_SHADOW = PASS
+  legacy architecture       = PASS
+  legacy robust 1-25        = PASS
+
+HISTORICAL_CORRECTION_CANDIDATE
+  source = db14a61862c3730582ad102a70d109348b7e1cb7
+  permanent CANDIDATE_SHADOW = PASS
+  legacy architecture       = PASS
+  legacy robust 1-25        = PASS
+```
+
+Mandatory negative parity:
+
+```text
+latest/install mismatch            legacy FAIL · permanent FAIL · LATEST_INSTALL_MISMATCH
+forbidden architecture module      legacy FAIL · permanent FAIL · ARCH_CONTRACT_FAIL
+COMMUNITY reaction predicate       legacy FAIL · permanent FAIL · SEMANTIC_FAIL
+closure terminal/stored mismatch   legacy expected INVALID_SOURCE · permanent expected INVALID_SOURCE
+```
+
+The permanent candidate profile used by the proof is the full candidate baseline, including:
+
+```text
+GATE_STATIC
+GATE_ARCH
+GATE_REGRESSION
+GATE_STATE
+GATE_COORDINATION
+GATE_LEGACY_COMPAT
+```
+
+The proof records:
+
+```text
+permanentStrength = EQUIVALENT_OR_STRICTER_WITH_DURABLE_BATCH_A_PLUS_BOUNDED_LEGACY_COMPAT
+runtimeMutation   = NONE
+repositoryWrite   = NONE
+```
+
+This supplies two qualifying positive records under one verifier identity. The frozen diversity rule still requires another independent verifier identity before shadow verification can be promoted.
+
 ## Validation record
 
 Permanent PR execution: **PASS**.
-Shadow equivalence and negative parity: **COLLECTING**.
+Shadow positive records: **2 qualifying**.
+Shadow verifier identities: **1 qualifying**.
+Mandatory negative parity: **PASS**.
+`PERMANENT_GATE_WEAKER`: **NONE OBSERVED**.
+Shadow equivalence status: **COLLECTING — diversity proof pending**.
 Shadow evidence parser anomaly: **FIX / PRESERVED**.
 Shadow semantic-negative fixture anomaly: **FIX / PRESERVED**.

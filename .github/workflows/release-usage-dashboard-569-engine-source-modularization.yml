@@ -28,7 +28,6 @@ jobs:
       publish: false
 
   materialize-command:
-    needs: release
     if: github.repository == 'hanmiyoo10-alt/-' && github.head_ref == 'release/usage-dashboard-569-publish-command'
     runs-on: ubuntu-latest
     steps:

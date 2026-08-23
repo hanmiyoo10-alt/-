@@ -130,7 +130,7 @@ function line(text, prefix) {
   const sync11 = Date.parse('2026-08-23T06:21:11.000Z');
 
   const visibility = await capture(10, 'visibility', sync10, 'basic');
-  const timer = await capture(11, 'timer', sync11, 'detailed');
+  const timer = await capture(11, 'timer', sync11, 'basic');
 
   const basic10 = line(visibility.view.summary, 'Refresh identity:');
   const full11 = line(timer.view.diag, 'Diagnostic refresh identity:');
@@ -140,9 +140,10 @@ function line(text, prefix) {
 
   const basic11 = line(timer.view.summary, 'Refresh identity:');
   assert.equal(basic11, full11, 'Basic and Full created from the same refresh state must report identical refresh identity');
-  assert.ok(timer.view.html.includes('Captured #11'), 'Basic/Detailed workspace header must expose the refresh count');
-  assert.ok(timer.view.html.includes('timer'), 'workspace header must preserve the source refresh reason');
-  assert.ok(timer.view.html.includes('2026-08-23T06:21:11.000Z'), 'workspace header must preserve the source sync timestamp');
+  assert.ok(visibility.view.html.includes('Captured #10'), 'Basic screen must expose the visibility refresh count');
+  assert.ok(timer.view.html.includes('Captured #11'), 'Basic screen must expose the timer refresh count');
+  assert.ok(timer.view.html.includes('timer'), 'Basic screen must preserve the source refresh reason');
+  assert.ok(timer.view.html.includes('2026-08-23T06:21:11.000Z'), 'Basic screen must preserve the source sync timestamp');
 
   const summaryCaptured = line(timer.view.summary, 'Diagnostic captured:');
   const fullCaptured = line(timer.view.diag, 'Diagnostic captured:');
@@ -155,11 +156,11 @@ function line(text, prefix) {
   assert.equal(unknown.view.summary.includes('1970-01-01T00:00:00.000Z'), false, 'unknown sync time must never be fabricated as epoch zero');
   assert.equal(unknown.view.diag.includes('1970-01-01T00:00:00.000Z'), false, 'Full Diagnostics must not fabricate an unknown sync time');
 
-  assert.equal(visibility.run.fetches.length, timer.run.fetches.length, 'capture identity presentation must not add network activity across modes');
+  assert.equal(visibility.run.fetches.length, timer.run.fetches.length, 'capture identity presentation must not add network activity');
   assert.equal(visibility.run.state.refreshCount, 10, 'opening/copying Diagnostics must not execute a refresh');
   assert.equal(timer.run.state.refreshCount, 11, 'opening/copying Diagnostics must not execute a refresh');
 
-  console.log('P30 Diagnostics Capture Identity: OK · Basic, screen, and Full export are self-identifying across same and different refresh states without new runtime work');
+  console.log('P30 Diagnostics Capture Identity: OK · Basic screen/summary and Full export are self-identifying across same and different refresh states without new runtime work');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

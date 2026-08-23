@@ -1,0 +1,207 @@
+name: SimCore v0.64.6 Post-B_END C Clock Handoff Build v2
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06406-post-bend-c-clock-handoff-v2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.pull_request.title == 'SimCore v0.64.6 Post-B_END C Clock Handoff Authority build command v2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.64.6 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06406-post-bend-c-clock-handoff
+          fetch-depth: 0
+
+      - name: Load scoped patch and architecture tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06406-post-bend-c-clock-handoff.py > /tmp/simcore-06406.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-06406.py /tmp/simcore-architecture-check.py
+
+      - name: Capture frozen surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def region(a,b):
+              s=text.index(a); e=text.index(b,s); return hashlib.sha256(text[s:e].encode()).hexdigest()
+          frozen={
+              'community_family': region('SimCore.define("community"','SimCore.define("time"'),
+              'reaction': region('SimCore.define("reaction"','SimCore.define("frame"'),
+              'representation': region('SimCore.define("representation"','SimCore.define("runtime-mirror"'),
+          }
+          Path('/tmp/frozen.json').write_text(json.dumps(frozen,sort_keys=True),encoding='utf-8')
+          counts={x:text.count(x) for x in ('pluginStorage.','setChat(','fetch(','setInterval(','setTimeout(')}
+          Path('/tmp/counts.json').write_text(json.dumps(counts,sort_keys=True),encoding='utf-8')
+          PY
+
+      - name: Apply scoped runtime patch
+        run: python3 /tmp/simcore-06406.py
+
+      - name: Static and architecture gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.6$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.6';" plugins/simcore/latest.js
+          grep -q 'function derivePostBEndClockEligibility' plugins/simcore/latest.js
+          grep -q 'function resolvePostBEndCurrentTimeFloor' plugins/simcore/latest.js
+          grep -q 'Post-B_END clock handoff:' plugins/simcore/latest.js
+          grep -q 'Current-time authority:' plugins/simcore/latest.js
+          python3 /tmp/simcore-architecture-check.py --contract /tmp/simcore-architecture-v2.json --source plugins/simcore/latest.js --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Run timeline regression consolidation fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('plugins/simcore/latest.js','utf8');
+          const assert=(ok,msg)=>{if(!ok) throw new Error(msg)};
+          function moduleSlice(name,nextName){
+            const s=text.indexOf(`SimCore.define("${name}"`), e=text.indexOf(`SimCore.define("${nextName}"`,s);
+            if(s<0||e<=s) throw new Error(`module extraction failed ${name}`);
+            return text.slice(s,e);
+          }
+          function loadModule(name,nextName,deps={}){
+            let out=null;
+            const SimCore={define(n,factory){
+              if(n!==name) return;
+              const module={exports:{}};
+              factory((id)=>deps[id]||{},module,module.exports);
+              out=module.exports;
+            }};
+            new Function('SimCore',moduleSlice(name,nextName))(SimCore);
+            if(!out) throw new Error(`requested module not loaded ${name}`);
+            return out;
+          }
+          const time=loadModule('time','lifecycle');
+          const lifecycle=loadModule('lifecycle','reaction',{'./kernel':{},'./time':time,'./recurrence':{},'./lineage':{},'./handoff':{}});
+          const community=loadModule('community','time');
+          const reaction=loadModule('reaction','frame',{'./community':community});
+          const representation=loadModule('representation','runtime-mirror');
+          const oldNarr='⏱️[2031-03-14 (Fri) 11:30 PM]';
+          const terminal='⏱️[2031-03-28 (Fri) 10:15 PM]';
+          const laterNarr='⏱️[2031-03-28 (Fri) 10:50 PM]';
+          const lineageB={lastRequestMode:'B',lastRequestIndex:2116};
+          const state={broadcastLocked:false,broadcastAirtime:terminal};
+
+          let e=lifecycle.derivePostBEndClockEligibility('C','B_END',state,lineageB);
+          let f=time.resolvePostBEndCurrentTimeFloor(oldNarr,e);
+          assert(e.eligible&&f.disposition==='APPLIED'&&f.effectiveFloor===terminal,`1 ${JSON.stringify({e,f})}`);
+          f=time.resolvePostBEndCurrentTimeFloor(laterNarr,e);
+          assert(f.disposition==='ALREADY_SATISFIED'&&f.effectiveFloor===laterNarr,`2 ${JSON.stringify(f)}`);
+          assert(!lifecycle.derivePostBEndClockEligibility.toString().includes('handoff'),'3 Source Handoff dependency');
+          assert(!lifecycle.derivePostBEndClockEligibility('C','C',state,{lastRequestMode:'C',lastRequestIndex:2118}).eligible,'4 second C bridged');
+          assert(!lifecycle.derivePostBEndClockEligibility('C','B_CONTINUE',state,lineageB).eligible,'5 B_CONTINUE->C');
+          assert(!lifecycle.derivePostBEndClockEligibility('C','B_START',state,lineageB).eligible,'6 B_START->C');
+          assert(!lifecycle.derivePostBEndClockEligibility('A','B_END',state,lineageB).eligible,'7 B_END->A');
+          e=lifecycle.derivePostBEndClockEligibility('C','B_END',{broadcastLocked:false,broadcastAirtime:'bad timestamp'},lineageB);
+          f=time.resolvePostBEndCurrentTimeFloor(oldNarr,e);
+          assert(f.disposition==='INVALID_SOURCE'&&f.effectiveFloor===oldNarr,`8 ${JSON.stringify(f)}`);
+
+          const historical=[oldNarr,'현재 반응 프레임','과거 회상:','⏱️[2017-06-01 (Thu) 08:00 PM]'].join('\n');
+          const clamped=time.enforceNarrativeCurrentTimeFloor(historical,terminal);
+          assert(clamped.changed&&clamped.content.includes(terminal),'9 current frame floor');
+          assert(clamped.content.includes('⏱️[2017-06-01 (Thu) 08:00 PM]'),'9 historical rewrite');
+
+          const laterTail=[terminal,'현재 반응','⏱️[2031-03-28 (Fri) 11:00 PM]'].join('\n');
+          const floorPass=time.enforceNarrativeCurrentTimeFloor(laterTail,terminal);
+          assert(!floorPass.changed,'10 later tail clamped');
+          const nstate={narrativeTimestamp:oldNarr};
+          const ncommit=time.commitNarrativeTimestamp(nstate,{mode:'C',narrativeTimestampPrevious:oldNarr},floorPass.content);
+          assert(ncommit.timestamp==='⏱️[2031-03-28 (Fri) 11:00 PM]',`10 ${JSON.stringify(ncommit)}`);
+
+          const rollback=['⏱️[2017-06-01 (Thu) 08:00 PM]','현재라고 잘못 렌더','⏱️[2016-01-01 (Fri) 01:00 PM]'].join('\n');
+          const rollbackFixed=time.enforceNarrativeCurrentTimeFloor(rollback,terminal);
+          assert(rollbackFixed.changed&&rollbackFixed.content.startsWith(terminal),'11 rollback not blocked');
+          assert(rollbackFixed.content.includes('⏱️[2016-01-01 (Fri) 01:00 PM]'),'11 history rewritten');
+
+          const bstate={broadcastAirtime:'⏱️[2031-03-28 (Fri) 09:45 PM]',broadcastAirtimeStart:'⏱️[2031-03-28 (Fri) 09:45 PM]'};
+          const bout=['⏱️[2031-03-28 (Fri) 09:45 PM]','방송 진행',terminal].join('\n');
+          const bcommit=time.commitBroadcastAirtime(bstate,{mode:'B_END',broadcastAirtimePrevious:bstate.broadcastAirtime},bout);
+          assert(bcommit.timestamp===terminal&&bstate.broadcastAirtime===terminal,`12 ${JSON.stringify(bcommit)}`);
+
+          const bilingual=['- @a: English top','(번역) [RT 1,001]','ㄴ @b: reply','(답글) [RT 1,002]','- @c: top','(번역) [RT 1,003]','- @d: top','(번역) [RT 1,004]','- @e: top','(번역) [RT 1,005]'].join('\n');
+          const units=community.commentUnits(bilingual);
+          assert(units.length===5&&units.filter(x=>x.kind==='TOP').length===4&&units.filter(x=>x.kind==='REPLY').length===1,'13 cardinality');
+          assert(units.every(x=>reaction.inspectCommentReactionLine(x.text).ok),'13 reaction');
+
+          const exactRow={fingerprintMatch:'CANONICAL',canonicalFingerprint:'10:aaa',freshFingerprint:'10:aaa',hostRawFingerprint:'10:aaa'};
+          let rel=representation.inspectCarryover('10:aaa',exactRow);
+          assert(rel.priorRepresentation==='EXACT'&&rel.currentMatch==='FRESH_CHAT'&&text.includes('SAME_FAST'),`14 ${JSON.stringify(rel)}`);
+          const driftRow={fingerprintMatch:'OUTPUT_MISMATCH',canonicalFingerprint:'11:canon',freshFingerprint:'10:fresh',hostRawFingerprint:''};
+          rel=representation.inspectCarryover('10:fresh',driftRow);
+          assert(rel.priorRepresentation==='OUTPUT_MISMATCH'&&rel.currentMatch==='FRESH_CHAT'&&rel.deltaShape==='FRESH_EXACT_CARRYOVER','15 representation fast relation');
+          assert(text.includes('REPRESENTATION_FAST_RECONCILED')&&text.includes("reason: 'representation-fast-reconciled'"),'15 fast marker');
+          rel=representation.inspectCarryover('10:edited',exactRow);
+          assert(rel.priorRepresentation==='EXACT'&&rel.currentMatch==='NONE'&&rel.deltaShape==='NEW_VISIBLE_REPRESENTATION','16 edit relation');
+          assert(text.includes('USER_EDIT_CANDIDATE')&&text.includes('MANUAL_EDIT_REBUILT'),'16 edit markers');
+
+          const annual=lifecycle.classifySummaryScope('2030년 연말 결산을 해줘','C');
+          const yoy=lifecycle.classifySummaryScope('2029년과 2030년 연말 누적 수치를 비교해줘','C');
+          assert(annual&&typeof annual.scope==='string'&&yoy&&typeof yoy.scope==='string','17 Summary Scope execution');
+          assert(text.includes('ANNUAL_ONLY')&&text.includes('CUMULATIVE_YOY'),'17 Summary Scope markers');
+
+          const third=lifecycle.derivePostBEndClockEligibility('C','C',{broadcastLocked:false,broadcastAirtime:terminal},{lastRequestMode:'C',lastRequestIndex:2120});
+          assert(!third.eligible&&third.reason==='not-direct-post-b-end-c',`18 ${JSON.stringify(third)}`);
+          console.log('timeline regression consolidation fixtures 1-18: PASS');
+          NODE
+
+      - name: Frozen surfaces and forbidden side effects gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          text=Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def region(a,b):
+              s=text.index(a); e=text.index(b,s); return hashlib.sha256(text[s:e].encode()).hexdigest()
+          before=json.loads(Path('/tmp/frozen.json').read_text())
+          after={
+              'community_family':region('SimCore.define("community"','SimCore.define("time"'),
+              'reaction':region('SimCore.define("reaction"','SimCore.define("frame"'),
+              'representation':region('SimCore.define("representation"','SimCore.define("runtime-mirror"'),
+          }
+          if before!=after: raise SystemExit(f'frozen module drift {before}->{after}')
+          before_counts=json.loads(Path('/tmp/counts.json').read_text())
+          after_counts={x:text.count(x) for x in before_counts}
+          if before_counts!=after_counts: raise SystemExit(f'side-effect drift {before_counts}->{after_counts}')
+          if 'state.narrativeTimestamp = state.broadcastAirtime' in text: raise SystemExit('persistent Broadcast/Narrative coupling')
+          for marker in ('function commentUnits(commentScope)','reaction.inspectCommentReactionLine(unit.text)','REPRESENTATION_FAST_RECONCILED','USER_EDIT_CANDIDATE','MANUAL_EDIT_REBUILT','stale_scale_fallback'):
+              if marker not in text: raise SystemExit(f'frozen marker missing {marker}')
+          print('frozen surfaces + side effects: PASS')
+          PY
+
+      - name: Commit validated implementation to work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --check
+          git commit -m 'SimCore v0.64.6 Post-B_END C Clock Handoff Authority'
+          git push origin HEAD:simcore-06406-post-bend-c-clock-handoff

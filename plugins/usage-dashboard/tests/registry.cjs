@@ -12,6 +12,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'behavior-harness-contract.cjs',
   'test-registry-contract.cjs',
   'candidate-ready-contract.cjs',
+  'release-candidate-classifier-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([
   'registry.cjs',

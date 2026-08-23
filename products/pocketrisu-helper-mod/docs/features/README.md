@@ -2,6 +2,16 @@
 
 플러그인처럼 **기능 하나 = 폴더 하나**로 관리한다.
 
+각 기능 폴더는 반드시:
+```text
+<feature>/
+├─ README.md       # 현재 구현/검증
+├─ UPSTREAM.md     # 미래 정식 PR dossier
+└─ FAILURES.md     # CI/PR/review/deploy 실패 장부
+```
+
+새 기능은 코드를 먼저 만들고 나중에 분리하지 않는다. 먼저 Feature-ID/폴더를 만들고 그 경계 안에서 작업한다.
+
 ## 📱 메인폰
 - [SSH core tunnel](main-phone/main-ssh-tunnel/README.md)
 - [notification relay](main-phone/main-notification-relay/README.md)
@@ -22,5 +32,6 @@
 - [V3 plugin targeted reload](shared/plugin-targeted-reload/README.md)
 - [session/write-lock](shared/session-write-lock/README.md)
 - [long-chat refresh stall](shared/long-chat-refresh-stall/README.md)
+- [PR lifecycle automation](shared/pr-lifecycle-automation/README.md)
 
-기능이 커지면 해당 폴더에 `DIAGNOSTICS.md`, `ROLLBACK.md`, `scripts/`를 추가한다.
+기능이 커지면 `DIAGNOSTICS.md`, `ROLLBACK.md`, `scripts/`를 추가한다. PR 준비/실패 기록은 `UPSTREAM.md`, `FAILURES.md`에 유지한다.

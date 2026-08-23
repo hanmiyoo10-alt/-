@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "contract": "RS2-1 Diagnostic Copy v0.64.2 equivalence",
+  "requiredSourceMarkers": [
+    "REPORT_BUILD_FAILED",
+    "CLIPBOARD_WRITE_FAILED",
+    "COPIED_FALLBACK",
+    "function runDiagnosticCopy",
+    "function fallbackCopyText"
+  ],
+  "historicalSource": {
+    "version": "0.64.2",
+    "commit": "7a1f1692920abbc890c6663b40e38a24676c3de9",
+    "gitBlobSha1": "3058e5bafa7f3abd15277ceabd0bd9d8518f52dc"
+  }
+}

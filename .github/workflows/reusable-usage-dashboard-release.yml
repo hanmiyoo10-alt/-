@@ -91,6 +91,8 @@ jobs:
 
           python3 "$UD_MATERIALIZER"
           assert_test_tree_clean
+          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --write
+          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node --check plugins/usage-dashboard/latest.js
@@ -116,6 +118,7 @@ jobs:
             p21-snapshot-scheduling-attribution.cjs p22-monotonic-release-integrity.cjs p23-credits-usage-early-start.cjs
             p24-snapshot-decision-attribution.cjs p25-long-window-critical-path-decoupling.cjs p26-foreground-cli-launcher-attribution.cjs
             p27-npx-cache-first-launcher.cjs p28-managed-direct-cli-runtime.cjs p29-diagnostics-workspace-separation.cjs p30-diagnostics-capture-identity.cjs
+            p31-engine-source-modularization-parity.cjs
           )
           for test in "${tests[@]}"; do node "plugins/usage-dashboard/tests/$test"; done
           assert_test_tree_clean
@@ -124,6 +127,9 @@ jobs:
           git diff --check
           EXPECTED_PARTS="$(node -e "console.log(require('./plugins/usage-dashboard/src/parts.cjs').PARTS.length)")"
           test "$(find plugins/usage-dashboard/src -maxdepth 1 -name '*.part.js' | wc -l)" -eq "$EXPECTED_PARTS"
+          ENGINE_EXPECTED_PARTS="$(node -e "console.log(require('./plugins/usage-dashboard/runtime-src/bridge-engine/parts.json').parts.length)")"
+          test "$(find plugins/usage-dashboard/runtime-src/bridge-engine -maxdepth 1 -name '*.part.mjs' | wc -l)" -eq "$ENGINE_EXPECTED_PARTS"
+          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
           grep -Fq 'STALE_CANDIDATE_MAIN' plugins/usage-dashboard/tools/check_release_monotonic.py
           grep -Fq 'SAME_VERSION_ARTIFACT_DIVERGENCE' plugins/usage-dashboard/tools/check_release_monotonic.py
 
@@ -134,7 +140,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- plugins/usage-dashboard/src plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime docs/USAGE_DASHBOARD_GUIDELINES.md
+          git add -- plugins/usage-dashboard/src plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime plugins/usage-dashboard/runtime-src docs/USAGE_DASHBOARD_GUIDELINES.md
           git diff --cached --check
           if git diff --cached --quiet; then
             echo "main already matches $UD_PRODUCT_VERSION"

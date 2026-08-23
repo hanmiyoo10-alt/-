@@ -14,6 +14,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'candidate-ready-contract.cjs',
   'release-candidate-classifier-contract.cjs',
   'release-authority-contract.cjs',
+  'candidate-preparation-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([
   'registry.cjs',

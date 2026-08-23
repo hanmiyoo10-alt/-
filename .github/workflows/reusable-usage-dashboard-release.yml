@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: repo-main-write
+  group: usage-dashboard-release
   cancel-in-progress: false
 
 jobs:
@@ -146,8 +146,13 @@ jobs:
             echo "main already matches $UD_PRODUCT_VERSION"
           else
             git commit -m "release: Local Usage Dashboard $UD_PRODUCT_VERSION $UD_RELEASE_TITLE"
-            git pull --rebase origin main
-            git push origin HEAD:main
+            PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+            python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
+              --allow plugins/usage-dashboard/src/ \
+              --allow plugins/usage-dashboard/latest.js \
+              --allow plugins/usage-dashboard/runtime/ \
+              --allow plugins/usage-dashboard/runtime-src/ \
+              --allow docs/USAGE_DASHBOARD_GUIDELINES.md
           fi
 
       - name: Publish candidate monotonically to release channel

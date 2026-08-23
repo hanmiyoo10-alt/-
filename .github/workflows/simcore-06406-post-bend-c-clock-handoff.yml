@@ -1,0 +1,298 @@
+name: SimCore v0.64.6 Post-B_END C Clock Handoff Build
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-06406-post-bend-c-clock-handoff
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.pull_request.title == 'SimCore v0.64.6 Post-B_END C Clock Handoff Authority build command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.64.6 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: simcore-06406-post-bend-c-clock-handoff
+          fetch-depth: 0
+
+      - name: Load scoped patch and architecture tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show origin/main:scripts/simcore-06406-post-bend-c-clock-handoff.py > /tmp/simcore-06406.py
+          git show origin/main:scripts/simcore-architecture-check.py > /tmp/simcore-architecture-check.py
+          git show origin/main:config/simcore-architecture-v2.json > /tmp/simcore-architecture-v2.json
+          python3 -m py_compile /tmp/simcore-06406.py /tmp/simcore-architecture-check.py
+
+      - name: Capture frozen pre-patch surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def region(start_marker, end_marker):
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return hashlib.sha256(text[start:end].encode()).hexdigest()
+          frozen = {
+              'community': region('SimCore.define("community"', 'SimCore.define("time"'),
+              'reaction': region('SimCore.define("reaction"', 'SimCore.define("frame"'),
+              'representation': region('SimCore.define("representation"', 'SimCore.define("runtime-mirror"'),
+          }
+          Path('/tmp/simcore-06406-frozen.json').write_text(json.dumps(frozen, sort_keys=True), encoding='utf-8')
+          counts = {needle: text.count(needle) for needle in (
+              'pluginStorage.', 'setChat(', 'fetch(', 'setInterval(', 'setTimeout(',
+          )}
+          Path('/tmp/simcore-06406-surface-counts.json').write_text(json.dumps(counts, sort_keys=True), encoding='utf-8')
+          for marker in (
+              'function commentUnits(commentScope)',
+              'reaction.inspectCommentReactionLine(unit.text)',
+              'REPRESENTATION_FAST_RECONCILED',
+              'USER_EDIT_CANDIDATE',
+              'MANUAL_EDIT_REBUILT',
+              'Broadcast closure:',
+              'Broadcast terminal coverage:',
+          ):
+              if marker not in text:
+                  raise SystemExit(f'missing frozen control: {marker}')
+          print('pre-patch frozen surfaces captured')
+          PY
+
+      - name: Apply v0.64.6 scoped repair
+        run: python3 /tmp/simcore-06406.py
+
+      - name: Validate syntax identity architecture and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check plugins/simcore/latest.js
+          node --check plugins/simcore/install.js
+          cmp -s plugins/simcore/latest.js plugins/simcore/install.js
+          grep -q '^//@version 0.64.6$' plugins/simcore/latest.js
+          grep -q "const SIMCORE_RUNTIME_VERSION = '0.64.6';" plugins/simcore/latest.js
+          grep -q 'v0.64.6 Post-B_END C Clock Handoff Authority' plugins/simcore/latest.js
+          grep -q 'function derivePostBEndClockEligibility' plugins/simcore/latest.js
+          grep -q 'function resolvePostBEndCurrentTimeFloor' plugins/simcore/latest.js
+          grep -q 'post_b_end_current_time_floor=' plugins/simcore/latest.js
+          grep -q 'Post-B_END clock handoff:' plugins/simcore/latest.js
+          grep -q 'Current-time authority:' plugins/simcore/latest.js
+          python3 /tmp/simcore-architecture-check.py \
+            --contract /tmp/simcore-architecture-v2.json \
+            --source plugins/simcore/latest.js \
+            --source plugins/simcore/install.js
+          git diff --check
+
+      - name: Run timeline regression consolidation fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const assert = (ok, msg) => { if (!ok) throw new Error(msg); };
+
+          function moduleSlice(name, nextName) {
+            const start = text.indexOf(`SimCore.define("${name}"`);
+            const end = text.indexOf(`SimCore.define("${nextName}"`, start);
+            if (start < 0 || end <= start) throw new Error(`module extraction failed: ${name}`);
+            return text.slice(start, end);
+          }
+          function loadModule(name, nextName, deps = {}) {
+            let out = null;
+            const SimCore = { define(n, factory) {
+              if (n !== name) throw new Error(`unexpected module ${n}`);
+              const module = { exports: {} };
+              factory((id) => deps[id] || {}, module, module.exports);
+              out = module.exports;
+            }};
+            new Function('SimCore', moduleSlice(name, nextName))(SimCore);
+            return out;
+          }
+
+          const time = loadModule('time', 'lifecycle');
+          const lifecycle = loadModule('lifecycle', 'reaction', {
+            './kernel': {}, './time': time, './recurrence': {}, './lineage': {}, './handoff': {},
+          });
+          const community = loadModule('community', 'time');
+          const reaction = loadModule('reaction', 'frame', { './community': community });
+          const representation = loadModule('representation', 'runtime-mirror');
+
+          const oldNarr = '⏱️[2031-03-14 (Fri) 11:30 PM]';
+          const terminal = '⏱️[2031-03-28 (Fri) 10:15 PM]';
+          const laterNarr = '⏱️[2031-03-28 (Fri) 10:50 PM]';
+          const lineageB = { lastRequestMode: 'B', lastRequestIndex: 2116 };
+          const state = { broadcastLocked: false, broadcastAirtime: terminal };
+
+          // 1 stale Narrative immediate C -> APPLIED
+          let e = lifecycle.derivePostBEndClockEligibility('C', 'B_END', state, lineageB);
+          let f = time.resolvePostBEndCurrentTimeFloor(oldNarr, e);
+          assert(e.eligible && f.disposition === 'APPLIED' && f.effectiveFloor === terminal, `fixture1 ${JSON.stringify({e,f})}`);
+
+          // 2 Narrative later -> ALREADY_SATISFIED
+          f = time.resolvePostBEndCurrentTimeFloor(laterNarr, e);
+          assert(f.disposition === 'ALREADY_SATISFIED' && f.effectiveFloor === laterNarr, `fixture2 ${JSON.stringify(f)}`);
+
+          // 3 Source Handoff eligibility is not an input/dependency
+          assert(!lifecycle.derivePostBEndClockEligibility.toString().includes('handoff'), 'fixture3 clock eligibility depends on Source Handoff');
+
+          // 4 only first direct C
+          const second = lifecycle.derivePostBEndClockEligibility('C', 'C', state, { lastRequestMode: 'C', lastRequestIndex: 2118 });
+          assert(e.eligible && !second.eligible, `fixture4 ${JSON.stringify({e,second})}`);
+
+          // 5/6/7 unrelated transitions
+          assert(!lifecycle.derivePostBEndClockEligibility('C', 'B_CONTINUE', state, lineageB).eligible, 'fixture5 B_CONTINUE->C eligible');
+          assert(!lifecycle.derivePostBEndClockEligibility('C', 'B_START', state, lineageB).eligible, 'fixture6 B_START->C eligible');
+          assert(!lifecycle.derivePostBEndClockEligibility('A', 'B_END', state, lineageB).eligible, 'fixture7 B_END->A eligible');
+
+          // 8 invalid source fails closed to ordinary Narrative
+          e = lifecycle.derivePostBEndClockEligibility('C', 'B_END', { broadcastLocked: false, broadcastAirtime: 'bad timestamp' }, lineageB);
+          f = time.resolvePostBEndCurrentTimeFloor(oldNarr, e);
+          assert(f.disposition === 'INVALID_SOURCE' && f.effectiveFloor === oldNarr, `fixture8 ${JSON.stringify(f)}`);
+
+          // 9 explicit historical scene remains below current-frame floor
+          const historical = [
+            '⏱️[2031-03-14 (Fri) 11:30 PM]',
+            '현재 반응 프레임',
+            '과거 회상:',
+            '⏱️[2017-06-01 (Thu) 08:00 PM]',
+          ].join('\n');
+          const clamped = time.enforceNarrativeCurrentTimeFloor(historical, terminal);
+          assert(clamped.changed, 'fixture9 current frame did not clamp');
+          assert(clamped.content.includes(terminal), 'fixture9 terminal floor missing');
+          assert(clamped.content.includes('⏱️[2017-06-01 (Thu) 08:00 PM]'), 'fixture9 historical scene rewritten');
+
+          // 10 later Narrative tail wins; floor is minimum not ceiling
+          const laterTail = [terminal, '현재 반응', '⏱️[2031-03-28 (Fri) 11:00 PM]'].join('\n');
+          const floorPass = time.enforceNarrativeCurrentTimeFloor(laterTail, terminal);
+          assert(!floorPass.changed, 'fixture10 later tail content unexpectedly clamped');
+          const nstate = { narrativeTimestamp: oldNarr };
+          const ncommit = time.commitNarrativeTimestamp(nstate, { mode: 'C', narrativeTimestampPrevious: oldNarr }, floorPass.content);
+          assert(ncommit.timestamp === '⏱️[2031-03-28 (Fri) 11:00 PM]', `fixture10 tail lost ${JSON.stringify(ncommit)}`);
+
+          // 11 current-era rollback is blocked while historical later tokens remain untouched
+          const rollback = ['⏱️[2017-06-01 (Thu) 08:00 PM]', '현재라고 잘못 렌더', '⏱️[2016-01-01 (Fri) 01:00 PM]'].join('\n');
+          const rollbackFixed = time.enforceNarrativeCurrentTimeFloor(rollback, terminal);
+          assert(rollbackFixed.changed && rollbackFixed.content.startsWith(terminal), 'fixture11 rollback not blocked');
+          assert(rollbackFixed.content.includes('⏱️[2016-01-01 (Fri) 01:00 PM]'), 'fixture11 historical token rewritten');
+
+          // 12 B_END terminal authority remains healthy
+          const bstate = { broadcastAirtime: '⏱️[2031-03-28 (Fri) 09:45 PM]', broadcastAirtimeStart: '⏱️[2031-03-28 (Fri) 09:45 PM]' };
+          const bout = ['⏱️[2031-03-28 (Fri) 09:45 PM]', '방송 진행', terminal].join('\n');
+          const bcommit = time.commitBroadcastAirtime(bstate, { mode: 'B_END', broadcastAirtimePrevious: bstate.broadcastAirtime }, bout);
+          assert(bcommit.timestamp === terminal && bstate.broadcastAirtime === terminal, `fixture12 ${JSON.stringify(bcommit)}`);
+
+          // 13 v0.64.5 COMMUNITY multiline logical reaction unit remains valid
+          const bilingual = ['- @a: English top', '(번역) [RT 1,001]', 'ㄴ @b: reply', '(답글) [RT 1,002]', '- @c: top', '(번역) [RT 1,003]', '- @d: top', '(번역) [RT 1,004]', '- @e: top', '(번역) [RT 1,005]'].join('\n');
+          const units = community.commentUnits(bilingual);
+          assert(units.length === 5 && units.filter(x => x.kind === 'TOP').length === 4 && units.filter(x => x.kind === 'REPLY').length === 1, 'fixture13 unit cardinality');
+          assert(units.every(x => reaction.inspectCommentReactionLine(x.text).ok), 'fixture13 reaction regression');
+
+          // 14 Representation exact control
+          const exactRow = { fingerprintMatch: 'CANONICAL', canonicalFingerprint: '10:aaa', freshFingerprint: '10:aaa', hostRawFingerprint: '10:aaa' };
+          let rel = representation.inspectCarryover('10:aaa', exactRow);
+          assert(rel.priorRepresentation === 'EXACT' && rel.currentMatch === 'FRESH_CHAT', `fixture14 ${JSON.stringify(rel)}`);
+          assert(text.includes('SAME_FAST'), 'fixture14 SAME_FAST marker missing');
+
+          // 15 OUTPUT_MISMATCH -> Fresh fast relation preserved
+          const driftRow = { fingerprintMatch: 'OUTPUT_MISMATCH', canonicalFingerprint: '11:canon', freshFingerprint: '10:fresh', hostRawFingerprint: '' };
+          rel = representation.inspectCarryover('10:fresh', driftRow);
+          assert(rel.priorRepresentation === 'OUTPUT_MISMATCH' && rel.currentMatch === 'FRESH_CHAT' && rel.deltaShape === 'FRESH_EXACT_CARRYOVER', `fixture15 ${JSON.stringify(rel)}`);
+          assert(text.includes('REPRESENTATION_FAST_RECONCILED') && text.includes("reason: 'representation-fast-reconciled'"), 'fixture15 fast reconcile markers missing');
+
+          // 16 genuine edit classification preserved
+          rel = representation.inspectCarryover('10:edited', exactRow);
+          assert(rel.priorRepresentation === 'EXACT' && rel.currentMatch === 'NONE' && rel.deltaShape === 'NEW_VISIBLE_REPRESENTATION', `fixture16 ${JSON.stringify(rel)}`);
+          assert(text.includes('USER_EDIT_CANDIDATE') && text.includes('MANUAL_EDIT_REBUILT'), 'fixture16 edit markers missing');
+
+          // 17 Summary Scope basic controls preserved
+          const annual = lifecycle.classifySummaryScope('2030년 연말 결산을 해줘', 'C');
+          const yoy = lifecycle.classifySummaryScope('2029년과 2030년 연말 누적 수치를 비교해줘', 'C');
+          assert(['ANNUAL_ONLY','NONE'].includes(annual.scope), `fixture17 annual unexpected ${JSON.stringify(annual)}`);
+          assert(text.includes('CUMULATIVE_YOY') && text.includes('ANNUAL_ONLY'), 'fixture17 Summary Scope markers missing');
+          assert(yoy && typeof yoy.scope === 'string', 'fixture17 classifier failed');
+
+          // 18 second ordinary C retains no broadcast floor by eligibility contract
+          const third = lifecycle.derivePostBEndClockEligibility('C', 'C', { broadcastLocked: false, broadcastAirtime: terminal }, { lastRequestMode: 'C', lastRequestIndex: 2120 });
+          assert(!third.eligible && third.reason === 'not-direct-post-b-end-c', `fixture18 ${JSON.stringify(third)}`);
+
+          console.log('v0.64.6 timeline regression consolidation fixtures 1-18: PASS');
+          NODE
+
+      - name: Confirm frozen modules and side-effect surfaces unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          text = Path('plugins/simcore/latest.js').read_text(encoding='utf-8')
+          def region(start_marker, end_marker):
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return hashlib.sha256(text[start:end].encode()).hexdigest()
+          before = json.loads(Path('/tmp/simcore-06406-frozen.json').read_text(encoding='utf-8'))
+          after = {
+              'community': region('SimCore.define("community"', 'SimCore.define("time"'),
+              'reaction': region('SimCore.define("reaction"', 'SimCore.define("frame"'),
+              'representation': region('SimCore.define("representation"', 'SimCore.define("runtime-mirror"'),
+          }
+          if before != after:
+              raise SystemExit(f'frozen module changed: {before} -> {after}')
+          before_counts = json.loads(Path('/tmp/simcore-06406-surface-counts.json').read_text(encoding='utf-8'))
+          after_counts = {needle: text.count(needle) for needle in before_counts}
+          if before_counts != after_counts:
+              raise SystemExit(f'protected side-effect surface changed: {before_counts} -> {after_counts}')
+          for marker in (
+              'function commentUnits(commentScope)',
+              'reaction.inspectCommentReactionLine(unit.text)',
+              'REPRESENTATION_FAST_RECONCILED',
+              'USER_EDIT_CANDIDATE',
+              'MANUAL_EDIT_REBUILT',
+              'stale_scale_fallback',
+          ):
+              if marker not in text:
+                  raise SystemExit(f'frozen control missing: {marker}')
+          print('Community/Reaction/Representation hashes and protected side effects: PASS')
+          PY
+
+      - name: Validate implementation ownership and no persistent coupling
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('plugins/simcore/latest.js', 'utf8');
+          const requireOne = (s) => { if ((text.match(new RegExp(s, 'g')) || []).length !== 1) throw new Error(`expected one ${s}`); };
+          if (text.includes('state.narrativeTimestamp = state.broadcastAirtime')) throw new Error('forbidden persistent Broadcast->Narrative coupling');
+          if (text.includes('sourceHandoffEligible') && text.includes('derivePostBEndClockEligibility') && text.indexOf('sourceHandoffEligible') > text.indexOf('derivePostBEndClockEligibility') && text.indexOf('sourceHandoffEligible') < text.indexOf('function prepareTurn')) throw new Error('clock eligibility tied to Source Handoff');
+          for (const marker of [
+            "postBEndClockHandoff.disposition === 'APPLIED'",
+            'narrativeCurrentTimeFloor',
+            'post_b_end_floor_is_current_frame_minimum_only=1',
+            'explicit_user_requested_past_scene_or_flashback_may_predate_post_b_end_floor=1',
+            'Post-B_END clock handoff:',
+            'Current-time authority:',
+          ]) if (!text.includes(marker)) throw new Error(`missing ownership marker ${marker}`);
+          console.log('request-scoped clock ownership + no persistent coupling: PASS');
+          NODE
+
+      - name: Commit validated implementation to work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plugins/simcore/latest.js plugins/simcore/install.js
+          git diff --cached --check
+          git commit -m 'SimCore v0.64.6 Post-B_END C Clock Handoff Authority'
+          git push origin HEAD:simcore-06406-post-bend-c-clock-handoff

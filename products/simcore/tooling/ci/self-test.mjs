@@ -57,6 +57,13 @@ ok('legacy-map-complete', () => {
     .map((name) => `.github/workflows/${name}`);
   for (const file of files) expect(mapped.has(file), `LEGACY_GATE_UNCLASSIFIED: ${file}`);
   for (const row of map.workflows) expect(row.status !== 'UNMAPPED', `unmapped workflow: ${row.legacyWorkflow}`);
+  expect(map.status === 'SHADOW_VERIFIED', `legacy map status=${map.status}`);
+  const pure = map.workflows.find((row) => row.class === 'CHECK_ONLY_PREDECESSOR');
+  expect(pure?.status === 'SHADOW_VERIFIED' && pure?.retirementEligibility === 'YES', 'pure predecessor is not retirement-eligible');
+  for (const row of map.workflows.filter((x) => x.class === 'MIXED_BUILD_VALIDATOR')) {
+    expect(row.status === 'VALIDATION_REPLACED', `mixed validator not validation-replaced: ${row.legacyWorkflow}`);
+    expect(row.writeDisposition === 'RS2_4_PENDING', `mixed validator write disposition changed: ${row.legacyWorkflow}`);
+  }
 });
 
 ok('legacy-compat-bounded', () => {
@@ -70,10 +77,18 @@ ok('legacy-compat-bounded', () => {
   }
 });
 
-ok('shadow-ledger-honest', () => {
+ok('shadow-ledger-verified', () => {
   const ledger = JSON.parse(fs.readFileSync('products/simcore/ci/shadow-equivalence.json','utf8'));
   expect(ledger.requiredPositivePerRetirementUnit === 3, 'positive shadow threshold');
   expect(ledger.requiredDistinctEvidenceIdentities === 2, 'shadow diversity threshold');
+  expect(ledger.status === 'SHADOW_VERIFIED', `shadow status=${ledger.status}`);
+  expect(Array.isArray(ledger.records) && ledger.records.length >= 3, 'insufficient positive shadow records');
+  const verifiers = new Set(ledger.records.map((row) => row.verifierCommit));
+  expect(verifiers.size >= 2, `insufficient verifier diversity=${verifiers.size}`);
+  expect(ledger.records.every((row) => row.permanent === 'PASS' && row.legacyArchitecture === 'PASS' && row.legacyRobust25 === 'PASS'), 'positive shadow record not PASS');
+  expect(Array.isArray(ledger.negativeParity) && ledger.negativeParity.length >= 4, 'negative parity evidence incomplete');
+  expect(Array.isArray(ledger.openMismatchIds) && ledger.openMismatchIds.length === 0, `open shadow mismatches=${JSON.stringify(ledger.openMismatchIds)}`);
+  expect(ledger.runtimeMutation === 'NONE' && ledger.releaseSimcoreMutation === 'NONE', 'shadow proof crossed runtime/release boundary');
 });
 
 console.log(`SimCore CI self-test PASS (${checks.length})`);

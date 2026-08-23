@@ -9,6 +9,7 @@ REPO = ROOT.parents[1]
 required = [
     ROOT / "README.md",
     ROOT / "CURRENT.md",
+    ROOT / "ROUTINE.md",
     ROOT / "ROADMAP.md",
     ROOT / "SECURITY-NOTES.md",
     ROOT / "product.json",
@@ -21,6 +22,28 @@ errors = []
 for path in required:
     if not path.is_file():
         errors.append(f"missing required file: {path.relative_to(REPO)}")
+
+# CURRENT is the handoff checkpoint. It must always leave a concrete next step
+# somewhere so a new chat/session can resume without reconstructing intent.
+current_path = ROOT / "CURRENT.md"
+if current_path.is_file():
+    current_text = current_path.read_text(encoding="utf-8", errors="replace")
+    if "다음 한 단계" not in current_text:
+        errors.append("CURRENT.md must contain at least one '다음 한 단계' checkpoint")
+
+# ROUTINE is the operating contract for starting and closing work.
+routine_path = ROOT / "ROUTINE.md"
+if routine_path.is_file():
+    routine_text = routine_path.read_text(encoding="utf-8", errors="replace")
+    for marker in [
+        "INSPECT_ONLY",
+        "CURRENT.md",
+        "ROADMAP.md",
+        "기능 문서",
+        "검증",
+    ]:
+        if marker not in routine_text:
+            errors.append(f"ROUTINE.md missing required routine marker: {marker}")
 
 feature_roots = [
     ROOT / "docs" / "features" / "main-phone",
@@ -83,4 +106,4 @@ if errors:
         print(f"ERROR: {err}")
     sys.exit(1)
 
-print(f"PocketRisu helper docs OK: {feature_count} feature modules")
+print(f"PocketRisu helper docs OK: {feature_count} feature modules + routine checkpoint")

@@ -17,6 +17,36 @@
     return {key:'', value:null};
   }
 
+  function requestDurationKnown(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  }
+
+  function requestDurationMetadata(row) {
+    const value = recentRequestValue(row, ['durationMs'], null);
+    const source = String(recentRequestValue(row, ['durationSource'], '') || '');
+    const fidelity = String(recentRequestValue(row, ['durationFidelity'], 'unknown') || 'unknown');
+    const explicit = requestDurationKnown(value) && source === 'llmgateway-log-duration' && fidelity === 'explicit';
+    return {
+      durationMs: explicit ? Number(value) : null,
+      durationSource: explicit ? source : '',
+      durationFidelity: explicit ? 'explicit' : 'unknown'
+    };
+  }
+
+  function formatRequestDurationMs(value) {
+    if (!requestDurationKnown(value)) return '—';
+    const ms = Number(value);
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    if (ms < 10000) return `${(ms / 1000).toFixed(2).replace(/\.?0+$/, '')}s`;
+    return `${(ms / 1000).toFixed(1).replace(/\.0$/, '')}s`;
+  }
+
+  function requestDurationText(row) {
+    return row?.durationFidelity === 'explicit' && requestDurationKnown(row?.durationMs)
+      ? formatRequestDurationMs(row.durationMs)
+      : '—';
+  }
+
   function requestCacheSignal(row) {
     const explicit = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
     const text = typeof explicit === 'string' ? explicit.trim().toLowerCase() : '';

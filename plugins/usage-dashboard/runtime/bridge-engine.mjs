@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.20';
+const VERSION = '1.6.21';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -987,6 +987,9 @@ if (output && !globalThis[marker]) {
         'response.serviceTier','response.service_tier','serviceTier','service_tier'
       ]);
       const cacheUsage = normalizeProviderCacheUsage(row);
+      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0
+        ? Number(row.duration)
+        : null;
       return {
         timestamp,
         requestNumber: String(requestNumber),
@@ -1006,6 +1009,9 @@ if (output && !globalThis[marker]) {
         cacheTtlTelemetry: cacheUsage?.cacheTtlTelemetry ?? 'unknown',
         cacheMetricSource: cacheUsage?.source ?? '',
         cacheHit: typeof row.cached === 'boolean' ? row.cached : null,
+        durationMs,
+        durationSource: durationMs !== null ? 'llmgateway-log-duration' : '',
+        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',
         requestedServiceTier: requestedTier.value,
         servedServiceTier: servedTier.value,
         requestedServiceTierSource: requestedTier.source,
@@ -1988,6 +1994,9 @@ function normalizeCapturedRecentLogs(root) {
     if (!row || typeof row !== 'object') return null;
     const timestamp = timestampMs(row.timestamp);
     const requestNumber = String(row.requestNumber || '');
+    const durationExplicit = typeof row.durationMs === 'number' && Number.isFinite(row.durationMs) && row.durationMs >= 0
+      && String(row.durationSource || '') === 'llmgateway-log-duration'
+      && String(row.durationFidelity || '') === 'explicit';
     if (timestamp === null || !requestNumber) return null;
     return {
       timestamp,
@@ -2004,6 +2013,9 @@ function normalizeCapturedRecentLogs(root) {
       cacheCreation1hTokens: finite(row.cacheCreation1hTokens),
       cacheMetricSource: String(row.cacheMetricSource || ''),
       cacheHit: typeof row.cacheHit === 'boolean' ? row.cacheHit : null,
+      durationMs: durationExplicit ? Number(row.durationMs) : null,
+      durationSource: durationExplicit ? 'llmgateway-log-duration' : '',
+      durationFidelity: durationExplicit ? 'explicit' : 'unknown',
       requestedServiceTier: row.requestedServiceTier ?? null,
       servedServiceTier: row.servedServiceTier ?? null,
       requestedServiceTierSource: String(row.requestedServiceTierSource || ''),

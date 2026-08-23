@@ -348,6 +348,9 @@ if (output && !globalThis[marker]) {
         'response.serviceTier','response.service_tier','serviceTier','service_tier'
       ]);
       const cacheUsage = normalizeProviderCacheUsage(row);
+      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0
+        ? Number(row.duration)
+        : null;
       return {
         timestamp,
         requestNumber: String(requestNumber),
@@ -367,6 +370,9 @@ if (output && !globalThis[marker]) {
         cacheTtlTelemetry: cacheUsage?.cacheTtlTelemetry ?? 'unknown',
         cacheMetricSource: cacheUsage?.source ?? '',
         cacheHit: typeof row.cached === 'boolean' ? row.cached : null,
+        durationMs,
+        durationSource: durationMs !== null ? 'llmgateway-log-duration' : '',
+        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',
         requestedServiceTier: requestedTier.value,
         servedServiceTier: servedTier.value,
         requestedServiceTierSource: requestedTier.source,

@@ -10,7 +10,7 @@ const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/pro
 const snapshotContract = JSON.parse(fs.readFileSync('plugins/usage-dashboard/contracts/snapshot-v1.schema.json', 'utf8'));
 const recentContract = JSON.parse(fs.readFileSync('plugins/usage-dashboard/contracts/recent-request-v1.schema.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
+const workflow = fs.readFileSync(currentRelease.validatorWorkflow, 'utf8');
 
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
@@ -81,15 +81,12 @@ assert.ok(workflow.includes('behavior-snapshot-scheduler.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
-assert.match(workflow, /group: usage-dashboard-release/);
-assert.doesNotMatch(workflow, /group: repo-main-write/);
-assert.doesNotMatch(workflow, /scripts\/repo-main-write\.py/);
-assert.match(workflow, /check_release_monotonic\.py/);
-assert.match(workflow, /--check-artifacts/);
+assert.match(workflow, /permissions:\s*\n\s*contents: read/);
+assert.doesNotMatch(workflow, /contents: write|group: repo-main-write|scripts\/repo-main-write\.py|git push/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);
 assert.match(workflow, /p24-snapshot-decision-attribution\.cjs/);
 assert.match(workflow, /p25-long-window-critical-path-decoupling\.cjs/);
-assert.ok(workflow.indexOf('check_release_monotonic.py') < workflow.indexOf('git commit -m "release: publish Local Usage Dashboard $UD_PRODUCT_VERSION product artifacts"'));
+assert.match(workflow, /p33-generic-release-controller\.cjs/);
 assert.ok(guidelines.includes('UNKNOWN stays distinct from known zero'));
 assert.ok(guidelines.includes('## Long-term update roadmap'));
 

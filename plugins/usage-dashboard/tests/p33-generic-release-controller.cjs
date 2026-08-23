@@ -72,8 +72,15 @@ const promoteCallerPath = '.github/workflows/usage-dashboard-promote.yml';
 const promoteCaller = fs.readFileSync(promoteCallerPath, 'utf8');
 assert.match(promoteCaller, /^  pull_request:/m);
 assert.match(promoteCaller, /types: \[closed\]/);
-assert.match(promoteCaller, /if: github\.event\.pull_request\.merged == true/);
-assert.match(promoteCaller, /^permissions:\n  contents: write$/m);
+assert.match(promoteCaller, /^permissions:\n  contents: read$/m);
+assert.match(promoteCaller, /^  classify:/m);
+assert.match(promoteCaller, /classify_release_candidate\.cjs/);
+assert.match(promoteCaller, /classification == 'MAINTENANCE_ONLY'/);
+assert.match(promoteCaller, /release_control_changed == 'true'/);
+assert.match(promoteCaller, /check_release_blob_parity\.cjs/);
+assert.match(promoteCaller, /classification == 'RELEASE_CANDIDATE'/);
+assert.match(promoteCaller, /^    permissions:\n      contents: write$/m);
+assert.equal((promoteCaller.match(/contents: write/g) || []).length, 1, 'only release candidate promotion job may request write');
 assert.ok(promoteCaller.includes(`uses: ./${release.publisherWorkflow}`));
 assert.match(promoteCaller, /candidate_sha: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}/);
 assert.ok(!promoteCaller.includes('github.sha'));
@@ -109,4 +116,4 @@ for (const archived of registry.archived) {
   assert.ok(!/^  push:/m.test(source), `${archived} must not auto-publish`);
 }
 
-console.log('usage-dashboard P33 generic release controller: OK · tuple resolver, registry-backed validation, merged exact-byte promotion, and version-workflow retirement locked');
+console.log('usage-dashboard P33 generic release controller: OK · tuple resolver, registry validation, classified maintenance/release flow, exact-byte promotion');

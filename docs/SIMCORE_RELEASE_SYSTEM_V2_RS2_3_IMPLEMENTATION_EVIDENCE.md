@@ -112,6 +112,38 @@ runtime diff                                        NONE required
 release-simcore diff                                NONE required
 ```
 
+## Permanent CI first execution
+
+Implementation PR: `#151`
+
+```text
+workflow       = SimCore CI
+run            = 32637087508
+Verify job     = 97188369974 / SUCCESS
+Required job   = 97188394793 / SUCCESS
+profile        = PR_MAIN
+scope          = CI_SELF + HARNESS + SIMCORE_DOC_ONLY
+production     = 47969d24771f6cc188df6e32150fc6fde519182d
+source sha256  = 1f07668f418faf0029c37409c31545f146c27592ac37eff39fea8cdd0e599aac
+Node           = 22.23
+Python         = 3.12
+report artifact= 9492595979
+```
+
+Executed permanent gates:
+
+```text
+GATE_CI_SELF    PASS
+GATE_STATIC     PASS
+GATE_ARCH       PASS
+GATE_REGRESSION PASS
+```
+
+The base branch had no permanent predecessor verifier, so the current-trusted-lane step correctly recorded an initial-install condition rather than inventing a base permanent result.
+
+The stable GitHub job name `Required` is operational. Repository enforcement is still inactive and is not inferred from the successful check.
+
 ## Validation record
 
-Pending permanent CI implementation and shadow proof.
+Permanent PR execution: **PASS**.
+Shadow equivalence and negative parity: **COLLECTING**.

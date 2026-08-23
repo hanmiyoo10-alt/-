@@ -29,7 +29,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'pull_request' && github.event.pull_request.title == 'SimCore durable memory sync command')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout main memory branch
         uses: actions/checkout@v4
@@ -37,31 +37,30 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Fetch production release branch
-        run: git fetch --no-tags origin release-simcore
-
-      - name: Validate production and resolve release identity
+      - name: Fetch and materialize production identity
         id: release
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --no-tags origin release-simcore
           RELEASE_COMMIT="$(git rev-parse origin/release-simcore)"
           LATEST_BLOB="$(git rev-parse origin/release-simcore:plugins/simcore/latest.js)"
           INSTALL_BLOB="$(git rev-parse origin/release-simcore:plugins/simcore/install.js)"
           test "$LATEST_BLOB" = "$INSTALL_BLOB"
 
-          git show origin/release-simcore:plugins/simcore/latest.js > /tmp/simcore-latest.js
-          git show origin/release-simcore:plugins/simcore/install.js > /tmp/simcore-install.js
-          node --check /tmp/simcore-latest.js
-          node --check /tmp/simcore-install.js
-          cmp -s /tmp/simcore-latest.js /tmp/simcore-install.js
+          mkdir -p .simcore-state-sync
+          git show origin/release-simcore:plugins/simcore/latest.js > .simcore-state-sync/latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > .simcore-state-sync/install.js
+          node --check .simcore-state-sync/latest.js
+          node --check .simcore-state-sync/install.js
+          cmp -s .simcore-state-sync/latest.js .simcore-state-sync/install.js
 
-          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' /tmp/simcore-latest.js | head -n 1)"
+          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' .simcore-state-sync/latest.js | head -n 1)"
           test -n "$VERSION"
           RELEASE_NAME="$(VERSION="$VERSION" python3 - <<'PY'
           import os, re
           from pathlib import Path
-          text = Path('/tmp/simcore-latest.js').read_text(encoding='utf-8')
+          text = Path('.simcore-state-sync/latest.js').read_text(encoding='utf-8')
           m = re.search(r'^// v' + re.escape(os.environ['VERSION']) + r'\s+(.+?):\s*$', text, re.M)
           if not m:
               raise SystemExit('release name not found')
@@ -69,12 +68,23 @@ jobs:
           PY
           )"
 
+          cat > .simcore-state-sync/identity.json <<EOF
+          {
+            "schemaVersion": 1,
+            "product": "SimCore",
+            "resolvedBranch": "release-simcore",
+            "resolvedCommit": "$RELEASE_COMMIT",
+            "latest": {"path": ".simcore-state-sync/latest.js", "blob": "$LATEST_BLOB"},
+            "install": {"path": ".simcore-state-sync/install.js", "blob": "$INSTALL_BLOB"}
+          }
+          EOF
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
           echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
           echo "release_blob=$LATEST_BLOB" >> "$GITHUB_OUTPUT"
 
-      - name: Sync durable product memory
+      - name: Update transitional release declaration only
         env:
           VERSION: ${{ steps.release.outputs.version }}
           RELEASE_NAME: ${{ steps.release.outputs.release_name }}
@@ -82,22 +92,37 @@ jobs:
           RELEASE_BLOB: ${{ steps.release.outputs.release_blob }}
         run: |
           set -euo pipefail
-          python3 scripts/simcore-sync-memory.py
+          python3 scripts/simcore-sync-memory.py --manifest-only
+
+      - name: Render registered document state
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/sync-state.mjs \
+            --write \
+            --root . \
+            --manifest product-manifest.json \
+            --production-identity .simcore-state-sync/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report .simcore-state-sync/write-report.json
           git diff --check
 
-      - name: Commit synchronized memory
+      - name: Clean materialized source and commit bounded state
         shell: bash
         env:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
+          rm -rf .simcore-state-sync
           git config user.name 'hanmiyoo10-alt'
           git config user.email 'hanmiyoo10@gmail.com'
           git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md
           if git diff --cached --quiet; then
-            echo 'Durable memory already synchronized.'
+            echo 'Durable state already synchronized.'
           else
-            git commit -m "docs: sync SimCore v${VERSION} production memory"
+            git commit -m "docs: sync SimCore v${VERSION} production state"
             PAYLOAD_COMMIT="$(git rev-parse HEAD)"
             python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
               --allow product-manifest.json \

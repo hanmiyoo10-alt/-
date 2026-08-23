@@ -15,13 +15,7 @@ Authority class: release-infrastructure design / target ownership migration cont
 
 RS2-2C freezes the exact first document mappings and the ownership-transfer mechanics that allow the future `sync-state.mjs` tool to replace regex-driven document synchronization without becoming a release authority or a whole-document generator.
 
-The question is no longer merely:
-
-```text
-Can sync-state render a block safely?
-```
-
-The concrete questions are now:
+The concrete questions are:
 
 ```text
 Which exact files are writable?
@@ -71,7 +65,7 @@ This is already a bounded writer surface, but it predates the canonical RS2 mark
 
 Current main contains a durable section equivalent to:
 
-```text
+````text
 ## 44. Current Production Baseline
 
 Current production family at the time this document was created:
@@ -81,7 +75,7 @@ SimCore vX.Y.Z — Release Name
 ```
 
 Do not treat this number as permanently current; update this section when production advances.
-```
+````
 
 The baseline line is currently updated by a broad regex in the legacy sync script.
 
@@ -99,9 +93,7 @@ That is too implicit for RS2-2 steady-state ownership.
 
 It also contains historical compatibility behavior for old version-specific document migrations.
 
-Therefore the legacy script is not just a renderer.
-
-It currently mixes:
+Therefore the legacy script currently mixes:
 
 ```text
 release declaration
@@ -109,7 +101,7 @@ release declaration
 + historical migration compatibility
 ```
 
-### 2.4 The current release-state workflow already has an outer orchestration layer
+### 2.4 The current release-state workflow is already the outer orchestrator
 
 `.github/workflows/simcore-release-state-sync.yml` currently:
 
@@ -123,7 +115,7 @@ commits product-manifest + two docs
 uses repo-main-write.py to land the bounded payload on latest main
 ```
 
-This is useful because RS2-2C does not need to invent a second GitHub/main-write mechanism.
+RS2-2C therefore does not invent a second GitHub/main-write mechanism.
 
 ### 2.5 Current identity drift remains a real cutover precondition
 
@@ -159,8 +151,6 @@ It is **not** permission for the new renderer to auto-heal the manifest.
 
 ## 3. Frozen design principles
 
-RS2-2C follows these rules:
-
 ```text
 one target span -> one active writer
 one generated fact -> one explicit source field
@@ -174,7 +164,7 @@ no whole-document rewrite
 no runtime/release-simcore mutation
 ```
 
-The safest cutover is a transfer of ownership, not a period in which both systems write the same bytes.
+The cutover is a transfer of ownership, not a period in which both systems write the same bytes.
 
 ---
 
@@ -233,21 +223,7 @@ Frozen logical content:
 
 No other document is initially writable by `sync-state`.
 
-In particular, the initial registry excludes:
-
-```text
-SIMCORE_M2_LIVE_EVIDENCE.md
-SIMCORE_ANOMALY_WATCH.md
-SIMCORE_DEFERRED_LEDGER.md
-release plans
-incident reports
-architecture audits
-Contracts documents
-historical live evidence
-raw diagnostics
-README files
-runtime source
-```
+The initial registry explicitly excludes evidence/watch/plan documents, architecture documents, historical diagnostics, README files, and runtime source.
 
 Adding any third target is a reviewed mapping change, not automatic discovery.
 
@@ -284,20 +260,11 @@ are migration-source markers only.
 
 They are **not** accepted as a permanent alias by the final target registry.
 
-Reason:
-
-```text
-permanent alias support
-→ two spellings for one authority
-→ larger parser surface forever
-→ easier accidental duplicate ownership
-```
-
-The one-time migration is explicit and reviewed instead.
+Permanent alias support would leave two spellings for one authority and enlarge the parser surface forever.
 
 ### 5.2 Ordinary sync-state never renames markers
 
-The standard CLI remains exactly the RS2-2B model:
+The standard CLI remains:
 
 ```text
 --check
@@ -305,13 +272,11 @@ The standard CLI remains exactly the RS2-2B model:
 --write
 ```
 
-Ordinary `sync-state --write` may replace bytes **between** registered canonical markers.
+Ordinary `sync-state --write` may replace bytes inside registered canonical spans.
 
 It may not rename legacy markers or enroll an unmarked document.
 
 Marker enrollment is a one-time repository migration operation owned by RS2-2C implementation.
-
-This prevents a routine state update from silently expanding its write boundary.
 
 ---
 
@@ -339,15 +304,13 @@ release_name
   max 160 bytes
 
 release_branch
-  exact expected value for current product: release-simcore
+  exact expected value: release-simcore
 
 release_commit
-  lowercase current Git object-format commit SHA
-  current repository: 40 lowercase hexadecimal characters
+  current repository object format: 40 lowercase hexadecimal characters
 
 release_blob
-  lowercase current Git object-format blob SHA
-  current repository: 40 lowercase hexadecimal characters
+  current repository object format: 40 lowercase hexadecimal characters
 
 validation_status
   one line
@@ -364,15 +327,13 @@ major_update_checkpoint
   max 80 bytes each
 ```
 
-A field that fails presentation validation is not escaped heuristically.
+Unsafe input is not heuristically escaped.
 
-The renderer fails closed:
+It fails closed as:
 
 ```text
 RENDER_INPUT_INVALID
 ```
-
-This avoids Markdown/code-fence injection becoming an authority bypass.
 
 ---
 
@@ -398,8 +359,6 @@ current-development-production-snapshot-v1
 
 ### 7.1 Exact renderer shape
 
-The v1 renderer emits:
-
 ```text
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->
 ## Current Production Snapshot
@@ -419,13 +378,9 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 ```
 
-Trailing file newline behavior is owned by the surrounding file, not invented by the renderer.
+The rendered block uses LF. The surrounding file retains its own final-newline behavior.
 
-The rendered block itself uses LF.
-
-### 7.2 Field mapping
-
-Exact mapping:
+### 7.2 Exact field mapping
 
 ```text
 Product                     <- manifest.product
@@ -440,9 +395,7 @@ Major update phase          <- manifest.major_update_phase
 Major update checkpoint     <- manifest.major_update_checkpoint
 ```
 
-The production identity record is a verification input, not an additional text source.
-
-It proves the manifest identity before these fields may render.
+The production identity record is a verification input, not a second text source.
 
 ### 7.3 Deliberately removed generated fields
 
@@ -455,19 +408,15 @@ Provider cache
 
 The v1 renderer excludes both.
 
-Reason:
-
 `current_priority` must not become immediate-action authority.
 
-The current operational action remains human-owned elsewhere in `CURRENT_DEVELOPMENT.md`.
-
-`provider_cache_status` is not part of the RS2-2A initial production-snapshot allowlist and is an evidence-sensitive diagnostic claim rather than required release identity.
+`provider_cache_status` is not part of the RS2-2A initial snapshot allowlist and remains evidence-sensitive.
 
 Exclusion is intentional, not accidental data loss.
 
-### 7.4 Human text that remains outside authority
+### 7.4 Human text remains outside machine authority
 
-The renderer must never consume or rewrite later sections such as:
+The renderer must never rewrite later sections such as:
 
 ```text
 Production verdict
@@ -481,9 +430,7 @@ hard freezes
 unknowns
 ```
 
-Even when those sections contain a stale version string, ordinary `sync-state --write` leaves them untouched.
-
-RS2-2D may detect bounded contradictions; repair remains human-owned.
+Even if human prose becomes stale, normal `sync-state --write` leaves it untouched.
 
 ---
 
@@ -511,14 +458,14 @@ guidelines-production-baseline-v1
 
 The managed span emits exactly:
 
-```text
+````text
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
 SimCore vX.Y.Z — Release Name
 Release commit: <commit-sha>
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
-```
+````
 
 The `## 44. Current Production Baseline` heading and explanatory paragraphs remain human-owned outside the managed span.
 
@@ -530,13 +477,13 @@ Release Name <- manifest.release_name
 commit-sha   <- manifest.release_commit
 ```
 
-No validation status, current priority, provider cache state, milestone, live gate, or next action belongs in Guidelines generated state.
+No validation status, current priority, provider cache state, milestone, live gate, or next action belongs in the Guidelines generated state.
 
 ### 8.3 Why the commit is included
 
 A version string alone is insufficient identity when a same-version production correction can replace the release commit.
 
-The current v0.64.6 line itself demonstrates why this matters: production has received same-version correction/hardening commits.
+The current v0.64.6 line demonstrates this class of update.
 
 Therefore the minimal Guidelines baseline carries:
 
@@ -564,34 +511,24 @@ SIMCORE_GUIDELINES
   everything else                    -> human-owned
 ```
 
-The key invariant remains:
+For each registered target:
 
 ```text
-for each registered target:
-  prefix bytes before BEGIN  unchanged
-  suffix bytes after END     unchanged
+prefix bytes before BEGIN  unchanged
+suffix bytes after END     unchanged
 ```
 
-For normal sync runs, marker lines themselves are also stable.
+For normal sync runs, marker lines themselves are stable.
 
-Only body bytes between the canonical marker lines may differ.
+Only body bytes between canonical markers may differ.
 
 ---
 
 ## 10. One-time migration — `CURRENT_DEVELOPMENT`
 
-The existing legacy span gives a strong migration anchor.
-
 ### 10.1 Migration source requirement
 
-Before migration, exactly one pair must exist:
-
-```text
-<!-- SIMCORE_PRODUCTION_SNAPSHOT:BEGIN -->
-<!-- SIMCORE_PRODUCTION_SNAPSHOT:END -->
-```
-
-and zero canonical `PRODUCTION_SNAPSHOT` pairs must exist.
+Before migration, exactly one legacy pair must exist and zero canonical `PRODUCTION_SNAPSHOT` pairs must exist.
 
 Otherwise:
 
@@ -603,18 +540,16 @@ and no migration write is allowed.
 
 ### 10.2 Migration transform
 
-The explicit migration patch:
-
 ```text
-1. replaces the legacy BEGIN marker with canonical BEGIN
-2. replaces the legacy END marker with canonical END
-3. replaces only the previously bounded legacy span body with renderer-v1 output
-4. leaves every byte before old BEGIN and after old END unchanged
+1. replace legacy BEGIN with canonical BEGIN
+2. replace legacy END with canonical END
+3. replace only the previously bounded legacy span body with renderer-v1 output
+4. leave every byte before old BEGIN and after old END unchanged
 ```
 
-The heading remains inside the managed span for this target.
+The heading remains inside the managed span.
 
-This deliberately preserves the historical span boundary rather than moving the heading during migration.
+This preserves the historical span boundary rather than moving structural text during migration.
 
 ### 10.3 Required proof
 
@@ -634,8 +569,6 @@ OLD_PREFIX == NEW_PREFIX
 OLD_SUFFIX == NEW_SUFFIX
 ```
 
-The only authority expansion is marker namespace replacement over the already-managed span.
-
 ---
 
 ## 11. One-time migration — `SIMCORE_GUIDELINES`
@@ -646,7 +579,7 @@ Guidelines has no historical marker, so enrollment requires a stricter anchor pr
 
 Migration accepts exactly one structural sequence:
 
-```text
+````text
 ## 44. Current Production Baseline
 
 <existing human explanatory paragraph>
@@ -656,7 +589,7 @@ Migration accepts exactly one structural sequence:
 ```
 
 <existing human explanatory paragraph>
-```
+````
 
 The implementation must use an explicit bounded parser/anchor contract.
 
@@ -664,13 +597,11 @@ It may not search the whole file for the first `SimCore v` string and wrap it.
 
 ### 11.2 Migration transform
 
-The migration patch:
-
 ```text
-1. inserts canonical BEGIN immediately before the existing baseline code fence
-2. inserts canonical END immediately after that code fence
-3. replaces only the newly enrolled managed span with renderer-v1 output
-4. preserves the heading and surrounding explanatory paragraphs byte-identically
+1. insert canonical BEGIN immediately before the existing baseline code fence
+2. insert canonical END immediately after that code fence
+3. replace only the newly enrolled managed span with renderer-v1 output
+4. preserve heading and surrounding explanatory paragraphs byte-identically
 ```
 
 ### 11.3 Required proof
@@ -684,11 +615,11 @@ all bytes before insertion point A are identical
 all bytes after insertion point B are identical
 ```
 
-The migration report records only hashes/lengths and anchor result, not the full Guidelines body.
+The migration report stores hashes/lengths and anchor results, not the full Guidelines body.
 
 ### 11.4 Ambiguity handling
 
-If the section contains multiple candidate baseline code fences or the expected heading/shape is absent:
+If multiple candidate baseline regions exist or the expected section shape is absent:
 
 ```text
 MIGRATION_SOURCE_AMBIGUOUS
@@ -702,17 +633,11 @@ No best-effort insertion is permitted.
 
 Marker enrollment is a repository-schema migration for documentation ownership.
 
-It must happen in an explicit infrastructure work branch/PR.
+It happens in an explicit infrastructure work branch/PR.
 
-It is never triggered merely because:
+It is never triggered merely because `sync-state --write` encounters a legacy or unmarked target.
 
-```text
-sync-state --write
-```
-
-encounters a legacy or unmarked target.
-
-Normal behavior in those cases is:
+Normal behavior there is fail-closed:
 
 ```text
 MARKER_MISSING
@@ -720,7 +645,7 @@ or
 MARKER_UNSUPPORTED
 ```
 
-This prevents routine releases from silently changing document authority boundaries.
+This prevents routine releases from silently expanding document authority boundaries.
 
 ---
 
@@ -728,7 +653,7 @@ This prevents routine releases from silently changing document authority boundar
 
 The existing 0.64.3 manifest vs 0.64.6 production mismatch blocks activation of the new writer.
 
-Before cutover:
+Before cutover, these must agree:
 
 ```text
 manifest declaration
@@ -737,11 +662,9 @@ latest/install local blobs
 source version/release marker
 ```
 
-must all verify.
+The new tool may demonstrate drift but may not repair the declaration itself.
 
-The new tool may demonstrate that the current state is drifted, but it may not repair that declaration itself.
-
-A required administrative precondition is therefore:
+Required administrative precondition:
 
 ```text
 existing authoritative release-state path
@@ -749,15 +672,13 @@ or explicit bounded administrative state sync
 → bring manifest declaration into agreement with deployed production
 ```
 
-Only after that independent repair may the ownership cutover claim `IDENTITY_VERIFIED`.
-
-This keeps evidence and repair order intact.
+Only after that independent repair may ownership cutover claim `IDENTITY_VERIFIED`.
 
 ---
 
 ## 14. Ownership state machine
 
-RS2-2C freezes four operational states.
+RS2-2C freezes four operational states:
 
 ```text
 LEGACY_ACTIVE
@@ -766,7 +687,7 @@ LEGACY_ACTIVE
 → SYNC_STATE_ACTIVE
 ```
 
-Rollback is a separate explicit transition:
+Rollback is explicit:
 
 ```text
 SYNC_STATE_ACTIVE
@@ -774,11 +695,9 @@ SYNC_STATE_ACTIVE
 → LEGACY_ACTIVE
 ```
 
-There is no state named `DUAL_WRITE`.
+There is no `DUAL_WRITE` state.
 
 ### 14.1 `LEGACY_ACTIVE`
-
-Authority:
 
 ```text
 product-manifest.json                      legacy release-state script/workflow
@@ -788,30 +707,17 @@ main integration                           repo-main-write.py
 release-simcore                             existing release authority
 ```
 
-New `sync-state` may be developed/tested in isolated fixtures/worktrees only.
-
 ### 14.2 `SHADOW_VERIFIED`
 
-Authority remains exactly the same as `LEGACY_ACTIVE`.
+Authority remains unchanged.
 
-The new tool may run:
+The new tool may run `--check`/`--render` against fixtures or a candidate migration worktree.
 
-```text
---check
---render
-```
-
-against a candidate migration worktree or fixtures.
-
-It must not `--write` the active main-owned document spans.
-
-Required proof includes exact proposed blocks and unmanaged-byte preservation.
+It must not write the active main-owned document spans.
 
 ### 14.3 `CUTOVER_READY`
 
-This is a gate, not a writer state.
-
-Requirements include:
+Required:
 
 ```text
 source identity clean
@@ -821,15 +727,13 @@ registry exact
 both renderers golden-tested
 unmanaged-byte migration proof PASS
 new writer idempotence PASS on candidate worktree
-legacy/new active-writer exclusivity plan verified
+legacy/new active-writer exclusivity verified
 rollback patch available
 runtime diff NONE
 release-simcore diff NONE
 ```
 
 ### 14.4 `SYNC_STATE_ACTIVE`
-
-Authority becomes:
 
 ```text
 product-manifest.json                      transitional legacy declaration owner
@@ -850,9 +754,7 @@ RS2-2 cannot simply stop calling `simcore-sync-memory.py` because that script cu
 
 The new renderer is intentionally forbidden from doing so.
 
-Therefore a temporary ownership split is required until RS2-4 replaces the release transaction.
-
-Frozen transitional rule:
+Therefore a temporary split is required until RS2-4 replaces the release transaction:
 
 ```text
 legacy compatibility path may still DECLARE manifest identity
@@ -871,7 +773,7 @@ RS2-2C freezes the future transitional interface for:
 scripts/simcore-sync-memory.py
 ```
 
-It must become explicit-mode only during cutover.
+It becomes explicit-mode only during cutover.
 
 Allowed compatibility modes:
 
@@ -880,11 +782,11 @@ Allowed compatibility modes:
 --legacy-full
 ```
 
-No implicit default mode after the cutover implementation is accepted.
+No implicit default mode is accepted after cutover implementation.
 
 ### 16.1 `--manifest-only`
 
-This mode may perform only the existing release declaration behavior needed before RS2-4:
+May perform only existing release declaration behavior needed before RS2-4:
 
 ```text
 read VERSION
@@ -892,7 +794,7 @@ read RELEASE_NAME
 read RELEASE_COMMIT
 read RELEASE_BLOB
 load product-manifest.json
-update the existing release identity declaration fields
+update existing release identity declaration fields
 preserve explicitly defined compatibility fields
 write product-manifest.json
 ```
@@ -904,31 +806,23 @@ docs/CURRENT_DEVELOPMENT.md
 docs/SIMCORE_GUIDELINES.md
 ```
 
-It does not invoke `sync-state` itself.
-
 ### 16.2 `--legacy-full`
 
-This preserves the old combined behavior only as a rollback compatibility path.
+Preserves the old combined behavior only as a rollback compatibility path.
 
 It must never be invoked by the primary workflow while `SYNC_STATE_ACTIVE` is true.
-
-Operational rule:
 
 ```text
 new doc writer enabled
 → legacy full writer forbidden
-```
 
-and:
-
-```text
 legacy full writer re-enabled
 → new doc writer must first be disabled/reverted
 ```
 
 ### 16.3 Why explicit mode is mandatory
 
-A bare invocation such as:
+A bare invocation:
 
 ```text
 python3 scripts/simcore-sync-memory.py
@@ -936,15 +830,11 @@ python3 scripts/simcore-sync-memory.py
 
 must not silently choose the old full writer after cutover.
 
-Accidental no-argument execution is too dangerous when document ownership has moved.
-
 ---
 
 ## 17. Transitional release-state workflow order
 
-After cutover, the existing state-sync workflow remains the outer orchestrator but changes its internal local-write sequence.
-
-Directional order:
+After cutover, the existing state-sync workflow remains the outer orchestrator but changes its local-write sequence:
 
 ```text
 1. checkout latest main worktree
@@ -977,16 +867,16 @@ docs/CURRENT_DEVELOPMENT.md
 docs/SIMCORE_GUIDELINES.md
 ```
 
-But ownership inside that payload is split:
+Ownership inside that payload is split:
 
 ```text
 manifest    <- transitional declaration compatibility path
 2 doc spans <- sync-state
 ```
 
-The release run must fail if an unexpected path changes.
+The release run fails if an unexpected path changes.
 
-The later repository integration continues to use `repo-main-write.py` with the same bounded path discipline.
+Repository integration continues to use `repo-main-write.py` with bounded path discipline.
 
 ---
 
@@ -994,41 +884,33 @@ The later repository integration continues to use `repo-main-write.py` with the 
 
 ### 19.1 No two writers for one span
 
-The primary invariant is:
-
 ```text
 legacy full writer active XOR sync-state doc writer active
 ```
 
 Never both.
 
-### 19.2 Workflow concurrency remains useful but insufficient alone
+### 19.2 Workflow concurrency is useful but not ownership
 
-The existing workflow concurrency group:
+The existing concurrency group:
 
 ```text
 simcore-main-state-sync
 ```
 
-continues to serialize normal state-sync jobs.
+continues to serialize normal jobs.
 
-However concurrency serialization does not justify dual ownership.
+But serialized writers with different semantics can still overwrite one another incorrectly.
 
-Two serialized writers with different semantics can still overwrite each other incorrectly.
-
-Therefore ownership exclusivity is required even if workflow concurrency exists.
+Therefore ownership exclusivity is required even with concurrency.
 
 ### 19.3 Shared-main races remain outer orchestration
 
-`repo-main-write.py` continues to handle:
+`repo-main-write.py` continues to handle main movement.
 
-```text
-main moved between checkout and push
-```
+`sync-state` never retries GitHub/main writes.
 
-`sync-state` itself never retries GitHub/main writes.
-
-If replaying a payload on new main creates a content conflict in a managed target, outer integration fails closed and a new local sync plan must be produced from the newer main.
+If replay creates a content conflict, outer integration fails closed and a new local sync plan must be generated from current main.
 
 No force push.
 
@@ -1036,34 +918,30 @@ No force push.
 
 ## 20. Replay-after-main-move rule
 
-A state-sync payload is valid only against the exact target bytes it preflighted.
+A state-sync payload is valid only against the target bytes it preflighted.
 
-Therefore if `repo-main-write.py` cannot replay the payload cleanly because another writer changed a target document:
+If the payload cannot replay cleanly on newer main:
 
 ```text
-DO NOT resolve by taking ours/theirs automatically
-DO NOT force-apply the old machine block
+DO NOT choose ours/theirs automatically
+DO NOT force-apply an old machine block
 ```
 
 Instead:
 
 ```text
 fetch current main
-→ rematerialize target documents
-→ rerun production identity verification
+→ rematerialize targets
+→ rerun identity verification
 → rerun sync-state
 → produce a new bounded payload
 ```
-
-This preserves the RS2-2B concurrent-local-change philosophy at repository scale.
 
 ---
 
 ## 21. Cutover migration patch boundary
 
-The future RS2-2C implementation/cutover work item may touch infrastructure/state-sync paths only.
-
-Expected bounded set may include:
+Expected infrastructure/state-sync paths may include:
 
 ```text
 products/simcore/state-sync/target-registry.json
@@ -1076,7 +954,7 @@ docs/CURRENT_DEVELOPMENT.md
 docs/SIMCORE_GUIDELINES.md
 ```
 
-If the RS2-2B tool implementation is already merged separately, the 2C implementation should touch only the mapping/migration-specific subset.
+If RS2-2B implementation is already merged separately, 2C implementation touches only the mapping/migration-specific subset.
 
 Forbidden in the same work item:
 
@@ -1095,7 +973,7 @@ unrelated repo-wide release-system refactor
 
 ---
 
-## 22. Migration candidate must be generated from verified identity
+## 22. Migration candidate must come from verified identity
 
 The renderer body inserted during final cutover must come from:
 
@@ -1105,19 +983,15 @@ manifest after independent declaration repair
 verified materialized production identity
 ```
 
-not from hand-typed current release values.
+not hand-typed current release values.
 
-The migration PR may contain static expected bytes, but its evidence must show those bytes are exactly the renderer output for the verified declared production state.
-
-This prevents the migration itself from becoming another manual version-edit event.
+The migration evidence must show candidate bytes equal renderer output for the verified declared production state.
 
 ---
 
 ## 23. Unmanaged-byte migration proof report
 
-The cutover evidence records bounded hashes for each target.
-
-Conceptual record:
+Conceptual bounded record:
 
 ```json
 {
@@ -1162,7 +1036,7 @@ canonical BEGIN count  = 1
 canonical END count    = 1
 ```
 
-Across both files:
+Across both:
 
 ```text
 no nested blocks
@@ -1173,13 +1047,9 @@ registered path matches block ID
 
 ---
 
-## 25. Exact renderer non-influence tests
+## 25. Renderer non-influence tests
 
-A target renderer must prove that unlisted manifest fields cannot affect output.
-
-For `CURRENT_DEVELOPMENT`:
-
-change only:
+For `CURRENT_DEVELOPMENT`, change only:
 
 ```text
 current_priority
@@ -1195,9 +1065,7 @@ Expected:
 rendered PRODUCTION_SNAPSHOT bytes unchanged
 ```
 
-For Guidelines:
-
-change only any field except:
+For Guidelines, change any field except:
 
 ```text
 production_version
@@ -1211,15 +1079,13 @@ Expected:
 rendered PRODUCTION_BASELINE bytes unchanged
 ```
 
-This is stronger than merely documenting an allowlist.
-
 ---
 
-## 26. Exact renderer influence tests
+## 26. Renderer influence tests
 
-Each allowlisted field must have a direct deterministic influence test.
+Each allowlisted field gets a direct deterministic influence test.
 
-Example for `CURRENT_DEVELOPMENT`:
+Examples:
 
 ```text
 change production_version only
@@ -1232,37 +1098,35 @@ change major_update_checkpoint only
 → exactly Major update checkpoint line changes
 ```
 
-Example for Guidelines:
+For Guidelines:
 
 ```text
 change release_commit only
 → exactly Release commit line changes
 ```
 
-No unrelated whitespace or line moves are permitted.
+No unrelated whitespace or line movement is permitted.
 
 ---
 
 ## 27. Current validation-state compatibility
 
-The current manifest schema predates the final RS2 state vocabulary and contains values such as:
+The current manifest predates the final RS2 state vocabulary and contains values such as:
 
 ```text
 PENDING_REAL_LONG_CHAT
 ```
 
-RS2-2C does not infer a new state such as `LIVE_PENDING` from that token.
+RS2-2C does not infer `LIVE_PENDING` or another replacement token.
 
-Initial renderer rule:
+Initial rule:
 
 ```text
-validate the declared compatibility token against the explicitly supported schema
-→ render the exact declared token
+validate declared compatibility token against explicit supported schema
+→ render exact declared token
 ```
 
-Any later normalization of manifest state vocabulary is a schema/state-authority migration, not a document-rendering trick.
-
-This preserves the human-judgment firewall.
+Later vocabulary normalization is a state/schema migration, not a renderer trick.
 
 ---
 
@@ -1276,13 +1140,7 @@ version changed
 production changed
 ```
 
-A same-version production correction may change:
-
-```text
-release_commit
-release_blob
-possibly release_name metadata if explicitly corrected
-```
+A same-version correction may change commit/blob identity.
 
 Therefore:
 
@@ -1291,66 +1149,58 @@ CURRENT_DEVELOPMENT includes commit + blob
 GUIDELINES includes commit
 ```
 
-and identity verification always occurs before rendering.
+and identity verification always precedes rendering.
 
-No semantic-version comparison is used to decide freshness.
+No semantic-version comparison decides freshness.
 
 ---
 
-## 29. Legacy historical migration code is not copied into new renderers
+## 29. Historical migration code is not copied into new renderers
 
-The current legacy script contains version-specific document migrations from older releases.
+The legacy script contains old version-specific document migrations.
 
-Those are historical compatibility actions, not permanent render behavior.
-
-The new target renderers must not absorb blocks such as:
+The new renderers must not absorb behavior like:
 
 ```text
 if version == old_version:
   insert old evidence prose
 ```
 
-Historical evidence remains in the repository as already materialized human/history content.
+Historical evidence stays as already materialized human/history content.
 
-New `sync-state` owns only the two registered current-state spans.
-
-This is a critical simplification boundary.
+New `sync-state` owns only the two current-state spans.
 
 ---
 
 ## 30. Legacy full path retention and rollback
 
-RS2-2C does not delete `--legacy-full` capability during initial cutover.
+RS2-2C does not delete `--legacy-full` during initial cutover.
 
-It is retained only as a bounded rollback path until RS2-2E/RS2-4 disposition.
+It is retained only as a bounded rollback path until later disposition.
 
-Rollback procedure is explicit:
+Rollback:
 
 ```text
-1. classify the sync-state failure
-2. stop/disable the new doc-writer invocation
-3. revert the ownership-cutover infrastructure/marker patch or apply its reviewed inverse
-4. verify legacy markers/expected old document shape
+1. classify sync-state failure
+2. stop/disable new doc-writer invocation
+3. revert ownership-cutover infrastructure/marker patch or apply reviewed inverse
+4. verify legacy markers/old expected shape
 5. only then re-enable --legacy-full
 ```
 
-Forbidden rollback:
+Forbidden:
 
 ```text
 new canonical writer still active
 +
-run legacy full writer anyway
+legacy full writer
 ```
 
-Rollback never requires a runtime/plugin rollback merely because document synchronization failed.
+A document-sync failure does not require runtime/plugin rollback.
 
 ---
 
-## 31. Failure classifications during migration
-
-Migration-specific failures are infrastructure failures.
-
-Initial bounded outcomes:
+## 31. Migration-specific outcomes
 
 ```text
 MIGRATION_SOURCE_MATCH
@@ -1362,29 +1212,27 @@ MIGRATION_OWNERSHIP_CONFLICT
 MIGRATION_IDENTITY_NOT_VERIFIED
 ```
 
-Disposition guidance:
+Cutover disposition:
 
 ```text
-SOURCE_AMBIGUOUS            -> BLOCKER for cutover
-UNMANAGED_BYTES_CHANGED     -> BLOCKER for cutover
-RENDER_MISMATCH             -> BLOCKER for cutover
-OWNERSHIP_CONFLICT          -> BLOCKER for cutover
+SOURCE_AMBIGUOUS            -> BLOCKER
+UNMANAGED_BYTES_CHANGED     -> BLOCKER
+RENDER_MISMATCH             -> BLOCKER
+OWNERSHIP_CONFLICT          -> BLOCKER
 IDENTITY_NOT_VERIFIED       -> BLOCKER for activation; preserve drift evidence
 ALREADY_CANONICAL           -> verify registry/renderer; do not duplicate markers
 ```
 
-No migration failure should mutate `release-simcore`.
+No migration failure mutates `release-simcore`.
 
 ---
 
-## 32. Implementation fixture families
-
-RS2-2C future implementation must add deterministic fixtures/tests covering at minimum:
+## 32. Required fixture families
 
 ### C1 — Current Development legacy migration
 
 ```text
-one legacy marker pair
+one legacy pair
 no canonical pair
 known prefix/suffix
 → canonical pair exactly once
@@ -1395,8 +1243,8 @@ known prefix/suffix
 ### C2 — Current Development ambiguity
 
 ```text
-duplicate legacy BEGIN/END
-or mixed legacy+canonical pair
+duplicate legacy pair
+or mixed legacy+canonical
 → MIGRATION_SOURCE_AMBIGUOUS
 → writes NONE
 ```
@@ -1405,7 +1253,7 @@ or mixed legacy+canonical pair
 
 ```text
 exact section-44 baseline shape
-→ canonical baseline markers inserted around expected code-fence region
+→ canonical baseline markers around expected code-fence region
 → human heading/paragraph bytes preserved
 ```
 
@@ -1420,7 +1268,7 @@ or missing expected section anchor
 
 ### C5 — Renderer exactness
 
-Golden bytes for both v1 renderers.
+Golden bytes for both renderers.
 
 ### C6 — Field non-influence
 
@@ -1428,7 +1276,7 @@ Unlisted manifest fields cannot change generated bytes.
 
 ### C7 — Field validation
 
-Unsafe release name/newline/backtick/control payload fails closed.
+Unsafe release-name/newline/backtick/control payload fails closed.
 
 ### C8 — Legacy mode separation
 
@@ -1438,12 +1286,12 @@ Unsafe release name/newline/backtick/control payload fails closed.
 → both target docs byte-identical
 
 --legacy-full
-→ historical combined path available only when explicitly invoked
+→ historical combined path only when explicitly invoked
 ```
 
 ### C9 — Writer exclusivity
 
-A candidate configuration that enables both legacy full document writes and sync-state writes fails migration validation.
+Configuration enabling both legacy full doc writes and sync-state writes fails migration validation.
 
 ### C10 — Idempotent post-cutover state
 
@@ -1459,10 +1307,8 @@ second --write
 
 ## 33. Cutover validation sequence
 
-Future implementation must validate in this order:
-
 ```text
-1. legacy baseline fixtures capture current behavior
+1. capture legacy baseline fixtures
 2. RS2-2B tool/self-tests PASS
 3. current source identity independently synchronized and VERIFIED
 4. migration anchors validate
@@ -1474,14 +1320,14 @@ Future implementation must validate in this order:
 10. immediate --check returns clean
 11. second --write produces no diff
 12. legacy --manifest-only proves docs unchanged
-13. active workflow config proves no legacy-full + sync-state dual writer
+13. workflow config proves no legacy-full + sync-state dual writer
 14. changed-path allowlist PASS
 15. runtime/release-simcore diff NONE
-16. merge cutover infrastructure through normal main-safe path
-17. post-merge read-only check of canonical marker counts
+16. merge bounded cutover infrastructure through normal main-safe path
+17. post-merge read-only canonical-marker/check verification
 ```
 
-No step may be skipped because the final diff looks visually small.
+No step is skipped because the final diff looks visually small.
 
 ---
 
@@ -1498,19 +1344,15 @@ live validation status
 release-simcore commit
 ```
 
-If any of those need to change, they belong to a separate release/correctness operation.
-
-The migration must not be bundled with v0.64.x or v0.65.x runtime code.
+Any such change belongs to a separate release/correctness operation.
 
 ---
 
 ## 35. Human continuity remains authoritative
 
-After the machine snapshot is correct, `CURRENT_DEVELOPMENT.md` may still contain human prose that references an older release or an older immediate gate.
+After the machine snapshot is correct, human prose may still reference an older release or gate.
 
 The renderer does not rewrite that prose.
-
-Required handling:
 
 ```text
 machine fact stale
@@ -1521,19 +1363,13 @@ human continuity stale
 → human/documentation update
 ```
 
-This is not a weakness.
-
-It is the intended authority split.
-
-Automatic prose rewriting would recreate the exact ambiguity RS2-2 is trying to remove.
+Automatic prose rewriting would recreate the authority ambiguity RS2-2 is meant to remove.
 
 ---
 
 ## 36. RS2-2D handoff — contradiction detection
 
-RS2-2D must build on the mappings frozen here.
-
-At minimum it must decide how `--check` reports:
+RS2-2D must build on these mappings and define how `--check` reports:
 
 ```text
 canonical machine block stale
@@ -1552,15 +1388,13 @@ historical version reference
 current-state contradiction
 ```
 
-It may report bounded contradictions.
-
-It still must not auto-rewrite human prose.
+It may report bounded contradictions but may not auto-rewrite human prose.
 
 ---
 
 ## 37. What RS2-2D must not reopen
 
-The following decisions are frozen by RS2-2C unless implementation evidence proves a blocker:
+Unless implementation evidence proves a blocker, these decisions are frozen:
 
 ```text
 exact two initial target documents
@@ -1570,37 +1404,27 @@ GUIDELINES v1 field allowlist
 renderer shapes
 current_priority exclusion
 provider_cache exclusion
-guidelines heading remains human-owned
+Guidelines heading remains human-owned
 legacy full writer cannot coexist with sync-state writer
 transitional manifest-only legacy ownership until RS2-4
 repo-main-write remains outer main integration authority
 ```
 
-RS2-2D is detection semantics, not a second mapping redesign.
-
 ---
 
 ## 38. Relationship to RS2-3 permanent CI
 
-RS2-2C creates a deterministic target surface that RS2-3 can later check.
+RS2-2C creates a deterministic target surface that RS2-3 can later check with `sync-state --check`.
 
-RS2-3 may eventually run:
+RS2-2C does not create permanent CI triggers.
 
-```text
-sync-state --check
-```
-
-on relevant PRs or release-state changes.
-
-But RS2-2C does not create that permanent CI trigger.
-
-The future CI should consume the registry and result codes rather than reproduce renderer logic in YAML.
+Future CI consumes registry/result codes instead of reproducing renderer logic in YAML.
 
 ---
 
 ## 39. Relationship to RS2-4 permanent release workflow
 
-The transitional `--manifest-only` legacy declaration is intentionally temporary.
+The transitional `--manifest-only` declaration is temporary.
 
 RS2-4 later owns replacement of:
 
@@ -1611,7 +1435,7 @@ release-state transaction ordering
 rollback/atomicity
 ```
 
-Target future ownership after RS2-4:
+Target future ownership:
 
 ```text
 RS2-4 release transaction
@@ -1621,15 +1445,11 @@ RS2-4 release transaction
 → creates one bounded release-state payload
 ```
 
-When that is proven, the legacy manifest compatibility path can be retired through an explicit later gate.
-
-RS2-2C does not authorize that retirement now.
+Only after that is proven may the legacy manifest compatibility path be retired through an explicit later gate.
 
 ---
 
 ## 40. Proposed implementation sequence
-
-After implementation is authorized:
 
 ```text
 C0  branch from then-current main
@@ -1650,7 +1470,7 @@ C14 freeze RS2-2C implementation evidence
 C15 hand off to RS2-2D
 ```
 
-Do not perform C6 as a side effect of C7-C10.
+C6 is not a side effect of C7-C10.
 
 Evidence before repair remains mandatory.
 
@@ -1658,7 +1478,7 @@ Evidence before repair remains mandatory.
 
 ## 41. Implementation evidence record
 
-Future RS2-2C implementation evidence must record at minimum:
+Future evidence records at minimum:
 
 ```text
 base main commit
@@ -1685,17 +1505,15 @@ Do not store full human document bodies in machine reports merely to prove prese
 
 ## 42. RS2-2C design close gate
 
-RS2-2C design is complete when:
-
 ```text
 initial target count fixed to two                         PASS
 exact target registry entries defined                    PASS
 CURRENT_DEVELOPMENT renderer-v1 shape defined            PASS
-CURRENT_DEVELOPMENT source allowlist defined              PASS
+CURRENT_DEVELOPMENT source allowlist defined             PASS
 current_priority generated-action exclusion defined      PASS
 provider-cache exclusion defined                         PASS
 GUIDELINES renderer-v1 shape defined                     PASS
-GUIDELINES source allowlist defined                       PASS
+GUIDELINES source allowlist defined                      PASS
 same-version correction identity treatment defined       PASS
 field presentation safety defined                        PASS
 canonical-only steady-state marker policy defined        PASS
@@ -1728,7 +1546,7 @@ No implementation is required to close the **design** subphase.
 
 RS2-2D must now freeze the exact **drift / contradiction detection and check-mode contract** over the mappings established here.
 
-At minimum it must define:
+At minimum:
 
 ```text
 machine-block CLEAN vs STALE semantics
@@ -1751,11 +1569,9 @@ It may not synthesize replacement prose.
 
 ## 44. Frozen final rule
 
-RS2-2C follows one migration rule above all others:
-
 > Move ownership once, prove the byte boundary, and never let two systems own the same span at the same time.
 
-For the first RS2 state-sync cutover, that means:
+For the first RS2 state-sync cutover:
 
 ```text
 manifest declaration remains separately owned

@@ -34,12 +34,12 @@ Stages: `CI | PR_SUBMISSION | PR_REVIEW | MERGE | DEPLOY | POST_DEPLOY_VERIFY`
 - source branch: `hanmiyoo10-alt/PocketRisu:feat/db-save-optimization-hash-cache`
 - validation PR: `hanmiyoo10-alt/PocketRisu#5` (draft, dependent on stage A)
 - failed diagnostic head: `2803b0ca8ed914a54801850813d8005c3b2a6738`
-- result: `FAILURE -> FIX_IN_PROGRESS`
+- result: `FAILURE -> FIXED`
 - cause: `CONFIRMED`
 - confirmed facts: dependency installation succeeded, but `pnpm exec vitest run server/node/patch-hash-cache.test.ts` exited 1 with `No test files found`; the repository Vitest configuration explicitly excludes `server/node/**`. Wiring and syntax stages were intentionally skipped after the failed prerequisite.
-- feedback/fix: move the test to the repository's discovered `test/` path while continuing to import the production module from `server/node/`; rerun the same reference-equivalence suite before wiring the cache into `server.cjs`.
-- independent verification: the production cache algorithm was also exercised locally against the reference `calculateHash` over deterministic add/replace/remove/copy/move cases plus 200×20 randomized top-level/nested mutations; all comparisons matched. This does not replace repository CI and is recorded only as supporting evidence.
-- re-validation: pending repository-run result after moving the test to `test/patch-hash-cache.test.ts`.
-- rollback: the diagnostic workflow reverted any unvalidated `server.cjs` wiring before recording the failure; no runtime deployment occurred.
+- feedback/fix: moved the test to `test/patch-hash-cache.test.ts`, preserving imports of the production module in `server/node/`; reran the same reference-equivalence suite before allowing server wiring.
+- independent verification: the production cache algorithm was also exercised locally against the reference `calculateHash` over deterministic add/replace/remove/copy/move cases plus 200×20 randomized top-level/nested mutations; all comparisons matched. This was supporting evidence only and did not replace repository validation.
+- re-validation: `PASS` — the revalidation workflow ran `pnpm exec vitest run test/patch-hash-cache.test.ts`, then wired the cache, ran `node --check server/node/server.cjs`, and only after those steps succeeded created bot commit `8f5a45959101a787f781da7a564f1c5c15aa51fb`. Final PR #5 changed files are exactly `server/node/patch-hash-cache.cjs`, `server/node/server.cjs`, and `test/patch-hash-cache.test.ts`; temporary workflow/diagnostic files are absent.
+- rollback: the first failed diagnostic workflow reverted unvalidated `server.cjs` wiring; the later validated wiring is isolated on the stage-B branch and has not been deployed.
 
 Historical synthetic/atomicity/performance verification remains preserved in README/UPSTREAM; runtime failures must continue to be recorded separately from documentation CI failures.

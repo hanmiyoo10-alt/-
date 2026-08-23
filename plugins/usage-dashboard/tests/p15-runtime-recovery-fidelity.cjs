@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const currentRelease = assertCurrentReleaseArtifacts();
+assertCurrentReleaseArtifacts();
 const root = 'plugins/usage-dashboard';
 const core = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
 const analytics = fs.readFileSync(`${root}/src/16-usage-analytics.part.js`, 'utf8');
@@ -31,6 +31,10 @@ assert.ok(diagnostics.includes('Stable readiness:'));
 assert.ok(diagnostics.includes('Stable contract:'));
 
 assert.ok(guidelines.includes('Runtime Recovery Fidelity'));
-assert.ok(guidelines.includes(`Stable Readiness remains READY with Engine \`${currentRelease.engineVersion}\`, Manager \`${currentRelease.managerVersion}\`, managed CLI runtime \`ready\`, CLI \`v${currentRelease.cliVersion}\`, and no active local runtime error.`));
+// This sentence is historical 5.66 device-success evidence. Do not rewrite its
+// Engine identity to the current release; current artifact identity is already
+// validated by assertCurrentReleaseArtifacts(), while this guard preserves the
+// actual evidence that existed when managed-direct recovery was verified.
+assert.ok(guidelines.includes('Stable Readiness remains READY with Engine `1.6.19`, Manager `1.3.0`, managed CLI runtime `ready`, CLI `v1.9.0`, and no active local runtime error.'));
 
 console.log('usage-dashboard P15 runtime recovery fidelity: OK · static recovery/readiness boundaries retained; failure and recovery behavior delegated to production process harness');

@@ -7,19 +7,22 @@ const {runDashboard} = require('./harness/dashboard-process.cjs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
 const root = 'plugins/usage-dashboard';
-const targetVersion = '3.0.0-alpha.5.68';
 const baselineVersion = '3.0.0-alpha.5.67';
+const baselineEngineVersion = '1.6.19';
 const baselineEngineSha = 'f17d689f39bd469bcadf1a2125313146cd6e04cb38299a5b4583d903a696cf09';
 const baselineManagerSha = 'ff899b3c8a98bf04b39e7430bad67236d8361fd18faa6a01489aecbca12a950e';
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 
 const currentRelease = assertCurrentReleaseArtifacts();
-if (currentRelease.productVersion !== targetVersion) {
-  console.log(`P30 Diagnostics Capture Identity: SKIP · candidate ${currentRelease.productVersion} is not ${targetVersion}`);
+const targetVersion = currentRelease.productVersion;
+const modularizationRelease = targetVersion === '3.0.0-alpha.5.69';
+if (!['3.0.0-alpha.5.68','3.0.0-alpha.5.69'].includes(targetVersion)) {
+  console.log(`P30 Diagnostics Capture Identity: SKIP · candidate ${targetVersion} is outside the locked capture-identity lineage`);
   process.exit(0);
 }
 
-assert.equal(currentRelease.engineVersion, '1.6.19');
+const expectedEngineVersion = modularizationRelease ? '1.6.20' : baselineEngineVersion;
+assert.equal(currentRelease.engineVersion, expectedEngineVersion);
 assert.equal(currentRelease.managerVersion, '1.3.0');
 assert.equal(currentRelease.snapshotContract, 1);
 assert.equal(currentRelease.recentRequestContract, 1);
@@ -31,14 +34,28 @@ const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`);
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
 
-assert.equal(sha256(engine), baselineEngineSha, '5.68 must keep the 1.6.19 Engine artifact byte-identical');
-const normalizedManager = manager.replace(
+const engineSha = sha256(engine);
+if (modularizationRelease) {
+  const normalizedEngine = engine.toString('utf8').replace(
+    "const VERSION = '1.6.20';",
+    "const VERSION = '1.6.19';",
+  );
+  assert.equal(sha256(Buffer.from(normalizedEngine, 'utf8')), baselineEngineSha, '5.69 Engine must preserve 5.68 capture-identity runtime bytes beyond the Engine VERSION literal');
+} else {
+  assert.equal(engineSha, baselineEngineSha, '5.68 must keep the 1.6.19 Engine artifact byte-identical');
+}
+let normalizedManager = manager.replace(
   `const PRODUCT_VERSION = '${targetVersion}';`,
   `const PRODUCT_VERSION = '${baselineVersion}';`,
 );
+if (modularizationRelease) {
+  normalizedManager = normalizedManager
+    .replace("const BUNDLED_ENGINE_VERSION = '1.6.20';", "const BUNDLED_ENGINE_VERSION = '1.6.19';")
+    .replace(`const BUNDLED_ENGINE_SHA256 = '${engineSha}';`, `const BUNDLED_ENGINE_SHA256 = '${baselineEngineSha}';`);
+}
 assert.ok(normalizedManager.includes(`const PRODUCT_VERSION = '${baselineVersion}';`));
-assert.equal(sha256(normalizedManager), baselineManagerSha, '5.68 Manager functional body may change only by product-version synchronization');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.19');
+assert.equal(sha256(normalizedManager), baselineManagerSha, 'Manager functional body may change only by release and bundled-Engine identity synchronization');
+assert.equal(manifest.components.bridge.requiredVersion, expectedEngineVersion);
 assert.equal(manifest.components.bridgeManager.version, '1.3.0');
 assert.equal(manifest.components.bridgeManager.productVersion, targetVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
@@ -160,7 +177,7 @@ function line(text, prefix) {
   assert.equal(visibility.run.state.refreshCount, 10, 'opening/copying Diagnostics must not execute a refresh');
   assert.equal(timer.run.state.refreshCount, 11, 'opening/copying Diagnostics must not execute a refresh');
 
-  console.log('P30 Diagnostics Capture Identity: OK · Basic screen/summary and Full export are self-identifying across same and different refresh states without new runtime work');
+  console.log(`P30 Diagnostics Capture Identity: OK · ${targetVersion} keeps Basic screen/summary and Full export self-identifying across same and different refresh states without new runtime work`);
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

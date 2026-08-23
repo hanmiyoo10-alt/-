@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "artifact": "plugins/usage-dashboard/runtime/bridge-engine.mjs",
+  "mode": "shared-lexical-concatenation",
+  "parts": [
+    "00-core.part.mjs",
+    "10-attribution.part.mjs",
+    "20-cache-circuit.part.mjs",
+    "30-cli-runtime.part.mjs",
+    "40-sources.part.mjs",
+    "50-organization-capture.part.mjs",
+    "60-snapshot-scheduler.part.mjs",
+    "70-http-diagnostics.part.mjs"
+  ]
+}

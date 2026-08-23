@@ -104,6 +104,8 @@ def validate_target_materialization() -> None:
     components = manifest.get('components') or {}
     bridge = components.get('bridge') or {}
     manager = components.get('bridgeManager') or {}
+    manager_text = MANAGER.read_text(encoding='utf-8')
+    engine_sha = sha256(ENGINE)
     if manifest.get('productVersion') != TARGET_VERSION:
         raise SystemExit('materialized Product version mismatch')
     if bridge.get('requiredVersion') != TARGET_ENGINE:
@@ -114,12 +116,16 @@ def validate_target_materialization() -> None:
         raise SystemExit('Manager product version was not synchronized')
     if manifest.get('contracts') != {'snapshot': 1, 'recentRequest': 1}:
         raise SystemExit('snapshot/recent-request contracts changed')
-    if bridge.get('sha256') != sha256(ENGINE):
+    if bridge.get('sha256') != engine_sha:
         raise SystemExit('manifest Engine hash mismatch')
     if manager.get('sha256') != sha256(MANAGER):
         raise SystemExit('manifest Manager hash mismatch')
     if manager.get('bootstrapSha256') != sha256(BOOTSTRAP):
         raise SystemExit('manifest Manager bootstrap hash mismatch')
+    if f"const BUNDLED_ENGINE_VERSION = '{TARGET_ENGINE}';" not in manager_text:
+        raise SystemExit('Manager bundled Engine version was not synchronized')
+    if f"const BUNDLED_ENGINE_SHA256 = '{engine_sha}';" not in manager_text:
+        raise SystemExit('Manager bundled Engine hash was not synchronized')
 
 
 part_names = validate_parts_manifest()
@@ -160,21 +166,6 @@ replace_once(CORE, "const VERSION = '3.0.0-alpha.5.68';", "const VERSION = '3.0.
 replace_once(CORE, "const REQUIRED_BRIDGE_VERSION = '1.6.19';", "const REQUIRED_BRIDGE_VERSION = '1.6.20';", 'plugin required Engine version')
 
 replace_once(
-    MANAGER,
-    "const PRODUCT_VERSION = '3.0.0-alpha.5.68';",
-    "const PRODUCT_VERSION = '3.0.0-alpha.5.69';",
-    'manager product synchronization',
-)
-manager_after = MANAGER.read_text(encoding='utf-8')
-expected_manager = manager_before.replace(
-    "const PRODUCT_VERSION = '3.0.0-alpha.5.68';",
-    "const PRODUCT_VERSION = '3.0.0-alpha.5.69';",
-    1,
-)
-if manager_after != expected_manager:
-    raise SystemExit('Manager functional body changed beyond product-version synchronization')
-
-replace_once(
     GUIDELINES,
     'Current release implementation: `3.0.0-alpha.5.68 — Diagnostics Capture Identity`.',
     'Current release implementation: `3.0.0-alpha.5.69 — Engine Development Source Modularization`.',
@@ -192,11 +183,47 @@ normalized_engine = candidate_engine_text.replace(
 )
 if normalized_engine.encode('utf-8') != baseline_engine_bytes:
     raise SystemExit('Engine byte parity failed: modularization changed runtime bytes beyond VERSION 1.6.19 -> 1.6.20')
+candidate_engine_sha = sha256(ENGINE)
+
+replace_once(
+    MANAGER,
+    "const PRODUCT_VERSION = '3.0.0-alpha.5.68';",
+    "const PRODUCT_VERSION = '3.0.0-alpha.5.69';",
+    'manager product synchronization',
+)
+replace_once(
+    MANAGER,
+    "const BUNDLED_ENGINE_VERSION = '1.6.19';",
+    "const BUNDLED_ENGINE_VERSION = '1.6.20';",
+    'manager bundled Engine version synchronization',
+)
+replace_once(
+    MANAGER,
+    f"const BUNDLED_ENGINE_SHA256 = '{BASE_ENGINE_SHA}';",
+    f"const BUNDLED_ENGINE_SHA256 = '{candidate_engine_sha}';",
+    'manager bundled Engine hash synchronization',
+)
+manager_after = MANAGER.read_text(encoding='utf-8')
+expected_manager = manager_before.replace(
+    "const PRODUCT_VERSION = '3.0.0-alpha.5.68';",
+    "const PRODUCT_VERSION = '3.0.0-alpha.5.69';",
+    1,
+).replace(
+    "const BUNDLED_ENGINE_VERSION = '1.6.19';",
+    "const BUNDLED_ENGINE_VERSION = '1.6.20';",
+    1,
+).replace(
+    f"const BUNDLED_ENGINE_SHA256 = '{BASE_ENGINE_SHA}';",
+    f"const BUNDLED_ENGINE_SHA256 = '{candidate_engine_sha}';",
+    1,
+)
+if manager_after != expected_manager:
+    raise SystemExit('Manager functional body changed beyond Product/Engine identity synchronization')
 
 manifest['productVersion'] = TARGET_VERSION
 manifest['components']['plugin']['version'] = TARGET_VERSION
 manifest['components']['bridge']['requiredVersion'] = TARGET_ENGINE
-manifest['components']['bridge']['sha256'] = sha256(ENGINE)
+manifest['components']['bridge']['sha256'] = candidate_engine_sha
 manifest['components']['bridgeManager']['productVersion'] = TARGET_VERSION
 manifest['components']['bridgeManager']['sha256'] = sha256(MANAGER)
 manifest['components']['bridgeManager']['bootstrapSha256'] = sha256(BOOTSTRAP)

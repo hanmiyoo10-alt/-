@@ -56,6 +56,21 @@ jobs:
           node --check /tmp/simcore-rs21-latest.js
           node --check /tmp/simcore-rs21-install.js
 
+      - name: Materialize historical equivalence sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          V0642=7a1f1692920abbc890c6663b40e38a24676c3de9
+          V0644=c11216310938a090f5c81cc6e81e9ca8535e002f
+          V0645=6c43c8167375b836a87277c005c63f93b028dde4
+          git fetch --no-tags origin "$V0642" "$V0644" "$V0645"
+          test "$(git rev-parse "$V0642:plugins/simcore/latest.js")" = 3058e5bafa7f3abd15277ceabd0bd9d8518f52dc
+          test "$(git rev-parse "$V0644:plugins/simcore/latest.js")" = 58aa3ff60bad4ab487230a96718c4ae1a1cc0c2d
+          test "$(git rev-parse "$V0645:plugins/simcore/latest.js")" = a4b4633343cd856954857e7c490528fc713620da
+          git show "$V0642:plugins/simcore/latest.js" > /tmp/simcore-v0642.js
+          git show "$V0644:plugins/simcore/latest.js" > /tmp/simcore-v0644.js
+          git show "$V0645:plugins/simcore/latest.js" > /tmp/simcore-v0645.js
+
       - name: Permanent Batch A against production
         shell: bash
         run: |
@@ -66,6 +81,29 @@ jobs:
             --report /tmp/rs21-batch-a.json
           cat /tmp/rs21-batch-a.json
           test "$(python3 -c 'import json; print(json.load(open("/tmp/rs21-batch-a.json"))["source"]["gitBlobSha1"])')" = "34da01aa131f760b92d65d961a7843e9cc0d37d6"
+
+      - name: COMMUNITY historical differential equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tests/equivalence/community-reaction.equivalence.mjs \
+            --old /tmp/simcore-v0644.js \
+            --fixed /tmp/simcore-v0645.js \
+            --current /tmp/simcore-rs21-latest.js \
+            --fixture products/simcore/tests/fixtures/community-reaction/cases.json \
+            --report /tmp/community-equivalence.json
+          cat /tmp/community-equivalence.json
+
+      - name: Diagnostic Copy historical owner equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/test.mjs \
+            --source /tmp/simcore-v0642.js \
+            --suite diagnostic-copy \
+            --contract products/simcore/contracts/diagnostic-copy-v06402-equivalence.json \
+            --report /tmp/diagnostic-v0642.json
+          cat /tmp/diagnostic-v0642.json
 
       - name: Legacy robust equivalence control
         shell: bash
@@ -78,5 +116,4 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse origin/release-simcore)" = "47969d24771f6cc188df6e32150fc6fde519182d"
-          git diff --exit-code -- /tmp/simcore-rs21-latest.js /tmp/simcore-rs21-install.js || true
           echo 'RS2-1 validation completed read-only.'

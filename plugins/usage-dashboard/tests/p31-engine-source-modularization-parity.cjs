@@ -17,7 +17,6 @@ const baselineManagerSha = '3bd9fa2b41db53cf68eea20bc85e198db8185c7eb52ba412ff91
 const sourceDir = `${root}/runtime-src/bridge-engine`;
 const artifactPath = `${root}/runtime/bridge-engine.mjs`;
 const managerPath = `${root}/runtime/bridge-manager.cjs`;
-const workflowPath = '.github/workflows/reusable-usage-dashboard-release.yml';
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 
 const release = assertCurrentReleaseArtifacts();
@@ -104,10 +103,10 @@ for (const marker of [
   assert.ok(engineText.includes(marker), `protected Engine invariant missing after modularization: ${marker}`);
 }
 
-const workflow = fs.readFileSync(workflowPath, 'utf8');
+const workflow = fs.readFileSync(release.validatorWorkflow, 'utf8');
 assert.ok(workflow.includes('node plugins/usage-dashboard/tools/build_bridge_engine.cjs --write'));
 assert.ok(workflow.includes('node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check'));
-assert.ok(workflow.includes('plugins/usage-dashboard/runtime-src'), 'main materialization must retain development Engine sources');
+assert.ok(workflow.includes('plugins/usage-dashboard/runtime-src'), 'candidate validation must retain development Engine sources on main');
 for (const behaviorTest of [
   'behavior-cli-launcher.cjs',
   'behavior-cache-runtime.cjs',
@@ -118,8 +117,11 @@ for (const behaviorTest of [
   'p25-long-window-critical-path-decoupling.cjs',
   'p27-npx-cache-first-launcher.cjs',
   'p28-managed-direct-cli-runtime.cjs',
+  'p33-generic-release-controller.cjs',
 ]) assert.ok(workflow.includes(behaviorTest), `process/incident regression must remain active: ${behaviorTest}`);
-assert.equal(workflow.includes('cp -R plugins/usage-dashboard/runtime-src /tmp/usage-dashboard-candidate'), false, 'development source tree must not become a release artifact');
+assert.match(workflow, /permissions:\s*\n\s*contents: read/);
+assert.equal(workflow.includes('cp -R plugins/usage-dashboard/runtime-src'), false, 'development source tree must never become a release artifact');
+assert.equal(workflow.includes('contents: write'), false, 'P31 validation must stay read-only');
 const selfSource = fs.readFileSync(__filename, 'utf8');
 const vmModule = ['node', 'vm'].join(':');
 assert.equal(selfSource.includes(`require('${vmModule}')`) || selfSource.includes(`require("${vmModule}")`), false, 'P31 must not import a VM execution module');

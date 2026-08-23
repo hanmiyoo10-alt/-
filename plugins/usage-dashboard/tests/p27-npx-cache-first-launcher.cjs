@@ -7,7 +7,7 @@ const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mj
 const diagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
-const workflow = fs.readFileSync(currentRelease.sharedWorkflow, 'utf8');
+const workflow = fs.readFileSync(currentRelease.validatorWorkflow, 'utf8');
 
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
@@ -49,9 +49,10 @@ assert.ok(guidelines.includes('`DEVPASS_BRIDGE_NPX_PREFER_OFFLINE=0` continues t
 assert.ok(guidelines.includes('One faster sample is insufficient to claim causality'));
 assert.ok(workflow.includes('behavior-cli-launcher.cjs'));
 assert.ok(workflow.includes('behavior-harness-contract.cjs'));
-assert.ok(workflow.includes('concurrency:\n  group: usage-dashboard-release'));
+assert.match(workflow, /permissions:\s*\n\s*contents: read/);
 assert.ok(!workflow.includes('group: repo-main-write'));
 assert.ok(!workflow.includes('scripts/repo-main-write.py'));
-assert.ok(workflow.includes('check_release_monotonic.py'));
+assert.ok(!workflow.includes('contents: write'));
+assert.ok(workflow.includes('p33-generic-release-controller.cjs'));
 
 console.log('P27 Npx Cache-First Launcher: OK · argv invariants retained; prefer-offline and rollback behavior delegated to black-box Engine harness');

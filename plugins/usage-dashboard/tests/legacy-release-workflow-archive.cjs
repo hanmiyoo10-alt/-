@@ -11,8 +11,8 @@ const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
 assert.equal(registry.schemaVersion, 1);
 assert.equal(registry.currentCaller, currentPath);
 assert.equal(new Set(registry.archived).size, registry.archived.length, 'archive paths must be unique');
-assert.ok(registry.archived.length >= 22, 'all completed stage callers must be registered');
-assert.ok(!registry.archived.includes(currentPath), 'current caller must never be archived');
+assert.ok(registry.archived.length >= 23, 'all completed version-specific stage callers must be registered');
+assert.ok(!registry.archived.includes(currentPath), 'generic current caller must never be archived');
 
 const candidatePaths = fs.readdirSync('.github/workflows')
   .filter((name) => /^(?:stage|release)-usage-dashboard-\d+.*\.yml$/.test(name))
@@ -20,8 +20,8 @@ const candidatePaths = fs.readdirSync('.github/workflows')
   .sort();
 assert.deepEqual(
   registry.archived.slice().sort(),
-  candidatePaths.filter((entry) => entry !== currentPath),
-  'every completed bounded stage caller must be archived and only the release-spec caller may remain active',
+  candidatePaths,
+  'every version-specific stage/release caller must be archived after generic-controller migration',
 );
 
 for (const workflowPath of registry.archived) {
@@ -33,16 +33,22 @@ for (const workflowPath of registry.archived) {
   assert.match(source, /^permissions:\n  contents: read$/m);
   assert.ok(!source.includes('contents: write'));
   assert.ok(!source.includes('git push'));
-  assert.ok(!source.includes('uses: ./.github/workflows/reusable-usage-dashboard-release.yml'));
+}
+
+assert.equal(new Set(registry.retiredCommands || []).size, (registry.retiredCommands || []).length, 'retired release commands must be unique');
+for (const workflowPath of registry.retiredCommands || []) {
+  assert.match(workflowPath, /^\.github\/workflows\/release-command-usage-dashboard-\d+\.yml$/);
+  assert.equal(fs.existsSync(workflowPath), false, `${workflowPath} must remain retired`);
 }
 
 const current = fs.readFileSync(currentPath, 'utf8');
 assert.match(current, /^  pull_request:/m);
 assert.ok(current.includes(`uses: ./${release.validatorWorkflow}`));
-assert.ok(current.includes(`release_spec: ${release.specPath}`));
 assert.match(current, /^permissions:\n  contents: read$/m);
-assert.ok(!current.includes('publish: true'));
+assert.ok(!current.includes('release_spec:'));
+assert.ok(!current.includes(release.specPath));
+assert.ok(!current.includes(release.productVersion));
 assert.ok(!current.includes('contents: write'));
-assert.ok(!/^  push:/m.test(current), 'current stage caller must remain validation-only');
+assert.ok(!/^  push:/m.test(current), 'generic validator caller must remain validation-only');
 
-console.log(`usage-dashboard legacy release workflow archive: OK · completed publishers are manual read-only no-ops and ${release.productVersion} read-only stage validation is authoritative`);
+console.log(`usage-dashboard legacy release workflow archive: OK · all version-specific callers retired and ${release.productVersion} generic validation is authoritative`);

@@ -9,15 +9,15 @@
   "recentRequestContract": 1,
   "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.67 — Diagnostics Workspace Overhaul`",
   "materializer": "plugins/usage-dashboard/tools/release_engine_source_modularization_569.py",
-  "callerWorkflow": ".github/workflows/release-usage-dashboard-569-engine-source-modularization.yml",
-  "releaseCommandWorkflow": ".github/workflows/release-command-usage-dashboard-569.yml",
-  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-release.yml",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
   "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
   "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
   "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
   "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
   "newTests": [
     "p31-engine-source-modularization-parity.cjs",
-    "p32-exact-byte-release-promotion.cjs"
+    "p32-exact-byte-release-promotion.cjs",
+    "p33-generic-release-controller.cjs"
   ]
 }

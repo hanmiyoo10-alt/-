@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentCaller": ".github/workflows/release-usage-dashboard-569-engine-source-modularization.yml",
-  "policy": "Completed release publishers are manual no-op archives and cannot write main or release-usage-dashboard.",
+  "currentCaller": ".github/workflows/usage-dashboard-validate.yml",
+  "policy": "Generic Usage Dashboard validation and exact-byte promotion are authoritative. Completed version-specific stage callers are manual read-only archives; retired version-specific release commands must not exist.",
   "archived": [
     ".github/workflows/stage-usage-dashboard-536-multi-org.yml",
     ".github/workflows/stage-usage-dashboard-537-engine-reconcile.yml",
@@ -25,6 +25,12 @@
     ".github/workflows/stage-usage-dashboard-564-foreground-cli-launcher-attribution.yml",
     ".github/workflows/stage-usage-dashboard-566-managed-direct-cli-runtime.yml",
     ".github/workflows/release-usage-dashboard-567-diagnostics-workspace.yml",
-    ".github/workflows/release-usage-dashboard-568-diagnostics-capture-identity.yml"
+    ".github/workflows/release-usage-dashboard-568-diagnostics-capture-identity.yml",
+    ".github/workflows/release-usage-dashboard-569-engine-source-modularization.yml"
+  ],
+  "retiredCommands": [
+    ".github/workflows/release-command-usage-dashboard-567.yml",
+    ".github/workflows/release-command-usage-dashboard-568.yml",
+    ".github/workflows/release-command-usage-dashboard-569.yml"
   ]
 }

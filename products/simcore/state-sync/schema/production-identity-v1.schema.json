@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simcore-production-identity-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "product", "resolvedBranch", "resolvedCommit", "latest", "install"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "product": {"const": "SimCore"},
+    "resolvedBranch": {"const": "release-simcore"},
+    "resolvedCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "latest": {"$ref": "#/$defs/materialized"},
+    "install": {"$ref": "#/$defs/materialized"}
+  },
+  "$defs": {
+    "materialized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "blob"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "blob": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    }
+  }
+}

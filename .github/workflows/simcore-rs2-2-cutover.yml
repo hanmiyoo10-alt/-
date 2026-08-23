@@ -1,26 +1,33 @@
 name: SimCore RS2-2 Cutover Applicator
 
 on:
-  pull_request:
+  push:
     branches: [main]
-    types: [opened, synchronize]
+    paths:
+      - 'products/simcore/tooling/sync-state.mjs'
+      - 'products/simcore/state-sync/**'
+      - 'scripts/simcore-sync-memory.py'
+      - '.github/workflows/simcore-release-state-sync.yml'
+      - '.github/workflows/simcore-rs2-2-cutover.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: simcore-rs2-2-cutover-${{ github.event.pull_request.number }}
+  group: simcore-rs2-2-cutover
   cancel-in-progress: false
 
 jobs:
   cutover:
-    if: github.event.pull_request.title == 'infra(simcore): implement RS2-2 state synchronization'
     runs-on: ubuntu-24.04
+    outputs:
+      canonical_main: ${{ steps.final.outputs.canonical_main }}
     steps:
-      - name: Checkout implementation branch
+      - name: Checkout canonical main
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: main
           fetch-depth: 0
 
       - name: Detect already-applied cutover
@@ -36,7 +43,6 @@ jobs:
           fi
 
       - name: Materialize production
-        if: steps.state.outputs.applied != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -54,7 +60,7 @@ jobs:
           {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".rs22-prod/latest.js","blob":"$B"},"install":{"path":".rs22-prod/install.js","blob":"$B"}}
           EOF
 
-      - name: Normalize declaration through legacy owner
+      - name: Normalize declaration through transitional legacy owner
         if: steps.state.outputs.applied != 'true'
         env:
           VERSION: '0.64.6'
@@ -80,8 +86,19 @@ jobs:
             --writer-policy products/simcore/state-sync/writer-policy.json \
             --report .rs22-prod/check.json
           git diff --check
+          python3 - <<'PY'
+          import json
+          r=json.load(open('.rs22-prod/migration.json'))
+          assert r['status']=='PASS'
+          for c in r['changes']:
+              assert c['prefixBefore']==c['prefixAfter']
+              assert c['suffixBefore']==c['suffixAfter']
+          c=json.load(open('.rs22-prod/check.json'))
+          assert c['result'] in ('CHECK_CLEAN','CHECK_CLEAN_WITH_OBSERVATIONS')
+          assert c['counts']['blockers']==0 and c['counts']['drifts']==0
+          PY
 
-      - name: Commit only cutover-owned files
+      - name: Land bounded cutover payload on latest main
         if: steps.state.outputs.applied != 'true'
         shell: bash
         run: |
@@ -94,4 +111,104 @@ jobs:
           git config user.email 'hanmiyoo10@gmail.com'
           git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md
           git commit -m 'infra(simcore): apply RS2-2 state-sync cutover'
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+          python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
+            --allow product-manifest.json \
+            --allow docs/CURRENT_DEVELOPMENT.md \
+            --allow docs/SIMCORE_GUIDELINES.md
+
+      - name: Resolve landed canonical main
+        id: final
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          MAIN_COMMIT="$(git rev-parse origin/main)"
+          echo "canonical_main=$MAIN_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "RS2-2 canonical main: $MAIN_COMMIT"
+
+  clean1:
+    needs: cutover
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fresh checkout of landed canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.cutover.outputs.canonical_main }}
+          fetch-depth: 0
+      - name: CLEAN-1 canonical-main check
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          P=47969d24771f6cc188df6e32150fc6fde519182d
+          B=34da01aa131f760b92d65d961a7843e9cc0d37d6
+          test "$(git rev-parse origin/release-simcore)" = "$P"
+          mkdir -p .rs22-prod
+          git show origin/release-simcore:plugins/simcore/latest.js > .rs22-prod/latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > .rs22-prod/install.js
+          cat > .rs22-prod/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".rs22-prod/latest.js","blob":"$B"},"install":{"path":".rs22-prod/install.js","blob":"$B"}}
+          EOF
+          node products/simcore/tooling/sync-state.mjs \
+            --check --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/rs22-clean1.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('/tmp/rs22-clean1.json'))
+          assert r['result'] in ('CHECK_CLEAN','CHECK_CLEAN_WITH_OBSERVATIONS')
+          assert r['counts']['blockers']==0 and r['counts']['drifts']==0
+          assert r['writerPolicy']=='WRITER_POLICY_CLEAN'
+          print(r['result'], r['counts'])
+          PY
+
+  clean2:
+    needs: [cutover, clean1]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Independent fresh checkout of same canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.cutover.outputs.canonical_main }}
+          fetch-depth: 0
+      - name: CLEAN-2 independent idempotent recheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          P=47969d24771f6cc188df6e32150fc6fde519182d
+          B=34da01aa131f760b92d65d961a7843e9cc0d37d6
+          mkdir -p .rs22-prod
+          git show origin/release-simcore:plugins/simcore/latest.js > .rs22-prod/latest.js
+          git show origin/release-simcore:plugins/simcore/install.js > .rs22-prod/install.js
+          cat > .rs22-prod/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".rs22-prod/latest.js","blob":"$B"},"install":{"path":".rs22-prod/install.js","blob":"$B"}}
+          EOF
+          sha256sum product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md > /tmp/before.sha
+          node products/simcore/tooling/sync-state.mjs \
+            --write --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/rs22-clean2-write.json
+          sha256sum product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md > /tmp/after.sha
+          diff -u /tmp/before.sha /tmp/after.sha
+          node products/simcore/tooling/sync-state.mjs \
+            --check --root . --manifest product-manifest.json \
+            --production-identity .rs22-prod/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report /tmp/rs22-clean2.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('/tmp/rs22-clean2.json'))
+          assert r['result'] in ('CHECK_CLEAN','CHECK_CLEAN_WITH_OBSERVATIONS')
+          assert r['counts']['blockers']==0 and r['counts']['drifts']==0
+          print(r['result'], r['counts'])
+          PY

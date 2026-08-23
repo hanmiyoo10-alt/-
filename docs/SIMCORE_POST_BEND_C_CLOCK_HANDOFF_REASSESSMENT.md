@@ -216,3 +216,64 @@ The activated static fixture set must include this case.
 - `SIMCORE_POST_BEND_C_EVIDENCE_06402.md` — first anomaly
 - `SIMCORE_LIVE_06403_BROADCAST_SEQUENCE.md` — healthy control
 - `SIMCORE_LIVE_06405_VALIDATION.md` — v0.64.5 repair close + immediate recurrence context
+
+---
+
+## 9. v0.64.5 manual-correction positive control
+
+After the faulty immediate C @2118→@2119 visibly used `2031-03-14 11:30 PM`, the user manually corrected that prior visible assistant frame to `2031-03-28 11:30 PM` and then sent request @2120.
+
+The pre-edit representation had been exact and trusted:
+
+```text
+Prior representation: EXACT
+canonical 3917:baebe371
+fresh     3917:baebe371
+```
+
+The manually corrected visible body retained the same character count but changed fingerprint and matched neither trusted representation:
+
+```text
+current 3917:d8fc8f4c
+match NONE
+Edit delta: vs canonical +0 · vs fresh +0
+shape NEW_VISIBLE_REPRESENTATION
+```
+
+Edit Reconcile correctly recognized the correction as a genuine user edit and rebuilt state:
+
+```text
+Edit origin: USER_EDIT_CANDIDATE
+Edit reconcile: MANUAL_EDIT_REBUILT · 12.012 s
+snapshot UPDATED
+```
+
+The rebuilt Narrative state then consumed the corrected current time:
+
+```text
+Narrative clock: SAME
+previous  2031-03-28 11:30 PM
+frame     2031-03-28 11:30 PM
+committed 2031-03-28 11:30 PM
+```
+
+while the completed broadcast remained independently preserved:
+
+```text
+Stored broadcast: UNLOCKED
+airtime 2031-03-28 10:15 PM
+start   2031-03-28 09:00 PM
+```
+
+Interpretation:
+
+```text
+Time parse/commit can consume a valid corrected post-broadcast timestamp: DIRECTLY CONFIRMED
+Genuine edit rebuild can repair the stale Narrative anchor: DIRECTLY CONFIRMED
+B_END terminal storage remains correct and independent: DIRECTLY CONFIRMED
+Missing B_END→first-C current-time authority edge remains the narrow defect: FURTHER SUPPORTED
+```
+
+This strengthens the v0.64.6 boundary: the repair does not need a new timestamp parser, a new persistent clock domain, or a rewrite of Edit Reconcile. It needs a deterministic request-scoped minimum current-time floor before the first directly-following C is generated.
+
+The manual correction is also preserved independently in `SIMCORE_M2_3_GENUINE_EDIT_LIVE_CONTROL_06405.md` as a GOLDEN genuine-edit regression control.

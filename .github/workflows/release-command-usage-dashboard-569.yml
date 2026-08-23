@@ -3,7 +3,7 @@ name: Release Command Usage Dashboard 3.0.0-alpha.5.69
 # Retry marker: re-emit the one-shot release trigger after the PR #106 merge
 # overlapped an independent main writer. The shared monotonic guard remains
 # authoritative if an earlier publish attempt later completes.
-# Deployment trigger: 2026-08-23T16:51+09:00
+# Deployment trigger: post-#114 product-local main-write coordination
 on:
   push:
     branches: [main]

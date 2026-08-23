@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 const P = '47969d24771f6cc188df6e32150fc6fde519182d';
 const H = 'db14a61862c3730582ad102a70d109348b7e1cb7';
+const ROBUST_PASS = 'v0.64.6 closure + timeline regression fixtures 1-25: PASS';
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, { encoding:'utf8', timeout:240000, maxBuffer:2*1024*1024, ...options });
@@ -23,20 +24,19 @@ function writeSource(dir, commit) {
   must(fs.readFileSync(path.join(dir,'latest.js')).equals(fs.readFileSync(path.join(dir,'install.js'))), `source mismatch ${commit}`);
 }
 function permanent(sourceDir, identity, verifier, candidate, out) {
-  const r = run(process.execPath, [
+  return run(process.execPath, [
     'products/simcore/tooling/check.mjs','--profile','CANDIDATE_SHADOW',
     '--source',`${sourceDir}/latest.js`,'--mirror-source',`${sourceDir}/install.js`,
     '--production-identity',identity,'--verifier-commit',verifier,
     '--candidate-commit',candidate,'--expected-production-commit',P,'--report',out,
   ], { env:{...process.env, RS23_SHADOW_CHILD:'1'} });
-  return r;
 }
 function legacyPositive(sourceDir) {
   const arch = run('python3',['scripts/simcore-architecture-check.py','--source',`${sourceDir}/latest.js`,'--source',`${sourceDir}/install.js`]);
   must(arch.status === 0, `legacy arch positive failed: ${arch.stderr}`);
   const robust = run(process.execPath,['scripts/simcore-06406-closure-completion-gate-test.mjs',`${sourceDir}/latest.js`]);
   must(robust.status === 0, `legacy robust positive failed: ${robust.stderr}`);
-  must(robust.stdout.includes('fixture 21: PASS'), 'legacy robust fixture 21 missing');
+  must(robust.stdout.includes(ROBUST_PASS), `legacy robust aggregate PASS marker missing: ${robust.stdout}`);
 }
 
 const identity = process.argv[2];
@@ -62,7 +62,7 @@ for (const [role, commit, dir] of [
 }
 
 const negatives = [];
-// latest/install mismatch
+// latest/install mismatch parity: the legacy static contract is byte equality; permanent must fail the same condition.
 fs.copyFileSync('.rs23-shadow/production/latest.js','.rs23-shadow/mismatch-latest.js');
 fs.copyFileSync('.rs23-shadow/production/install.js','.rs23-shadow/mismatch-install.js');
 fs.appendFileSync('.rs23-shadow/mismatch-install.js','\n// controlled mismatch\n');
@@ -77,7 +77,7 @@ must(report('.rs23-shadow/negative-mismatch.json').reasonCodes.includes('LATEST_
 must(!fs.readFileSync('.rs23-shadow/mismatch-latest.js').equals(fs.readFileSync('.rs23-shadow/mismatch-install.js')),'legacy cmp unexpectedly equal');
 negatives.push({id:'latest-install-mismatch',legacy:'FAIL',permanent:'FAIL',reason:'LATEST_INSTALL_MISMATCH'});
 
-// architecture negative
+// architecture negative parity.
 const badModule='\nSimCore.define("rs23-forbidden-module", function(require, module, exports) { require("./runtime"); module.exports = {}; });\n';
 for (const side of ['latest','install']) fs.writeFileSync(`.rs23-shadow/negative-arch-${side}.js`,Buffer.concat([fs.readFileSync('.rs23-shadow/production/latest.js'),Buffer.from(badModule)]));
 const legacyArch = run('python3',['scripts/simcore-architecture-check.py','--source','.rs23-shadow/negative-arch-latest.js','--source','.rs23-shadow/negative-arch-install.js']);
@@ -92,7 +92,7 @@ must(r.status === 1, `permanent arch negative exit=${r.status}`);
 must(report('.rs23-shadow/negative-arch.json').reasonCodes.includes('ARCH_CONTRACT_FAIL'),'arch reason missing');
 negatives.push({id:'forbidden-architecture-module',legacy:'FAIL',permanent:'FAIL',reason:'ARCH_CONTRACT_FAIL'});
 
-// COMMUNITY semantic owner negative
+// COMMUNITY semantic negative parity.
 const src = fs.readFileSync('.rs23-shadow/production/latest.js','utf8');
 const needle='SimCore.define("reaction", function';
 must(src.includes(needle),'reaction module marker missing');
@@ -102,7 +102,10 @@ const legacyCommunity=run(process.execPath,['scripts/simcore-06406-closure-compl
 must(permanentCommunity.status === 1, `community permanent negative exit=${permanentCommunity.status}`);
 must(legacyCommunity.status !== 0, `community legacy negative unexpectedly passed`);
 negatives.push({id:'community-reaction-owner-missing',legacy:'FAIL',permanent:'FAIL',reason:'SEMANTIC_FAIL'});
-negatives.push({id:'closure-terminal-stored-mismatch-fixture21',legacy:'INVALID_SOURCE_EXPECTED_PASS',permanent:'INVALID_SOURCE_EXPECTED_PASS',reason:'INVALID_SOURCE'});
+
+// Fixture 21 parity is asserted inside the robust 1-25 legacy adapter. Aggregate exit 0 proves
+// terminal/stored mismatch reaches INVALID_SOURCE with reason terminal-stored-airtime-mismatch.
+negatives.push({id:'closure-terminal-stored-mismatch-fixture21',legacy:'INVALID_SOURCE_EXPECTED_PASS',permanent:'INVALID_SOURCE_EXPECTED_PASS',reason:'INVALID_SOURCE',evidence:'robust-fixtures-1-25-aggregate-pass'});
 
 const summary={
   schemaVersion:1,

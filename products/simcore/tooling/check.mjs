@@ -36,8 +36,8 @@ function bounded(value, max = 2048) {
   const s = String(value || '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
   return s.length <= max ? s : `${s.slice(0, max)}…[truncated]`;
 }
-function run(command, args, timeout = 120000) {
-  const r = spawnSync(command, args, { encoding: 'utf8', timeout, maxBuffer: 1024 * 1024 });
+function run(command, args, timeout = 120000, extra = {}) {
+  const r = spawnSync(command, args, { encoding: 'utf8', timeout, maxBuffer: 1024 * 1024, ...extra });
   return { status: r.status, signal: r.signal || null, error: r.error || null, stdout: bounded(r.stdout), stderr: bounded(r.stderr) };
 }
 function gate(id, planned) { return { id, planned, status: planned ? 'PENDING' : 'NOT_APPLICABLE', reasonCode: null }; }
@@ -138,6 +138,22 @@ function main() {
   if (plan.GATE_LEGACY_COMPAT) {
     const r = run(process.execPath, ['products/simcore/tooling/ci/legacy-compat.mjs','--source',sourcePath,'--report','.simcore-ci/legacy-compat.json'], 180000);
     setGate('GATE_LEGACY_COMPAT', resultClass(r, 'LEGACY_COMPAT_SEMANTIC_FAIL', 'LEGACY_COMPAT_ERROR'), r);
+  }
+
+  if (process.env.GITHUB_HEAD_REF === 'infra/simcore-rs2-3-permanent-ci' && process.env.RS23_SHADOW_CHILD !== '1' && args.profile === 'PR_MAIN') {
+    const shadowPath = '.simcore-ci/rs2-3-shadow-summary.json';
+    const r = run(process.execPath, [
+      'products/simcore/tooling/ci/rs2-3-shadow-proof.mjs',
+      args['production-identity'], args['verifier-commit'] || process.env.GITHUB_SHA || 'UNKNOWN', shadowPath,
+    ], 900000, { env:{...process.env,RS23_SHADOW_CHILD:'1'} });
+    if (r.status === 0) {
+      const shadow = JSON.parse(fs.readFileSync(shadowPath,'utf8'));
+      details.RS2_3_SHADOW_PROOF = shadow;
+      observations.push('RS2_3_SHADOW_PROOF_PASS');
+      console.log(`RS2-3 shadow proof PASS positives=${shadow.positives.length} negatives=${shadow.negativeParity.length}`);
+    } else {
+      setGate('GATE_CI_SELF', {status:'FAIL',reasonCode:'RS2_3_SHADOW_PROOF_FAIL'}, r);
+    }
   }
 
   const planned = Object.values(gates).filter((x) => x.planned);

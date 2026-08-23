@@ -9,6 +9,7 @@ on:
       - '.github/usage-dashboard/releases/**'
       - '.github/usage-dashboard/archived-release-workflows.json'
       - '.github/workflows/usage-dashboard-validate.yml'
+      - '.github/workflows/usage-dashboard-candidate-ready.yml'
       - '.github/workflows/usage-dashboard-promote.yml'
       - '.github/workflows/reusable-usage-dashboard-validate.yml'
       - '.github/workflows/reusable-usage-dashboard-promote.yml'
@@ -16,11 +17,60 @@ on:
       - 'docs/USAGE_DASHBOARD_RELEASE_PIPELINE_V2*.md'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  promote:
+  classify:
     if: github.event.pull_request.merged == true
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      classification: ${{ steps.classify.outputs.classification }}
+      release_control_changed: ${{ steps.classify.outputs.release_control_changed }}
+    steps:
+      - name: Checkout immutable merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Classify production-byte change
+        id: classify
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/classify_release_candidate.cjs \
+            --candidate-sha "${{ github.event.pull_request.merge_commit_sha }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+  maintenance-release-control-smoke:
+    needs: classify
+    if: needs.classify.outputs.classification == 'MAINTENANCE_ONLY' && needs.classify.outputs.release_control_changed == 'true'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout immutable merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Prove maintenance release control would noop
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node plugins/usage-dashboard/tools/check_release_blob_parity.cjs \
+            --repository "${{ github.repository }}" \
+            --candidate-sha "${{ github.event.pull_request.merge_commit_sha }}" \
+            --release-branch release-usage-dashboard
+
+  promote:
+    needs: classify
+    if: needs.classify.outputs.classification == 'RELEASE_CANDIDATE'
+    permissions:
+      contents: write
     uses: ./.github/workflows/reusable-usage-dashboard-promote.yml
     with:
       candidate_sha: ${{ github.event.pull_request.merge_commit_sha }}

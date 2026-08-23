@@ -23,6 +23,9 @@ After reload/re-entry, restore the last active character/chat context instead of
 - `src/ts/characters.ts`
 - `src/ts/hotkey.ts`
 
+## Minimal upstream scope
+Persist last active character by stable identity, restore it after normal data load through the canonical character-selection path, and clear the persisted value on deliberate home/deselect. Keep all server, notification, DB and plugin changes outside this PR.
+
 ## Clean rebuild boundary
 Rebuild from the latest official upstream base at PR time.
 
@@ -54,8 +57,10 @@ If current upstream already provides a preferred navigation/session persistence 
 
 No NodeOnly server dependency is required for the feature itself.
 
+## Verification evidence
+Historical commit `000dd8baf383200ecb180490d2c063ebdd11c004` provides the original six-file behavior reference. Rebuild acceptance is the regression matrix below on the then-current upstream base; no mixed-history cherry-pick is required.
+
 ## Rebuild test plan
-Minimum regression matrix:
 - Clean first boot/no saved key -> home state remains selected.
 - Select character A -> reload -> character A restores.
 - Switch A -> B -> reload -> B restores.

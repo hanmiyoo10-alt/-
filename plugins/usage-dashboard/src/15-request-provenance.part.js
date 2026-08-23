@@ -52,6 +52,14 @@
     });
   };
 
+  const requestLedgerRowsForScopeBeforeProvenance = requestLedgerRowsForScope;
+  requestLedgerRowsForScope = function requestLedgerRowsForScopeWithProvenance(scopeKey) {
+    const key = ['all','devpass','credits'].includes(String(scopeKey)) ? String(scopeKey) : 'all';
+    const rows = requestLedgerRowsForScopeBeforeProvenance('all');
+    if (key === 'all') return rows;
+    return rows.filter((row) => requestAccountScopeValue(row?.requestAccountScope) === key);
+  };
+
   const requestServiceTierTextBeforeProvenance = requestServiceTierText;
   requestServiceTierText = function requestServiceTierTextWithProvenance(row) {
     const scopeText = requestAccountScopeLabel(row?.requestAccountScope);

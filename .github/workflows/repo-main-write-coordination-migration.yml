@@ -1,0 +1,87 @@
+name: Repository Main Write Coordination Migration
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-main-write-coordination-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.event.pull_request.title == 'Repository main-write coordination migration command'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infrastructure implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: repo-main-write-coordination-implementation
+          fetch-depth: 0
+
+      - name: Verify implementation parent and tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          python3 -m py_compile scripts/repo-main-write.py scripts/test-repo-main-write.py scripts/repo-main-write-migration.py
+          python3 scripts/test-repo-main-write.py
+
+      - name: Migrate current product main writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/repo-main-write-migration.py
+          git diff --check
+
+      - name: Validate bounded infrastructure-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/simcore-release-state-sync.yml',
+              '.github/workflows/simcore-release-command.yml',
+              '.github/workflows/reusable-usage-dashboard-release.yml',
+              '.github/workflows/usage-dashboard-project-memory.yml',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected migration diff: {sorted(changed)} != {sorted(expected)}')
+          for path in sorted(expected):
+              text = open(path, encoding='utf-8').read()
+              if 'git push origin HEAD:main' in text:
+                  raise SystemExit(f'direct main push remains in migrated current writer: {path}')
+              if 'scripts/repo-main-write.py' not in text:
+                  raise SystemExit(f'common helper missing from migrated current writer: {path}')
+              if 'group: repo-main-write' in text:
+                  raise SystemExit(f'cross-product shared concurrency remains: {path}')
+          assert 'group: simcore-main-state-sync' in open('.github/workflows/simcore-release-state-sync.yml', encoding='utf-8').read()
+          assert 'group: simcore-main-state-sync' in open('.github/workflows/simcore-release-command.yml', encoding='utf-8').read()
+          assert 'group: usage-dashboard-release' in open('.github/workflows/reusable-usage-dashboard-release.yml', encoding='utf-8').read()
+          assert 'group: usage-dashboard-project-memory' in open('.github/workflows/usage-dashboard-project-memory.yml', encoding='utf-8').read()
+          print('bounded current-writer migration: PASS')
+          PY
+
+      - name: Commit validated infrastructure migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/simcore-release-state-sync.yml \
+            .github/workflows/simcore-release-command.yml \
+            .github/workflows/reusable-usage-dashboard-release.yml \
+            .github/workflows/usage-dashboard-project-memory.yml
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Main-write coordination migration already applied.'
+            exit 0
+          fi
+          git commit -m 'build(repo): serialize product main writes without cross-product cancellation'
+          git push origin HEAD:repo-main-write-coordination-implementation

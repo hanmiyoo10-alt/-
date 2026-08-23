@@ -50,13 +50,15 @@ jobs:
           git fetch origin main
           git checkout origin/main -- \
             .github/workflows/release-usage-dashboard-569-engine-source-modularization.yml \
-            .github/workflows/release-command-usage-dashboard-569.yml
+            .github/workflows/release-command-usage-dashboard-569.yml \
+            plugins/usage-dashboard/tests/release-infrastructure-foundation.cjs
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- \
             .github/workflows/release-usage-dashboard-569-engine-source-modularization.yml \
             .github/workflows/release-command-usage-dashboard-569.yml \
+            plugins/usage-dashboard/tests/release-infrastructure-foundation.cjs \
             plugins/usage-dashboard/src \
             plugins/usage-dashboard/latest.js \
             plugins/usage-dashboard/runtime \

@@ -59,7 +59,7 @@ assert.ok(guidelines.includes('Diagnostics expose only sanitized family/scope/ra
 assert.ok(guidelines.includes('Evidence outranks roadmap order.'));
 assert.match(workflow, /group: usage-dashboard-release/);
 assert.doesNotMatch(workflow, /group: repo-main-write/);
-assert.match(workflow, /scripts\/repo-main-write\.py/);
+assert.doesNotMatch(workflow, /scripts\/repo-main-write\.py/);
 assert.match(workflow, /check_release_monotonic\.py/);
 assert.match(workflow, /--check-artifacts/);
 assert.match(workflow, /p22-monotonic-release-integrity\.cjs/);

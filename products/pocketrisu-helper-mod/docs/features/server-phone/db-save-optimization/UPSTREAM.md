@@ -2,23 +2,23 @@
 
 Feature-ID: `db-save-optimization`
 Area: `server-phone`
-PR status: `UPSTREAM_PARTIAL_ACCEPTED_D_READY`
+PR status: `UPSTREAM_D_OPEN`
 Isolation status: `CLEAN`
 Dependencies status: `D_BASE_RESOLVED_E_WAITS_ON_D`
 Deployment status: `NOT_READY`
 Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`
-Official upstream PRs: `https://github.com/PocketRisu/PocketRisu/pull/67`, `https://github.com/PocketRisu/PocketRisu/pull/68`, `https://github.com/PocketRisu/PocketRisu/pull/69`
-Current tracked upstream heads: A `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; B `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; C `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; D upstream-ready `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`
+Official upstream PRs: `https://github.com/PocketRisu/PocketRisu/pull/67`, `https://github.com/PocketRisu/PocketRisu/pull/68`, `https://github.com/PocketRisu/PocketRisu/pull/69`, `https://github.com/PocketRisu/PocketRisu/pull/73`
+Current tracked upstream heads: A `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; B `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; C `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; D `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`
 
 ## Clean staged branches / PRs
 - Stage A — empty patch fast path + opaque ETag: official `PocketRisu/PocketRisu#67`; head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; CLOSED / NOT MERGED. Maintainer adopted the empty-patch early-return half into `develop` via `e3a63daafdac00c52968c4e668af0ac6f7adcc3b`; isolated opaque revision ETag was not accepted because it can conflict with content-MD5 ETags minted by `/api/read` and 409 responses. Future ETag unification belongs with upstream #66 served-view/revision redesign.
 - Stage B — compositional DB patch hash cache: official `PocketRisu/PocketRisu#68`; head `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; MERGED into `develop` as `7159bf9fd2913e06965cd68c27b9f5292dfb75b5`. Original stacked local draft remains `hanmiyoo10-alt/PocketRisu#5` at `04992dcdc47b144d14fbc8df6c6c1c2c7cadec7c` and must not be auto-merged.
 - Stage C — top-level selective clone: official `PocketRisu/PocketRisu#69`; head `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; MERGED into `develop` as `7e0e61af73e67f3d443352509d8c989ccd8f4773`. Original stacked local draft remains `hanmiyoo10-alt/PocketRisu#6` at `0d0c8104246a662d9601cffcddb832fd52f7d6f1` and must not be auto-merged.
 - Upstream follow-up after B/C: `e3a63daafdac00c52968c4e668af0ac6f7adcc3b` stores `result.newDocument`, rejects invalid/non-object roots, documents the no-in-place-mutation invariant for shared untouched branches, adds endpoint integration coverage, and includes the accepted empty-patch early return from Stage A.
-- Stage D — pluginCustomStorage direct-child hash/clone: original stacked local draft `#7` remains at `c3ec3b5e63f7f0bcdb6888d8475f836cc9f31ca3`. A separate upstream-ready branch `feat/db-save-optimization-plugin-storage-child-upstream` at `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd` was rebuilt on current `develop`; comparison is exactly ahead 1 / behind 0 and changes only 3 files. Cross-repository PR creation is currently blocked by connector HTTP 403 `Resource not accessible by integration`.
+- Stage D — pluginCustomStorage direct-child hash/clone: official `PocketRisu/PocketRisu#73`; head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`; OPEN / MERGEABLE / NOT_DRAFT; exactly 1 commit / 3 files. The PR was manually submitted from `feat/db-save-optimization-plugin-storage-child-upstream` after connector cross-repository PR creation was blocked. At the latest check there are no workflow runs/status checks, no submitted reviews, and no review threads; absence of checks is not GREEN. The PR body is still the untouched repository template, so the next manual action should include filling the summary/changes/impact/checklist before review if desired. Original stacked local draft `#7` remains obsolete validation ancestry and must not be auto-merged.
 - Stage E — pluginCustomStorage depth-3 lazy subchild hash/clone: local draft `#8`; clean stacked head `1a937bc680658df732aab75632f0e030c2005f53`; 1 commit / 3 files. Do not promote until Stage D is officially reviewed/accepted/rebased.
 
-The original stacked draft dependency rule remains B after A, C after B, D after C, E after D, but official B/C were independently rebased and merged into `develop`. Stage D's dependency on accepted Stage C is now resolved and a clean current-upstream branch exists. Stage E still waits on the final accepted/rebased Stage-D shape. Never merge the old stacked local drafts merely because their historical dependencies landed upstream; they are draft validation artifacts with obsolete ancestry.
+The original stacked draft dependency rule remains B after A, C after B, D after C, E after D, but official B/C were independently rebased and merged into `develop`. Stage D's dependency on accepted Stage C is resolved and Stage D is now under official upstream review as #73. Stage E still waits on the final accepted/rebased Stage-D shape. Never merge the old stacked local drafts merely because their historical dependencies landed upstream; they are draft validation artifacts with obsolete ancestry.
 
 ## Problem / motivation
 Large `/api/patch` requests paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On large saves/pluginCustomStorage this produced roughly 1.1–1.8s patch latency in the verified local workload.
@@ -91,9 +91,11 @@ Acceptance:
 - direct-child root operations fall back safely;
 - arrays/non-object/ambiguous shapes use conservative fallback.
 
-Current preparation:
-- clean upstream-ready head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd` on current `develop` (`ahead 1 / behind 0`, 3 files only).
-- official PR creation is blocked only by connector cross-repository permission (HTTP 403); do not treat this as a code failure and do not substitute old stacked draft #7.
+Current upstream state:
+- official PR `PocketRisu/PocketRisu#73` is OPEN / MERGEABLE / NOT_DRAFT at head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`.
+- diff remains isolated: exactly 1 commit, 3 files, based on current accepted B/C follow-up shape.
+- latest check: no workflow runs or status checks, no submitted reviews, no review threads. This is waiting for validation/review, not GREEN.
+- PR description currently remains the default repository template and should be filled manually rather than by this lifecycle automation.
 
 ### PR E — pluginCustomStorage depth-3 lazy subchild optimization
 Goal:
@@ -135,7 +137,7 @@ Known remaining bottlenecks (worker structured clone before worker launch; synch
 ## Dependencies
 - Current upstream `/api/patch` implementation: resolved through merged #68/#69 plus follow-up `e3a63daa` for Stage-D preparation.
 - Stage A opaque ETag: not a prerequisite for D; empty-patch half landed, opaque-token half is superseded pending #66 revision redesign.
-- Stage D dependency on accepted/rebased Stage C: RESOLVED; clean D branch rebuilt on current `develop`.
+- Stage D dependency on accepted/rebased Stage C: RESOLVED; official Stage D is now #73.
 - Stage E dependency on final accepted/rebased Stage D: UNRESOLVED.
 - No official upstream PR should be auto-merged by this automation.
 
@@ -163,6 +165,7 @@ Operational verification:
 - #69 maintainer review independently verified selective-clone atomicity and copy semantics.
 - `e3a63daa` adds endpoint-level `/api/patch` integration tests across nested, root, empty, and failing patches, stores `result.newDocument`, rejects invalid database roots, and documents the no-in-place-mutation invariant.
 - Maintainer plans to ship the merged B/C work after dogfooding on their own instance; this is upstream release timing, not permission for this automation to deploy to server-phone.
+- #73 is the official Stage-D submission at the same clean upstream-ready head previously prepared; current state has no CI/check or review result yet.
 
 ### Historical performance
 Large pluginCustomStorage patch before optimization:
@@ -211,12 +214,12 @@ Large self-host databases should not pay whole-database hash/clone/ETag costs fo
 - upstream strategy: STAGED_PR_SERIES
 - boundary validation: all currently open source-repo `feat/` PRs #4-#8 contain exactly one `Feature-ID: db-save-optimization` line and their branch names match the Feature-ID. Exactly one matching dossier folder exists at `docs/features/server-phone/db-save-optimization/`, with required `README.md`, `UPSTREAM.md`, and `FAILURES.md` present.
 - local PR #4: OPEN / MERGEABLE / NOT_DRAFT; historical branch is obsolete relative to upstream outcome and has no relevant CI/check runs, so it is not GREEN and must not be auto-merged.
-- local PRs #5-#8: OPEN / MERGEABLE / DRAFT; draft state blocks auto-merge. Absence of relevant checks also prevents GREEN; never treat no checks as success.
+- local PRs #5-#8: OPEN / MERGEABLE / DRAFT; draft state blocks auto-merge. All five local feature heads currently have no relevant workflow runs; absence of checks also prevents GREEN and must never be treated as success.
 - official upstream PR #67: CLOSED / NOT_MERGED. Empty-patch half adopted in `e3a63daa`; opaque ETag half superseded pending #66 revision-model work.
 - official upstream PR #68: MERGED `7159bf9fd2913e06965cd68c27b9f5292dfb75b5`.
 - official upstream PR #69: MERGED `7e0e61af73e67f3d443352509d8c989ccd8f4773`.
 - official feedback: positive independent verification on #68/#69; #69 maintainer explicitly thanked the careful split across the three PRs. Both merged stages are planned for upstream dogfooding before release.
-- Stage D upstream-ready branch: `feat/db-save-optimization-plugin-storage-child-upstream` / `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`; current comparison to `develop` is ahead 1 / behind 0, 3 files only. Official PR creation remains blocked by connector 403 and requires a GitHub path with cross-repository PR permission.
+- official upstream PR #73 (Stage D): OPEN / MERGEABLE / NOT_DRAFT; head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`; 1 commit / 3 files; no CI/check runs or statuses yet; no reviews or review threads yet. PR body is still the default template.
 - Stage E: keep staged; do not promote until D receives official review/acceptance/rebase.
 - deployment gate: `docs/features/server-phone/safe-updater/UPSTREAM.md` currently has `AUTO_DEPLOY_GATE: DISABLED` and `AUTO_DEPLOY_VERIFIED: NO`; therefore no server-phone deployment, SSH, restart, direct git pull, or device action is permitted. Even after a future gate enablement, deployment must use the verified pull-based safe-updater rather than GitHub Actions push-SSH.
-- next action: submit the clean Stage-D branch through an authorized GitHub identity/integration; then monitor its upstream CI/review state. Do not auto-merge any official upstream PR and do not prepare Stage E against current upstream until D's accepted shape is known.
+- next action: monitor #73 for CI/checks and maintainer review; do not auto-merge it. Keep Stage E staged until #73 establishes the accepted Stage-D shape. If preparing #73 manually for review, fill its currently untouched PR description/checklist first.

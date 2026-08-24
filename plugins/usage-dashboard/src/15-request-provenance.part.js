@@ -30,6 +30,12 @@
     return stats;
   }
 
+  const requestLedgerKeyBeforeProvenance = requestLedgerKey;
+  requestLedgerKey = function requestLedgerKeyWithProvenance(row) {
+    const requestNumber = String(row?.requestNumber || '').trim();
+    return requestNumber ? `request:${requestNumber}` : requestLedgerKeyBeforeProvenance(row);
+  };
+
   const normalizeRecentRequestRowsBeforeProvenance = normalizeRecentRequestRows;
   normalizeRecentRequestRows = function normalizeRecentRequestRowsWithProvenance(rows, limit = 12) {
     const normalized = normalizeRecentRequestRowsBeforeProvenance(rows, limit);

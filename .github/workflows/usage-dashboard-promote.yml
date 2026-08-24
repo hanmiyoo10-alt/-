@@ -9,9 +9,10 @@ on:
       - '.github/usage-dashboard/releases/**'
       - '.github/usage-dashboard/archived-release-workflows.json'
       - '.github/workflows/usage-dashboard-validate.yml'
+      - '.github/workflows/usage-dashboard-validate-exact.yml'
       - '.github/workflows/usage-dashboard-candidate-ready.yml'
       - '.github/workflows/usage-dashboard-prepare-candidate.yml'
-      - '.github/workflows/usage-dashboard-stage-e6.yml'
+      - '.github/workflows/usage-dashboard-stage-e7.yml'
       - '.github/workflows/usage-dashboard-promote.yml'
       - '.github/workflows/reusable-usage-dashboard-validate.yml'
       - '.github/workflows/reusable-usage-dashboard-promote.yml'
@@ -108,7 +109,7 @@ jobs:
             --candidate-sha "$MERGE_SHA" \
             --release-branch release-usage-dashboard
           RELEASE_SHA="$(git ls-remote https://github.com/$GITHUB_REPOSITORY.git refs/heads/release-usage-dashboard | awk '{print $1}')"
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E6_RELEASE_RECEIPT_SHA_INVALID'; exit 1; }
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E7_RELEASE_RECEIPT_SHA_INVALID'; exit 1; }
           node - <<'NODE' > "$RUNNER_TEMP/release-receipt.env"
           const fs=require('node:fs');
           const crypto=require('node:crypto');
@@ -123,7 +124,7 @@ jobs:
             ENGINE_SHA256:sha('plugins/usage-dashboard/runtime/bridge-engine.mjs'),
           };
           for(const [k,v] of Object.entries(rows)) {
-            if(!v || /[\r\n]/.test(v)) throw new Error(`E6_RECEIPT_VALUE_INVALID:${k}`);
+            if(!v || /[\r\n]/.test(v)) throw new Error(`E7_RECEIPT_VALUE_INVALID:${k}`);
             console.log(`${k}=${v}`);
           }
           NODE
@@ -151,4 +152,4 @@ jobs:
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" \
               --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null
           done
-          echo "E6_RELEASE_RECEIPT_POSTED:$PRODUCT_VERSION:$MERGE_SHA:$RELEASE_SHA"
+          echo "E7_RELEASE_RECEIPT_POSTED:$PRODUCT_VERSION:$MERGE_SHA:$RELEASE_SHA"

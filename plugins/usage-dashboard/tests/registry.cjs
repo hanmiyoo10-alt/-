@@ -18,6 +18,8 @@ const FOUNDATION_TESTS = Object.freeze([
   'candidate-reconciliation-contract.cjs',
   'candidate-stage-policy-contract.cjs',
   'candidate-stage-transaction-contract.cjs',
+  'e7-validation-control-command-contract.cjs',
+  'release-generic-preflight-contract.cjs',
   'pr-lifecycle-closure-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([

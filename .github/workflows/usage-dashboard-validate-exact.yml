@@ -1,0 +1,188 @@
+name: Usage Dashboard E7 Exact-SHA Validation
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usage-dashboard-e7-validation
+  cancel-in-progress: false
+
+jobs:
+  resolve_validation:
+    if: ${{ github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard validate ') }}
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      candidate_sha: ${{ steps.resolve.outputs.candidate_sha }}
+      candidate_branch: ${{ steps.resolve.outputs.candidate_branch }}
+      failure_reason: ${{ steps.resolve.outputs.failure_reason }}
+    steps:
+      - name: Checkout immutable trusted validation control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bind PR identity to exact candidate SHA
+        id: resolve
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONTROL_COMMAND: ${{ github.event.comment.body }}
+          CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CONTROL_ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'failure_reason=VALIDATION_UNTRUSTED_WORKFLOW_REF' >> "$GITHUB_OUTPUT"; exit 1; }
+          node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
+          PR_NUMBER="$(node plugins/usage-dashboard/tools/release_control_command.cjs --validate-pr "$CONTROL_COMMAND")"
+          CANDIDATE_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --validate-sha "$CONTROL_COMMAND")"
+          if ! curl --fail-with-body --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pr.json"; then
+            echo 'failure_reason=VALIDATION_PR_LOOKUP_FAILED' >> "$GITHUB_OUTPUT"; exit 1
+          fi
+          node - "$RUNNER_TEMP/pr.json" "$GITHUB_REPOSITORY" "$CANDIDATE_SHA" <<'NODE'
+          const fs=require('node:fs');
+          const [file,repo,candidateSha]=process.argv.slice(2);
+          const pr=JSON.parse(fs.readFileSync(file,'utf8'));
+          if(pr.state!=='open') throw new Error('VALIDATION_PR_NOT_OPEN');
+          if(pr.base?.ref!=='main') throw new Error('VALIDATION_PR_BASE_DENIED');
+          if(pr.head?.repo?.full_name!==repo) throw new Error('VALIDATION_PR_REPOSITORY_DENIED');
+          if(!/^stage\/usage-dashboard-3\.0\.0-alpha\.5\.\d+$/.test(String(pr.head?.ref||''))) throw new Error('VALIDATION_PR_HEAD_DENIED');
+          if(pr.head?.sha!==candidateSha) throw new Error(`VALIDATION_IDENTITY_MISMATCH:${pr.head?.sha||'UNKNOWN'}:expected=${candidateSha}`);
+          NODE
+          CANDIDATE_BRANCH="$(jq -r '.head.ref' "$RUNNER_TEMP/pr.json")"
+          REMOTE_SHA="$(git ls-remote https://github.com/$GITHUB_REPOSITORY.git "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          [[ "$REMOTE_SHA" == "$CANDIDATE_SHA" ]] || { echo 'failure_reason=VALIDATION_BRANCH_IDENTITY_MISMATCH' >> "$GITHUB_OUTPUT"; exit 1; }
+          {
+            echo "pr_number=$PR_NUMBER"
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "candidate_branch=$CANDIDATE_BRANCH"
+            echo 'failure_reason='
+          } >> "$GITHUB_OUTPUT"
+          echo "E7_VALIDATION_IDENTITY_BOUND:$PR_NUMBER:$CANDIDATE_BRANCH:$CANDIDATE_SHA"
+
+  receipt_accepted:
+    needs: resolve_validation
+    if: ${{ needs.resolve_validation.result == 'success' }}
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post exact-SHA validation accepted receipt
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.resolve_validation.outputs.pr_number }}
+          CANDIDATE_SHA: ${{ needs.resolve_validation.outputs.candidate_sha }}
+          CANDIDATE_BRANCH: ${{ needs.resolve_validation.outputs.candidate_branch }}
+        run: |
+          set -euo pipefail
+          BODY="$(cat <<EOF
+          UD_VALIDATION_ACCEPTED
+          pr: #$PR_NUMBER
+          candidate_branch: $CANDIDATE_BRANCH
+          candidate_sha: $CANDIDATE_SHA
+          transaction: $GITHUB_RUN_ID
+          next: authoritative full registry
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/197/comments" \
+            --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null
+
+  validate_exact:
+    needs: resolve_validation
+    if: ${{ needs.resolve_validation.result == 'success' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-usage-dashboard-validate.yml
+    with:
+      candidate_sha: ${{ needs.resolve_validation.outputs.candidate_sha }}
+
+  receipt_result:
+    needs: [resolve_validation, validate_exact]
+    if: ${{ always() && needs.resolve_validation.result == 'success' }}
+    permissions:
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post exact-SHA validation result
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.resolve_validation.outputs.pr_number }}
+          CANDIDATE_SHA: ${{ needs.resolve_validation.outputs.candidate_sha }}
+          VALIDATION_RESULT: ${{ needs.validate_exact.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$VALIDATION_RESULT" == 'success' ]]; then
+            STATUS='GREEN'; NEXT='re-read PR head/mergeability and exact-head merge';
+          else
+            STATUS='RED'; NEXT='fix source only, run the same stage command, then validate the new exact candidate SHA';
+          fi
+          BODY="$(cat <<EOF
+          UD_VALIDATION_RESULT
+          pr: #$PR_NUMBER
+          validated_sha: $CANDIDATE_SHA
+          status: $STATUS
+          transaction: $GITHUB_RUN_ID
+          next: $NEXT
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
+          for ISSUE in 197 "$PR_NUMBER"; do
+            curl --fail-with-body --silent --show-error -X POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" \
+              --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null
+          done
+          [[ "$STATUS" == 'GREEN' ]] || exit 1
+
+  receipt_failure:
+    needs: resolve_validation
+    if: ${{ always() && needs.resolve_validation.result == 'failure' }}
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post validation activation rejection
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REASON: ${{ needs.resolve_validation.outputs.failure_reason }}
+        run: |
+          set -euo pipefail
+          BODY="$(cat <<EOF
+          UD_VALIDATION_REJECTED
+          reason: ${REASON:-VALIDATION_ACTIVATION_FAILED}
+          transaction: $GITHUB_RUN_ID
+          next: preserve candidate bytes; correct PR/head identity and retry exact-SHA validation
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/197/comments" \
+            --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null

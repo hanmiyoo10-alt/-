@@ -6,6 +6,7 @@ const PREPARE_RE = /^\/usage-dashboard prepare (release\/usage-dashboard-[A-Za-z
 const READY_RE = /^\/usage-dashboard ready ([0-9a-fA-F]{40})$/;
 const READY_BRANCH_RE = /^\/usage-dashboard ready-branch (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
 const STAGE_RE = /^\/usage-dashboard stage (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
+const VALIDATE_RE = /^\/usage-dashboard validate ([1-9]\d*) ([0-9a-fA-F]{40})$/;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -57,6 +58,13 @@ function parseStageCommand(value) {
   return {candidateBranch: match[1]};
 }
 
+function parseValidateCommand(value) {
+  const text = singleLine(value, 'UD_CONTROL_VALIDATE_DENIED');
+  const match = VALIDATE_RE.exec(text);
+  if (!match) fail('UD_CONTROL_VALIDATE_DENIED');
+  return {prNumber:Number(match[1]), candidateSha:match[2].toLowerCase()};
+}
+
 function main() {
   const args = process.argv.slice(2);
   const command = args.shift() || '';
@@ -89,6 +97,14 @@ function main() {
     process.stdout.write(parseStageCommand(args.join(' ')).candidateBranch);
     return;
   }
+  if (command === '--validate-pr') {
+    process.stdout.write(String(parseValidateCommand(args.join(' ')).prNumber));
+    return;
+  }
+  if (command === '--validate-sha') {
+    process.stdout.write(parseValidateCommand(args.join(' ')).candidateSha);
+    return;
+  }
   fail('UD_CONTROL_USAGE');
 }
 
@@ -98,11 +114,13 @@ module.exports = {
   READY_RE,
   READY_BRANCH_RE,
   STAGE_RE,
+  VALIDATE_RE,
   assertControlEnvelope,
   parsePrepareCommand,
   parseReadyCommand,
   parseReadyBranchCommand,
   parseStageCommand,
+  parseValidateCommand,
 };
 
 if (require.main === module) {

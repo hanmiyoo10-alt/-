@@ -30,6 +30,7 @@
     "nonDowngradable": ["MAIN_WRITE_CONTENT_CONFLICT", "MAIN_WRITE_RETRY_EXHAUSTED", "RELEASE_AUTHORITY_IDENTITY_MISMATCH", "UNDECLARED_AUTHORITY_MIGRATION", "MEMORY_SYNC_PATH_ESCAPE"]
   },
   "adapters": {
+    "observationEpoch": "2026-08-24T20:37:22Z",
     "requiredCi": {"workflow": "simcore-ci.yml", "requiredJob": "Required"},
     "productionAuthority": {"simcore": {"manifest": "product-manifest.json"}},
     "writerWorkflows": [
@@ -52,6 +53,6 @@
     "issueTitle": "[repo-ops:main]",
     "recentRecoveryLimit": 10,
     "projectStatusFreshnessMinutes": 150,
-    "eventAdaptersComplete": false
+    "eventAdaptersComplete": true
   }
 }

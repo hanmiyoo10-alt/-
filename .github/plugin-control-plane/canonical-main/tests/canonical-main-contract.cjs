@@ -16,6 +16,7 @@ const {
   repositoryBindingErrors,
   renderGuidelines,
 } = require('../bootstrap.cjs');
+const {latestRelevantRun} = require('../adapters.cjs');
 
 const root = path.resolve(__dirname, '../../../..');
 const policy = loadPolicy();
@@ -25,7 +26,8 @@ const registeredPath = path.join(__dirname, '../descriptors/voyage-token-check.j
 const registered = JSON.parse(fs.readFileSync(registeredPath, 'utf8'));
 
 assert.equal(policy.schemaVersion, 1);
-assert.equal(policy.operations.eventAdaptersComplete, false, 'Phase B shadow must fail closed until live adapter proof');
+assert.equal(policy.operations.eventAdaptersComplete, true, 'Phase B activation requires proven adapter coverage');
+assert.equal(policy.adapters.observationEpoch, '2026-08-24T20:37:22Z');
 assert.deepEqual(validateDescriptor(example, policy), []);
 assert.deepEqual(repositoryBindingErrors(example, root), []);
 assert.deepEqual(validateDescriptor(registered, policy), []);
@@ -93,9 +95,19 @@ assert.equal(deriveOperatorState({freshnessValid: true, incidents: [{state: 'OPE
 assert.equal(deriveOperatorState({freshnessValid: true, incidents: [{state: 'OPEN', severity: 'P2'}]}), 'ATTENTION');
 assert.equal(deriveOperatorState({freshnessValid: true, incidents: []}), 'CLEAR');
 
+const historical = {id: 1, event: 'workflow_dispatch', conclusion: 'failure', created_at: '2026-08-24T16:12:53Z'};
+const current = {id: 2, event: 'workflow_dispatch', conclusion: 'success', created_at: '2026-08-24T20:38:00Z'};
+assert.equal(latestRelevantRun([historical], ['workflow_dispatch'], policy.adapters.observationEpoch), undefined, 'pre-adapter historical failures must not open new incidents');
+assert.equal(latestRelevantRun([historical, current], ['workflow_dispatch'], policy.adapters.observationEpoch).id, 2);
+
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-ops.yml'), 'utf8');
 assert.match(workflow, /schedule:/);
 assert.match(workflow, /workflow_dispatch:/);
+assert.match(workflow, /workflow_run:/);
+assert.match(workflow, /SimCore CI/);
+assert.match(workflow, /SimCore release state sync/);
+assert.match(workflow, /SimCore Permanent Release/);
+assert.match(workflow, /Usage Dashboard Project Memory/);
 assert.match(workflow, /contents:\s*read/);
 assert.match(workflow, /actions:\s*read/);
 assert.match(workflow, /issues:\s*write/);
@@ -106,9 +118,17 @@ assert.doesNotMatch(workflow, /(?:^|\n)\s*pull_request(?:_target)?:/);
 assert.doesNotMatch(workflow, /contents:\s*write/);
 assert.doesNotMatch(workflow, /git\s+push/);
 
+const workflowDir = path.join(root, '.github/workflows');
+const directWriterFiles = fs.readdirSync(workflowDir)
+  .filter((name) => /\.ya?ml$/.test(name))
+  .filter((name) => fs.readFileSync(path.join(workflowDir, name), 'utf8').includes('scripts/repo-main-write.py'))
+  .sort();
+assert.deepEqual(directWriterFiles, policy.adapters.writerInventory.map((row) => row.workflow).sort(), 'every direct repo-main-write workflow must be classified');
+
 const adapter = fs.readFileSync(path.join(__dirname, '../adapters.cjs'), 'utf8');
 assert.match(adapter, /observeRequiredCi/);
 assert.match(adapter, /observeProductionAuthority/);
+assert.match(adapter, /observationEpoch/);
 assert.match(adapter, /MAIN_WRITE_RETRY_EXHAUSTED/);
 assert.match(adapter, /MAIN_WRITE_CONTENT_CONFLICT/);
 assert.match(adapter, /MEMORY_SYNC_PATH_ESCAPE/);

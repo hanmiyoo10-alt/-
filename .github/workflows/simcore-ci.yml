@@ -40,6 +40,40 @@ on:
       expected_production_commit:
         required: false
         type: string
+      candidate_required_authority:
+        required: false
+        type: string
+      release_spec_sha256:
+        required: false
+        type: string
+    outputs:
+      conclusion:
+        description: Bounded permanent CI conclusion
+        value: ${{ jobs.verify.outputs.conclusion }}
+      verified_candidate_commit:
+        description: Exact candidate commit verified by the reusable run
+        value: ${{ jobs.verify.outputs.verified_candidate_commit }}
+      verified_production_commit:
+        description: Exact production commit verified by the reusable run
+        value: ${{ jobs.verify.outputs.verified_production_commit }}
+      verified_candidate_latest_blob:
+        description: Candidate latest.js Git blob identity
+        value: ${{ jobs.verify.outputs.verified_candidate_latest_blob }}
+      verified_candidate_install_blob:
+        description: Candidate install.js Git blob identity
+        value: ${{ jobs.verify.outputs.verified_candidate_install_blob }}
+      verifier_commit:
+        description: Canonical verifier source commit
+        value: ${{ jobs.verify.outputs.verifier_commit }}
+      report_sha256:
+        description: SHA-256 of bounded verifier report
+        value: ${{ jobs.verify.outputs.report_sha256 }}
+      authority:
+        description: Candidate-required caller authority
+        value: ${{ jobs.verify.outputs.authority }}
+      release_spec_sha256:
+        description: Release spec digest bound into verification
+        value: ${{ jobs.verify.outputs.release_spec_sha256 }}
 
 permissions:
   contents: read
@@ -56,6 +90,14 @@ jobs:
     outputs:
       conclusion: ${{ steps.outcome.outputs.conclusion }}
       profile: ${{ steps.profile.outputs.profile }}
+      verified_candidate_commit: ${{ steps.profile.outputs.candidate_commit }}
+      verified_production_commit: ${{ steps.production.outputs.production_commit }}
+      verified_candidate_latest_blob: ${{ steps.candidate.outputs.latest_blob }}
+      verified_candidate_install_blob: ${{ steps.candidate.outputs.install_blob }}
+      verifier_commit: ${{ steps.profile.outputs.verifier_commit }}
+      report_sha256: ${{ steps.report_identity.outputs.report_sha256 }}
+      authority: ${{ steps.profile.outputs.candidate_required_authority }}
+      release_spec_sha256: ${{ steps.profile.outputs.release_spec_sha256 }}
     steps:
       - name: Checkout verifier source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -83,6 +125,8 @@ jobs:
           INPUT_CANDIDATE: ${{ inputs.candidate_commit }}
           INPUT_FETCH_REF: ${{ inputs.candidate_fetch_ref }}
           INPUT_EXPECTED_PRODUCTION: ${{ inputs.expected_production_commit }}
+          INPUT_REQUIRED_AUTHORITY: ${{ inputs.candidate_required_authority }}
+          INPUT_RELEASE_SPEC_SHA256: ${{ inputs.release_spec_sha256 }}
         run: |
           set -euo pipefail
           case "${GITHUB_EVENT_NAME}" in
@@ -104,10 +148,20 @@ jobs:
           if [[ "$PROFILE" == CANDIDATE_* ]]; then
             [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]] || { echo 'CANDIDATE_IDENTITY_INVALID' >&2; exit 2; }
           fi
+          REQUIRED_AUTHORITY="${INPUT_REQUIRED_AUTHORITY:-}"
+          RELEASE_SPEC_SHA256="${INPUT_RELEASE_SPEC_SHA256:-}"
+          if [[ "$PROFILE" == CANDIDATE_REQUIRED ]]; then
+            [[ "$GITHUB_EVENT_NAME" == workflow_call ]] || { echo 'CANDIDATE_REQUIRED_CALLER_INVALID' >&2; exit 2; }
+            [[ "$REQUIRED_AUTHORITY" == SHADOW_ONLY ]] || { echo 'CANDIDATE_REQUIRED_AUTHORITY_INVALID' >&2; exit 2; }
+            [[ "$RELEASE_SPEC_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo 'RELEASE_SPEC_DIGEST_INVALID' >&2; exit 2; }
+          fi
           echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
           echo "candidate_commit=$CANDIDATE" >> "$GITHUB_OUTPUT"
           echo "candidate_fetch_ref=${INPUT_FETCH_REF:-}" >> "$GITHUB_OUTPUT"
           echo "expected_production_commit=${INPUT_EXPECTED_PRODUCTION:-}" >> "$GITHUB_OUTPUT"
+          echo "candidate_required_authority=$REQUIRED_AUTHORITY" >> "$GITHUB_OUTPUT"
+          echo "release_spec_sha256=$RELEASE_SPEC_SHA256" >> "$GITHUB_OUTPUT"
+          echo "verifier_commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Classify pull request paths
         id: classify
@@ -155,6 +209,7 @@ jobs:
           fi
           L="$(git rev-parse "$P:plugins/simcore/latest.js")"
           I="$(git rev-parse "$P:plugins/simcore/install.js")"
+          test "$L" = "$I"
           mkdir -p .simcore-ci/production
           git show "$P:plugins/simcore/latest.js" > .simcore-ci/production/latest.js
           git show "$P:plugins/simcore/install.js" > .simcore-ci/production/install.js
@@ -165,6 +220,7 @@ jobs:
           echo "production_blob=$L" >> "$GITHUB_OUTPUT"
 
       - name: Materialize immutable candidate
+        id: candidate
         if: steps.profile.outputs.profile == 'CANDIDATE_SHADOW' || steps.profile.outputs.profile == 'CANDIDATE_REQUIRED'
         shell: bash
         env:
@@ -176,8 +232,12 @@ jobs:
             git fetch --no-tags origin "$FETCH_REF"
           fi
           git cat-file -e "$CANDIDATE^{commit}"
+          L="$(git rev-parse "$CANDIDATE:plugins/simcore/latest.js")"
+          I="$(git rev-parse "$CANDIDATE:plugins/simcore/install.js")"
           git show "$CANDIDATE:plugins/simcore/latest.js" > .simcore-ci/candidate-latest.js
           git show "$CANDIDATE:plugins/simcore/install.js" > .simcore-ci/candidate-install.js
+          echo "latest_blob=$L" >> "$GITHUB_OUTPUT"
+          echo "install_blob=$I" >> "$GITHUB_OUTPUT"
 
       - name: Select source under test
         id: source
@@ -231,6 +291,10 @@ jobs:
           PROFILE: ${{ steps.profile.outputs.profile }}
           CANDIDATE: ${{ steps.profile.outputs.candidate_commit }}
           EXPECTED_PRODUCTION: ${{ steps.profile.outputs.expected_production_commit }}
+          CANDIDATE_LATEST_BLOB: ${{ steps.candidate.outputs.latest_blob }}
+          CANDIDATE_INSTALL_BLOB: ${{ steps.candidate.outputs.install_blob }}
+          REQUIRED_AUTHORITY: ${{ steps.profile.outputs.candidate_required_authority }}
+          RELEASE_SPEC_SHA256: ${{ steps.profile.outputs.release_spec_sha256 }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -245,6 +309,10 @@ jobs:
             --verifier-commit "$GITHUB_SHA" \
             --candidate-commit "${CANDIDATE:-}" \
             --expected-production-commit "${EXPECTED_PRODUCTION:-}" \
+            --candidate-latest-blob "${CANDIDATE_LATEST_BLOB:-}" \
+            --candidate-install-blob "${CANDIDATE_INSTALL_BLOB:-}" \
+            --candidate-required-authority "${REQUIRED_AUTHORITY:-}" \
+            --release-spec-sha256 "${RELEASE_SPEC_SHA256:-}" \
             --pr-base-commit "${BASE_SHA:-}" \
             --pr-head-commit "${HEAD_SHA:-}" \
             --report .simcore-ci/simcore-ci-report.json
@@ -273,6 +341,17 @@ jobs:
           fi
           echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
           cat .simcore-ci/simcore-ci-report.json
+
+      - name: Bind verifier report identity
+        id: report_identity
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .simcore-ci/simcore-ci-report.json
+          H="$(sha256sum .simcore-ci/simcore-ci-report.json | awk '{print $1}')"
+          [[ "$H" =~ ^[0-9a-f]{64}$ ]]
+          echo "report_sha256=$H" >> "$GITHUB_OUTPUT"
 
       - name: Upload bounded CI report
         if: always()

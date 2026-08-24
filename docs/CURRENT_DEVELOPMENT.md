@@ -22,7 +22,7 @@
 - Release branch: `release-simcore`
 - Release commit: `47969d24771f6cc188df6e32150fc6fde519182d`
 - Release blob: `34da01aa131f760b92d65d961a7843e9cc0d37d6`
-- Declared validation status: `PENDING_REAL_LONG_CHAT`
+- Declared validation status: `LIVE_PASS`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-2`
@@ -36,11 +36,13 @@ This block is machine-managed from verified declared release state. It does not 
 
 ## Production verdict
 
-`v0.64.3` is the current production release. It is a narrow diagnostic-only repair for the confirmed v0.64.2 natural B_END `REPORT_BUILD_FAILED`: the outer runtime now binds the existing Kernel and Time modules used by `buildLastTurnDiagnosticReport()`. The report-builder body, B_END terminal-coverage calculation, clipboard transport contract, request/output hot paths, Broadcast/Time semantics, persistent state, M2-2 behavior, and the frozen v0.65.0 M2-3 design are unchanged.
+`v0.64.6` is the current production release: **Post-B_END C Clock Handoff Authority** at release commit `47969d24771f6cc188df6e32150fc6fde519182d`, with identical latest/install release blob `34da01aa131f760b92d65d961a7843e9cc0d37d6`. Direct long-chat evidence in `docs/SIMCORE_LIVE_06406_VALIDATION.md` is `FULL NATURAL LIVE CLOSE PASS`. The post-B_END first-C clock gap is closed, Source Handoff independence is proven, the second ordinary C resumes normal Narrative authority, Broadcast closure remains intact, and the Representation/edit regression controls remain preserved.
 
-The live close gate is one natural current-turn B_END diagnostic copy with `output COMMITTED`, report construction success, Broadcast closure / terminal coverage lines present, and copy result `COPIED` or `COPIED_FALLBACK`. After that gate, review the separately preserved `POST_BEND_C_CLOCK_DOMAIN_GAP` evidence before starting M2-3; if the clock-authority contract is confirmed, ship a separate narrow clock mini first. M2-3 implementation remains blocked until that disposition is explicit. The genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
+The runtime is frozen at v0.64.6 while Release System v2 (`R`) is completed. RS2-3 is closed under the project-authority gateway contract, RS2-4 A/B/C/D shadow work is verified, the RS2-4E permanent controller primitive and repository-bound P1/rollback qualification are verified, and the current infrastructure task is to finish the bounded administrative-state repair, activate the permanent `RS2_4_RELEASE` caller, and reach `REAL_RELEASE_READY`. No v0.64.7 runtime implementation or v0.65.0 M2-3 implementation should begin before that gate.
 
-## Validated precursor problem — v0.63.55
+## Historical validated precursor — v0.63.55
+
+The subsection below is preserved as historical regression evidence. Any point-in-time current-production wording inside it is historical and does not override the current snapshot or production verdict.
 
 The most expensive confirmed avoidable path is now:
 
@@ -68,7 +70,9 @@ v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural l
 
 ---
 
-# 2. Current Validation Release
+# 2. Historical Validation Release Ledger
+
+The entries below preserve point-in-time release contracts and statuses for regression history. They do not override the machine-managed production snapshot or the current operational verdict above.
 
 ## v0.64.3 — B_END Diagnostic Builder Binding Repair
 

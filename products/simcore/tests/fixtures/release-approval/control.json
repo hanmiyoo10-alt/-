@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "release-approval-control",
+  "suite": "release-approval",
+  "input": {
+    "releaseId": "simcore-v0.64.8-new-01",
+    "intentId": "simcore-v0.64.8-intent-01"
+  },
+  "expected": {
+    "decision": "APPROVAL_RESOLVED_SHADOW",
+    "publicationDispatch": "DISABLED_PENDING_OPERATOR_DECISION"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

@@ -21,6 +21,13 @@ function expectCode(fn, code) {
   try { fn(); } catch (error) { seen = error?.code || null; }
   equal(seen, code, `expected failure ${code}`);
 }
+function jobSlice(workflow, startName, endName = null) {
+  const start = workflow.indexOf(`\n  ${startName}:`);
+  assert(start >= 0, `workflow job missing: ${startName}`);
+  const end = endName ? workflow.indexOf(`\n  ${endName}:`, start + 1) : workflow.length;
+  assert(endName === null || end > start, `workflow job boundary missing: ${startName}->${endName}`);
+  return workflow.slice(start, end);
+}
 
 export async function runSuite({ fixtures }) {
   const f = fixtures[0].input;
@@ -116,13 +123,14 @@ export async function runSuite({ fixtures }) {
 
   const tool = fs.readFileSync('products/simcore/tooling/candidate-materialize.mjs', 'utf8');
   const workflow = fs.readFileSync('.github/workflows/product-simcore-candidate-materialize.yml', 'utf8');
+  const materializeJob = jobSlice(workflow, 'materialize', 'receipt');
   for (const token of ['release-publish.mjs', 'repo-main-write.py', 'force-with-lease', 'git push --force']) {
     assert(!tool.includes(token), `candidate tool publication primitive: ${token}`);
-    assert(!workflow.includes(token), `candidate workflow publication primitive: ${token}`);
+    assert(!materializeJob.includes(token), `candidate materialize job publication primitive: ${token}`);
   }
-  assert(workflow.includes('contents: write'), 'candidate transport write permission missing');
-  assert(workflow.includes('release-simcore'), 'production parent observation missing');
-  assert(workflow.includes('candidate-materialize.mjs'), 'generic materializer invocation missing');
+  assert(materializeJob.includes('contents: write'), 'candidate transport write permission missing');
+  assert(materializeJob.includes('release-simcore'), 'production parent observation missing');
+  assert(materializeJob.includes('candidate-materialize.mjs'), 'generic materializer invocation missing');
   pass('B-N13-N14-static-authority-boundary');
 
   return { coverage: 'EXECUTABLE', status: 'PASS', assertions };

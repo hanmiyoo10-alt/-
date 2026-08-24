@@ -8,6 +8,7 @@ export const LABELS = Object.freeze([
   'HARNESS',
   'ARCH_CONTRACT',
   'STATE_SYNC',
+  'RELEASE_INFRA',
   'LEGACY_VERIFICATION',
   'SIMCORE_DOC_ONLY',
   'SHARED_MAIN_COORDINATION',
@@ -15,6 +16,7 @@ export const LABELS = Object.freeze([
 
 const exact = Object.freeze({
   '.github/workflows/simcore-ci.yml': ['CI_SELF'],
+  '.github/workflows/simcore-release.yml': ['CI_SELF', 'RELEASE_INFRA'],
   'products/simcore/tooling/check.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/test.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/registry.mjs': ['CI_SELF', 'HARNESS'],
@@ -44,12 +46,21 @@ export function classifyPath(input) {
   if (p.startsWith('products/simcore/contracts/')) add(out, ['CI_SELF', 'HARNESS', 'ARCH_CONTRACT']);
   if (/^products\/simcore\/tooling\/test-[^/]+\.mjs$/.test(p)) add(out, ['CI_SELF', 'HARNESS']);
   if (p.startsWith('products/simcore/state-sync/')) out.add('STATE_SYNC');
+  if (p.startsWith('products/simcore/releases/') || p.startsWith('products/simcore/tooling/release/')) add(out, ['CI_SELF', 'RELEASE_INFRA']);
+  if (p.startsWith('products/simcore/tooling/release/')) out.add('HARNESS');
 
-  if (p.startsWith('.github/workflows/simcore-') && !['.github/workflows/simcore-ci.yml', '.github/workflows/simcore-release-state-sync.yml'].includes(p)) out.add('LEGACY_VERIFICATION');
+  if (
+    p.startsWith('.github/workflows/simcore-')
+    && ![
+      '.github/workflows/simcore-ci.yml',
+      '.github/workflows/simcore-release.yml',
+      '.github/workflows/simcore-release-state-sync.yml',
+    ].includes(p)
+  ) out.add('LEGACY_VERIFICATION');
   if (/^scripts\/simcore-0.*(?:\.py|-test\.mjs)$/.test(p) || /^scripts\/simcore-m2-.*\.py$/.test(p)) out.add('LEGACY_VERIFICATION');
 
   if (p.startsWith('docs/SIMCORE_RELEASE_SYSTEM_V2_') || p.startsWith('docs/SIMCORE_')) {
-    const higher = ['STATE_SYNC', 'ARCH_CONTRACT'].some((x) => out.has(x));
+    const higher = ['STATE_SYNC', 'ARCH_CONTRACT', 'RELEASE_INFRA'].some((x) => out.has(x));
     if (!higher) out.add('SIMCORE_DOC_ONLY');
   }
 

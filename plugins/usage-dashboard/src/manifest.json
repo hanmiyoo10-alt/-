@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.71",
+  "version": "3.0.0-alpha.5.72",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "7ca28c5ed29780cf4e06afb401dc538121abb6dc835a0b5971f1316887c161a1",
+  "artifactSha256": "2832d413769b7fd9eeba0e5949afa17449508ab0cfff9dab9edf46789ecd5231",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "cd23af461e1b8efa65f3791cf68c4c91196e47090dd9d6245ce4096d93904ca5"
+      "sha256": "33ae1f0658254ad4681627a67670cd866093d8d339858b09fb0ea9e4fafba5bc"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -126,6 +126,12 @@
       "label": "diagnostics workspace",
       "bytes": 14281,
       "sha256": "6b13b98241cba8ac7632ab4f2d325ba6f15b52818c846b08cdecf86adbf6b0f0"
+    },
+    {
+      "file": "63-diagnostics-instant-mode.part.js",
+      "label": "diagnostics instant mode persistence",
+      "bytes": 1133,
+      "sha256": "2751c0d9c83362e5a1bafdc0ea4dc5980ab8617ce05fe3dc175df690bdbaaa3d"
     },
     {
       "file": "70-widget-render.part.js",

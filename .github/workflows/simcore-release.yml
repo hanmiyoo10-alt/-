@@ -143,10 +143,152 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  post-publish-state-shadow:
+    name: Post-Publish State Shadow
+    needs: [resolve, candidate-required, shadow-plan]
+    if: ${{ needs.shadow-plan.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout canonical release policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download exact candidate-required report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: simcore-ci-report-${{ github.run_id }}
+          path: .simcore-release/ci-report
+
+      - name: Fetch immutable candidate transport hint
+        if: ${{ inputs.candidate_fetch_ref != '' }}
+        shell: bash
+        env:
+          FETCH_REF: ${{ inputs.candidate_fetch_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$FETCH_REF"
+
+      - name: Materialize simulated published identity
+        id: state
+        shell: bash
+        env:
+          SPEC_PATH: ${{ needs.resolve.outputs.spec_path }}
+          CANDIDATE_COMMIT: ${{ needs.resolve.outputs.candidate_commit }}
+          EXPECTED_PRODUCTION_COMMIT: ${{ needs.resolve.outputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_PRODUCTION_COMMIT"
+          git cat-file -e "$CANDIDATE_COMMIT^{commit}"
+
+          mkdir -p .simcore-release/post-publish-source
+          git show "$CANDIDATE_COMMIT:plugins/simcore/latest.js" > .simcore-release/post-publish-source/latest.js
+          git show "$CANDIDATE_COMMIT:plugins/simcore/install.js" > .simcore-release/post-publish-source/install.js
+          node --check .simcore-release/post-publish-source/latest.js
+          node --check .simcore-release/post-publish-source/install.js
+          cmp -s .simcore-release/post-publish-source/latest.js .simcore-release/post-publish-source/install.js
+          LATEST_BLOB="$(git rev-parse "$CANDIDATE_COMMIT:plugins/simcore/latest.js")"
+          INSTALL_BLOB="$(git rev-parse "$CANDIDATE_COMMIT:plugins/simcore/install.js")"
+          test "$LATEST_BLOB" = "$INSTALL_BLOB"
+
+          SPEC_AUTH_COMMIT="$(git log -1 --format=%H -- "$SPEC_PATH")"
+          [[ "$SPEC_AUTH_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+          node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const p=process.env.SPEC_PATH;
+          const spec=JSON.parse(fs.readFileSync(p,'utf8'));
+          const ciPath='.simcore-release/ci-report/simcore-ci-report.json';
+          const ciBytes=fs.readFileSync(ciPath);
+          const ci=JSON.parse(ciBytes);
+          if(ci.conclusion!=='PASS') throw new Error('CANDIDATE_REQUIRED_REPORT_NOT_PASS');
+          if(ci.candidateCommit!==process.env.CANDIDATE_COMMIT) throw new Error('CANDIDATE_REQUIRED_REPORT_CANDIDATE_MISMATCH');
+          if(ci.expectedProductionCommit!==process.env.EXPECTED_PRODUCTION_COMMIT) throw new Error('CANDIDATE_REQUIRED_REPORT_PARENT_MISMATCH');
+          if(ci.candidateRequiredAuthority!=='RS2_4_SHADOW') throw new Error('CANDIDATE_REQUIRED_REPORT_AUTHORITY_MISMATCH');
+          const specDigest=crypto.createHash('sha256').update(Buffer.from(JSON.stringify(spec)+'\n')).digest('hex');
+          const reportDigest=crypto.createHash('sha256').update(ciBytes).digest('hex');
+          const out={
+            schemaVersion:1,product:'SimCore',releaseId:spec.releaseId,releaseMode:spec.releaseMode,
+            authorizationCommit:process.env.SPEC_AUTH_COMMIT,releaseSpecPath:p,releaseSpecSha256:specDigest,
+            productionCommit:spec.candidateCommit,previousProductionCommit:spec.expectedProductionCommit,
+            productionBlob:spec.candidateReleaseBlob,version:spec.version,releaseName:spec.releaseName,
+            verificationReportSha256:reportDigest,verifierCommit:ci.verifierCommit,
+            liveScenarioId:spec.liveGate.scenarioId,publisherRunId:String(process.env.GITHUB_RUN_ID||'shadow')
+          };
+          fs.writeFileSync('.simcore-release/post-publish-input.json',JSON.stringify(out,null,2)+'\n');
+          fs.writeFileSync('.simcore-release/post-publish-identity.json',JSON.stringify({schemaVersion:1,product:'SimCore',resolvedBranch:'release-simcore',resolvedCommit:spec.candidateCommit,latest:{path:'.simcore-release/post-publish-source/latest.js',blob:spec.candidateReleaseBlob},install:{path:'.simcore-release/post-publish-source/install.js',blob:spec.candidateReleaseBlob}},null,2)+'\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,`release_mode=${spec.releaseMode}\n`);
+          NODE
+        env:
+          SPEC_AUTH_COMMIT: ${{ env.SPEC_AUTH_COMMIT }}
+
+      - name: Exercise local post-publish state path
+        if: ${{ steps.state.outputs.release_mode != 'NOOP_IDENTICAL' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/post-publish-state-shadow.mjs \
+            --root . \
+            --input .simcore-release/post-publish-input.json \
+            --production-identity .simcore-release/post-publish-identity.json \
+            --report .simcore-release/post-publish-state-shadow.json
+          python3 - <<'PY'
+          import json, subprocess
+          p=json.load(open('.simcore-release/post-publish-state-shadow.json'))
+          assert p['releaseAuthority']=='SHADOW_ONLY'
+          assert p['productionMutation']=='NONE'
+          assert p['mainMutation']=='LOCAL_WORKTREE_ONLY'
+          assert p['lifecycleState']=='LIVE_PENDING'
+          allowed=set(p['persistentPayloadAllowlist'])
+          raw=subprocess.check_output(['git','status','--porcelain=v1','-z'])
+          rows=[x for x in raw.decode().split('\0') if x]
+          paths=[]
+          for row in rows:
+              path=row[3:]
+              if ' -> ' in path: path=path.split(' -> ',1)[1]
+              if path.startswith('.simcore-release/'): continue
+              paths.append(path)
+          denied=[x for x in paths if x not in allowed]
+          if denied: raise SystemExit('STATE_SYNC_MAIN_PAYLOAD_PATH_DENIED:'+','.join(denied))
+          print('RS2_4D_LOCAL_STATE_SHADOW_PASS', sorted(paths))
+          PY
+
+      - name: Record no-op state disposition
+        if: ${{ steps.state.outputs.release_mode == 'NOOP_IDENTICAL' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .simcore-release/post-publish-state-shadow.json <<'EOF'
+          {"schemaVersion":1,"releaseAuthority":"SHADOW_ONLY","productionMutation":"NONE","mainMutation":"NONE","lifecycleState":"NOT_APPLICABLE","disposition":"NOOP_STATE_UNCHANGED"}
+          EOF
+
+      - name: Reverify production remained untouched
+        shell: bash
+        env:
+          EXPECTED_PRODUCTION_COMMIT: ${{ needs.resolve.outputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_PRODUCTION_COMMIT"
+          echo 'RS2_4D_SHADOW_PRODUCTION_UNCHANGED_PASS'
+
+      - name: Upload bounded post-publish shadow evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simcore-post-publish-state-shadow-${{ needs.resolve.outputs.release_id }}
+          path: |
+            .simcore-release/post-publish-state-shadow.json
+            .simcore-release/post-publish-shadow/*.json
+          if-no-files-found: error
+          retention-days: 14
+
   shadow-required:
     name: Shadow Required
     if: always()
-    needs: [resolve, candidate-required, shadow-plan]
+    needs: [resolve, candidate-required, shadow-plan, post-publish-state-shadow]
     runs-on: ubuntu-24.04
     steps:
       - name: Enforce shadow-only terminal result
@@ -155,9 +297,11 @@ jobs:
           RESOLVE_RESULT: ${{ needs.resolve.result }}
           CI_RESULT: ${{ needs.candidate-required.result }}
           PLAN_RESULT: ${{ needs.shadow-plan.result }}
+          STATE_RESULT: ${{ needs.post-publish-state-shadow.result }}
         run: |
           set -euo pipefail
           test "$RESOLVE_RESULT" = success
           test "$CI_RESULT" = success
           test "$PLAN_RESULT" = success
+          test "$STATE_RESULT" = success
           echo 'RS2_4_SHADOW_REQUIRED_PASS'

@@ -70,7 +70,7 @@ assert.match(exact,/^name: Usage Dashboard E7 Exact-SHA Validation$/m);
 assert.match(exact,/github\.event\.issue\.number == 197/);
 assert.match(exact,/github\.actor == github\.repository_owner/);
 assert.match(exact,/startsWith\(github\.event\.comment\.body, '\/usage-dashboard validate '\)/);
-assert.match(exact,/^stage\\\/usage-dashboard-3\\\.0\\\.0-alpha\\\.5\\\.\\d\+\$/m);
+assert.ok(exact.includes("/^stage\\/usage-dashboard-3\\.0\\.0-alpha\\.5\\.\\d+$/"),'exact validator must restrict PR heads to deterministic E7 candidate branches');
 assert.match(exact,/pr\.base\?\.ref!=='main'/);
 assert.match(exact,/pr\.head\?\.sha!==candidateSha/);
 assert.match(exact,/VALIDATION_IDENTITY_MISMATCH/);

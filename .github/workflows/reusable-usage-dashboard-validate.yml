@@ -8,6 +8,11 @@ on:
         required: false
         default: ''
         type: string
+      candidate_sha:
+        description: Optional exact candidate commit SHA; when set the validator checks out and verifies this identity
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -19,7 +24,21 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.candidate_sha != '' && inputs.candidate_sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact candidate identity
+        if: ${{ inputs.candidate_sha != '' }}
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'VALIDATION_CANDIDATE_SHA_INVALID'; exit 1; }
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          [[ "$ACTUAL_SHA" == "$CANDIDATE_SHA" ]] || { echo "VALIDATION_IDENTITY_MISMATCH:$ACTUAL_SHA:expected=$CANDIDATE_SHA"; exit 1; }
+          echo "UD_VALIDATING_EXACT_SHA:$CANDIDATE_SHA"
 
       - name: Validate already-materialized Usage Dashboard candidate
         shell: bash

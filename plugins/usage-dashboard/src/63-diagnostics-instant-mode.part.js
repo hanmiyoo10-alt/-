@@ -2,9 +2,14 @@
   const diagnosticsInstantModeLegacyBindSettings = bindSettings;
   let diagnosticsModePersistTail = Promise.resolve();
 
-  function persistDiagnosticsModeSerialized() {
+  function persistDiagnosticsModeSerialized(mode) {
+    const capturedMode = mode === 'detailed' ? 'detailed' : 'basic';
     diagnosticsModePersistTail = diagnosticsModePersistTail
-      .then(() => persist())
+      .then(async () => {
+        if (runtimeDisposed) return dropStaleAsync();
+        await store.setItem(STATE_KEY, {...state, diagnosticsMode:capturedMode});
+        powerRuntime.persistWrites += 1;
+      })
       .catch(error => {
         console.log(`[Local Usage Dashboard] diagnostics mode persist failed: ${error?.message || error}`);
       });
@@ -16,7 +21,7 @@
     if (diagnosticsWorkspaceMode() === next) return;
     state.diagnosticsMode = next;
     renderSettingsPartial();
-    void persistDiagnosticsModeSerialized();
+    void persistDiagnosticsModeSerialized(next);
   }
 
   bindSettings = function diagnosticsInstantModeBindSettings() {

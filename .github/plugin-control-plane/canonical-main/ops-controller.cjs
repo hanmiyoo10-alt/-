@@ -9,6 +9,11 @@ const {
   severityFor,
 } = require('./contract.cjs');
 const {observeAll} = require('./adapters.cjs');
+const {
+  previousIncidentState,
+  buildAlertEnvelope,
+  envelopeMarker,
+} = require('./notification.cjs');
 
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'registry.json'), 'utf8'));
 const policy = loadPolicy();
@@ -131,7 +136,7 @@ function incidentLabels(event, severity, state) {
   return [...new Set(labels)].sort();
 }
 
-function renderIncidentBody(event, severity, state, key) {
+function renderIncidentBody(event, severity, state, key, alertEnvelope = null) {
   const evidence = (event.evidence || []).slice(0, 12);
   return [
     `# Canonical Main Incident — ${event.observation.reasonCode}`,
@@ -153,6 +158,7 @@ function renderIncidentBody(event, severity, state, key) {
     '',
     markerForKey(key),
     markerForEvent(event.eventId),
+    ...(alertEnvelope ? [envelopeMarker(alertEnvelope)] : []),
   ].join('\n');
 }
 
@@ -167,7 +173,16 @@ async function reconcileIncidentEvents(events, allIssues) {
     if (transition === 'RECOVERED' && !issue) continue;
     if (issue && (issue.body || '').includes(markerForEvent(event.eventId))) continue;
 
-    const body = renderIncidentBody(event, severity, transition, key);
+    const priorState = previousIncidentState(issue);
+    if (transition === 'RECOVERED' && priorState === 'RECOVERED') continue;
+    const alertEnvelope = buildAlertEnvelope({
+      event,
+      severity,
+      transition,
+      correlationKey: key,
+      previousState: priorState,
+    });
+    const body = renderIncidentBody(event, severity, transition, key, alertEnvelope);
     const labels = incidentLabels(event, severity, transition);
     const title = `[repo-incident:${severity}] ${event.observation.reasonCode} — ${(event.scope || []).join(',') || 'UNKNOWN'}`;
     if (issue) {
@@ -180,7 +195,14 @@ async function reconcileIncidentEvents(events, allIssues) {
       issue = await api('/issues', {method: 'POST', body: {title, body, labels}});
       allIssues.push(issue);
     }
-    touched.push({number: issue.number, transition, severity, reason: event.observation.reasonCode});
+    touched.push({
+      number: issue.number,
+      transition,
+      severity,
+      reason: event.observation.reasonCode,
+      notificationEligible: alertEnvelope.eligible,
+      deliveryKey: alertEnvelope.deliveryKey,
+    });
   }
   return touched;
 }
@@ -213,6 +235,18 @@ function renderWriterStatus(rows) {
 function renderBootstrap(status) {
   if (!status.statuses?.length) return '- `UNKNOWN` — no registered descriptors';
   return status.statuses.map((row) => `- \`${row.id}\`: \`${row.ready ? 'BOOTSTRAP_READY' : 'BOOTSTRAP_INCOMPLETE'}\` / \`${row.profile}\``).join('\n');
+}
+
+function renderNotificationStatus() {
+  const config = policy.notifications || {};
+  const severityText = (config.severities || []).join('/') || 'NONE';
+  const channels = (config.channels || []).join(', ') || 'NONE';
+  return [
+    `- Outbox: \`${config.outboxEnabled === true ? 'ACTIVE' : 'DISABLED'}\` — ${severityText} OPEN${config.includeRecovery === true ? ' + RECOVERED' : ''}`,
+    `- Channel handoff: \`${channels}\``,
+    `- Delivery bridge: \`${config.bridgeState || 'UNKNOWN'}\` / \`${config.deliveryBridge || 'UNKNOWN'}\``,
+    '- Delivery bridge health is intentionally non-authoritative for release/main health.',
+  ].join('\n');
 }
 
 async function refresh() {
@@ -261,6 +295,10 @@ async function refresh() {
     '',
     renderWriterStatus(adapterResult.writers),
     '',
+    '## Notification outbox / external bridge',
+    '',
+    renderNotificationStatus(),
+    '',
     '## Active P0/P1 incidents',
     '',
     renderIncidentRows(active.filter((row) => row.severity === 'P0' || row.severity === 'P1')),
@@ -294,7 +332,12 @@ async function refresh() {
     opsIssue = await api('/issues', {method: 'POST', body: {title: policy.operations.issueTitle, body, labels: ['scope:repo', 'control-plane:operations']}});
     console.log(`CANONICAL_MAIN_OPS_CREATED:#${opsIssue.number}:${state}`);
   }
-  for (const row of touched) console.log(`CANONICAL_MAIN_INCIDENT_${row.transition}:#${row.number}:${row.severity}:${row.reason}`);
+  for (const row of touched) {
+    console.log(`CANONICAL_MAIN_INCIDENT_${row.transition}:#${row.number}:${row.severity}:${row.reason}`);
+    if (row.notificationEligible) {
+      console.log(`CANONICAL_MAIN_NOTIFICATION_OUTBOX:#${row.number}:${row.severity}:${row.transition}:${row.deliveryKey}`);
+    }
+  }
 }
 
 async function main() {
@@ -316,4 +359,5 @@ module.exports = {
   markerForKey,
   markerForEvent,
   renderIncidentBody,
+  renderNotificationStatus,
 };

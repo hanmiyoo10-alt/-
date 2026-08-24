@@ -66,3 +66,48 @@ record first
 extend helper wrapper with bounded stdin input
 cover in release self-test before PR
 ```
+
+## Implementation finding 2
+
+The first permanent CI execution for implementation PR `#207` reached the proposed permanent verifier and failed only `GATE_RELEASE_INFRA`.
+
+Evidence:
+
+```text
+workflow run   32722939935
+Verify job     97418021946
+GATE_CI_SELF   PASS
+GATE_STATIC    PASS
+GATE_ARCH      PASS
+GATE_REGRESSION PASS
+GATE_STATE     PASS
+GATE_RELEASE_INFRA FAIL
+reasonCode     RELEASE_INFRA_SELF_TEST_FAIL
+```
+
+The release self-test wrote temporary `resolved.json` / `receipt.json` files inside its synthetic Git worktree. A later negative test committed those scratch files as part of an intentional production-moved fixture; a subsequent finalize call modified them, so the next checkout correctly refused to overwrite local changes.
+
+Classification:
+
+```text
+RS2_4_SELF_TEST_WORKTREE_SCRATCH_CONTAMINATION
+= FIX / HARNESS / DIRECT_EVIDENCE / PR_207 / NON_RUNTIME
+```
+
+Scope:
+
+```text
+synthetic temporary Git repository only
+permanent CI correctly rejected the implementation PR
+main not mutated by this failure
+release-simcore not mutated
+runtime not mutated
+```
+
+Disposition:
+
+```text
+move controller receipt/transaction scratch files outside the synthetic repository
+retain semantic negative fixtures unchanged
+rerun the same permanent release-infra gate
+```

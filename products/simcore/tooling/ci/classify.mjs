@@ -22,6 +22,7 @@ const exact=Object.freeze({
   'products/simcore/tooling/declare-production.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/post-publish-state-shadow.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/post-publish-state.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
+  'products/simcore/tooling/release-state-converge.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/admin-state-transition.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/build-06407-reload-cache-continuity.py':['CI_SELF','HARNESS'],
   'products/simcore/tests/release-shadow.test.mjs':['CI_SELF','HARNESS'],

@@ -62,6 +62,27 @@ def sync_release_memory() -> None:
     GUIDELINES.write_text(text.replace(BASE_RELEASE_MEMORY, TARGET_RELEASE_MEMORY, 1), encoding='utf-8')
 
 
+def sync_target_artifact_hashes() -> None:
+    engine_sha = sha256(ENGINE)
+    manager_text = MANAGER.read_text(encoding='utf-8')
+    next_manager, count = re.subn(
+        r"const BUNDLED_ENGINE_SHA256 = '[0-9a-f]{64}';",
+        f"const BUNDLED_ENGINE_SHA256 = '{engine_sha}';",
+        manager_text,
+        count=1,
+    )
+    if count != 1:
+        raise SystemExit(f'5.71 rematerialize manager Engine hash: expected exactly one match, found {count}')
+    if next_manager != manager_text:
+        MANAGER.write_text(next_manager, encoding='utf-8')
+
+    manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
+    manifest['components']['bridge']['sha256'] = engine_sha
+    manifest['components']['bridgeManager']['sha256'] = sha256(MANAGER)
+    manifest['components']['bridgeManager']['bootstrapSha256'] = sha256(BOOTSTRAP)
+    MANIFEST.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+
 def validate_target() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     bridge = manifest.get('components', {}).get('bridge', {})
@@ -127,6 +148,7 @@ if current == TARGET_VERSION:
     run('python3', str(TOOLS / 'sync_project_guidelines.py'))
     run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write')
     run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
+    sync_target_artifact_hashes()
     run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
     run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
     validate_target()

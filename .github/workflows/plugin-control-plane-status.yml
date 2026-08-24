@@ -11,6 +11,9 @@ on:
       - '.github/usage-dashboard/releases/**'
       - 'plugins/devpass/**'
       - 'plugins/termux/large-doc-editor/**'
+      - 'voyage-token-check/**'
+      - 'products/pocketrisu-helper-mod/**'
+      - '.github/workflows/pocketrisu-helper-docs.yml'
       - 'product-manifest.json'
 
 permissions:

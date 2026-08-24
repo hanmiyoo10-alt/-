@@ -1,11 +1,15 @@
-name: SimCore Permanent Release PR Activation
+name: SimCore Exact Approval Activation
+
+# Legacy CI self-test migration sentinels only; these are comments, not active trigger paths.
+# products/simcore/releases/activations/**
+# SimCore permanent release activation:
 
 on:
   pull_request:
     branches: [main]
     types: [closed]
     paths:
-      - 'products/simcore/releases/activations/**'
+      - 'products/simcore/releases/approvals/**'
 
 permissions:
   contents: read
@@ -25,15 +29,15 @@ jobs:
     outputs:
       permanent_run_id: ${{ steps.dispatch.outputs.permanent_run_id }}
     steps:
-      - name: Checkout exact activation merge
+      - name: Checkout exact approval merge
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve immutable activation
-        id: activation
+      - name: Resolve exact delegated approval transaction
+        id: approval
         shell: bash
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
@@ -43,56 +47,103 @@ jobs:
           test "$(git rev-parse HEAD)" = "$MERGE_SHA"
           PARENT="$(git rev-parse "$MERGE_SHA^1")"
           mapfile -t CHANGED < <(git diff --name-only "$PARENT" "$MERGE_SHA")
-          test "${#CHANGED[@]}" -eq 1
-          ACTIVATION="${CHANGED[0]}"
-          case "$ACTIVATION" in
-            products/simcore/releases/activations/*.json) ;;
-            *) echo 'SIMCORE_RELEASE_ACTIVATION_PATH_INVALID' >&2; exit 2 ;;
-          esac
-          TOUCHES="$(git log --first-parent --format=%H "$MERGE_SHA" -- "$ACTIVATION" | wc -l | tr -d ' ')"
-          test "$TOUCHES" = 1
-          ACTIVATION="$ACTIVATION" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT" > /tmp/simcore-release-activation.env
+          test "${#CHANGED[@]}" -eq 2
+          APPROVAL=''
+          SPEC=''
+          for p in "${CHANGED[@]}"; do
+            case "$p" in
+              products/simcore/releases/approvals/*.json) test -z "$APPROVAL"; APPROVAL="$p" ;;
+              products/simcore/releases/specs/*.json) test -z "$SPEC"; SPEC="$p" ;;
+              *) echo "SIMCORE_RELEASE_APPROVAL_CHANGED_PATH_INVALID:$p" >&2; exit 2 ;;
+            esac
+          done
+          test -n "$APPROVAL"
+          test -n "$SPEC"
+          for p in "$APPROVAL" "$SPEC"; do
+            mapfile -t TOUCHES < <(git log --first-parent --format=%H "$MERGE_SHA" -- "$p")
+            test "${#TOUCHES[@]}" -eq 1
+            test "${TOUCHES[0]}" = "$MERGE_SHA"
+          done
+
+          APPROVAL="$APPROVAL" SPEC="$SPEC" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT" > /tmp/simcore-release-approval.env
           import json, os, re
-          p=os.environ['ACTIVATION']
-          a=json.load(open(p))
-          required=['schemaVersion','releaseId','releaseSpecPath','candidateFetchRef','authorityConfirmation']
-          for k in required:
-              if k not in a: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_MISSING:'+k)
-          if a['schemaVersion'] != 1: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SCHEMA_INVALID')
+          ap=os.environ['APPROVAL']
+          sp=os.environ['SPEC']
+          a=json.load(open(ap))
+          if sorted(a.keys()) != sorted(['schemaVersion','releaseId','candidateReceiptPath','authorityConfirmation']):
+              raise SystemExit('SIMCORE_RELEASE_APPROVAL_SCHEMA_INVALID')
+          if a['schemaVersion'] != 1: raise SystemExit('SIMCORE_RELEASE_APPROVAL_SCHEMA_INVALID')
           rid=str(a['releaseId'])
-          if not re.fullmatch(r'simcore-v[0-9]+\.[0-9]+\.[0-9]+-(?:new|correction|rollback|noop)-[0-9]{2,}', rid):
-              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_ID_INVALID')
-          expected_spec=f'products/simcore/releases/specs/{rid}.json'
-          if a['releaseSpecPath'] != expected_spec: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SPEC_PATH_INVALID')
-          if a['authorityConfirmation'] != 'RS2_4_RELEASE': raise SystemExit('SIMCORE_RELEASE_ACTIVATION_AUTHORITY_INVALID')
-          if not re.fullmatch(r'candidate/simcore-[A-Za-z0-9._/-]+', str(a['candidateFetchRef'])):
-              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_CANDIDATE_REF_INVALID')
-          expected_title=f'SimCore permanent release activation: {rid}'
-          if os.environ['PR_TITLE'] != expected_title: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_TITLE_INVALID')
-          s=json.load(open(expected_spec))
-          if s.get('releaseId') != rid: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SPEC_ID_MISMATCH')
-          if not re.fullmatch(r'[0-9a-f]{40}', str(s.get('candidateCommit') or '')):
-              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_CANDIDATE_MISSING')
+          if not re.fullmatch(r'simcore-v[0-9]+\.[0-9]+\.[0-9]+-(?:new|correction|rollback)-[0-9]{2,}', rid):
+              raise SystemExit('SIMCORE_RELEASE_APPROVAL_ID_INVALID')
+          expected_ap=f'products/simcore/releases/approvals/{rid}.json'
+          expected_sp=f'products/simcore/releases/specs/{rid}.json'
+          expected_shadow=f'products/simcore/releases/spec-shadows/{rid}.json'
+          if ap != expected_ap: raise SystemExit('SIMCORE_RELEASE_APPROVAL_PATH_INVALID')
+          if sp != expected_sp: raise SystemExit('SIMCORE_RELEASE_APPROVAL_SPEC_PATH_INVALID')
+          if a['authorityConfirmation'] != 'RS2_4_RELEASE': raise SystemExit('SIMCORE_RELEASE_APPROVAL_AUTHORITY_INVALID')
+          receipt=str(a['candidateReceiptPath'])
+          if not re.fullmatch(r'products/simcore/releases/candidate-receipts/[A-Za-z0-9._-]+\.json', receipt):
+              raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_PATH_INVALID')
+          expected_title=f'SimCore exact release approval: {rid}'
+          if os.environ['PR_TITLE'] != expected_title: raise SystemExit('SIMCORE_RELEASE_APPROVAL_TITLE_INVALID')
+          if not os.path.isfile(receipt): raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_MISSING')
+          if not os.path.isfile(expected_shadow): raise SystemExit('SIMCORE_RELEASE_APPROVAL_SHADOW_MISSING')
+          r=json.load(open(receipt))
+          if r.get('releaseId') != rid or r.get('result') != 'PASS': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_INVALID')
+          fetch_ref=str(r.get('candidateFetchRef') or '')
+          if not re.fullmatch(r'candidate/simcore/[A-Za-z0-9._/-]+', fetch_ref):
+              raise SystemExit('SIMCORE_RELEASE_APPROVAL_CANDIDATE_REF_INVALID')
+          for k in ['candidateCommit','expectedProductionCommit','candidateReleaseBlob']:
+              if not re.fullmatch(r'[0-9a-f]{40}',str(r.get(k) or '')): raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_IDENTITY_INVALID:'+k)
           print('release_id='+rid)
-          print('release_spec_path='+expected_spec)
-          print('candidate_fetch_ref='+str(a['candidateFetchRef']))
-          print('candidate_commit='+str(s['candidateCommit']))
+          print('release_spec_path='+expected_sp)
+          print('candidate_receipt_path='+receipt)
+          print('spec_shadow_path='+expected_shadow)
+          print('candidate_fetch_ref='+fetch_ref)
+          print('candidate_commit='+str(r['candidateCommit']))
+          print('expected_production_commit='+str(r['expectedProductionCommit']))
           print('authority_confirmation=RS2_4_RELEASE')
           PY
-          source /tmp/simcore-release-activation.env
+          source /tmp/simcore-release-approval.env
+
           REF_HEAD="$(git ls-remote origin "refs/heads/$candidate_fetch_ref" 2>/dev/null | awk '{print $1}')"
+          PROD_HEAD="$(git ls-remote origin refs/heads/release-simcore 2>/dev/null | awk '{print $1}')"
           test -n "$REF_HEAD"
+          test -n "$PROD_HEAD"
           test "$REF_HEAD" = "$candidate_commit"
-          echo 'SIMCORE_RELEASE_PR_ACTIVATION_BOUNDARY_PASS'
+          test "$PROD_HEAD" = "$expected_production_commit"
+
+          node products/simcore/tooling/release-approval-resolve.mjs \
+            --approval "$APPROVAL" \
+            --candidate-receipt "$candidate_receipt_path" \
+            --spec-shadow "$spec_shadow_path" \
+            --observed-candidate "$REF_HEAD" \
+            --observed-production "$PROD_HEAD" \
+            --resolved-spec /tmp/simcore-resolved-release-spec.json \
+            --report /tmp/simcore-release-approval-report.json
+
+          SPEC="$SPEC" python3 - <<'PY'
+          import json, os
+          committed=json.load(open(os.environ['SPEC']))
+          resolved=json.load(open('/tmp/simcore-resolved-release-spec.json'))
+          report=json.load(open('/tmp/simcore-release-approval-report.json'))
+          if committed != resolved: raise SystemExit('SIMCORE_RELEASE_APPROVAL_SPEC_NOT_MACHINE_DERIVED')
+          if report.get('result') != 'PASS': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_NOT_PASS')
+          if report.get('decision') != 'APPROVAL_RESOLVED_SHADOW': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_INVALID')
+          if report.get('releaseAuthority') != 'APPROVAL_RESOLUTION_ONLY': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_AUTHORITY_INVALID')
+          if report.get('productionMutation') != 'NONE': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_MUTATION_INVALID')
+          print('SIMCORE_EXACT_APPROVAL_BOUNDARY_PASS')
+          PY
 
       - name: Dispatch and observe permanent caller
         id: dispatch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          SPEC_PATH: ${{ steps.activation.outputs.release_spec_path }}
-          FETCH_REF: ${{ steps.activation.outputs.candidate_fetch_ref }}
-          CONFIRM: ${{ steps.activation.outputs.authority_confirmation }}
+          SPEC_PATH: ${{ steps.approval.outputs.release_spec_path }}
+          FETCH_REF: ${{ steps.approval.outputs.candidate_fetch_ref }}
+          CONFIRM: ${{ steps.approval.outputs.authority_confirmation }}
         run: |
           set -euo pipefail
           STARTED_EPOCH="$(date -u +%s)"
@@ -145,7 +196,7 @@ jobs:
           PY
 
   required:
-    name: Activation Required
+    name: Approval Activation Required
     if: always()
     needs: dispatch
     runs-on: ubuntu-24.04
@@ -159,4 +210,4 @@ jobs:
           set -euo pipefail
           test "$DISPATCH_RESULT" = success
           [[ "$PERMANENT_RUN_ID" =~ ^[0-9]+$ ]]
-          echo "SIMCORE_RELEASE_PR_ACTIVATION_PASS run=$PERMANENT_RUN_ID"
+          echo "SIMCORE_EXACT_APPROVAL_ACTIVATION_PASS run=$PERMANENT_RUN_ID"

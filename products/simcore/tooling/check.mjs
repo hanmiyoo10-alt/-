@@ -79,12 +79,14 @@ function stateCheck(args) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.profile === 'CANDIDATE_REQUIRED') throw Object.assign(new Error('CANDIDATE_REQUIRED caller authority is reserved for RS2-4'), { ciCode:'CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4' });
+  if (args.profile === 'CANDIDATE_REQUIRED' && args['candidate-required-authority'] !== 'RS2_4_SHADOW') {
+    throw Object.assign(new Error('CANDIDATE_REQUIRED caller authority is reserved for RS2-4'), { ciCode:'CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4' });
+  }
   const sourcePath = inside(args.source), mirrorPath = inside(args['mirror-source']);
   const sourceBytes = fs.readFileSync(sourcePath), mirrorBytes = fs.readFileSync(mirrorPath);
   let scope = { schemaVersion:1, labels:[], unrelated:false, docOnly:false };
   if (args['scope-file']) scope = JSON.parse(fs.readFileSync(inside(args['scope-file']), 'utf8'));
-  if (args.profile !== 'PR_MAIN') scope = { schemaVersion:1, labels:['FULL_BASELINE'], unrelated:false, docOnly:false };
+  if (args.profile !== 'PR_MAIN') scope = { schemaVersion:1, labels:['FULL_BASELINE'],unrelated:false,docOnly:false };
 
   const plan = plannedGates(args.profile, scope);
   const gates = Object.fromEntries(Object.entries(plan).map(([id, p]) => [id, gate(id, p)]));
@@ -157,6 +159,7 @@ function main() {
     productionCommit:identity.resolvedCommit || null,
     candidateCommit:args['candidate-commit'] || null,
     expectedProductionCommit:args['expected-production-commit'] || null,
+    candidateRequiredAuthority:args['candidate-required-authority'] || null,
     prBaseCommit:args['pr-base-commit'] || null,
     prHeadCommit:args['pr-head-commit'] || null,
     scopeLabels:scope.labels || [],

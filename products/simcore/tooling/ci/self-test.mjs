@@ -53,6 +53,14 @@ ok('workflow-read-only-trust-boundary', () => {
   expect(!/uses:\s+[^\n]+@(?![0-9a-f]{40}\b)/.test(workflow), 'external action is not full-SHA pinned');
 });
 
+ok('automated-state-writer-bot-provenance', () => {
+  const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
+  const names = [...workflow.matchAll(/git config user\.name '([^']+)'/g)].map((m) => m[1]);
+  const emails = [...workflow.matchAll(/git config user\.email '([^']+)'/g)].map((m) => m[1]);
+  expect(names.length === 1 && names[0] === 'github-actions[bot]', `unexpected automated writer name: ${JSON.stringify(names)}`);
+  expect(emails.length === 1 && emails[0] === '41898282+github-actions[bot]@users.noreply.github.com', `unexpected automated writer email identity: ${JSON.stringify(emails)}`);
+});
+
 ok('release-shadow-read-only-boundary', () => {
   const workflow=fs.readFileSync('.github/workflows/simcore-release.yml','utf8');
   for(const token of ['contents: write','git push','--force','release-simcore:']) expect(!workflow.includes(token),`shadow release workflow forbidden token: ${token}`);

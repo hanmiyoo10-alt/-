@@ -24,7 +24,8 @@ const settingsRuntime = fs.readFileSync(`${root}/src/60-settings-runtime.part.js
 const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const {PARTS} = require('../src/parts.cjs');
 assert.ok(PARTS.some(part => part.file === '63-diagnostics-instant-mode.part.js'));
-assert.match(moduleSource, /state\.diagnosticsMode = next;\s*renderSettingsPartial\(\);\s*void persistDiagnosticsModeSerialized\(\);/s, 'visual switch must happen before persistence scheduling');
+assert.match(moduleSource, /state\.diagnosticsMode = next;\s*renderSettingsPartial\(\);\s*void persistDiagnosticsModeSerialized\(next\);/s, 'visual switch must happen before persistence scheduling and queue the clicked mode');
+assert.match(moduleSource, /store\.setItem\(STATE_KEY, \{\.\.\.state, diagnosticsMode:capturedMode\}\)/, 'queued persistence must combine latest state with the click-time mode snapshot');
 assert.doesNotMatch(moduleSource, /renderSettings\(\)|schedulePanelRender\(|nativeFetch\(|enqueueRefresh\(|fetchSnapshot\(|runCli\(|setTimeout\(|setInterval\(/, 'mode switching must not trigger full render, scheduler delay, Bridge/network/CLI work, or polling');
 assert.match(settingsRuntime, /Keep Local Bridge config inputs untouched so typed-but-unsaved values survive/);
 assert.match(settingsRuntime, /const diagnosticsCurrent = currentAdvanced\[1\]\?\.querySelector\('\.advanced-body'\)/);
@@ -45,7 +46,7 @@ function deferred() {
 }
 
 function buildHarness() {
-  const state = {diagnosticsMode:'basic'};
+  const state = {diagnosticsMode:'basic', typedButUnsaved:'draft-value'};
   const renders = [];
   const persisted = [];
   const gates = [];
@@ -64,19 +65,24 @@ function buildHarness() {
     `let bindSettings = () => { __legacyBinds(); };\n` +
     `const diagnosticsWorkspaceMode = () => state.diagnosticsMode === 'detailed' ? 'detailed' : 'basic';\n` +
     `const renderSettingsPartial = () => { __renders.push(state.diagnosticsMode); };\n` +
-    `const persist = () => __persist();\n` +
+    `const runtimeDisposed = false;\n` +
+    `const dropStaleAsync = () => undefined;\n` +
+    `const STATE_KEY = 'local-usage-dashboard-v3';\n` +
+    `const powerRuntime = {persistWrites:0};\n` +
+    `const store = {setItem:(key,payload)=>__persist(key,payload)};\n` +
     `const document = {querySelector:(selector)=>__buttons[selector] || null};\n` +
     moduleSource +
-    `\nbindSettings();\nreturn {buttons:__buttons,state};\n})()`;
+    `\nbindSettings();\nreturn {buttons:__buttons,state,powerRuntime};\n})()`;
   Object.assign(context, {
     __state:state,
     __renders:renders,
     __buttons:buttons,
     __legacyBinds:() => { legacyBinds += 1; },
-    __persist:() => {
+    __persist:(key, payload) => {
+      assert.equal(key, 'local-usage-dashboard-v3');
       persistCalls += 1;
       const gate = deferred();
-      const snapshot = state.diagnosticsMode;
+      const snapshot = {...payload};
       gates.push({gate,snapshot});
       return gate.promise.then(() => { persisted.push(snapshot); });
     },
@@ -97,13 +103,14 @@ async function settleUntil(predicate, label) {
   const one = buildHarness();
   one.buttons['#diagnostics-mode-detailed'].onclick();
   assert.equal(one.state.diagnosticsMode, 'detailed');
+  assert.equal(one.state.typedButUnsaved, 'draft-value', 'partial render must not discard unrelated Settings state');
   assert.deepEqual(one.renders, ['detailed'], 'Basic → Detailed must render synchronously before persistence resolves');
   assert.equal(one.persistCalls, 0, 'persistence must be deferred out of the click stack');
   await settleUntil(() => one.persistCalls === 1, 'first Detailed write starts');
   assert.deepEqual(one.persisted, []);
   one.gates[0].gate.resolve();
   await settleUntil(() => one.persisted.length === 1, 'first Detailed write resolves');
-  assert.deepEqual(one.persisted, ['detailed']);
+  assert.equal(one.persisted[0].diagnosticsMode, 'detailed');
 
   one.buttons['#diagnostics-mode-basic'].onclick();
   assert.equal(one.state.diagnosticsMode, 'basic');
@@ -111,7 +118,7 @@ async function settleUntil(predicate, label) {
   await settleUntil(() => one.persistCalls === 2, 'Basic write starts');
   one.gates[1].gate.resolve();
   await settleUntil(() => one.persisted.length === 2, 'Basic write resolves');
-  assert.deepEqual(one.persisted, ['detailed','basic']);
+  assert.deepEqual(one.persisted.map(row => row.diagnosticsMode), ['detailed','basic']);
 
   const rapid = buildHarness();
   rapid.buttons['#diagnostics-mode-detailed'].onclick();
@@ -119,16 +126,19 @@ async function settleUntil(predicate, label) {
   rapid.buttons['#diagnostics-mode-basic'].onclick();
   rapid.buttons['#diagnostics-mode-detailed'].onclick();
   assert.deepEqual(rapid.renders, ['detailed','basic','detailed']);
+  assert.equal(rapid.state.typedButUnsaved, 'draft-value');
   await Promise.resolve();
   assert.equal(rapid.persistCalls, 1, 'later writes must wait for the first write');
   rapid.gates[0].gate.resolve();
   await settleUntil(() => rapid.persistCalls === 2, 'rapid second write starts after first resolves');
+  assert.equal(rapid.gates[1].snapshot.diagnosticsMode, 'basic', 'second queued write must retain the Basic click snapshot even though live state is Detailed');
   rapid.gates[1].gate.resolve();
   await settleUntil(() => rapid.persistCalls === 3, 'rapid third write starts after second resolves');
+  assert.equal(rapid.gates[2].snapshot.diagnosticsMode, 'detailed');
   rapid.gates[2].gate.resolve();
   await settleUntil(() => rapid.persisted.length === 3, 'rapid writes all resolve');
-  assert.deepEqual(rapid.persisted, ['detailed','basic','detailed'], 'serialized writes must preserve click order');
-  assert.equal(rapid.persisted.at(-1), 'detailed', 'last selected mode must win persistence ordering');
+  assert.deepEqual(rapid.persisted.map(row => row.diagnosticsMode), ['detailed','basic','detailed'], 'serialized writes must preserve click order');
+  assert.equal(rapid.persisted.at(-1).diagnosticsMode, 'detailed', 'last selected mode must win persistence ordering');
 
   const failure = buildHarness();
   failure.buttons['#diagnostics-mode-detailed'].onclick();
@@ -141,9 +151,9 @@ async function settleUntil(predicate, label) {
   await settleUntil(() => failure.persistCalls === 2, 'queue recovers after rejected persistence');
   failure.gates[1].gate.resolve();
   await settleUntil(() => failure.persisted.length === 1, 'post-failure Basic write resolves');
-  assert.equal(failure.persisted.at(-1), 'basic');
+  assert.equal(failure.persisted.at(-1).diagnosticsMode, 'basic');
 
-  console.log('P36 Diagnostics Instant Mode Switch: OK · immediate partial render, serialized latest-safe persistence, zero mode-switch I/O, Engine byte-identical');
+  console.log('P36 Diagnostics Instant Mode Switch: OK · immediate partial render, click-time serialized persistence, zero mode-switch network/CLI I/O, Engine byte-identical');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

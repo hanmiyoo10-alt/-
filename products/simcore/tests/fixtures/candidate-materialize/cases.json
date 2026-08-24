@@ -1,14 +1,25 @@
-[
-  {
-    "id": "generic-candidate-controller",
-    "input": {
-      "intentId": "simcore-v0.0.2-intent-01",
-      "targetVersion": "0.0.2",
-      "releaseName": "Fixture Candidate",
-      "releaseMode": "NEW_VERSION",
-      "verificationSuite": "batch-a",
-      "primaryGoalId": "R2_1_B_FIXTURE",
-      "liveScenarioId": "R2_1_B_FIXTURE_REAL_LONG_CHAT"
-    }
+{
+  "schemaVersion": 1,
+  "id": "candidate-materialize-v1",
+  "suite": "candidate-materialize",
+  "input": {
+    "intentId": "simcore-v0.0.2-intent-01",
+    "targetVersion": "0.0.2",
+    "releaseName": "Fixture Candidate",
+    "releaseMode": "NEW_VERSION",
+    "verificationSuite": "batch-a",
+    "primaryGoalId": "R2_1_B_FIXTURE",
+    "liveScenarioId": "R2_1_B_FIXTURE_REAL_LONG_CHAT"
+  },
+  "expected": {
+    "createdDisposition": "CREATED",
+    "exactRetryDisposition": "ALREADY_MATERIALIZED",
+    "conflictDisposition": "CANDIDATE_REF_CONFLICT",
+    "productionMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_B_GENERIC_CANDIDATE_EVIDENCE.md"
   }
-]
+}

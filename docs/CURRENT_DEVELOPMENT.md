@@ -36,9 +36,9 @@ This block is machine-managed from verified declared release state. It does not 
 
 ## Production verdict
 
-`v0.64.6` is the current production release: **Post-B_END C Clock Handoff Authority** at release commit `47969d24771f6cc188df6e32150fc6fde519182d`, with identical latest/install release blob `34da01aa131f760b92d65d961a7843e9cc0d37d6`. Direct long-chat evidence in `docs/SIMCORE_LIVE_06406_VALIDATION.md` is `FULL NATURAL LIVE CLOSE PASS`. The post-B_END first-C clock gap is closed, Source Handoff independence is proven, the second ordinary C resumes normal Narrative authority, Broadcast closure remains intact, and the Representation/edit regression controls remain preserved.
+`v0.64.7` is the current production release: **Cross-Reload Cache Observer Continuity** at release commit `a7ce8ce33a97797630f885c6753415e4b2ccc7fc`, with identical latest/install release blob `676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0`. Release System v2 published and reobserved this identity successfully; the durable release record is `LIVE_PENDING`, while `product-manifest.json` correctly declares `PENDING_REAL_LONG_CHAT`. The validated parent remains v0.64.6 Post-B_END C Clock Handoff Authority.
 
-The runtime is frozen at v0.64.6 while Release System v2 (`R`) is completed. RS2-3 is closed under the project-authority gateway contract, RS2-4 A/B/C/D shadow work is verified, the RS2-4E permanent controller primitive and repository-bound P1/rollback qualification are verified, and the current infrastructure task is to finish the bounded administrative-state repair, activate the permanent `RS2_4_RELEASE` caller, and reach `REAL_RELEASE_READY`. No v0.64.7 runtime implementation or v0.65.0 M2-3 implementation should begin before that gate.
+The runtime is frozen at v0.64.7 while the required real long-chat scenario `06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT` is pending. Do not begin another runtime release or M2-3 implementation before this live gate is classified and closed. R2.1 delegated operation is implemented, permanent-CI qualified, and active as policy, but remains `ACTIVE · AWAITING GENUINE RELEASE PROOF`; that operational proof belongs to the next genuine runtime release after the current v0.64.7 live gate, and does not block the present validation.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1135,15 +1135,15 @@ Main-writing workflows use the shared `repo-main-write` concurrency contract whe
 
 ---
 
-## Future infrastructure plan — Release System v2
+## Historical infrastructure plan — Release System v2
 
-Status: **PLANNED · NOT ACTIVE · SEPARATE FROM THE CURRENT RELEASE ORDER**
+Status: **SUPERSEDED BY ACTIVE R v2 / R2.1 IMPLEMENTATION · HISTORICAL PLAN POINTER**
 
 Canonical plan:
 
 - [SIMCORE_RELEASE_SYSTEM_V2_PLAN.md](./SIMCORE_RELEASE_SYSTEM_V2_PLAN.md)
 
-This is a future repository/release-infrastructure plan. It does not describe production runtime behavior, does not start M2-3, and does not replace the current promoted action. The current action remains one ordinary v0.64.2 diagnostic-copy live result. After that result, decide explicitly whether RS2-1 durable-test extraction should be promoted before active M2-3 implementation; the plan must not reorder the roadmap merely by existing.
+This subsection preserves the original infrastructure-plan pointer as historical continuity. Release System v2 has since executed the first genuine v0.64.7 publication, and R2.1 delegated operation is now implemented and permanent-CI qualified. Its remaining operational proof is intentionally deferred to the next genuine runtime release after the current v0.64.7 real-long-chat gate. Do not use this historical subsection to override the Current Operational State or Quick Resume action.
 
 ---
 
@@ -1164,28 +1164,29 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Capture one ordinary v0.64.2 production copy result.
-If it is COPIED or COPIED_FALLBACK, mark the live gate PASS and start M2-3.
+Run the required v0.64.7 real long-chat validation.
+Scenario: 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+Keep runtime bytes frozen while the live result is pending.
 ```
 
 Current success condition:
 
 ```text
-report build count 1
-primary/fallback payload EXACT
-COPIED or COPIED_FALLBACK in an ordinary live copy
-→ v0.64.2 live gate PASS
-→ M2-3 Edit Reconcile extraction may begin
+production identity remains v0.64.7 / a7ce8ce33a97797630f885c6753415e4b2ccc7fc
+latest.js == install.js == 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
+release record remains LIVE_PENDING until human evidence is supplied
 
-REPORT_BUILD_FAILED
-→ direct builder attribution
-→ separate narrow builder-repair mini
+real long-chat result PASS
+→ record the human live evidence
+→ close v0.64.7 as LIVE_PASS through the durable main documentation/state path
+→ only then select the next genuine runtime work item
 
-CLIPBOARD_WRITE_FAILED
-→ builder succeeded
-→ PocketRisu/WebView clipboard transport scope
+observed anomaly
+→ preserve the evidence immediately
+→ classify WATCH / DEFER / FIX / BLOCKER
+→ unresolved FIX or BLOCKER stops advancement
 
-genuine user edit control
-→ deferred from M2-3 start
-→ required before M2-3 close / M2-4 start
+R2.1 delegated-operator end-to-end proof
+→ not part of the v0.64.7 live gate
+→ exercise on the next genuine runtime release after v0.64.7 closure
 ```

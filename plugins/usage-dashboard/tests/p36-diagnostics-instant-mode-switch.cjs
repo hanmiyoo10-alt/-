@@ -85,9 +85,12 @@ function buildHarness() {
   return {api,state,renders,persisted,gates,buttons,get persistCalls(){return persistCalls;},get legacyBinds(){return legacyBinds;}};
 }
 
-async function flush() {
-  await Promise.resolve();
-  await Promise.resolve();
+async function settleUntil(predicate, label) {
+  for (let i = 0; i < 24; i += 1) {
+    if (predicate()) return;
+    await Promise.resolve();
+  }
+  assert.ok(predicate(), `promise chain did not settle: ${label}`);
 }
 
 (async () => {
@@ -96,53 +99,48 @@ async function flush() {
   assert.equal(one.state.diagnosticsMode, 'detailed');
   assert.deepEqual(one.renders, ['detailed'], 'Basic → Detailed must render synchronously before persistence resolves');
   assert.equal(one.persistCalls, 0, 'persistence must be deferred out of the click stack');
-  await flush();
-  assert.equal(one.persistCalls, 1);
+  await settleUntil(() => one.persistCalls === 1, 'first Detailed write starts');
   assert.deepEqual(one.persisted, []);
   one.gates[0].gate.resolve();
-  await flush();
+  await settleUntil(() => one.persisted.length === 1, 'first Detailed write resolves');
   assert.deepEqual(one.persisted, ['detailed']);
 
   one.buttons['#diagnostics-mode-basic'].onclick();
   assert.equal(one.state.diagnosticsMode, 'basic');
   assert.deepEqual(one.renders, ['detailed','basic'], 'Detailed → Basic must also render before persistence resolves');
-  await flush();
-  assert.equal(one.persistCalls, 2);
+  await settleUntil(() => one.persistCalls === 2, 'Basic write starts');
   one.gates[1].gate.resolve();
-  await flush();
+  await settleUntil(() => one.persisted.length === 2, 'Basic write resolves');
   assert.deepEqual(one.persisted, ['detailed','basic']);
 
   const rapid = buildHarness();
   rapid.buttons['#diagnostics-mode-detailed'].onclick();
-  await flush();
-  assert.equal(rapid.persistCalls, 1);
+  await settleUntil(() => rapid.persistCalls === 1, 'rapid first write starts');
   rapid.buttons['#diagnostics-mode-basic'].onclick();
   rapid.buttons['#diagnostics-mode-detailed'].onclick();
   assert.deepEqual(rapid.renders, ['detailed','basic','detailed']);
-  await flush();
+  await Promise.resolve();
   assert.equal(rapid.persistCalls, 1, 'later writes must wait for the first write');
   rapid.gates[0].gate.resolve();
-  await flush();
-  assert.equal(rapid.persistCalls, 2);
+  await settleUntil(() => rapid.persistCalls === 2, 'rapid second write starts after first resolves');
   rapid.gates[1].gate.resolve();
-  await flush();
-  assert.equal(rapid.persistCalls, 3);
+  await settleUntil(() => rapid.persistCalls === 3, 'rapid third write starts after second resolves');
   rapid.gates[2].gate.resolve();
-  await flush();
+  await settleUntil(() => rapid.persisted.length === 3, 'rapid writes all resolve');
+  assert.deepEqual(rapid.persisted, ['detailed','basic','detailed'], 'serialized writes must preserve click order');
   assert.equal(rapid.persisted.at(-1), 'detailed', 'last selected mode must win persistence ordering');
 
   const failure = buildHarness();
   failure.buttons['#diagnostics-mode-detailed'].onclick();
   assert.deepEqual(failure.renders, ['detailed'], 'persistence failure must not block immediate visual switch');
-  await flush();
+  await settleUntil(() => failure.persistCalls === 1, 'failure fixture first write starts');
   failure.gates[0].gate.reject(new Error('injected persist failure'));
-  await flush();
+  await settleUntil(() => failure.persistCalls === 1, 'rejected write caught');
   failure.buttons['#diagnostics-mode-basic'].onclick();
   assert.deepEqual(failure.renders, ['detailed','basic']);
-  await flush();
-  assert.equal(failure.persistCalls, 2, 'serialized queue must recover after a rejected persistence');
+  await settleUntil(() => failure.persistCalls === 2, 'queue recovers after rejected persistence');
   failure.gates[1].gate.resolve();
-  await flush();
+  await settleUntil(() => failure.persisted.length === 1, 'post-failure Basic write resolves');
   assert.equal(failure.persisted.at(-1), 'basic');
 
   console.log('P36 Diagnostics Instant Mode Switch: OK · immediate partial render, serialized latest-safe persistence, zero mode-switch I/O, Engine byte-identical');

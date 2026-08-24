@@ -213,6 +213,9 @@ jobs:
     needs: [resolve, publish]
     if: ${{ needs.publish.result == 'success' && needs.publish.outputs.publication_disposition == 'PUBLISHED' }}
     runs-on: ubuntu-24.04
+    concurrency:
+      group: simcore-main-state-sync
+      cancel-in-progress: false
     permissions:
       contents: write
       actions: read
@@ -298,6 +301,7 @@ jobs:
         shell: bash
         env:
           RELEASE_ID: ${{ steps.state.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           RECORD="products/simcore/releases/records/${RELEASE_ID}.json"

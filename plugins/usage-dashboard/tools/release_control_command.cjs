@@ -5,6 +5,7 @@ const CONTROL_ISSUE_NUMBER = 197;
 const PREPARE_RE = /^\/usage-dashboard prepare (release\/usage-dashboard-[A-Za-z0-9._-]+) ([0-9a-fA-F]{40}) (\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json)$/;
 const READY_RE = /^\/usage-dashboard ready ([0-9a-fA-F]{40})$/;
 const READY_BRANCH_RE = /^\/usage-dashboard ready-branch (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
+const STAGE_RE = /^\/usage-dashboard stage (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -49,6 +50,13 @@ function parseReadyBranchCommand(value) {
   return {candidateBranch: match[1]};
 }
 
+function parseStageCommand(value) {
+  const text = singleLine(value, 'UD_CONTROL_STAGE_DENIED');
+  const match = STAGE_RE.exec(text);
+  if (!match) fail('UD_CONTROL_STAGE_DENIED');
+  return {candidateBranch: match[1]};
+}
+
 function main() {
   const args = process.argv.slice(2);
   const command = args.shift() || '';
@@ -77,6 +85,10 @@ function main() {
     process.stdout.write(parseReadyBranchCommand(args.join(' ')).candidateBranch);
     return;
   }
+  if (command === '--stage-branch') {
+    process.stdout.write(parseStageCommand(args.join(' ')).candidateBranch);
+    return;
+  }
   fail('UD_CONTROL_USAGE');
 }
 
@@ -85,10 +97,12 @@ module.exports = {
   PREPARE_RE,
   READY_RE,
   READY_BRANCH_RE,
+  STAGE_RE,
   assertControlEnvelope,
   parsePrepareCommand,
   parseReadyCommand,
   parseReadyBranchCommand,
+  parseStageCommand,
 };
 
 if (require.main === module) {

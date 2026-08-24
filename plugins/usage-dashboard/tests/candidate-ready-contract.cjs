@@ -31,8 +31,7 @@ assert.match(preflight, /git rev-parse HEAD/);
 assert.match(preflight, /CANDIDATE_READY_SHA_MISMATCH/);
 assert.match(preflight, /resolve_release_spec\.cjs/);
 assert.match(preflight, /CANDIDATE_READY_MATERIALIZER_DENIED/);
-assert.match(preflight, /build_bridge_engine\.cjs --write/);
-assert.match(preflight, /build_usage_dashboard\.cjs --write/);
+assert.match(preflight, /reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
 assert.match(preflight, /CANDIDATE_NOT_MATERIALIZED/);
 assert.match(preflight, /sync_project_guidelines\.py --check/);
 assert.match(preflight, /tests\/test-registry-contract\.cjs/);
@@ -59,7 +58,9 @@ for (const denied of [
 ]) assert.throws(() => control.parseReadyBranchCommand(denied), /UD_CONTROL_READY_BRANCH_DENIED/);
 
 assert.match(validator, /permissions:\s*\n\s*contents: read/);
+assert.match(validator, /reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
 assert.match(validator, /CANDIDATE_NOT_MATERIALIZED/);
 assert.match(validator, /tests\/run-all\.cjs/);
+assert.doesNotMatch(validator, /contents: write|git push/);
 
-console.log('usage-dashboard candidate-ready contract: OK · manual/comment exact-SHA plus trusted branch-to-SHA resolution, read-only, no full pre-PR regression');
+console.log('usage-dashboard candidate-ready contract: OK · fallback exact-SHA readiness and PR validation share generic reconciliation, remain read-only');

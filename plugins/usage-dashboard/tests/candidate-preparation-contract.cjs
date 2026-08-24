@@ -19,6 +19,7 @@ assert.match(workflow, /^  prepare:/m);
 assert.match(workflow, /github\.event\.issue\.number == 197/);
 assert.match(workflow, /github\.actor == github\.repository_owner/);
 assert.match(workflow, /\/usage-dashboard prepare /);
+assert.match(workflow, /\/usage-dashboard stage /);
 assert.match(workflow, /Checkout immutable trusted normalization policy/);
 assert.match(workflow, /Require main workflow trust root/);
 assert.match(workflow, /refs\/heads\/main/);
@@ -29,6 +30,10 @@ assert.match(workflow, /release_control_command\.cjs --check-envelope/);
 assert.match(workflow, /release_control_command\.cjs --prepare-target/);
 assert.match(workflow, /release_control_command\.cjs --prepare-sha/);
 assert.match(workflow, /release_control_command\.cjs --prepare-spec/);
+assert.match(workflow, /release_control_command\.cjs --stage-branch/);
+assert.match(workflow, /candidate_stage_policy\.cjs "\$RUNNER_TEMP\/usage-dashboard-candidate-stage-policy\.cjs"/);
+assert.match(workflow, /node "\$RUNNER_TEMP\/usage-dashboard-candidate-stage-policy\.cjs" --inspect/);
+assert.match(workflow, /git merge-base "\$TRUSTED_MAIN_SHA" "\$SOURCE_SHA"/);
 assert.match(workflow, /--normalize-target "\$RAW_TARGET_BRANCH"/);
 assert.match(workflow, /--normalize-sha "\$RAW_EXPECTED_HEAD_SHA"/);
 assert.match(workflow, /--normalize-spec "\$RAW_RELEASE_SPEC"/);
@@ -36,15 +41,18 @@ assert.match(workflow, /ref: \$\{\{ steps\.trust\.outputs\.expected_head_sha \}\
 assert.match(workflow, /persist-credentials: false/);
 assert.match(workflow, /CANDIDATE_BRANCH_MOVED/);
 assert.match(workflow, /candidate_preparation_policy\.cjs --check-worktree/);
+assert.match(workflow, /reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
 assert.match(workflow, /git bundle create/);
 assert.match(workflow, /actions\/upload-artifact@v4/);
 assert.match(workflow, /actions\/download-artifact@v4/);
 assert.match(workflow, /^  commit-candidate:/m);
+assert.match(workflow, /^  candidate-ready:/m);
 assert.equal((workflow.match(/contents: write/g) || []).length, 1, 'only candidate commit job may request repository write');
 
 const writerAt = workflow.indexOf('\n  commit-candidate:');
-assert.ok(writerAt > 0);
-const writer = workflow.slice(writerAt);
+const readyAt = workflow.indexOf('\n  candidate-ready:');
+assert.ok(writerAt > 0 && readyAt > writerAt, 'writer and downstream readiness jobs must have distinct boundaries');
+const writer = workflow.slice(writerAt, readyAt);
 assert.match(writer, /ref: \$\{\{ github\.sha \}\}/);
 assert.match(writer, /TARGET_BRANCH: \$\{\{ needs\.prepare\.outputs\.target_branch \}\}/);
 assert.match(writer, /EXPECTED_HEAD_SHA: \$\{\{ needs\.prepare\.outputs\.expected_head_sha \}\}/);
@@ -57,6 +65,8 @@ for (const forbidden of [
   'UD_MATERIALIZER',
   'build_bridge_engine.cjs',
   'build_usage_dashboard.cjs',
+  'reconcile_release_candidate.py',
+  'run_behavior_smoke.cjs',
   'release_control_command.cjs',
   'tests/run-all.cjs',
   'npm ',
@@ -66,6 +76,17 @@ for (const forbidden of [
   '--force',
   '--force-with-lease',
 ]) assert.ok(!writer.includes(forbidden), `writer must not contain ${forbidden}`);
+
+const readiness = workflow.slice(readyAt);
+assert.match(readiness, /^  candidate-ready:/m);
+assert.match(readiness, /permissions:\n      contents: read/);
+assert.match(readiness, /ref: \$\{\{ needs\.prepare\.outputs\.candidate_sha \}\}/);
+assert.match(readiness, /reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
+assert.match(readiness, /run_behavior_smoke\.cjs --repeat 3/);
+assert.match(readiness, /run_behavior_smoke\.cjs --repeat 1/);
+assert.match(readiness, /CANDIDATE_READY_BRANCH_MOVED/);
+assert.match(readiness, /CANDIDATE_READY:\$CANDIDATE_SHA:\$PRODUCT_VERSION:\$RELEASE_SPEC/);
+assert.doesNotMatch(readiness, /contents: write|git push origin/);
 
 assert.equal(policy.assertTargetBranch('release/usage-dashboard-571-example'),'release/usage-dashboard-571-example');
 for (const denied of ['main','release-usage-dashboard','release-simcore','feature/foo','release/other']) {
@@ -125,6 +146,14 @@ for (const denied of [
   `/usage-dashboard prepare ${candidateBranch} ${candidateSha} ../5.71.json`,
   `${prepareCommand} extra`,
 ]) assert.throws(() => control.parsePrepareCommand(denied), /UD_CONTROL_PREPARE_DENIED/);
+assert.deepEqual(control.parseStageCommand(`/usage-dashboard stage ${candidateBranch}`), {candidateBranch});
+for (const denied of [
+  `/usage-dashboard stage ${candidateBranch} extra`,
+  `/usage-dashboard stage ${candidateBranch}\nextra`,
+  '/usage-dashboard stage main',
+  '/usage-dashboard stage release-usage-dashboard',
+  '/usage-dashboard stage feature/foo',
+]) assert.throws(() => control.parseStageCommand(denied), /UD_CONTROL_STAGE_DENIED/);
 
 for (const allowed of [
   'plugins/usage-dashboard/latest.js',
@@ -193,4 +222,4 @@ for (const marker of [
   'E2 read-only candidate-ready preflight',
 ]) assert.ok(doc.includes(marker), `missing E4-B durable invariant: ${marker}`);
 
-console.log('usage-dashboard candidate preparation contract: OK · manual/comment control inputs, read/write split, bundle boundary, CAS, path/mode fail-closed');
+console.log('usage-dashboard candidate preparation contract: OK · manual/comment/stage control, read/write split, bundle boundary, CAS, path/mode fail-closed');

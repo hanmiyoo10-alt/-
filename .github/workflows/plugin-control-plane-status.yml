@@ -1,0 +1,40 @@
+name: Plugin Control Plane — Status views
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */2 * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/plugin-control-plane/**'
+      - '.github/usage-dashboard/releases/**'
+      - 'plugins/devpass/**'
+      - 'plugins/termux/large-doc-editor/**'
+      - 'product-manifest.json'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: plugin-control-plane-status
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted main controller
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Refresh mutable GitHub status issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! node .github/plugin-control-plane/controller.cjs refresh-status; then
+            echo "::warning::Plugin Control Plane status refresh failed; no release/product authority is affected."
+          fi

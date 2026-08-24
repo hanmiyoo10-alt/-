@@ -1,0 +1,25 @@
+name: Plugin work
+description: Track work for one registered plugin or a repository/shared concern.
+title: ""
+body:
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: Plugin
+      description: Choose the exact operational scope. The control plane does not infer this from prose.
+      options:
+        - usage-dashboard
+        - simcore
+        - devpass
+        - termux-large-doc-editor
+        - shared
+        - repo
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the work, evidence, or requested change.
+    validations:
+      required: true

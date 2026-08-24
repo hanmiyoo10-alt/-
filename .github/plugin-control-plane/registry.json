@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "managedLabelPrefixes": ["plugin:", "scope:"],
+  "plugins": {
+    "usage-dashboard": {
+      "displayName": "Local Usage Dashboard",
+      "lifecycle": "production",
+      "issueValues": ["usage-dashboard", "Local Usage Dashboard"],
+      "paths": [
+        "plugins/usage-dashboard/**",
+        ".github/usage-dashboard/**",
+        ".github/workflows/usage-dashboard-*.yml",
+        ".github/workflows/reusable-usage-dashboard-*.yml",
+        "docs/USAGE_DASHBOARD_*.md"
+      ],
+      "statusAdapter": "usage-dashboard",
+      "authority": {
+        "releaseBranch": "release-usage-dashboard",
+        "artifact": "plugins/usage-dashboard/latest.js",
+        "releaseSpecDir": ".github/usage-dashboard/releases"
+      }
+    },
+    "simcore": {
+      "displayName": "SimCore",
+      "lifecycle": "production",
+      "issueValues": ["simcore", "SimCore"],
+      "paths": [
+        "plugins/simcore/**",
+        ".github/workflows/simcore-*.yml",
+        "docs/SIMCORE_*.md",
+        "config/simcore-*.json",
+        "product-manifest.json"
+      ],
+      "statusAdapter": "simcore",
+      "authority": {
+        "manifest": "product-manifest.json"
+      }
+    },
+    "devpass": {
+      "displayName": "DevPass",
+      "lifecycle": "declared-update-channel",
+      "issueValues": ["devpass", "DevPass"],
+      "paths": [
+        "plugins/devpass/**"
+      ],
+      "statusAdapter": "devpass",
+      "authority": {
+        "declaredBy": "plugins/devpass/README.md",
+        "artifact": "plugins/devpass/latest.js",
+        "ref": "main"
+      }
+    },
+    "termux-large-doc-editor": {
+      "displayName": "Termux Large Doc Editor",
+      "lifecycle": "prototype",
+      "issueValues": ["termux-large-doc-editor", "Termux Large Doc Editor"],
+      "paths": [
+        "plugins/termux/large-doc-editor/**",
+        "docs/TERMUX_*.md"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "plugins/termux/large-doc-editor/README.md"
+      }
+    }
+  },
+  "nonOperationalScopes": [
+    {
+      "id": "template",
+      "label": "scope:template",
+      "paths": ["plugins/_template/**"]
+    },
+    {
+      "id": "test-fixture",
+      "label": "scope:test-fixture",
+      "paths": ["plugins/test-a/**", "plugins/test-b/**"]
+    }
+  ],
+  "repoPaths": [
+    ".github/plugin-control-plane/**",
+    ".github/workflows/plugin-control-plane-*.yml",
+    ".github/ISSUE_TEMPLATE/plugin-work.yml",
+    "docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md"
+  ],
+  "sharedPaths": [
+    "README.md",
+    ".github/workflows/repo-main-write-coordination-migration.yml"
+  ]
+}

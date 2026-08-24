@@ -1,0 +1,27 @@
+name: Plugin Control Plane CI
+
+on:
+  pull_request:
+    paths:
+      - '.github/plugin-control-plane/**'
+      - '.github/workflows/plugin-control-plane-*.yml'
+      - '.github/ISSUE_TEMPLATE/plugin-work.yml'
+      - 'docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Plugin Control Plane contracts
+        run: node .github/plugin-control-plane/tests/control-plane-contract.cjs

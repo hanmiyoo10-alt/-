@@ -24,7 +24,9 @@ It must not:
 
 PR ownership is converged from trusted `main` by `.github/workflows/plugin-control-plane-pr.yml`.
 
-The workflow runs on relevant trusted-main changes, manual dispatch, and a bounded periodic schedule. It enumerates open PRs through the GitHub API, classifies changed paths with `registry.json`, and reconciles only managed `plugin:*`, `product:*`, and `scope:*` labels while preserving unrelated labels.
+The dedicated reconciler runs on relevant trusted-main changes, manual dispatch, and a bounded periodic schedule. It enumerates open PRs through the GitHub API, classifies changed paths with `registry.json`, and reconciles only managed `plugin:*`, `product:*`, and `scope:*` labels while preserving unrelated labels.
+
+`.github/workflows/plugin-control-plane-status.yml` also invokes the same trusted-main PR reconciler before refreshing operational views. This is an intentionally redundant metadata-only fallback: a stale or delayed dedicated workflow registration must not leave ownership labels permanently absent. Both invokers execute the same trusted controller and neither becomes product release authority.
 
 The separate `pull_request` observer is read-only evidence; it is not classification authority.
 

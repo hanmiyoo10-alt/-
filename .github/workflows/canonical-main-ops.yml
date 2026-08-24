@@ -4,6 +4,14 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '11,41 * * * *'
+  workflow_run:
+    workflows:
+      - SimCore CI
+      - SimCore release state sync
+      - SimCore Permanent Release
+      - SimCore Generic Candidate Materialize
+      - Usage Dashboard Project Memory
+    types: [completed]
   push:
     branches: [main]
     paths:

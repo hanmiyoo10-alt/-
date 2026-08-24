@@ -167,7 +167,63 @@ da8c134a1117a3cd0b5101e82512ed85e5132fb6
 
 The failed CI remains durable evidence and the corrected harness is permanent regression coverage.
 
-## 6. Remaining RS2-4E work after this implementation passes
+## 6. PFFL evidence — second qualification CI failure
+
+Second validation head:
+
+```text
+a4005c4c51ccbfa4d8aa513833d6df237373aa3b
+```
+
+SimCore CI run:
+
+```text
+32730541048
+Verify 97441624213 = FAILURE
+Required 97441742592 = FAILURE
+reason = CI_SELF_TEST_FAIL
+```
+
+Direct cause:
+
+```text
+RS2_4E_AUTH_NEGATIVE_TARGETED_WRONG_GATE
+```
+
+The N6 mixed-authorization negative changed `releaseName`. That mutation was semantically invalid by itself, so the frozen release-spec validator correctly failed earlier with:
+
+```text
+RELEASE_SPEC_NAME_MISMATCH
+```
+
+before the intended immutable-authorization boundary could be exercised.
+
+Classification:
+
+```text
+FIX / TEST_ORACLE / NON_RUNTIME / DIRECT_EVIDENCE
+```
+
+This is not an authority bypass. The earlier semantic gate was stricter than the test setup expected, and production remained untouched.
+
+Narrow repair:
+
+```text
+mutate only evidenceRefs so the release spec remains semantically valid
+while its authorized bytes change
+→ N6 reaches RELEASE_AUTHORIZATION_MIXED_COMMIT
+→ N7 reaches RELEASE_SPEC_MUTATED_AFTER_AUTHORIZATION
+```
+
+Repair commit:
+
+```text
+cdd74346894547c7c69bcb2a1178c3f1955c35e5
+```
+
+Both failed CI runs are preserved as qualification learning evidence.
+
+## 7. Remaining RS2-4E work after this implementation passes
 
 ```text
 record final permanent CI PASS

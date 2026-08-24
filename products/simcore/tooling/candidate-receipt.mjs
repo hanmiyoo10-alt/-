@@ -8,6 +8,7 @@ const HEX40=/^[0-9a-f]{40}$/;
 const HEX64=/^[0-9a-f]{64}$/;
 const RELEASE_ID=/^simcore-v(\d+\.\d+\.\d+)-(new|correction|rollback)-\d{2,}$/;
 const MODE_SUFFIX={NEW_VERSION:'new',SAME_VERSION_CORRECTION:'correction',ROLLBACK:'rollback'};
+const REASON=/^[A-Za-z0-9_.:-]{1,96}$/;
 function fail(code,msg=code){const e=new Error(msg);e.code=code;throw e;}
 function sha256(bytes){return crypto.createHash('sha256').update(bytes).digest('hex');}
 function parseArgs(argv){const out={};for(let i=0;i<argv.length;i+=1){const a=argv[i];if(!a.startsWith('--')||i+1>=argv.length)fail('CANDIDATE_RECEIPT_ARGUMENT_INVALID',a);out[a.slice(2)]=argv[++i];}for(const k of ['request','candidate-report','verifier-commit','receipt','spec-shadow'])if(!out[k])fail('CANDIDATE_RECEIPT_ARGUMENT_MISSING',k);return out;}
@@ -18,6 +19,20 @@ export function validateReleaseIdentity(request){
   if(m[1]!==String(request.targetVersion||''))fail('CANDIDATE_RELEASE_ID_VERSION_MISMATCH');
   if(m[2]!==MODE_SUFFIX[request.releaseMode])fail('CANDIDATE_RELEASE_ID_MODE_MISMATCH');
   return request.releaseId;
+}
+
+function normalizedRollback(request){
+  const rollback=request?.rollback;
+  if(request.releaseMode==='ROLLBACK'){
+    if(!rollback||typeof rollback!=='object'||Array.isArray(rollback))fail('SPEC_SHADOW_ROLLBACK_REQUIRED');
+    const approvedSafeCommit=String(rollback.approvedSafeCommit||'');
+    const approvedSafeBlob=String(rollback.approvedSafeBlob||'');
+    const reasonCode=String(rollback.reasonCode||'');
+    if(!HEX40.test(approvedSafeCommit)||!HEX40.test(approvedSafeBlob)||!REASON.test(reasonCode))fail('SPEC_SHADOW_ROLLBACK_INVALID');
+    return {approvedSafeCommit,approvedSafeBlob,reasonCode};
+  }
+  if(rollback!=null)fail('SPEC_SHADOW_ROLLBACK_UNEXPECTED');
+  return null;
 }
 
 export function deriveReceipt(request,report,verifierCommit,verificationReportSha256){
@@ -36,7 +51,9 @@ export function deriveReceipt(request,report,verifierCommit,verificationReportSh
 
 export function deriveSpecShadow(request,receipt){
   if(receipt.releaseId!==request.releaseId||receipt.result!=='PASS')fail('SPEC_SHADOW_RECEIPT_INVALID');
+  const rollback=normalizedRollback(request);
   const derivedSpec={schemaVersion:1,releaseId:request.releaseId,product:'SimCore',version:request.targetVersion,releaseName:request.releaseName,releaseMode:request.releaseMode,candidateCommit:receipt.candidateCommit,expectedProductionCommit:receipt.expectedProductionCommit,candidateReleaseBlob:receipt.candidateReleaseBlob,primaryGoalId:request.primaryGoalId,changeClass:request.changeClass,evidenceRefs:request.evidenceRefs,liveGate:request.liveGate};
+  if(rollback)derivedSpec.rollback=rollback;
   return {schemaVersion:1,product:'SimCore',authority:'SHADOW_ONLY',intentId:request.intentId,releaseId:request.releaseId,candidateReceiptPath:`products/simcore/releases/candidate-receipts/${request.intentId}.json`,derivedSpec};
 }
 function writeJson(p,v){fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,`${JSON.stringify(v,null,2)}\n`,'utf8');}

@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.70
+//@version 3.0.0-alpha.5.71
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.70';
+  const VERSION = '3.0.0-alpha.5.71';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.21';
+  const REQUIRED_BRIDGE_VERSION = '1.6.22';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -1858,6 +1858,74 @@ async function importLegacyTodayBaselines() {
     return baseHtml + hourlyRequestDrilldownHtml(scopeKey);
   }
 
+  function requestAccountScopeValue(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return ['devpass','credits','unknown'].includes(text) ? text : 'unknown';
+  }
+
+  function requestScopeFidelityValue(value, scope = 'unknown') {
+    const text = String(value || '').trim().toLowerCase();
+    const normalizedScope = requestAccountScopeValue(scope);
+    if (normalizedScope === 'devpass' && text === 'explicit-project') return text;
+    if (normalizedScope === 'credits' && text === 'explicit-org-billing') return text;
+    return 'unknown';
+  }
+
+  function requestAccountScopeLabel(value) {
+    const scope = requestAccountScopeValue(value);
+    if (scope === 'devpass') return 'DevPass';
+    if (scope === 'credits') return 'Credits';
+    return '—';
+  }
+
+  function requestAccountScopeStats(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const stats = {rows:list.length,devpass:0,credits:0,unknown:0,conflict:0};
+    for (const row of list) {
+      const scope = requestAccountScopeValue(row?.requestAccountScope);
+      stats[scope] += 1;
+      if (row?.requestScopeConflict === true) stats.conflict += 1;
+    }
+    return stats;
+  }
+
+  const normalizeRecentRequestRowsBeforeProvenance = normalizeRecentRequestRows;
+  normalizeRecentRequestRows = function normalizeRecentRequestRowsWithProvenance(rows, limit = 12) {
+    const normalized = normalizeRecentRequestRowsBeforeProvenance(rows, limit);
+    const sourceByRequest = new Map();
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      if (!row || typeof row !== 'object') continue;
+      const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
+      const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
+      if (requestNumber) sourceByRequest.set(requestNumber, row);
+    }
+    return normalized.map((row) => {
+      const source = sourceByRequest.get(String(row?.requestNumber || '')) || null;
+      const scope = requestAccountScopeValue(recentRequestValue(source || {}, ['requestAccountScope','request_account_scope'], 'unknown'));
+      return {
+        ...row,
+        requestAccountScope:scope,
+        requestScopeFidelity:requestScopeFidelityValue(recentRequestValue(source || {}, ['requestScopeFidelity','request_scope_fidelity'], 'unknown'), scope),
+        requestScopeConflict:source?.requestScopeConflict === true,
+      };
+    });
+  };
+
+  const requestLedgerRowsForScopeBeforeProvenance = requestLedgerRowsForScope;
+  requestLedgerRowsForScope = function requestLedgerRowsForScopeWithProvenance(scopeKey) {
+    const key = ['all','devpass','credits'].includes(String(scopeKey)) ? String(scopeKey) : 'all';
+    const rows = requestLedgerRowsForScopeBeforeProvenance('all');
+    if (key === 'all') return rows;
+    return rows.filter((row) => requestAccountScopeValue(row?.requestAccountScope) === key);
+  };
+
+  const requestServiceTierTextBeforeProvenance = requestServiceTierText;
+  requestServiceTierText = function requestServiceTierTextWithProvenance(row) {
+    const scopeText = requestAccountScopeLabel(row?.requestAccountScope);
+    const tierText = requestServiceTierTextBeforeProvenance(row);
+    return `${scopeText} · ${tierText}`;
+  };
+
   function normalizeScopeActivity(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const rows = value => Array.isArray(value) ? value.map(row => ({
@@ -2154,6 +2222,37 @@ async function importLegacyTodayBaselines() {
     try { await renderWidget(reason); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }
+
+  function normalizeRequestProvenanceMetadata(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const captureMode = ['account-wide','project-fallback','unknown'].includes(String(raw.captureMode))
+      ? String(raw.captureMode)
+      : 'unknown';
+    const bounded = value => num(value) ? Math.max(0, Number(value)) : 0;
+    return {
+      captureMode,
+      rows:bounded(raw.rows),
+      fallbackCount:bounded(raw.fallbackCount),
+      devpass:bounded(raw.devpass),
+      credits:bounded(raw.credits),
+      unknown:bounded(raw.unknown),
+      conflict:bounded(raw.conflict),
+      modelInference:0,
+      authority:String(raw.authority || '') === 'project-exact+credits-org-used-mode'
+        ? 'project-exact+credits-org-used-mode'
+        : 'unknown',
+    };
+  }
+
+  const normalizeScopeActivityBeforeProvenance = normalizeScopeActivity;
+  normalizeScopeActivity = function normalizeScopeActivityWithProvenance(raw) {
+    const normalized = normalizeScopeActivityBeforeProvenance(raw);
+    if (!normalized) return normalized;
+    return {
+      ...normalized,
+      requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),
+    };
+  };
 
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
@@ -2880,6 +2979,32 @@ function todayOverviewMetrics(d) {
   }
   return {devToday,premiumToday,creditsToday,observedDailyTotal,monthEnd,monthlyLeft,weeklyLeft,projected,projectedPercent,cost24h:num(a?.cost24h)?Number(a.cost24h):null,resetPasses:num(w?.resetPasses)?Number(w.resetPasses):null,resetPassesExact:w?.resetPassesExact===true};
 }
+
+  function requestProvenanceDiagnosticMetadata() {
+    const source = state.data?.usageScopes?.scopes?.all?.requestProvenance || null;
+    if (source && typeof source === 'object') return source;
+    const stats = requestAccountScopeStats(requestLedgerRowsForScope('all'));
+    return {
+      captureMode:'unknown',
+      rows:stats.rows,
+      fallbackCount:0,
+      devpass:stats.devpass,
+      credits:stats.credits,
+      unknown:stats.unknown,
+      conflict:stats.conflict,
+      modelInference:0,
+      authority:'unknown',
+    };
+  }
+
+  const diagTextBeforeRequestProvenance = diagText;
+  diagText = function diagTextWithRequestProvenance() {
+    const base = diagTextBeforeRequestProvenance();
+    const p = requestProvenanceDiagnosticMetadata();
+    const rows = Math.max(0, Number(p?.rows || 0));
+    const mode = ['account-wide','project-fallback'].includes(String(p?.captureMode)) ? String(p.captureMode) : 'unknown';
+    return `${base}\nAccount request capture: ${mode} · rows ${rows} · fallback ${Math.max(0, Number(p?.fallbackCount || 0))}\nRequest account scope fidelity: DevPass ${Math.max(0, Number(p?.devpass || 0))}/${rows} · Credits ${Math.max(0, Number(p?.credits || 0))}/${rows} · Unknown ${Math.max(0, Number(p?.unknown || 0))}/${rows} · conflict ${Math.max(0, Number(p?.conflict || 0))}\nScope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`;
+  };
 
   function settingsHtml() {
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};

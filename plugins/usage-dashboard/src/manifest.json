@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.70",
+  "version": "3.0.0-alpha.5.71",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "2f296c0978e0279e0e59941e157cd4dba92bafeedbf5fb2563c6dd977eadae13",
+  "artifactSha256": "7b20786145fb4e3321098caf4fbb898d3492cd2605c83848ac7e7581157d133f",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "1b5d2dcf425925a33f604eab1bc9879c6e16aa4f214495d2c96e7204fddc7353"
+      "sha256": "cd23af461e1b8efa65f3791cf68c4c91196e47090dd9d6245ce4096d93904ca5"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -56,10 +56,22 @@
       "sha256": "a200ac69fbf7bed1c1898e47f5e027374b5fe902b0e8c5980b6eb2bc6b13be92"
     },
     {
+      "file": "15-request-provenance.part.js",
+      "label": "request account provenance",
+      "bytes": 3354,
+      "sha256": "779e54369f8b5fa5f52b7791e91f25bd72c6423cb17744006803de100c84ec58"
+    },
+    {
       "file": "16-usage-analytics.part.js",
       "label": "usage + analytics normalization",
       "bytes": 17967,
       "sha256": "97db0e8f5aaa8f6fc252fea10b55cd1d2dcd25f0edfecbb89fb84a1ade37cd39"
+    },
+    {
+      "file": "18-request-provenance-analytics.part.js",
+      "label": "request provenance analytics",
+      "bytes": 1175,
+      "sha256": "28096961b8f40e791c01d79afbb33294c49f7e4815bfb8221b3ea9db9f2ec430"
     },
     {
       "file": "20-bridge-io.part.js",
@@ -78,6 +90,12 @@
       "label": "diagnostics + release hardening",
       "bytes": 43983,
       "sha256": "c98ca837fc8aa9f010c82728b6f42230e0819acbebb1d5a4f01ca3e34ebecfd9"
+    },
+    {
+      "file": "42-request-provenance-diagnostics.part.js",
+      "label": "request provenance diagnostics",
+      "bytes": 1431,
+      "sha256": "df594c6b090068b9ac985b40cd4c1a7841ebfd5bedd4275c6bd1522fcd559298"
     },
     {
       "file": "50-dashboard-context.part.js",

@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.21';
+const VERSION = '1.6.22';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -1326,6 +1326,72 @@ if (output && !globalThis[marker]) {
   try { await fs.chmod(CAPTURE_TAP_FILE, 0o600); } catch {}
 }
 
+// 5.71 Cross-Scope Request Provenance capture extension.
+// Keep the stable 5.70 capture tap as the base, then patch only the request-log
+// metadata/query policy before the official CLI process starts.
+const ensureCaptureTapBeforeRequestProvenance = ensureCaptureTap;
+
+function replaceCaptureSourceOnce(source, oldText, newText, label) {
+  const count = source.split(oldText).length - 1;
+  if (count !== 1) throw new Error(`REQUEST_PROVENANCE_CAPTURE_PATCH_MISMATCH:${label}:${count}`);
+  return source.replace(oldText, newText);
+}
+
+ensureCaptureTap = async function ensureCaptureTapWithRequestProvenance() {
+  await ensureCaptureTapBeforeRequestProvenance();
+  let source = await fs.readFile(CAPTURE_TAP_FILE, 'utf8');
+
+  source = replaceCaptureSourceOnce(
+    source,
+    "llmgateway.devpass.bridge.capture.v10",
+    "llmgateway.devpass.bridge.capture.v11",
+    'capture-marker',
+  );
+
+  source = replaceCaptureSourceOnce(
+    source,
+    "      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
+    "      const requestProject = logField(row, ['projectId','project_id','project.id','metadata.projectId','metadata.project_id']);\n      const requestOrganization = logField(row, ['organizationId','organization_id','orgId','org_id','organization.id','metadata.organizationId','metadata.organization_id']);\n      const requestUsedMode = logField(row, ['usedMode','used_mode']);\n      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
+    'ephemeral-provenance-inputs',
+  );
+
+  source = replaceCaptureSourceOnce(
+    source,
+    "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        requestedServiceTier: requestedTier.value,",
+    "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        requestProjectId: requestProject.value === null ? '' : String(requestProject.value),\n        requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value),\n        requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value),\n        requestedServiceTier: requestedTier.value,",
+    'ephemeral-provenance-fields',
+  );
+
+  const logsStart = source.indexOf("  const logsCandidates = (orgUrl, statusUrl, projectId, range) => {");
+  const logsEnd = source.indexOf("\n\n  const originalFetch = globalThis.fetch;", logsStart);
+  if (logsStart < 0 || logsEnd <= logsStart) throw new Error('REQUEST_PROVENANCE_CAPTURE_PATCH_MISMATCH:logs-candidates-boundary');
+  const logsBlock = source.slice(logsStart, logsEnd);
+  const patchedLogsBlock = replaceCaptureSourceOnce(
+    logsBlock,
+    "    return [...new Map(out.map((u) => [u.toString(), u])).values()];",
+    "    const projectScoped = [...new Map(out.map((u) => [u.toString(), u])).values()];\n    const accountWide = projectScoped.map((u) => {\n      const next = new URL(u);\n      next.searchParams.delete('projectId');\n      return next;\n    });\n    return [...new Map([...accountWide, ...projectScoped].map((u) => [u.toString(), u])).values()];",
+    'account-wide-before-project-fallback',
+  );
+  source = source.slice(0, logsStart) + patchedLogsBlock + source.slice(logsEnd);
+
+  source = replaceCaptureSourceOnce(
+    source,
+    "storeLogs(logs, requestedActivityRange, 'fetch')",
+    "storeLogs(logs, requestedActivityRange, logsTarget.searchParams.has('projectId') ? 'project-fallback-fetch' : 'account-wide-fetch')",
+    'fetch-capture-mode',
+  );
+  source = replaceCaptureSourceOnce(
+    source,
+    "storeLogs(logs, requestedActivityRange, 'node-request')",
+    "storeLogs(logs, requestedActivityRange, logsTarget.searchParams.has('projectId') ? 'project-fallback-node-request' : 'account-wide-node-request')",
+    'node-capture-mode',
+  );
+
+  // Raw project/org identity and usedMode live only in this short-lived 0600
+  // capture file. Engine normalization consumes them and emits only derived
+  // scope/fidelity fields before data reaches the snapshot or request ledger.
+  await fs.writeFile(CAPTURE_TAP_FILE, source, { mode: 0o600 });
+};
 async function captureAccountDetailsViaCliSession(activityRange = '') {
   await ensureCaptureTap();
   const captureFile = path.join(
@@ -2715,6 +2781,111 @@ function moduleValueStatus(value) {
   return valueIsStale(value) ? 'stale' : 'ok';
 }
 
+// 5.71 Cross-Scope Request Provenance normalization.
+// Classification authority is explicit request provenance only. Model/provider,
+// price, tokens, duration, cache and service tier never participate.
+function normalizeRequestUsedMode(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function classifyRequestAccountScope(rawRow, devPassProjectId, creditsOrganizationId) {
+  const requestProjectId = String(rawRow?.requestProjectId || '').trim();
+  const requestOrganizationId = String(rawRow?.requestOrganizationId || '').trim();
+  const requestUsedMode = normalizeRequestUsedMode(rawRow?.requestUsedMode);
+  const devPassProject = Boolean(devPassProjectId && requestProjectId && requestProjectId === String(devPassProjectId));
+  const creditsBilling = Boolean(
+    creditsOrganizationId
+    && requestOrganizationId
+    && requestOrganizationId === String(creditsOrganizationId)
+    && requestUsedMode === 'credits'
+  );
+  const conflict = devPassProject && creditsBilling;
+
+  if (devPassProject) {
+    return { requestAccountScope:'devpass', requestScopeFidelity:'explicit-project', requestScopeConflict:conflict };
+  }
+  if (creditsBilling) {
+    return { requestAccountScope:'credits', requestScopeFidelity:'explicit-org-billing', requestScopeConflict:false };
+  }
+  return { requestAccountScope:'unknown', requestScopeFidelity:'unknown', requestScopeConflict:false };
+}
+
+function classifiedAccountRecentRequests(capturedLogs, devPassProjectId, creditsOrganizationId) {
+  const rawRows = Array.isArray(capturedLogs?.rows) ? capturedLogs.rows.slice(0, 100) : [];
+  const normalizedRows = normalizeCapturedRecentLogs(capturedLogs).slice(0, 100);
+  const rawByRequest = new Map();
+  for (const row of rawRows) {
+    const requestNumber = String(row?.requestNumber || '');
+    if (requestNumber) rawByRequest.set(requestNumber, row);
+  }
+  return normalizedRows.map((row) => ({
+    ...row,
+    ...classifyRequestAccountScope(rawByRequest.get(String(row?.requestNumber || '')) || null, devPassProjectId, creditsOrganizationId),
+  }));
+}
+
+function requestProvenanceSummary(rows, capturedLogs) {
+  const list = Array.isArray(rows) ? rows : [];
+  const mode = String(capturedLogs?.mode || '');
+  const captureMode = mode.startsWith('account-wide-')
+    ? 'account-wide'
+    : mode.startsWith('project-fallback-')
+      ? 'project-fallback'
+      : 'unknown';
+  return {
+    captureMode,
+    rows:list.length,
+    fallbackCount:captureMode === 'project-fallback' ? 1 : 0,
+    devpass:list.filter((row) => row?.requestAccountScope === 'devpass').length,
+    credits:list.filter((row) => row?.requestAccountScope === 'credits').length,
+    unknown:list.filter((row) => row?.requestAccountScope === 'unknown').length,
+    conflict:list.filter((row) => row?.requestScopeConflict === true).length,
+    modelInference:0,
+    authority:'project-exact+credits-org-used-mode',
+  };
+}
+
+async function resolvedCreditsOrganizationId(requestedCreditsOrgId = '') {
+  try {
+    const orgData = await loadOrgs();
+    const selection = creditsUsageSelection(orgData, requestedCreditsOrgId);
+    return String(selection?.org?.id || '').trim();
+  } catch {
+    return String(requestedCreditsOrgId || '').trim();
+  }
+}
+
+const activityForScopeBeforeRequestProvenance = activityForScope;
+activityForScope = async function activityForScopeWithRequestProvenance(range = '24h', scope = 'all', creditsOrgId = '', options = {}) {
+  const normalizedRange = ['24h','7d','30d'].includes(String(range)) ? String(range) : '24h';
+  const normalizedScope = ['all','devpass','credits'].includes(String(scope)) ? String(scope) : 'all';
+  const base = await activityForScopeBeforeRequestProvenance(normalizedRange, normalizedScope, creditsOrgId, options);
+  if (normalizedRange !== '24h') return base;
+
+  let captured = null;
+  try { captured = await loadAccountCapture(); }
+  catch { return base; }
+  const capturedLogs = captured?.devpassLogs;
+  if (!capturedLogs || !Array.isArray(capturedLogs.rows)) return base;
+
+  const status = normalizeIndependentDevPassStatus(captured?.devPlanStatus ?? null);
+  const devPassProjectId = String(status?.projectId || '').trim();
+  const creditsOrganizationId = await resolvedCreditsOrganizationId(creditsOrgId);
+  const allRows = classifiedAccountRecentRequests(capturedLogs, devPassProjectId, creditsOrganizationId);
+  const scopedRows = normalizedScope === 'all'
+    ? allRows
+    : allRows.filter((row) => row.requestAccountScope === normalizedScope);
+  const provenance = requestProvenanceSummary(allRows, capturedLogs);
+
+  return {
+    ...base,
+    recentRequests:scopedRows,
+    requestProvenance:provenance,
+    source:provenance.captureMode === 'project-fallback'
+      ? `${String(base?.source || 'LLMGateway usage')} · /logs DevPass fallback · provenance-v1`
+      : `${String(base?.source || 'LLMGateway usage')} · account-wide /logs · provenance-v1`,
+  };
+};
 async function snapshot(profile = 'full', creditsOrgId = '') {
   const normalizedProfile = profile === 'light' ? 'light' : 'full';
   const attribution = createSnapshotAttribution(normalizedProfile);

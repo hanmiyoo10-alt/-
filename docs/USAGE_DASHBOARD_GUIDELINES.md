@@ -13,8 +13,8 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.70`
-- Bridge Engine: `1.6.21`
+- Product: `3.0.0-alpha.5.71`
+- Bridge Engine: `1.6.22`
 - Bridge Manager: `1.3.0`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`

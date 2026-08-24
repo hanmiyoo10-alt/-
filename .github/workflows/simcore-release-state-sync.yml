@@ -118,8 +118,8 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .simcore-state-sync
-          git config user.name 'hanmiyoo10-alt'
-          git config user.email 'hanmiyoo10@gmail.com'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md
           if git diff --cached --quiet; then
             echo 'Durable state already synchronized.'

@@ -5,7 +5,7 @@
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "7b20786145fb4e3321098caf4fbb898d3492cd2605c83848ac7e7581157d133f",
+  "artifactSha256": "1f181cf5d2442a9adcfce1333bf7c166f8a416adcd916bc0cac4b71127be58b0",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
@@ -58,8 +58,8 @@
     {
       "file": "15-request-provenance.part.js",
       "label": "request account provenance",
-      "bytes": 3354,
-      "sha256": "779e54369f8b5fa5f52b7791e91f25bd72c6423cb17744006803de100c84ec58"
+      "bytes": 3651,
+      "sha256": "b1209274a808d8291b1d6fe3d1eaebe556704264fc1bb2313d08415f43845791"
     },
     {
       "file": "16-usage-analytics.part.js",

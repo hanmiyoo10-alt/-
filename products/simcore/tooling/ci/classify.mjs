@@ -16,6 +16,7 @@ export const LABELS = Object.freeze([
 const permanentReleaseWorkflows = Object.freeze([
   '.github/workflows/simcore-release-permanent.yml',
   '.github/workflows/simcore-release-required.yml',
+  '.github/workflows/simcore-release-pr-activation.yml',
 ]);
 
 const exact = Object.freeze({
@@ -23,6 +24,7 @@ const exact = Object.freeze({
   '.github/workflows/simcore-release.yml': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   '.github/workflows/simcore-release-permanent.yml': ['CI_SELF', 'HARNESS', 'STATE_SYNC', 'SHARED_MAIN_COORDINATION'],
   '.github/workflows/simcore-release-required.yml': ['CI_SELF', 'HARNESS'],
+  '.github/workflows/simcore-release-pr-activation.yml': ['CI_SELF', 'HARNESS'],
   '.github/workflows/product-simcore-06407-candidate-prep.yml': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/check.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/test.mjs': ['CI_SELF', 'HARNESS'],

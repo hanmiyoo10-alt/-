@@ -118,7 +118,7 @@ function snapshot() {
 
   const view = run.views.find(row => String(row.reason || '').startsWith('refresh:init:'));
   assert.ok(view && !view.error, `post-refresh diagnostics missing: ${view?.error || 'not captured'}`);
-  assert.ok(view.diag.includes('Service tier fidelity: requested known 4/5 · served known 3/5 · served flex 1 · standard 2 · priority 0 · unknown 2'), 'service tier diagnostics must normalize default→standard and retain missing served tier as unknown');
+  assert.ok(view.diag.includes('Service tier fidelity: requested known 4/5 · served known 3/5 · served flex 1 · standard 2 · priority 0 · unknown 2'), `service tier diagnostics must normalize default→standard and retain missing served tier as unknown\nactual diagnostics:\n${view.diag}`);
   assert.ok(view.diag.includes('Service tier source fields: requested request.serviceTier,requestedServiceTier,requestedTier,requested_service_tier'), 'requested tier source provenance must remain explicit');
   assert.ok(view.diag.includes('served response.serviceTier,served_service_tier,usedServiceTier'), 'served tier source provenance must remain explicit');
   assert.ok(view.diag.includes('Request outcome taxonomy: success 2 · error 1 · cancelled 1 · unknown 1 · rows 5'), 'outcome taxonomy must preserve status precedence and explicit unknown history');

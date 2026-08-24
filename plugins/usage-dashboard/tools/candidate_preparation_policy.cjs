@@ -4,6 +4,9 @@
 const {execFileSync} = require('node:child_process');
 
 const TARGET_BRANCH_RE = /^release\/usage-dashboard-[A-Za-z0-9._-]+$/;
+const TARGET_BRANCH_TOKEN_RE = /release\/usage-dashboard-[A-Za-z0-9._-]+/g;
+const SHA_TOKEN_RE = /(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])/gi;
+const RELEASE_SPEC_TOKEN_RE = /\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json/g;
 const DENIED_BRANCHES = Object.freeze(['main','release-usage-dashboard','release-simcore']);
 const OUTPUT_EXACT = Object.freeze([
   'plugins/usage-dashboard/latest.js',
@@ -19,6 +22,14 @@ function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
 }
 
+function uniqueInputToken(value, regex, code) {
+  const text = String(value || '');
+  const matches = text.match(regex) || [];
+  const unique = [...new Set(matches.map(String))];
+  if (unique.length !== 1) fail(code, `matches=${unique.length}`);
+  return unique[0];
+}
+
 function assertSha(value, code = 'CANDIDATE_PREP_INVALID_SHA') {
   if (!/^[0-9a-f]{40}$/i.test(String(value || ''))) fail(code, String(value || ''));
   return String(value);
@@ -28,6 +39,22 @@ function assertTargetBranch(branch) {
   const value = String(branch || '');
   if (DENIED_BRANCHES.includes(value) || !TARGET_BRANCH_RE.test(value)) fail('CANDIDATE_PREP_TARGET_DENIED', value);
   return value;
+}
+
+function normalizeTargetBranchInput(value) {
+  return assertTargetBranch(uniqueInputToken(value, TARGET_BRANCH_TOKEN_RE, 'CANDIDATE_PREP_TARGET_DENIED'));
+}
+
+function normalizeExpectedShaInput(value) {
+  return assertSha(uniqueInputToken(value, SHA_TOKEN_RE, 'CANDIDATE_PREP_INVALID_SHA'));
+}
+
+function normalizeReleaseSpecInput(value) {
+  const normalized = uniqueInputToken(value, RELEASE_SPEC_TOKEN_RE, 'CANDIDATE_PREP_RELEASE_SPEC_DENIED');
+  if (!/^\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json$/.test(normalized)) {
+    fail('CANDIDATE_PREP_RELEASE_SPEC_DENIED', normalized);
+  }
+  return normalized;
 }
 
 function safePath(path) {
@@ -89,7 +116,7 @@ function verifyPayloadCommit(expectedParent, payloadSha) {
   if (!paths.length) fail('CANDIDATE_PAYLOAD_EMPTY');
   for (const path of paths) {
     const entry = treeEntryAt(payload,path);
-    if (!entry) continue; // deletion is allowed for an allowlisted output path
+    if (!entry) continue;
     if (entry.type !== 'blob' || !['100644','100755'].includes(entry.mode)) {
       fail('CANDIDATE_PAYLOAD_MODE_DENIED', `${path}:${entry.mode}:${entry.type}`);
     }
@@ -100,6 +127,18 @@ function verifyPayloadCommit(expectedParent, payloadSha) {
 function main() {
   const args = process.argv.slice(2);
   const command = args.shift() || '';
+  if (command === '--normalize-target') {
+    process.stdout.write(normalizeTargetBranchInput(args.join(' ')));
+    return;
+  }
+  if (command === '--normalize-sha') {
+    process.stdout.write(normalizeExpectedShaInput(args.join(' ')));
+    return;
+  }
+  if (command === '--normalize-spec') {
+    process.stdout.write(normalizeReleaseSpecInput(args.join(' ')));
+    return;
+  }
   if (command === '--check-target') {
     console.log(`CANDIDATE_PREP_TARGET_OK:${assertTargetBranch(args[0])}`);
     return;
@@ -119,11 +158,18 @@ function main() {
 
 module.exports = {
   TARGET_BRANCH_RE,
+  TARGET_BRANCH_TOKEN_RE,
+  SHA_TOKEN_RE,
+  RELEASE_SPEC_TOKEN_RE,
   DENIED_BRANCHES,
   OUTPUT_EXACT,
   OUTPUT_PREFIXES,
+  uniqueInputToken,
   assertSha,
   assertTargetBranch,
+  normalizeTargetBranchInput,
+  normalizeExpectedShaInput,
+  normalizeReleaseSpecInput,
   safePath,
   assertAllowedPaths,
   worktreeChangedPaths,

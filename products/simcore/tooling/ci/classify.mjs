@@ -15,11 +15,14 @@ export const LABELS = Object.freeze([
 
 const exact = Object.freeze({
   '.github/workflows/simcore-ci.yml': ['CI_SELF'],
-  '.github/workflows/simcore-release.yml': ['CI_SELF', 'HARNESS'],
+  '.github/workflows/simcore-release.yml': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tooling/check.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/test.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/release-shadow.mjs': ['CI_SELF', 'HARNESS'],
+  'products/simcore/tooling/declare-production.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
+  'products/simcore/tooling/post-publish-state-shadow.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tests/release-shadow.test.mjs': ['CI_SELF', 'HARNESS'],
+  'products/simcore/tests/post-publish-state-shadow.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC', 'SHARED_MAIN_COORDINATION'],
   'products/simcore/releases/release-schema-v1.json': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/registry.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/contracts/frozen-surfaces-v1.json': ['CI_SELF', 'HARNESS', 'ARCH_CONTRACT'],

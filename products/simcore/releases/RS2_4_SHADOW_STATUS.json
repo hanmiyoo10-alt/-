@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "RS2-4",
-  "scope": "A_B_C_SHADOW",
+  "scope": "A_B_C_D_SHADOW",
   "status": "SHADOW_VERIFIED",
   "releaseAuthority": "SHADOW_ONLY",
   "productionPublicationAuthorized": false,
@@ -26,6 +26,15 @@
     "publicationDisposition": "WOULD_NOOP",
     "releaseSimcoreBefore": "47969d24771f6cc188df6e32150fc6fde519182d",
     "releaseSimcoreAfter": "47969d24771f6cc188df6e32150fc6fde519182d",
+    "result": "PASS"
+  },
+  "postPublishStateShadow": {
+    "implementationHead": "e16c058272e4dd17a9295c681b62263b0e86d9d5",
+    "pr": 212,
+    "ciRun": 32727321800,
+    "verifyJob": 97431442047,
+    "requiredJob": 97431540968,
+    "coverage": "S1-S8",
     "result": "PASS"
   },
   "permanentCiAfterCleanup": {
@@ -54,6 +63,9 @@
   "requiredCiEnforcementVerified": false,
   "rs2_3Closed": false,
   "rs2_4EntryAuthorized": false,
-  "nextStep": "RS2_4_D_SHADOW_OR_ACTIVATION_DECISION",
-  "evidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4_SHADOW_IMPLEMENTATION_EVIDENCE.md"
+  "nextStep": "RS2_4_E_PROMOTION_OR_ACTIVATION_AMENDMENT_DECISION",
+  "evidence": [
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4_SHADOW_IMPLEMENTATION_EVIDENCE.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4D_SHADOW_IMPLEMENTATION_EVIDENCE.md"
+  ]
 }

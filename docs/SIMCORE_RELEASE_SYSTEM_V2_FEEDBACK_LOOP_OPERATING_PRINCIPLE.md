@@ -1,0 +1,148 @@
+# SimCore Release System v2 — R-First Feedback Loop Operating Principle
+
+Date: 2026-08-24
+Status: **ACTIVE OPERATING PRINCIPLE · NON-RUNTIME**
+Scope: Release System v2 sequencing and future SimCore update operations
+
+## 1. Core decision
+
+Finish and harden Release System v2 (`R`) before resuming the next planned SimCore runtime release.
+
+Current intended sequence:
+
+```text
+finish current R work
+→ use the completed R path for the next legitimate SimCore plugin update
+→ collect release/update feedback and operational anomalies
+→ preserve each finding as evidence
+→ classify WATCH / DEFER / FIX / BLOCKER
+→ harden R only where evidence justifies it
+→ continue later plugin versions through the improved R path
+```
+
+R is therefore not a one-time repository migration that is considered finished merely because the first implementation works.
+
+The first real plugin updates executed through R are qualification data for R itself.
+
+## 2. Long-term goal
+
+The goal is to make future SimCore updates materially easier and safer without weakening the existing evidence-driven process.
+
+Desired steady state:
+
+```text
+product design/evidence
+→ work-branch implementation
+→ permanent static/CI verification
+→ repeatable release transaction
+→ release-simcore publication
+→ real long-chat validation
+→ bounded main state/evidence synchronization
+```
+
+Routine releases should require less bespoke release plumbing while preserving exact production identity, latest/install equality, fail-closed behavior, and real-live validation.
+
+## 3. Feedback loop rule
+
+Every real release executed through R may expose problems that shadow tests did not reveal.
+
+Examples include:
+
+```text
+workflow ergonomics
+identity binding gaps
+state-sync drift
+cleanup/retirement friction
+rollback gaps
+CI false positives/negatives
+release evidence gaps
+operator ambiguity
+```
+
+These findings must not be silently worked around.
+
+Preserve them immediately and classify:
+
+```text
+WATCH
+DEFER
+FIX
+BLOCKER
+```
+
+Then decide whether the finding belongs to:
+
+```text
+R infrastructure
+product/runtime behavior
+host/provider environment
+administrative governance
+```
+
+Do not mix an R repair with an unrelated runtime feature in one work item.
+
+## 4. Product-update relationship
+
+After the current R work reaches its required completion gate, proceed to the next separately planned SimCore product version.
+
+That product release becomes both:
+
+```text
+1. a normal evidence-backed SimCore update
+2. a real operational exercise of R
+```
+
+Product semantics remain judged independently from release-system correctness.
+
+A product bug does not automatically mean R failed.
+An R transaction/authority/state-sync failure does not automatically mean the product change is wrong.
+
+## 5. Authority preservation
+
+Existing authority split remains unchanged:
+
+```text
+release-simcore
+= actual plugin code and production deployment authority
+
+main
+= design, evidence, roadmap, release-system state, and administrative record authority
+```
+
+`plugins/simcore/latest.js` and `plugins/simcore/install.js` must remain identical for every production release.
+
+## 6. Success condition for R
+
+R is successful when repeated real SimCore updates become routine rather than bespoke while preserving or increasing safety.
+
+Practical indicators:
+
+```text
+fewer per-version one-off workflows/scripts
+less manual release identity editing
+less main/document drift
+repeatable static/CI gates
+repeatable release-simcore publication
+bounded rollback/recovery behavior
+clear release evidence and status
+faster operator execution with fewer ambiguous steps
+```
+
+The final optimization target is not maximum automation by itself.
+
+The target is:
+
+> **updates become easier because the safe process is encoded and reusable.**
+
+## 7. Current sequencing intent
+
+```text
+R first
+→ finish current Release System v2 work
+→ next planned plugin version
+→ observe real operational feedback
+→ harden R from evidence
+→ continue subsequent versions on the improved path
+```
+
+This operating principle should be preserved when deciding whether to advance R, start a runtime release, or respond to release-system feedback.

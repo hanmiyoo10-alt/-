@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "v0.64.7 published production bootstrap before RS2-4 permanent post-publish recovery",
+  "expectedProductionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "expectedProductionBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+  "sourceFailure": "POST_PUBLISH_MAIN_GATE_ACTIONS_PERMISSION_GAP",
+  "mergeThisCommandPayload": false
+}

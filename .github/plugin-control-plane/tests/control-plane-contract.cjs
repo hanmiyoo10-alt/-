@@ -121,7 +121,7 @@ assert.doesNotMatch(statusWorkflow, /git\s+push/);
 
 const controlPlaneReadme = fs.readFileSync(path.join(root, '.github/plugin-control-plane/README.md'), 'utf8');
 assert.match(controlPlaneReadme, /intentionally redundant metadata-only fallback/);
-assert.match(controlPlaneReadme, /pull_request observer is read-only evidence/);
+assert.match(controlPlaneReadme, /`pull_request` observer is read-only evidence/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);

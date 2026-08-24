@@ -171,7 +171,7 @@ jobs:
             "version": "${VERSION}",
             "release_name": "${RELEASE_NAME}",
             "release_branch": "release-simcore",
-            "release_commit": "${RELEASE_COMMIT",
+            "release_commit": "${RELEASE_COMMIT}",
             "release_blob": "${RELEASE_BLOB}",
             "canonical_manifest": "product-manifest.json",
             "canonical_guideline": "docs/SIMCORE_GUIDELINES.md",

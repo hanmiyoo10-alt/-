@@ -36,6 +36,7 @@ const exact = Object.freeze({
   'products/simcore/tests/release-controller-qualification.test.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/post-publish-state-shadow.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC', 'SHARED_MAIN_COORDINATION'],
   'products/simcore/tests/post-publish-state-permanent.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
+  'products/simcore/tests/release-declaration-transition.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tests/admin-state-transition.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/releases/release-schema-v1.json': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/registry.mjs': ['CI_SELF', 'HARNESS'],

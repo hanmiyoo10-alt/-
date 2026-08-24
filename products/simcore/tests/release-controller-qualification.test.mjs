@@ -81,7 +81,7 @@ function semanticNegatives(base){
 function authorizationNegatives(base){
   const {root}=initRepo(base,'n6n7-auth'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); const C=all(root,'c');
   const spec=makeSpec({id:'simcore-v0.64.7-new-07',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); const rel=`products/simcore/releases/specs/${spec.releaseId}.json`; write(root,rel,`${JSON.stringify(spec)}\n`); const A1=commit(root,'auth1',rel);
-  const changed={...spec,releaseName:'Next Changed'}; write(root,rel,`${JSON.stringify(changed)}\n`); const A2=commit(root,'mutate spec',rel);
+  const changed={...spec,evidenceRefs:[...spec.evidenceRefs,'docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ACTIVATION_AMENDMENT.md']}; write(root,rel,`${JSON.stringify(changed)}\n`); const A2=commit(root,'mutate spec evidence',rel);
   within(root,()=>{ expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A1}),'RELEASE_AUTHORIZATION_MIXED_COMMIT');
   expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A2}),'RELEASE_SPEC_MUTATED_AFTER_AUTHORIZATION'); });
 }

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.64.7-new-01",
+  "product": "SimCore",
+  "version": "0.64.7",
+  "releaseName": "Cross-Reload Cache Observer Continuity",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "expectedProductionCommit": "47969d24771f6cc188df6e32150fc6fde519182d",
+  "candidateReleaseBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+  "primaryGoalId": "06407_RELOAD_CACHE_CONTINUITY",
+  "changeClass": "RUNTIME_FEATURE",
+  "evidenceRefs": [
+    "docs/SIMCORE_06407_RELOAD_CACHE_CONTINUITY_ACTIVATION.md",
+    "docs/SIMCORE_06407_IMPLEMENTATION_EVIDENCE.md",
+    "docs/SIMCORE_06407_CANDIDATE_PREP_ACTIVATION_EVIDENCE.md",
+    "docs/SIMCORE_06407_CANDIDATE_REGRESSION_FIX.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

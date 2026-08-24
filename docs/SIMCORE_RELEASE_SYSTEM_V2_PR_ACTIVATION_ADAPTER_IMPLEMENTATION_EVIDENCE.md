@@ -103,6 +103,25 @@ FIX / HARNESS / NON_RUNTIME / PRE_CI
 
 A temporary `products/simcore/releases/activations/.gitkeep` marker would itself have matched the adapter's activation path filter when the adapter installation PR closed. The marker was removed before PR creation. The activation directory is therefore created only by a real immutable activation JSON, preventing the installation PR from self-triggering the release adapter.
 
+### ACCIDENTAL_WORK_BRANCH_PR_MARKER
+
+Classification:
+
+```text
+FIX / TOOLING / WORK_BRANCH_ONLY
+```
+
+A temporary `docs/.simcore-r-pr-adapter-pr-marker` file was accidentally created while preparing the PR payload. It was immediately removed before PR creation.
+
+Impact:
+
+```text
+main mutation: NONE
+runtime mutation: NONE
+release-simcore mutation: NONE
+residual file: NONE
+```
+
 ## 5. Runtime/release boundary
 
 This infrastructure mini changes no SimCore runtime bytes and performs no publication while being introduced.

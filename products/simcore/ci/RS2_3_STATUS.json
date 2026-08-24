@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "phase": "RS2-3",
-  "phaseStatus": "PROMOTION_READY",
+  "phaseStatus": "CLOSED_AMENDED",
   "permanentCiAvailable": true,
   "permanentCiShadowVerified": true,
   "requiredCiActive": false,
@@ -22,6 +22,24 @@
       "GATE_LEGACY_COMPAT"
     ]
   },
+  "projectAuthorityGateway": {
+    "active": true,
+    "verified": true,
+    "model": "EXACT_CANDIDATE_REQUIRED_GATEWAY",
+    "mainWriter": "scripts/repo-main-write.py",
+    "activeSimcoreStateWriter": ".github/workflows/simcore-release-state-sync.yml",
+    "requiredWorkflow": "simcore-ci.yml",
+    "requiredProfile": "MAIN_HEALTH",
+    "requiredJob": "Required",
+    "stagingPrefix": "simcore-main-write-gate",
+    "coordinationTests": "scripts/test-repo-main-write.py",
+    "manualOwnerBypassOutsideAuthorizedOperation": true
+  },
+  "platformGovernance": {
+    "branchProtectionVerified": false,
+    "rulesetRequiredCheckVerified": false,
+    "status": "UNAVAILABLE_RESIDUAL_DEFER"
+  },
   "legacyGateMapSha256": "732ee4e82fab3cb8c9d8fc12f7be1f34764411684420fe298ac03f1ea894cb75",
   "shadowEquivalenceSha256": "d3a961ced4899f9453fb2909389f57ef7857f4b067526a0598e185c810c82dca",
   "pureCheckPredecessorsRetired": [],
@@ -39,16 +57,19 @@
     "timeline-closure-robust-25",
     "summary-scope-execution-control"
   ],
-  "releaseWriteDisposition": "RS2_4_PENDING",
-  "stateWriteDisposition": "RS2_2_OWNED",
+  "releaseWriteDisposition": "RS2_4E_QUALIFICATION",
+  "stateWriteDisposition": "RS2_2_PROJECT_GATEWAY_OWNED",
   "candidateRequiredInterface": "READY",
-  "candidateRequiredReleaseAuthority": "RESERVED_FOR_RS2_4",
-  "rs2_3Closed": false,
-  "rs2_4EntryAuthorized": false,
-  "blockers": [
+  "candidateRequiredReleaseAuthority": "READY_FOR_RS2_4E_QUALIFICATION",
+  "rs2_3Closed": true,
+  "rs2_4EntryAuthorized": true,
+  "closureBasis": "AMENDED_PROJECT_AUTHORITY_ENFORCEMENT",
+  "closureAmendment": "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_3_PROJECT_AUTHORITY_CLOSURE_AMENDMENT.md",
+  "blockers": [],
+  "residualDefers": [
     "REQUIRED_CI_ENFORCEMENT_ADMIN_CAPABILITY_GAP"
   ],
-  "nextPromotionStep": "P4_CONFIGURE_REQUIRED_CHECK_ENFORCEMENT",
+  "nextPromotionStep": "RS2_4E_CONTROLLER_QUALIFICATION",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE"
 }

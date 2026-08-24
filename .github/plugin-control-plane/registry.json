@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "managedLabelPrefixes": ["plugin:", "scope:"],
+  "managedLabelPrefixes": ["plugin:", "product:", "scope:"],
   "plugins": {
     "usage-dashboard": {
       "displayName": "Local Usage Dashboard",
@@ -8,6 +8,7 @@
       "issueValues": ["usage-dashboard", "Local Usage Dashboard"],
       "paths": [
         "plugins/usage-dashboard/**",
+        "products/usage-dashboard/**",
         ".github/usage-dashboard/**",
         ".github/workflows/usage-dashboard-*.yml",
         ".github/workflows/reusable-usage-dashboard-*.yml",
@@ -26,6 +27,7 @@
       "issueValues": ["simcore", "SimCore"],
       "paths": [
         "plugins/simcore/**",
+        "products/simcore/**",
         ".github/workflows/simcore-*.yml",
         "docs/SIMCORE_*.md",
         "config/simcore-*.json",
@@ -62,6 +64,34 @@
       "authority": {
         "evidence": "plugins/termux/large-doc-editor/README.md"
       }
+    },
+    "voyage-token-check": {
+      "displayName": "Voyage Token Check",
+      "lifecycle": "design-evidence-validation",
+      "issueValues": ["voyage-token-check", "Voyage Token Check", "Voyage"],
+      "paths": [
+        "voyage-token-check/**"
+      ],
+      "statusAdapter": "evidence",
+      "authority": {
+        "evidence": "voyage-token-check/DESIGN_STATUS.md"
+      }
+    }
+  },
+  "products": {
+    "pocketrisu-helper-mod": {
+      "displayName": "PocketRisu Helper Mod",
+      "lifecycle": "operations-product-root",
+      "issueValues": ["pocketrisu-helper-mod", "PocketRisu Helper Mod", "PocketRisu 개조", "포켓리스 보조 개조"],
+      "paths": [
+        "products/pocketrisu-helper-mod/**",
+        ".github/workflows/pocketrisu-helper-docs.yml"
+      ],
+      "statusAdapter": "pocketrisu-helper-mod",
+      "authority": {
+        "manifest": "products/pocketrisu-helper-mod/product.json",
+        "currentState": "products/pocketrisu-helper-mod/CURRENT.md"
+      }
     }
   },
   "nonOperationalScopes": [
@@ -84,6 +114,7 @@
   ],
   "sharedPaths": [
     "README.md",
+    "products/README.md",
     ".github/workflows/repo-main-write-coordination-migration.yml"
   ]
 }

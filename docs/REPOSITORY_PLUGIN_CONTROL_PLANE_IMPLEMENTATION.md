@@ -9,6 +9,7 @@ Implementation PR: `#271`.
 Implementation merge SHA: `3640a81a82fcbac0bd0ca8e34a309cc0ff81b8ab`.
 CP1 trigger repair PR: `#278`.
 CP1 trigger repair merge SHA: `c0a511a1a71bbdeec930f641c070976df2aa5597`.
+Final closure/proof PR: `#280`.
 
 ## What is implemented
 
@@ -148,9 +149,11 @@ Metadata/status failures degrade observability only.
 - Explicit issue-classification canary `#276`: `plugin:usage-dashboard` applied automatically.
 - Status views `#272`–`#275`: created automatically from existing authorities.
 - Initial PR-target closure PR `#277`: remained unlabeled and was preserved as negative operational evidence.
-- Repair PR `#278`: read-only observer activated successfully; Plugin Control Plane contracts and existing SimCore gates GREEN before exact-head merge.
+- Repair PR `#278`: Plugin Control Plane contracts and existing SimCore gates GREEN before exact-head merge.
+- Repair observer run `#1`: SUCCESS on PR `#278`.
+- Fresh closure PR `#280`: read-only observer run `#4` SUCCESS on initial PR event; this documentation update intentionally emits a second synchronize event to verify the post-merge trusted classifier after workflow registration has settled.
 
-Final fresh post-repair PR-label proof is recorded on the closure PR conversation and in Issue `#267` after the trusted classifier applies `scope:repo`.
+Final post-repair label evidence is recorded after `scope:repo` appears on PR `#280`; no manual label is used as proof.
 
 ## CP4 decision
 

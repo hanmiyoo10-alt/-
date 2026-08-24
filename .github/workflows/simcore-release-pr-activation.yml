@@ -1,0 +1,162 @@
+name: SimCore Permanent Release PR Activation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+    paths:
+      - 'products/simcore/releases/activations/**'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: simcore-release-activation
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Dispatch Permanent Caller
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    outputs:
+      permanent_run_id: ${{ steps.dispatch.outputs.permanent_run_id }}
+    steps:
+      - name: Checkout exact activation merge
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve immutable activation
+        id: activation
+        shell: bash
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$MERGE_SHA"
+          PARENT="$(git rev-parse "$MERGE_SHA^1")"
+          mapfile -t CHANGED < <(git diff --name-only "$PARENT" "$MERGE_SHA")
+          test "${#CHANGED[@]}" -eq 1
+          ACTIVATION="${CHANGED[0]}"
+          case "$ACTIVATION" in
+            products/simcore/releases/activations/*.json) ;;
+            *) echo 'SIMCORE_RELEASE_ACTIVATION_PATH_INVALID' >&2; exit 2 ;;
+          esac
+          TOUCHES="$(git log --first-parent --format=%H "$MERGE_SHA" -- "$ACTIVATION" | wc -l | tr -d ' ')"
+          test "$TOUCHES" = 1
+          ACTIVATION="$ACTIVATION" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT" > /tmp/simcore-release-activation.env
+          import json, os, re
+          p=os.environ['ACTIVATION']
+          a=json.load(open(p))
+          required=['schemaVersion','releaseId','releaseSpecPath','candidateFetchRef','authorityConfirmation']
+          for k in required:
+              if k not in a: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_MISSING:'+k)
+          if a['schemaVersion'] != 1: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SCHEMA_INVALID')
+          rid=str(a['releaseId'])
+          if not re.fullmatch(r'simcore-v[0-9]+\.[0-9]+\.[0-9]+-(?:new|correction|rollback|noop)-[0-9]{2,}', rid):
+              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_ID_INVALID')
+          expected_spec=f'products/simcore/releases/specs/{rid}.json'
+          if a['releaseSpecPath'] != expected_spec: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SPEC_PATH_INVALID')
+          if a['authorityConfirmation'] != 'RS2_4_RELEASE': raise SystemExit('SIMCORE_RELEASE_ACTIVATION_AUTHORITY_INVALID')
+          if not re.fullmatch(r'candidate/simcore-[A-Za-z0-9._/-]+', str(a['candidateFetchRef'])):
+              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_CANDIDATE_REF_INVALID')
+          expected_title=f'SimCore permanent release activation: {rid}'
+          if os.environ['PR_TITLE'] != expected_title: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_TITLE_INVALID')
+          s=json.load(open(expected_spec))
+          if s.get('releaseId') != rid: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SPEC_ID_MISMATCH')
+          if not re.fullmatch(r'[0-9a-f]{40}', str(s.get('candidateCommit') or '')):
+              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_CANDIDATE_MISSING')
+          print('release_id='+rid)
+          print('release_spec_path='+expected_spec)
+          print('candidate_fetch_ref='+str(a['candidateFetchRef']))
+          print('candidate_commit='+str(s['candidateCommit']))
+          print('authority_confirmation=RS2_4_RELEASE')
+          PY
+          source /tmp/simcore-release-activation.env
+          REF_HEAD="$(git ls-remote origin "refs/heads/$candidate_fetch_ref" 2>/dev/null | awk '{print $1}')"
+          test -n "$REF_HEAD"
+          test "$REF_HEAD" = "$candidate_commit"
+          echo 'SIMCORE_RELEASE_PR_ACTIVATION_BOUNDARY_PASS'
+
+      - name: Dispatch and observe permanent caller
+        id: dispatch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPEC_PATH: ${{ steps.activation.outputs.release_spec_path }}
+          FETCH_REF: ${{ steps.activation.outputs.candidate_fetch_ref }}
+          CONFIRM: ${{ steps.activation.outputs.authority_confirmation }}
+        run: |
+          set -euo pipefail
+          STARTED_EPOCH="$(date -u +%s)"
+          DISPATCH_HEAD="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          [[ "$DISPATCH_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          gh workflow run simcore-release-permanent.yml \
+            --ref main \
+            -f release_spec_path="$SPEC_PATH" \
+            -f candidate_fetch_ref="$FETCH_REF" \
+            -f authority_confirmation="$CONFIRM"
+          RUN_ID=''
+          for _ in $(seq 1 30); do
+            gh run list \
+              --workflow simcore-release-permanent.yml \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,createdAt,headSha,status,conclusion > /tmp/simcore-permanent-runs.json
+            RUN_ID="$(STARTED_EPOCH="$STARTED_EPOCH" DISPATCH_HEAD="$DISPATCH_HEAD" python3 - <<'PY'
+          import datetime, json, os
+          started=int(os.environ['STARTED_EPOCH'])
+          head=os.environ['DISPATCH_HEAD']
+          rows=json.load(open('/tmp/simcore-permanent-runs.json'))
+          matches=[]
+          for r in rows:
+              if str(r.get('headSha') or '') != head: continue
+              ts=str(r.get('createdAt') or '').replace('Z','+00:00')
+              try: epoch=int(datetime.datetime.fromisoformat(ts).timestamp())
+              except Exception: continue
+              if epoch >= started-2: matches.append((epoch,int(r['databaseId'])))
+          if matches: print(sorted(matches)[-1][1])
+          PY
+            )"
+            [[ -n "$RUN_ID" ]] && break
+            sleep 2
+          done
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          echo "permanent_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "SIMCORE_PERMANENT_RELEASE_RUN_ID=$RUN_ID"
+          gh run watch "$RUN_ID" --exit-status --interval 5
+          gh run view "$RUN_ID" --json databaseId,event,headSha,status,conclusion,name > /tmp/simcore-permanent-result.json
+          RUN_ID="$RUN_ID" DISPATCH_HEAD="$DISPATCH_HEAD" python3 - <<'PY'
+          import json, os
+          r=json.load(open('/tmp/simcore-permanent-result.json'))
+          assert int(r['databaseId']) == int(os.environ['RUN_ID'])
+          assert r['event'] == 'workflow_dispatch'
+          assert r['headSha'] == os.environ['DISPATCH_HEAD']
+          assert r['status'] == 'completed'
+          assert r['conclusion'] == 'success'
+          print('SIMCORE_PERMANENT_RELEASE_DISPATCH_PASS')
+          PY
+
+  required:
+    name: Activation Required
+    if: always()
+    needs: dispatch
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce adapter result
+        shell: bash
+        env:
+          DISPATCH_RESULT: ${{ needs.dispatch.result }}
+          PERMANENT_RUN_ID: ${{ needs.dispatch.outputs.permanent_run_id }}
+        run: |
+          set -euo pipefail
+          test "$DISPATCH_RESULT" = success
+          [[ "$PERMANENT_RUN_ID" =~ ^[0-9]+$ ]]
+          echo "SIMCORE_RELEASE_PR_ACTIVATION_PASS run=$PERMANENT_RUN_ID"

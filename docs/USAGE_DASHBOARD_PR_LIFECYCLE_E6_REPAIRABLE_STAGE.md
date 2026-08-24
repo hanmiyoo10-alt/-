@@ -1,11 +1,32 @@
 # Local Usage Dashboard — E6 Repairable Single-Transaction Release Flow
 
-Status: **IMPLEMENTATION CANDIDATE — operational proof pending**
+Status: **IMPLEMENTED — E6-A/B/C/D merged and regression GREEN; E6-E operational proof pending**
 
 Recorded: `2026-08-25`
 
 Reference design: Issue `#239`.
 Reference retrospective: Issue `#235`.
+Implementation PR: `#243`.
+Implementation merge SHA: `5343c3c89def76b32e70612f5eee5d0bc780bf13`.
+
+## Implementation closure
+
+E6-A/B/C/D are implemented on `main`.
+
+Repository proof from PR `#243`:
+
+- `Usage Dashboard Candidate Validation` run `#100` completed GREEN;
+- authoritative registry result: `TEST_REGISTRY_GREEN:77`;
+- E6 candidate-preparation and stage-transaction contracts GREEN;
+- Product remained `3.0.0-alpha.5.72`;
+- Engine remained `1.6.22` with SHA-256 `85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69`;
+- Manager remained `1.3.0`;
+- contracts remained `1 / 1`;
+- maintenance merge did not promote a new production release;
+- `release-usage-dashboard` remained at the existing 5.72 exact-artifact promotion commit `0056f0ee46b28e0e6b6ac63f0f845e0f0eab1510`;
+- main/release Git blobs for product manifest, `latest.js`, Engine, Manager, and bootstrap were rechecked exact-equal after merge.
+
+E6-E remains deliberately open because a maintenance implementation PR cannot prove the real feature-release repair loop. The next actual Usage Dashboard feature release must prove reentrant stage and same-PR repair behavior in operation.
 
 ## Goal
 
@@ -133,19 +154,21 @@ Normal release operation should not need those commands.
 
 ## Acceptance contracts
 
-E6 implementation is not closed until repository regression proves:
+Repository regression has proved the implementation contracts for:
 
 1. source and derived candidate namespaces are distinct;
 2. source generated-output edits remain fail-closed;
 3. fresh source intent is reconstructed onto a frozen trusted main base;
-4. second stage can parent a new fresh tree on the prior candidate head without force;
+4. a repaired candidate can parent a fresh tree on the prior candidate head without force;
 5. writer CAS and postverify remain exact;
 6. candidate code never sees repository write authority;
 7. PR management never executes candidate code;
-8. one open PR is reused and full validation is explicitly dispatched;
+8. one open PR is reused and full validation is explicitly dispatched by design;
 9. accepted/ready/rejected receipts exist;
-10. deployment receipt verifies exact production parity;
-11. maintenance implementation itself leaves `release-usage-dashboard` Product 5.72 bytes unchanged.
+10. deployment receipt verifies exact production parity by design;
+11. maintenance implementation leaves `release-usage-dashboard` Product 5.72 bytes unchanged.
+
+Items 8–10 still require E6-E operational evidence through the next real feature release, not merely static/contract proof.
 
 ## Operational proof
 

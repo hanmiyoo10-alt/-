@@ -1,10 +1,10 @@
-name: Usage Dashboard Safe Candidate Preparation
+name: Usage Dashboard Safe Candidate Preparation Fallback
 
 on:
   workflow_dispatch:
     inputs:
       target_branch:
-        description: Candidate branch in release/usage-dashboard-* namespace
+        description: Exact candidate branch in release/usage-dashboard-* namespace
         required: true
         type: string
       expected_head_sha:
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   prepare:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && (startsWith(github.event.comment.body, '/usage-dashboard prepare ') || startsWith(github.event.comment.body, '/usage-dashboard stage '))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard prepare ')) }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -31,26 +31,21 @@ jobs:
       has_changes: ${{ steps.materialize.outputs.has_changes }}
       candidate_sha: ${{ steps.materialize.outputs.candidate_sha }}
       bundle_sha256: ${{ steps.materialize.outputs.bundle_sha256 }}
-      target_branch: ${{ steps.trust.outputs.target_branch }}
-      expected_head_sha: ${{ steps.trust.outputs.expected_head_sha }}
+      target_branch: ${{ steps.request.outputs.target_branch }}
+      expected_head_sha: ${{ steps.request.outputs.expected_head_sha }}
       release_spec: ${{ steps.request.outputs.release_spec }}
-      stage_mode: ${{ steps.trust.outputs.stage_mode }}
-      source_base_sha: ${{ steps.request.outputs.source_base_sha }}
-      engine_changed: ${{ steps.request.outputs.engine_changed }}
-      plugin_changed: ${{ steps.request.outputs.plugin_changed }}
     steps:
-      - name: Checkout immutable trusted normalization policy
+      - name: Checkout immutable trusted fallback control plane
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Require main workflow trust root
-        id: trust
+      - name: Resolve exact fallback request
+        id: request
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           RAW_TARGET_BRANCH: ${{ inputs.target_branch }}
           RAW_EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
           RAW_RELEASE_SPEC: ${{ inputs.release_spec }}
@@ -61,127 +56,63 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo "CANDIDATE_PREP_UNTRUSTED_WORKFLOW_REF:$GITHUB_REF"; exit 1; }
-          STAGE_MODE=false
           if [[ "$GITHUB_EVENT_NAME" == 'issue_comment' ]]; then
             node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
-            if [[ "$CONTROL_COMMAND" == '/usage-dashboard stage '* ]]; then
-              TARGET_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-branch "$CONTROL_COMMAND")"
-              node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
-              RESPONSE="$(curl --fail-with-body --silent --show-error \
-                -H 'Accept: application/vnd.github+json' \
-                -H "Authorization: Bearer $GITHUB_TOKEN" \
-                -H 'X-GitHub-Api-Version: 2022-11-28' \
-                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH")"
-              EXPECTED_HEAD_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("object",{}).get("sha",""))' <<< "$RESPONSE")"
-              [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'CANDIDATE_STAGE_BRANCH_SHA_INVALID'; exit 1; }
-              EXPECTED_HEAD_SHA="${EXPECTED_HEAD_SHA,,}"
-              RELEASE_SPEC=''
-              STAGE_MODE=true
-              cp plugins/usage-dashboard/tools/candidate_stage_policy.cjs "$RUNNER_TEMP/usage-dashboard-candidate-stage-policy.cjs"
-              echo "CANDIDATE_STAGE_CONTROL_COMMENT:$TARGET_BRANCH:$EXPECTED_HEAD_SHA"
-            else
-              TARGET_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-target "$CONTROL_COMMAND")"
-              EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-sha "$CONTROL_COMMAND")"
-              RELEASE_SPEC="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-spec "$CONTROL_COMMAND")"
-              echo "CANDIDATE_PREP_CONTROL_COMMENT:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$RELEASE_SPEC"
-            fi
+            TARGET_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-target "$CONTROL_COMMAND")"
+            EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-sha "$CONTROL_COMMAND")"
+            RELEASE_SPEC="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-spec "$CONTROL_COMMAND")"
           else
             TARGET_BRANCH="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-target "$RAW_TARGET_BRANCH")"
             EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-sha "$RAW_EXPECTED_HEAD_SHA")"
             RELEASE_SPEC="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-spec "$RAW_RELEASE_SPEC")"
-            echo "CANDIDATE_PREP_INPUTS_NORMALIZED:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$RELEASE_SPEC"
           fi
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
-          printf 'target_branch=%s\n' "$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
-          printf 'expected_head_sha=%s\n' "$EXPECTED_HEAD_SHA" >> "$GITHUB_OUTPUT"
-          printf 'release_spec=%s\n' "$RELEASE_SPEC" >> "$GITHUB_OUTPUT"
-          printf 'stage_mode=%s\n' "$STAGE_MODE" >> "$GITHUB_OUTPUT"
+          case "$RELEASE_SPEC" in .github/usage-dashboard/releases/*.json) ;; *) echo "CANDIDATE_PREP_RELEASE_SPEC_DENIED:$RELEASE_SPEC"; exit 1 ;; esac
+          echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "expected_head_sha=${EXPECTED_HEAD_SHA,,}" >> "$GITHUB_OUTPUT"
+          echo "release_spec=$RELEASE_SPEC" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_PREP_FALLBACK_REQUEST:$TARGET_BRANCH:${EXPECTED_HEAD_SHA,,}:$RELEASE_SPEC"
 
-      - name: Checkout exact candidate base
+      - name: Checkout exact fallback candidate head
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.trust.outputs.expected_head_sha }}
+          ref: ${{ steps.request.outputs.expected_head_sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify candidate branch still matches expected head
+      - name: Verify fallback branch CAS before candidate code
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TARGET_BRANCH: ${{ steps.trust.outputs.target_branch }}
-          EXPECTED_HEAD_SHA: ${{ steps.trust.outputs.expected_head_sha }}
+          TARGET_BRANCH: ${{ steps.request.outputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ steps.request.outputs.expected_head_sha }}
         run: |
           set -euo pipefail
-          ACTUAL_SHA="$(git rev-parse HEAD)"
-          [[ "$ACTUAL_SHA" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_PREP_CHECKOUT_MISMATCH:$ACTUAL_SHA"; exit 1; }
-          RESPONSE="$(curl --fail-with-body --silent --show-error \
-            -H 'Accept: application/vnd.github+json' \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH")"
-          REMOTE_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("object",{}).get("sha",""))' <<< "$RESPONSE")"
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_HEAD_SHA" ]] || { echo 'CANDIDATE_PREP_CHECKOUT_MISMATCH'; exit 1; }
+          REMOTE_SHA="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
           [[ "$REMOTE_SHA" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_SHA:expected=$EXPECTED_HEAD_SHA"; exit 1; }
 
-      - name: Resolve immutable candidate request
-        id: request
-        shell: bash
-        env:
-          STAGE_MODE: ${{ steps.trust.outputs.stage_mode }}
-          TRUSTED_MAIN_SHA: ${{ github.sha }}
-          SOURCE_SHA: ${{ steps.trust.outputs.expected_head_sha }}
-          RAW_RELEASE_SPEC: ${{ steps.trust.outputs.release_spec }}
-        run: |
-          set -euo pipefail
-          if [[ "$STAGE_MODE" == 'true' ]]; then
-            git cat-file -e "$TRUSTED_MAIN_SHA^{commit}"
-            SOURCE_BASE_SHA="$(git merge-base "$TRUSTED_MAIN_SHA" "$SOURCE_SHA")"
-            [[ "$SOURCE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'CANDIDATE_STAGE_BASE_SHA_INVALID'; exit 1; }
-            INSPECT="$(node "$RUNNER_TEMP/usage-dashboard-candidate-stage-policy.cjs" --inspect "$SOURCE_BASE_SHA" "$SOURCE_SHA")"
-            RELEASE_SPEC="$(node -e 'const j=JSON.parse(process.argv[1]); process.stdout.write(j.releaseSpec)' "$INSPECT")"
-            ENGINE_CHANGED="$(node -e 'const j=JSON.parse(process.argv[1]); process.stdout.write(String(Boolean(j.engineChanged)))' "$INSPECT")"
-            PLUGIN_CHANGED="$(node -e 'const j=JSON.parse(process.argv[1]); process.stdout.write(String(Boolean(j.pluginChanged)))' "$INSPECT")"
-            echo "CANDIDATE_STAGE_SOURCE_FROZEN:$SOURCE_BASE_SHA:$SOURCE_SHA:$RELEASE_SPEC"
-          else
-            SOURCE_BASE_SHA=''
-            RELEASE_SPEC="$RAW_RELEASE_SPEC"
-            ENGINE_CHANGED=false
-            PLUGIN_CHANGED=false
-          fi
-          case "$RELEASE_SPEC" in
-            .github/usage-dashboard/releases/*.json) ;;
-            *) echo "CANDIDATE_PREP_RELEASE_SPEC_DENIED:$RELEASE_SPEC"; exit 1 ;;
-          esac
-          printf 'source_base_sha=%s\n' "$SOURCE_BASE_SHA" >> "$GITHUB_OUTPUT"
-          printf 'release_spec=%s\n' "$RELEASE_SPEC" >> "$GITHUB_OUTPUT"
-          printf 'engine_changed=%s\n' "$ENGINE_CHANGED" >> "$GITHUB_OUTPUT"
-          printf 'plugin_changed=%s\n' "$PLUGIN_CHANGED" >> "$GITHUB_OUTPUT"
-
-      - name: Materialize candidate without repository credentials
+      - name: Materialize fallback candidate without repository credentials
         id: materialize
         shell: bash
         env:
           PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
-          TARGET_BRANCH: ${{ steps.trust.outputs.target_branch }}
-          EXPECTED_HEAD_SHA: ${{ steps.trust.outputs.expected_head_sha }}
+          TARGET_BRANCH: ${{ steps.request.outputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ steps.request.outputs.expected_head_sha }}
           RELEASE_SPEC: ${{ steps.request.outputs.release_spec }}
         run: |
           set -euo pipefail
-          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
           test -f "$RELEASE_SPEC"
-          UD_MATERIALIZER="$(python3 - "$RELEASE_SPEC" <<'PY'
-          import json, re, sys
-          from pathlib import Path
-          spec = json.loads(Path(sys.argv[1]).read_text())
-          path = str(spec.get('materializer', ''))
-          if not re.fullmatch(r'plugins/usage-dashboard/tools/[A-Za-z0-9_.-]+\.py', path):
-              raise SystemExit('CANDIDATE_PREP_MATERIALIZER_DENIED')
-          print(path)
-          PY
+          UD_MATERIALIZER="$(node - "$RELEASE_SPEC" <<'NODE'
+          const fs=require('node:fs');
+          const spec=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const path=String(spec.materializer||'');
+          if(!/^plugins\/usage-dashboard\/tools\/[A-Za-z0-9_.-]+\.py$/.test(path)) throw new Error('CANDIDATE_PREP_MATERIALIZER_DENIED');
+          process.stdout.write(path);
+          NODE
           )"
-          python3 -m py_compile "$UD_MATERIALIZER" plugins/usage-dashboard/tools/validate_release_candidate.py plugins/usage-dashboard/tools/reconcile_release_candidate.py
+          python3 -m py_compile "$UD_MATERIALIZER" plugins/usage-dashboard/tools/reconcile_release_candidate.py plugins/usage-dashboard/tools/validate_release_candidate.py
           python3 "$UD_MATERIALIZER"
           python3 plugins/usage-dashboard/tools/reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass
-
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-worktree
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
@@ -189,7 +120,6 @@ jobs:
           bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
           git diff --check
-
           if [[ -z "$(git status --porcelain --untracked-files=all)" ]]; then
             echo 'has_changes=false' >> "$GITHUB_OUTPUT"
             echo "candidate_sha=$EXPECTED_HEAD_SHA" >> "$GITHUB_OUTPUT"
@@ -197,23 +127,15 @@ jobs:
             echo "CANDIDATE_PREP_NO_CHANGES:$TARGET_BRANCH:$EXPECTED_HEAD_SHA"
             exit 0
           fi
-
           git config user.name 'usage-dashboard-candidate-prep'
           git config user.email 'usage-dashboard-candidate-prep@users.noreply.github.com'
-          git add -A -- \
-            plugins/usage-dashboard/src \
-            plugins/usage-dashboard/runtime-src \
-            plugins/usage-dashboard/runtime \
-            plugins/usage-dashboard/latest.js \
-            docs/USAGE_DASHBOARD_GUIDELINES.md
+          git add -A -- plugins/usage-dashboard/src plugins/usage-dashboard/runtime-src plugins/usage-dashboard/runtime plugins/usage-dashboard/latest.js docs/USAGE_DASHBOARD_GUIDELINES.md
           git diff --cached --quiet && { echo 'CANDIDATE_PREP_EMPTY_STAGE'; exit 1; }
           [[ -z "$(git diff --name-only)" ]] || { echo 'CANDIDATE_PREP_UNSTAGED_OUTPUT'; git diff --name-only; exit 1; }
           [[ -z "$(git ls-files --others --exclude-standard)" ]] || { echo 'CANDIDATE_PREP_UNTRACKED_OUTPUT'; git ls-files --others --exclude-standard; exit 1; }
-
-          git commit -m "materialize: Usage Dashboard candidate from $RELEASE_SPEC"
+          git commit -m "materialize: Usage Dashboard fallback candidate from $RELEASE_SPEC"
           PAYLOAD_SHA="$(git rev-parse HEAD)"
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --verify-payload "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA"
-
           git branch -f candidate-payload "$PAYLOAD_SHA"
           BUNDLE="$RUNNER_TEMP/usage-dashboard-candidate.bundle"
           META="$RUNNER_TEMP/usage-dashboard-candidate.json"
@@ -223,14 +145,14 @@ jobs:
           node - "$META" "$TARGET_BRANCH" "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA" "$RELEASE_SPEC" "$BUNDLE_SHA256" <<'NODE'
           const fs=require('node:fs');
           const [file,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256]=process.argv.slice(2);
-          fs.writeFileSync(file, JSON.stringify({schemaVersion:1,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256},null,2)+'\n');
+          fs.writeFileSync(file,JSON.stringify({schemaVersion:1,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256},null,2)+'\n');
           NODE
           echo 'has_changes=true' >> "$GITHUB_OUTPUT"
           echo "candidate_sha=$PAYLOAD_SHA" >> "$GITHUB_OUTPUT"
           echo "bundle_sha256=$BUNDLE_SHA256" >> "$GITHUB_OUTPUT"
           echo "CANDIDATE_PREP_BUNDLE_READY:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$PAYLOAD_SHA"
 
-      - name: Upload immutable candidate payload
+      - name: Upload immutable fallback payload
         if: steps.materialize.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -248,120 +170,38 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout immutable trusted control plane
+      - name: Checkout immutable trusted fallback writer
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: true
 
-      - name: Download candidate Git bundle only
+      - name: Download immutable fallback payload
         uses: actions/download-artifact@v4
         with:
           name: usage-dashboard-candidate-payload
           path: ${{ runner.temp }}/usage-dashboard-candidate-payload
 
-      - name: Verify payload and fast-forward candidate branch
+      - name: Verify payload and fast-forward fallback candidate branch
         shell: bash
         env:
           TARGET_BRANCH: ${{ needs.prepare.outputs.target_branch }}
           EXPECTED_HEAD_SHA: ${{ needs.prepare.outputs.expected_head_sha }}
           PAYLOAD_SHA: ${{ needs.prepare.outputs.candidate_sha }}
           EXPECTED_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle_sha256 }}
-          RELEASE_SPEC: ${{ needs.prepare.outputs.release_spec }}
         run: |
           set -euo pipefail
           BUNDLE="$RUNNER_TEMP/usage-dashboard-candidate-payload/usage-dashboard-candidate.bundle"
-          META="$RUNNER_TEMP/usage-dashboard-candidate-payload/usage-dashboard-candidate.json"
-          test -f "$BUNDLE" && test -f "$META"
+          test -f "$BUNDLE"
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
-
-          ACTUAL_BUNDLE_SHA256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
-          [[ "$ACTUAL_BUNDLE_SHA256" == "$EXPECTED_BUNDLE_SHA256" ]] || { echo 'CANDIDATE_BUNDLE_SHA256_MISMATCH'; exit 1; }
-          node - "$META" "$TARGET_BRANCH" "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA" "$RELEASE_SPEC" "$EXPECTED_BUNDLE_SHA256" <<'NODE'
-          const fs=require('node:fs');
-          const [file,targetBranch,expectedHeadSha,payloadSha,releaseSpec,bundleSha256]=process.argv.slice(2);
-          const data=JSON.parse(fs.readFileSync(file,'utf8'));
-          if(data.schemaVersion!==1 || data.targetBranch!==targetBranch || data.expectedHeadSha!==expectedHeadSha || data.payloadSha!==payloadSha || data.releaseSpec!==releaseSpec || data.bundleSha256!==bundleSha256) throw new Error('CANDIDATE_BUNDLE_METADATA_MISMATCH');
-          NODE
-
-          git fetch --no-tags origin "refs/heads/$TARGET_BRANCH:refs/remotes/origin/candidate-target"
-          REMOTE_BASE="$(git rev-parse refs/remotes/origin/candidate-target)"
-          [[ "$REMOTE_BASE" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_BASE:expected=$EXPECTED_HEAD_SHA"; exit 1; }
-
-          git bundle verify "$BUNDLE"
-          git fetch "$BUNDLE" 'refs/heads/candidate-payload:refs/candidate/payload'
-          IMPORTED_SHA="$(git rev-parse refs/candidate/payload)"
-          [[ "$IMPORTED_SHA" == "$PAYLOAD_SHA" ]] || { echo "CANDIDATE_PAYLOAD_SHA_MISMATCH:$IMPORTED_SHA"; exit 1; }
-          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --verify-payload "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA"
-
+          [[ "$(sha256sum "$BUNDLE" | awk '{print $1}')" == "$EXPECTED_BUNDLE_SHA256" ]] || { echo 'CANDIDATE_BUNDLE_SHA256_MISMATCH'; exit 1; }
           REMOTE_BEFORE="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
           [[ "$REMOTE_BEFORE" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_BEFORE:expected=$EXPECTED_HEAD_SHA"; exit 1; }
+          git bundle verify "$BUNDLE"
+          git fetch "$BUNDLE" 'refs/heads/candidate-payload:refs/candidate/payload'
+          [[ "$(git rev-parse refs/candidate/payload)" == "$PAYLOAD_SHA" ]] || { echo 'CANDIDATE_PAYLOAD_SHA_MISMATCH'; exit 1; }
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --verify-payload "$EXPECTED_HEAD_SHA" "$PAYLOAD_SHA"
           git push origin "$PAYLOAD_SHA:refs/heads/$TARGET_BRANCH"
-          REMOTE_AFTER="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
-          [[ "$REMOTE_AFTER" == "$PAYLOAD_SHA" ]] || { echo "CANDIDATE_BRANCH_POSTVERIFY_MISMATCH:$REMOTE_AFTER"; exit 1; }
-          echo "CANDIDATE_MATERIALIZED branch=$TARGET_BRANCH base=$EXPECTED_HEAD_SHA candidate=$PAYLOAD_SHA"
-
-  candidate-ready:
-    needs: [prepare, commit-candidate]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.stage_mode == 'true' && (needs.commit-candidate.result == 'success' || needs.commit-candidate.result == 'skipped') }}
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout exact materialized candidate
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.candidate_sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Verify exact-SHA readiness and focused behavior smoke
-        shell: bash
-        env:
-          PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
-          CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate_sha }}
-          RELEASE_SPEC: ${{ needs.prepare.outputs.release_spec }}
-          ENGINE_CHANGED: ${{ needs.prepare.outputs.engine_changed }}
-          PLUGIN_CHANGED: ${{ needs.prepare.outputs.plugin_changed }}
-        run: |
-          set -euo pipefail
-          ACTUAL_SHA="$(git rev-parse HEAD)"
-          [[ "$ACTUAL_SHA" == "$CANDIDATE_SHA" ]] || { echo "CANDIDATE_READY_SHA_MISMATCH:$ACTUAL_SHA"; exit 1; }
-          python3 plugins/usage-dashboard/tools/reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass
-          [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/src plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime plugins/usage-dashboard/runtime-src docs/USAGE_DASHBOARD_GUIDELINES.md)" ]] || { git status --short; echo 'CANDIDATE_NOT_MATERIALIZED'; exit 1; }
-          node plugins/usage-dashboard/tests/test-registry-contract.cjs
-          node --check plugins/usage-dashboard/latest.js
-          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
-          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
-          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
-          if [[ "$ENGINE_CHANGED" == 'true' ]]; then
-            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat 3
-          elif [[ "$PLUGIN_CHANGED" == 'true' ]]; then
-            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat 1
-          else
-            echo 'BEHAVIOR_SMOKE_SKIPPED:structural-only-source-diff'
-          fi
-          [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]] || { git status --short plugins/usage-dashboard/tests; echo 'TEST_TREE_MUTATED'; exit 1; }
-          [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/src plugins/usage-dashboard/latest.js plugins/usage-dashboard/runtime plugins/usage-dashboard/runtime-src docs/USAGE_DASHBOARD_GUIDELINES.md)" ]] || { git status --short; echo 'CANDIDATE_NOT_MATERIALIZED'; exit 1; }
-          PRODUCT_VERSION="$(node -e "console.log(require('./plugins/usage-dashboard/runtime/product-manifest.json').productVersion)")"
-          echo "CANDIDATE_READY_LOCAL:$CANDIDATE_SHA:$PRODUCT_VERSION:$RELEASE_SPEC"
-
-      - name: Recheck candidate branch still equals ready SHA
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TARGET_BRANCH: ${{ needs.prepare.outputs.target_branch }}
-          CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate_sha }}
-          RELEASE_SPEC: ${{ needs.prepare.outputs.release_spec }}
-        run: |
-          set -euo pipefail
-          RESPONSE="$(curl --fail-with-body --silent --show-error \
-            -H 'Accept: application/vnd.github+json' \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH")"
-          REMOTE_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("object",{}).get("sha",""))' <<< "$RESPONSE")"
-          [[ "$REMOTE_SHA" == "$CANDIDATE_SHA" ]] || { echo "CANDIDATE_READY_BRANCH_MOVED:$REMOTE_SHA:expected=$CANDIDATE_SHA"; exit 1; }
-          PRODUCT_VERSION="$(node -e "console.log(require('./plugins/usage-dashboard/runtime/product-manifest.json').productVersion)")"
-          echo "CANDIDATE_READY:$CANDIDATE_SHA:$PRODUCT_VERSION:$RELEASE_SPEC"
+          [[ "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" == "$PAYLOAD_SHA" ]] || { echo 'CANDIDATE_BRANCH_POSTVERIFY_MISMATCH'; exit 1; }
+          echo "CANDIDATE_MATERIALIZED_FALLBACK:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$PAYLOAD_SHA"

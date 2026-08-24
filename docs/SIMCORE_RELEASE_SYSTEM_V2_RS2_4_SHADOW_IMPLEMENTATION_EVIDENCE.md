@@ -113,18 +113,58 @@ valid NOOP_IDENTICAL                     -> WOULD_NOOP
 
 The permanent CI self-test executes this matrix for release-system PR changes.
 
-## PFFL findings so far
+## PFFL findings
 
-No PR execution has occurred yet for this implementation branch.
+### Finding 1 — temporary Git repository was not bound as planner cwd
 
-The previously recorded repository-infrastructure transcription finding remains separate and already fixed before this work item:
+First latest-main PR run:
+
+```text
+PR       #208
+run      32723154375
+Verify   97418675473  FAILURE
+Required              FAILURE
+reason   CI_SELF_TEST_FAIL
+```
+
+The permanent trusted-lane baseline passed. `GATE_STATIC`, `GATE_ARCH`, and `GATE_REGRESSION` also passed. The only failing proposed gate was `GATE_CI_SELF`.
+
+Root cause:
+
+`release-shadow.test.mjs` correctly created candidate commits in an isolated temporary Git repository, but `release-shadow.mjs` executes `git` in the process current working directory. The test did not switch the process cwd to the temporary repository before calling `evaluateShadow`, so the candidate SHA was looked up in the checked-out project repository and was correctly reported as absent.
+
+Classification:
+
+```text
+RS2_4_SHADOW_TEST_REPO_CWD_NOT_BOUND
+= FIX / HARNESS / DIRECT_EVIDENCE / NON_RUNTIME
+```
+
+Impact:
+
+```text
+production code regression        NO
+permanent product gates weakened  NO
+release-simcore mutation          NONE
+runtime mutation                  NONE
+```
+
+Repair:
+
+```text
+bind the deterministic test process to its temporary Git repository
+restore the original cwd in finally
+re-run the whole permanent CI, not only the failed local assertion
+```
+
+### Earlier repository-infrastructure finding
+
+The previously recorded separate finding remains:
 
 ```text
 PROTECTED_MAIN_WORKFLOW_TEMPLATE_TRANSCRIPTION_ERROR
 = FIX / CI_WORKFLOW / NON_RUNTIME
 ```
-
-Any new PR/CI failure from this branch must be appended here before repair.
 
 ## Forbidden activation state
 
@@ -148,8 +188,8 @@ plugins/simcore/install.js
 ## Next proof
 
 ```text
-1. permanent PR CI on implementation head
-2. fix/evidence any accidental failures
+1. repair test cwd binding
+2. permanent PR CI on repaired implementation head
 3. shadow workflow contract review
 4. bounded live GitHub shadow execution using a synthetic temporary candidate ref
 5. prove release-simcore unchanged

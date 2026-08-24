@@ -183,3 +183,35 @@ Do not optimize by deleting evidence or weakening gates merely to reduce step co
 Long-term target:
 
 > **A normal SimCore update should be quick because past failures have already taught R how to handle the common cases.**
+
+## 9. Project-owned enforcement over manual platform governance
+
+Do not make manual GitHub platform enforcement a default dependency of the SimCore release process.
+
+The preferred direction is to encode required safety properties inside repository-owned, testable, evidence-backed controls that the project can evolve directly.
+
+Examples include:
+
+```text
+exact-candidate CI binding
+project-authority write gateways
+path allowlists
+fast-forward-only writes
+production-parent revalidation
+immutable release identity checks
+bounded state writers
+fail-closed controller logic
+permanent regression tests
+```
+
+If a GitHub platform feature is unavailable, awkward to maintain manually, or would create recurring operator dependence, first ask whether the same safety property can be implemented and verified inside R using existing repository and automation capabilities.
+
+This does not mean external platform safeguards are forbidden. They may be adopted later when they provide clear additional value and can be managed without becoming a manual operating dependency.
+
+However, absence of such a platform feature must not remain a permanent blocker when an equivalent or stronger project-owned control can be demonstrated with durable evidence.
+
+Manual owner bypass of an established project-authority gateway is outside authorized SimCore operation and must be treated as an authority violation rather than as a normal alternative workflow.
+
+Preferred long-term principle:
+
+> **SimCore should depend primarily on controls it can encode, test, preserve, and improve itself; platform governance is optional defense-in-depth, not the default source of correctness.**

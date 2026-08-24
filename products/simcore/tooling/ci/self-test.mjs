@@ -26,7 +26,7 @@ ok('release-system-classification', () => {
   }
 });
 ok('state-sync-classification', () => {
-  for (const p of ['products/simcore/tooling/sync-state.mjs','products/simcore/tooling/declare-production.mjs','products/simcore/tooling/post-publish-state-shadow.mjs','products/simcore/tests/post-publish-state-shadow.test.mjs']) {
+  for (const p of ['products/simcore/tooling/sync-state.mjs','products/simcore/tooling/declare-production.mjs','products/simcore/tooling/post-publish-state-shadow.mjs','products/simcore/tests/post-publish-state-shadow.test.mjs','products/simcore/tooling/admin-state-transition.mjs','products/simcore/tests/admin-state-transition.test.mjs','.github/workflows/simcore-release-state-sync.yml']) {
     const r = classifyPaths([p]);
     expect(r.labels.includes('STATE_SYNC'), `${p}: ${JSON.stringify(r)}`);
   }
@@ -34,6 +34,10 @@ ok('state-sync-classification', () => {
 ok('post-publish-shadow-coordination-classification', () => {
   const r = classifyPaths(['products/simcore/tests/post-publish-state-shadow.test.mjs']);
   expect(r.labels.includes('SHARED_MAIN_COORDINATION'), JSON.stringify(r));
+});
+ok('admin-state-writer-coordination-classification', () => {
+  const r = classifyPaths(['.github/workflows/simcore-release-state-sync.yml']);
+  for (const id of ['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION']) expect(r.labels.includes(id), JSON.stringify(r));
 });
 ok('contract-multilabel-classification', () => {
   const r = classifyPaths(['products/simcore/contracts/frozen-surfaces-v1.json']);
@@ -61,6 +65,19 @@ ok('automated-state-writer-bot-provenance', () => {
   expect(emails.length === 1 && emails[0] === '41898282+github-actions[bot]@users.noreply.github.com', `unexpected automated writer email identity: ${JSON.stringify(emails)}`);
 });
 
+ok('admin-state-writer-boundary', () => {
+  const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
+  const admin = workflow.indexOf('node products/simcore/tooling/admin-state-transition.mjs');
+  const render = workflow.indexOf('node products/simcore/tooling/sync-state.mjs');
+  expect(workflow.includes("TRANSITION='products/simcore/state-sync/active-admin-transition.json'"), 'registered admin transition path missing');
+  expect(admin >= 0 && render > admin, 'admin transition must run before sync-state rendering');
+  expect(workflow.includes('--required-profile MAIN_HEALTH'), 'state writer must use MAIN_HEALTH project gateway');
+  expect(workflow.includes('--required-job Required'), 'state writer Required gate missing');
+  expect(workflow.includes('--allow product-manifest.json'), 'manifest allowlist missing');
+  expect(workflow.includes('--allow docs/CURRENT_DEVELOPMENT.md'), 'current-development allowlist missing');
+  expect(!workflow.includes('--allow products/simcore/state-sync/active-admin-transition.json'), 'transition spec must not be part of generated state payload');
+});
+
 ok('release-shadow-read-only-boundary', () => {
   const workflow=fs.readFileSync('.github/workflows/simcore-release.yml','utf8');
   for(const token of ['contents: write','git push','--force','release-simcore:']) expect(!workflow.includes(token),`shadow release workflow forbidden token: ${token}`);
@@ -80,6 +97,12 @@ ok('rs2-4e-controller-qualification-tests', () => {
   const r=spawnSync(process.execPath,['products/simcore/tests/release-controller-qualification.test.mjs'],{encoding:'utf8',timeout:240000,maxBuffer:1024*1024});
   expect(r.status===0,`RS2-4E controller qualification failed: ${r.stderr || r.stdout}`);
   expect(String(r.stdout).includes('RS2_4E_CONTROLLER_QUALIFICATION_PASS E-A1-E-A6 P2 P3 R1 N1-N9'),'RS2-4E qualification pass marker missing');
+});
+
+ok('admin-state-transition-deterministic-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/admin-state-transition.test.mjs'],{encoding:'utf8',timeout:120000,maxBuffer:1024*1024});
+  expect(r.status===0,`RS2-4E admin-state transition tests failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4E_ADMIN_STATE_TRANSITION_TEST_PASS'),'admin-state transition pass marker missing');
 });
 
 ok('post-publish-state-shadow-deterministic-tests', () => {

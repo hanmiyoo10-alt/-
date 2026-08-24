@@ -9,9 +9,15 @@
     {key:'data',title:'Data Fidelity & Request Ledger'},
     {key:'scheduler',title:'Scheduler, UI & Recovery'},
   ]);
+  let diagnosticsModePersistTail = Promise.resolve();
 
   function diagnosticsWorkspaceMode() {
     return state?.diagnosticsMode === 'detailed' ? 'detailed' : 'basic';
+  }
+
+  function diagnosticsWorkspaceQueuePersist() {
+    diagnosticsModePersistTail = diagnosticsModePersistTail.then(() => persist()).catch(() => undefined);
+    return diagnosticsModePersistTail;
   }
 
   function diagnosticsWorkspaceCliRuntime() {
@@ -167,12 +173,12 @@
   bindSettings = function diagnosticsWorkspaceBindSettings() {
     diagnosticsWorkspaceLegacyBindSettings();
     const q = selector => document.querySelector(selector);
-    const setMode = async mode => {
+    const setMode = mode => {
       const next = mode === 'detailed' ? 'detailed' : 'basic';
       if (diagnosticsWorkspaceMode() === next) return;
       state.diagnosticsMode = next;
-      await persist();
-      renderSettings();
+      renderSettingsPartial();
+      void diagnosticsWorkspaceQueuePersist();
     };
     if (q('#diagnostics-mode-basic')) q('#diagnostics-mode-basic').onclick = () => setMode('basic');
     if (q('#diagnostics-mode-detailed')) q('#diagnostics-mode-detailed').onclick = () => setMode('detailed');

@@ -1,6 +1,7 @@
 name: Usage Dashboard Candidate Validation
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -11,6 +12,7 @@ on:
       - '.github/workflows/usage-dashboard-validate.yml'
       - '.github/workflows/usage-dashboard-candidate-ready.yml'
       - '.github/workflows/usage-dashboard-prepare-candidate.yml'
+      - '.github/workflows/usage-dashboard-stage-e6.yml'
       - '.github/workflows/usage-dashboard-promote.yml'
       - '.github/workflows/reusable-usage-dashboard-validate.yml'
       - '.github/workflows/reusable-usage-dashboard-promote.yml'

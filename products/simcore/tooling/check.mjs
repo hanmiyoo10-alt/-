@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const PROFILES = new Set(['PR_MAIN', 'MAIN_HEALTH', 'CANDIDATE_SHADOW', 'CANDIDATE_REQUIRED']);
+const CANDIDATE_REQUIRED_AUTHORITIES = new Set(['RS2_4_SHADOW', 'RS2_4_RELEASE']);
 const MAX_REPORT = 256 * 1024;
 
 function parseArgs(argv) {
@@ -79,8 +80,8 @@ function stateCheck(args) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.profile === 'CANDIDATE_REQUIRED' && args['candidate-required-authority'] !== 'RS2_4_SHADOW') {
-    throw Object.assign(new Error('CANDIDATE_REQUIRED caller authority is reserved for RS2-4'), { ciCode:'CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4' });
+  if (args.profile === 'CANDIDATE_REQUIRED' && !CANDIDATE_REQUIRED_AUTHORITIES.has(args['candidate-required-authority'])) {
+    throw Object.assign(new Error('CANDIDATE_REQUIRED caller authority is not an authorized RS2-4 lane'), { ciCode:'CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4' });
   }
   const sourcePath = inside(args.source), mirrorPath = inside(args['mirror-source']);
   const sourceBytes = fs.readFileSync(sourcePath), mirrorBytes = fs.readFileSync(mirrorPath);

@@ -26,6 +26,8 @@ BASE_RELEASE_TITLE = 'Runtime Weight & Lifecycle Audit'
 TARGET_RELEASE_TITLE = 'Diagnostics Mode Handler Ownership Consolidation'
 BASE_RELEASE_MEMORY = f'Current release implementation: `{BASE_VERSION} — {BASE_RELEASE_TITLE}`.'
 TARGET_RELEASE_MEMORY = f'Current release implementation: `{TARGET_VERSION} — {TARGET_RELEASE_TITLE}`.'
+BASE_VERIFIED_BASELINE = 'Last verified real-device baseline: `3.0.0-alpha.5.67 — Diagnostics Workspace Overhaul`.'
+TARGET_VERIFIED_BASELINE = 'Last verified real-device baseline: `3.0.0-alpha.5.73 — Runtime Weight & Lifecycle Audit`.'
 BASE_ENGINE_SHA = '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69'
 
 
@@ -53,6 +55,16 @@ def sync_release_memory() -> None:
     if count != 1:
         raise SystemExit(f'5.74 release memory sync: expected exactly one 5.73 memory line, found {count}')
     GUIDELINES.write_text(text.replace(BASE_RELEASE_MEMORY, TARGET_RELEASE_MEMORY, 1), encoding='utf-8')
+
+
+def sync_verified_baseline() -> None:
+    text = GUIDELINES.read_text(encoding='utf-8')
+    if TARGET_VERIFIED_BASELINE in text:
+        return
+    count = text.count(BASE_VERIFIED_BASELINE)
+    if count != 1:
+        raise SystemExit(f'5.74 verified baseline sync: expected exactly one 5.67 baseline line, found {count}')
+    GUIDELINES.write_text(text.replace(BASE_VERIFIED_BASELINE, TARGET_VERIFIED_BASELINE, 1), encoding='utf-8')
 
 
 def sync_manifest_hashes() -> None:
@@ -132,8 +144,11 @@ def validate_target() -> None:
         raise SystemExit('5.74 Manager hash mismatch')
     if manager.get('bootstrapSha256') != sha256(BOOTSTRAP):
         raise SystemExit('5.74 bootstrap hash mismatch')
-    if TARGET_RELEASE_MEMORY not in GUIDELINES.read_text(encoding='utf-8'):
+    guidelines = GUIDELINES.read_text(encoding='utf-8')
+    if TARGET_RELEASE_MEMORY not in guidelines:
         raise SystemExit('5.74 current release memory mismatch')
+    if TARGET_VERIFIED_BASELINE not in guidelines:
+        raise SystemExit('5.74 verified real-device baseline mismatch')
     core = CORE.read_text(encoding='utf-8')
     latest = (ROOT / 'latest.js').read_text(encoding='utf-8')
     if f'//@version {TARGET_VERSION}' not in core or f"const VERSION = '{TARGET_VERSION}';" not in core:
@@ -177,6 +192,7 @@ if current == BASE_VERSION:
     MANIFEST.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 
 sync_release_memory()
+sync_verified_baseline()
 run('python3', str(TOOLS / 'sync_project_guidelines.py'))
 run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
 run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')

@@ -28,21 +28,40 @@ jobs:
       has_changes: ${{ steps.materialize.outputs.has_changes }}
       candidate_sha: ${{ steps.materialize.outputs.candidate_sha }}
       bundle_sha256: ${{ steps.materialize.outputs.bundle_sha256 }}
+      target_branch: ${{ steps.trust.outputs.target_branch }}
+      expected_head_sha: ${{ steps.trust.outputs.expected_head_sha }}
+      release_spec: ${{ steps.trust.outputs.release_spec }}
     steps:
+      - name: Checkout immutable trusted normalization policy
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Require main workflow trust root
+        id: trust
         shell: bash
+        env:
+          RAW_TARGET_BRANCH: ${{ inputs.target_branch }}
+          RAW_EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          RAW_RELEASE_SPEC: ${{ inputs.release_spec }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo "CANDIDATE_PREP_UNTRUSTED_WORKFLOW_REF:$GITHUB_REF"; exit 1; }
-          [[ '${{ inputs.target_branch }}' =~ ^release/usage-dashboard-[A-Za-z0-9._-]+$ ]] || { echo 'CANDIDATE_PREP_TARGET_DENIED'; exit 1; }
-          case '${{ inputs.target_branch }}' in main|release-usage-dashboard|release-simcore) echo 'CANDIDATE_PREP_TARGET_DENIED'; exit 1;; esac
-          [[ '${{ inputs.expected_head_sha }}' =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'CANDIDATE_PREP_INVALID_SHA'; exit 1; }
-          case '${{ inputs.release_spec }}' in .github/usage-dashboard/releases/*.json) ;; *) echo 'CANDIDATE_PREP_RELEASE_SPEC_DENIED'; exit 1;; esac
+          TARGET_BRANCH="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-target "$RAW_TARGET_BRANCH")"
+          EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-sha "$RAW_EXPECTED_HEAD_SHA")"
+          RELEASE_SPEC="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-spec "$RAW_RELEASE_SPEC")"
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
+          printf 'target_branch=%s\n' "$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+          printf 'expected_head_sha=%s\n' "$EXPECTED_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'release_spec=%s\n' "$RELEASE_SPEC" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_PREP_INPUTS_NORMALIZED:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$RELEASE_SPEC"
 
       - name: Checkout exact candidate base
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_head_sha }}
+          ref: ${{ steps.trust.outputs.expected_head_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -50,8 +69,8 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          TARGET_BRANCH: ${{ steps.trust.outputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ steps.trust.outputs.expected_head_sha }}
         run: |
           set -euo pipefail
           ACTUAL_SHA="$(git rev-parse HEAD)"
@@ -69,9 +88,9 @@ jobs:
         shell: bash
         env:
           PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
-          RELEASE_SPEC: ${{ inputs.release_spec }}
+          TARGET_BRANCH: ${{ steps.trust.outputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ steps.trust.outputs.expected_head_sha }}
+          RELEASE_SPEC: ${{ steps.trust.outputs.release_spec }}
         run: |
           set -euo pipefail
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
@@ -176,11 +195,11 @@ jobs:
       - name: Verify payload and fast-forward candidate branch
         shell: bash
         env:
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          TARGET_BRANCH: ${{ needs.prepare.outputs.target_branch }}
+          EXPECTED_HEAD_SHA: ${{ needs.prepare.outputs.expected_head_sha }}
           PAYLOAD_SHA: ${{ needs.prepare.outputs.candidate_sha }}
           EXPECTED_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle_sha256 }}
-          RELEASE_SPEC: ${{ inputs.release_spec }}
+          RELEASE_SPEC: ${{ needs.prepare.outputs.release_spec }}
         run: |
           set -euo pipefail
           BUNDLE="$RUNNER_TEMP/usage-dashboard-candidate-payload/usage-dashboard-candidate.bundle"

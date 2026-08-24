@@ -14,12 +14,18 @@ assert.match(workflow, /^  workflow_dispatch:/m);
 for (const input of ['target_branch:','expected_head_sha:','release_spec:']) assert.ok(workflow.includes(input));
 assert.match(workflow, /^permissions:\n  contents: read$/m);
 assert.match(workflow, /^  prepare:/m);
+assert.match(workflow, /Checkout immutable trusted normalization policy/);
 assert.match(workflow, /Require main workflow trust root/);
 assert.match(workflow, /refs\/heads\/main/);
-assert.match(workflow, /ref: \$\{\{ inputs\.expected_head_sha \}\}/);
+assert.match(workflow, /RAW_TARGET_BRANCH: \$\{\{ inputs\.target_branch \}\}/);
+assert.match(workflow, /RAW_EXPECTED_HEAD_SHA: \$\{\{ inputs\.expected_head_sha \}\}/);
+assert.match(workflow, /RAW_RELEASE_SPEC: \$\{\{ inputs\.release_spec \}\}/);
+assert.match(workflow, /--normalize-target "\$RAW_TARGET_BRANCH"/);
+assert.match(workflow, /--normalize-sha "\$RAW_EXPECTED_HEAD_SHA"/);
+assert.match(workflow, /--normalize-spec "\$RAW_RELEASE_SPEC"/);
+assert.match(workflow, /ref: \$\{\{ steps\.trust\.outputs\.expected_head_sha \}\}/);
 assert.match(workflow, /persist-credentials: false/);
 assert.match(workflow, /CANDIDATE_BRANCH_MOVED/);
-assert.match(workflow, /\.github\/usage-dashboard\/releases\/\*\.json/);
 assert.match(workflow, /candidate_preparation_policy\.cjs --check-worktree/);
 assert.match(workflow, /git bundle create/);
 assert.match(workflow, /actions\/upload-artifact@v4/);
@@ -31,6 +37,9 @@ const writerAt = workflow.indexOf('\n  commit-candidate:');
 assert.ok(writerAt > 0);
 const writer = workflow.slice(writerAt);
 assert.match(writer, /ref: \$\{\{ github\.sha \}\}/);
+assert.match(writer, /TARGET_BRANCH: \$\{\{ needs\.prepare\.outputs\.target_branch \}\}/);
+assert.match(writer, /EXPECTED_HEAD_SHA: \$\{\{ needs\.prepare\.outputs\.expected_head_sha \}\}/);
+assert.match(writer, /RELEASE_SPEC: \$\{\{ needs\.prepare\.outputs\.release_spec \}\}/);
 assert.match(writer, /candidate_preparation_policy\.cjs --verify-payload/);
 assert.match(writer, /git ls-remote origin/);
 assert.match(writer, /git push origin "\$PAYLOAD_SHA:refs\/heads\/\$TARGET_BRANCH"/);
@@ -52,6 +61,44 @@ assert.equal(policy.assertTargetBranch('release/usage-dashboard-571-example'),'r
 for (const denied of ['main','release-usage-dashboard','release-simcore','feature/foo','release/other']) {
   assert.throws(() => policy.assertTargetBranch(denied), /CANDIDATE_PREP_TARGET_DENIED/);
 }
+
+const candidateBranch = 'release/usage-dashboard-5.71-cross-scope-provenance';
+const candidateSha = 'a43da840bb689ad43d8ac3cc0c6748a274cccc75';
+const releaseSpec = '.github/usage-dashboard/releases/5.71.json';
+assert.equal(
+  policy.normalizeTargetBranchInput(`Candidate branch ${candidateBranch}\n${candidateBranch}`),
+  candidateBranch,
+  'mobile UI label contamination with the same branch repeated must normalize to one exact branch',
+);
+assert.equal(
+  policy.normalizeExpectedShaInput(`Exact current candidate branch head SHA ${candidateSha}\n${candidateSha}`),
+  candidateSha,
+  'mobile UI label contamination with the same SHA repeated must normalize to one exact SHA',
+);
+assert.equal(
+  policy.normalizeReleaseSpecInput(`Explicit target release spec path under ${releaseSpec}`),
+  releaseSpec,
+  'mobile UI label contamination around one exact release spec must normalize safely',
+);
+assert.throws(
+  () => policy.normalizeTargetBranchInput(`${candidateBranch}\nrelease/usage-dashboard-other`),
+  /CANDIDATE_PREP_TARGET_DENIED/,
+  'two distinct valid target branches must fail closed',
+);
+assert.throws(
+  () => policy.normalizeExpectedShaInput(`${candidateSha}\n${'b'.repeat(40)}`),
+  /CANDIDATE_PREP_INVALID_SHA/,
+  'two distinct valid SHAs must fail closed',
+);
+assert.throws(
+  () => policy.normalizeReleaseSpecInput(`${releaseSpec}\n.github/usage-dashboard/releases/5.72.json`),
+  /CANDIDATE_PREP_RELEASE_SPEC_DENIED/,
+  'two distinct valid release specs must fail closed',
+);
+assert.throws(() => policy.normalizeTargetBranchInput('Candidate branch only'), /CANDIDATE_PREP_TARGET_DENIED/);
+assert.throws(() => policy.normalizeExpectedShaInput('not-a-sha'), /CANDIDATE_PREP_INVALID_SHA/);
+assert.throws(() => policy.normalizeReleaseSpecInput('../5.71.json'), /CANDIDATE_PREP_RELEASE_SPEC_DENIED/);
+
 for (const allowed of [
   'plugins/usage-dashboard/latest.js',
   'plugins/usage-dashboard/src/10-request-normalize.part.js',
@@ -119,4 +166,4 @@ for (const marker of [
   'E2 read-only candidate-ready preflight',
 ]) assert.ok(doc.includes(marker), `missing E4-B durable invariant: ${marker}`);
 
-console.log('usage-dashboard candidate preparation contract: OK · read/write split, bundle boundary, CAS, path/mode fail-closed');
+console.log('usage-dashboard candidate preparation contract: OK · normalized dispatch inputs, read/write split, bundle boundary, CAS, path/mode fail-closed');

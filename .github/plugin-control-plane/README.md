@@ -28,7 +28,7 @@ The dedicated reconciler runs on relevant trusted-main changes, manual dispatch,
 
 `.github/workflows/plugin-control-plane-status.yml` also invokes the same trusted-main PR reconciler before refreshing operational views. This is an intentionally redundant metadata-only fallback: a stale or delayed dedicated workflow registration must not leave ownership labels permanently absent. Both invokers execute the same trusted controller and neither becomes product release authority.
 
-The separate `pull_request` observer is read-only evidence; it is not classification authority.
+The two trusted-main reconciliation invokers hold `pull-requests: write` only because GitHub Actions uses that permission for pull-request label mutation. They still check out `main` explicitly, never execute PR-head code, and expose no merge/review/publish operation in the classifier. The separate `pull_request` observer remains read-only evidence and holds no metadata write authority.
 
 ## Registered ownership namespaces
 

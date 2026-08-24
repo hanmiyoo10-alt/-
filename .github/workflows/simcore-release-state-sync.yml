@@ -12,7 +12,7 @@ on:
       - 'SimCore release command'
     types: [completed]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, closed]
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,7 @@ jobs:
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.title == 'SimCore durable memory sync command')
+      (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.title == 'SimCore durable memory sync command')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout main memory branch
@@ -187,3 +187,191 @@ jobs:
           path: dist/SimCore-v${{ steps.release.outputs.version }}-project-source.zip
           if-no-files-found: error
           retention-days: 90
+
+  permanent-recovery:
+    name: Recover Permanent Published State
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.title, 'SimCore permanent release state recovery: ')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout current main administrative authority
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve immutable recovery request
+        id: recovery
+        shell: bash
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$MERGE_SHA^{commit}"
+          PARENT="$(git rev-parse "$MERGE_SHA^1")"
+          mapfile -t CHANGED < <(git diff --name-only "$PARENT" "$MERGE_SHA")
+          test "${#CHANGED[@]}" -eq 1
+          RECOVERY="${CHANGED[0]}"
+          case "$RECOVERY" in
+            products/simcore/releases/recoveries/*.json) ;;
+            *) echo 'POST_PUBLISH_RECOVERY_PATH_INVALID' >&2; exit 2 ;;
+          esac
+          mkdir -p .simcore-release
+          git show "$MERGE_SHA:$RECOVERY" > .simcore-release/recovery-request.json
+          RECOVERY="$RECOVERY" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT"
+          import json, os, re
+          r=json.load(open('.simcore-release/recovery-request.json'))
+          required=['schemaVersion','releaseId','publisherRunId','productionCommit','productionBlob','authorityConfirmation','failureCode']
+          for k in required:
+              if k not in r: raise SystemExit('POST_PUBLISH_RECOVERY_MISSING:'+k)
+          if r['schemaVersion'] != 1: raise SystemExit('POST_PUBLISH_RECOVERY_SCHEMA_INVALID')
+          rid=str(r['releaseId'])
+          if not re.fullmatch(r'simcore-v[0-9]+\.[0-9]+\.[0-9]+-(?:new|correction|rollback|noop)-[0-9]{2,}',rid): raise SystemExit('POST_PUBLISH_RECOVERY_ID_INVALID')
+          if os.environ['PR_TITLE'] != f'SimCore permanent release state recovery: {rid}': raise SystemExit('POST_PUBLISH_RECOVERY_TITLE_INVALID')
+          if r['authorityConfirmation'] != 'RS2_4_POST_PUBLISH_RECOVERY': raise SystemExit('POST_PUBLISH_RECOVERY_AUTHORITY_INVALID')
+          if not re.fullmatch(r'[0-9]+',str(r['publisherRunId'])): raise SystemExit('POST_PUBLISH_RECOVERY_RUN_ID_INVALID')
+          for k in ['productionCommit','productionBlob']:
+              if not re.fullmatch(r'[0-9a-f]{40}',str(r[k])): raise SystemExit('POST_PUBLISH_RECOVERY_IDENTITY_INVALID:'+k)
+          spec_path=f'products/simcore/releases/specs/{rid}.json'
+          spec=json.load(open(spec_path))
+          if spec.get('releaseId') != rid: raise SystemExit('POST_PUBLISH_RECOVERY_SPEC_ID_MISMATCH')
+          if spec.get('candidateCommit') != r['productionCommit']: raise SystemExit('POST_PUBLISH_RECOVERY_SPEC_COMMIT_MISMATCH')
+          if spec.get('candidateReleaseBlob') != r['productionBlob']: raise SystemExit('POST_PUBLISH_RECOVERY_SPEC_BLOB_MISMATCH')
+          print('release_id='+rid)
+          print('publisher_run_id='+str(r['publisherRunId']))
+          print('production_commit='+r['productionCommit'])
+          print('production_blob='+r['productionBlob'])
+          print('recovery_path='+os.environ['RECOVERY'])
+          PY
+
+      - name: Download immutable publication handoff
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: simcore-permanent-publication-${{ steps.recovery.outputs.publisher_run_id }}
+          path: .simcore-release/handoff
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.recovery.outputs.publisher_run_id }}
+
+      - name: Verify immutable publication handoff
+        shell: bash
+        env:
+          RELEASE_ID: ${{ steps.recovery.outputs.release_id }}
+          RUN_ID: ${{ steps.recovery.outputs.publisher_run_id }}
+          EXPECTED_C: ${{ steps.recovery.outputs.production_commit }}
+          EXPECTED_BLOB: ${{ steps.recovery.outputs.production_blob }}
+        run: |
+          set -euo pipefail
+          test -f .simcore-release/handoff/post-publish-input.json
+          python3 - <<'PY'
+          import json, os
+          h=json.load(open('.simcore-release/handoff/post-publish-input.json'))
+          assert h['releaseId'] == os.environ['RELEASE_ID']
+          assert str(h['publisherRunId']) == os.environ['RUN_ID']
+          assert h['productionCommit'] == os.environ['EXPECTED_C']
+          assert h['productionBlob'] == os.environ['EXPECTED_BLOB']
+          print('RS2_4_POST_PUBLISH_RECOVERY_HANDOFF_PASS')
+          PY
+
+      - name: Materialize exact observed production
+        shell: bash
+        env:
+          EXPECTED_C: ${{ steps.recovery.outputs.production_commit }}
+          EXPECTED_BLOB: ${{ steps.recovery.outputs.production_blob }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_C"
+          mkdir -p .simcore-release/observed
+          git show "$EXPECTED_C:plugins/simcore/latest.js" > .simcore-release/observed/latest.js
+          git show "$EXPECTED_C:plugins/simcore/install.js" > .simcore-release/observed/install.js
+          node --check .simcore-release/observed/latest.js
+          node --check .simcore-release/observed/install.js
+          cmp -s .simcore-release/observed/latest.js .simcore-release/observed/install.js
+          L="$(git rev-parse "$EXPECTED_C:plugins/simcore/latest.js")"
+          I="$(git rev-parse "$EXPECTED_C:plugins/simcore/install.js")"
+          test "$L" = "$EXPECTED_BLOB"
+          test "$I" = "$EXPECTED_BLOB"
+          cat > .simcore-release/observed/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$EXPECTED_C","latest":{"path":".simcore-release/observed/latest.js","blob":"$L"},"install":{"path":".simcore-release/observed/install.js","blob":"$I"}}
+          EOF
+
+      - name: Rebuild bounded LIVE_PENDING administrative payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/post-publish-state.mjs \
+            --root . \
+            --input .simcore-release/handoff/post-publish-input.json \
+            --production-identity .simcore-release/observed/identity.json \
+            --report .simcore-release/post-publish-state-recovery-report.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('.simcore-release/post-publish-state-recovery-report.json'))
+          assert p['releaseAuthority']=='RS2_4_PERMANENT'
+          assert p['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
+          assert p['lifecycleState']=='LIVE_PENDING'
+          assert p['disposition'] in ['POST_PUBLISH_PAYLOAD_READY','ADMIN_STATE_ALREADY_SYNCED']
+          allowed=set(p['persistentPayloadAllowlist'])
+          changed=set(p['changedPaths'])
+          assert changed <= allowed
+          print('RS2_4_POST_PUBLISH_RECOVERY_PAYLOAD_PASS')
+          PY
+          git diff --check
+
+      - name: Commit and gate recovered main state
+        shell: bash
+        env:
+          RELEASE_ID: ${{ steps.recovery.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RECORD="products/simcore/releases/records/${RELEASE_ID}.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md "$RECORD"
+          if git diff --cached --quiet; then
+            echo 'POST_PUBLISH_RECOVERY_ALREADY_DURABLE'
+          else
+            git commit -m "state(simcore): recover ${RELEASE_ID} live pending"
+            PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+            python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
+              --allow product-manifest.json \
+              --allow docs/CURRENT_DEVELOPMENT.md \
+              --allow docs/SIMCORE_GUIDELINES.md \
+              --allow "$RECORD" \
+              --required-workflow simcore-ci.yml \
+              --required-profile MAIN_HEALTH \
+              --required-job Required \
+              --staging-prefix simcore-rs2-4-post-publish-recovery
+          fi
+
+      - name: Reobserve durable main truth
+        shell: bash
+        env:
+          RELEASE_ID: ${{ steps.recovery.outputs.release_id }}
+          EXPECTED_C: ${{ steps.recovery.outputs.production_commit }}
+          EXPECTED_BLOB: ${{ steps.recovery.outputs.production_blob }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_C"
+          git show origin/main:product-manifest.json > .simcore-release/durable-manifest.json
+          git show "origin/main:products/simcore/releases/records/${RELEASE_ID}.json" > .simcore-release/durable-record.json
+          python3 - <<'PY'
+          import json, os
+          m=json.load(open('.simcore-release/durable-manifest.json'))
+          r=json.load(open('.simcore-release/durable-record.json'))
+          assert m['release_commit']==os.environ['EXPECTED_C']
+          assert m['release_blob']==os.environ['EXPECTED_BLOB']
+          assert m['validation_status']=='PENDING_REAL_LONG_CHAT'
+          assert r['releaseState']=='LIVE_PENDING'
+          assert r['productionTruth']=='PUBLISHED_IDENTITY_VERIFIED'
+          assert r['stateSyncStatus']=='PASS'
+          print('RS2_4_POST_PUBLISH_RECOVERY_DURABLE_MAIN_PASS')
+          PY

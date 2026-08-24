@@ -97,8 +97,8 @@ ok('automated-state-writer-bot-provenance', () => {
   const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
   const names = [...workflow.matchAll(/git config user\.name '([^']+)'/g)].map((m) => m[1]);
   const emails = [...workflow.matchAll(/git config user\.email '([^']+)'/g)].map((m) => m[1]);
-  expect(names.length === 1 && names[0] === 'github-actions[bot]', `unexpected automated writer name: ${JSON.stringify(names)}`);
-  expect(emails.length === 1 && emails[0] === '41898282+github-actions[bot]@users.noreply.github.com', `unexpected automated writer email identity: ${JSON.stringify(emails)}`);
+  expect(names.length === 2 && names.every((x) => x === 'github-actions[bot]'), `unexpected automated writer names: ${JSON.stringify(names)}`);
+  expect(emails.length === 2 && emails.every((x) => x === '41898282+github-actions[bot]@users.noreply.github.com'), `unexpected automated writer email identities: ${JSON.stringify(emails)}`);
 });
 
 ok('admin-state-writer-boundary', () => {
@@ -112,6 +112,27 @@ ok('admin-state-writer-boundary', () => {
   expect(workflow.includes('--allow product-manifest.json'), 'manifest allowlist missing');
   expect(workflow.includes('--allow docs/CURRENT_DEVELOPMENT.md'), 'current-development allowlist missing');
   expect(!workflow.includes('--allow products/simcore/state-sync/active-admin-transition.json'), 'transition spec must not be part of generated state payload');
+});
+
+ok('permanent-post-publish-recovery-boundary', () => {
+  const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
+  for (const token of [
+    'types: [opened, synchronize, closed]',
+    'Recover Permanent Published State',
+    'products/simcore/releases/recoveries/*.json',
+    'RS2_4_POST_PUBLISH_RECOVERY',
+    'simcore-permanent-publication-${{ steps.recovery.outputs.publisher_run_id }}',
+    'run-id: ${{ steps.recovery.outputs.publisher_run_id }}',
+    'post-publish-state.mjs',
+    'ALREADY_PUBLISHED_UPSTREAM',
+    '--required-profile MAIN_HEALTH',
+    '--required-job Required',
+    'PENDING_REAL_LONG_CHAT',
+    'LIVE_PENDING',
+  ]) expect(workflow.includes(token), `post-publish recovery token missing: ${token}`);
+  for (const token of ['release-publish.mjs','--mode publish','git push --force','force-with-lease','+refs/heads/release-simcore']) {
+    expect(!workflow.includes(token), `post-publish recovery forbidden token: ${token}`);
+  }
 });
 
 ok('release-shadow-read-only-boundary', () => {
@@ -138,6 +159,11 @@ ok('permanent-release-controller-boundary', () => {
   const writes=[...workflow.matchAll(/contents:\s+write/g)];
   expect(writes.length===2,`permanent caller write scope count=${writes.length}`);
   expect(workflow.includes('permissions:\n  contents: read\n  actions: read'),'permanent caller top-level read-only permission missing');
+  const start=workflow.indexOf('\n  post-publish-state:');
+  const end=workflow.lastIndexOf('\n  required:');
+  expect(start >= 0 && end > start,'post-publish state job boundary missing');
+  const postPublish=workflow.slice(start,end);
+  expect(/permissions:\s*\n\s*contents:\s*write\s*\n\s*actions:\s*write/.test(postPublish),'post-publish state job must be able to dispatch gated MAIN_HEALTH');
   for(const token of [
     'authority_confirmation',
     'RS2_4_RELEASE',

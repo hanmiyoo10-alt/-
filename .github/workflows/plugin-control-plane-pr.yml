@@ -1,8 +1,9 @@
 name: Plugin Control Plane — PR scope
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["Plugin Control Plane — PR observe"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -11,6 +12,7 @@ permissions:
 
 jobs:
   classify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted default branch controller
@@ -22,6 +24,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! node .github/plugin-control-plane/controller.cjs classify-pr; then
+          if ! node .github/plugin-control-plane/pr-classifier.cjs; then
             echo "::warning::Plugin Control Plane PR classification failed; release/product CI remains authoritative and unblocked."
           fi

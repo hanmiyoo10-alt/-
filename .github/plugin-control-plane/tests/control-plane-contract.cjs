@@ -90,12 +90,35 @@ assert.deepEqual(
   {explicit: false, labels: []},
 );
 
+const observerWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-pr-observe.yml'), 'utf8');
+assert.match(observerWorkflow, /pull_request:/);
+assert.match(observerWorkflow, /contents:\s*read/);
+assert.doesNotMatch(observerWorkflow, /issues:\s*write/);
+assert.doesNotMatch(observerWorkflow, /pull-requests:\s*write/);
+assert.doesNotMatch(observerWorkflow, /actions\/checkout/);
+assert.match(observerWorkflow, /PLUGIN_CONTROL_PLANE_PR_OBSERVED/);
+
 const prWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-pr.yml'), 'utf8');
-assert.match(prWorkflow, /pull_request_target:/);
+assert.match(prWorkflow, /workflow_run:/);
+assert.match(prWorkflow, /Plugin Control Plane — PR observe/);
 assert.match(prWorkflow, /github\.event\.repository\.default_branch/);
 assert.match(prWorkflow, /persist-credentials:\s*false/);
-assert.doesNotMatch(prWorkflow, /github\.event\.pull_request\.head\.sha/);
+assert.match(prWorkflow, /pr-classifier\.cjs/);
+assert.match(prWorkflow, /issues:\s*write/);
+assert.match(prWorkflow, /pull-requests:\s*read/);
+assert.doesNotMatch(prWorkflow, /pull_request_target:/);
 assert.doesNotMatch(prWorkflow, /pull-requests:\s*write/);
+assert.doesNotMatch(prWorkflow, /github\.event\.pull_request\.head\.sha/);
+
+const prClassifier = fs.readFileSync(path.join(root, '.github/plugin-control-plane/pr-classifier.cjs'), 'utf8');
+assert.match(prClassifier, /event\?\.workflow_run\?\.event !== 'pull_request'/);
+assert.match(prClassifier, /trusted pull_request workflow_run required/);
+assert.match(prClassifier, /event\.workflow_run\.pull_requests/);
+assert.match(prClassifier, /expected exactly one workflow_run pull request/);
+assert.match(prClassifier, /\/pulls\/\$\{number\}\/files/);
+assert.match(prClassifier, /classifyPaths\(paths, registry\)/);
+assert.match(prClassifier, /PLUGIN_CONTROL_PLANE_PR_CLASSIFIED/);
+assert.doesNotMatch(prClassifier, /child_process|execSync|spawnSync|require\(['"]vm['"]\)/);
 
 const issueWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-issue.yml'), 'utf8');
 assert.match(issueWorkflow, /issues:/);

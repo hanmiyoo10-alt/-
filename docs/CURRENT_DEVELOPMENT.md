@@ -22,7 +22,7 @@
 - Release branch: `release-simcore`
 - Release commit: `47969d24771f6cc188df6e32150fc6fde519182d`
 - Release blob: `34da01aa131f760b92d65d961a7843e9cc0d37d6`
-- Declared validation status: `PENDING_REAL_LONG_CHAT`
+- Declared validation status: `LIVE_PASS`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-2`
@@ -36,13 +36,15 @@ This block is machine-managed from verified declared release state. It does not 
 
 ## Production verdict
 
-`v0.64.3` is the current production release. It is a narrow diagnostic-only repair for the confirmed v0.64.2 natural B_END `REPORT_BUILD_FAILED`: the outer runtime now binds the existing Kernel and Time modules used by `buildLastTurnDiagnosticReport()`. The report-builder body, B_END terminal-coverage calculation, clipboard transport contract, request/output hot paths, Broadcast/Time semantics, persistent state, M2-2 behavior, and the frozen v0.65.0 M2-3 design are unchanged.
+`v0.64.6` is the current production release and has completed the full natural long-chat close gate. Direct production evidence is preserved in `docs/SIMCORE_LIVE_06406_VALIDATION.md` with status `FULL NATURAL LIVE CLOSE PASS`. The post-B_END first-C clock-authority gap is resolved, Source Handoff independence is preserved, ordinary second-C narrative inheritance passed, Broadcast unlock remained correct, warnings were zero, and Representation/edit frozen controls remained intact.
 
-The live close gate is one natural current-turn B_END diagnostic copy with `output COMMITTED`, report construction success, Broadcast closure / terminal coverage lines present, and copy result `COPIED` or `COPIED_FALLBACK`. After that gate, review the separately preserved `POST_BEND_C_CLOCK_DOMAIN_GAP` evidence before starting M2-3; if the clock-authority contract is confirmed, ship a separate narrow clock mini first. M2-3 implementation remains blocked until that disposition is explicit. The genuine visible-edit control remains required before M2-3 closes or M2-4 begins.
+The runtime is intentionally frozen while Release System v2 (`R`) is finished. RS2-3 is `CLOSED_AMENDED` under the project-authority gateway model; RS2-4 A/B/C/D shadow qualification is complete; the RS2-4E controller primitive, exact C/P authority negatives, sandbox NEW_VERSION/SAME_VERSION_CORRECTION publication, forward-history rollback, repository-bound P1 NOOP evidence, and the approved v0.64.5 rollback source are qualified. The active work item is the bounded administrative state repair followed by activation of the permanent `RS2_4_RELEASE` caller and the final `REAL_RELEASE_READY` gate.
+
+Do not start v0.64.7 or M2-3 inside this R infrastructure work item. The next genuine runtime release remains a separate product work item and will be the first real operational exercise of R after `REAL_RELEASE_READY`.
 
 ## Validated precursor problem — v0.63.55
 
-The most expensive confirmed avoidable path is now:
+The most expensive confirmed avoidable path was:
 
 ```text
 previous output:
@@ -57,22 +59,46 @@ current visible != previous canonical
 → multi-second request delay
 ```
 
-This has been reproduced with both a tiny and a larger representation delta:
+This was reproduced with both a tiny and a larger representation delta:
 
 ```text
 Δ -1  → next-turn rebuild 4.091 s
 Δ -80 → next-turn rebuild 6.257 s
 ```
 
-v0.63.55 validated this **next-turn false manual-edit rebuild** fix in natural long chat and now serves as a frozen regression control. The active major checkpoint remains M2-2, while current production is the v0.64.2 Diagnostic Copy Resilience hardening release; preserve the validated Representation fast path, Summary Scope authority, and genuine-user-edit behavior while capturing the single ordinary diagnostic-copy live result before M2-3.
+v0.63.55 validated the next-turn false manual-edit rebuild fix in natural long chat and remains a frozen regression control. Current production v0.64.6 preserves that fast path and the genuine-user-edit control; both remain mandatory controls for later M2-3 extraction.
 
 ---
 
 # 2. Current Validation Release
 
+## v0.64.6 — Post-B_END C Clock Handoff Authority
+
+Status: **PRODUCTION · FULL NATURAL LIVE CLOSE PASS**
+
+```text
+Version: 0.64.6
+Release: Post-B_END C Clock Handoff Authority
+Release commit: 47969d24771f6cc188df6e32150fc6fde519182d
+Release blob: 34da01aa131f760b92d65d961a7843e9cc0d37d6
+Major checkpoint: M2-2 unchanged
+```
+
+Natural sequence validated:
+
+```text
+B_START
+→ several B_CONTINUE
+→ B_END
+→ immediate C
+→ second ordinary C
+```
+
+Direct evidence in `docs/SIMCORE_LIVE_06406_VALIDATION.md` proves the B_END terminal clock floor is handed to the immediate C independently of Source Handoff eligibility, the second ordinary C resumes normal Narrative authority, broadcast unlock remains correct, warnings are zero, and Representation/edit controls remain intact.
+
 ## v0.64.3 — B_END Diagnostic Builder Binding Repair
 
-Status: **PRODUCTION · PENDING NATURAL B_END LIVE CLOSE GATE**
+Status: **SUPERSEDED BY v0.64.6 · HISTORICAL REGRESSION EVIDENCE**
 
 ```text
 Version: 0.64.3
@@ -96,23 +122,11 @@ no persistent schema or host/storage/network/timer surface change
 M2-3 design remains frozen for v0.65.0
 ```
 
-Static release gate requires syntax, latest/install identity, Contracts v2, B_END report-builder binding fixture, unchanged builder body, unchanged protected side-effect counts, and unchanged diagnostic-copy stage fixtures.
-
-Natural live close gate:
-
-```text
-current runtime mode B_END
-output COMMITTED
-report build succeeds
-Broadcast closure / terminal coverage lines present
-copy result COPIED or COPIED_FALLBACK
-```
-
-After the live close gate, review `POST_BEND_C_CLOCK_DOMAIN_GAP` as a separate correctness contract. Do not fold it into v0.64.3 or M2-3; if confirmed, release a narrow post-B_END clock-authority mini before v0.65.0. M2-3 remains blocked until that review is resolved.
+Its natural B_END close work and the subsequent post-B_END clock-authority follow-up are now superseded by the fully validated v0.64.6 production baseline.
 
 ## v0.64.2 — Diagnostic Copy Resilience
 
-Status: **PRODUCTION · PENDING ONE LIVE COPY RESULT**
+Status: **SUPERSEDED BY v0.64.6 · HISTORICAL REGRESSION EVIDENCE**
 
 ```text
 Version: 0.64.2
@@ -134,19 +148,11 @@ bounded memory-only probe; no raw report retention
 builder body byte-identical; runtime semantics unchanged
 ```
 
-Static CI verifies report build count, primary/fallback exact payload identity, builder-failure short circuit, fallback cleanup/focus restoration, latest/install equality, architecture contracts, Summary Scope fixtures, frozen M2 markers, and unchanged storage/chat/network/timer call counts.
-
-Live routing:
-
-```text
-COPIED or COPIED_FALLBACK -> v0.64.2 live gate PASS; proceed with M2-3
-REPORT_BUILD_FAILED       -> separate builder-repair mini before M2-3
-CLIPBOARD_WRITE_FAILED    -> PocketRisu/WebView clipboard transport scope
-```
+Static CI verified report build count, primary/fallback exact payload identity, builder-failure short circuit, fallback cleanup/focus restoration, latest/install equality, architecture contracts, Summary Scope fixtures, frozen M2 markers, and unchanged storage/chat/network/timer call counts.
 
 ## v0.64.1 — Summary Scope Authority
 
-Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+Status: **SUPERSEDED BY v0.64.6 · HISTORICAL REGRESSION EVIDENCE**
 
 Production identity:
 
@@ -195,24 +201,9 @@ summary classifier fixtures 9/9 PASS
 M2-2 frozen markers retained     PASS
 ```
 
-Live targets:
-
-```text
-ANNUAL_ONLY input -> Summary scope ANNUAL_ONLY / target 2030
-- target-year achievements stay target-year scoped
-- earlier facts only labeled context/metadata
-- cumulative counters labeled year-end snapshot
-
-CUMULATIVE_YOY input -> Summary scope CUMULATIVE_YOY / target 2030 / comparison 2029
-- every requested comparable metric gets previous/current/absolute delta/percentage delta
-- older historical values cannot replace the requested 2029 baseline
-
-Lineage over-chain remains WATCH and is intentionally unchanged for attribution isolation.
-```
-
 ## v0.64.0 — M2-2 Representation Ownership Split
 
-Status: **PRODUCTION · PENDING REAL LONG-CHAT VALIDATION**
+Status: **SUPERSEDED BY v0.64.6 · HISTORICAL REGRESSION EVIDENCE**
 
 Production identity:
 
@@ -262,7 +253,7 @@ persistent schema change             NONE
 new host/network/timer surfaces      NONE
 ```
 
-Frozen behavioral controls that must remain unchanged in live validation:
+Frozen behavioral controls that must remain unchanged in later ownership work:
 
 ```text
 Prior OUTPUT_MISMATCH + current == prior FRESH_CHAT exact
@@ -277,22 +268,6 @@ Prior EXACT + current matches neither canonical nor Fresh
 Deferred Mirror unknown representation
 → conservative OUTPUT_MISMATCH / no unsafe mirror write
 ```
-
-New diagnostic ownership line:
-
-```text
-Representation ownership: REPRESENTATION · ledger <N> · mirror TRANSPORT_ONLY · raw bodies NOT RETAINED
-```
-
-Live gate before M2 advances to Edit Reconcile extraction:
-
-1. ordinary A/C/B turns keep stable request/output/binding/mirror behavior;
-2. a normal exact carryover remains `SAME_FAST` / `Edit origin NONE`;
-3. when a natural CANONICAL↔FRESH mismatch occurs, exact Fresh carryover still reaches `REPRESENTATION_FAST_RECONCILED` without the old multi-second rebuild;
-4. a genuine user edit still reaches `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT`;
-5. no regression appears in Recovery, timeline, Broadcast closure, Frame, Evidence/Lineage/Handoff/Recurrence, Structure/COMMUNITY, cache/history observation, or persistent schema.
-
-Do not start physical `edit-reconcile` extraction until this checkpoint has direct real-long-chat evidence.
 
 ## v0.63.59 — Broadcast End Closure Contract
 
@@ -354,15 +329,6 @@ Frozen:
 - Structure / COMMUNITY;
 - cache/history, storage/API/network/timer surfaces, persistent schema.
 
-Real long-chat validation target:
-
-1. a natural scene whose current time advances inside one response emits an explicit later canonical timestamp and commits it;
-2. the next natural turn inherits that terminal time instead of the opening frame time;
-3. ordinary single-time responses may remain `FRAME_ONLY` without being treated as faults, but RAW must be checked when prose contains time advancement;
-4. v0.63.57 current-era authority and v0.63.55 representation/edit controls remain unchanged.
-
-The separate COMMUNITY platform-family warning observed during v0.63.57 validation is not repaired in v0.63.58; keep it as an independent recurrence watch.
-
 ## v0.63.57 — Current Timeline Authority Guard
 
 Status: **SUPERSEDED BY v0.64.0 · HISTORICAL CONTRACT / REGRESSION EVIDENCE**
@@ -385,22 +351,6 @@ non-monotonic visible timestamp sequence
 → visible chronology is reported explicitly
 → generated body is not semantically/date-rewritten by SimCore
 ```
-
-Frozen in this mini release:
-
-- M2-1 `output-compat` / `bootstrap-migration` / Recovery facade boundaries;
-- Representation Fast Reconcile and genuine-user-edit semantics;
-- Deferred Mirror mismatch safety;
-- Broadcast lifecycle and end authority;
-- Frame sequencing;
-- Evidence / Lineage / Handoff / Recurrence / Structure / COMMUNITY;
-- cache/history behavior, storage/API/network/timer surfaces, and persistent schema.
-
-Real long-chat validation should confirm three cases before M2 advances:
-
-1. ordinary current-timeline A/C output stays in the current era;
-2. an explicit user-requested historical scene/flashback remains possible;
-3. if another non-monotonic visible sequence occurs, diagnostics report `Visible chronology: NON_MONOTONIC_VISIBLE_SEQUENCE` while the persisted narrative floor remains protected.
 
 ## M2-1 — Recovery Boundary Split
 
@@ -429,16 +379,13 @@ Frozen behavior target:
 - Structure remains judge-only; History remains `OBSERVE_ONLY`; provider cache remains `UNVERIFIED`;
 - storage/API/network/timer surfaces and persistent state schema are unchanged.
 
-Live validation should first prove ordinary A/C/B turns remain stable and then, when naturally available, reconfirm the representation fast path / genuine-edit controls. Do not mix storage-latency optimization into this checkpoint.
-
-
 ## v0.63.55 — Representation Fast Reconcile
 
 Status: **SUPERSEDED BY v0.63.56 · VALIDATED REAL LONG-CHAT**
 
 ### Goal
 
-When the previous output was already classified as an `OUTPUT_MISMATCH`, and the next request sees that the current visible assistant message is **exactly the previous `FRESH_CHAT` representation**, recognize this as confirmed representation carryover and avoid the expensive full manual-edit rebuild.
+When the previous output was already classified as an `OUTPUT_MISMATCH`, and the next request sees that the current visible assistant message is **exactly the previous `FRESH_CHAT` representation**, recognize this as confirmed representation carryover and avoid the expensive full manual-edit reconstruction.
 
 This is a reconcile optimization. It must not weaken the output-side Deferred Mirror gate.
 
@@ -455,7 +402,6 @@ OUTPUT_MISMATCH
 setChat 0
 
 next B_END request:
-Prior representation OUTPUT_MISMATCH
 current == prior FRESH_CHAT
 vs canonical -1
 vs fresh +0
@@ -470,14 +416,11 @@ MANUAL_EDIT_REBUILT 4.091 s
 C output:
 CANONICAL 4180:931843fc
 FRESH_CHAT 4100:ee834c48
-Δchars -80
+Δ -80
 OUTPUT_MISMATCH
-setChat 0
 
 next C request:
-Prior representation OUTPUT_MISMATCH
-current 4100:ee834c48
-match FRESH_CHAT
+current == prior FRESH_CHAT
 vs canonical -80
 vs fresh +0
 shape FRESH_EXACT_CARRYOVER
@@ -485,67 +428,11 @@ Edit origin REPRESENTATION_DRIFT_CORRELATED
 MANUAL_EDIT_REBUILT 6.257 s
 ```
 
-The `-80` rebuild dominated request preparation:
+### Confirmed fast-path contract
 
-```text
-request total       6.437 s
-edit reconcile      6.257 s
-share               97.2%
-handshake           18 ms
-onSend              152 ms
-```
+The fast path may run only when required provenance is available, the previous representation is `OUTPUT_MISMATCH`, and the current visible assistant fingerprint equals the prior Fresh fingerprint exactly for the same slot/location. Any ambiguity keeps the full existing rebuild path.
 
-### Proposed fast-path gate
-
-The fast path may run only when all required provenance is available and all of the following are true:
-
-1. Previous assistant slot/location identity is the expected prior output.
-2. Previous representation state is `OUTPUT_MISMATCH`.
-3. Previous canonical fingerprint exists.
-4. Previous Fresh fingerprint exists.
-5. Current visible assistant fingerprint equals **previous Fresh exactly**.
-6. Current visible assistant fingerprint does not represent an unproven third body.
-7. Edit attribution resolves to `REPRESENTATION_DRIFT_CORRELATED` / `FRESH_EXACT_CARRYOVER`.
-8. No explicit user-edit evidence supersedes the representation evidence.
-
-If every gate passes, accept the already-recorded Fresh identity as a request-side representation alias for that exact slot/location and skip the expensive full manual-edit reconstruction. The canonical CoreSession state is intentionally left untouched.
-
-### Desired diagnostic shape
-
-```text
-Edit reconcile: REPRESENTATION_FAST_RECONCILED · <small cost> · snapshot UNCHANGED · representation fresh-exact-carryover
-Prior representation: OUTPUT_MISMATCH
-Edit origin: REPRESENTATION_DRIFT_CORRELATED
-Edit delta: vs canonical <delta> · vs fresh +0 · shape FRESH_EXACT_CARRYOVER
-```
-
-Exact naming may change during implementation, but the diagnostic must make it obvious that:
-
-- this was not a user edit;
-- Fresh exact carryover was the proof;
-- the full rebuild was skipped;
-- no output-side safety gate was relaxed.
-
-### Fail-safe behavior
-
-Any ambiguity must keep the existing path:
-
-```text
-MANUAL_EDIT_REBUILT
-```
-
-In particular, do **not** fast-reconcile when:
-
-- current visible matches neither prior canonical nor prior Fresh;
-- prior Fresh is unavailable;
-- location/slot identity is uncertain;
-- provenance is stale;
-- a genuine user edit is indicated;
-- multiple competing representations exist without an exact provenance match.
-
-### Genuine user edit control that must remain intact
-
-Confirmed hand-edit positive control from v0.63.52:
+Confirmed hand-edit positive control:
 
 ```text
 Prior representation EXACT
@@ -554,45 +441,6 @@ current != canonical
 current != Fresh
 Edit origin USER_EDIT_CANDIDATE
 MANUAL_EDIT_REBUILT 4.753 s
-```
-
-v0.63.55 must **not** make this fast.
-
-### v0.63.55 validation target
-
-Reproduce a natural output mismatch followed by an unedited next request.
-
-Desired result:
-
-```text
-previous output:
-OUTPUT_MISMATCH
-CANONICAL != FRESH_CHAT
-
-next request:
-current == previous FRESH_CHAT EXACT
-Prior representation OUTPUT_MISMATCH
-Edit origin REPRESENTATION_DRIFT_CORRELATED
-Edit reconcile REPRESENTATION_FAST_RECONCILED
-```
-
-The next request should avoid the previous `4–6 s` rebuild class while preserving ordinary user-edit rebuild behavior.
-
-### v0.63.55 scope freeze
-
-Do not mix these into the release:
-
-```text
-output envelope recovery
-SAFE_ENVELOPE_COMPAT normalization
-SILENT_COMPAT normalization
-COMMUNITY structure recovery
-cache request behavior
-provider cache logic
-history stabilization writes
-Broadcast / Frame / Continuity / Evidence / Lineage
-persistent schema
-network / timers / provider routing
 ```
 
 ---
@@ -676,20 +524,6 @@ What is known:
 - rolling chat-history frontier movement does not imply a provider miss;
 - representation mismatch, manual rebuild, and mode switch are not sufficient explanations for cache hit/miss by themselves;
 - host system0 has shown both stable-family behavior and reset-correlated changes.
-
-Recent useful host-prefix event:
-
-```text
-system0 301057:305d2968
-→ 308014:1e3d66da
-Δchars +6957
-family 2cd672fc → fa691663
-shape INSERTION_LIKE
-cache topology → PREFIX_COLLAPSE @0
-SimCore contribution NOT_FIRST_BREAK
-```
-
-This is valuable host telemetry but must remain separate from representation reconcile work.
 
 Resume cache engineering only when authoritative provider evidence becomes available, preferably cached-token metadata/counts from the host/provider layer.
 
@@ -831,6 +665,10 @@ Edit Origin Attribution itself is **not** frozen against a narrowly proven fast-
 
 # 6. Verified Evidence Ledger
 
+## E-LIVE-06406 — Full natural close PASS
+
+`docs/SIMCORE_LIVE_06406_VALIDATION.md` is the production authority evidence for the current release. It validates B_END terminal authority, immediate-C clock handoff, Source Handoff independence, second-C ordinary Narrative inheritance, broadcast unlock, zero warnings, and preserved Representation/edit controls.
+
 ## E-LIVE-055 — Representation Fast Reconcile validated
 
 Runtime `mt1g8kbx-3qd6s0`, same boot/generation throughout:
@@ -852,7 +690,7 @@ current == prior FRESH_CHAT EXACT
 vs canonical -1 · vs fresh +0
 ```
 
-Result: the former `4–6 s` false `MANUAL_EDIT_REBUILT` class was avoided exactly as designed. Output @1873 returned to `CANONICAL == FRESH_CHAT`, and subsequent requests @1874/@1876/@1878/@1880/@1882/@1884/@1886 remained `SAME_FAST` at 0–2 ms with `snapshot UNCHANGED`.
+Result: the former `4–6 s` false `MANUAL_EDIT_REBUILT` class was avoided exactly as designed. Output @1873 returned to `CANONICAL == FRESH_CHAT`, and subsequent requests remained `SAME_FAST` with `snapshot UNCHANGED`.
 
 The same run also strengthens the later storage-latency target without changing current M2 scope:
 
@@ -863,10 +701,7 @@ request hotspot: TURN_STORAGE ~81–90%
 output hotspot: OUT_STORAGE ~93–95%
 ```
 
-This storage evidence belongs to later latency work; do not mix it into the M2 mechanical modularization. Provider cache remains `UNVERIFIED`.
-
-
-This section stores the compact evidence that future conversations should not have to rediscover.
+This storage evidence belongs to later latency work; do not mix it into current R or M2 mechanical modularization. Provider cache remains `UNVERIFIED`.
 
 ## E1 — Genuine user edit positive control
 
@@ -886,93 +721,19 @@ Conclusion: genuine user edits can be distinguished from exact representation ca
 
 ## E2 — Unedited output-side unresolved-envelope failure
 
-B_END @1842 entered cleanly:
-
-```text
-SAME_FAST 1 ms
-Prior EXACT
-Edit origin NONE
-current == prior FRESH
-```
-
-Then output produced:
-
-```text
-THOUGHTS_COMPAT
-UNRESOLVED
-candidate 1
-envelope offset 4252
-HOST_RAW 11328
-CANONICAL 11321
-FRESH 7074
-Δ canonical→fresh -4247
-OUTPUT_MISMATCH
-setChat 0
-```
-
-`HOST_RAW chars - envelope offset = 7076`, two chars longer than Fresh. This motivated v0.63.53 but did not prove the characters were CR/LF.
+B_END @1842 entered cleanly, then output produced an unresolved Thoughts-compatible suffix and `OUTPUT_MISMATCH`. This motivated v0.63.53 but did not prove the exact characters were CR/LF.
 
 ## E3 — `-1` representation drift → expensive next-turn rebuild
 
-Same runtime `mt16584l-0okmn1`:
-
-```text
-output:
-SAFE_ENVELOPE_COMPAT
-CANONICAL 4238
-FRESH 4237
-Δ -1
-OUTPUT_MISMATCH
-
-next request:
-current == prior FRESH
-vs canonical -1
-vs fresh +0
-REPRESENTATION_DRIFT_CORRELATED
-MANUAL_EDIT_REBUILT 4.091 s
-```
-
-Following an exact output, the next request instead returned `SAME_FAST 0 ms`.
-
-Conclusion: strong same-runtime A/B evidence links Fresh representation drift to the expensive reconcile path.
+Same runtime `mt16584l-0okmn1` proved a Fresh-exact carryover could cause the prior 4.091 s rebuild before v0.63.55.
 
 ## E4 — `-80` representation drift → expensive next-turn rebuild
 
-Same runtime `mt19j4wz-2a7t5e`:
-
-```text
-output:
-SILENT_COMPAT
-CANONICAL 4180:931843fc
-FRESH 4100:ee834c48
-Δ -80
-OUTPUT_MISMATCH
-
-next request:
-Prior representation OUTPUT_MISMATCH
-current 4100:ee834c48
-match FRESH_CHAT
-vs canonical -80
-vs fresh +0
-shape FRESH_EXACT_CARRYOVER
-Edit origin REPRESENTATION_DRIFT_CORRELATED
-MANUAL_EDIT_REBUILT 6.257 s
-```
-
-Conclusion: the false rebuild mechanism is not limited to the earlier one-character family.
+Same runtime `mt19j4wz-2a7t5e` proved the same false rebuild class was not limited to the earlier one-character family.
 
 ## E5 — v0.63.54 ordinary-path regression check
 
-Same runtime produced four consecutive `SAFE_ENVELOPE_COMPAT` broadcast outputs with:
-
-```text
-CANONICAL == FRESH
-Safe-envelope reconcile NOT_APPLICABLE
-Deferred mirror COMMITTED
-next request SAME_FAST
-```
-
-Conclusion: no observed false-positive structural-boundary reconcile on ordinary exact output.
+Four consecutive `SAFE_ENVELOPE_COMPAT` broadcast outputs remained canonical/Fresh exact, with no false-positive structural-boundary reconcile.
 
 ## E6 — Deferred Mirror strict safety remains correct
 
@@ -984,28 +745,17 @@ CANONICAL != FRESH
 → setChat 0
 ```
 
-No current roadmap item should weaken identity/location/staleness/fingerprint acceptance gates merely to reduce latency.
+No roadmap item should weaken identity/location/staleness/fingerprint acceptance gates merely to reduce latency.
 
-## E7 — trailing-document-newline hypothesis was invalidated before v0.63.54 release
+## E7 — trailing-document-newline hypothesis invalidated
 
-Source inspection showed:
-
-```text
-fingerprintText
-→ CRLF normalized to LF
-→ trimEnd()
-
-safe canonical envelope
-→ trim()
-```
-
-Therefore document-end CR/LF cannot explain a fingerprint-level `-1` difference. v0.63.54 instead tests only known internal structural separators.
+Source inspection showed fingerprint normalization and canonical trimming make document-end CR/LF insufficient to explain a fingerprint-level `-1` difference. v0.63.54 therefore tests only known internal structural separators.
 
 ---
 
 # 7. Known Unknowns
 
-- Exact host transformation that produced the `SILENT_COMPAT` `-80` body difference.
+- Exact host transformation that produced the historical `SILENT_COMPAT` `-80` body difference.
 - Whether v0.63.54's `SAFE_BOUNDARY_CONFIRMED` path will naturally occur in long chat.
 - Whether v0.63.53's `BOUNDARY_CONFIRMED_SUFFIX` path will naturally occur again.
 - Whether historical COMMUNITY grouping warnings are independent after successful representation recovery.
@@ -1029,13 +779,7 @@ These rules exist specifically so future long conversations do not lose developm
 6. **Do not infer provider behavior from local proxies.** Provider cache stays `UNVERIFIED` without authoritative telemetry.
 7. **Preserve positive controls.** Every optimization of edit/reconcile behavior must keep the known genuine-user-edit case correct.
 8. **Fresh is evidence, not an untrusted body source.** Prefer exact fingerprints/provenance; do not start retaining or copying raw Fresh bodies merely for convenience.
-9. **After every production release:**
-   - refresh Current Operational State;
-   - promote or replace Immediate Next;
-   - move completed work into Completed Major Milestones;
-   - record new evidence in the Verified Evidence Ledger;
-   - move unsupported ideas to Deferred / Waiting for Evidence;
-   - review Hard Freeze explicitly.
+9. **After every production release:** refresh Current Operational State, promote/replace Immediate Next, record evidence, review Deferred and Hard Freeze.
 10. **Before a new major phase:** read this document first and reconcile it with the latest production diagnostic instead of relying on chat memory alone.
 
 ---
@@ -1044,79 +788,19 @@ These rules exist specifically so future long conversations do not lose developm
 
 ## v0.63.52 — Edit Origin Attribution
 
-Added provenance needed to distinguish:
-
-```text
-USER_EDIT_CANDIDATE
-REPRESENTATION_DRIFT_CORRELATED
-AMBIGUOUS_CHANGE
-UNKNOWN
-NONE
-```
-
-Verified with a real hand-edit positive control and later Fresh-drift controls.
+Added provenance needed to distinguish `USER_EDIT_CANDIDATE`, `REPRESENTATION_DRIFT_CORRELATED`, `AMBIGUOUS_CHANGE`, `UNKNOWN`, and `NONE`. Verified with a real hand-edit positive control and later Fresh-drift controls.
 
 ## v0.63.53 — Boundary-Normalized Envelope Recovery
 
-Extended Fresh-confirmed unresolved-envelope recovery with an extremely narrow trailing CR/LF variant test after exact suffix confirmation fails.
-
-Safety properties:
-
-- no raw-body retention;
-- no new read/network/timer;
-- Fresh only confirms fingerprint identity;
-- non-match remains `FRESH_MISMATCH` / `OUTPUT_MISMATCH`.
-
-Natural special-path activation remains pending.
+Extended Fresh-confirmed unresolved-envelope recovery with an extremely narrow trailing CR/LF variant test after exact suffix confirmation fails. Natural special-path activation remains pending.
 
 ## v0.63.54 — Safe-Envelope Structural Boundary Reconcile
 
-After source inspection rejected the document-end newline theory, added a narrow internal-structural-separator check only after an already safe `SAFE_ENVELOPE_COMPAT` candidate exists.
-
-Known boundary classes:
-
-```text
-BASE_TO_COMMUNITY
-COMMUNITY_TO_COMMUNITY
-COMMUNITY_TO_KNOWLEDGE
-BASE_TO_KNOWLEDGE
-```
-
-Only one canonical-derived `\n\n → \n` structural variant may be confirmed, and only by exact existing Fresh fingerprint identity. Ambiguity stays `OUTPUT_MISMATCH`.
-
-Ordinary long-chat regression check passed; natural special-path activation remains pending.
+Added a narrow internal-structural-separator check only after an already safe `SAFE_ENVELOPE_COMPAT` candidate exists. Ordinary long-chat regression check passed; natural special-path activation remains pending.
 
 ## v0.63.55 — Representation Fast Reconcile
 
-Added a request-side fast reconcile for one fully proven representation case:
-
-```text
-previous output = OUTPUT_MISMATCH
-current visible == prior FRESH_CHAT EXACT
-same assistant slot/location provenance
-live CoreSession still anchored to prior canonical identity
-```
-
-When all gates hold, SimCore reports `REPRESENTATION_FAST_RECONCILED`, keeps the canonical state untouched, performs no snapshot write, and skips the full manual-edit rebuild. Any missing/stale/third representation still falls back to the existing path.
-
-Frozen positive control:
-
-```text
-genuine user edit
-current != prior canonical
-current != prior Fresh
-→ USER_EDIT_CANDIDATE
-→ MANUAL_EDIT_REBUILT
-```
-
-Release identity:
-
-```text
-release-simcore commit 6156685a3edf0ec0c5017900a82990d4f17dfb49
-production blob 8c42851df34831465403d12fc57c7499923bdbc6
-```
-
-Real long-chat activation remains the current validation target.
+Added and live-validated a request-side fast reconcile for one fully proven Fresh-exact carryover case while preserving the genuine-user-edit rebuild control.
 
 ## Repository Product Root Isolation — Phase 1
 
@@ -1127,19 +811,40 @@ products/simcore/
 products/usage-dashboard/
 ```
 
-Main-writing workflows use the shared `repo-main-write` concurrency contract where applied. Runtime/install paths were intentionally not relocated in phase 1.
+Main-writing workflows use the shared `repo-main-write` coordination contract where applied. Runtime/install paths were intentionally not relocated in phase 1.
 
 ---
 
-## Future infrastructure plan — Release System v2
+## Release System v2 — ACTIVE R-FIRST WORK
 
-Status: **PLANNED · NOT ACTIVE · SEPARATE FROM THE CURRENT RELEASE ORDER**
+Status: **RS2-4E REPOSITORY-BOUND QUALIFIED · ADMIN FIX / CALLER ACTIVATION REMAIN**
 
-Canonical plan:
+Canonical operating principle:
 
-- [SIMCORE_RELEASE_SYSTEM_V2_PLAN.md](./SIMCORE_RELEASE_SYSTEM_V2_PLAN.md)
+- [SIMCORE_RELEASE_SYSTEM_V2_FEEDBACK_LOOP_OPERATING_PRINCIPLE.md](./SIMCORE_RELEASE_SYSTEM_V2_FEEDBACK_LOOP_OPERATING_PRINCIPLE.md)
 
-This is a future repository/release-infrastructure plan. It does not describe production runtime behavior, does not start M2-3, and does not replace the current promoted action. The current action remains one ordinary v0.64.2 diagnostic-copy live result. After that result, decide explicitly whether RS2-1 durable-test extraction should be promoted before active M2-3 implementation; the plan must not reorder the roadmap merely by existing.
+Current R state:
+
+```text
+RS2-1 durable tests                         complete
+RS2-2 state synchronization                 complete
+RS2-3 permanent CI                          CLOSED_AMENDED
+RS2-4 A/B/C/D shadow                        verified
+RS2-4E controller primitive                 CI verified
+P1 current-production NOOP                  requalified
+P2 NEW_VERSION sandbox                      PASS
+P3 SAME_VERSION_CORRECTION sandbox          PASS
+N1-N10 fail-closed coverage                 PASS / permanently owned
+rollback safe source v0.64.5                qualified
+forward-history rollback rehearsal          verified
+MAIN_ADMIN_STATE_DRIFT                      current FIX
+RS2_4_RELEASE production caller             not yet active
+REAL_RELEASE_READY                          not yet declared
+```
+
+R prefers project-owned, testable enforcement over manual GitHub platform governance. Platform branch protection/rulesets are optional defense-in-depth rather than a correctness dependency.
+
+After the admin repair passes permanent CI/state validation, activate the exact C/P `RS2_4_RELEASE` caller, run final repository-bound qualification, and mark `REAL_RELEASE_READY`. Only then begin the next legitimate SimCore runtime release as a separate work item.
 
 ---
 
@@ -1149,39 +854,33 @@ When continuing development in a new conversation:
 
 ```text
 1. Read Current Production Snapshot.
-2. Read Current Operational State.
-3. Read Immediate Next Release.
-4. Check whether a newer production diagnostic changes the evidence.
-5. Check Hard Freeze before editing code.
-6. Implement only the promoted Immediate Next scope.
-7. After release, update this file again.
+2. Confirm v0.64.6 LIVE_PASS and release-simcore identity.
+3. Read RS2_4E_QUALIFICATION_STATUS.json.
+4. Continue only the current R gate until REAL_RELEASE_READY.
+5. Keep runtime/plugin code frozen during R infrastructure work.
+6. Preserve every failure as WATCH / DEFER / FIX / BLOCKER evidence.
+7. After REAL_RELEASE_READY, start the next legitimate runtime release separately and execute it through R.
 ```
 
 Current promoted next action:
 
 ```text
-Capture one ordinary v0.64.2 production copy result.
-If it is COPIED or COPIED_FALLBACK, mark the live gate PASS and start M2-3.
+repair MAIN_ADMIN_STATE_DRIFT
+→ permanent CI + sync-state check
+→ activate RS2_4_RELEASE exact C/P caller
+→ final repository-bound qualification
+→ REAL_RELEASE_READY
 ```
 
 Current success condition:
 
 ```text
-report build count 1
-primary/fallback payload EXACT
-COPIED or COPIED_FALLBACK in an ordinary live copy
-→ v0.64.2 live gate PASS
-→ M2-3 Edit Reconcile extraction may begin
-
-REPORT_BUILD_FAILED
-→ direct builder attribution
-→ separate narrow builder-repair mini
-
-CLIPBOARD_WRITE_FAILED
-→ builder succeeded
-→ PocketRisu/WebView clipboard transport scope
-
-genuine user edit control
-→ deferred from M2-3 start
-→ required before M2-3 close / M2-4 start
+v0.64.6 declared lifecycle = LIVE_PASS
+current_priority = RS2_4E_REAL_RELEASE_READY_QUALIFICATION
+registered machine blocks = current
+permanent state check = PASS
+production release caller = exact C/P Required-bound and fail-closed
+rollback rehearsal = VERIFIED
+release-simcore mutation before real release = NONE
+→ REAL_RELEASE_READY
 ```

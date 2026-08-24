@@ -26,8 +26,14 @@ ok('release-system-classification', () => {
   }
 });
 ok('state-sync-classification', () => {
-  const r = classifyPaths(['products/simcore/tooling/sync-state.mjs']);
-  expect(r.labels.includes('STATE_SYNC'), JSON.stringify(r));
+  for (const p of ['products/simcore/tooling/sync-state.mjs','products/simcore/tooling/declare-production.mjs','products/simcore/tooling/post-publish-state-shadow.mjs','products/simcore/tests/post-publish-state-shadow.test.mjs']) {
+    const r = classifyPaths([p]);
+    expect(r.labels.includes('STATE_SYNC'), `${p}: ${JSON.stringify(r)}`);
+  }
+});
+ok('post-publish-shadow-coordination-classification', () => {
+  const r = classifyPaths(['products/simcore/tests/post-publish-state-shadow.test.mjs']);
+  expect(r.labels.includes('SHARED_MAIN_COORDINATION'), JSON.stringify(r));
 });
 ok('contract-multilabel-classification', () => {
   const r = classifyPaths(['products/simcore/contracts/frozen-surfaces-v1.json']);
@@ -60,6 +66,12 @@ ok('release-shadow-deterministic-tests', () => {
   const r=spawnSync(process.execPath,['products/simcore/tests/release-shadow.test.mjs'],{encoding:'utf8',timeout:120000,maxBuffer:1024*1024});
   expect(r.status===0,`release shadow tests failed: ${r.stderr || r.stdout}`);
   expect(String(r.stdout).includes('RS2_4_SHADOW_TESTS_PASS'),'release shadow pass marker missing');
+});
+
+ok('post-publish-state-shadow-deterministic-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/post-publish-state-shadow.test.mjs'],{encoding:'utf8',timeout:180000,maxBuffer:1024*1024});
+  expect(r.status===0,`RS2-4D state shadow tests failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4D_POST_PUBLISH_STATE_SHADOW_TEST_PASS S1-S8'),'RS2-4D state shadow pass marker missing');
 });
 
 ok('legacy-map-complete', () => {

@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — E Exact Approval Resolution Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED SHADOW · OPERATIONAL ACTIVATION DEFERRED · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI VERIFIED · OPERATIONAL ACTIVATION DEFERRED · NON-RUNTIME**
 
 ## Scope decision
 
@@ -10,7 +10,7 @@ This work implements only the R2.1-E approval-resolution infrastructure.
 The operator policy for using that approval to trigger an actual release is deliberately **not activated in this work item** and must be discussed separately before any cutover.
 
 ```text
-E implementation / qualification = IN SCOPE
+E implementation / qualification = COMPLETE AFTER MERGE
 actual release approval semantics = DEFER
 permanent caller dispatch from E = DISABLED
 runtime mutation = NONE
@@ -86,7 +86,7 @@ receipt exists / PASS / CANDIDATE_RECEIPT_ONLY
 receipt releaseId == approval releaseId
 spec shadow authority == SHADOW_ONLY
 spec shadow bound to exact receipt
-resolved spec schema exact
+resolved spec schema exact / no extra manual override fields
 resolved C/P/blob == receipt C/P/blob
 NEW_VERSION / SAME_VERSION_CORRECTION / ROLLBACK semantics
 rollback metadata when required
@@ -110,9 +110,17 @@ It contains no publisher, `repo-main-write.py`, `gh workflow run`, or production
 
 Therefore this implementation **does not decide** whether the future steady-state human approval should be one merge, another explicit action, or some different operator policy. That decision is intentionally left for the next discussion.
 
-## Permanent negative coverage
+## Permanent coverage
 
-The `release-approval` batch-a suite proves at least:
+The `release-approval` batch-a suite proves positive resolution for:
+
+```text
+NEW_VERSION
+SAME_VERSION_CORRECTION
+ROLLBACK
+```
+
+and fail-closed negatives:
 
 ```text
 E-N1 human approval cannot embed candidate identity
@@ -128,12 +136,25 @@ E-N10 approval path mismatch blocks
 E-N11 resolver contains no publication authority
 ```
 
-Positive resolution is covered for:
+## Permanent CI evidence
+
+PR `#286`, first implementation-complete head:
 
 ```text
-NEW_VERSION
-SAME_VERSION_CORRECTION
-ROLLBACK
+run      32766766843
+Verify   97557881830  PASS
+Required 97558019582  PASS
 ```
 
-R2.1-E is not closed until permanent Verify/Required PASS, merge, durable-main re-observation, and machine status/documentation synchronization. Operational release activation remains deferred even after implementation closure.
+This PASS includes the current batch-a composition with candidate materialization, machine receipt/spec shadow, LIVE_PENDING convergence, and exact approval-resolution tests together.
+
+Production boundary at this evidence point:
+
+```text
+runtime mutation = NONE
+release-simcore mutation = NONE
+current production = v0.64.7
+current human gate = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+```
+
+A final documentation/status head must also receive permanent Verify/Required PASS before merge. After merge and durable-main re-observation, R2.1-E implementation may be marked CLOSED_IMPLEMENTED_NOT_ACTIVE. Operational release activation remains deferred even after implementation closure.

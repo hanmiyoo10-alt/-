@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_AUTOMATION_COMMIT_PROVENANCE",
+  "status": "CI_VERIFIED",
+  "activeWriter": ".github/workflows/simcore-release-state-sync.yml",
+  "automationIdentity": {
+    "name": "github-actions[bot]",
+    "email": "41898282+github-actions[bot]@users.noreply.github.com"
+  },
+  "ciGuard": "products/simcore/tooling/ci/self-test.mjs",
+  "validation": {
+    "run": 32728473569,
+    "verifyJob": 97435035544,
+    "requiredJob": 97435112607,
+    "result": "PASS"
+  },
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

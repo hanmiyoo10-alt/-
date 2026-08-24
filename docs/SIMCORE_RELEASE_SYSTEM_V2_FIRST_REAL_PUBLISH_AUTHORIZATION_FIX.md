@@ -1,7 +1,7 @@
 # SimCore Release System v2 — First Real Publish Authorization Canonicalization Fix
 
 Date: 2026-08-25
-Status: **FIX ACTIVE · NON-RUNTIME · PRODUCTION UNCHANGED**
+Status: **FIX IMPLEMENTED · PERMANENT CI PASS · NON-RUNTIME · PRODUCTION UNCHANGED**
 Release: `simcore-v0.64.7-new-01`
 
 ## 1. Direct production evidence
@@ -58,7 +58,7 @@ GitHub commit evidence shows that commit changed exactly one path:
 
 and the file contains the authorized v0.64.7 tuple.
 
-The controller's `verifyImmutableAuthorization` currently compares:
+The controller's former `verifyImmutableAuthorization` compared:
 
 ```text
 git-show bytes from authorization commit
@@ -66,58 +66,88 @@ vs
 JSON.stringify(parsed current spec) + newline
 ```
 
-The checked-in release spec is human-readable pretty JSON, while `JSON.stringify(parsed current spec)` is compact one-line JSON. Therefore semantically identical JSON is rejected solely due to formatting.
+The checked-in release spec is human-readable pretty JSON, while `JSON.stringify(parsed current spec)` is compact one-line JSON. Therefore semantically identical JSON was rejected solely due to formatting.
 
 The qualification fixture did not expose this because its `authorizeSpec` helper wrote only compact JSON.
 
-## 3. Frozen correction
+## 3. Implemented correction
 
-Do not weaken immutable authorization.
+Immutable authorization is not weakened.
 
-Correct the comparison boundary to:
+The comparison boundary is now:
 
 ```text
 authorization commit spec bytes
 → parse JSON
-→ canonical semantic JSON bytes
-→ compare with canonical semantic bytes of current parsed spec
+→ normalized JSON bytes
+→ compare with normalized bytes of current parsed spec
 ```
+
+Invalid authorization JSON fails closed with `RELEASE_AUTHORIZATION_SPEC_INVALID`.
 
 The following remain mandatory and unchanged:
 
 ```text
 authorizationCommit is an immutable commit
 spec exists at that commit
-spec semantic content is exactly identical
-spec path has exactly one authorization touch in canonical history
+spec normalized content is exactly identical
+spec path has exactly one authorization touch
 CANDIDATE_REQUIRED exact C/P = PASS
 current release-simcore == expected P
 candidate direct-parent/path/blob constraints
 no force publication
 ```
 
-Invalid JSON at the authorization commit must fail closed.
+A real field/content mutation continues to fail authorization.
 
-A real field/content mutation must continue to fail authorization.
+## 4. Permanent regression
 
-## 4. Permanent regression requirement
-
-The controller qualification suite must permanently cover:
+`products/simcore/tests/release-controller-qualification.test.mjs` now makes normal positive authorization fixtures human-readable pretty JSON for:
 
 ```text
-pretty-printed authorization JSON + same semantic current spec = PASS
-compact authorization JSON + same semantic current spec = PASS
+NEW_VERSION
+SAME_VERSION_CORRECTION
+ROLLBACK
+```
+
+and retains an explicit compact-JSON positive authorization control.
+
+Existing negative controls still require:
+
+```text
 actual semantic spec mutation = FAIL
 post-authorization spec mutation = FAIL
 ```
 
-At minimum, normal positive release qualification must use pretty-printed JSON so the first-real-release failure cannot recur.
+The pass marker now includes `AUTH_JSON_PRETTY_COMPACT`, while retaining the previous qualification marker prefix consumed by permanent CI.
 
-## 5. Retry boundary
+## 5. Permanent CI evidence
 
-The existing immutable release spec and merged activation record are historical evidence and must not be edited.
+PR: `#249 — fix(simcore): canonicalize permanent release authorization JSON`
 
-After this controller fix passes permanent CI and merges to main:
+Implementation head before this evidence-only amendment:
+
+`ac29b410be89bafb7442828f18ad4f607fa650b3`
+
+Authoritative permanent CI:
+
+```text
+SimCore CI run: 32749119043
+Verify job: 97501593249 — SUCCESS
+Required job: 97501679298 — SUCCESS
+```
+
+The run executed the proposed release-controller qualification including pretty and compact authorization representations.
+
+No runtime or production mutation occurred.
+
+A final CI run after this evidence-only amendment is the merge gate.
+
+## 6. Retry boundary
+
+The existing immutable release spec and merged activation record are historical evidence and remain unedited.
+
+Before retry:
 
 ```text
 release-simcore must still equal P

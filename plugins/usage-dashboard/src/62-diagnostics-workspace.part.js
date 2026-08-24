@@ -16,9 +16,8 @@
   }
 
   function diagnosticsWorkspaceQueuePersist() {
-    const next = diagnosticsModePersistTail.catch(() => undefined).then(() => persist());
-    diagnosticsModePersistTail = next.catch(() => undefined);
-    return next;
+    diagnosticsModePersistTail = diagnosticsModePersistTail.then(() => persist()).catch(() => undefined);
+    return diagnosticsModePersistTail;
   }
 
   function diagnosticsWorkspaceCliRuntime() {

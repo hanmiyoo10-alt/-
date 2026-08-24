@@ -6,8 +6,13 @@ const fs = require('node:fs');
 const {ALLOWLIST} = require('./promote_release_blobs.cjs');
 
 const RELEASE_CONTROL_PATHS = Object.freeze([
+  '.github/workflows/usage-dashboard-stage-e7.yml',
+  '.github/workflows/usage-dashboard-validate.yml',
+  '.github/workflows/usage-dashboard-validate-exact.yml',
+  '.github/workflows/reusable-usage-dashboard-validate.yml',
   '.github/workflows/usage-dashboard-promote.yml',
   '.github/workflows/reusable-usage-dashboard-promote.yml',
+  'plugins/usage-dashboard/tools/release_generic_preflight.cjs',
   'plugins/usage-dashboard/tools/promote_release_blobs.cjs',
   'plugins/usage-dashboard/tools/classify_release_candidate.cjs',
   'plugins/usage-dashboard/tools/check_release_blob_parity.cjs',

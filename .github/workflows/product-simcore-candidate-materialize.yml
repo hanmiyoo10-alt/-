@@ -7,7 +7,7 @@ on:
       - 'products/simcore/releases/candidate-requests/**'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: simcore-candidate-${{ github.sha }}
@@ -17,8 +17,13 @@ jobs:
   materialize:
     name: Materialize Candidate
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     outputs:
       intent_id: ${{ steps.request.outputs.intent_id }}
+      release_id: ${{ steps.request.outputs.release_id }}
+      request_path: ${{ steps.request.outputs.request_path }}
+      source_commit: ${{ steps.request.outputs.source_commit }}
       candidate_commit: ${{ steps.candidate.outputs.candidate_commit }}
       candidate_disposition: ${{ steps.candidate.outputs.candidate_disposition }}
     steps:
@@ -52,13 +57,19 @@ jobs:
           test -f "$REQUEST"
           TOUCHES="$(git log --first-parent --format=%H HEAD -- "$REQUEST" | wc -l | tr -d ' ')"
           test "$TOUCHES" = 1
-          INTENT_ID="$(python3 - "$REQUEST" <<'PY'
-          import json,sys
-          print(json.load(open(sys.argv[1]))['intentId'])
+          python3 - "$REQUEST" <<'PY' | tee -a "$GITHUB_OUTPUT"
+          import json,re,sys
+          r=json.load(open(sys.argv[1]))
+          rid=str(r.get('releaseId') or '')
+          version=str(r.get('targetVersion') or '')
+          mode=str(r.get('releaseMode') or '')
+          suffix={'NEW_VERSION':'new','SAME_VERSION_CORRECTION':'correction','ROLLBACK':'rollback'}.get(mode)
+          if suffix is None: raise SystemExit('CANDIDATE_REQUEST_RELEASE_MODE_INVALID')
+          if not re.fullmatch(rf'simcore-v{re.escape(version)}-{suffix}-[0-9]{{2,}}',rid): raise SystemExit('CANDIDATE_RELEASE_ID_INVALID')
+          print('intent_id='+str(r['intentId']))
+          print('release_id='+rid)
           PY
-          )"
           echo "request_path=$REQUEST" >> "$GITHUB_OUTPUT"
-          echo "intent_id=$INTENT_ID" >> "$GITHUB_OUTPUT"
           echo "source_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo 'SIMCORE_GENERIC_CANDIDATE_REQUEST_BOUNDARY_PASS'
 
@@ -118,3 +129,119 @@ jobs:
         run: |
           set -euo pipefail
           echo "SIMCORE_GENERIC_CANDIDATE_PASS intent=$INTENT disposition=$D C=$C productionMutation=NONE"
+
+  receipt:
+    name: Persist Candidate Receipt and Spec Shadow
+    needs: materialize
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: simcore-main-state-sync
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout current main administrative authority
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download exact candidate report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: simcore-candidate-${{ needs.materialize.outputs.intent_id }}-${{ github.run_id }}
+          path: .simcore-candidate
+
+      - name: Reobserve immutable request and candidate
+        shell: bash
+        env:
+          SOURCE: ${{ needs.materialize.outputs.source_commit }}
+          REQUEST: ${{ needs.materialize.outputs.request_path }}
+          C: ${{ needs.materialize.outputs.candidate_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$C" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p .simcore-candidate/source
+          git show "$SOURCE:$REQUEST" > .simcore-candidate/source/request.json
+          test -f "$REQUEST"
+          cmp -s "$REQUEST" .simcore-candidate/source/request.json
+          REF="$(python3 - <<'PY'
+          import json
+          print(json.load(open('.simcore-candidate/report.json'))['candidateFetchRef'])
+          PY
+          )"
+          HEAD="$(git ls-remote origin "refs/heads/$REF" | awk '{print $1}')"
+          test "$HEAD" = "$C"
+          echo 'SIMCORE_CANDIDATE_RECEIPT_REOBSERVE_PASS'
+
+      - name: Derive bounded machine receipt and spec shadow
+        id: receipt
+        shell: bash
+        env:
+          INTENT: ${{ needs.materialize.outputs.intent_id }}
+          RELEASE_ID: ${{ needs.materialize.outputs.release_id }}
+          SOURCE: ${{ needs.materialize.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          RECEIPT="products/simcore/releases/candidate-receipts/${INTENT}.json"
+          SHADOW="products/simcore/releases/spec-shadows/${RELEASE_ID}.json"
+          node products/simcore/tooling/candidate-receipt.mjs \
+            --request .simcore-candidate/source/request.json \
+            --candidate-report .simcore-candidate/report.json \
+            --verifier-commit "$SOURCE" \
+            --receipt "$RECEIPT" \
+            --spec-shadow "$SHADOW"
+          echo "receipt_path=$RECEIPT" >> "$GITHUB_OUTPUT"
+          echo "shadow_path=$SHADOW" >> "$GITHUB_OUTPUT"
+          git diff --check
+
+      - name: Commit and gate machine-known candidate truth
+        shell: bash
+        env:
+          INTENT: ${{ needs.materialize.outputs.intent_id }}
+          RECEIPT: ${{ steps.receipt.outputs.receipt_path }}
+          SHADOW: ${{ steps.receipt.outputs.shadow_path }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RECEIPT" "$SHADOW"
+          if git diff --cached --quiet; then
+            echo 'SIMCORE_CANDIDATE_RECEIPT_ALREADY_DURABLE'
+          else
+            git commit -m "state(simcore): record candidate ${INTENT}"
+            PAYLOAD="$(git rev-parse HEAD)"
+            python3 scripts/repo-main-write.py --commit "$PAYLOAD" \
+              --allow "$RECEIPT" \
+              --allow "$SHADOW" \
+              --required-workflow simcore-ci.yml \
+              --required-profile MAIN_HEALTH \
+              --required-job Required \
+              --staging-prefix simcore-candidate-receipt
+          fi
+
+      - name: Reobserve durable machine receipt
+        shell: bash
+        env:
+          RECEIPT: ${{ steps.receipt.outputs.receipt_path }}
+          SHADOW: ${{ steps.receipt.outputs.shadow_path }}
+          C: ${{ needs.materialize.outputs.candidate_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show "origin/main:$RECEIPT" > .simcore-candidate/durable-receipt.json
+          git show "origin/main:$SHADOW" > .simcore-candidate/durable-shadow.json
+          C="$C" python3 - <<'PY'
+          import json,os
+          r=json.load(open('.simcore-candidate/durable-receipt.json'))
+          s=json.load(open('.simcore-candidate/durable-shadow.json'))
+          assert r['candidateCommit']==os.environ['C']
+          assert r['result']=='PASS'
+          assert r['productionMutation']=='NONE'
+          assert s['authority']=='SHADOW_ONLY'
+          assert s['derivedSpec']['candidateCommit']==os.environ['C']
+          print('SIMCORE_CANDIDATE_RECEIPT_DURABLE_PASS')
+          PY

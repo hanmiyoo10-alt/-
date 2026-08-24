@@ -51,7 +51,7 @@ jobs:
           esac
           TOUCHES="$(git log --format=%H "$MERGE_SHA" -- "$ACTIVATION" | wc -l | tr -d ' ')"
           test "$TOUCHES" = 1
-          ACTIVATION="$ACTIVATION" PR_TITLE="$PR_TITLE" python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          ACTIVATION="$ACTIVATION" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT" > /tmp/simcore-release-activation.env
           import json, os, re
           p=os.environ['ACTIVATION']
           a=json.load(open(p))
@@ -71,16 +71,18 @@ jobs:
           if os.environ['PR_TITLE'] != expected_title: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_TITLE_INVALID')
           s=json.load(open(expected_spec))
           if s.get('releaseId') != rid: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_SPEC_ID_MISMATCH')
-          if s.get('candidateCommit') is None: raise SystemExit('SIMCORE_RELEASE_ACTIVATION_CANDIDATE_MISSING')
+          if not re.fullmatch(r'[0-9a-f]{40}', str(s.get('candidateCommit') or '')):
+              raise SystemExit('SIMCORE_RELEASE_ACTIVATION_CANDIDATE_MISSING')
           print('release_id='+rid)
           print('release_spec_path='+expected_spec)
           print('candidate_fetch_ref='+str(a['candidateFetchRef']))
           print('candidate_commit='+str(s['candidateCommit']))
           print('authority_confirmation=RS2_4_RELEASE')
           PY
-          REF_HEAD="$(git ls-remote origin "refs/heads/${{ steps.activation.outputs.candidate_fetch_ref }}" 2>/dev/null | awk '{print $1}')"
+          source /tmp/simcore-release-activation.env
+          REF_HEAD="$(git ls-remote origin "refs/heads/$candidate_fetch_ref" 2>/dev/null | awk '{print $1}')"
           test -n "$REF_HEAD"
-          test "$REF_HEAD" = "${{ steps.activation.outputs.candidate_commit }}"
+          test "$REF_HEAD" = "$candidate_commit"
           echo 'SIMCORE_RELEASE_PR_ACTIVATION_BOUNDARY_PASS'
 
       - name: Dispatch and observe permanent caller

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "RS2-4E MAIN_ADMIN_STATE_DRIFT repair",
+  "expectedProductionCommit": "47969d24771f6cc188df6e32150fc6fde519182d",
+  "registeredTransition": "products/simcore/state-sync/active-admin-transition.json",
+  "mergeThisCommandPayload": false
+}

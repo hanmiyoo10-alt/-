@@ -213,9 +213,60 @@ validation_status = PENDING_REAL_LONG_CHAT
 
 This bootstrap intentionally does **not** create the permanent RS2-4 release record. It only removes the stale production/admin contradiction so trusted permanent CI can evaluate the actual recovery infrastructure.
 
-## 8. Permanent regression ownership
+The original PR #251 remained bound to its original pull-request base identity even after synchronize, so it was closed without merge and superseded rather than bypassing the trusted predecessor boundary.
 
-The permanent CI self-test now owns the recovery surface explicitly:
+## 8. Rebased recovery infrastructure qualification
+
+A clean recovery branch was rebuilt directly from synchronized current main:
+
+```text
+PR: #255
+branch: fix/simcore-r-post-publish-state-recovery-v2
+base: a53aca79f41e7f75c351e8c486565912a012dcea
+initial head: c86f157267633e048f368737231a6385c8c5542d
+initial CI run: 32751957566
+```
+
+That run proved the bootstrap cycle was resolved:
+
+```text
+trusted predecessor MAIN_HEALTH: PASS
+GATE_STATIC: PASS
+GATE_ARCH: PASS
+GATE_REGRESSION: PASS
+GATE_STATE: PASS
+GATE_COORDINATION: PASS
+stateCheck: PASS
+```
+
+The only proposed-verifier failure was `GATE_CI_SELF` from a brittle self-test boundary locator. The self-test used the first occurrence of the substring `  required:` as the end of the post-publish job. Workflow input fields contain indented `required:` keys earlier in the file, so the slice was empty even though the actual job correctly contained:
+
+```yaml
+permissions:
+  contents: write
+  actions: write
+```
+
+Classification:
+
+```text
+POST_PUBLISH_PERMISSION_SELF_TEST_BOUNDARY_FALSE_NEGATIVE
+= FIX / HARNESS / CI_SELF / NON_RUNTIME
+```
+
+Correction:
+
+```text
+locate `post-publish-state` from an anchored job boundary
+locate the final `required` job with lastIndexOf
+validate the permissions block with whitespace-tolerant regex
+```
+
+No permission rule was weakened. The test still requires both `contents: write` and `actions: write` specifically inside the post-publish state job.
+
+## 9. Permanent regression ownership
+
+The permanent CI self-test owns the recovery surface explicitly:
 
 ```text
 normal durable-memory writer bot identity = github-actions[bot]
@@ -240,7 +291,7 @@ RECOVERY_WORKFLOW_SOURCE_METADATA_INTERPOLATION_TYPO
 
 It never reached main, production, or `release-simcore`.
 
-## 9. Expected durable recovery result
+## 10. Expected durable recovery result
 
 After the permanent recovery request completes:
 

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "generic-candidate-controller",
+    "input": {
+      "intentId": "simcore-v0.0.2-intent-01",
+      "targetVersion": "0.0.2",
+      "releaseName": "Fixture Candidate",
+      "releaseMode": "NEW_VERSION",
+      "verificationSuite": "batch-a",
+      "primaryGoalId": "R2_1_B_FIXTURE",
+      "liveScenarioId": "R2_1_B_FIXTURE_REAL_LONG_CHAT"
+    }
+  }
+]

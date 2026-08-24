@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.64.7-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "08b54993876a687182469ee2cc9124f56ce77d9c",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.64.7-new-01.json",
+  "releaseSpecSha256": "5ce6d00fc95a6cf7b91f59639a7f030073d298fcf02c231006028d3c6f0bbc95",
+  "productionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "previousProductionCommit": "47969d24771f6cc188df6e32150fc6fde519182d",
+  "productionBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+  "version": "0.64.7",
+  "releaseName": "Cross-Reload Cache Observer Continuity",
+  "verificationReportSha256": "ff18a07477d83ea004671cbe1baf577ab1001db7f3e28d3a362109332ef509a9",
+  "verifierCommit": "e7490f5c0a68462960c868388796d1c7b9345e45",
+  "publisherRunId": "32749519307",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

@@ -167,15 +167,6 @@
   bindSettings = function diagnosticsWorkspaceBindSettings() {
     diagnosticsWorkspaceLegacyBindSettings();
     const q = selector => document.querySelector(selector);
-    const setMode = async mode => {
-      const next = mode === 'detailed' ? 'detailed' : 'basic';
-      if (diagnosticsWorkspaceMode() === next) return;
-      state.diagnosticsMode = next;
-      await persist();
-      renderSettings();
-    };
-    if (q('#diagnostics-mode-basic')) q('#diagnostics-mode-basic').onclick = () => setMode('basic');
-    if (q('#diagnostics-mode-detailed')) q('#diagnostics-mode-detailed').onclick = () => setMode('detailed');
     if (q('#copy-diag-summary')) q('#copy-diag-summary').onclick = async e => {
       let copied = false;
       try {

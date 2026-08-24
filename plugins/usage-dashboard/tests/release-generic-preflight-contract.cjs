@@ -7,7 +7,7 @@ const path = require('node:path');
 const preflight = require('../tools/release_generic_preflight.cjs');
 
 const target = '3.0.0-alpha.5.74';
-const stale = "const release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
+const stale = "const release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.73');\n"; // UD_HISTORICAL_VERSION_LOCK — unannotated stale fixture is test data, not current-release authority.
 const current = "const release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.74');\n";
 const historical = "// UD_HISTORICAL_VERSION_LOCK\nconst release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
 assert.deepEqual(preflight.staleProductAssertions(current,target),[]);

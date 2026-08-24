@@ -57,6 +57,7 @@ try {
   const inspected = policy.inspectCandidate(base, source);
   assert.equal(inspected.releaseSpec, '.github/usage-dashboard/releases/5.72.json');
   assert.equal(inspected.materializer, 'plugins/usage-dashboard/tools/release_fixture_572.py');
+  // UD_HISTORICAL_VERSION_LOCK — fixture assertion intentionally proves the 5.72 source-policy contract.
   assert.equal(inspected.productVersion, '3.0.0-alpha.5.72');
   assert.equal(inspected.engineChanged, true);
   assert.equal(inspected.pluginChanged, true);

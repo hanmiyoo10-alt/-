@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_1_A_D_QUALIFICATION",
+  "status": "B_C_D_QUALIFIED",
+  "date": "2026-08-25",
+  "baseMainCommit": "7ab8bbaa76495bbf2cd1ad95a42b72b1c631b2b7",
+  "productionIdentity": {
+    "version": "0.64.7",
+    "releaseCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+    "releaseBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+    "humanLiveGate": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+    "mutationFromQualification": "NONE"
+  },
+  "units": {
+    "A": {"id":"R2_1_A_ONE_SHOT_RETIREMENT","result":"PASS","evidence":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_A_ONE_SHOT_RETIREMENT_EVIDENCE.md","mergeCommit":"b65e544ef8096d2b606fc0aa9f0076a08291b6c1"},
+    "B": {"id":"R2_1_B_GENERIC_CANDIDATE_CONTROLLER","result":"PASS","evidence":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_B_GENERIC_CANDIDATE_EVIDENCE.md","mergeCommit":"4e4bc5643c5d01276f6b012bbd170a2fbd4b2e86","permanentOwner":"products/simcore/tooling/candidate-materialize.mjs","permanentSuite":"candidate-materialize"},
+    "C": {"id":"R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC","result":"PASS","evidence":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_C_MACHINE_RECEIPT_EVIDENCE.md","mergeCommit":"89815dd5cd89ed2ed7556e18e8f8ff158b9c3689","permanentOwner":"products/simcore/tooling/candidate-receipt.mjs","permanentSuite":"candidate-receipt","machineSpecAuthority":"SHADOW_ONLY"},
+    "D": {"id":"R2_1_D_LIVE_PENDING_STATE_CONVERGENCE","result":"PASS","evidence":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_D_STATE_CONVERGENCE_EVIDENCE.md","mergeCommit":"7ab8bbaa76495bbf2cd1ad95a42b72b1c631b2b7","permanentOwner":"products/simcore/tooling/release-state-converge.mjs","compatibilityAdapter":"products/simcore/tooling/post-publish-state.mjs"}
+  },
+  "compositionEvidence": {
+    "preQualificationRun": 32764634954,
+    "preQualificationVerifyJob": 97551262418,
+    "preQualificationRequiredJob": 97551357191,
+    "qualificationRun": 32764906669,
+    "qualificationVerifyJob": 97552076823,
+    "qualificationRequiredJob": 97552211100,
+    "result": "PASS",
+    "meaning": "Merged A/B/C/D composition requalified under current permanent SimCore CI."
+  },
+  "activationGate": {
+    "required": "B_C_D_QUALIFIED",
+    "current": "B_C_D_QUALIFIED",
+    "eMayImplement": true,
+    "machineSpecPublicationAuthorityActive": false
+  },
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

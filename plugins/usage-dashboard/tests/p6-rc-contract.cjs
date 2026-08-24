@@ -10,7 +10,11 @@ const srcManifest = JSON.parse(fs.readFileSync(`${root}/src/manifest.json`, 'utf
 const productVersion = (source.match(/^\/\/@version (.+)$/m) || [])[1] || '';
 const alphaBuild = productVersion.match(/^3\.0\.0-alpha\.5\.(\d+)$/);
 const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
-const expectedParts = alphaBuild && Number(alphaBuild[1]) >= 67 ? 23 : 22;
+const expectedParts = alphaBuild && Number(alphaBuild[1]) >= 71
+  ? 26
+  : alphaBuild && Number(alphaBuild[1]) >= 67
+    ? 23
+    : 22;
 assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bridge contract version: ${requiredEngineVersion}`);
 assert.ok(source.includes("const STATE_KEY = 'local-usage-dashboard-v3';"));
 assert.ok(source.includes("const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';"));

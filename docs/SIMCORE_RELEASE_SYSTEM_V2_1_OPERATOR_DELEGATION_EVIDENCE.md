@@ -1,11 +1,25 @@
 # SimCore Release System v2.1 — Delegated Operator Activation Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · FIRST PERMANENT CI PASS · PENDING FINAL MERGE/CLOSURE · NON-RUNTIME**
+Status: **CLOSED · DELEGATED OPERATOR POLICY ACTIVE · AWAITING GENUINE RELEASE PROOF · NON-RUNTIME**
+
+## Closure verdict
+
+The user-selected delegated operator policy is implemented, permanent-CI qualified, merged to durable `main`, production-preserving, and documented.
+
+```text
+explicit release work item required = YES
+standing/background release authority = NO
+user manual pre-live GitHub actions = 0
+assistant delegated through LIVE_PENDING = YES
+human real-long-chat LIVE_PASS = STILL REQUIRED
+```
+
+The next genuine runtime release is still required to prove the complete steady-state flow end to end. This closure therefore means **policy active / infrastructure qualified**, not “production operation already proven.”
 
 ## Decision
 
-The user selected the following steady-state operator experience:
+Steady-state operator experience:
 
 ```text
 explicit SimCore update/release request
@@ -29,7 +43,7 @@ products/simcore/releases/approvals/<releaseId>.json
 products/simcore/releases/specs/<releaseId>.json
 ```
 
-The approval object does not contain C/P/blob. The spec is copied from the already validated machine-derived shadow via the exact approval resolver. Packaging has no publication primitive.
+The approval object does not contain C/P/blob. The spec is copied from the already validated machine-derived shadow through the exact approval resolver. Packaging has no publication primitive.
 
 ### Exact approval activation adapter
 
@@ -59,7 +73,7 @@ The adapter still has no `contents: write`, publisher call, main writer, direct 
 
 ## Permanent regression
 
-`release-approval` batch-a now additionally proves:
+`release-approval` batch-a additionally proves:
 
 ```text
 NEW_VERSION package == machine shadow
@@ -99,9 +113,11 @@ R2_1_OPERATOR_POLICY_ACCIDENTAL_MAIN_NOOP_MARKER
 
 No runtime, release state, or `release-simcore` identity was touched by either anomaly.
 
-## First permanent CI
+## Permanent CI evidence
 
-PR: `#292`
+Implementation PR: `#292`
+
+First proposed-head permanent CI:
 
 ```text
 run      32769662790
@@ -109,16 +125,75 @@ Verify   97566934048  PASS
 Required 97567062169  PASS
 ```
 
-This proves the proposed delegated operator adapter, package helper, classifier change, and permanent release-approval regression together against the current SimCore verifier.
+Final evidence/status head permanent CI:
 
-## Remaining closure
+```text
+run      32769840775
+Verify   97567528932  PASS
+Required 97567646673  PASS
+```
 
-Before this work is COMPLETE:
+PR `#292` merged to durable main as:
 
-1. record this CI evidence in machine status;
-2. run permanent CI again on the evidence/status head;
-3. merge PR #292;
-4. reobserve durable main and frozen v0.64.7 production;
-5. land a docs/admin closure recording the merge and setting delegated operator policy active-but-awaiting-genuine-release-proof.
+`ff3d2233b8acac795aa1d62d219c4ef6538427f2`
 
-The next genuine runtime release is still required to prove the complete two-PR-to-LIVE_PENDING operational path in production.
+Durable main was reobserved at that exact merge after publication of the infrastructure change.
+
+## Production preservation
+
+After #292 merged:
+
+```text
+release-simcore = a7ce8ce33a97797630f885c6753415e4b2ccc7fc
+version = 0.64.7
+latest.js blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
+install.js blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
+latest == install = PASS
+```
+
+Therefore:
+
+```text
+runtime mutation = NONE
+release-simcore mutation = NONE
+current product gate = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+```
+
+## Authority boundary after activation
+
+The delegated approval adapter is active, but it is not a publisher. The actual publication chain remains:
+
+```text
+exact approval merge
+→ approval adapter revalidation
+→ existing SimCore Permanent Release caller
+→ Candidate Required
+→ single permanent publisher
+→ LIVE_PENDING state convergence
+```
+
+The policy does not authorize unattended/background releases. A concrete release work item must first be explicitly requested by the user in the active work session.
+
+## Completion boundary
+
+This infrastructure/policy work item is complete once this closure document and machine status are merged through permanent CI.
+
+The next genuine runtime release must provide the remaining operational proof:
+
+```text
+PR1 product + intent
+→ generic candidate + receipt
+→ PR2 delegated exact approval package
+→ permanent publication
+→ LIVE_PENDING convergence
+→ handoff to user
+→ `+` / real long-chat
+→ human evidence
+→ LIVE_PASS closure
+```
+
+Until that occurs, use the phrase:
+
+**`ACTIVE · AWAITING GENUINE RELEASE PROOF`**
+
+and do not claim R2.1 delegated operation is already end-to-end production-proven.

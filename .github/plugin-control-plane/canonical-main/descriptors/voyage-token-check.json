@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "voyage-token-check",
+  "kind": "plugin",
+  "displayName": "Voyage Token Check",
+  "lifecycle": "design-evidence-validation",
+  "projectPath": "voyage-token-check",
+  "guidelines": "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "voyage-token-check/DESIGN_STATUS.md"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

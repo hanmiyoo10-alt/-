@@ -1,6 +1,5 @@
 'use strict';
 
-const fs = require('fs');
 const {
   loadRegistry,
   classifyPaths,
@@ -18,7 +17,7 @@ async function api(repo, endpoint, options = {}) {
       'Accept': 'application/vnd.github+json',
       'Authorization': `Bearer ${token}`,
       'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'repository-plugin-control-plane-pr-classifier',
+      'User-Agent': 'repository-plugin-control-plane-pr-reconciler',
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
@@ -45,49 +44,69 @@ async function listPrFiles(repo, number) {
     paths.push(...rows.map((row) => row.filename));
     if (rows.length < 100) return paths;
   }
-  throw new Error('PR file pagination exceeded safety bound');
+  throw new Error(`PR #${number} file pagination exceeded safety bound`);
 }
 
-function readEvent() {
-  if (!process.env.GITHUB_EVENT_PATH) throw new Error('GITHUB_EVENT_PATH is required');
-  return JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+async function listOpenPrs(repo) {
+  const prs = [];
+  for (let page = 1; page <= 5; page += 1) {
+    const rows = await api(repo, `/pulls?state=open&per_page=100&page=${page}`);
+    prs.push(...rows);
+    if (rows.length < 100) return prs;
+  }
+  throw new Error('open PR pagination exceeded 500-item safety bound');
 }
 
-async function main() {
-  const event = readEvent();
-  const repo = process.env.GITHUB_REPOSITORY || event?.repository?.full_name;
-  if (!repo) throw new Error('repository identity missing');
-  if (event?.workflow_run?.event !== 'pull_request') throw new Error('trusted pull_request workflow_run required');
-
-  const linked = event.workflow_run.pull_requests || [];
-  if (linked.length !== 1 || !linked[0]?.number) {
-    throw new Error(`expected exactly one workflow_run pull request, got ${linked.length}`);
-  }
-  const number = linked[0].number;
-  const pr = await api(repo, `/pulls/${number}`);
-  if (pr.state !== 'open') {
-    console.log(`PLUGIN_CONTROL_PLANE_PR_SKIP_CLOSED:#${number}`);
-    return;
-  }
-
-  const registry = loadRegistry();
-  const paths = await listPrFiles(repo, number);
+async function reconcilePr(repo, pr, registry) {
+  const paths = await listPrFiles(repo, pr.number);
   const result = classifyPaths(paths, registry);
-  await ensureLabels(repo, registry);
-
   const current = (pr.labels || []).map((label) => label.name);
   const preserved = current.filter((label) => !managedLabel(label, registry));
   const labels = [...new Set([...preserved, ...result.labels])].sort();
-  await api(repo, `/issues/${number}/labels`, {method: 'PUT', body: {labels}});
+
+  const same = current.length === labels.length && current.every((label) => labels.includes(label));
+  if (!same) {
+    await api(repo, `/issues/${pr.number}/labels`, {method: 'PUT', body: {labels}});
+  }
 
   console.log(JSON.stringify({
-    receipt: 'PLUGIN_CONTROL_PLANE_PR_CLASSIFIED',
-    number,
-    observedHeadSha: event.workflow_run.head_sha || 'UNKNOWN',
+    receipt: 'PLUGIN_CONTROL_PLANE_PR_RECONCILED',
+    number: pr.number,
+    headSha: pr.head?.sha || 'UNKNOWN',
+    changed: !same,
     paths,
     ...result,
     appliedLabels: labels,
-  }, null, 2));
+  }));
+}
+
+async function main() {
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!repo) throw new Error('GITHUB_REPOSITORY is required');
+
+  const registry = loadRegistry();
+  await ensureLabels(repo, registry);
+
+  const target = process.env.PR_NUMBER ? Number(process.env.PR_NUMBER) : null;
+  let prs;
+  if (Number.isInteger(target) && target > 0) {
+    const pr = await api(repo, `/pulls/${target}`, {allow404: true});
+    prs = pr && pr.state === 'open' ? [pr] : [];
+  } else {
+    prs = await listOpenPrs(repo);
+  }
+
+  const errors = [];
+  for (const pr of prs) {
+    try {
+      await reconcilePr(repo, pr, registry);
+    } catch (error) {
+      errors.push(`#${pr.number}: ${error.message || String(error)}`);
+    }
+  }
+
+  console.log(`PLUGIN_CONTROL_PLANE_PR_RECONCILE_SUMMARY:${prs.length}:${errors.length}`);
+  if (errors.length) throw new Error(`PR reconciliation failures: ${errors.join(' | ')}`);
 }
 
 main().catch((error) => {

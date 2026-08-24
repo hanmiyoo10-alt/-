@@ -1,29 +1,37 @@
-name: Plugin Control Plane — PR scope
+name: Plugin Control Plane — PR reconcile
 
 on:
-  workflow_run:
-    workflows: ["Plugin Control Plane — PR observe"]
-    types: [completed]
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/plugin-control-plane/**'
+      - '.github/workflows/plugin-control-plane-pr*.yml'
 
 permissions:
   contents: read
   issues: write
   pull-requests: read
 
+concurrency:
+  group: plugin-control-plane-pr-reconcile
+  cancel-in-progress: true
+
 jobs:
-  classify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
+  reconcile:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout trusted default branch controller
+      - name: Checkout trusted main classifier
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: main
           persist-credentials: false
-      - name: Classify changed paths without executing PR code
+      - name: Reconcile all open PR scopes from GitHub metadata
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! node .github/plugin-control-plane/pr-classifier.cjs; then
-            echo "::warning::Plugin Control Plane PR classification failed; release/product CI remains authoritative and unblocked."
+            echo "::warning::Plugin Control Plane PR reconciliation failed; release/product CI remains authoritative and unblocked."
           fi

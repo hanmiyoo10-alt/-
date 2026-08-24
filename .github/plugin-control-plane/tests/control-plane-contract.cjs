@@ -111,8 +111,9 @@ assert.doesNotMatch(prWorkflow, /pull-requests:\s*write/);
 assert.doesNotMatch(prWorkflow, /github\.event\.pull_request\.head\.sha/);
 
 const prClassifier = fs.readFileSync(path.join(root, '.github/plugin-control-plane/pr-classifier.cjs'), 'utf8');
-assert.match(prClassifier, /workflow_run\.event !== 'pull_request'/);
-assert.match(prClassifier, /workflow_run\.pull_requests/);
+assert.match(prClassifier, /event\?\.workflow_run\?\.event !== 'pull_request'/);
+assert.match(prClassifier, /trusted pull_request workflow_run required/);
+assert.match(prClassifier, /event\.workflow_run\.pull_requests/);
 assert.match(prClassifier, /expected exactly one workflow_run pull request/);
 assert.match(prClassifier, /\/pulls\/\$\{number\}\/files/);
 assert.match(prClassifier, /classifyPaths\(paths, registry\)/);

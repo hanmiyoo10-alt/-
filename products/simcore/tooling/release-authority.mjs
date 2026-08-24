@@ -33,9 +33,13 @@ function verifyImmutableAuthorization(spec, specPath, authorizationCommit) {
   if (!authorizationCommit) return null;
   if (!HEX40.test(authorizationCommit)) fail('RELEASE_AUTHORIZATION_COMMIT_INVALID');
   git('cat-file','-e',`${authorizationCommit}^{commit}`);
-  let authorizedBytes;
-  try { authorizedBytes = Buffer.from(git('show',`${authorizationCommit}:${specPath}`) + '\n', 'utf8'); }
+  let authorizedText;
+  try { authorizedText = git('show',`${authorizationCommit}:${specPath}`); }
   catch { fail('RELEASE_AUTHORIZATION_SPEC_MISSING'); }
+  let authorizedSpec;
+  try { authorizedSpec = JSON.parse(authorizedText); }
+  catch { fail('RELEASE_AUTHORIZATION_SPEC_INVALID'); }
+  const authorizedBytes = canonicalBytes(authorizedSpec);
   const expected = canonicalBytes(spec);
   if (!authorizedBytes.equals(expected)) fail('RELEASE_AUTHORIZATION_MIXED_COMMIT');
   const touches = git('log','--format=%H','--',specPath).split(/\r?\n/).filter(Boolean);

@@ -108,6 +108,7 @@ def validate_target() -> None:
         'Request account scope fidelity:',
         'Scope authority: DevPass project exact',
         'Request duration fidelity:',
+        'function requestLedgerKeyWithProvenance(row)',
     ]:
         if marker not in latest_text:
             raise SystemExit(f'5.71 plugin provenance marker missing: {marker}')
@@ -124,7 +125,9 @@ current = str(manifest.get('productVersion') or '')
 if current == TARGET_VERSION:
     sync_release_memory()
     run('python3', str(TOOLS / 'sync_project_guidelines.py'))
+    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write')
     run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
+    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
     run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
     validate_target()
     print(f'{TARGET_VERSION} already materialized · Cross-Scope Request Provenance intact')

@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: usage-dashboard-project-memory
@@ -47,6 +48,8 @@ jobs:
 
       - name: Commit synchronized project memory
         if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
@@ -59,4 +62,8 @@ jobs:
           git commit -m 'docs: sync Usage Dashboard production memory'
           PAYLOAD_COMMIT="$(git rev-parse HEAD)"
           python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
-            --allow docs/USAGE_DASHBOARD_GUIDELINES.md
+            --allow docs/USAGE_DASHBOARD_GUIDELINES.md \
+            --required-workflow simcore-ci.yml \
+            --required-profile MAIN_HEALTH \
+            --required-job Required \
+            --staging-prefix usage-dashboard-main-write-gate

@@ -37,7 +37,12 @@ function initRepo(base,name){
   run(base,'git','init','--bare',remote); git(root,'remote','add','origin',remote); return {root,remote};
 }
 function authorizeSpec(root,spec){
-  const rel=`products/simcore/releases/specs/${spec.releaseId}.json`; write(root,rel,`${JSON.stringify(spec)}\n`); const A=commit(root,'authorize release',rel); const rp='.ci-report.json'; write(root,rp,`${JSON.stringify(report(spec))}\n`); return {rel,A,rp};
+  const rel=`products/simcore/releases/specs/${spec.releaseId}.json`;
+  write(root,rel,`${JSON.stringify(spec,null,2)}\n`);
+  const A=commit(root,'authorize release',rel);
+  const rp='.ci-report.json';
+  write(root,rp,`${JSON.stringify(report(spec))}\n`);
+  return {rel,A,rp};
 }
 function pushProduction(root,P){ git(root,'push','origin',`${P}:refs/heads/release-simcore`); }
 
@@ -81,6 +86,7 @@ function semanticNegatives(base){
 function authorizationNegatives(base){
   const {root}=initRepo(base,'n6n7-auth'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); const C=all(root,'c');
   const spec=makeSpec({id:'simcore-v0.64.7-new-07',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); const rel=`products/simcore/releases/specs/${spec.releaseId}.json`; write(root,rel,`${JSON.stringify(spec)}\n`); const A1=commit(root,'auth1',rel);
+  within(root,()=>{ const compact=authorizeRelease({spec,specPath:rel,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A1}); if(compact.decision!=='AUTHORIZED_PUBLISH')throw new Error('compact authorization control'); });
   const changed={...spec,evidenceRefs:[...spec.evidenceRefs,'docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ACTIVATION_AMENDMENT.md']}; write(root,rel,`${JSON.stringify(changed)}\n`); const A2=commit(root,'mutate spec evidence',rel);
   within(root,()=>{ expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A1}),'RELEASE_AUTHORIZATION_MIXED_COMMIT');
   expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A2}),'RELEASE_SPEC_MUTATED_AFTER_AUTHORIZATION'); });
@@ -91,5 +97,5 @@ try {
   positiveNew(base); positiveCorrection(base); positiveRollback(base); authorityNegatives(base); semanticNegatives(base); authorizationNegatives(base);
   const publisher=fs.readFileSync(new URL('../tooling/release-publish.mjs',import.meta.url),'utf8');
   if(publisher.includes('--force')||publisher.includes('force-with-lease'))throw new Error('force token forbidden');
-  console.log('RS2_4E_CONTROLLER_QUALIFICATION_PASS E-A1-E-A6 P2 P3 R1 N1-N9');
+  console.log('RS2_4E_CONTROLLER_QUALIFICATION_PASS E-A1-E-A6 P2 P3 R1 N1-N9 AUTH_JSON_PRETTY_COMPACT');
 } finally { fs.rmSync(base,{recursive:true,force:true}); }

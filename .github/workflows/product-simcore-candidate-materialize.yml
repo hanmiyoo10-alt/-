@@ -1,0 +1,120 @@
+name: SimCore Generic Candidate Materialize
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'products/simcore/releases/candidate-requests/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: simcore-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    name: Materialize Candidate
+    runs-on: ubuntu-24.04
+    outputs:
+      intent_id: ${{ steps.request.outputs.intent_id }}
+      candidate_commit: ${{ steps.candidate.outputs.candidate_commit }}
+      candidate_disposition: ${{ steps.candidate.outputs.candidate_disposition }}
+    steps:
+      - name: Checkout exact merged product intent
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+          cache: ''
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.x'
+          cache: ''
+
+      - name: Resolve one immutable candidate request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD^ >/dev/null
+          mapfile -t REQUESTS < <(git diff --name-only HEAD^ HEAD -- 'products/simcore/releases/candidate-requests/*.json')
+          test "${#REQUESTS[@]}" -eq 1
+          REQUEST="${REQUESTS[0]}"
+          test -f "$REQUEST"
+          TOUCHES="$(git log --first-parent --format=%H HEAD -- "$REQUEST" | wc -l | tr -d ' ')"
+          test "$TOUCHES" = 1
+          INTENT_ID="$(python3 - "$REQUEST" <<'PY'
+          import json,sys
+          print(json.load(open(sys.argv[1]))['intentId'])
+          PY
+          )"
+          echo "request_path=$REQUEST" >> "$GITHUB_OUTPUT"
+          echo "intent_id=$INTENT_ID" >> "$GITHUB_OUTPUT"
+          echo "source_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo 'SIMCORE_GENERIC_CANDIDATE_REQUEST_BOUNDARY_PASS'
+
+      - name: Observe exact production parent
+        id: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          P="$(git rev-parse origin/release-simcore)"
+          [[ "$P" =~ ^[0-9a-f]{40}$ ]]
+          echo "production_commit=$P" >> "$GITHUB_OUTPUT"
+
+      - name: Materialize or reuse exact candidate
+        id: candidate
+        shell: bash
+        env:
+          REQUEST: ${{ steps.request.outputs.request_path }}
+          SOURCE: ${{ steps.request.outputs.source_commit }}
+          PRODUCTION: ${{ steps.production.outputs.production_commit }}
+        run: |
+          set -euo pipefail
+          mkdir -p .simcore-candidate
+          node products/simcore/tooling/candidate-materialize.mjs \
+            --root . \
+            --request "$REQUEST" \
+            --source-commit "$SOURCE" \
+            --production-commit "$PRODUCTION" \
+            --report .simcore-candidate/report.json
+          python3 - <<'PY' | tee -a "$GITHUB_OUTPUT"
+          import json
+          r=json.load(open('.simcore-candidate/report.json'))
+          assert r['result']=='PASS'
+          assert r['productionMutation']=='NONE'
+          assert r['releaseAuthority']=='CANDIDATE_TRANSPORT_ONLY'
+          assert r['candidateDisposition'] in ('CREATED','ALREADY_MATERIALIZED')
+          print('candidate_commit='+r['candidateCommit'])
+          print('candidate_disposition='+r['candidateDisposition'])
+          print('candidate_fetch_ref='+r['candidateFetchRef'])
+          print('candidate_blob='+r['candidateReleaseBlob'])
+          PY
+
+      - name: Upload bounded candidate report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simcore-candidate-${{ steps.request.outputs.intent_id }}-${{ github.run_id }}
+          path: .simcore-candidate/report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Candidate summary
+        shell: bash
+        env:
+          INTENT: ${{ steps.request.outputs.intent_id }}
+          C: ${{ steps.candidate.outputs.candidate_commit }}
+          D: ${{ steps.candidate.outputs.candidate_disposition }}
+        run: |
+          set -euo pipefail
+          echo "SIMCORE_GENERIC_CANDIDATE_PASS intent=$INTENT disposition=$D C=$C productionMutation=NONE"

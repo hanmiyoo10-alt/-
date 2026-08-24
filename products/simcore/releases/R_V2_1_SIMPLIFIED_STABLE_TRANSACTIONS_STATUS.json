@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS",
-  "status": "E_REBASED_PENDING_FINAL_CI",
+  "status": "IMPLEMENTATION_COMPLETE_OPERATION_POLICY_DEFERRED",
   "date": "2026-08-25",
   "parentFeedback": "products/simcore/releases/R_FIRST_REAL_RELEASE_FEEDBACK_STATUS.json",
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md",
@@ -18,7 +18,7 @@
     { "id": "R2_1_B_GENERIC_CANDIDATE_CONTROLLER", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_D_LIVE_PENDING_STATE_CONVERGENCE", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
-    { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "IMPLEMENTED_NOT_ACTIVE_PENDING_FINAL_CI" }
+    { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "CLOSED_IMPLEMENTED_NOT_ACTIVE" }
   ],
   "feedbackDisposition": {
     "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC": "FIXED_R2_1_B",
@@ -29,7 +29,7 @@
     "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY": "FIXED_R2_1_C_D",
     "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR": "R2_1_E_IMPLEMENTED_NOT_ACTIVE",
     "R2_1_E_ROLLBACK_MACHINE_SPEC_MISSING_ROLLBACK_BLOCK": "FIXED_PRE_ACTIVATION",
-    "R2_1_E_PREMERGE_BASE_DRIFT": "FIXED_FRESH_REBASE",
+    "R2_1_E_PREMERGE_BASE_DRIFT": "FIXED_FRESH_REBASE_AND_MAIN_MERGE",
     "R2_1_E_OPERATIONAL_APPROVAL_POLICY": "DEFER_USER_DISCUSSION",
     "PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING": "WATCH_RETAIN",
     "CANDIDATE_TRANSPORT_REF_RETIREMENT": "DEFER_TOOL_SURFACE",
@@ -63,6 +63,7 @@
     "productionMutationFromDesign": "FORBIDDEN"
   },
   "implementationAuthorized": true,
+  "implementationComplete": true,
   "approvalResolverImplemented": true,
   "approvalResolverOperationallyActive": false,
   "machineDerivedSpecAuthority": "SHADOW_ONLY",
@@ -85,7 +86,14 @@
     "supersededFinalCiRun": 32766947598,
     "supersededFinalVerifyJob": 97558454976,
     "supersededFinalRequiredJob": 97558550787,
-    "rebaseMain": "ffc6aeb38513fa50d0a9d6bcda7b7fbfb263a696"
+    "finalEPr": 289,
+    "freshBaseCiRun": 32767651870,
+    "freshBaseVerifyJob": 97560658706,
+    "freshBaseRequiredJob": 97560832118,
+    "finalMergeHeadCiRun": 32767935072,
+    "finalMergeHeadVerifyJob": 97561541664,
+    "finalMergeHeadRequiredJob": 97561670705,
+    "eImplementationMerge": "3d23e088980d409a3085c58cb435a733e8d67cef"
   },
-  "recommendedNextWorkItemAfterApproval": "FINAL_CI_AND_MERGE_E_IMPLEMENTATION_THEN_DISCUSS_OPERATIONAL_APPROVAL_POLICY"
+  "recommendedNextWorkItemAfterApproval": "DISCUSS_R2_1_E_OPERATIONAL_APPROVAL_POLICY"
 }

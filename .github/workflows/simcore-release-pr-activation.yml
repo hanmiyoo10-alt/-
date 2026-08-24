@@ -49,7 +49,7 @@ jobs:
             products/simcore/releases/activations/*.json) ;;
             *) echo 'SIMCORE_RELEASE_ACTIVATION_PATH_INVALID' >&2; exit 2 ;;
           esac
-          TOUCHES="$(git log --format=%H "$MERGE_SHA" -- "$ACTIVATION" | wc -l | tr -d ' ')"
+          TOUCHES="$(git log --first-parent --format=%H "$MERGE_SHA" -- "$ACTIVATION" | wc -l | tr -d ' ')"
           test "$TOUCHES" = 1
           ACTIVATION="$ACTIVATION" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT" > /tmp/simcore-release-activation.env
           import json, os, re

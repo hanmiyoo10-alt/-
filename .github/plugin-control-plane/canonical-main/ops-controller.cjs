@@ -2,7 +2,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const {loadPolicy, deriveOperatorState} = require('./contract.cjs');
+const {
+  loadPolicy,
+  deriveOperatorState,
+  correlationKey,
+  severityFor,
+} = require('./contract.cjs');
+const {observeAll} = require('./adapters.cjs');
 
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'registry.json'), 'utf8'));
 const policy = loadPolicy();
@@ -11,11 +17,11 @@ if (!token) throw new Error('GH_TOKEN/GITHUB_TOKEN is required');
 const repo = process.env.GITHUB_REPOSITORY;
 if (!repo) throw new Error('GITHUB_REPOSITORY is required');
 
-async function api(endpoint, options = {}) {
+async function request(endpoint, options = {}) {
   const response = await fetch(`https://api.github.com/repos/${repo}${endpoint}`, {
     method: options.method || 'GET',
     headers: {
-      Accept: 'application/vnd.github+json',
+      Accept: options.accept || 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'canonical-main-ops-controller',
@@ -24,8 +30,18 @@ async function api(endpoint, options = {}) {
   });
   if (options.allow404 && response.status === 404) return null;
   if (!response.ok) throw new Error(`${options.method || 'GET'} ${endpoint}: HTTP ${response.status} ${(await response.text()).slice(0, 300)}`);
-  if (response.status === 204) return null;
+  return response;
+}
+
+async function api(endpoint, options = {}) {
+  const response = await request(endpoint, options);
+  if (response === null || response.status === 204) return null;
   return response.json();
+}
+
+async function fetchText(endpoint) {
+  const response = await request(endpoint, {accept: 'text/plain'});
+  return response.text();
 }
 
 async function listIssues(state = 'open') {
@@ -76,14 +92,7 @@ function ownerRows(openIssues, now = Date.now()) {
     const issue = openIssues.find((row) => row.title === title);
     const refreshed = issue ? parseRefresh(issue.body || '') : null;
     const fresh = refreshed !== null && now - refreshed <= boundMs;
-    return {
-      kind,
-      id,
-      owner,
-      issue,
-      refreshed,
-      fresh,
-    };
+    return {kind, id, owner, issue, refreshed, fresh};
   });
 }
 
@@ -92,11 +101,88 @@ function incidentFromIssue(issue) {
   if (!labels.includes('control-plane:incident')) return null;
   const severityLabel = labels.find((label) => /^severity:P[0-3]$/.test(label));
   const state = labels.includes('incident:recovered') ? 'RECOVERED' : labels.includes('incident:open') ? 'OPEN' : 'UNKNOWN';
-  return {
-    issue,
-    severity: severityLabel ? severityLabel.split(':')[1] : 'P2',
-    state,
-  };
+  return {issue, severity: severityLabel ? severityLabel.split(':')[1] : 'P2', state};
+}
+
+function eventTransition(event) {
+  if (event.disposition === 'RECOVERY_FEEDBACK_CANDIDATE') return 'RECOVERED';
+  if (event.disposition === 'FEEDBACK_CANDIDATE' || event.disposition === 'ESCALATION_CANDIDATE') return 'OPEN';
+  return 'NONE';
+}
+
+function markerForKey(key) {
+  return `<!-- canonical-main-correlation:${Buffer.from(key).toString('base64url')} -->`;
+}
+
+function markerForEvent(eventId) {
+  return `<!-- canonical-main-event:${Buffer.from(String(eventId)).toString('base64url')} -->`;
+}
+
+function existingIncident(allIssues, key) {
+  const marker = markerForKey(key);
+  return allIssues.find((issue) => (issue.body || '').includes(marker)) || null;
+}
+
+function incidentLabels(event, severity, state) {
+  const labels = ['control-plane:incident', `incident:${state.toLowerCase()}`, `severity:${severity}`];
+  for (const scope of event.scope || []) {
+    if (/^(?:plugin|product|scope):/.test(scope)) labels.push(scope);
+  }
+  return [...new Set(labels)].sort();
+}
+
+function renderIncidentBody(event, severity, state, key) {
+  const evidence = (event.evidence || []).slice(0, 12);
+  return [
+    `# Canonical Main Incident — ${event.observation.reasonCode}`,
+    '',
+    '> Derived incident record. This issue is not a production/release authority.',
+    '',
+    `- State: **${state}**`,
+    `- Severity: **${severity}**`,
+    `- Scope: ${(event.scope || []).map((row) => `\`${row}\``).join(', ') || '`UNKNOWN`'}`,
+    `- Event class: \`${event.eventClass}\``,
+    `- Reason: \`${event.observation.reasonCode}\``,
+    `- Subject: \`${event.subject.kind}:${event.subject.id ?? event.subject.number ?? 'UNKNOWN'}\``,
+    `- Summary: ${event.summary || 'No summary provided.'}`,
+    `- Observed transition: \`${event.observation.from || 'UNKNOWN'} → ${event.observation.to || 'UNKNOWN'}\``,
+    '',
+    '## Evidence',
+    '',
+    ...(evidence.length ? evidence.map((row) => `- \`${String(row).replace(/`/g, '')}\``) : ['- `UNKNOWN`']),
+    '',
+    markerForKey(key),
+    markerForEvent(event.eventId),
+  ].join('\n');
+}
+
+async function reconcileIncidentEvents(events, allIssues) {
+  const touched = [];
+  for (const event of events) {
+    const transition = eventTransition(event);
+    if (transition === 'NONE') continue;
+    const key = correlationKey(event);
+    const severity = severityFor(event);
+    let issue = existingIncident(allIssues, key);
+    if (transition === 'RECOVERED' && !issue) continue;
+    if (issue && (issue.body || '').includes(markerForEvent(event.eventId))) continue;
+
+    const body = renderIncidentBody(event, severity, transition, key);
+    const labels = incidentLabels(event, severity, transition);
+    const title = `[repo-incident:${severity}] ${event.observation.reasonCode} — ${(event.scope || []).join(',') || 'UNKNOWN'}`;
+    if (issue) {
+      issue = await api(`/issues/${issue.number}`, {
+        method: 'PATCH',
+        body: {title, body, state: transition === 'RECOVERED' ? 'closed' : 'open'},
+      });
+      await api(`/issues/${issue.number}/labels`, {method: 'PUT', body: {labels}});
+    } else {
+      issue = await api('/issues', {method: 'POST', body: {title, body, labels}});
+      allIssues.push(issue);
+    }
+    touched.push({number: issue.number, transition, severity, reason: event.observation.reasonCode});
+  }
+  return touched;
 }
 
 function fmtTime(ms) {
@@ -104,7 +190,7 @@ function fmtTime(ms) {
 }
 
 function renderIncidentRows(incidents) {
-  if (!incidents.length) return '- none observed within the current event-adapter coverage';
+  if (!incidents.length) return '- none observed within current adapter coverage';
   return incidents.map(({issue, severity, state}) => `- **${severity}** ${state} — #${issue.number} ${issue.title}`).join('\n');
 }
 
@@ -119,21 +205,34 @@ function renderProjectTable(rows) {
   return [...head, ...body].join('\n');
 }
 
+function renderWriterStatus(rows) {
+  if (!rows.length) return '- `UNKNOWN`';
+  return rows.map((row) => `- \`${row.id}\`: ${row.summary}`).join('\n');
+}
+
+function renderBootstrap(status) {
+  if (!status.statuses?.length) return '- `UNKNOWN` — no registered descriptors';
+  return status.statuses.map((row) => `- \`${row.id}\`: \`${row.ready ? 'BOOTSTRAP_READY' : 'BOOTSTRAP_INCOMPLETE'}\` / \`${row.profile}\``).join('\n');
+}
+
 async function refresh() {
   await ensureLabels();
-  const [branch, openIssues, allIssues] = await Promise.all([
-    api('/branches/main'),
-    listIssues('open'),
-    listIssues('all'),
-  ]);
+  const branch = await api('/branches/main');
+  const adapterResult = await observeAll({api, fetchText, mainSha: branch.commit.sha, root: process.cwd()});
+
+  let allIssues = await listIssues('all');
+  const touched = await reconcileIncidentEvents(adapterResult.events, allIssues);
+  if (touched.length) allIssues = await listIssues('all');
+  const openIssues = allIssues.filter((row) => row.state === 'open');
 
   const projects = ownerRows(openIssues);
   const incidentRows = allIssues.map(incidentFromIssue).filter(Boolean);
   const active = incidentRows.filter((row) => row.state === 'OPEN');
   const activeP2 = active.filter((row) => row.severity === 'P2');
   const allProjectViewsFresh = projects.every((row) => row.fresh);
-  const eventCoverageComplete = policy.operations.eventAdaptersComplete === true;
-  const freshnessValid = allProjectViewsFresh && eventCoverageComplete;
+  const configuredCoverageComplete = policy.operations.eventAdaptersComplete === true;
+  const observationCoverageValid = adapterResult.coverage.complete === true;
+  const freshnessValid = allProjectViewsFresh && configuredCoverageComplete && observationCoverageValid;
   const state = deriveOperatorState({incidents: active, attention: activeP2, freshnessValid});
   const recentRecoveries = incidentRows
     .filter((row) => row.state === 'RECOVERED')
@@ -149,13 +248,18 @@ async function refresh() {
     '',
     '## Canonical main',
     '',
-    `- Branch: \`main\``,
+    '- Branch: `main`',
     `- Observed SHA: \`${branch.commit.sha}\``,
-    '- Required gate observation: `UNKNOWN` (branch-level adapter not enabled in Phase A)',
-    '- Main-write incident coverage: `UNKNOWN` (event adapters not enabled in Phase A)',
-    `- Event adapter coverage complete: \`${eventCoverageComplete}\``,
+    `- Required gate observation: ${adapterResult.requiredCi.summary}`,
+    `- Production authority observation: ${adapterResult.productionAuthority.summary}`,
+    `- Adapter contract complete: \`${configuredCoverageComplete}\``,
+    `- Current adapter observations valid: \`${observationCoverageValid}\``,
     `- Project status freshness valid: \`${allProjectViewsFresh}\``,
     `- Refresh time: ${new Date().toISOString()}`,
+    '',
+    '## Main-write / durable-memory adapters',
+    '',
+    renderWriterStatus(adapterResult.writers),
     '',
     '## Active P0/P1 incidents',
     '',
@@ -171,9 +275,8 @@ async function refresh() {
     '',
     '## Bootstrap & durable-memory health',
     '',
-    '- Phase A contract engine: `IMPLEMENTED`',
-    '- Existing workstreams: `LEGACY/UNREGISTERED_FOR_STANDARD` until descriptors are adopted',
-    '- Writable memory adapters: `NOT ENABLED BY THIS PHASE`',
+    renderBootstrap(adapterResult.bootstrap),
+    '- Workstreams without descriptors remain `LEGACY/UNREGISTERED_FOR_STANDARD`.',
     '',
     '## Recent recoveries',
     '',
@@ -191,6 +294,7 @@ async function refresh() {
     opsIssue = await api('/issues', {method: 'POST', body: {title: policy.operations.issueTitle, body, labels: ['scope:repo', 'control-plane:operations']}});
     console.log(`CANONICAL_MAIN_OPS_CREATED:#${opsIssue.number}:${state}`);
   }
+  for (const row of touched) console.log(`CANONICAL_MAIN_INCIDENT_${row.transition}:#${row.number}:${row.severity}:${row.reason}`);
 }
 
 async function main() {
@@ -204,4 +308,12 @@ if (require.main === module) main().catch((error) => {
   process.exitCode = 1;
 });
 
-module.exports = {parseRefresh, ownerRows, incidentFromIssue};
+module.exports = {
+  parseRefresh,
+  ownerRows,
+  incidentFromIssue,
+  eventTransition,
+  markerForKey,
+  markerForEvent,
+  renderIncidentBody,
+};

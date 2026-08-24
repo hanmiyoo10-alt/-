@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — D LIVE_PENDING State Convergence Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · PENDING PERMANENT CI · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI VERIFIED · NON-RUNTIME**
 
 ## Purpose
 
@@ -85,6 +85,17 @@ D-N12 conflicting state receipt blocks
 
 It also proves successful convergence writes current_priority, the LIVE_PENDING document block, and the deterministic state receipt while preserving existing caller compatibility.
 
+## Permanent CI evidence
+
+PR `#279`, run `32764497048`:
+
+```text
+Verify   97550771581  PASS
+Required 97550920051  PASS
+```
+
+The run included the permanent self-test path, state gate, static/architecture checks, and the deterministic post-publish suite with the R2.1-D assertions enabled.
+
 ## Safety boundary
 
 ```text
@@ -96,4 +107,4 @@ current production = v0.64.7
 current human gate = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
 ```
 
-R2.1-D is not closed until permanent Verify/Required PASS, merge, and durable-main re-observation.
+R2.1-D may close after merge and durable-main re-observation.

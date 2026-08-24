@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — B Generic Candidate Controller Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · PENDING PERMANENT CI · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI REQUALIFICATION ACTIVE · NON-RUNTIME**
 Parent: R2.1-A retired v0.64.7-only candidate workflows
 
 ## Implemented permanent surface
@@ -39,5 +39,37 @@ release authority = CANDIDATE_TRANSPORT_ONLY
 ```
 
 The permanent regression suite covers schema rejection, builder/path allowlists, parent movement, direct-child creation, exact-existing NOOP/PASS, conflicting ref BLOCK, mirror equality, and static absence of publication/main-write primitives.
+
+## First permanent CI finding
+
+PR `#268`, run `32761786586`:
+
+```text
+Verify   97542081438  FAIL
+Required 97542197133  FAIL
+trusted predecessor   PASS
+proposed GATE_CI_SELF PASS
+proposed GATE_STATIC  PASS
+proposed GATE_ARCH    PASS
+proposed GATE_REGRESSION INFRA_ERROR
+reason = FIXTURE_SCHEMA_INVALID: fixture envelope
+```
+
+Classification:
+
+```text
+R2_1_B_CANDIDATE_FIXTURE_ENVELOPE_INVALID
+= FIX / TEST_HARNESS / NON_RUNTIME / PRE_MERGE
+```
+
+Cause: the new candidate fixture was initially committed as a raw JSON array rather than the standard SimCore fixture envelope (`schemaVersion`, `id`, `suite`, `input`, `expected`, `meta`). The candidate controller itself had not reached a semantic failure. The fixture has now been converted to the canonical envelope and the same PR is being requalified.
+
+Production impact:
+
+```text
+runtime mutation = NONE
+release-simcore mutation = NONE
+v0.64.7 production unchanged
+```
 
 R2.1-B is not closed until permanent SimCore Verify/Required PASS and merge evidence are recorded.

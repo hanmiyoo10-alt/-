@@ -4,6 +4,7 @@
 const CONTROL_ISSUE_NUMBER = 197;
 const PREPARE_RE = /^\/usage-dashboard prepare (release\/usage-dashboard-[A-Za-z0-9._-]+) ([0-9a-fA-F]{40}) (\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json)$/;
 const READY_RE = /^\/usage-dashboard ready ([0-9a-fA-F]{40})$/;
+const READY_BRANCH_RE = /^\/usage-dashboard ready-branch (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -41,6 +42,13 @@ function parseReadyCommand(value) {
   return {candidateSha: match[1].toLowerCase()};
 }
 
+function parseReadyBranchCommand(value) {
+  const text = singleLine(value, 'UD_CONTROL_READY_BRANCH_DENIED');
+  const match = READY_BRANCH_RE.exec(text);
+  if (!match) fail('UD_CONTROL_READY_BRANCH_DENIED');
+  return {candidateBranch: match[1]};
+}
+
 function main() {
   const args = process.argv.slice(2);
   const command = args.shift() || '';
@@ -65,6 +73,10 @@ function main() {
     process.stdout.write(parseReadyCommand(args.join(' ')).candidateSha);
     return;
   }
+  if (command === '--ready-branch') {
+    process.stdout.write(parseReadyBranchCommand(args.join(' ')).candidateBranch);
+    return;
+  }
   fail('UD_CONTROL_USAGE');
 }
 
@@ -72,9 +84,11 @@ module.exports = {
   CONTROL_ISSUE_NUMBER,
   PREPARE_RE,
   READY_RE,
+  READY_BRANCH_RE,
   assertControlEnvelope,
   parsePrepareCommand,
   parseReadyCommand,
+  parseReadyBranchCommand,
 };
 
 if (require.main === module) {

@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "phase": "RS2-4E",
-  "status": "REPOSITORY_BOUND_QUALIFIED_ADMIN_FIX_PENDING",
+  "status": "REPOSITORY_BOUND_QUALIFIED_CALLER_ACTIVATION_PENDING",
   "controllerPrimitiveCiVerified": true,
   "permanentReleaseAvailable": false,
   "permanentReleaseShadowVerified": true,
@@ -45,26 +45,39 @@
     }
   },
   "adminState": {
-    "status": "FIX_REQUIRED",
+    "status": "FIXED",
     "finding": "MAIN_ADMIN_STATE_DRIFT",
-    "desiredValidationStatus": "LIVE_PASS",
-    "desiredCurrentPriority": "RS2_4E_REAL_RELEASE_READY_QUALIFICATION"
+    "validationStatus": "LIVE_PASS",
+    "currentPriority": "RS2_4E_REAL_RELEASE_READY_QUALIFICATION",
+    "implementationPr": 226,
+    "implementationCiRun": 32733715053,
+    "commandPr": 227,
+    "stateSyncRun": 32733857877,
+    "stateSyncJob": 97452001196,
+    "generatedMainCommit": "64aa4c8caf5b145fec3e1d4cba56907b61686fdd",
+    "projectGatewayRequiredRun": 32733878499,
+    "syncStateResult": "CHECK_CLEAN",
+    "oneShotTransitionRetired": true,
+    "result": "PASS"
   },
   "pffl": {
     "accidentalFailures": [
       "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",
       "RS2_4E_AUTH_NEGATIVE_TARGETED_WRONG_GATE"
     ],
-    "openBlockers": ["MAIN_ADMIN_STATE_DRIFT"],
-    "openFixes": ["MAIN_ADMIN_STATE_DRIFT"],
+    "openBlockers": [],
+    "openFixes": [],
+    "watches": ["GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24"],
     "residualDefers": ["SHADOW_PROOF_REF_DELETE_TOOL_SURFACE_UNAVAILABLE"]
   },
   "productionMutation": "NONE",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE",
-  "nextStep": "PROJECT_OWNED_ADMIN_STATE_FIX_THEN_RS2_4_RELEASE_CALLER_ACTIVATION",
+  "nextStep": "ACTIVATE_RS2_4_RELEASE_CALLER_THEN_REAL_RELEASE_READY",
   "evidence": [
     "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_QUALIFICATION_EVIDENCE.md",
-    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_REPOSITORY_BOUND_QUALIFICATION.md"
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_REPOSITORY_BOUND_QUALIFICATION.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ADMIN_STATE_REPAIR_PATH.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ADMIN_STATE_REPAIR_EVIDENCE.md"
   ]
 }

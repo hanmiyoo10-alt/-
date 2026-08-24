@@ -1,0 +1,19 @@
+name: Plugin Control Plane — PR observe
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit bounded observation receipt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "PLUGIN_CONTROL_PLANE_PR_OBSERVED:${PR_NUMBER}:${PR_HEAD_SHA}"

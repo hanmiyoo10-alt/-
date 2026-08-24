@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — B Generic Candidate Controller Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · PERMANENT CI REQUALIFICATION ACTIVE · NON-RUNTIME**
+Status: **CI VERIFIED · NON-RUNTIME · READY TO MERGE**
 Parent: R2.1-A retired v0.64.7-only candidate workflows
 
 ## Implemented permanent surface
@@ -62,9 +62,21 @@ R2_1_B_CANDIDATE_FIXTURE_ENVELOPE_INVALID
 = FIX / TEST_HARNESS / NON_RUNTIME / PRE_MERGE
 ```
 
-Cause: the new candidate fixture was initially committed as a raw JSON array rather than the standard SimCore fixture envelope (`schemaVersion`, `id`, `suite`, `input`, `expected`, `meta`). The candidate controller itself had not reached a semantic failure. The fixture has now been converted to the canonical envelope and the same PR is being requalified.
+Cause: the new candidate fixture was initially committed as a raw JSON array rather than the standard SimCore fixture envelope (`schemaVersion`, `id`, `suite`, `input`, `expected`, `meta`). The candidate controller itself had not reached a semantic failure. The fixture was converted to the canonical envelope.
 
-Production impact:
+## Successful requalification
+
+Same PR after the fixture repair:
+
+```text
+run      32762117327
+Verify   97543197684  PASS
+Required 97543371370  PASS
+```
+
+This proves the permanent batch-a regression now executes the generic candidate controller fixture successfully, including direct-child creation, exact retry `ALREADY_MATERIALIZED`, conflicting ref BLOCK, and parent-movement BLOCK.
+
+Production impact throughout:
 
 ```text
 runtime mutation = NONE
@@ -72,4 +84,4 @@ release-simcore mutation = NONE
 v0.64.7 production unchanged
 ```
 
-R2.1-B is not closed until permanent SimCore Verify/Required PASS and merge evidence are recorded.
+Final merge must still be followed by durable-main re-observation before R2.1-B is called closed.

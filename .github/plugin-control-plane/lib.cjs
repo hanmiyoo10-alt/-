@@ -40,43 +40,53 @@ function matchesAny(filePath, patterns = []) {
 
 function classifyPaths(paths, registry = loadRegistry()) {
   const pluginIds = new Set();
+  const productIds = new Set();
   const scopeLabels = new Set();
   const unclassifiedPaths = [];
   const ambiguousPaths = [];
 
   for (const filePath of paths) {
-    const owners = Object.entries(registry.plugins)
+    const pluginOwners = Object.entries(registry.plugins || {})
       .filter(([, plugin]) => matchesAny(filePath, plugin.paths))
       .map(([id]) => id);
+    const productOwners = Object.entries(registry.products || {})
+      .filter(([, product]) => matchesAny(filePath, product.paths))
+      .map(([id]) => id);
+    const ownerCount = pluginOwners.length + productOwners.length;
 
     const nonOperational = (registry.nonOperationalScopes || [])
       .filter((entry) => matchesAny(filePath, entry.paths));
     const isRepo = matchesAny(filePath, registry.repoPaths || []);
     const isShared = matchesAny(filePath, registry.sharedPaths || []);
 
-    if (owners.length > 1) {
+    if (ownerCount > 1) {
       ambiguousPaths.push(filePath);
       scopeLabels.add('scope:unclassified');
       continue;
     }
 
-    if (owners.length === 1) pluginIds.add(owners[0]);
+    if (pluginOwners.length === 1) pluginIds.add(pluginOwners[0]);
+    if (productOwners.length === 1) productIds.add(productOwners[0]);
     for (const entry of nonOperational) scopeLabels.add(entry.label);
     if (isRepo) scopeLabels.add('scope:repo');
     if (isShared) scopeLabels.add('scope:shared');
 
-    if (!owners.length && !nonOperational.length && !isRepo && !isShared) {
+    if (!ownerCount && !nonOperational.length && !isRepo && !isShared) {
       unclassifiedPaths.push(filePath);
       scopeLabels.add('scope:unclassified');
     }
   }
 
   if (pluginIds.size > 1) scopeLabels.add('scope:multi-plugin');
+  if (productIds.size > 1) scopeLabels.add('scope:multi-product');
+  if (pluginIds.size > 0 && productIds.size > 0) scopeLabels.add('scope:multi-owner');
 
   return {
     pluginIds: [...pluginIds].sort(),
+    productIds: [...productIds].sort(),
     labels: [
       ...[...pluginIds].sort().map((id) => `plugin:${id}`),
+      ...[...productIds].sort().map((id) => `product:${id}`),
       ...[...scopeLabels].sort(),
     ],
     unclassifiedPaths,
@@ -84,32 +94,42 @@ function classifyPaths(paths, registry = loadRegistry()) {
   };
 }
 
-function extractIssuePluginValue(body = '') {
+function extractIssueScopeValue(body = '') {
   const lines = String(body).replace(/\r/g, '').split('\n');
   for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i].trim() === '### Plugin') {
+    if (lines[i].trim() === '### Scope' || lines[i].trim() === '### Plugin') {
       for (let j = i + 1; j < lines.length; j += 1) {
         const value = lines[j].trim();
         if (value) return value;
       }
     }
-    const direct = lines[i].match(/^Plugin:\s*(.+)$/i);
+    const direct = lines[i].match(/^(?:Scope|Plugin):\s*(.+)$/i);
     if (direct) return direct[1].trim();
   }
   return null;
 }
 
+function extractIssuePluginValue(body = '') {
+  return extractIssueScopeValue(body);
+}
+
 function classifyIssueBody(body, registry = loadRegistry()) {
-  const value = extractIssuePluginValue(body);
+  const value = extractIssueScopeValue(body);
   if (!value) return {explicit: false, labels: []};
 
   if (value === 'repo') return {explicit: true, labels: ['scope:repo']};
   if (value === 'shared') return {explicit: true, labels: ['scope:shared']};
 
-  const matched = Object.entries(registry.plugins)
+  const pluginMatches = Object.entries(registry.plugins || {})
     .filter(([, plugin]) => (plugin.issueValues || []).includes(value));
-  if (matched.length === 1) {
-    return {explicit: true, labels: [`plugin:${matched[0][0]}`]};
+  const productMatches = Object.entries(registry.products || {})
+    .filter(([, product]) => (product.issueValues || []).includes(value));
+  const matchCount = pluginMatches.length + productMatches.length;
+  if (matchCount === 1 && pluginMatches.length === 1) {
+    return {explicit: true, labels: [`plugin:${pluginMatches[0][0]}`]};
+  }
+  if (matchCount === 1 && productMatches.length === 1) {
+    return {explicit: true, labels: [`product:${productMatches[0][0]}`]};
   }
   return {explicit: true, labels: ['scope:unclassified']};
 }
@@ -124,13 +144,18 @@ function labelDefinitions(registry = loadRegistry()) {
     ['scope:repo', '5319e7', 'Repository-level control-plane or shared infrastructure work'],
     ['scope:shared', '8250df', 'Change affects shared repository surface'],
     ['scope:multi-plugin', 'd876e3', 'Change touches more than one registered plugin'],
-    ['scope:unclassified', 'b60205', 'Plugin scope could not be classified deterministically'],
+    ['scope:multi-product', 'd876e3', 'Change touches more than one registered product'],
+    ['scope:multi-owner', 'd876e3', 'Change spans registered plugin and product ownership boundaries'],
+    ['scope:unclassified', 'b60205', 'Operational scope could not be classified deterministically'],
     ['scope:template', 'c5def5', 'Template-only path'],
     ['scope:test-fixture', 'c5def5', 'Repository test fixture path'],
-    ['control-plane:status', '0e8a16', 'Mutable plugin operational status issue'],
+    ['control-plane:status', '0e8a16', 'Mutable operational status issue'],
   ];
-  for (const [id, plugin] of Object.entries(registry.plugins)) {
+  for (const [id, plugin] of Object.entries(registry.plugins || {})) {
     defs.push([`plugin:${id}`, '1d76db', plugin.displayName]);
+  }
+  for (const [id, product] of Object.entries(registry.products || {})) {
+    defs.push([`product:${id}`, '0052cc', product.displayName]);
   }
   return defs.map(([name, color, description]) => ({name, color, description}));
 }
@@ -155,11 +180,21 @@ function validateRegistry(registry = loadRegistry()) {
   }
   walk(registry);
 
-  for (const [id, plugin] of Object.entries(registry.plugins || {})) {
-    if (!plugin.displayName) errors.push(`${id}: displayName missing`);
-    if (!Array.isArray(plugin.paths) || !plugin.paths.length) errors.push(`${id}: paths missing`);
-    if (!plugin.statusAdapter) errors.push(`${id}: statusAdapter missing`);
+  const issueValueOwners = new Map();
+  function validateOwners(kind, owners = {}) {
+    for (const [id, owner] of Object.entries(owners)) {
+      if (!owner.displayName) errors.push(`${kind}.${id}: displayName missing`);
+      if (!Array.isArray(owner.paths) || !owner.paths.length) errors.push(`${kind}.${id}: paths missing`);
+      if (!owner.statusAdapter) errors.push(`${kind}.${id}: statusAdapter missing`);
+      for (const value of owner.issueValues || []) {
+        const previous = issueValueOwners.get(value);
+        if (previous) errors.push(`issueValues collision: ${value} owned by ${previous} and ${kind}.${id}`);
+        else issueValueOwners.set(value, `${kind}.${id}`);
+      }
+    }
   }
+  validateOwners('plugins', registry.plugins || {});
+  validateOwners('products', registry.products || {});
   return errors;
 }
 
@@ -168,6 +203,7 @@ module.exports = {
   globToRegex,
   matchesAny,
   classifyPaths,
+  extractIssueScopeValue,
   extractIssuePluginValue,
   classifyIssueBody,
   managedLabel,

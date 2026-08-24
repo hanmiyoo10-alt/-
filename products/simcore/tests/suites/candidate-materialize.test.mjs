@@ -77,7 +77,7 @@ export async function runSuite({ fixtures }) {
 
     git(bare, 'init', '--bare');
     git(root, 'remote', 'add', 'origin', bare);
-    git(root, 'push', 'origin', `HEAD:refs/heads/main`);
+    git(root, 'push', 'origin', 'HEAD:refs/heads/main');
 
     const args = {
       root,
@@ -102,7 +102,7 @@ export async function runSuite({ fixtures }) {
 
     const conflictTree = git(root, 'rev-parse', `${P}^{tree}`);
     const conflict = run(root, 'git', ['commit-tree', conflictTree, '-p', P, '-m', 'conflict']);
-    run(root, 'git', [`--git-dir=${bare}` , 'update-ref', `refs/heads/candidate/simcore/${f.intentId}`, conflict]);
+    git(root, 'push', '--force', 'origin', `${conflict}:refs/heads/candidate/simcore/${f.intentId}`);
     expectCode(() => materialize(args), 'CANDIDATE_REF_CONFLICT');
     pass('B-N12-conflicting-existing-block');
 

@@ -6,7 +6,8 @@ export const registry = Object.freeze([
   { id: 'diagnostic-copy', module: './suites/diagnostic-copy.test.mjs', fixtureDir: 'diagnostic-copy', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'candidate-materialize', module: './suites/candidate-materialize.test.mjs', fixtureDir: 'candidate-materialize', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'candidate-receipt', module: './suites/candidate-receipt.test.mjs', fixtureDir: 'candidate-receipt', coverage: 'EXECUTABLE', required: true, goldenGate: true }
+  { id: 'candidate-receipt', module: './suites/candidate-receipt.test.mjs', fixtureDir: 'candidate-receipt', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'release-approval', module: './suites/release-approval.test.mjs', fixtureDir: 'release-approval', coverage: 'EXECUTABLE', required: true, goldenGate: true }
 ]);
 
 export const packAliases = Object.freeze({

@@ -7,6 +7,8 @@ import { spawnSync } from 'node:child_process';
 const ROOT = process.cwd();
 const PROFILES = new Set(['PR_MAIN', 'MAIN_HEALTH', 'CANDIDATE_SHADOW', 'CANDIDATE_REQUIRED']);
 const MAX_REPORT = 256 * 1024;
+const SHA40 = /^[0-9a-f]{40}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 
 function parseArgs(argv) {
   const out = {};
@@ -17,6 +19,23 @@ function parseArgs(argv) {
   }
   for (const key of ['profile', 'source', 'mirror-source', 'production-identity', 'report']) if (!out[key]) throw new Error(`--${key} required`);
   if (!PROFILES.has(out.profile)) throw Object.assign(new Error('unsupported profile'), { ciCode: 'CI_PROFILE_INVALID' });
+  if (out.profile === 'CANDIDATE_REQUIRED') {
+    if (out['candidate-required-authority'] !== 'SHADOW_ONLY') {
+      throw Object.assign(new Error('CANDIDATE_REQUIRED production authority is not activated'), { ciCode:'CANDIDATE_REQUIRED_AUTHORITY_INVALID' });
+    }
+    if (!SHA40.test(String(out['candidate-commit'] || '')) || !SHA40.test(String(out['expected-production-commit'] || ''))) {
+      throw Object.assign(new Error('CANDIDATE_REQUIRED requires exact C/P identities'), { ciCode:'CANDIDATE_IDENTITY_INVALID' });
+    }
+    if (!SHA40.test(String(out['candidate-latest-blob'] || '')) || !SHA40.test(String(out['candidate-install-blob'] || ''))) {
+      throw Object.assign(new Error('CANDIDATE_REQUIRED requires candidate blob identities'), { ciCode:'CANDIDATE_BLOB_IDENTITY_INVALID' });
+    }
+    if (out['candidate-latest-blob'] !== out['candidate-install-blob']) {
+      throw Object.assign(new Error('CANDIDATE_REQUIRED candidate blob identities differ'), { ciCode:'LATEST_INSTALL_MISMATCH' });
+    }
+    if (!SHA256.test(String(out['release-spec-sha256'] || ''))) {
+      throw Object.assign(new Error('CANDIDATE_REQUIRED requires release spec SHA-256'), { ciCode:'RELEASE_SPEC_DIGEST_INVALID' });
+    }
+  }
   return out;
 }
 
@@ -43,9 +62,13 @@ function run(command, args, timeout = 120000, extra = {}) {
 function gate(id, planned) { return { id, planned, status: planned ? 'PENDING' : 'NOT_APPLICABLE', reasonCode: null }; }
 
 function plannedGates(profile, scope) {
-  const ids = ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
+  const ids = ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT','GATE_RELEASE_INFRA'];
   const plan = Object.fromEntries(ids.map((id) => [id, false]));
-  if (['MAIN_HEALTH','CANDIDATE_SHADOW','CANDIDATE_REQUIRED'].includes(profile)) {
+  if (profile === 'MAIN_HEALTH') {
+    for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT','GATE_RELEASE_INFRA']) plan[id] = true;
+    return plan;
+  }
+  if (['CANDIDATE_SHADOW','CANDIDATE_REQUIRED'].includes(profile)) {
     for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT']) plan[id] = true;
     return plan;
   }
@@ -55,6 +78,7 @@ function plannedGates(profile, scope) {
   if (labels.has('HARNESS')) for (const id of ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION']) plan[id] = true;
   if (labels.has('ARCH_CONTRACT')) for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION']) plan[id] = true;
   if (labels.has('STATE_SYNC')) for (const id of ['GATE_STATIC','GATE_STATE']) plan[id] = true;
+  if (labels.has('RELEASE_INFRA')) for (const id of ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_RELEASE_INFRA']) plan[id] = true;
   if (labels.has('SHARED_MAIN_COORDINATION')) for (const id of ['GATE_STATIC','GATE_COORDINATION']) plan[id] = true;
   if (labels.has('LEGACY_VERIFICATION')) for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_LEGACY_COMPAT']) plan[id] = true;
   return plan;
@@ -79,7 +103,6 @@ function stateCheck(args) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.profile === 'CANDIDATE_REQUIRED') throw Object.assign(new Error('CANDIDATE_REQUIRED caller authority is reserved for RS2-4'), { ciCode:'CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4' });
   const sourcePath = inside(args.source), mirrorPath = inside(args['mirror-source']);
   const sourceBytes = fs.readFileSync(sourcePath), mirrorBytes = fs.readFileSync(mirrorPath);
   let scope = { schemaVersion:1, labels:[], unrelated:false, docOnly:false };
@@ -139,6 +162,10 @@ function main() {
     const r = run(process.execPath, ['products/simcore/tooling/ci/legacy-compat.mjs','--source',sourcePath,'--report','.simcore-ci/legacy-compat.json'], 180000);
     setGate('GATE_LEGACY_COMPAT', resultClass(r, 'LEGACY_COMPAT_SEMANTIC_FAIL', 'LEGACY_COMPAT_ERROR'), r);
   }
+  if (plan.GATE_RELEASE_INFRA) {
+    const r = run(process.execPath, ['products/simcore/tooling/release/self-test.mjs'], 180000);
+    setGate('GATE_RELEASE_INFRA', resultClass(r, 'RELEASE_INFRA_SELF_TEST_FAIL', 'RELEASE_INFRA_SELF_TEST_ERROR'), r);
+  }
 
   const planned = Object.values(gates).filter((x) => x.planned);
   const infra = planned.some((x) => x.status === 'INFRA_ERROR');
@@ -157,6 +184,10 @@ function main() {
     productionCommit:identity.resolvedCommit || null,
     candidateCommit:args['candidate-commit'] || null,
     expectedProductionCommit:args['expected-production-commit'] || null,
+    candidateLatestBlob:args['candidate-latest-blob'] || null,
+    candidateInstallBlob:args['candidate-install-blob'] || null,
+    candidateRequiredAuthority:args['candidate-required-authority'] || null,
+    releaseSpecSha256:args['release-spec-sha256'] || null,
     prBaseCommit:args['pr-base-commit'] || null,
     prHeadCommit:args['pr-head-commit'] || null,
     scopeLabels:scope.labels || [],

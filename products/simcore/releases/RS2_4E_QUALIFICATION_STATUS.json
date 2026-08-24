@@ -99,6 +99,23 @@
     "liveScenarioId": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
     "liveGate": "PENDING"
   },
+  "currentAdminState": {
+    "validationStatus": "PENDING_REAL_LONG_CHAT",
+    "currentPriority": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+    "closurePr": 257,
+    "closureCiRun": 32753581445,
+    "closureVerifyJob": 97515905732,
+    "closureRequiredJob": 97515992131,
+    "prioritySyncCommandPr": 258,
+    "prioritySyncRun": 32753769277,
+    "prioritySyncJob": 97516497658,
+    "prioritySyncMainCommit": "4d7256e23acb9ad8e13859c6925673b89c01b723",
+    "oneShotTransitionId": "06407-real-release-live-pending-priority",
+    "oneShotTransitionRetired": true,
+    "productionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+    "productionBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+    "result": "PASS"
+  },
   "pffl": {
     "accidentalFailures": [
       "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",

@@ -18,6 +18,17 @@ ok('ci-self-classification', () => {
   const r = classifyPaths(['.github/workflows/simcore-ci.yml']);
   expect(r.labels.includes('CI_SELF'), JSON.stringify(r));
 });
+ok('release-infra-classification', () => {
+  for (const p of [
+    '.github/workflows/simcore-release.yml',
+    'products/simcore/releases/release-schema-v1.json',
+    'products/simcore/tooling/release/controller.mjs',
+  ]) {
+    const r = classifyPaths([p]);
+    expect(r.labels.includes('CI_SELF') && r.labels.includes('RELEASE_INFRA'), `${p}: ${JSON.stringify(r)}`);
+    expect(!r.labels.includes('LEGACY_VERIFICATION'), `${p} classified as legacy`);
+  }
+});
 ok('state-sync-classification', () => {
   const r = classifyPaths(['products/simcore/tooling/sync-state.mjs']);
   expect(r.labels.includes('STATE_SYNC'), JSON.stringify(r));
@@ -45,15 +56,28 @@ ok('workflow-read-only-trust-boundary', () => {
   for (const token of forbidden) expect(!workflow.includes(token), `forbidden workflow token: ${token}`);
   expect(workflow.includes('permissions:\n  contents: read'), 'contents: read permission missing');
   expect(workflow.includes('name: Required'), 'stable Required job missing');
+  expect(workflow.includes('candidate_required_authority'), 'candidate-required authority input missing');
+  expect(workflow.includes('SHADOW_ONLY'), 'shadow candidate-required authority missing');
   expect(!/uses:\s+[^\n]+@(?![0-9a-f]{40}\b)/.test(workflow), 'external action is not full-SHA pinned');
+});
+
+ok('release-workflow-shadow-only-trust-boundary', () => {
+  const workflow = fs.readFileSync('.github/workflows/simcore-release.yml', 'utf8');
+  expect(workflow.includes('permissions:\n  contents: read'), 'release workflow must remain contents: read');
+  expect(workflow.includes('candidate_required_authority: SHADOW_ONLY'), 'release workflow must call shadow-only candidate gate');
+  expect(workflow.includes('--authority SHADOW_ONLY'), 'release controller shadow authority missing');
+  for (const token of ['contents: write', 'git push origin', '--force-with-lease', 'refs/heads/release-simcore']) {
+    expect(!workflow.includes(token), `shadow release workflow contains forbidden mutation token: ${token}`);
+  }
 });
 
 ok('legacy-map-complete', () => {
   const map = JSON.parse(fs.readFileSync('products/simcore/ci/legacy-gate-map.json','utf8'));
   const mapped = new Set(map.workflows.map((row) => row.legacyWorkflow));
+  const permanent = new Set(['simcore-ci.yml', 'simcore-release.yml']);
   const files = fs.readdirSync('.github/workflows')
     .filter((name) => /^simcore-.*\.yml$/.test(name))
-    .filter((name) => !['simcore-ci.yml'].includes(name))
+    .filter((name) => !permanent.has(name))
     .map((name) => `.github/workflows/${name}`);
   for (const file of files) expect(mapped.has(file), `LEGACY_GATE_UNCLASSIFIED: ${file}`);
   for (const row of map.workflows) expect(row.status !== 'UNMAPPED', `unmapped workflow: ${row.legacyWorkflow}`);

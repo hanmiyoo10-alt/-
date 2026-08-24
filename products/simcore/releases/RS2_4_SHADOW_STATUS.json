@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "phase": "RS2-4",
-  "scope": "A_B_C_D_SHADOW",
-  "status": "SHADOW_VERIFIED",
+  "scope": "A_B_C_D_SHADOW_PLUS_E_ENTRY",
+  "status": "SHADOW_VERIFIED_E_QUALIFICATION_ACTIVE",
   "releaseAuthority": "SHADOW_ONLY",
   "productionPublicationAuthorized": false,
   "productionMutation": "NONE",
@@ -38,21 +38,23 @@
     "coverage": "S1-S8",
     "result": "PASS"
   },
-  "permanentCiAfterCleanup": {
-    "run": 32723922852,
-    "verifyJob": 97420956127,
-    "requiredJob": 97421023459,
-    "result": "PASS"
+  "rs2_4eController": {
+    "implementationPr": 221,
+    "mergeCommit": "2148e8b9ee87e71faea32b74d274c0008f43a314",
+    "ciRun": 32731077286,
+    "verifyJob": 97443243549,
+    "requiredJob": 97443348273,
+    "result": "CONTROLLER_PRIMITIVE_CI_VERIFIED"
   },
   "pffl": {
     "accidentalFailures": [
       "RS2_4_SHADOW_TEST_REPO_CWD_NOT_BOUND",
-      "RS2_4D_SPEC_AUTH_ENV_NOT_EXPORTED"
+      "RS2_4D_SPEC_AUTH_ENV_NOT_EXPORTED",
+      "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",
+      "RS2_4E_AUTH_NEGATIVE_TARGETED_WRONG_GATE"
     ],
-    "openBlockers": [],
-    "openCleanupDefers": [
-      "SHADOW_PROOF_REF_DELETE_TOOL_SURFACE_UNAVAILABLE"
-    ]
+    "openBlockers": ["MAIN_ADMIN_STATE_DRIFT"],
+    "openCleanupDefers": ["SHADOW_PROOF_REF_DELETE_TOOL_SURFACE_UNAVAILABLE"]
   },
   "proofOnlyPayloadRemoved": {
     "temporarySpec": true,
@@ -60,14 +62,17 @@
     "temporaryProofRef": false,
     "temporaryProofRefHasProductionAuthority": false
   },
-  "rs2_3State": "PROMOTION_READY",
+  "rs2_3State": "CLOSED_AMENDED",
   "requiredCiActive": false,
   "requiredCiEnforcementVerified": false,
-  "rs2_3Closed": false,
-  "rs2_4EntryAuthorized": false,
-  "nextStep": "RS2_4_E_PROMOTION_OR_ACTIVATION_AMENDMENT_DECISION",
+  "projectAuthorityGatewayVerified": true,
+  "rs2_3Closed": true,
+  "rs2_4EntryAuthorized": true,
+  "nextStep": "RS2_4E_ADMIN_STATE_FIX_THEN_RELEASE_CALLER_ACTIVATION",
   "evidence": [
     "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4_SHADOW_IMPLEMENTATION_EVIDENCE.md",
-    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4D_SHADOW_IMPLEMENTATION_EVIDENCE.md"
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4D_SHADOW_IMPLEMENTATION_EVIDENCE.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_QUALIFICATION_EVIDENCE.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_REPOSITORY_BOUND_QUALIFICATION.md"
   ]
 }

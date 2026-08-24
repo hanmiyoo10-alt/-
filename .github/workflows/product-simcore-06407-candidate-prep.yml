@@ -1,4 +1,5 @@
 name: SimCore v0.64.7 Candidate Preparation
+# Activation revision: workflow is already registered on main before this trigger push.
 
 on:
   push:

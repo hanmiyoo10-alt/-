@@ -1,7 +1,7 @@
 # SimCore Release System v2 — PR Activation Adapter Implementation Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · CI PENDING · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI PASS · NON-RUNTIME**
 Parent design: `docs/SIMCORE_RELEASE_SYSTEM_V2_PR_ACTIVATION_ADAPTER.md`
 First consumer: `simcore-v0.64.7-new-01`
 
@@ -156,3 +156,19 @@ immutable release spec still exists exactly once on main
 ```
 
 After those gates, the v0.64.7 activation transaction may proceed through the permanent caller.
+
+## 7. Permanent CI evidence
+
+PR: `#246 — infra(simcore): add permanent release PR activation adapter`
+
+Initial authoritative CI on head `625b04f618c72657f093bced48536080a170a7ac`:
+
+```text
+SimCore CI run: 32748003694
+Verify job: 97498016492 — SUCCESS
+Required job: 97498150109 — SUCCESS
+```
+
+The run exercised the proposed CI-self classifier and self-test from the PR branch. No runtime or `release-simcore` mutation occurred.
+
+A final CI run after this evidence binding is required before merge; that run becomes the merge gate while the run above remains the implementation proof that established PASS before evidence-only amendment.

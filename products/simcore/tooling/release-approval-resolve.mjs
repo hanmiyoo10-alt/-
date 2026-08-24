@@ -5,10 +5,15 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HEX40=/^[0-9a-f]{40}$/;
+const VERSION=/^\d+\.\d+\.\d+$/;
 const RELEASE_ID=/^simcore-v\d+\.\d+\.\d+-(?:new|correction|rollback)-\d{2,}$/;
 const RECEIPT_PATH=/^products\/simcore\/releases\/candidate-receipts\/[A-Za-z0-9._-]+\.json$/;
 const REASON=/^[A-Za-z0-9_.:-]{1,96}$/;
 const APPROVAL_KEYS=['authorityConfirmation','candidateReceiptPath','releaseId','schemaVersion'];
+const SPEC_BASE_KEYS=['candidateCommit','candidateReleaseBlob','changeClass','evidenceRefs','expectedProductionCommit','liveGate','primaryGoalId','product','releaseId','releaseMode','releaseName','schemaVersion','version'];
+const LIVE_GATE_KEYS=['closeAuthority','required','scenarioId'];
+const MODES=new Set(['NEW_VERSION','SAME_VERSION_CORRECTION','ROLLBACK']);
+const CHANGE_CLASSES=new Set(['RUNTIME_FEATURE','RUNTIME_CORRECTION','ROLLBACK']);
 function fail(code,detail=''){const e=new Error(detail?`${code}: ${detail}`:code);e.code=code;throw e;}
 function sha256(bytes){return crypto.createHash('sha256').update(bytes).digest('hex');}
 function canonicalBytes(value){return Buffer.from(`${JSON.stringify(value)}\n`,'utf8');}
@@ -31,21 +36,27 @@ function validateReceipt(receipt,approval){
 function validateRollback(spec){
   if(spec.releaseMode==='ROLLBACK'){
     const r=spec.rollback;
-    if(!r||typeof r!=='object'||Array.isArray(r))fail('APPROVAL_ROLLBACK_METADATA_REQUIRED');
+    if(!sameKeys(r,['approvedSafeBlob','approvedSafeCommit','reasonCode']))fail('APPROVAL_ROLLBACK_METADATA_REQUIRED');
     if(!HEX40.test(String(r.approvedSafeCommit||''))||!HEX40.test(String(r.approvedSafeBlob||''))||!REASON.test(String(r.reasonCode||'')))fail('APPROVAL_ROLLBACK_METADATA_INVALID');
   } else if(spec.rollback!=null) fail('APPROVAL_ROLLBACK_METADATA_UNEXPECTED');
 }
 function validateSpec(spec,receipt,approval){
   if(!spec||spec.schemaVersion!==1||spec.product!=='SimCore'||spec.releaseId!==approval.releaseId)fail('APPROVAL_SPEC_INVALID');
+  const expectedKeys=spec.releaseMode==='ROLLBACK'?[...SPEC_BASE_KEYS,'rollback']:SPEC_BASE_KEYS;
+  if(!sameKeys(spec,expectedKeys))fail('APPROVAL_SPEC_SCHEMA_INVALID');
+  if(!MODES.has(spec.releaseMode)||!VERSION.test(String(spec.version||''))||!String(spec.releaseName||'').trim())fail('APPROVAL_SPEC_INVALID');
+  if(!CHANGE_CLASSES.has(spec.changeClass)||!String(spec.primaryGoalId||'').trim()||!Array.isArray(spec.evidenceRefs))fail('APPROVAL_SPEC_INVALID');
   if(spec.candidateCommit!==receipt.candidateCommit)fail('APPROVAL_SPEC_CANDIDATE_MISMATCH');
   if(spec.expectedProductionCommit!==receipt.expectedProductionCommit)fail('APPROVAL_SPEC_PARENT_MISMATCH');
   if(spec.candidateReleaseBlob!==receipt.candidateReleaseBlob)fail('APPROVAL_SPEC_BLOB_MISMATCH');
-  if(!spec.liveGate||spec.liveGate.required!==true||spec.liveGate.closeAuthority!=='HUMAN_EVIDENCE'||!String(spec.liveGate.scenarioId||''))fail('APPROVAL_SPEC_LIVE_GATE_INVALID');
+  if(!sameKeys(spec.liveGate,LIVE_GATE_KEYS)||spec.liveGate.required!==true||spec.liveGate.closeAuthority!=='HUMAN_EVIDENCE'||!String(spec.liveGate.scenarioId||''))fail('APPROVAL_SPEC_LIVE_GATE_INVALID');
   validateRollback(spec);
 }
 
 export function resolveApproval({approval,approvalPath,candidateReceipt,candidateReceiptPath,specShadow,specShadowPath,observedCandidateCommit,observedProductionCommit}){
   validateApproval(approval);
+  const expectedApproval=`products/simcore/releases/approvals/${approval.releaseId}.json`;
+  if(approvalPath!==expectedApproval)fail('APPROVAL_PATH_MISMATCH');
   if(candidateReceiptPath!==approval.candidateReceiptPath)fail('APPROVAL_RECEIPT_PATH_MISMATCH');
   const expectedShadow=`products/simcore/releases/spec-shadows/${approval.releaseId}.json`;
   if(specShadowPath!==expectedShadow)fail('APPROVAL_SPEC_SHADOW_PATH_MISMATCH');

@@ -19,7 +19,11 @@ All Termux plugin development, diagnostic, release, evidence, regression, and pr
 
 `docs/TERMUX_DEVELOPMENT_GUIDELINES.md`
 
-That document is the durable project memory and takes precedence over conversation memory for project operating rules. Production state must still be re-read from the actual repository/release artifacts rather than inferred from memory.
+Repository-driven project-memory and production-state synchronization must follow:
+
+`docs/TERMUX_REPO_AUTOMATION.md`
+
+These repository documents are the durable project memory and take precedence over conversation memory for project operating rules. Production state must still be re-read from the actual repository/release artifacts rather than inferred from memory.
 
 ## Current state
 

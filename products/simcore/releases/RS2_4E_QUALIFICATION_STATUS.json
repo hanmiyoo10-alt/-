@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "phase": "RS2-4E",
-  "status": "IMPLEMENTED_VALIDATING",
+  "status": "CONTROLLER_PRIMITIVE_CI_VERIFIED",
+  "controllerPrimitiveCiVerified": true,
   "permanentReleaseAvailable": false,
   "permanentReleaseShadowVerified": false,
   "rollbackRehearsalVerified": false,
@@ -18,6 +19,13 @@
     "negative": ["E-A2", "E-A3", "E-A4", "E-A5", "E-A6_AUTHORITY", "E-A6_VERIFIER", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8", "N9"],
     "n10PermanentOwner": "RS2_4D_S8"
   },
+  "validation": {
+    "head": "f8e03486bc9fb90f21e070c8854af282a4513dc1",
+    "run": 32730877768,
+    "verifyJob": 97442651173,
+    "requiredJob": 97442762842,
+    "result": "PASS"
+  },
   "pffl": {
     "accidentalFailures": [
       "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",
@@ -30,6 +38,6 @@
   "productionMutation": "NONE",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE",
-  "nextStep": "COMPLETE_CONTROLLER_CI_THEN_REPOSITORY_BOUND_P1_ROLLBACK_AND_ADMIN_DRIFT_FIX",
+  "nextStep": "REPOSITORY_BOUND_P1_ROLLBACK_AND_ADMIN_DRIFT_FIX",
   "evidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_QUALIFICATION_EVIDENCE.md"
 }

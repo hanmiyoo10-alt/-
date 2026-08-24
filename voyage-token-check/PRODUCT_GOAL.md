@@ -4,6 +4,16 @@
 
 The plugin should let the user view their actual Voyage token allocation/quota inside the plugin UI.
 
+## User experience goal
+
+The product exists primarily to remove the friction of opening the Voyage website, navigating to usage/quota information, and checking it manually.
+
+The intended interaction is:
+
+`open plugin → see current Voyage quota/usage immediately`
+
+The plugin should therefore optimize for a fast, one-action check rather than recreating the full Voyage dashboard. The first useful screen should surface the verified quota/usage state directly, with extra provenance or diagnostics available only when needed.
+
 ## Success criteria
 
 - The displayed quota comes from a real, identifiable Voyage source.
@@ -12,10 +22,12 @@ The plugin should let the user view their actual Voyage token allocation/quota i
 - The plugin identifies provenance and scope when the source exposes them.
 - Refresh behavior should retrieve current quota without unnecessary polling or unrelated network activity.
 - The UI should remain useful when the quota source is temporarily unavailable.
+- Normal use should not require opening the Voyage website just to check quota/usage.
 
 ## Current evidence state
 
 - VERIFIED: the final product goal is to display Voyage token allocation/quota in the plugin.
+- VERIFIED: the primary UX motivation is to replace the repetitive website-navigation check with a one-action plugin check.
 - VERIFIED: documented inference responses expose per-request token usage such as `total_tokens`.
 - VERIFIED: Voyage documents usage/cost and rate-limit visibility in its dashboard at organization/project scope.
 - VERIFIED: Voyage documents API keys as secrets and says not to expose them in browsers or apps.

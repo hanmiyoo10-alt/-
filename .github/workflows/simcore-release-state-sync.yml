@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: simcore-main-state-sync
@@ -113,6 +114,7 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ steps.release.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           rm -rf .simcore-state-sync
@@ -127,7 +129,11 @@ jobs:
             python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
               --allow product-manifest.json \
               --allow docs/CURRENT_DEVELOPMENT.md \
-              --allow docs/SIMCORE_GUIDELINES.md
+              --allow docs/SIMCORE_GUIDELINES.md \
+              --required-workflow simcore-ci.yml \
+              --required-profile MAIN_HEALTH \
+              --required-job Required \
+              --staging-prefix simcore-main-write-gate
           fi
 
       - name: Build project-source snapshot
@@ -149,7 +155,7 @@ jobs:
             "version": "${VERSION}",
             "release_name": "${RELEASE_NAME}",
             "release_branch": "release-simcore",
-            "release_commit": "${RELEASE_COMMIT}",
+            "release_commit": "${RELEASE_COMMIT",
             "release_blob": "${RELEASE_BLOB}",
             "canonical_manifest": "product-manifest.json",
             "canonical_guideline": "docs/SIMCORE_GUIDELINES.md",

@@ -29,11 +29,12 @@
     "result": "PASS"
   },
   "postPublishStateShadow": {
-    "implementationHead": "e16c058272e4dd17a9295c681b62263b0e86d9d5",
+    "implementationFixHead": "8283da686653aa6e24929dd71d2dc420fc77f600",
+    "validatedPrHead": "495bd55990c0d1e7bd65c2cc9a73915ee82c954d",
     "pr": 212,
-    "ciRun": 32727321800,
-    "verifyJob": 97431442047,
-    "requiredJob": 97431540968,
+    "ciRun": 32727464917,
+    "verifyJob": 97431945643,
+    "requiredJob": 97432043800,
     "coverage": "S1-S8",
     "result": "PASS"
   },
@@ -45,7 +46,8 @@
   },
   "pffl": {
     "accidentalFailures": [
-      "RS2_4_SHADOW_TEST_REPO_CWD_NOT_BOUND"
+      "RS2_4_SHADOW_TEST_REPO_CWD_NOT_BOUND",
+      "RS2_4D_SPEC_AUTH_ENV_NOT_EXPORTED"
     ],
     "openBlockers": [],
     "openCleanupDefers": [

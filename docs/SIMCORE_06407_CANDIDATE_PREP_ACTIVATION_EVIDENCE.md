@@ -1,7 +1,7 @@
 # SimCore v0.64.7 — Candidate Preparation Activation Evidence
 
 Date: 2026-08-25
-Status: **FIX ACTIVE · NON-RUNTIME · PRE-CANDIDATE**
+Status: **ACTIVATION REQUESTED · NON-RUNTIME · PRE-CANDIDATE**
 Parent production: `v0.64.6` / `47969d24771f6cc188df6e32150fc6fde519182d`
 
 ## 1. Observed anomaly
@@ -68,4 +68,19 @@ candidate C
 → post-publish LIVE_PENDING state sync
 ```
 
-`LIVE_PASS`, authority cutover, legacy retirement, and `RS2_4_CLOSED` remain forbidden until real long-chat evidence exists.
+`LIVE_PASS`, permanent authority cutover, legacy retirement, and `RS2_4_CLOSED` remain forbidden until real long-chat evidence exists.
+
+## 5. Activation request
+
+The one-shot activation transaction is now intentionally requested through a documentation-only PR with the exact required title.
+
+Expected effect after that PR passes permanent CI and is merged:
+
+```text
+runtime diff: NONE
+release-simcore write: NONE
+candidate-prep observable run: REQUIRED
+candidate ref creation: REQUIRED on PASS
+```
+
+If candidate preparation fails, preserve the exact job/log evidence and classify it before retrying. If it passes, freeze candidate commit/blob identity before creating the R release spec.

@@ -86,10 +86,10 @@ assert.match(prWorkflow, /ref:\s*main/);
 assert.match(prWorkflow, /persist-credentials:\s*false/);
 assert.match(prWorkflow, /pr-classifier\.cjs/);
 assert.match(prWorkflow, /issues:\s*write/);
-assert.match(prWorkflow, /pull-requests:\s*read/);
+assert.match(prWorkflow, /pull-requests:\s*write/);
 assert.doesNotMatch(prWorkflow, /workflow_run:/);
 assert.doesNotMatch(prWorkflow, /pull_request_target:/);
-assert.doesNotMatch(prWorkflow, /pull-requests:\s*write/);
+assert.doesNotMatch(prWorkflow, /(?:^|\n)\s*pull_request:\s*(?:\n|$)/);
 
 const prClassifier = fs.readFileSync(path.join(root, '.github/plugin-control-plane/pr-classifier.cjs'), 'utf8');
 assert.match(prClassifier, /\/pulls\?state=open&per_page=100&page=\$\{page\}/);
@@ -115,13 +115,16 @@ assert.match(statusWorkflow, /refresh-status/);
 assert.match(statusWorkflow, /voyage-token-check\/\*\*/);
 assert.match(statusWorkflow, /products\/pocketrisu-helper-mod\/\*\*/);
 assert.match(statusWorkflow, /issues:\s*write/);
-assert.match(statusWorkflow, /pull-requests:\s*read/);
+assert.match(statusWorkflow, /pull-requests:\s*write/);
+assert.doesNotMatch(statusWorkflow, /(?:^|\n)\s*pull_request:\s*(?:\n|$)/);
 assert.doesNotMatch(statusWorkflow, /contents:\s*write/);
 assert.doesNotMatch(statusWorkflow, /git\s+push/);
 
 const controlPlaneReadme = fs.readFileSync(path.join(root, '.github/plugin-control-plane/README.md'), 'utf8');
 assert.match(controlPlaneReadme, /intentionally redundant metadata-only fallback/);
-assert.match(controlPlaneReadme, /`pull_request` observer is read-only evidence/);
+assert.match(controlPlaneReadme, /pull-requests: write/);
+assert.match(controlPlaneReadme, /never execute PR-head code/);
+assert.match(controlPlaneReadme, /`pull_request` observer remains read-only evidence/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);

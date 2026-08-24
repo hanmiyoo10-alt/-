@@ -28,11 +28,15 @@ release_blob = required_env('RELEASE_BLOB')
 
 manifest_path = Path('product-manifest.json')
 manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+previous_release_commit = manifest.get('release_commit')
+production_identity_changed = previous_release_commit != release_commit
 manifest['production_version'] = version
 manifest['release_name'] = release_name
 manifest['release_branch'] = 'release-simcore'
 manifest['release_commit'] = release_commit
 manifest['release_blob'] = release_blob
+if production_identity_changed:
+    manifest['validation_status'] = 'PENDING_REAL_LONG_CHAT'
 manifest['provider_cache_status'] = manifest.get('provider_cache_status', 'UNVERIFIED')
 manifest['managed_by'] = '.github/workflows/simcore-release-state-sync.yml'
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

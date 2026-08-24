@@ -29,6 +29,8 @@ export async function runSuite({ source, loader, fixtures }) {
   }
 
   equal(version, '0.64.7', 'reload continuity gate version');
+  assert(source.includes("const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';"), 'v0.64.7 memory handoff compatibility control missing');
+  pass('unchanged-reload-control');
   const telemetry = loader.load('runtime-telemetry');
   for (const name of ['capture', 'publish', 'claim', 'validate', 'diagnostics']) assert(typeof telemetry[name] === 'function', `${name} surface missing`);
   const SESSION_KEY = fixture.input.sessionKey;

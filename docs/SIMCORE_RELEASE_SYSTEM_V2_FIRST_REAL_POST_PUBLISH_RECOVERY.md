@@ -1,7 +1,7 @@
 # SimCore Release System v2 — First Real Post-Publish State Recovery
 
 Date: 2026-08-25
-Status: **FIX ACTIVE · R FEEDBACK · NON-RUNTIME · PRODUCTION ALREADY PUBLISHED**
+Status: **RECOVERED · REAL_RELEASE_LIVE_PENDING · R FEEDBACK CLOSED · NON-RUNTIME**
 Release: `simcore-v0.64.7-new-01`
 
 ## 1. Production truth
@@ -17,7 +17,7 @@ Publish Exact Candidate: SUCCESS
 Declare Published State: FAILURE
 ```
 
-Production authority is already:
+Production authority is:
 
 ```text
 release-simcore commit: a7ce8ce33a97797630f885c6753415e4b2ccc7fc
@@ -28,11 +28,11 @@ latest.js == install.js: YES
 previous production: 47969d24771f6cc188df6e32150fc6fde519182d
 ```
 
-No recovery step may republish or rewrite `release-simcore`.
+The recovery sequence never republished or rewrote `release-simcore`.
 
 ## 2. Failure evidence
 
-The post-publish controller successfully reconstructed and verified the published identity and generated the bounded LIVE_PENDING payload:
+The original post-publish controller successfully reconstructed and verified the published identity and generated the bounded LIVE_PENDING payload:
 
 ```text
 releaseAuthority = RS2_4_PERMANENT
@@ -75,17 +75,17 @@ Classification:
 
 ```text
 POST_PUBLISH_MAIN_GATE_ACTIONS_PERMISSION_GAP
-= FIX / R_FEEDBACK / STATE_SYNC / NON_RUNTIME / PRODUCTION_ALREADY_PUBLISHED / BLOCKING_ADMIN_SYNC
+= FIXED / R_FEEDBACK / STATE_SYNC / NON_RUNTIME / PRODUCTION_ALREADY_PUBLISHED
 ```
 
 ## 3. Frozen correction
 
-Two bounded corrections are authorized in one R infrastructure work item because they address the same observed failure class:
+Two bounded corrections were authorized in one R infrastructure work item because they address the same observed failure class:
 
-1. Future permanent release post-publish state jobs must have `actions: write` in addition to `contents: write`.
-2. Existing `SimCore release state sync` gains a permanent admin-recovery lane for an already-published permanent transaction.
+1. Future permanent release post-publish state jobs have `actions: write` in addition to `contents: write`.
+2. Existing `SimCore release state sync` has a permanent admin-recovery lane for an already-published permanent transaction.
 
-The recovery lane must consume the immutable publication artifact from the original permanent publisher run. It must not synthesize a replacement release transaction.
+The recovery lane consumes the immutable publication artifact from the original permanent publisher run. It does not synthesize a replacement release transaction.
 
 Recovery input is a one-shot repository record under:
 
@@ -106,7 +106,7 @@ failureCode
 
 ## 4. Recovery invariants
 
-Before any main mutation, recovery must prove:
+Before any main mutation, recovery proves:
 
 ```text
 request PR merged to main
@@ -122,7 +122,7 @@ post-publish-state accepts the observed production identity
 changed persistent paths are within the permanent four-path allowlist
 ```
 
-The recovery gateway must then require:
+The recovery gateway then requires:
 
 ```text
 SimCore CI
@@ -130,7 +130,7 @@ profile = MAIN_HEALTH
 job = Required
 ```
 
-and reobserve durable main truth after the gated write.
+and reobserves durable main truth after the gated write.
 
 ## 5. Forbidden recovery behavior
 
@@ -166,10 +166,10 @@ Classification:
 
 ```text
 POST_PUBLISH_RECOVERY_TRUSTED_CI_BOOTSTRAP_CYCLE
-= FIX / R_FEEDBACK / CI_TRUST_BOUNDARY / ADMIN_STATE / NON_RUNTIME
+= FIXED / R_FEEDBACK / CI_TRUST_BOUNDARY / ADMIN_STATE / NON_RUNTIME
 ```
 
-This is not a runtime defect and not a publication defect. It is a recovery bootstrap cycle:
+This was not a runtime defect and not a publication defect. It was a recovery bootstrap cycle:
 
 ```text
 production already advanced
@@ -178,7 +178,7 @@ production already advanced
 → recovery infrastructure PR cannot reach proposed verifier
 ```
 
-The correction must not bypass trusted CI. Use the already-installed canonical durable-memory sync authority to synchronize only the production identity first, then rerun the recovery infrastructure PR normally.
+The correction did not bypass trusted CI. The already-installed canonical durable-memory sync authority synchronized only the production identity first, then recovery infrastructure was rebuilt from synchronized main.
 
 ## 7. Canonical durable-memory bootstrap
 
@@ -201,7 +201,7 @@ durable main commit: abd8a60653b9bb176ce034920ccf5dbaa4c85cfc
 release-simcore mutation: NONE
 ```
 
-After bootstrap, durable main truth is:
+After bootstrap, durable main truth became:
 
 ```text
 production_version = 0.64.7
@@ -211,7 +211,7 @@ release_blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
 validation_status = PENDING_REAL_LONG_CHAT
 ```
 
-This bootstrap intentionally does **not** create the permanent RS2-4 release record. It only removes the stale production/admin contradiction so trusted permanent CI can evaluate the actual recovery infrastructure.
+This bootstrap intentionally did **not** create the permanent RS2-4 release record. It only removed the stale production/admin contradiction so trusted permanent CI could evaluate the actual recovery infrastructure.
 
 The original PR #251 remained bound to its original pull-request base identity even after synchronize, so it was closed without merge and superseded rather than bypassing the trusted predecessor boundary.
 
@@ -223,23 +223,16 @@ A clean recovery branch was rebuilt directly from synchronized current main:
 PR: #255
 branch: fix/simcore-r-post-publish-state-recovery-v2
 base: a53aca79f41e7f75c351e8c486565912a012dcea
-initial head: c86f157267633e048f368737231a6385c8c5542d
-initial CI run: 32751957566
+final head: 56621c9e0903bda3be577bf4ba8f4af5ea6778c7
+merge commit: b3ab656dfc140e483d74ff50ee6a5e9a2d507d0c
+final CI run: 32752377529
+Verify job: 97512080635 SUCCESS
+Required job: 97512191418 SUCCESS
 ```
 
-That run proved the bootstrap cycle was resolved:
+The first rebased run proved the bootstrap cycle was resolved but exposed a brittle CI self-test boundary locator.
 
-```text
-trusted predecessor MAIN_HEALTH: PASS
-GATE_STATIC: PASS
-GATE_ARCH: PASS
-GATE_REGRESSION: PASS
-GATE_STATE: PASS
-GATE_COORDINATION: PASS
-stateCheck: PASS
-```
-
-The only proposed-verifier failure was `GATE_CI_SELF` from a brittle self-test boundary locator. The self-test used the first occurrence of the substring `  required:` as the end of the post-publish job. Workflow input fields contain indented `required:` keys earlier in the file, so the slice was empty even though the actual job correctly contained:
+The self-test used a substring boundary that could stop at an unrelated workflow input `required:` key even though the actual post-publish job correctly contained:
 
 ```yaml
 permissions:
@@ -251,7 +244,7 @@ Classification:
 
 ```text
 POST_PUBLISH_PERMISSION_SELF_TEST_BOUNDARY_FALSE_NEGATIVE
-= FIX / HARNESS / CI_SELF / NON_RUNTIME
+= FIXED / HARNESS / CI_SELF / NON_RUNTIME
 ```
 
 Correction:
@@ -262,11 +255,11 @@ locate the final `required` job with lastIndexOf
 validate the permissions block with whitespace-tolerant regex
 ```
 
-No permission rule was weakened. The test still requires both `contents: write` and `actions: write` specifically inside the post-publish state job.
+No permission rule was weakened. The final permanent CI run passed both trusted predecessor and proposed verifier lanes.
 
 ## 9. Permanent regression ownership
 
-The permanent CI self-test owns the recovery surface explicitly:
+The permanent CI self-test now owns the recovery surface explicitly:
 
 ```text
 normal durable-memory writer bot identity = github-actions[bot]
@@ -286,23 +279,127 @@ An initial work-branch-only copied workflow interpolation typo was detected befo
 
 ```text
 RECOVERY_WORKFLOW_SOURCE_METADATA_INTERPOLATION_TYPO
-= FIX / HARNESS / WORK_BRANCH_ONLY / PRE_CI / NON_RUNTIME
+= FIXED / HARNESS / WORK_BRANCH_ONLY / PRE_CI / NON_RUNTIME
 ```
 
 It never reached main, production, or `release-simcore`.
 
-## 10. Expected durable recovery result
+## 10. One-shot durable recovery execution
 
-After the permanent recovery request completes:
+Recovery request:
 
 ```text
-product-manifest.production_version = 0.64.7
-product-manifest.release_commit = a7ce8ce33a97797630f885c6753415e4b2ccc7fc
-product-manifest.release_blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
-product-manifest.validation_status = PENDING_REAL_LONG_CHAT
-release record state = LIVE_PENDING
-state sync = PASS
-release-simcore mutation during recovery = NONE
+PR: #256
+branch: state/simcore-06407-post-publish-recovery
+changed files: 1
+request file: products/simcore/releases/recoveries/simcore-v0.64.7-new-01.json
+request head: 330311aa092c19d26cc8949c048d29ddf9205777
+merge commit: ecde1f12a349be142476bd746d97a28e0c30b8d1
+PR CI run: 32752517599
+Verify job: 97512522011 SUCCESS
+Required job: 97512633594 SUCCESS
 ```
 
-Real long-chat `LIVE_PASS` remains a separate human-evidence gate and must not be claimed by recovery.
+The merged request triggered the installed permanent-recovery lane:
+
+```text
+state-sync run: 32752594335
+Recover Permanent Published State job: 97512771303 SUCCESS
+Resolve immutable recovery request: SUCCESS
+Download immutable publication handoff: SUCCESS
+Verify immutable publication handoff: SUCCESS
+Materialize exact observed production: SUCCESS
+Rebuild bounded LIVE_PENDING administrative payload: SUCCESS
+Commit and gate recovered main state: SUCCESS
+Reobserve durable main truth: SUCCESS
+```
+
+Durable main write:
+
+```text
+main commit: 5320e6dbf4e5a722058c79ddb9be49517a48de37
+commit message: state(simcore): recover simcore-v0.64.7-new-01 live pending
+writer: github-actions[bot]
+release-simcore mutation during recovery: NONE
+```
+
+## 11. Recovered durable state
+
+The recovered release record is authoritative for the first real R release lifecycle:
+
+```text
+releaseId = simcore-v0.64.7-new-01
+version = 0.64.7
+productionCommit = a7ce8ce33a97797630f885c6753415e4b2ccc7fc
+productionBlob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
+releaseState = LIVE_PENDING
+productionTruth = PUBLISHED_IDENTITY_VERIFIED
+stateSyncStatus = PASS
+liveGate.required = true
+liveGate.scenarioId = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+liveGate.result = PENDING
+openAnomalyIds = []
+```
+
+The product manifest agrees on production identity and correctly remains:
+
+```text
+validation_status = PENDING_REAL_LONG_CHAT
+```
+
+The R machine lifecycle therefore advances from:
+
+```text
+REAL_RELEASE_READY
+→ REAL_RELEASE_LIVE_PENDING
+```
+
+It does **not** advance to:
+
+```text
+REAL_RELEASE_LIVE_PASS
+AUTHORITY_CUTOVER
+LEGACY_RETIREMENT
+RS2_4_CLOSED
+```
+
+until real long-chat evidence passes.
+
+## 12. R feedback closure classification
+
+All infrastructure findings exposed by this real release are now preserved and converted into durable behavior or permanent checks:
+
+```text
+POST_PUBLISH_MAIN_GATE_ACTIONS_PERMISSION_GAP = FIXED
+POST_PUBLISH_RECOVERY_TRUSTED_CI_BOOTSTRAP_CYCLE = FIXED
+POST_PUBLISH_PERMISSION_SELF_TEST_BOUNDARY_FALSE_NEGATIVE = FIXED
+RECOVERY_WORKFLOW_SOURCE_METADATA_INTERPOLATION_TYPO = FIXED
+```
+
+No open recovery blocker remains.
+
+The remaining gate is product/live evidence, not recovery infrastructure:
+
+```text
+NEXT = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+```
+
+## 13. Completion boundary
+
+Operational recovery is closed only when its durable evidence and machine state are synchronized on `main`.
+
+For this release, the recovery operation and documentation are considered complete at `REAL_RELEASE_LIVE_PENDING` after:
+
+```text
+recovery infrastructure merged
+permanent CI green
+one-shot recovery request merged
+recovery run green
+durable main state reobserved
+recovery evidence finalized
+RS2-4E machine status synchronized
+current priority moved to real long-chat validation
+one-shot admin transition retired after synchronization
+```
+
+Real long-chat `LIVE_PASS` remains a separate human-evidence gate and must not be claimed by this recovery closure.

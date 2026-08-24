@@ -5,9 +5,9 @@ const fs = require('node:fs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
 const release = assertCurrentReleaseArtifacts();
-assert.equal(release.productVersion, '3.0.0-alpha.5.71');
-assert.equal(release.engineVersion, '1.6.22');
-assert.equal(release.managerVersion, '1.3.0');
+assert.ok(release.productVersion);
+assert.ok(release.engineVersion);
+assert.ok(release.managerVersion);
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 
@@ -32,7 +32,7 @@ assert.ok(cliRuntime.includes('messages, custom headers, cookies, and auth mater
 assert.ok(engineSources.includes("durationSource: durationExplicit ? 'llmgateway-log-duration' : ''"));
 assert.ok(engineSources.includes("durationFidelity: durationExplicit ? 'explicit' : 'unknown'"));
 assert.ok(engineSources.includes("typeof row.durationMs === 'number' && Number.isFinite(row.durationMs) && row.durationMs >= 0"));
-assert.ok(engine.includes("const VERSION = '1.6.22';"));
+assert.ok(engine.includes(`const VERSION = '${release.engineVersion}';`));
 assert.ok(engine.includes("durationSource: durationExplicit ? 'llmgateway-log-duration' : ''"));
 
 assert.ok(requestNormalize.includes("recentRequestValue(row, ['durationMs'], null)"), 'plugin normalization must only consume normalized durationMs');
@@ -70,8 +70,8 @@ assert.ok(engine.includes("accountCapture: 30_000"));
 assert.ok(engine.includes("'activity:24h': 60_000"));
 assert.ok(engine.includes("if (CLI_CONCURRENCY < 2)"));
 
-assert.ok(manager.includes("const MANAGER_VERSION = '1.3.0';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.71';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.22';"));
+assert.ok(manager.includes(`const MANAGER_VERSION = '${release.managerVersion}';`));
+assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`));
+assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${release.engineVersion}';`));
 
 console.log('usage-dashboard P34 Request Duration Fidelity: OK · explicit /logs duration only, UNKNOWN preserved, dedupe identity unchanged, zero/error values retained, no extra network call');

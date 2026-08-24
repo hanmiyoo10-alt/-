@@ -21,6 +21,7 @@ const PARTS = Object.freeze([
   {file:'54-dashboard-markup.part.js', marker:'    return `<style>', label:'dashboard/markup'},
   {file:'60-settings-runtime.part.js', marker:'\n  function renderSettings() {', label:'settings runtime'},
   {file:'62-diagnostics-workspace.part.js', marker:'\n  const diagnosticsWorkspaceLegacySettingsHtml = settingsHtml;', label:'diagnostics workspace'},
+  {file:'63-diagnostics-instant-mode.part.js', marker:'\n  const diagnosticsInstantModeLegacyBindSettings = bindSettings;', label:'diagnostics instant mode persistence'},
   {file:'70-widget-render.part.js', marker:'\n  function widgetHtml() {', label:'floating widget/render'},
   {file:'72-widget-layout.part.js', marker:'\n  const widgetWidth = (mobile = false, expanded = false) => mobile', label:'floating widget/layout'},
   {file:'74-widget-gestures.part.js', marker:'\n  async function ensureWidget() {', label:'floating widget/gestures'},

@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — C Machine Candidate Receipt / Spec Shadow Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · PERMANENT CI REQUALIFICATION ACTIVE · SHADOW-FIRST · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI VERIFIED · SHADOW-FIRST · NON-RUNTIME**
 
 ## Purpose
 
@@ -102,7 +102,16 @@ R2_1_C_B_AUTHORITY_TEST_SCOPE_TOO_WIDE
 
 Cause: the R2.1-B authority test inspected the entire shared workflow text. R2.1-C legitimately adds a separate receipt job that owns a bounded `repo-main-write.py` state write, so the old assertion falsely treated that state writer as if the candidate materialize job had acquired publication authority.
 
-Repair: preserve the negative invariant but scope it to the `materialize` job boundary only. The materialize application/tool and job must still contain no `release-publish.mjs`, `repo-main-write.py`, force-update, or production publication primitive; the separate receipt job is independently constrained by C tests and the main-write gateway.
+Repair: preserve the negative invariant but scope it to the `materialize` job boundary only. The materialize application/tool and job still contain no `release-publish.mjs`, `repo-main-write.py`, force-update, or production publication primitive; the separate receipt job is independently constrained by C tests and the main-write gateway.
+
+Requalification run `32763365884`:
+
+```text
+Verify   97547209654  PASS
+Required 97547337778  PASS
+```
+
+This proves the B candidate-authority invariant and C receipt/state-write boundary coexist without weakening production publication isolation.
 
 Production impact:
 
@@ -112,4 +121,4 @@ release-simcore mutation = NONE
 v0.64.7 production unchanged
 ```
 
-R2.1-C is not closed until permanent Verify/Required PASS, merge, and durable-main re-observation.
+R2.1-C may close after merge and durable-main re-observation.

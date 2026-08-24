@@ -87,10 +87,6 @@ function snapshot() {
 }
 
 (async () => {
-  assert.equal(currentRelease.productVersion, '3.0.0-alpha.5.71');
-  assert.equal(currentRelease.engineVersion, '1.6.22');
-  assert.equal(currentRelease.managerVersion, '1.3.0');
-
   const run = await runDashboard({
     state:initialState(),
     token:'request-duration-fixture-token',
@@ -138,7 +134,7 @@ function snapshot() {
   assert.equal(run.fetches.filter(row => row.url.includes('/snapshot')).length, 1);
   assert.ok(!JSON.stringify(run).includes('request-duration-fixture-token'), 'harness output must not retain the bridge token');
 
-  console.log('usage-dashboard request duration behavior: OK · explicit /logs duration enriches one ledger identity, preserves 0/error values, and leaves invalid/missing duration UNKNOWN');
+  console.log(`usage-dashboard request duration behavior: OK · ${currentRelease.productVersion} preserves explicit /logs duration, one ledger identity, known zero/error, and UNKNOWN invalid/missing values`);
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

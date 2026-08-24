@@ -100,6 +100,11 @@ jobs:
             echo 'CI_PROFILE_INVALID: manual CANDIDATE_REQUIRED forbidden' >&2
             exit 2
           fi
+          AUTHORITY=''
+          if [[ "$PROFILE" == CANDIDATE_REQUIRED ]]; then
+            [[ "$GITHUB_EVENT_NAME" == workflow_call ]] || { echo 'CANDIDATE_REQUIRED_CALLER_INVALID' >&2; exit 2; }
+            AUTHORITY=RS2_4_SHADOW
+          fi
           CANDIDATE="${INPUT_CANDIDATE:-}"
           if [[ "$PROFILE" == CANDIDATE_* ]]; then
             [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]] || { echo 'CANDIDATE_IDENTITY_INVALID' >&2; exit 2; }
@@ -108,6 +113,7 @@ jobs:
           echo "candidate_commit=$CANDIDATE" >> "$GITHUB_OUTPUT"
           echo "candidate_fetch_ref=${INPUT_FETCH_REF:-}" >> "$GITHUB_OUTPUT"
           echo "expected_production_commit=${INPUT_EXPECTED_PRODUCTION:-}" >> "$GITHUB_OUTPUT"
+          echo "candidate_required_authority=$AUTHORITY" >> "$GITHUB_OUTPUT"
 
       - name: Classify pull request paths
         id: classify
@@ -231,6 +237,7 @@ jobs:
           PROFILE: ${{ steps.profile.outputs.profile }}
           CANDIDATE: ${{ steps.profile.outputs.candidate_commit }}
           EXPECTED_PRODUCTION: ${{ steps.profile.outputs.expected_production_commit }}
+          CANDIDATE_REQUIRED_AUTHORITY: ${{ steps.profile.outputs.candidate_required_authority }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -245,6 +252,7 @@ jobs:
             --verifier-commit "$GITHUB_SHA" \
             --candidate-commit "${CANDIDATE:-}" \
             --expected-production-commit "${EXPECTED_PRODUCTION:-}" \
+            --candidate-required-authority "${CANDIDATE_REQUIRED_AUTHORITY:-}" \
             --pr-base-commit "${BASE_SHA:-}" \
             --pr-head-commit "${HEAD_SHA:-}" \
             --report .simcore-ci/simcore-ci-report.json

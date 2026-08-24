@@ -146,3 +146,40 @@ R first
 ```
 
 This operating principle should be preserved when deciding whether to advance R, start a runtime release, or respond to release-system feedback.
+
+## 8. Progressive simplification and accumulated failure evidence
+
+R should become simpler to operate over time even if its internal safeguards become richer.
+
+The project already preserves failed attempts, failed CI runs, live anomalies, and their fixes as durable evidence. Repeated failures therefore become reusable release knowledge rather than rediscovered manual work.
+
+Expected learning loop:
+
+```text
+first occurrence
+→ preserve exact failure evidence
+→ classify cause and authority boundary
+→ repair narrowly
+→ convert the proven failure mode into a permanent test/gate/check where appropriate
+→ later releases detect or avoid the same class automatically
+```
+
+As this repeats, the operator-facing release path should shrink toward a small stable sequence while the repository carries the accumulated defensive knowledge.
+
+The desired direction is:
+
+```text
+more historical evidence
++ more permanent regression coverage
++ more deterministic automation
+=
+fewer manual decisions for already-solved failure classes
++ faster routine updates
++ easier attribution when a genuinely new failure appears
+```
+
+Do not optimize by deleting evidence or weakening gates merely to reduce step count. Simplification is earned when a formerly manual judgment has been encoded safely and backed by recorded evidence.
+
+Long-term target:
+
+> **A normal SimCore update should be quick because past failures have already taught R how to handle the common cases.**

@@ -6,20 +6,29 @@ const os = require('node:os');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
 const policy = require('../tools/candidate_preparation_policy.cjs');
+const control = require('../tools/release_control_command.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/usage-dashboard-prepare-candidate.yml','utf8');
 const doc = fs.readFileSync('docs/USAGE_DASHBOARD_PR_LIFECYCLE_E4B_SAFE_CANDIDATE_PREPARATION.md','utf8');
 
 assert.match(workflow, /^  workflow_dispatch:/m);
+assert.match(workflow, /^  issue_comment:\n    types: \[created\]$/m);
 for (const input of ['target_branch:','expected_head_sha:','release_spec:']) assert.ok(workflow.includes(input));
 assert.match(workflow, /^permissions:\n  contents: read$/m);
 assert.match(workflow, /^  prepare:/m);
+assert.match(workflow, /github\.event\.issue\.number == 197/);
+assert.match(workflow, /github\.actor == github\.repository_owner/);
+assert.match(workflow, /\/usage-dashboard prepare /);
 assert.match(workflow, /Checkout immutable trusted normalization policy/);
 assert.match(workflow, /Require main workflow trust root/);
 assert.match(workflow, /refs\/heads\/main/);
 assert.match(workflow, /RAW_TARGET_BRANCH: \$\{\{ inputs\.target_branch \}\}/);
 assert.match(workflow, /RAW_EXPECTED_HEAD_SHA: \$\{\{ inputs\.expected_head_sha \}\}/);
 assert.match(workflow, /RAW_RELEASE_SPEC: \$\{\{ inputs\.release_spec \}\}/);
+assert.match(workflow, /release_control_command\.cjs --check-envelope/);
+assert.match(workflow, /release_control_command\.cjs --prepare-target/);
+assert.match(workflow, /release_control_command\.cjs --prepare-sha/);
+assert.match(workflow, /release_control_command\.cjs --prepare-spec/);
 assert.match(workflow, /--normalize-target "\$RAW_TARGET_BRANCH"/);
 assert.match(workflow, /--normalize-sha "\$RAW_EXPECTED_HEAD_SHA"/);
 assert.match(workflow, /--normalize-spec "\$RAW_RELEASE_SPEC"/);
@@ -48,6 +57,7 @@ for (const forbidden of [
   'UD_MATERIALIZER',
   'build_bridge_engine.cjs',
   'build_usage_dashboard.cjs',
+  'release_control_command.cjs',
   'tests/run-all.cjs',
   'npm ',
   'npx ',
@@ -98,6 +108,23 @@ assert.throws(
 assert.throws(() => policy.normalizeTargetBranchInput('Candidate branch only'), /CANDIDATE_PREP_TARGET_DENIED/);
 assert.throws(() => policy.normalizeExpectedShaInput('not-a-sha'), /CANDIDATE_PREP_INVALID_SHA/);
 assert.throws(() => policy.normalizeReleaseSpecInput('../5.71.json'), /CANDIDATE_PREP_RELEASE_SPEC_DENIED/);
+
+assert.equal(control.CONTROL_ISSUE_NUMBER, 197);
+assert.equal(control.assertControlEnvelope(197, 'hanmiyoo10-alt', 'hanmiyoo10-alt'), true);
+assert.throws(() => control.assertControlEnvelope(198, 'hanmiyoo10-alt', 'hanmiyoo10-alt'), /UD_CONTROL_ISSUE_DENIED/);
+assert.throws(() => control.assertControlEnvelope(197, 'someone-else', 'hanmiyoo10-alt'), /UD_CONTROL_ACTOR_DENIED/);
+const prepareCommand = `/usage-dashboard prepare ${candidateBranch} ${candidateSha} ${releaseSpec}`;
+assert.deepEqual(control.parsePrepareCommand(prepareCommand), {
+  targetBranch:candidateBranch,
+  expectedHeadSha:candidateSha,
+  releaseSpec,
+});
+for (const denied of [
+  `${prepareCommand}\nextra`,
+  `/usage-dashboard prepare main ${candidateSha} ${releaseSpec}`,
+  `/usage-dashboard prepare ${candidateBranch} ${candidateSha} ../5.71.json`,
+  `${prepareCommand} extra`,
+]) assert.throws(() => control.parsePrepareCommand(denied), /UD_CONTROL_PREPARE_DENIED/);
 
 for (const allowed of [
   'plugins/usage-dashboard/latest.js',
@@ -166,4 +193,4 @@ for (const marker of [
   'E2 read-only candidate-ready preflight',
 ]) assert.ok(doc.includes(marker), `missing E4-B durable invariant: ${marker}`);
 
-console.log('usage-dashboard candidate preparation contract: OK · normalized dispatch inputs, read/write split, bundle boundary, CAS, path/mode fail-closed');
+console.log('usage-dashboard candidate preparation contract: OK · manual/comment control inputs, read/write split, bundle boundary, CAS, path/mode fail-closed');

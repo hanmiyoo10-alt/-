@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const CANONICAL_RUNTIME_PATHS = Object.freeze([
@@ -129,16 +130,18 @@ export function materialize(args) {
 
   const builderBytes = Buffer.from(git(args.root, ['show', `${sourceCommit}:${request.builderPath}`], { code: 'CANDIDATE_BUILDER_MISSING' }), 'utf8');
   const builderDigest = sha256(builderBytes);
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'simcore-candidate-'));
-  const builderTemp = path.join(os.tmpdir(), `simcore-builder-${process.pid}-${path.basename(request.builderPath)}`);
+  const tempBase = fs.mkdtempSync(path.join(os.tmpdir(), 'simcore-candidate-'));
+  const work = path.join(tempBase, 'worktree');
+  const builderTemp = path.join(tempBase, path.basename(request.builderPath));
   fs.writeFileSync(builderTemp, builderBytes);
   let candidateCommit = null;
   let disposition = null;
-  let tree = null;
   let candidateBlob = null;
   const candidateRef = `refs/heads/candidate/simcore/${request.intentId}`;
+  let worktreeAdded = false;
   try {
     git(args.root, ['worktree', 'add', '--detach', work, productionCommit], { code: 'CANDIDATE_WORKTREE_FAILED' });
+    worktreeAdded = true;
     const [cmd, cmdArgs] = builderCommand(request.builderPath, builderTemp);
     run(cmd, cmdArgs, { cwd: work, timeout: 180000, code: 'CANDIDATE_BUILDER_FAILED' });
     const paths = changedPaths(work);
@@ -157,47 +160,39 @@ export function materialize(args) {
       ], { cwd: args.root, timeout: 300000, code: 'CANDIDATE_REGRESSION_FAILED' });
     }
     git(work, ['add', ...request.allowedRuntimePaths]);
-    tree = git(work, ['write-tree']);
+    const tree = git(work, ['write-tree']);
     const existing = remoteHead(args.root, candidateRef);
     if (existing) {
-      git(args.root, ['fetch', '--no-tags', 'origin', `${candidateRef}:${candidateRef}`], { code: 'CANDIDATE_FETCH_EXISTING_FAILED' });
+      git(args.root, ['fetch', '--no-tags', 'origin', candidateRef], { code: 'CANDIDATE_FETCH_EXISTING_FAILED' });
       const parent = singleParent(args.root, existing);
       const existingTree = git(args.root, ['rev-parse', `${existing}^{tree}`]);
       const state = evaluateExistingCandidate({ parent, tree: existingTree, expectedParent: productionCommit, expectedTree: tree });
       if (state !== 'ALREADY_MATERIALIZED') fail('CANDIDATE_REF_CONFLICT');
       candidateCommit = existing;
       disposition = state;
+    } else if (args.mode !== 'materialize') {
+      disposition = 'WOULD_CREATE';
     } else {
-      if (args.mode !== 'materialize') {
-        disposition = 'WOULD_CREATE';
-      } else {
-        const sourceDate = git(args.root, ['show', '-s', '--format=%aI', sourceCommit]);
-        const env = {
-          ...process.env,
-          GIT_AUTHOR_NAME: 'github-actions[bot]',
-          GIT_AUTHOR_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
-          GIT_COMMITTER_NAME: 'github-actions[bot]',
-          GIT_COMMITTER_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
-          GIT_AUTHOR_DATE: sourceDate,
-          GIT_COMMITTER_DATE: sourceDate,
-        };
-        candidateCommit = run('git', ['commit-tree', tree, '-p', productionCommit], {
-          cwd: work,
-          env,
-          code: 'CANDIDATE_COMMIT_CREATE_FAILED',
-        });
-        // commit-tree reads the message from stdin only when provided by spawn; use -m to keep invocation non-shell.
-        candidateCommit = run('git', ['commit-tree', tree, '-p', productionCommit, '-m', `SimCore v${request.targetVersion} ${request.releaseName}`], {
-          cwd: work,
-          env,
-          code: 'CANDIDATE_COMMIT_CREATE_FAILED',
-        });
-        if (!HEX40.test(candidateCommit)) fail('CANDIDATE_COMMIT_IDENTITY_INVALID');
-        git(args.root, ['push', 'origin', `${candidateCommit}:${candidateRef}`], { code: 'CANDIDATE_PUSH_FAILED' });
-        const observed = remoteHead(args.root, candidateRef);
-        if (observed !== candidateCommit) fail('CANDIDATE_PUSH_REOBSERVE_FAILED');
-        disposition = 'CREATED';
-      }
+      const sourceDate = git(args.root, ['show', '-s', '--format=%aI', sourceCommit]);
+      const env = {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'github-actions[bot]',
+        GIT_AUTHOR_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
+        GIT_COMMITTER_NAME: 'github-actions[bot]',
+        GIT_COMMITTER_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
+        GIT_AUTHOR_DATE: sourceDate,
+        GIT_COMMITTER_DATE: sourceDate,
+      };
+      candidateCommit = run('git', ['commit-tree', tree, '-p', productionCommit, '-m', `SimCore v${request.targetVersion} ${request.releaseName}`], {
+        cwd: work,
+        env,
+        code: 'CANDIDATE_COMMIT_CREATE_FAILED',
+      });
+      if (!HEX40.test(candidateCommit)) fail('CANDIDATE_COMMIT_IDENTITY_INVALID');
+      git(args.root, ['push', 'origin', `${candidateCommit}:${candidateRef}`], { code: 'CANDIDATE_PUSH_FAILED' });
+      const observed = remoteHead(args.root, candidateRef);
+      if (observed !== candidateCommit) fail('CANDIDATE_PUSH_REOBSERVE_FAILED');
+      disposition = 'CREATED';
     }
     if (candidateCommit) {
       if (singleParent(args.root, candidateCommit) !== productionCommit) fail('CANDIDATE_PARENT_MISMATCH');
@@ -230,9 +225,11 @@ export function materialize(args) {
     emitReport(path.resolve(args.root, args.report), report);
     return report;
   } finally {
-    try { git(args.root, ['worktree', 'remove', '--force', work]); } catch {}
-    try { fs.rmSync(builderTemp, { force: true }); } catch {}
-    try { fs.rmSync(work, { recursive: true, force: true }); } catch {}
+    if (worktreeAdded) {
+      try { git(work, ['reset', '--hard']); } catch {}
+      try { git(args.root, ['worktree', 'remove', work]); } catch {}
+    }
+    try { fs.rmSync(tempBase, { recursive: true, force: true }); } catch {}
   }
 }
 
@@ -242,7 +239,7 @@ function main() {
   console.log(`SIMCORE_CANDIDATE_MATERIALIZE_PASS intent=${result.intentId} disposition=${result.candidateDisposition} C=${result.candidateCommit || 'NONE'}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { main(); }
   catch (error) {
     console.error(`${error.code || 'CANDIDATE_MATERIALIZE_ERROR'}: ${error.message || error}`);

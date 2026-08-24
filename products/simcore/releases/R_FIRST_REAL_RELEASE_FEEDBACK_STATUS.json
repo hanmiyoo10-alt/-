@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_FIRST_REAL_RELEASE_FEEDBACK",
+  "status": "RECORDED",
+  "releaseId": "simcore-v0.64.7-new-01",
+  "releaseState": "REAL_RELEASE_LIVE_PENDING",
+  "production": {
+    "version": "0.64.7",
+    "commit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+    "blob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0"
+  },
+  "observedOperatorPrCount": 18,
+  "prBreakdown": {
+    "productCandidate": [234, 236, 237, 238, 240, 241],
+    "authorizationInvocation": [242, 246, 247, 249, 250],
+    "postPublishRecovery": [251, 252, 255, 256],
+    "livePendingClosure": [257, 258, 260]
+  },
+  "assessment": {
+    "safetyModel": "PASS",
+    "operatorErgonomics": "NEEDS_HARDENING",
+    "productionDoubleWriteObserved": false,
+    "singlePublisherPreserved": true,
+    "latestInstallEqualityPreserved": true,
+    "documentationClosurePreserved": true
+  },
+  "findings": [
+    {
+      "id": "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC",
+      "classification": "FIX",
+      "priority": "HIGH"
+    },
+    {
+      "id": "CANDIDATE_RETRY_EXACT_REF_ALREADY_EXISTS",
+      "classification": "FIX",
+      "priority": "HIGH"
+    },
+    {
+      "id": "06407_CANDIDATE_ONE_SHOT_WORKFLOWS_STILL_ACTIVE",
+      "classification": "FIX",
+      "priority": "BEFORE_NEXT_RUNTIME_RELEASE"
+    },
+    {
+      "id": "CANDIDATE_PREPARATION_OBSERVABILITY_NOT_PERMANENT",
+      "classification": "FIX",
+      "priority": "HIGH"
+    },
+    {
+      "id": "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR",
+      "classification": "DEFER",
+      "priority": "AFTER_GENERIC_CANDIDATE_AND_CLOSURE_HARDENING"
+    },
+    {
+      "id": "PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING",
+      "classification": "WATCH",
+      "priority": "EVIDENCE_DRIVEN"
+    },
+    {
+      "id": "POST_PUBLISH_MAIN_GATE_ACTIONS_PERMISSION_GAP",
+      "classification": "FIXED",
+      "priority": "PERMANENT_REGRESSION_OWNED"
+    },
+    {
+      "id": "LIVE_PENDING_DURABLE_CLOSURE_FRAGMENTED",
+      "classification": "FIX",
+      "priority": "HIGH"
+    },
+    {
+      "id": "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY",
+      "classification": "FIX",
+      "priority": "HIGH"
+    },
+    {
+      "id": "CANDIDATE_TRANSPORT_REF_RETIREMENT",
+      "classification": "DEFER",
+      "priority": "TOOL_SURFACE"
+    },
+    {
+      "id": "GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24",
+      "classification": "WATCH",
+      "priority": "NON_BLOCKING"
+    }
+  ],
+  "hardeningQueue": [
+    "R-F1_RETIRE_06407_ONE_SHOT_CANDIDATE_WORKFLOWS",
+    "R-F2_GENERIC_CANDIDATE_PREPARATION_AND_IDEMPOTENCY",
+    "R-F3_CONSOLIDATE_LIVE_PENDING_DURABLE_CLOSURE",
+    "R-F4_AUTHORIZATION_ACTIVATION_CONSOLIDATION_REVIEW",
+    "R-F5_ACTIVATION_RUN_CORRELATION_WATCH"
+  ],
+  "targetOperatorPrRange": {
+    "toLivePending": "2-3",
+    "throughHumanLivePassClosure": "3-4"
+  },
+  "currentGateUnchanged": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE",
+  "evidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_FIRST_REAL_RELEASE_RETROSPECTIVE.md"
+}

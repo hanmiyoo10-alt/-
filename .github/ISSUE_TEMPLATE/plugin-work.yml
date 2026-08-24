@@ -1,17 +1,19 @@
-name: Plugin work
-description: Track work for one registered plugin or a repository/shared concern.
+name: Repository work
+description: Track work for one registered plugin, product, or repository/shared concern.
 title: ""
 body:
   - type: dropdown
-    id: plugin
+    id: scope
     attributes:
-      label: Plugin
+      label: Scope
       description: Choose the exact operational scope. The control plane does not infer this from prose.
       options:
         - usage-dashboard
         - simcore
         - devpass
         - termux-large-doc-editor
+        - voyage-token-check
+        - pocketrisu-helper-mod
         - shared
         - repo
     validations:

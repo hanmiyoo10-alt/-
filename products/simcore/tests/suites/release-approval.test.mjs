@@ -8,14 +8,15 @@ function makeCase(mode='NEW_VERSION'){
   const releaseId=`simcore-v0.64.8-${suffix}-01`;
   const intentId='simcore-v0.64.8-intent-01';
   const receiptPath=`products/simcore/releases/candidate-receipts/${intentId}.json`;
+  const approvalPath=`products/simcore/releases/approvals/${releaseId}.json`;
   const approval={schemaVersion:1,releaseId,candidateReceiptPath:receiptPath,authorityConfirmation:'RS2_4_RELEASE'};
   const receipt={schemaVersion:1,product:'SimCore',intentId,releaseId,candidateDisposition:'CREATED',expectedProductionCommit:'a'.repeat(40),sourceCommit:'b'.repeat(40),candidateCommit:'c'.repeat(40),candidateReleaseBlob:'d'.repeat(40),candidateFetchRef:`candidate/simcore/${intentId}`,builderPath:'products/simcore/tooling/build-fixture.py',builderSha256:'e'.repeat(64),verifierCommit:'f'.repeat(40),verificationSuite:'batch-a',verificationReportSha256:'1'.repeat(64),result:'PASS',productionMutation:'NONE',releaseAuthority:'CANDIDATE_RECEIPT_ONLY'};
   const spec={schemaVersion:1,releaseId,product:'SimCore',version:'0.64.8',releaseName:'Fixture Release',releaseMode:mode,candidateCommit:receipt.candidateCommit,expectedProductionCommit:receipt.expectedProductionCommit,candidateReleaseBlob:receipt.candidateReleaseBlob,primaryGoalId:'R2_1_E_FIXTURE',changeClass:mode==='ROLLBACK'?'ROLLBACK':'RUNTIME_FEATURE',evidenceRefs:['docs/fixture.md'],liveGate:{required:true,scenarioId:'R2_1_E_FIXTURE_REAL_LONG_CHAT',closeAuthority:'HUMAN_EVIDENCE'}};
   if(mode==='ROLLBACK')spec.rollback={approvedSafeCommit:'2'.repeat(40),approvedSafeBlob:'3'.repeat(40),reasonCode:'FIXTURE_ROLLBACK'};
   const shadow={schemaVersion:1,product:'SimCore',authority:'SHADOW_ONLY',intentId,releaseId,candidateReceiptPath:receiptPath,derivedSpec:spec};
-  return {approval,receipt,receiptPath,shadow,shadowPath:`products/simcore/releases/spec-shadows/${releaseId}.json`,spec};
+  return {approval,approvalPath,receipt,receiptPath,shadow,shadowPath:`products/simcore/releases/spec-shadows/${releaseId}.json`,spec};
 }
-function resolve(c){return resolveApproval({approval:c.approval,approvalPath:`products/simcore/releases/approvals/${c.approval.releaseId}.json`,candidateReceipt:c.receipt,candidateReceiptPath:c.receiptPath,specShadow:c.shadow,specShadowPath:c.shadowPath,observedCandidateCommit:c.receipt.candidateCommit,observedProductionCommit:c.receipt.expectedProductionCommit});}
+function resolve(c,overrides={}){return resolveApproval({approval:c.approval,approvalPath:c.approvalPath,candidateReceipt:c.receipt,candidateReceiptPath:c.receiptPath,specShadow:c.shadow,specShadowPath:c.shadowPath,observedCandidateCommit:c.receipt.candidateCommit,observedProductionCommit:c.receipt.expectedProductionCommit,...overrides});}
 
 export async function runSuite({fixtures}){
   const assertions=[];const pass=(id)=>assertions.push({id,status:'PASS'});
@@ -39,19 +40,23 @@ export async function runSuite({fixtures}){
   const wrongPath=makeCase();wrongPath.receiptPath='products/simcore/releases/candidate-receipts/other.json';
   expectCode(()=>resolve(wrongPath),'APPROVAL_RECEIPT_PATH_MISMATCH');pass('E-N3-receipt-path-mismatch');
   const wrongCandidate=makeCase();
-  expectCode(()=>resolveApproval({approval:wrongCandidate.approval,approvalPath:'products/simcore/releases/approvals/x.json',candidateReceipt:wrongCandidate.receipt,candidateReceiptPath:wrongCandidate.receiptPath,specShadow:wrongCandidate.shadow,specShadowPath:wrongCandidate.shadowPath,observedCandidateCommit:'9'.repeat(40),observedProductionCommit:wrongCandidate.receipt.expectedProductionCommit}),'APPROVAL_CANDIDATE_REF_MOVED');pass('E-N4-candidate-ref-moved');
+  expectCode(()=>resolve(wrongCandidate,{observedCandidateCommit:'9'.repeat(40)}),'APPROVAL_CANDIDATE_REF_MOVED');pass('E-N4-candidate-ref-moved');
   const wrongProduction=makeCase();
-  expectCode(()=>resolveApproval({approval:wrongProduction.approval,approvalPath:'products/simcore/releases/approvals/x.json',candidateReceipt:wrongProduction.receipt,candidateReceiptPath:wrongProduction.receiptPath,specShadow:wrongProduction.shadow,specShadowPath:wrongProduction.shadowPath,observedCandidateCommit:wrongProduction.receipt.candidateCommit,observedProductionCommit:'9'.repeat(40)}),'APPROVAL_PRODUCTION_PARENT_MOVED');pass('E-N5-production-parent-moved');
+  expectCode(()=>resolve(wrongProduction,{observedProductionCommit:'9'.repeat(40)}),'APPROVAL_PRODUCTION_PARENT_MOVED');pass('E-N5-production-parent-moved');
   const wrongSpec=makeCase();wrongSpec.shadow.derivedSpec.candidateCommit='9'.repeat(40);
   expectCode(()=>resolve(wrongSpec),'APPROVAL_SPEC_CANDIDATE_MISMATCH');pass('E-N6-spec-candidate-mismatch');
   const noRollback=makeCase('ROLLBACK');delete noRollback.shadow.derivedSpec.rollback;
-  expectCode(()=>resolve(noRollback),'APPROVAL_ROLLBACK_METADATA_REQUIRED');pass('E-N7-rollback-metadata-required');
+  expectCode(()=>resolve(noRollback),'APPROVAL_SPEC_SCHEMA_INVALID');pass('E-N7-rollback-metadata-required');
   const wrongAuthority=makeCase();wrongAuthority.approval.authorityConfirmation='NOPE';
   expectCode(()=>resolve(wrongAuthority),'APPROVAL_AUTHORITY_INVALID');pass('E-N8-authority-marker');
+  const extraSpec=makeCase();extraSpec.shadow.derivedSpec.manualCandidateOverride='9'.repeat(40);
+  expectCode(()=>resolve(extraSpec),'APPROVAL_SPEC_SCHEMA_INVALID');pass('E-N9-machine-spec-extra-field-block');
+  const wrongApprovalPath=makeCase();
+  expectCode(()=>resolve(wrongApprovalPath,{approvalPath:'products/simcore/releases/approvals/other.json'}),'APPROVAL_PATH_MISMATCH');pass('E-N10-approval-path-bound');
 
   const tool=fs.readFileSync('products/simcore/tooling/release-approval-resolve.mjs','utf8');
   for(const token of ['release-publish.mjs','repo-main-write.py','gh workflow run','git push','force-with-lease'])assert(!tool.includes(token),`approval resolver gained publication primitive: ${token}`);
   assert(tool.includes('DISABLED_PENDING_OPERATOR_DECISION'),'operator decision boundary missing');
-  pass('E-N9-no-publication-authority');
+  pass('E-N11-no-publication-authority');
   return {coverage:'EXECUTABLE',status:'PASS',assertions};
 }

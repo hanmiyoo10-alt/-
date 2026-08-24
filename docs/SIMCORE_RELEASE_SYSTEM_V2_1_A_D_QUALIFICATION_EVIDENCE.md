@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — A/B/C/D Qualification Evidence
 
 Date: 2026-08-25
-Status: **QUALIFICATION ACTIVE · PENDING PERMANENT CI · NON-RUNTIME**
+Status: **B/C/D QUALIFIED · E IMPLEMENTATION AUTHORIZED · NON-RUNTIME**
 
 ## Qualification purpose
 
@@ -14,18 +14,27 @@ R2_1_B_C_D_QUALIFIED
 → only then may R2.1-E implementation begin
 ```
 
-## Why this is a composition qualification
+That gate is now satisfied.
 
-A, B, C, and D were already implemented and individually permanent-CI verified on separate branches. The D final-head permanent CI run `32764634954` executed with the current B/C permanent suites and D deterministic post-publish tests simultaneously present:
+## Composition qualification
+
+A, B, C, and D were individually permanent-CI verified. The D final-head run first proved the composed implementation with B/C permanent suites and D deterministic state tests simultaneously present:
 
 ```text
+run      32764634954
 Verify   97551262418  PASS
 Required 97551357191  PASS
 ```
 
-Therefore this qualification does not invent a parallel verification stack. Instead, the machine status file `products/simcore/releases/R_V2_1_QUALIFICATION_STATUS.json` is itself classified as SimCore CI/HARNESS state. Its PR must pass the current permanent verifier again on top of merged A/B/C/D main.
+The dedicated qualification PR then re-ran the current permanent verifier on merged A/B/C/D main:
 
-That second full-composition PASS is the activation evidence for E.
+```text
+run      32764906669
+Verify   97552076823  PASS
+Required 97552211100  PASS
+```
+
+This is the durable activation evidence for E.
 
 ## Qualified units
 
@@ -61,7 +70,7 @@ release-id mismatch block
 historical v0.64.7 semantic equivalence
 ```
 
-Machine-derived specs remain `SHADOW_ONLY` until E explicitly changes authority.
+Machine-derived publication authority is still OFF. Qualification authorizes E implementation; it does not itself activate publication from spec shadows.
 
 ### D — LIVE_PENDING state convergence
 
@@ -78,9 +87,19 @@ conflicting receipt = BLOCK
 recovery cannot publish
 ```
 
-## Production safety
+## Activation decision
 
-Qualification is read-only with respect to production:
+```text
+B qualified = YES
+C qualified = YES
+D qualified = YES
+R2.1-E implementation = AUTHORIZED
+machine spec publication authority = NOT YET ACTIVE
+```
+
+E must still prove that an approval cannot resolve a different C/P, and that NEW_VERSION / SAME_VERSION_CORRECTION / ROLLBACK machine spec representations resolve correctly before its authority can activate.
+
+## Production safety
 
 ```text
 runtime mutation = NONE
@@ -88,5 +107,3 @@ release-simcore mutation = NONE
 current production = v0.64.7
 human long-chat authority = unchanged
 ```
-
-R2.1-E implementation remains unauthorized until this branch receives permanent Verify/Required PASS and the qualification status is promoted to `B_C_D_QUALIFIED`.

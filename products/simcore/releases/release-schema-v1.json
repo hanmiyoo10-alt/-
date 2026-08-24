@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hanmiyoo10-alt/-/products/simcore/releases/release-schema-v1.json",
+  "title": "SimCore Release Spec v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "releaseId",
+    "product",
+    "version",
+    "releaseName",
+    "releaseMode",
+    "candidateCommit",
+    "expectedProductionCommit",
+    "candidateReleaseBlob",
+    "primaryGoalId",
+    "changeClass",
+    "evidenceRefs",
+    "liveGate"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "releaseId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 96,
+      "pattern": "^simcore-v[0-9]+\\.[0-9]+\\.[0-9]+-(new|correction|rollback|noop)-[0-9]{2,}$"
+    },
+    "product": { "const": "SimCore" },
+    "version": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 32,
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "releaseName": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "releaseMode": {
+      "enum": ["NEW_VERSION", "SAME_VERSION_CORRECTION", "ROLLBACK", "NOOP_IDENTICAL"]
+    },
+    "candidateCommit": { "$ref": "#/$defs/gitSha" },
+    "expectedProductionCommit": { "$ref": "#/$defs/gitSha" },
+    "candidateReleaseBlob": { "$ref": "#/$defs/gitSha" },
+    "primaryGoalId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "changeClass": {
+      "enum": [
+        "RUNTIME_FEATURE",
+        "CORRECTNESS_MINI",
+        "SAME_VERSION_CORRECTION",
+        "ROLLBACK",
+        "RELEASE_INFRA_QUALIFICATION"
+      ]
+    },
+    "evidenceRefs": { "$ref": "#/$defs/evidenceRefs" },
+    "liveGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "scenarioId", "closeAuthority"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "scenarioId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "closeAuthority": { "const": "HUMAN_EVIDENCE" }
+      }
+    },
+    "newVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expectedParentVersion"],
+      "properties": {
+        "expectedParentVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reasonCode", "evidenceRefs", "priorLifecycleState", "preserveReleaseName"],
+      "properties": {
+        "reasonCode": { "enum": ["PRE_LIVE_BLOCKER", "DEPLOYMENT_CORRECTION"] },
+        "evidenceRefs": { "$ref": "#/$defs/evidenceRefs" },
+        "priorLifecycleState": {
+          "enum": ["LIVE_PENDING", "DEPLOYED_PRE_LIVE", "ADMIN_RECOVERY_REQUIRED"]
+        },
+        "preserveReleaseName": { "const": true }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reasonCode",
+        "sourceReleaseCommit",
+        "sourceReleaseBlob",
+        "evidenceRefs",
+        "targetSafetyState"
+      ],
+      "properties": {
+        "reasonCode": {
+          "enum": ["LIVE_BLOCKER", "POST_PUBLISH_BLOCKER", "EMERGENCY_CORRECTNESS_ROLLBACK"]
+        },
+        "sourceReleaseCommit": { "$ref": "#/$defs/gitSha" },
+        "sourceReleaseBlob": { "$ref": "#/$defs/gitSha" },
+        "evidenceRefs": { "$ref": "#/$defs/evidenceRefs" },
+        "targetSafetyState": { "const": "LAST_KNOWN_SAFE" }
+      }
+    }
+  },
+  "$defs": {
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 8,
+        "maxLength": 220,
+        "pattern": "^docs/[A-Za-z0-9_./-]+\\.md(?:#[A-Za-z0-9_.:-]+)?$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "releaseMode": { "const": "NEW_VERSION" } } },
+      "then": { "required": ["newVersion"] }
+    },
+    {
+      "if": { "properties": { "releaseMode": { "const": "SAME_VERSION_CORRECTION" } } },
+      "then": { "required": ["correction"] }
+    },
+    {
+      "if": { "properties": { "releaseMode": { "const": "ROLLBACK" } } },
+      "then": { "required": ["rollback"] }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "candidate-receipt-v1",
+  "suite": "candidate-receipt",
+  "input": {
+    "releaseIds": {
+      "NEW_VERSION": "simcore-v0.64.8-new-01",
+      "SAME_VERSION_CORRECTION": "simcore-v0.64.8-correction-01",
+      "ROLLBACK": "simcore-v0.64.7-rollback-01"
+    }
+  },
+  "expected": {
+    "receiptAuthority": "CANDIDATE_RECEIPT_ONLY",
+    "shadowAuthority": "SHADOW_ONLY",
+    "productionMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md"
+  }
+}

@@ -15,12 +15,15 @@ on:
         description: Explicit target release spec path under .github/usage-dashboard/releases
         required: true
         type: string
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
 
 jobs:
   prepare:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard prepare ')) }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -46,17 +49,29 @@ jobs:
           RAW_TARGET_BRANCH: ${{ inputs.target_branch }}
           RAW_EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
           RAW_RELEASE_SPEC: ${{ inputs.release_spec }}
+          CONTROL_COMMAND: ${{ github.event.comment.body }}
+          CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CONTROL_ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo "CANDIDATE_PREP_UNTRUSTED_WORKFLOW_REF:$GITHUB_REF"; exit 1; }
-          TARGET_BRANCH="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-target "$RAW_TARGET_BRANCH")"
-          EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-sha "$RAW_EXPECTED_HEAD_SHA")"
-          RELEASE_SPEC="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-spec "$RAW_RELEASE_SPEC")"
+          if [[ "$GITHUB_EVENT_NAME" == 'issue_comment' ]]; then
+            node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
+            TARGET_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-target "$CONTROL_COMMAND")"
+            EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-sha "$CONTROL_COMMAND")"
+            RELEASE_SPEC="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-spec "$CONTROL_COMMAND")"
+            echo "CANDIDATE_PREP_CONTROL_COMMENT:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$RELEASE_SPEC"
+          else
+            TARGET_BRANCH="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-target "$RAW_TARGET_BRANCH")"
+            EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-sha "$RAW_EXPECTED_HEAD_SHA")"
+            RELEASE_SPEC="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-spec "$RAW_RELEASE_SPEC")"
+            echo "CANDIDATE_PREP_INPUTS_NORMALIZED:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$RELEASE_SPEC"
+          fi
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
           printf 'target_branch=%s\n' "$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
           printf 'expected_head_sha=%s\n' "$EXPECTED_HEAD_SHA" >> "$GITHUB_OUTPUT"
           printf 'release_spec=%s\n' "$RELEASE_SPEC" >> "$GITHUB_OUTPUT"
-          echo "CANDIDATE_PREP_INPUTS_NORMALIZED:$TARGET_BRANCH:$EXPECTED_HEAD_SHA:$RELEASE_SPEC"
 
       - name: Checkout exact candidate base
         uses: actions/checkout@v4

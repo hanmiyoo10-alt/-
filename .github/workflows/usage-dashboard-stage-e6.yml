@@ -1,0 +1,482 @@
+name: Usage Dashboard E6 Repairable Stage
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usage-dashboard-e6-stage
+  cancel-in-progress: false
+
+jobs:
+  resolve_stage:
+    if: ${{ github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard stage ') }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      source_branch: ${{ steps.resolve.outputs.source_branch }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      trusted_base_sha: ${{ steps.resolve.outputs.trusted_base_sha }}
+      intent_base_sha: ${{ steps.resolve.outputs.intent_base_sha }}
+      candidate_branch: ${{ steps.resolve.outputs.candidate_branch }}
+      candidate_parent_sha: ${{ steps.resolve.outputs.candidate_parent_sha }}
+      release_spec: ${{ steps.resolve.outputs.release_spec }}
+      product_version: ${{ steps.resolve.outputs.product_version }}
+      release_title: ${{ steps.resolve.outputs.release_title }}
+      engine_changed: ${{ steps.resolve.outputs.engine_changed }}
+      plugin_changed: ${{ steps.resolve.outputs.plugin_changed }}
+      source_files_json: ${{ steps.resolve.outputs.source_files_json }}
+      failure_reason: ${{ steps.resolve.outputs.failure_reason }}
+    steps:
+      - name: Checkout immutable trusted control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Freeze source intent and derived candidate identity
+        id: resolve
+        shell: bash
+        env:
+          CONTROL_COMMAND: ${{ github.event.comment.body }}
+          CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CONTROL_ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'failure_reason=E6_UNTRUSTED_WORKFLOW_REF' >> "$GITHUB_OUTPUT"; echo "E6_UNTRUSTED_WORKFLOW_REF:$GITHUB_REF"; exit 1; }
+          node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
+          SOURCE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-branch "$CONTROL_COMMAND")"
+          node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$SOURCE_BRANCH"
+          git fetch --no-tags origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/e6-source"
+          SOURCE_SHA="$(git rev-parse refs/remotes/origin/e6-source)"
+          TRUSTED_BASE_SHA="$(git rev-parse HEAD)"
+          if ! INSPECT="$(node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --inspect "$TRUSTED_BASE_SHA" "$SOURCE_SHA" 2>&1)"; then
+            REASON="$(printf '%s\n' "$INSPECT" | tail -n 1 | tr -cd 'A-Za-z0-9_./:=-' | cut -c1-180)"
+            echo "failure_reason=${REASON:-E6_SOURCE_POLICY_REJECTED}" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$INSPECT" >&2
+            exit 1
+          fi
+          INTENT_BASE_SHA="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.intentBaseSha)' "$INSPECT")"
+          CANDIDATE_BRANCH="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.candidateBranch)' "$INSPECT")"
+          RELEASE_SPEC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseSpec)' "$INSPECT")"
+          PRODUCT_VERSION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.productVersion)' "$INSPECT")"
+          ENGINE_CHANGED="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(String(Boolean(j.engineChanged)))' "$INSPECT")"
+          PLUGIN_CHANGED="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(String(Boolean(j.pluginChanged)))' "$INSPECT")"
+          SOURCE_FILES_JSON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(JSON.stringify(j.files))' "$INSPECT")"
+          RELEASE_TITLE="$(git show "$SOURCE_SHA:$RELEASE_SPEC" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).releaseTitle||"")))')"
+          [[ -n "$RELEASE_TITLE" && "$RELEASE_TITLE" != *$'\n'* && "$RELEASE_TITLE" != *$'\r'* ]] || { echo 'failure_reason=E6_RELEASE_TITLE_INVALID' >> "$GITHUB_OUTPUT"; exit 1; }
+          node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --check-derived-branch "$CANDIDATE_BRANCH" >/dev/null
+          CANDIDATE_PARENT_SHA="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          if [[ -z "$CANDIDATE_PARENT_SHA" ]]; then CANDIDATE_PARENT_SHA="$TRUSTED_BASE_SHA"; fi
+          [[ "$CANDIDATE_PARENT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'failure_reason=E6_CANDIDATE_PARENT_INVALID' >> "$GITHUB_OUTPUT"; exit 1; }
+          {
+            echo "source_branch=$SOURCE_BRANCH"
+            echo "source_sha=$SOURCE_SHA"
+            echo "trusted_base_sha=$TRUSTED_BASE_SHA"
+            echo "intent_base_sha=$INTENT_BASE_SHA"
+            echo "candidate_branch=$CANDIDATE_BRANCH"
+            echo "candidate_parent_sha=$CANDIDATE_PARENT_SHA"
+            echo "release_spec=$RELEASE_SPEC"
+            echo "product_version=$PRODUCT_VERSION"
+            echo "release_title=$RELEASE_TITLE"
+            echo "engine_changed=$ENGINE_CHANGED"
+            echo "plugin_changed=$PLUGIN_CHANGED"
+            echo "source_files_json=$SOURCE_FILES_JSON"
+            echo 'failure_reason='
+          } >> "$GITHUB_OUTPUT"
+          echo "E6_STAGE_SOURCE_FROZEN:$SOURCE_BRANCH:$SOURCE_SHA:$TRUSTED_BASE_SHA:$CANDIDATE_BRANCH:$CANDIDATE_PARENT_SHA"
+
+  receipt_accepted:
+    needs: resolve_stage
+    if: ${{ needs.resolve_stage.result == 'success' }}
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post accepted transaction receipt
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ needs.resolve_stage.outputs.source_branch }}
+          SOURCE_SHA: ${{ needs.resolve_stage.outputs.source_sha }}
+          CANDIDATE_BRANCH: ${{ needs.resolve_stage.outputs.candidate_branch }}
+          PRODUCT_VERSION: ${{ needs.resolve_stage.outputs.product_version }}
+        run: |
+          set -euo pipefail
+          BODY="$(cat <<EOF
+          UD_STAGE_ACCEPTED
+          source_branch: $SOURCE_BRANCH
+          source_sha: $SOURCE_SHA
+          candidate_branch: $CANDIDATE_BRANCH
+          release: $PRODUCT_VERSION
+          transaction: $GITHUB_RUN_ID
+          next: materializing
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/197/comments" \
+            --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null
+
+  materialize_stage:
+    needs: resolve_stage
+    if: ${{ needs.resolve_stage.result == 'success' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      candidate_sha: ${{ steps.materialize.outputs.candidate_sha }}
+      bundle_sha256: ${{ steps.materialize.outputs.bundle_sha256 }}
+      failure_reason: ${{ steps.materialize.outputs.failure_reason }}
+    steps:
+      - name: Checkout frozen trusted main base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reconstruct and validate materialized candidate without write credentials
+        id: materialize
+        shell: bash
+        env:
+          PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
+          SOURCE_BRANCH: ${{ needs.resolve_stage.outputs.source_branch }}
+          SOURCE_SHA: ${{ needs.resolve_stage.outputs.source_sha }}
+          TRUSTED_BASE_SHA: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
+          INTENT_BASE_SHA: ${{ needs.resolve_stage.outputs.intent_base_sha }}
+          CANDIDATE_BRANCH: ${{ needs.resolve_stage.outputs.candidate_branch }}
+          CANDIDATE_PARENT_SHA: ${{ needs.resolve_stage.outputs.candidate_parent_sha }}
+          RELEASE_SPEC: ${{ needs.resolve_stage.outputs.release_spec }}
+          PRODUCT_VERSION: ${{ needs.resolve_stage.outputs.product_version }}
+          ENGINE_CHANGED: ${{ needs.resolve_stage.outputs.engine_changed }}
+          PLUGIN_CHANGED: ${{ needs.resolve_stage.outputs.plugin_changed }}
+          SOURCE_FILES_JSON: ${{ needs.resolve_stage.outputs.source_files_json }}
+        run: |
+          set -euo pipefail
+          trap 'rc=$?; if [[ $rc -ne 0 ]]; then echo "failure_reason=E6_MATERIALIZE_OR_SMOKE_FAILED" >> "$GITHUB_OUTPUT"; fi' EXIT
+          node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --check-derived-branch "$CANDIDATE_BRANCH" >/dev/null
+          git fetch --no-tags origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/e6-source"
+          [[ "$(git rev-parse refs/remotes/origin/e6-source)" == "$SOURCE_SHA" ]] || { echo 'E6_SOURCE_BRANCH_MOVED'; exit 1; }
+          if [[ "$CANDIDATE_PARENT_SHA" != "$TRUSTED_BASE_SHA" ]]; then
+            git fetch --no-tags origin "refs/heads/$CANDIDATE_BRANCH:refs/remotes/origin/e6-candidate"
+            [[ "$(git rev-parse refs/remotes/origin/e6-candidate)" == "$CANDIDATE_PARENT_SHA" ]] || { echo 'E6_CANDIDATE_BRANCH_MOVED'; exit 1; }
+          fi
+          PATCH="$RUNNER_TEMP/usage-dashboard-source-intent.patch"
+          git diff --binary "$INTENT_BASE_SHA" "$SOURCE_SHA" -- > "$PATCH"
+          if ! git apply --index --3way "$PATCH"; then echo 'SOURCE_INTENT_CONFLICT'; exit 1; fi
+          ACTUAL_FILES_JSON="$(git diff --cached --name-only -z | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(s.split("\0").filter(Boolean).sort())))')"
+          node - "$ACTUAL_FILES_JSON" "$SOURCE_FILES_JSON" <<'NODE'
+          const [actualText,expectedText]=process.argv.slice(2);
+          const actual=JSON.parse(actualText), expected=JSON.parse(expectedText);
+          const allowed=new Set(expected);
+          for(const file of actual) if(!allowed.has(file)) throw new Error(`E6_SOURCE_PATCH_PATH_DRIFT:${file}`);
+          NODE
+          git config user.name 'usage-dashboard-e6-source-intent'
+          git config user.email 'usage-dashboard-e6-source-intent@users.noreply.github.com'
+          git diff --cached --quiet && { echo 'E6_SOURCE_INTENT_EMPTY'; exit 1; }
+          git commit -m "stage: apply Usage Dashboard source intent $SOURCE_SHA"
+          test -f "$RELEASE_SPEC"
+          UD_MATERIALIZER="$(node - "$RELEASE_SPEC" <<'NODE'
+          const fs=require('node:fs');
+          const spec=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const path=String(spec.materializer||'');
+          if(!/^plugins\/usage-dashboard\/tools\/[A-Za-z0-9_.-]+\.py$/.test(path)) throw new Error('E6_MATERIALIZER_DENIED');
+          process.stdout.write(path);
+          NODE
+          )"
+          python3 -m py_compile "$UD_MATERIALIZER" plugins/usage-dashboard/tools/reconcile_release_candidate.py plugins/usage-dashboard/tools/validate_release_candidate.py
+          python3 "$UD_MATERIALIZER"
+          python3 plugins/usage-dashboard/tools/reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass
+          node --check plugins/usage-dashboard/latest.js
+          node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
+          node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
+          bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+          python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
+          git diff --check
+          if [[ "$ENGINE_CHANGED" == 'true' ]]; then
+            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat 3
+          elif [[ "$PLUGIN_CHANGED" == 'true' ]]; then
+            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat 1
+          else
+            echo 'BEHAVIOR_SMOKE_SKIPPED:structural-only-source-diff'
+          fi
+          [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]] || { git status --short plugins/usage-dashboard/tests; echo 'TEST_TREE_MUTATED'; exit 1; }
+          git add -A
+          TREE_SHA="$(git write-tree)"
+          PAYLOAD_SHA="$(printf 'materialize: Usage Dashboard %s from source %s\n' "$PRODUCT_VERSION" "$SOURCE_SHA" | git commit-tree "$TREE_SHA" -p "$CANDIDATE_PARENT_SHA")"
+          node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --verify-derived "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON"
+          git branch -f candidate-payload "$PAYLOAD_SHA"
+          BUNDLE="$RUNNER_TEMP/usage-dashboard-e6-candidate.bundle"
+          META="$RUNNER_TEMP/usage-dashboard-e6-candidate.json"
+          git bundle create "$BUNDLE" refs/heads/candidate-payload ^"$CANDIDATE_PARENT_SHA"
+          git bundle verify "$BUNDLE"
+          BUNDLE_SHA256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+          node - "$META" "$TRUSTED_BASE_SHA" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$RELEASE_SPEC" "$SOURCE_FILES_JSON" "$BUNDLE_SHA256" <<'NODE'
+          const fs=require('node:fs');
+          const [file,trustedBaseSha,sourceSha,candidateBranch,candidateParentSha,payloadSha,releaseSpec,sourceFilesJson,bundleSha256]=process.argv.slice(2);
+          fs.writeFileSync(file,JSON.stringify({schemaVersion:1,trustedBaseSha,sourceSha,candidateBranch,candidateParentSha,payloadSha,releaseSpec,sourceFiles:JSON.parse(sourceFilesJson),bundleSha256},null,2)+'\n');
+          NODE
+          echo "candidate_sha=$PAYLOAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha256=$BUNDLE_SHA256" >> "$GITHUB_OUTPUT"
+          echo 'failure_reason=' >> "$GITHUB_OUTPUT"
+          trap - EXIT
+          echo "E6_CANDIDATE_BUNDLE_READY:$CANDIDATE_BRANCH:$CANDIDATE_PARENT_SHA:$PAYLOAD_SHA"
+
+      - name: Upload immutable derived candidate payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: usage-dashboard-e6-candidate-payload
+          path: |
+            ${{ runner.temp }}/usage-dashboard-e6-candidate.bundle
+            ${{ runner.temp }}/usage-dashboard-e6-candidate.json
+          retention-days: 1
+          if-no-files-found: error
+
+  write_candidate:
+    needs: [resolve_stage, materialize_stage]
+    if: ${{ needs.resolve_stage.result == 'success' && needs.materialize_stage.result == 'success' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      candidate_sha: ${{ steps.write.outputs.candidate_sha }}
+      failure_reason: ${{ steps.write.outputs.failure_reason }}
+    steps:
+      - name: Checkout immutable trusted writer control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Download candidate bundle only
+        uses: actions/download-artifact@v4
+        with:
+          name: usage-dashboard-e6-candidate-payload
+          path: ${{ runner.temp }}/usage-dashboard-e6-candidate-payload
+
+      - name: Verify bundle and fast-forward derived candidate branch
+        id: write
+        shell: bash
+        env:
+          TRUSTED_BASE_SHA: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
+          SOURCE_SHA: ${{ needs.resolve_stage.outputs.source_sha }}
+          CANDIDATE_BRANCH: ${{ needs.resolve_stage.outputs.candidate_branch }}
+          CANDIDATE_PARENT_SHA: ${{ needs.resolve_stage.outputs.candidate_parent_sha }}
+          PAYLOAD_SHA: ${{ needs.materialize_stage.outputs.candidate_sha }}
+          SOURCE_FILES_JSON: ${{ needs.resolve_stage.outputs.source_files_json }}
+          EXPECTED_BUNDLE_SHA256: ${{ needs.materialize_stage.outputs.bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          trap 'rc=$?; if [[ $rc -ne 0 ]]; then echo "failure_reason=E6_WRITER_FAILED" >> "$GITHUB_OUTPUT"; fi' EXIT
+          BUNDLE="$RUNNER_TEMP/usage-dashboard-e6-candidate-payload/usage-dashboard-e6-candidate.bundle"
+          META="$RUNNER_TEMP/usage-dashboard-e6-candidate-payload/usage-dashboard-e6-candidate.json"
+          test -f "$BUNDLE" && test -f "$META"
+          node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --check-derived-branch "$CANDIDATE_BRANCH" >/dev/null
+          ACTUAL_BUNDLE_SHA256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+          [[ "$ACTUAL_BUNDLE_SHA256" == "$EXPECTED_BUNDLE_SHA256" ]] || { echo 'E6_BUNDLE_SHA256_MISMATCH'; exit 1; }
+          node - "$META" "$TRUSTED_BASE_SHA" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON" "$EXPECTED_BUNDLE_SHA256" <<'NODE'
+          const fs=require('node:fs');
+          const [file,trustedBaseSha,sourceSha,candidateBranch,candidateParentSha,payloadSha,sourceFilesJson,bundleSha256]=process.argv.slice(2);
+          const data=JSON.parse(fs.readFileSync(file,'utf8'));
+          const expected={trustedBaseSha,sourceSha,candidateBranch,candidateParentSha,payloadSha,bundleSha256};
+          for(const [key,value] of Object.entries(expected)) if(data[key]!==value) throw new Error(`E6_BUNDLE_METADATA_MISMATCH:${key}`);
+          if(JSON.stringify(data.sourceFiles)!==JSON.stringify(JSON.parse(sourceFilesJson))) throw new Error('E6_BUNDLE_METADATA_MISMATCH:sourceFiles');
+          NODE
+          REMOTE_BEFORE="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          if [[ -z "$REMOTE_BEFORE" ]]; then
+            [[ "$CANDIDATE_PARENT_SHA" == "$TRUSTED_BASE_SHA" ]] || { echo 'E6_CANDIDATE_MISSING_WITH_NONBASE_PARENT'; exit 1; }
+          else
+            [[ "$REMOTE_BEFORE" == "$CANDIDATE_PARENT_SHA" ]] || { echo "E6_CANDIDATE_CAS_FAILED:$REMOTE_BEFORE:expected=$CANDIDATE_PARENT_SHA"; exit 1; }
+            git fetch --no-tags origin "refs/heads/$CANDIDATE_BRANCH:refs/remotes/origin/e6-candidate-parent"
+          fi
+          git bundle verify "$BUNDLE"
+          git fetch "$BUNDLE" 'refs/heads/candidate-payload:refs/e6/candidate-payload'
+          IMPORTED_SHA="$(git rev-parse refs/e6/candidate-payload)"
+          [[ "$IMPORTED_SHA" == "$PAYLOAD_SHA" ]] || { echo 'E6_PAYLOAD_SHA_MISMATCH'; exit 1; }
+          node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --verify-derived "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON"
+          REMOTE_RECHECK="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          [[ "$REMOTE_RECHECK" == "$REMOTE_BEFORE" ]] || { echo 'E6_CANDIDATE_CAS_RECHECK_FAILED'; exit 1; }
+          git push origin "$PAYLOAD_SHA:refs/heads/$CANDIDATE_BRANCH"
+          REMOTE_AFTER="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          [[ "$REMOTE_AFTER" == "$PAYLOAD_SHA" ]] || { echo 'E6_CANDIDATE_POSTVERIFY_FAILED'; exit 1; }
+          echo "candidate_sha=$PAYLOAD_SHA" >> "$GITHUB_OUTPUT"
+          echo 'failure_reason=' >> "$GITHUB_OUTPUT"
+          trap - EXIT
+          echo "E6_CANDIDATE_MATERIALIZED:$CANDIDATE_BRANCH:$CANDIDATE_PARENT_SHA:$PAYLOAD_SHA"
+
+  manage_pr:
+    needs: [resolve_stage, write_candidate]
+    if: ${{ needs.resolve_stage.result == 'success' && needs.write_candidate.result == 'success' }}
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: write
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+      pr_url: ${{ steps.pr.outputs.pr_url }}
+      failure_reason: ${{ steps.pr.outputs.failure_reason }}
+    steps:
+      - name: Create or reuse exactly one release PR and dispatch full validation
+        id: pr
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ needs.resolve_stage.outputs.source_branch }}
+          SOURCE_SHA: ${{ needs.resolve_stage.outputs.source_sha }}
+          CANDIDATE_BRANCH: ${{ needs.resolve_stage.outputs.candidate_branch }}
+          CANDIDATE_SHA: ${{ needs.write_candidate.outputs.candidate_sha }}
+          PRODUCT_VERSION: ${{ needs.resolve_stage.outputs.product_version }}
+          RELEASE_TITLE: ${{ needs.resolve_stage.outputs.release_title }}
+        run: |
+          set -euo pipefail
+          trap 'rc=$?; if [[ $rc -ne 0 ]]; then echo "failure_reason=E6_PR_OR_DISPATCH_FAILED" >> "$GITHUB_OUTPUT"; fi' EXIT
+          OWNER="$GITHUB_REPOSITORY_OWNER"
+          LIST="$RUNNER_TEMP/pr-list.json"
+          curl --fail-with-body --silent --show-error --get \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls" \
+            --data-urlencode 'state=open' \
+            --data-urlencode 'base=main' \
+            --data-urlencode "head=$OWNER:$CANDIDATE_BRANCH" > "$LIST"
+          COUNT="$(jq 'length' "$LIST")"
+          BODY="$(cat <<EOF
+          <!-- usage-dashboard-e6-status -->
+          Release: $PRODUCT_VERSION — $RELEASE_TITLE
+          Source authority: $SOURCE_BRANCH @ $SOURCE_SHA
+          Derived candidate: $CANDIDATE_BRANCH @ $CANDIDATE_SHA
+          Stage transaction: $GITHUB_RUN_ID
+          Full validation is dispatched for the exact derived candidate head.
+          <!-- /usage-dashboard-e6-status -->
+          EOF
+          )"
+          if [[ "$COUNT" == '0' ]]; then
+            jq -n --arg title "feat(usage-dashboard): $PRODUCT_VERSION $RELEASE_TITLE" --arg head "$CANDIDATE_BRANCH" --arg body "$BODY" '{title:$title,head:$head,base:"main",body:$body}' > "$RUNNER_TEMP/pr-create.json"
+            if ! curl --fail-with-body --silent --show-error -X POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls" \
+              --data-binary @"$RUNNER_TEMP/pr-create.json" > "$RUNNER_TEMP/pr.json"; then
+              echo 'E6_PR_CREATE_DENIED_OR_FAILED'; exit 1
+            fi
+          elif [[ "$COUNT" == '1' ]]; then
+            jq '.[0]' "$LIST" > "$RUNNER_TEMP/pr.json"
+            PR_NUMBER="$(jq -r '.number' "$RUNNER_TEMP/pr.json")"
+            jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/pr-update.json"
+            curl --fail-with-body --silent --show-error -X PATCH \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
+              --data-binary @"$RUNNER_TEMP/pr-update.json" > "$RUNNER_TEMP/pr.json"
+          else
+            echo "E6_MULTIPLE_OPEN_RELEASE_PRS:$COUNT"; exit 1
+          fi
+          PR_NUMBER="$(jq -r '.number' "$RUNNER_TEMP/pr.json")"
+          PR_URL="$(jq -r '.html_url' "$RUNNER_TEMP/pr.json")"
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo 'E6_PR_NUMBER_INVALID'; exit 1; }
+          jq -n --arg ref "$CANDIDATE_BRANCH" '{ref:$ref}' > "$RUNNER_TEMP/dispatch.json"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/usage-dashboard-validate.yml/dispatches" \
+            --data-binary @"$RUNNER_TEMP/dispatch.json"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo 'failure_reason=' >> "$GITHUB_OUTPUT"
+          trap - EXIT
+          echo "E6_PR_READY:$PR_NUMBER:$CANDIDATE_BRANCH:$CANDIDATE_SHA"
+
+  receipt_ready:
+    needs: [resolve_stage, write_candidate, manage_pr]
+    if: ${{ needs.resolve_stage.result == 'success' && needs.write_candidate.result == 'success' && needs.manage_pr.result == 'success' }}
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post candidate-ready receipt
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.resolve_stage.outputs.source_sha }}
+          CANDIDATE_SHA: ${{ needs.write_candidate.outputs.candidate_sha }}
+          CANDIDATE_BRANCH: ${{ needs.resolve_stage.outputs.candidate_branch }}
+          PRODUCT_VERSION: ${{ needs.resolve_stage.outputs.product_version }}
+          PR_NUMBER: ${{ needs.manage_pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          BODY="$(cat <<EOF
+          UD_CANDIDATE_READY
+          release: $PRODUCT_VERSION
+          source_sha: $SOURCE_SHA
+          candidate_branch: $CANDIDATE_BRANCH
+          candidate_sha: $CANDIDATE_SHA
+          pr: #$PR_NUMBER
+          smoke: GREEN
+          validation: DISPATCHED
+          next: full PR CI
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/197/comments" \
+            --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null
+
+  receipt_failure:
+    needs: [resolve_stage, materialize_stage, write_candidate, manage_pr]
+    if: ${{ always() && (needs.resolve_stage.result == 'failure' || needs.materialize_stage.result == 'failure' || needs.write_candidate.result == 'failure' || needs.manage_pr.result == 'failure') }}
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post actionable failure receipt
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RESOLVE_RESULT: ${{ needs.resolve_stage.result }}
+          MATERIALIZE_RESULT: ${{ needs.materialize_stage.result }}
+          WRITE_RESULT: ${{ needs.write_candidate.result }}
+          PR_RESULT: ${{ needs.manage_pr.result }}
+          RESOLVE_REASON: ${{ needs.resolve_stage.outputs.failure_reason }}
+          MATERIALIZE_REASON: ${{ needs.materialize_stage.outputs.failure_reason }}
+          WRITE_REASON: ${{ needs.write_candidate.outputs.failure_reason }}
+          PR_REASON: ${{ needs.manage_pr.outputs.failure_reason }}
+        run: |
+          set -euo pipefail
+          if [[ "$RESOLVE_RESULT" == 'failure' ]]; then REASON="${RESOLVE_REASON:-E6_RESOLVE_FAILED}"; NEXT='fix the source-policy rejection and run the same stage command again';
+          elif [[ "$MATERIALIZE_RESULT" == 'failure' ]]; then REASON="${MATERIALIZE_REASON:-E6_MATERIALIZE_FAILED}"; NEXT='fix source/tests/materializer and run the same stage command again';
+          elif [[ "$WRITE_RESULT" == 'failure' ]]; then REASON="${WRITE_REASON:-E6_WRITER_FAILED}"; NEXT='rerun the same stage command; stale/CAS conflicts fail closed';
+          else REASON="${PR_REASON:-E6_PR_OR_DISPATCH_FAILED}"; NEXT='retry the same stage command; no candidate rebuild is required'; fi
+          BODY="$(cat <<EOF
+          UD_STAGE_REJECTED
+          reason: $REASON
+          transaction: $GITHUB_RUN_ID
+          run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          next: $NEXT
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/197/comments" \
+            --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS",
-  "status": "E_IMPLEMENTED_SHADOW_PENDING_CI",
+  "status": "E_IMPLEMENTED_CI_VERIFIED_PENDING_MERGE",
   "date": "2026-08-25",
   "parentFeedback": "products/simcore/releases/R_FIRST_REAL_RELEASE_FEEDBACK_STATUS.json",
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md",
@@ -18,7 +18,7 @@
     { "id": "R2_1_B_GENERIC_CANDIDATE_CONTROLLER", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_D_LIVE_PENDING_STATE_CONVERGENCE", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
-    { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "IMPLEMENTED_SHADOW_PENDING_CI" }
+    { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "CI_VERIFIED_PENDING_MERGE" }
   ],
   "feedbackDisposition": {
     "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC": "FIXED_R2_1_B",
@@ -89,7 +89,11 @@
     "qualification": "products/simcore/releases/R_V2_1_QUALIFICATION_STATUS.json",
     "qualificationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_A_D_QUALIFICATION_EVIDENCE.md",
     "qualificationMerge": "47028d800965fb7eeae8b00385c2ba7acdbc39e8",
-    "r2_1_e": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_E_EXACT_APPROVAL_EVIDENCE.md"
+    "r2_1_e": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_E_EXACT_APPROVAL_EVIDENCE.md",
+    "r2_1_e_pr": 286,
+    "r2_1_e_first_ci_run": 32766766843,
+    "r2_1_e_first_verify_job": 97557881830,
+    "r2_1_e_first_required_job": 97558019582
   },
-  "recommendedNextWorkItemAfterApproval": "PERMANENT_CI_FOR_R2_1_E_THEN_DISCUSS_OPERATIONAL_APPROVAL_POLICY"
+  "recommendedNextWorkItemAfterApproval": "MERGE_R2_1_E_IMPLEMENTATION_THEN_DISCUSS_OPERATIONAL_APPROVAL_POLICY"
 }

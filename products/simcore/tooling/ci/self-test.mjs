@@ -24,6 +24,7 @@ ok('release-system-classification', () => {
     '.github/workflows/simcore-release.yml',
     '.github/workflows/simcore-release-permanent.yml',
     '.github/workflows/simcore-release-required.yml',
+    '.github/workflows/simcore-release-pr-activation.yml',
     'products/simcore/tooling/release-shadow.mjs',
     'products/simcore/tooling/release-authority.mjs',
     'products/simcore/tooling/release-publish.mjs',
@@ -59,6 +60,12 @@ ok('permanent-release-coordination-classification', () => {
   const r = classifyPaths(['.github/workflows/simcore-release-permanent.yml']);
   for (const id of ['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION']) expect(r.labels.includes(id), JSON.stringify(r));
   expect(!r.labels.includes('LEGACY_VERIFICATION'), JSON.stringify(r));
+});
+ok('permanent-release-adapter-classification', () => {
+  const r = classifyPaths(['.github/workflows/simcore-release-pr-activation.yml']);
+  for (const id of ['CI_SELF','HARNESS']) expect(r.labels.includes(id), JSON.stringify(r));
+  expect(!r.labels.includes('LEGACY_VERIFICATION'), JSON.stringify(r));
+  expect(!r.labels.includes('STATE_SYNC') && !r.labels.includes('SHARED_MAIN_COORDINATION'), JSON.stringify(r));
 });
 ok('post-publish-shadow-coordination-classification', () => {
   const r = classifyPaths(['products/simcore/tests/post-publish-state-shadow.test.mjs']);
@@ -149,6 +156,31 @@ ok('permanent-release-controller-boundary', () => {
   expect(!/uses:\s+actions\/(?:checkout|download-artifact|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'permanent caller external action is not pinned');
 });
 
+ok('permanent-release-pr-adapter-boundary', () => {
+  const workflow=fs.readFileSync('.github/workflows/simcore-release-pr-activation.yml','utf8');
+  for(const token of [
+    'pull_request:',
+    'types: [closed]',
+    "products/simcore/releases/activations/**",
+    'contents: read',
+    'actions: write',
+    'gh workflow run simcore-release-permanent.yml',
+    'gh run watch',
+    'RS2_4_RELEASE',
+    'SimCore permanent release activation:',
+  ]) expect(workflow.includes(token),`release adapter required token missing: ${token}`);
+  for(const token of [
+    'contents: write',
+    'release-publish.mjs',
+    'repo-main-write.py',
+    'git push',
+    '--force',
+    'force-with-lease',
+    '+refs/heads/release-simcore',
+  ]) expect(!workflow.includes(token),`release adapter forbidden token: ${token}`);
+  expect(!/uses:\s+actions\/checkout@(?![0-9a-f]{40}\b)/.test(workflow),'release adapter checkout action is not pinned');
+});
+
 ok('permanent-required-authority-set-bounded', () => {
   const check=fs.readFileSync('products/simcore/tooling/check.mjs','utf8');
   expect(check.includes("new Set(['RS2_4_SHADOW', 'RS2_4_RELEASE'])"),'CANDIDATE_REQUIRED authority set is not exact');
@@ -200,7 +232,7 @@ ok('release-declaration-transition-deterministic-tests', () => {
 ok('legacy-map-complete', () => {
   const map = JSON.parse(fs.readFileSync('products/simcore/ci/legacy-gate-map.json','utf8'));
   const mapped = new Set(map.workflows.map((row) => row.legacyWorkflow));
-  const permanent = new Set(['simcore-ci.yml','simcore-release.yml','simcore-release-permanent.yml','simcore-release-required.yml']);
+  const permanent = new Set(['simcore-ci.yml','simcore-release.yml','simcore-release-permanent.yml','simcore-release-required.yml','simcore-release-pr-activation.yml']);
   const files = fs.readdirSync('.github/workflows')
     .filter((name) => /^simcore-.*\.yml$/.test(name))
     .filter((name) => !permanent.has(name))

@@ -32,7 +32,7 @@ Verified 5.64 foreground evidence:
 - All three foreground source operations followed direct `llmgateway` ENOENT into the existing `npx` fallback, so routine npx-launcher use on the device is VERIFIED.
 - The portion of each 7–8.6s interval attributable to npm metadata freshness checks remains UNKNOWN. Launcher attribution alone does not prove that npx is the dominant latency source.
 
-Current release implementation: `3.0.0-alpha.5.70 — Request Duration Fidelity`.
+Current release implementation: `3.0.0-alpha.5.71 — Cross-Scope Request Provenance`.
 
 5.66 release contract:
 

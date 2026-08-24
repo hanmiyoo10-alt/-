@@ -24,7 +24,7 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.67 — Diagnostics Workspace Overhaul`.
+Last verified real-device baseline: `3.0.0-alpha.5.73 — Runtime Weight & Lifecycle Audit`.
 
 Verified 5.64 foreground evidence:
 

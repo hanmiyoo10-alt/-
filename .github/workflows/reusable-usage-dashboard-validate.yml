@@ -58,7 +58,7 @@ jobs:
               if '\n' in value or '\r' in value: raise SystemExit(f'invalid newline in {key}')
               print(f'{key}={value}')
           PY
-          python3 -m py_compile plugins/usage-dashboard/tools/check_release_monotonic.py plugins/usage-dashboard/tools/validate_release_candidate.py "$UD_MATERIALIZER"
+          python3 -m py_compile plugins/usage-dashboard/tools/check_release_monotonic.py plugins/usage-dashboard/tools/validate_release_candidate.py plugins/usage-dashboard/tools/reconcile_release_candidate.py "$UD_MATERIALIZER"
           assert_test_tree_clean() {
             local status; status="$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)"
             if [[ -n "$status" ]]; then printf '%s\n' "$status"; echo 'TEST_TREE_MUTATED'; return 1; fi
@@ -68,10 +68,7 @@ jobs:
             if [[ -n "$status" ]]; then printf '%s\n' "$status"; echo 'CANDIDATE_NOT_MATERIALIZED'; return 1; fi
           }
           python3 "$UD_MATERIALIZER"
-          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --write
-          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --write
-          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          python3 plugins/usage-dashboard/tools/reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass
           assert_candidate_materialized
           assert_test_tree_clean
           node --check plugins/usage-dashboard/latest.js

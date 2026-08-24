@@ -4,7 +4,9 @@ import { deriveReceipt, deriveSpecShadow, validateReleaseIdentity } from '../../
 
 function expectCode(fn,code){let got=null;try{fn();}catch(e){got=e?.code||null;}equal(got,code,`expected ${code}`);}
 function baseRequest(releaseId,releaseMode,version='0.64.8'){
-  return {schemaVersion:1,intentId:`simcore-v${version}-intent-01`,releaseId,product:'SimCore',targetVersion:version,releaseName:'Fixture Release',releaseMode,expectedProductionCommit:'a'.repeat(40),builderPath:'products/simcore/tooling/build-fixture.py',verificationSuite:'batch-a',allowedRuntimePaths:['plugins/simcore/latest.js','plugins/simcore/install.js'],changeClass:'RUNTIME_FEATURE',primaryGoalId:'R2_1_C_FIXTURE',liveGate:{required:true,scenarioId:'R2_1_C_FIXTURE_REAL_LONG_CHAT',closeAuthority:'HUMAN_EVIDENCE'},evidenceRefs:['docs/fixture.md']};
+  const request={schemaVersion:1,intentId:`simcore-v${version}-intent-01`,releaseId,product:'SimCore',targetVersion:version,releaseName:'Fixture Release',releaseMode,expectedProductionCommit:'a'.repeat(40),builderPath:'products/simcore/tooling/build-fixture.py',verificationSuite:'batch-a',allowedRuntimePaths:['plugins/simcore/latest.js','plugins/simcore/install.js'],changeClass:releaseMode==='ROLLBACK'?'ROLLBACK':'RUNTIME_FEATURE',primaryGoalId:'R2_1_C_FIXTURE',liveGate:{required:true,scenarioId:'R2_1_C_FIXTURE_REAL_LONG_CHAT',closeAuthority:'HUMAN_EVIDENCE'},evidenceRefs:['docs/fixture.md']};
+  if(releaseMode==='ROLLBACK')request.rollback={approvedSafeCommit:'2'.repeat(40),approvedSafeBlob:'3'.repeat(40),reasonCode:'FIXTURE_ROLLBACK'};
+  return request;
 }
 function report(req){return {schemaVersion:1,product:'SimCore',intentId:req.intentId,targetVersion:req.targetVersion,releaseName:req.releaseName,releaseMode:req.releaseMode,expectedProductionCommit:'a'.repeat(40),sourceCommit:'b'.repeat(40),candidateCommit:'c'.repeat(40),candidateReleaseBlob:'d'.repeat(40),candidateFetchRef:`candidate/simcore/${req.intentId}`,candidateDisposition:'CREATED',builderPath:req.builderPath,builderSha256:'e'.repeat(64),verificationSuite:'batch-a',changedPaths:req.allowedRuntimePaths,productionMutation:'NONE',releaseAuthority:'CANDIDATE_TRANSPORT_ONLY',result:'PASS'};}
 
@@ -21,8 +23,20 @@ export async function runSuite({fixtures}){
     equal(receipt.productionMutation,'NONE','receipt production mutation');
     equal(shadow.authority,'SHADOW_ONLY','spec shadow authority');
     equal(shadow.derivedSpec.candidateCommit,'c'.repeat(40),'shadow candidate');
+    if(mode==='ROLLBACK'){
+      equal(shadow.derivedSpec.rollback.approvedSafeCommit,'2'.repeat(40),'rollback safe commit');
+      equal(shadow.derivedSpec.rollback.approvedSafeBlob,'3'.repeat(40),'rollback safe blob');
+      equal(shadow.derivedSpec.rollback.reasonCode,'FIXTURE_ROLLBACK','rollback reason');
+    } else {
+      assert(!Object.prototype.hasOwnProperty.call(shadow.derivedSpec,'rollback'),'non-rollback spec gained rollback block');
+    }
     pass(`C-${mode}-derivation`);
   }
+  const missingRollback=baseRequest(ids.ROLLBACK,'ROLLBACK',ids.ROLLBACK.match(/^simcore-v(\d+\.\d+\.\d+)/)[1]);
+  delete missingRollback.rollback;
+  const missingReceipt=deriveReceipt(missingRollback,report(missingRollback),'f'.repeat(40),'1'.repeat(64));
+  expectCode(()=>deriveSpecShadow(missingRollback,missingReceipt),'SPEC_SHADOW_ROLLBACK_REQUIRED');
+  pass('C-rollback-metadata-required');
   const bad=baseRequest('simcore-v0.64.8-rollback-01','NEW_VERSION');
   expectCode(()=>validateReleaseIdentity(bad),'CANDIDATE_RELEASE_ID_MODE_MISMATCH');
   pass('C-release-id-mode-mismatch-block');

@@ -20,16 +20,45 @@ ok('ci-self-classification', () => {
   expect(r.labels.includes('CI_SELF'), JSON.stringify(r));
 });
 ok('release-system-classification', () => {
-  for (const p of ['.github/workflows/simcore-release.yml','products/simcore/tooling/release-shadow.mjs','products/simcore/tooling/release-authority.mjs','products/simcore/tooling/release-publish.mjs','products/simcore/tests/release-controller-qualification.test.mjs','products/simcore/releases/release-schema-v1.json']) {
+  for (const p of [
+    '.github/workflows/simcore-release.yml',
+    '.github/workflows/simcore-release-permanent.yml',
+    '.github/workflows/simcore-release-required.yml',
+    'products/simcore/tooling/release-shadow.mjs',
+    'products/simcore/tooling/release-authority.mjs',
+    'products/simcore/tooling/release-publish.mjs',
+    'products/simcore/tooling/post-publish-state.mjs',
+    'products/simcore/tests/release-controller-qualification.test.mjs',
+    'products/simcore/tests/post-publish-state-permanent.test.mjs',
+    'products/simcore/tests/release-declaration-transition.test.mjs',
+    'products/simcore/releases/release-schema-v1.json',
+  ]) {
     const r=classifyPaths([p]);
     expect(r.labels.includes('CI_SELF') && r.labels.includes('HARNESS') && !r.labels.includes('LEGACY_VERIFICATION'), `${p}: ${JSON.stringify(r)}`);
   }
 });
 ok('state-sync-classification', () => {
-  for (const p of ['products/simcore/tooling/sync-state.mjs','products/simcore/tooling/declare-production.mjs','products/simcore/tooling/post-publish-state-shadow.mjs','products/simcore/tests/post-publish-state-shadow.test.mjs','products/simcore/tooling/admin-state-transition.mjs','products/simcore/tests/admin-state-transition.test.mjs','.github/workflows/simcore-release-state-sync.yml']) {
+  for (const p of [
+    'products/simcore/tooling/sync-state.mjs',
+    'products/simcore/tooling/declare-production.mjs',
+    'products/simcore/tooling/post-publish-state-shadow.mjs',
+    'products/simcore/tooling/post-publish-state.mjs',
+    'products/simcore/tests/post-publish-state-shadow.test.mjs',
+    'products/simcore/tests/post-publish-state-permanent.test.mjs',
+    'products/simcore/tests/release-declaration-transition.test.mjs',
+    'products/simcore/tooling/admin-state-transition.mjs',
+    'products/simcore/tests/admin-state-transition.test.mjs',
+    '.github/workflows/simcore-release-state-sync.yml',
+    '.github/workflows/simcore-release-permanent.yml',
+  ]) {
     const r = classifyPaths([p]);
     expect(r.labels.includes('STATE_SYNC'), `${p}: ${JSON.stringify(r)}`);
   }
+});
+ok('permanent-release-coordination-classification', () => {
+  const r = classifyPaths(['.github/workflows/simcore-release-permanent.yml']);
+  for (const id of ['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION']) expect(r.labels.includes(id), JSON.stringify(r));
+  expect(!r.labels.includes('LEGACY_VERIFICATION'), JSON.stringify(r));
 });
 ok('post-publish-shadow-coordination-classification', () => {
   const r = classifyPaths(['products/simcore/tests/post-publish-state-shadow.test.mjs']);
@@ -87,6 +116,51 @@ ok('release-shadow-read-only-boundary', () => {
   expect(!/uses:\s+actions\/(?:checkout|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'release external action is not pinned');
 });
 
+ok('permanent-required-read-only-boundary', () => {
+  const workflow=fs.readFileSync('.github/workflows/simcore-release-required.yml','utf8');
+  for(const token of ['contents: write','git push','--force','force-with-lease','pull_request_target:']) expect(!workflow.includes(token),`permanent Required forbidden token: ${token}`);
+  expect(workflow.includes('permissions:\n  contents: read'),'permanent Required contents:read missing');
+  expect(workflow.includes('--profile CANDIDATE_REQUIRED'),'permanent Required profile missing');
+  expect(workflow.includes('--candidate-required-authority RS2_4_RELEASE'),'permanent release authority marker missing');
+  expect(workflow.includes('name: Required'),'permanent Required stable terminal job missing');
+  expect(!/uses:\s+actions\/(?:checkout|setup-node|setup-python|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'permanent Required external action is not pinned');
+});
+
+ok('permanent-release-controller-boundary', () => {
+  const workflow=fs.readFileSync('.github/workflows/simcore-release-permanent.yml','utf8');
+  const writes=[...workflow.matchAll(/contents:\s+write/g)];
+  expect(writes.length===2,`permanent caller write scope count=${writes.length}`);
+  expect(workflow.includes('permissions:\n  contents: read\n  actions: read'),'permanent caller top-level read-only permission missing');
+  for(const token of [
+    'authority_confirmation',
+    'RS2_4_RELEASE',
+    'uses: ./.github/workflows/simcore-release-required.yml',
+    'release-publish.mjs',
+    '--mode publish',
+    'post-publish-state.mjs',
+    'repo-main-write.py',
+    '--required-profile MAIN_HEALTH',
+    '--required-job Required',
+    'PENDING_REAL_LONG_CHAT',
+    'group: simcore-main-state-sync',
+    'GH_TOKEN: ${{ github.token }}',
+  ]) expect(workflow.includes(token),`permanent caller required token missing: ${token}`);
+  for(const token of ['--force','force-with-lease','git push --force','+refs/heads/release-simcore']) expect(!workflow.includes(token),`permanent caller forbidden token: ${token}`);
+  expect(!/uses:\s+actions\/(?:checkout|download-artifact|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'permanent caller external action is not pinned');
+});
+
+ok('permanent-required-authority-set-bounded', () => {
+  const check=fs.readFileSync('products/simcore/tooling/check.mjs','utf8');
+  expect(check.includes("new Set(['RS2_4_SHADOW', 'RS2_4_RELEASE'])"),'CANDIDATE_REQUIRED authority set is not exact');
+  expect(check.includes('CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4'),'reserved authority failure code missing');
+});
+
+ok('release-declaration-validation-reset-static', () => {
+  const script=fs.readFileSync('scripts/simcore-sync-memory.py','utf8');
+  expect(script.includes("production_identity_changed = previous_release_commit != release_commit"),'production identity transition detector missing');
+  expect(script.includes("manifest['validation_status'] = 'PENDING_REAL_LONG_CHAT'"),'new production validation reset missing');
+});
+
 ok('release-shadow-deterministic-tests', () => {
   const r=spawnSync(process.execPath,['products/simcore/tests/release-shadow.test.mjs'],{encoding:'utf8',timeout:120000,maxBuffer:1024*1024});
   expect(r.status===0,`release shadow tests failed: ${r.stderr || r.stdout}`);
@@ -111,16 +185,29 @@ ok('post-publish-state-shadow-deterministic-tests', () => {
   expect(String(r.stdout).includes('RS2_4D_POST_PUBLISH_STATE_SHADOW_TEST_PASS S1-S8'),'RS2-4D state shadow pass marker missing');
 });
 
+ok('post-publish-state-permanent-deterministic-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/post-publish-state-permanent.test.mjs'],{encoding:'utf8',timeout:180000,maxBuffer:1024*1024});
+  expect(r.status===0,`RS2-4E permanent state tests failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5'),'RS2-4E permanent state pass marker missing');
+});
+
+ok('release-declaration-transition-deterministic-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/release-declaration-transition.test.mjs'],{encoding:'utf8',timeout:60000,maxBuffer:1024*1024});
+  expect(r.status===0,`RS2-4E release declaration transition failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4E_RELEASE_DECLARATION_TRANSITION_TEST_PASS NEW SAME ROLLBACK'),'release declaration transition pass marker missing');
+});
+
 ok('legacy-map-complete', () => {
   const map = JSON.parse(fs.readFileSync('products/simcore/ci/legacy-gate-map.json','utf8'));
   const mapped = new Set(map.workflows.map((row) => row.legacyWorkflow));
+  const permanent = new Set(['simcore-ci.yml','simcore-release.yml','simcore-release-permanent.yml','simcore-release-required.yml']);
   const files = fs.readdirSync('.github/workflows')
     .filter((name) => /^simcore-.*\.yml$/.test(name))
-    .filter((name) => !['simcore-ci.yml','simcore-release.yml'].includes(name))
+    .filter((name) => !permanent.has(name))
     .map((name) => `.github/workflows/${name}`);
   for (const file of files) expect(mapped.has(file), `LEGACY_GATE_UNCLASSIFIED: ${file}`);
   for (const row of map.workflows) expect(row.status !== 'UNMAPPED', `unmapped workflow: ${row.legacyWorkflow}`);
-  expect(map.status === 'SHADOW_VERIFIED', `legacy map status=${map.status}`);
+  expect(map.status === 'SHADOW_VERIFIED', `shadow status=${map.status}`);
   const pure = map.workflows.find((row) => row.class === 'CHECK_ONLY_PREDECESSOR');
   expect(pure?.status === 'SHADOW_VERIFIED' && pure?.retirementEligibility === 'YES', 'pure predecessor is not retirement-eligible');
   for (const row of map.workflows.filter((x) => x.class === 'MIXED_BUILD_VALIDATOR')) {

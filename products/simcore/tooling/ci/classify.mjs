@@ -13,9 +13,16 @@ export const LABELS = Object.freeze([
   'SHARED_MAIN_COORDINATION',
 ]);
 
+const permanentReleaseWorkflows = Object.freeze([
+  '.github/workflows/simcore-release-permanent.yml',
+  '.github/workflows/simcore-release-required.yml',
+]);
+
 const exact = Object.freeze({
   '.github/workflows/simcore-ci.yml': ['CI_SELF'],
   '.github/workflows/simcore-release.yml': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
+  '.github/workflows/simcore-release-permanent.yml': ['CI_SELF', 'HARNESS', 'STATE_SYNC', 'SHARED_MAIN_COORDINATION'],
+  '.github/workflows/simcore-release-required.yml': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/check.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/test.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/release-shadow.mjs': ['CI_SELF', 'HARNESS'],
@@ -23,10 +30,13 @@ const exact = Object.freeze({
   'products/simcore/tooling/release-publish.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/declare-production.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tooling/post-publish-state-shadow.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
+  'products/simcore/tooling/post-publish-state.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tooling/admin-state-transition.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tests/release-shadow.test.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/release-controller-qualification.test.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/post-publish-state-shadow.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC', 'SHARED_MAIN_COORDINATION'],
+  'products/simcore/tests/post-publish-state-permanent.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
+  'products/simcore/tests/release-declaration-transition.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/tests/admin-state-transition.test.mjs': ['CI_SELF', 'HARNESS', 'STATE_SYNC'],
   'products/simcore/releases/release-schema-v1.json': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/registry.mjs': ['CI_SELF', 'HARNESS'],
@@ -58,7 +68,13 @@ export function classifyPath(input) {
   if (/^products\/simcore\/tooling\/test-[^/]+\.mjs$/.test(p)) add(out, ['CI_SELF', 'HARNESS']);
   if (p.startsWith('products/simcore/state-sync/')) out.add('STATE_SYNC');
 
-  if (p.startsWith('.github/workflows/simcore-') && !['.github/workflows/simcore-ci.yml', '.github/workflows/simcore-release.yml', '.github/workflows/simcore-release-state-sync.yml'].includes(p)) out.add('LEGACY_VERIFICATION');
+  const permanentWorkflowSet = new Set(permanentReleaseWorkflows);
+  if (p.startsWith('.github/workflows/simcore-') && ![
+    '.github/workflows/simcore-ci.yml',
+    '.github/workflows/simcore-release.yml',
+    '.github/workflows/simcore-release-state-sync.yml',
+    ...permanentWorkflowSet,
+  ].includes(p)) out.add('LEGACY_VERIFICATION');
   if (/^scripts\/simcore-0.*(?:\.py|-test\.mjs)$/.test(p) || /^scripts\/simcore-m2-.*\.py$/.test(p)) out.add('LEGACY_VERIFICATION');
 
   if (p.startsWith('docs/SIMCORE_RELEASE_SYSTEM_V2_') || p.startsWith('docs/SIMCORE_')) {

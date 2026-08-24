@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { classifyPaths } from './classify.mjs';
 
 const checks = [];
@@ -18,6 +19,12 @@ ok('ci-self-classification', () => {
   const r = classifyPaths(['.github/workflows/simcore-ci.yml']);
   expect(r.labels.includes('CI_SELF'), JSON.stringify(r));
 });
+ok('release-system-classification', () => {
+  for (const p of ['.github/workflows/simcore-release.yml','products/simcore/tooling/release-shadow.mjs','products/simcore/releases/release-schema-v1.json']) {
+    const r=classifyPaths([p]);
+    expect(r.labels.includes('CI_SELF') && r.labels.includes('HARNESS') && !r.labels.includes('LEGACY_VERIFICATION'), JSON.stringify(r));
+  }
+});
 ok('state-sync-classification', () => {
   const r = classifyPaths(['products/simcore/tooling/sync-state.mjs']);
   expect(r.labels.includes('STATE_SYNC'), JSON.stringify(r));
@@ -33,19 +40,26 @@ ok('legacy-workflow-classification', () => {
 
 ok('workflow-read-only-trust-boundary', () => {
   const workflow = fs.readFileSync('.github/workflows/simcore-ci.yml', 'utf8');
-  const forbidden = [
-    'contents: write',
-    'pull_request_target:',
-    '${{ secrets.',
-    'repo-main-write.py',
-    'sync-state.mjs --write',
-    'git push',
-    'id-token: write',
-  ];
+  const forbidden = ['contents: write','pull_request_target:','${{ secrets.','repo-main-write.py','sync-state.mjs --write','git push','id-token: write'];
   for (const token of forbidden) expect(!workflow.includes(token), `forbidden workflow token: ${token}`);
   expect(workflow.includes('permissions:\n  contents: read'), 'contents: read permission missing');
   expect(workflow.includes('name: Required'), 'stable Required job missing');
   expect(!/uses:\s+[^\n]+@(?![0-9a-f]{40}\b)/.test(workflow), 'external action is not full-SHA pinned');
+});
+
+ok('release-shadow-read-only-boundary', () => {
+  const workflow=fs.readFileSync('.github/workflows/simcore-release.yml','utf8');
+  for(const token of ['contents: write','git push','--force','release-simcore:']) expect(!workflow.includes(token),`shadow release workflow forbidden token: ${token}`);
+  expect(workflow.includes('permissions:\n  contents: read'),'shadow release contents:read missing');
+  expect(workflow.includes('profile: CANDIDATE_REQUIRED'),'candidate required caller missing');
+  expect(workflow.includes("releaseAuthority']=='SHADOW_ONLY'"),'shadow authority assertion missing');
+  expect(!/uses:\s+actions\/(?:checkout|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'release external action is not pinned');
+});
+
+ok('release-shadow-deterministic-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/release-shadow.test.mjs'],{encoding:'utf8',timeout:120000,maxBuffer:1024*1024});
+  expect(r.status===0,`release shadow tests failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4_SHADOW_TESTS_PASS'),'release shadow pass marker missing');
 });
 
 ok('legacy-map-complete', () => {
@@ -53,7 +67,7 @@ ok('legacy-map-complete', () => {
   const mapped = new Set(map.workflows.map((row) => row.legacyWorkflow));
   const files = fs.readdirSync('.github/workflows')
     .filter((name) => /^simcore-.*\.yml$/.test(name))
-    .filter((name) => !['simcore-ci.yml'].includes(name))
+    .filter((name) => !['simcore-ci.yml','simcore-release.yml'].includes(name))
     .map((name) => `.github/workflows/${name}`);
   for (const file of files) expect(mapped.has(file), `LEGACY_GATE_UNCLASSIFIED: ${file}`);
   for (const row of map.workflows) expect(row.status !== 'UNMAPPED', `unmapped workflow: ${row.legacyWorkflow}`);

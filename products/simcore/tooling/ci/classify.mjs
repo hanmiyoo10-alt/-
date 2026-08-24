@@ -15,8 +15,12 @@ export const LABELS = Object.freeze([
 
 const exact = Object.freeze({
   '.github/workflows/simcore-ci.yml': ['CI_SELF'],
+  '.github/workflows/simcore-release.yml': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/check.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/tooling/test.mjs': ['CI_SELF', 'HARNESS'],
+  'products/simcore/tooling/release-shadow.mjs': ['CI_SELF', 'HARNESS'],
+  'products/simcore/tests/release-shadow.test.mjs': ['CI_SELF', 'HARNESS'],
+  'products/simcore/releases/release-schema-v1.json': ['CI_SELF', 'HARNESS'],
   'products/simcore/tests/registry.mjs': ['CI_SELF', 'HARNESS'],
   'products/simcore/contracts/frozen-surfaces-v1.json': ['CI_SELF', 'HARNESS', 'ARCH_CONTRACT'],
   'config/simcore-architecture-v2.json': ['ARCH_CONTRACT'],
@@ -41,11 +45,12 @@ export function classifyPath(input) {
 
   if (p === '.github/workflows/simcore-ci.yml' || p.startsWith('products/simcore/tooling/ci/') || p.startsWith('products/simcore/ci/')) out.add('CI_SELF');
   if (p.startsWith('products/simcore/tests/')) add(out, ['CI_SELF', 'HARNESS']);
+  if (p.startsWith('products/simcore/releases/')) add(out, ['CI_SELF', 'HARNESS']);
   if (p.startsWith('products/simcore/contracts/')) add(out, ['CI_SELF', 'HARNESS', 'ARCH_CONTRACT']);
   if (/^products\/simcore\/tooling\/test-[^/]+\.mjs$/.test(p)) add(out, ['CI_SELF', 'HARNESS']);
   if (p.startsWith('products/simcore/state-sync/')) out.add('STATE_SYNC');
 
-  if (p.startsWith('.github/workflows/simcore-') && !['.github/workflows/simcore-ci.yml', '.github/workflows/simcore-release-state-sync.yml'].includes(p)) out.add('LEGACY_VERIFICATION');
+  if (p.startsWith('.github/workflows/simcore-') && !['.github/workflows/simcore-ci.yml', '.github/workflows/simcore-release.yml', '.github/workflows/simcore-release-state-sync.yml'].includes(p)) out.add('LEGACY_VERIFICATION');
   if (/^scripts\/simcore-0.*(?:\.py|-test\.mjs)$/.test(p) || /^scripts\/simcore-m2-.*\.py$/.test(p)) out.add('LEGACY_VERIFICATION');
 
   if (p.startsWith('docs/SIMCORE_RELEASE_SYSTEM_V2_') || p.startsWith('docs/SIMCORE_')) {

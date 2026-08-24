@@ -118,6 +118,27 @@ The first builder path under `scripts/simcore-0*.py` would have entered the exis
 
 The product build workflow is classified explicitly as `CI_SELF + HARNESS`, not legacy release authority.
 
+### ACCIDENTAL_WORK_BRANCH_TEMP_FILE
+
+Classification:
+
+```text
+FIX / TOOLING / WORK_BRANCH_ONLY
+```
+
+A pull-request tool-surface attempt accidentally created empty `docs/.tmp-no` only on the v0.64.7 work branch in commit `b21565e22a1b949d0ff702312bf600fdcf459378`.
+
+It was immediately removed in commit `87a86e8112b9e7ec35cc16a63aedf94ec3e3ff67` before PR creation.
+
+Impact:
+
+```text
+main mutation: NONE
+runtime mutation: NONE
+release-simcore mutation: NONE
+residual file: NONE
+```
+
 ## 5. Promotion gates
 
 Before any real publication:

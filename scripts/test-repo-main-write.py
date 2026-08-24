@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import importlib.util
+import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 HELPER = Path(__file__).with_name("repo-main-write.py").resolve()
 
 
-def run(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check)
+def run(cwd: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    merged = os.environ.copy()
+    if env:
+        merged.update(env)
+    return subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check, env=merged)
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -43,12 +49,19 @@ def clone(remote: Path, dest: Path) -> Path:
     return dest
 
 
-def helper(repo: Path, payload: str, allow: list[str], *extra: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def helper(
+    repo: Path,
+    payload: str,
+    allow: list[str],
+    *extra: str,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, str(HELPER), "--commit", payload, "--attempts", "5"]
     for rule in allow:
         cmd += ["--allow", rule]
     cmd += list(extra)
-    return run(repo, *cmd, check=check)
+    return run(repo, *cmd, check=check, env=env)
 
 
 def remote_text(remote: Path, path: str) -> str:
@@ -152,6 +165,86 @@ def test_denied_path(root: Path) -> None:
     assert remote_text(remote, "denied.txt") == "denied-base\n"
 
 
+def load_helper_module():
+    spec = importlib.util.spec_from_file_location("repo_main_write", HELPER)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def gate_args(**overrides):
+    values = {
+        "required_workflow": "simcore-ci.yml",
+        "required_profile": "MAIN_HEALTH",
+        "required_job": "Required",
+        "github_repository": "owner/repo",
+        "gate_timeout_seconds": 30,
+        "gate_poll_seconds": 0.2,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def cp(code: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(["gh"], code, stdout=stdout, stderr=stderr)
+
+
+def test_gate_exact_candidate_and_required_job() -> None:
+    mod = load_helper_module()
+    args = gate_args()
+    sequence = [
+        cp(0),
+        cp(0, json.dumps([{"databaseId": 11, "headSha": "a" * 40, "status": "in_progress", "conclusion": ""}])),
+        cp(0, json.dumps({"status": "completed", "conclusion": "success", "jobs": [{"name": "Required", "conclusion": "success"}]})),
+    ]
+    with patch.object(mod, "gh", side_effect=sequence):
+        assert mod.wait_for_gate(args, "stage/ref", "a" * 40) is True
+
+
+def test_gate_wrong_candidate_not_accepted() -> None:
+    mod = load_helper_module()
+    args = gate_args()
+    with patch.object(mod, "gh", return_value=cp(0, json.dumps([{"databaseId": 11, "headSha": "b" * 40, "status": "completed", "conclusion": "success"}]))), \
+         patch.object(mod.time, "sleep", side_effect=lambda _: None), \
+         patch.object(mod.time, "monotonic", side_effect=[0, 2]):
+        got = mod.find_gate_run(args, "stage/ref", "a" * 40, 1)
+        assert got is None
+
+
+def test_gate_missing_required_job_fails() -> None:
+    mod = load_helper_module()
+    args = gate_args()
+    sequence = [
+        cp(0),
+        cp(0, json.dumps([{"databaseId": 12, "headSha": "a" * 40, "status": "completed", "conclusion": "success"}])),
+        cp(0, json.dumps({"status": "completed", "conclusion": "success", "jobs": [{"name": "Verify", "conclusion": "success"}]})),
+    ]
+    with patch.object(mod, "gh", side_effect=sequence):
+        assert mod.wait_for_gate(args, "stage/ref", "a" * 40) is False
+
+
+def test_gate_failed_required_job_fails() -> None:
+    mod = load_helper_module()
+    args = gate_args()
+    sequence = [
+        cp(0),
+        cp(0, json.dumps([{"databaseId": 13, "headSha": "a" * 40, "status": "completed", "conclusion": "failure"}])),
+        cp(0, json.dumps({"status": "completed", "conclusion": "failure", "jobs": [{"name": "Required", "conclusion": "failure"}]})),
+    ]
+    with patch.object(mod, "gh", side_effect=sequence):
+        assert mod.wait_for_gate(args, "stage/ref", "a" * 40) is False
+
+
+def test_staging_ref_safety() -> None:
+    mod = load_helper_module()
+    assert mod.safe_ref_prefix("repo-main-write-gate")
+    assert mod.safe_ref_prefix("repo/main-write.gate")
+    assert not mod.safe_ref_prefix("../bad")
+    assert not mod.safe_ref_prefix("bad@{ref")
+    assert not mod.safe_ref_prefix("bad ref")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="repo-main-write-test-") as td:
         root = Path(td)
@@ -160,6 +253,11 @@ def main() -> int:
         test_actual_push_race_retry(root)
         test_content_conflict(root)
         test_denied_path(root)
+    test_gate_exact_candidate_and_required_job()
+    test_gate_wrong_candidate_not_accepted()
+    test_gate_missing_required_job_fails()
+    test_gate_failed_required_job_fails()
+    test_staging_ref_safety()
     source = HELPER.read_text(encoding="utf-8")
     assert "--force" not in source
     assert "force-with-lease" not in source

@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -17,6 +18,17 @@ const {
   renderGuidelines,
 } = require('../bootstrap.cjs');
 const {latestRelevantRun} = require('../adapters.cjs');
+const {
+  buildAlertEnvelope,
+  envelopeMarker,
+  parseEnvelope,
+} = require('../notification.cjs');
+const {
+  verifyWebhookSignature,
+  deliveryFromIssueWebhook,
+  buildEmailHandoff,
+  buildDeliveryReceipt,
+} = require('../notification-bot/webhook.cjs');
 
 const root = path.resolve(__dirname, '../../../..');
 const policy = loadPolicy();
@@ -28,6 +40,11 @@ const registered = JSON.parse(fs.readFileSync(registeredPath, 'utf8'));
 assert.equal(policy.schemaVersion, 1);
 assert.equal(policy.operations.eventAdaptersComplete, true, 'Phase B activation requires proven adapter coverage');
 assert.equal(policy.adapters.observationEpoch, '2026-08-24T20:37:22Z');
+assert.equal(policy.notifications.outboxEnabled, true);
+assert.deepEqual(policy.notifications.severities, ['P0', 'P1']);
+assert.deepEqual(policy.notifications.channels, ['email']);
+assert.equal(policy.notifications.includeRecovery, true);
+assert.equal(policy.notifications.bridgeState, 'NOT_INSTALLED', 'repository must not claim the external bot is installed before direct proof');
 assert.deepEqual(validateDescriptor(example, policy), []);
 assert.deepEqual(repositoryBindingErrors(example, root), []);
 assert.deepEqual(validateDescriptor(registered, policy), []);
@@ -56,6 +73,7 @@ function event(overrides = {}) {
     observation: {from: 'PASS', to: 'FAIL', reasonCode: 'REQUIRED_CHECK_FAILED'},
     disposition: 'FEEDBACK_CANDIDATE',
     evidence: ['run:1', 'sha:abc'],
+    summary: 'Required check failed for exact main.',
     ...overrides,
   };
 }
@@ -88,6 +106,52 @@ const recovered = applyIncident(opened, event({
   disposition: 'RECOVERY_FEEDBACK_CANDIDATE',
 }));
 assert.equal(recovered.state, 'RECOVERED');
+
+const key = correlationKey(event());
+const firstOpenEnvelope = buildAlertEnvelope({event: event(), severity: 'P1', transition: 'OPEN', correlationKey: key, previousState: 'NONE'});
+assert.equal(firstOpenEnvelope.eligible, true, 'first P1 OPEN transition should enter the notification outbox');
+assert.deepEqual(firstOpenEnvelope.channels, ['email']);
+const repeatedOpenEnvelope = buildAlertEnvelope({event: event({eventId: 'event-repeat'}), severity: 'P1', transition: 'OPEN', correlationKey: key, previousState: 'OPEN'});
+assert.equal(repeatedOpenEnvelope.eligible, false, 'same incident remaining OPEN must not create another delivery candidate');
+const recoveryEnvelope = buildAlertEnvelope({
+  event: event({eventId: 'event-recovery', observation: {from: 'FAIL', to: 'PASS', reasonCode: 'REQUIRED_CHECK_FAILED'}, disposition: 'RECOVERY_FEEDBACK_CANDIDATE'}),
+  severity: 'P1',
+  transition: 'RECOVERED',
+  correlationKey: key,
+  previousState: 'OPEN',
+});
+assert.equal(recoveryEnvelope.eligible, true, 'OPEN to RECOVERED should notify');
+const p2Envelope = buildAlertEnvelope({event: event({eventId: 'event-p2'}), severity: 'P2', transition: 'OPEN', correlationKey: key, previousState: 'NONE'});
+assert.equal(p2Envelope.eligible, false, 'P2 is not an immediate email delivery candidate');
+assert.notEqual(firstOpenEnvelope.deliveryKey, recoveryEnvelope.deliveryKey);
+
+const marker = envelopeMarker(firstOpenEnvelope);
+assert.deepEqual(parseEnvelope(`body\n${marker}`), firstOpenEnvelope, 'alert envelope marker must round-trip deterministically');
+const issueWebhook = {
+  number: 999,
+  title: '[repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo',
+  state: 'open',
+  html_url: 'https://github.com/hanmiyoo10-alt/-/issues/999',
+  body: `incident\n${marker}`,
+};
+const delivery = deliveryFromIssueWebhook({eventName: 'issues', action: 'opened', issue: issueWebhook});
+assert(delivery);
+assert.equal(delivery.deliveryKey, firstOpenEnvelope.deliveryKey);
+assert.equal(delivery.channel, 'email');
+const handoff = buildEmailHandoff(delivery);
+assert.match(handoff.subject, /^\[P1\] canonical main OPEN:/);
+assert.match(handoff.text, /Required check failed for exact main\./);
+assert.doesNotMatch(JSON.stringify(handoff), /recipient|oauth|password|token/i, 'email handoff payload must not carry recipient or credential secrets');
+const receipt = buildDeliveryReceipt({delivery, providerMessageId: 'provider-123', deliveredAt: '2026-08-25T00:00:00Z'});
+assert.match(receipt, /canonical-main-delivery-receipt:email:/);
+assert.doesNotMatch(receipt, /@/, 'delivery receipt must not include recipient addresses');
+
+const webhookSecret = 'test-only-secret';
+const rawWebhook = Buffer.from(JSON.stringify({action: 'opened', issue: issueWebhook}));
+const webhookSignature = `sha256=${crypto.createHmac('sha256', webhookSecret).update(rawWebhook).digest('hex')}`;
+assert.equal(verifyWebhookSignature(rawWebhook, webhookSignature, webhookSecret), true);
+assert.equal(verifyWebhookSignature(rawWebhook, webhookSignature, 'wrong-secret'), false);
+assert.equal(deliveryFromIssueWebhook({eventName: 'issue_comment', action: 'created', issue: issueWebhook}), null, 'bot consumes only Issues webhook events');
 
 assert.equal(deriveOperatorState({freshnessValid: false}), 'UNKNOWN');
 assert.equal(deriveOperatorState({freshnessValid: true, incidents: [{state: 'OPEN', severity: 'P0'}]}), 'INCIDENT');
@@ -125,6 +189,19 @@ const directWriterFiles = fs.readdirSync(workflowDir)
   .sort();
 assert.deepEqual(directWriterFiles, policy.adapters.writerInventory.map((row) => row.workflow).sort(), 'every direct repo-main-write workflow must be classified');
 
+const appContractPath = path.join(__dirname, '../notification-bot/app-contract.json');
+const appContract = JSON.parse(fs.readFileSync(appContractPath, 'utf8'));
+assert.equal(appContract.installation.state, 'NOT_INSTALLED');
+assert.equal(appContract.permissions.metadata, 'read');
+assert.equal(appContract.permissions.issues, 'write');
+assert.deepEqual(appContract.webhookEvents, ['issues']);
+for (const permission of ['actions', 'contents', 'workflows', 'pull_requests']) {
+  assert(appContract.forbiddenPermissions.includes(permission), `${permission} must remain forbidden for the notification bot`);
+  assert.equal(appContract.permissions[permission], undefined);
+}
+assert.equal(appContract.channels.email.credentialSource, 'external-secret-config');
+assert.equal(appContract.channels.email.recipientSource, 'external-secret-config');
+
 const adapter = fs.readFileSync(path.join(__dirname, '../adapters.cjs'), 'utf8');
 assert.match(adapter, /observeRequiredCi/);
 assert.match(adapter, /observeProductionAuthority/);
@@ -138,6 +215,8 @@ assert.match(controller, /eventAdaptersComplete/);
 assert.match(controller, /observeAll/);
 assert.match(controller, /reconcileIncidentEvents/);
 assert.match(controller, /canonical-main-correlation/);
+assert.match(controller, /CANONICAL_MAIN_NOTIFICATION_OUTBOX/);
+assert.match(controller, /Notification outbox \/ external bridge/);
 assert.match(controller, /Current adapter observations valid/);
 assert.match(controller, /LEGACY\/UNREGISTERED_FOR_STANDARD/);
 assert.doesNotMatch(controller, /git\s+push/);

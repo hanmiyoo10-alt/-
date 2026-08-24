@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "name": "canonical-main-notification-bot",
+  "installation": {
+    "state": "NOT_INSTALLED",
+    "authority": "external-github-app"
+  },
+  "permissions": {
+    "metadata": "read",
+    "issues": "write"
+  },
+  "webhookEvents": ["issues"],
+  "forbiddenPermissions": [
+    "actions",
+    "checks",
+    "contents",
+    "deployments",
+    "pull_requests",
+    "statuses",
+    "workflows"
+  ],
+  "channels": {
+    "email": {
+      "state": "HANDOFF_READY",
+      "recipientSource": "external-secret-config",
+      "credentialSource": "external-secret-config"
+    }
+  },
+  "receipt": {
+    "target": "incident-issue-comment",
+    "containsSecrets": false
+  }
+}

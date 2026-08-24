@@ -1,0 +1,15 @@
+{
+  "name": "Nyangnyang Main Ops Bot",
+  "url": "<BOT_HOME_URL>",
+  "hook_attributes": {
+    "url": "<GITHUB_WEBHOOK_URL>",
+    "active": true
+  },
+  "description": "Delivery-only bridge for canonical-main P0/P1 incident and recovery notifications.",
+  "public": false,
+  "default_permissions": {
+    "issues": "write"
+  },
+  "default_events": ["issues"],
+  "request_oauth_on_install": false
+}

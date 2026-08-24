@@ -24,9 +24,11 @@ function expectCode(fn, code) {
   if (seen !== code) throw new Error(`expected ${code}, got ${seen || 'NO_ERROR'}`);
 }
 
+const originalCwd = process.cwd();
 const cwd = fs.mkdtempSync(path.join(os.tmpdir(),'simcore-rs24-'));
 try {
   git(cwd,'init'); git(cwd,'config','user.email','test@example.invalid'); git(cwd,'config','user.name','RS2-4 Test');
+  process.chdir(cwd);
   writePlugin(cwd,'0.64.6','Production');
   const P = commitAll(cwd,'production');
 
@@ -50,7 +52,7 @@ try {
   const mismatch = specFor(cwd,{candidate:CMIS,parent:P,blob:LMIS});
   expectCode(() => evaluateShadow({spec:mismatch.spec,specPath:mismatch.specPath,currentProductionCommit:P}), 'CANDIDATE_LATEST_INSTALL_MISMATCH');
 
-  git(cwd,'checkout','-B','intermediate',P); fs.writeFileSync(path.join(cwd,'note'),'n\n'); const I = commitAll(cwd,'intermediate'); writePlugin(cwd,'0.65.0','Shadow New'); const CNON = commitAll(cwd,'non-child'); const LNON = git(cwd,'rev-parse',`${CNON}:plugins/simcore/latest.js`);
+  git(cwd,'checkout','-B','intermediate',P); fs.writeFileSync(path.join(cwd,'note'),'n\n'); commitAll(cwd,'intermediate'); writePlugin(cwd,'0.65.0','Shadow New'); const CNON = commitAll(cwd,'non-child'); const LNON = git(cwd,'rev-parse',`${CNON}:plugins/simcore/latest.js`);
   const nonChild = specFor(cwd,{candidate:CNON,parent:P,blob:LNON});
   expectCode(() => evaluateShadow({spec:nonChild.spec,specPath:nonChild.specPath,currentProductionCommit:P}), 'CANDIDATE_PARENT_INVALID');
 
@@ -60,4 +62,7 @@ try {
   if(result.publicationDisposition!=='WOULD_NOOP') throw new Error('noop disposition');
 
   console.log('RS2_4_SHADOW_TESTS_PASS');
-} finally { fs.rmSync(cwd,{recursive:true,force:true}); }
+} finally {
+  process.chdir(originalCwd);
+  fs.rmSync(cwd,{recursive:true,force:true});
+}

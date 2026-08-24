@@ -120,8 +120,17 @@ async function observeProductionAuthority(api) {
   return {known: true, matching: match, summary: `${match ? 'MATCH' : 'MISMATCH'} — ${branch} ${actual}`, events: [event]};
 }
 
-function latestRelevantRun(runs, allowedEvents) {
-  return runs.find((run) => allowedEvents.includes(run.event) && run.conclusion !== 'skipped');
+function runAtOrAfterEpoch(run, observationEpoch) {
+  if (!observationEpoch) return true;
+  const epoch = Date.parse(observationEpoch);
+  const observed = Date.parse(run.created_at || run.run_started_at || '');
+  return Number.isFinite(epoch) && Number.isFinite(observed) && observed >= epoch;
+}
+
+function latestRelevantRun(runs, allowedEvents, observationEpoch = null) {
+  return runs.find((run) => allowedEvents.includes(run.event)
+    && run.conclusion !== 'skipped'
+    && runAtOrAfterEpoch(run, observationEpoch));
 }
 
 async function scanFailedRun(api, fetchText, run) {
@@ -154,8 +163,9 @@ function memoryEvent(config, run, reasonCode, recovered) {
 
 async function observeWriterWorkflow(api, fetchText, config) {
   const runs = await workflowRuns(api, config.workflow, 50);
-  const run = latestRelevantRun(runs, config.events);
-  if (!run) return {id: config.id, known: true, passing: true, summary: 'IDLE — no relevant workflow run observed', events: []};
+  const epoch = policy.adapters.observationEpoch || null;
+  const run = latestRelevantRun(runs, config.events, epoch);
+  if (!run) return {id: config.id, known: true, passing: true, summary: `IDLE — no relevant workflow run since ${epoch || 'adapter start'}`, events: []};
   if (run.status !== 'completed') return {id: config.id, known: false, summary: `PENDING — run ${run.id}`, events: []};
   if (run.conclusion === 'success') {
     const recoverable = ['MEMORY_SYNC_FAILED', 'MAIN_WRITE_CONTENT_CONFLICT', 'MAIN_WRITE_RETRY_EXHAUSTED', 'MEMORY_SYNC_PATH_ESCAPE'];
@@ -258,6 +268,7 @@ async function observeAll({api, fetchText, mainSha, root = process.cwd()}) {
 module.exports = {
   stableEventId,
   requiredCiEvent,
+  runAtOrAfterEpoch,
   latestRelevantRun,
   scanFailedRun,
   memoryEvent,

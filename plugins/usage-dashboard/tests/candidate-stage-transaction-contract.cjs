@@ -11,7 +11,7 @@ const smoke = fs.readFileSync('plugins/usage-dashboard/tools/run_behavior_smoke.
 
 const candidateBranch = 'release/usage-dashboard-5.72-fixture';
 assert.deepEqual(control.parseStageCommand(`/usage-dashboard stage ${candidateBranch}`), {candidateBranch});
-assert.match(parser, /const STAGE_RE = \^?\/\^\\\/usage-dashboard stage/);
+assert.ok(parser.includes("const STAGE_RE = /^\\/usage-dashboard stage "), 'strict stage grammar authority must remain present');
 assert.match(workflow, /startsWith\(github\.event\.comment\.body, '\/usage-dashboard stage '\)/);
 assert.match(workflow, /release_control_command\.cjs --stage-branch/);
 assert.match(workflow, /CANDIDATE_STAGE_CONTROL_COMMENT/);
@@ -61,7 +61,7 @@ assert.match(ready, /CANDIDATE_READY_BRANCH_MOVED/);
 assert.match(ready, /CANDIDATE_READY:\$CANDIDATE_SHA:\$PRODUCT_VERSION:\$RELEASE_SPEC/);
 assert.doesNotMatch(ready, /contents: write|git push origin/);
 
-assert.match(smoke, /discoverTests\(\)\.behavior|const suite = discoverTests\(\)/);
+assert.match(smoke, /const suite = discoverTests\(\)/);
 assert.match(smoke, /value < 1 \|\| value > 3/);
 assert.match(smoke, /BEHAVIOR_SMOKE_FAILED/);
 assert.match(smoke, /BEHAVIOR_SMOKE_GREEN/);

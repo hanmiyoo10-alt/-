@@ -1,7 +1,7 @@
 # SimCore Release System v2 — RS2-4E Controller Qualification Evidence
 
 Date: 2026-08-24
-Status: **IMPLEMENTED · VALIDATION IN PROGRESS · NON-RUNTIME**
+Status: **CONTROLLER PRIMITIVE CI VERIFIED · NON-RUNTIME**
 Scope: permanent release authority binding, sandbox publish qualification, rollback rehearsal foundation
 Parent design: `docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_PROMOTION_REAL_RELEASE_ROLLBACK_RETIREMENT.md`
 Activation amendment: `docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ACTIVATION_AMENDMENT.md`
@@ -223,15 +223,50 @@ cdd74346894547c7c69bcb2a1178c3f1955c35e5
 
 Both failed CI runs are preserved as qualification learning evidence.
 
-## 7. Remaining RS2-4E work after this implementation passes
+## 7. Controller primitive CI verification
+
+Validated branch head before evidence-close update:
 
 ```text
-record final permanent CI PASS
+f8e03486bc9fb90f21e070c8854af282a4513dc1
+```
+
+Permanent SimCore CI:
+
+```text
+run      32730877768
+Verify   97442651173 = SUCCESS
+Required 97442762842 = SUCCESS
+```
+
+The proposed verifier executed the permanent RS2-4E controller qualification harness and the stable Required aggregate accepted the result.
+
+Verdict:
+
+```text
+exact C/P authority binding                  PASS
+missing/failed/wrong-C Required negatives    PASS
+parent movement negative                     PASS
+authority/verifier identity negatives        PASS
+P2 NEW_VERSION sandbox publish               PASS
+P3 SAME_VERSION_CORRECTION sandbox publish   PASS
+R1 forward-history rollback sandbox publish  PASS
+N1-N9 qualification matrix                   PASS
+N10 permanent owner RS2-4D S8                PRESERVED
+release-simcore mutation                     NONE
+runtime mutation                             NONE
+```
+
+The controller primitive is therefore CI-verified. This does **not** yet authorize production publication; repository-bound P1, rollback source qualification, admin-state repair, and production caller activation remain separate R work.
+
+## 8. Remaining RS2-4E work
+
+```text
 repository-bound P1/current-production NOOP qualification
 repository-bound rollback source plan qualification
 repair current main administrative production drift
 activate RS2_4_RELEASE caller authority in permanent controller
-run final positive/negative/rollback qualification
+run final repository-bound qualification
 mark REAL_RELEASE_READY
 ```
 

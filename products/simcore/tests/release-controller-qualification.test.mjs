@@ -15,6 +15,7 @@ function commit(root,msg,...paths){ git(root,'add','--',...paths); git(root,'com
 function all(root,msg){ git(root,'add','.'); git(root,'commit','-m',msg); return git(root,'rev-parse','HEAD'); }
 function blob(root,commit){ return git(root,'rev-parse',`${commit}:plugins/simcore/latest.js`); }
 function expectCode(fn,code){ let got=''; try{fn();}catch(e){got=e.code||'';} if(got!==code) throw new Error(`expected ${code}, got ${got||'NO_ERROR'}`); }
+function within(root,fn){ const prev=process.cwd(); process.chdir(root); try{return fn();} finally{process.chdir(prev);} }
 const VERIFIER='f'.repeat(40);
 
 function report(spec, overrides={}) {
@@ -44,46 +45,45 @@ function positiveNew(base){
   const {root}=initRepo(base,'p2-new'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'production'); pushProduction(root,P);
   writePlugin(root,'0.64.7','Reload Cache Continuity','new'); const C=commit(root,'candidate','plugins/simcore/latest.js','plugins/simcore/install.js');
   const spec=makeSpec({id:'simcore-v0.64.7-new-01',version:'0.64.7',name:'Reload Cache Continuity',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)});
-  const {rel,A,rp}=authorizeSpec(root,spec); const dry=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'dry-run'}); if(dry.publicationDisposition!=='WOULD_PUBLISH')throw new Error('P2 dry');
-  const pub=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'publish'}); if(pub.after!==C||pub.productionMutation!=='FAST_FORWARD')throw new Error('P2 publish');
-  return {root,P,C,spec,rel,A,rp};
+  const {rel,A,rp}=authorizeSpec(root,spec); return within(root,()=>{ const dry=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'dry-run'}); if(dry.publicationDisposition!=='WOULD_PUBLISH')throw new Error('P2 dry');
+  const pub=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'publish'}); if(pub.after!==C||pub.productionMutation!=='FAST_FORWARD')throw new Error('P2 publish'); return {root,P,C,spec,rel,A,rp}; });
 }
 function positiveCorrection(base){
   const {root}=initRepo(base,'p3-correction'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'production'); pushProduction(root,P);
   writePlugin(root,'0.64.6','Production','correction'); const C=commit(root,'candidate','plugins/simcore/latest.js','plugins/simcore/install.js');
   const spec=makeSpec({id:'simcore-v0.64.6-correction-01',version:'0.64.6',name:'Production',mode:'SAME_VERSION_CORRECTION',candidate:C,parent:P,releaseBlob:blob(root,C)});
-  const {rel,A,rp}=authorizeSpec(root,spec); const pub=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'publish'}); if(pub.after!==C)throw new Error('P3 publish');
+  const {rel,A,rp}=authorizeSpec(root,spec); within(root,()=>{ const pub=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'publish'}); if(pub.after!==C)throw new Error('P3 publish'); });
 }
 function positiveRollback(base){
   const {root}=initRepo(base,'r1-rollback'); writePlugin(root,'0.64.5','Safe','safe'); const S=all(root,'safe');
   writePlugin(root,'0.64.6','Bad','bad'); const P=commit(root,'bad production','plugins/simcore/latest.js','plugins/simcore/install.js'); pushProduction(root,P);
   writePlugin(root,'0.64.5','Safe','safe'); const C=commit(root,'rollback candidate','plugins/simcore/latest.js','plugins/simcore/install.js'); const safeBlob=blob(root,S);
   const spec=makeSpec({id:'simcore-v0.64.5-rollback-01',version:'0.64.5',name:'Safe',mode:'ROLLBACK',candidate:C,parent:P,releaseBlob:blob(root,C),rollback:{approvedSafeCommit:S,approvedSafeBlob:safeBlob,reasonCode:'SANDBOX_REHEARSAL'}});
-  const {rel,A,rp}=authorizeSpec(root,spec); const pub=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'publish'}); if(pub.after!==C||blob(root,C)!==safeBlob)throw new Error('R1 publish');
+  const {rel,A,rp}=authorizeSpec(root,spec); within(root,()=>{ const pub=runPublish({specPath:rel,ciReportPath:rp,authorizationCommit:A,expectedVerifierCommit:VERIFIER,remote:'origin',mode:'publish'}); if(pub.after!==C||blob(root,C)!==safeBlob)throw new Error('R1 publish'); });
 }
 function authorityNegatives(base){
   const {root}=initRepo(base,'authority-neg'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'production'); pushProduction(root,P); writePlugin(root,'0.64.7','Next','n'); const C=commit(root,'candidate','plugins/simcore/latest.js','plugins/simcore/install.js');
   const spec=makeSpec({id:'simcore-v0.64.7-new-02',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); const {rel,A}=authorizeSpec(root,spec); const good=report(spec);
-  const ok=authorizeRelease({spec,specPath:rel,ciReport:good,currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A}); if(ok.decision!=='AUTHORIZED_PUBLISH')throw new Error('E-A1');
+  within(root,()=>{ const ok=authorizeRelease({spec,specPath:rel,ciReport:good,currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A}); if(ok.decision!=='AUTHORIZED_PUBLISH')throw new Error('E-A1');
   expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:null,currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A}),'REQUIRED_REPORT_MISSING');
   expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:report(spec,{conclusion:'FAIL'}),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A}),'REQUIRED_REPORT_NOT_PASS');
   expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:report(spec,{candidateCommit:'1'.repeat(40)}),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A}),'REQUIRED_REPORT_CANDIDATE_MISMATCH');
   expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:good,currentProductionCommit:'2'.repeat(40),expectedVerifierCommit:VERIFIER,authorizationCommit:A}),'PRODUCTION_PARENT_MOVED');
   expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:report(spec,{candidateRequiredAuthority:'RS2_4_SHADOW'}),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A}),'REQUIRED_REPORT_AUTHORITY_MISMATCH');
-  expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:good,currentProductionCommit:P,expectedVerifierCommit:'3'.repeat(40),authorizationCommit:A}),'REQUIRED_REPORT_VERIFIER_MISMATCH');
+  expectCode(()=>authorizeRelease({spec,specPath:rel,ciReport:good,currentProductionCommit:P,expectedVerifierCommit:'3'.repeat(40),authorizationCommit:A}),'REQUIRED_REPORT_VERIFIER_MISMATCH'); });
 }
 function semanticNegatives(base){
-  { const {root}=initRepo(base,'n3-path'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); write(root,'extra.txt','x\n'); const C=all(root,'bad'); const spec=makeSpec({id:'simcore-v0.64.7-new-03',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'CANDIDATE_PATH_SCOPE_INVALID'); }
-  { const {root}=initRepo(base,'n4-mismatch'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); write(root,'plugins/simcore/install.js',plugin('0.64.7','Next','other')); const C=all(root,'bad'); const spec=makeSpec({id:'simcore-v0.64.7-new-04',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'CANDIDATE_LATEST_INSTALL_MISMATCH'); }
-  { const {root}=initRepo(base,'n8-same'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'p'); writePlugin(root,'0.64.6','Production','changed'); const C=all(root,'c'); const spec=makeSpec({id:'simcore-v0.64.6-new-05',version:'0.64.6',name:'Production',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'RELEASE_MODE_RELATION_INVALID'); }
-  { const {root}=initRepo(base,'n9-down'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'p'); writePlugin(root,'0.64.5','Old','x'); const C=all(root,'c'); const spec=makeSpec({id:'simcore-v0.64.5-new-06',version:'0.64.5',name:'Old',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'RELEASE_MODE_RELATION_INVALID'); }
+  { const {root}=initRepo(base,'n3-path'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); write(root,'extra.txt','x\n'); const C=all(root,'bad'); const spec=makeSpec({id:'simcore-v0.64.7-new-03',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); within(root,()=>expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'CANDIDATE_PATH_SCOPE_INVALID')); }
+  { const {root}=initRepo(base,'n4-mismatch'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); write(root,'plugins/simcore/install.js',plugin('0.64.7','Next','other')); const C=all(root,'bad'); const spec=makeSpec({id:'simcore-v0.64.7-new-04',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); within(root,()=>expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'CANDIDATE_LATEST_INSTALL_MISMATCH')); }
+  { const {root}=initRepo(base,'n8-same'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'p'); writePlugin(root,'0.64.6','Production','changed'); const C=all(root,'c'); const spec=makeSpec({id:'simcore-v0.64.6-new-05',version:'0.64.6',name:'Production',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); within(root,()=>expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'RELEASE_MODE_RELATION_INVALID')); }
+  { const {root}=initRepo(base,'n9-down'); writePlugin(root,'0.64.6','Production','p'); const P=all(root,'p'); writePlugin(root,'0.64.5','Old','x'); const C=all(root,'c'); const spec=makeSpec({id:'simcore-v0.64.5-new-06',version:'0.64.5',name:'Old',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); within(root,()=>expectCode(()=>authorizeRelease({spec,specPath:`products/simcore/releases/specs/${spec.releaseId}.json`,ciReport:report(spec),currentProductionCommit:P,expectedVerifierCommit:VERIFIER}),'RELEASE_MODE_RELATION_INVALID')); }
 }
 function authorizationNegatives(base){
   const {root}=initRepo(base,'n6n7-auth'); writePlugin(root,'0.64.6','Production'); const P=all(root,'p'); writePlugin(root,'0.64.7','Next'); const C=all(root,'c');
   const spec=makeSpec({id:'simcore-v0.64.7-new-07',version:'0.64.7',name:'Next',mode:'NEW_VERSION',candidate:C,parent:P,releaseBlob:blob(root,C)}); const rel=`products/simcore/releases/specs/${spec.releaseId}.json`; write(root,rel,`${JSON.stringify(spec)}\n`); const A1=commit(root,'auth1',rel);
   const changed={...spec,releaseName:'Next Changed'}; write(root,rel,`${JSON.stringify(changed)}\n`); const A2=commit(root,'mutate spec',rel);
-  expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A1}),'RELEASE_AUTHORIZATION_MIXED_COMMIT');
-  expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A2}),'RELEASE_SPEC_MUTATED_AFTER_AUTHORIZATION');
+  within(root,()=>{ expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A1}),'RELEASE_AUTHORIZATION_MIXED_COMMIT');
+  expectCode(()=>authorizeRelease({spec:changed,specPath:rel,ciReport:report(changed),currentProductionCommit:P,expectedVerifierCommit:VERIFIER,authorizationCommit:A2}),'RELEASE_SPEC_MUTATED_AFTER_AUTHORIZATION'); });
 }
 
 const base=fs.mkdtempSync(path.join(os.tmpdir(),'simcore-rs24e-'));

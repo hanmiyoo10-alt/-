@@ -67,8 +67,8 @@ for (const forbidden of ['model','provider','cost','token','duration','serviceTi
 }
 assert.ok(!classifier.includes("'api-keys'"), 'api-keys must not have a positive Credits rule');
 assert.ok(provenance.includes('modelInference:0'));
-assert.ok(provenance.includes("rawRows.slice(0, 100)"));
-assert.ok(provenance.includes("normalizedRows = normalizeCapturedRecentLogs(capturedLogs).slice(0, 100)"));
+assert.ok(provenance.includes("capturedLogs?.rows) ? capturedLogs.rows.slice(0, 100) : []"), 'raw account-wide rows must stay bounded to 100 before request-id matching');
+assert.ok(provenance.includes("normalizedRows = normalizeCapturedRecentLogs(capturedLogs).slice(0, 100)"), 'normalized account-wide rows must stay bounded to 100');
 
 for (const publicPluginSource of [pluginProvenance, pluginAnalytics, pluginDiagnostics]) {
   assert.ok(!/requestProjectId|requestOrganizationId|project_id|organization_id/.test(publicPluginSource), 'raw project/org identity must never enter plugin code');

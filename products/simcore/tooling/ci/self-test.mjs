@@ -20,9 +20,9 @@ ok('ci-self-classification', () => {
   expect(r.labels.includes('CI_SELF'), JSON.stringify(r));
 });
 ok('release-system-classification', () => {
-  for (const p of ['.github/workflows/simcore-release.yml','products/simcore/tooling/release-shadow.mjs','products/simcore/releases/release-schema-v1.json']) {
+  for (const p of ['.github/workflows/simcore-release.yml','products/simcore/tooling/release-shadow.mjs','products/simcore/tooling/release-authority.mjs','products/simcore/tooling/release-publish.mjs','products/simcore/tests/release-controller-qualification.test.mjs','products/simcore/releases/release-schema-v1.json']) {
     const r=classifyPaths([p]);
-    expect(r.labels.includes('CI_SELF') && r.labels.includes('HARNESS') && !r.labels.includes('LEGACY_VERIFICATION'), JSON.stringify(r));
+    expect(r.labels.includes('CI_SELF') && r.labels.includes('HARNESS') && !r.labels.includes('LEGACY_VERIFICATION'), `${p}: ${JSON.stringify(r)}`);
   }
 });
 ok('state-sync-classification', () => {
@@ -74,6 +74,12 @@ ok('release-shadow-deterministic-tests', () => {
   const r=spawnSync(process.execPath,['products/simcore/tests/release-shadow.test.mjs'],{encoding:'utf8',timeout:120000,maxBuffer:1024*1024});
   expect(r.status===0,`release shadow tests failed: ${r.stderr || r.stdout}`);
   expect(String(r.stdout).includes('RS2_4_SHADOW_TESTS_PASS'),'release shadow pass marker missing');
+});
+
+ok('rs2-4e-controller-qualification-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/release-controller-qualification.test.mjs'],{encoding:'utf8',timeout:240000,maxBuffer:1024*1024});
+  expect(r.status===0,`RS2-4E controller qualification failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4E_CONTROLLER_QUALIFICATION_PASS E-A1-E-A6 P2 P3 R1 N1-N9'),'RS2-4E qualification pass marker missing');
 });
 
 ok('post-publish-state-shadow-deterministic-tests', () => {

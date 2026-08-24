@@ -40,6 +40,7 @@ assert.deepEqual(classifyPaths(['plugins/_template/latest.js'], registry).labels
 assert.deepEqual(classifyPaths(['README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['products/README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['.github/plugin-control-plane/registry.json'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['docs/REPOSITORY_PLUGIN_CONTROL_PLANE_IMPLEMENTATION.md'], registry).labels, ['scope:repo']);
 assert.deepEqual(
   classifyPaths(['plugins/usage-dashboard/latest.js', 'plugins/simcore/latest.js'], registry).labels,
   ['plugin:simcore', 'plugin:usage-dashboard', 'scope:multi-plugin'],
@@ -108,11 +109,19 @@ assert.doesNotMatch(issueWorkflow, /pull_request_target/);
 
 const statusWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-status.yml'), 'utf8');
 assert.match(statusWorkflow, /schedule:/);
+assert.match(statusWorkflow, /Reconcile open PR ownership from trusted main/);
+assert.match(statusWorkflow, /pr-classifier\.cjs/);
 assert.match(statusWorkflow, /refresh-status/);
 assert.match(statusWorkflow, /voyage-token-check\/\*\*/);
 assert.match(statusWorkflow, /products\/pocketrisu-helper-mod\/\*\*/);
+assert.match(statusWorkflow, /issues:\s*write/);
+assert.match(statusWorkflow, /pull-requests:\s*read/);
 assert.doesNotMatch(statusWorkflow, /contents:\s*write/);
 assert.doesNotMatch(statusWorkflow, /git\s+push/);
+
+const controlPlaneReadme = fs.readFileSync(path.join(root, '.github/plugin-control-plane/README.md'), 'utf8');
+assert.match(controlPlaneReadme, /intentionally redundant metadata-only fallback/);
+assert.match(controlPlaneReadme, /pull_request observer is read-only evidence/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);

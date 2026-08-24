@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.71
+//@version 3.0.0-alpha.5.72
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.71';
+  const VERSION = '3.0.0-alpha.5.72';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -3661,9 +3661,15 @@ function todayOverviewMetrics(d) {
     {key:'data',title:'Data Fidelity & Request Ledger'},
     {key:'scheduler',title:'Scheduler, UI & Recovery'},
   ]);
+  let diagnosticsModePersistTail = Promise.resolve();
 
   function diagnosticsWorkspaceMode() {
     return state?.diagnosticsMode === 'detailed' ? 'detailed' : 'basic';
+  }
+
+  function diagnosticsWorkspaceQueuePersist() {
+    diagnosticsModePersistTail = diagnosticsModePersistTail.then(() => persist()).catch(() => undefined);
+    return diagnosticsModePersistTail;
   }
 
   function diagnosticsWorkspaceCliRuntime() {
@@ -3819,12 +3825,12 @@ function todayOverviewMetrics(d) {
   bindSettings = function diagnosticsWorkspaceBindSettings() {
     diagnosticsWorkspaceLegacyBindSettings();
     const q = selector => document.querySelector(selector);
-    const setMode = async mode => {
+    const setMode = mode => {
       const next = mode === 'detailed' ? 'detailed' : 'basic';
       if (diagnosticsWorkspaceMode() === next) return;
       state.diagnosticsMode = next;
-      await persist();
-      renderSettings();
+      renderSettingsPartial();
+      void diagnosticsWorkspaceQueuePersist();
     };
     if (q('#diagnostics-mode-basic')) q('#diagnostics-mode-basic').onclick = () => setMode('basic');
     if (q('#diagnostics-mode-detailed')) q('#diagnostics-mode-detailed').onclick = () => setMode('detailed');

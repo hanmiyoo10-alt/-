@@ -159,8 +159,11 @@ ok('permanent-release-controller-boundary', () => {
   const writes=[...workflow.matchAll(/contents:\s+write/g)];
   expect(writes.length===2,`permanent caller write scope count=${writes.length}`);
   expect(workflow.includes('permissions:\n  contents: read\n  actions: read'),'permanent caller top-level read-only permission missing');
-  const postPublish=workflow.slice(workflow.indexOf('  post-publish-state:'),workflow.indexOf('  required:'));
-  expect(postPublish.includes('contents: write\n      actions: write'),'post-publish state job must be able to dispatch gated MAIN_HEALTH');
+  const start=workflow.indexOf('\n  post-publish-state:');
+  const end=workflow.lastIndexOf('\n  required:');
+  expect(start >= 0 && end > start,'post-publish state job boundary missing');
+  const postPublish=workflow.slice(start,end);
+  expect(/permissions:\s*\n\s*contents:\s*write\s*\n\s*actions:\s*write/.test(postPublish),'post-publish state job must be able to dispatch gated MAIN_HEALTH');
   for(const token of [
     'authority_confirmation',
     'RS2_4_RELEASE',

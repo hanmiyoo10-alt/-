@@ -1,50 +1,20 @@
 {
-  "schemaVersion": 1,
-  "product": "SimCore",
-  "scope": "R_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS",
-  "status": "IMPLEMENTATION_ACTIVE",
-  "date": "2026-08-25",
-  "parentFeedback": "products/simcore/releases/R_FIRST_REAL_RELEASE_FEEDBACK_STATUS.json",
-  "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md",
-  "objective": {"operatorSimplification":true,"safetyWeakeningAllowed":false,"targetPrsToLivePending":2,"targetPrsThroughLivePassClosure":3,"machineKnownFactReentryTarget":0},
-  "hardeningUnits": [
+  "schemaVersion":1,"product":"SimCore","scope":"R_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS","status":"IMPLEMENTATION_ACTIVE","date":"2026-08-25",
+  "parentFeedback":"products/simcore/releases/R_FIRST_REAL_RELEASE_FEEDBACK_STATUS.json","design":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md",
+  "objective":{"operatorSimplification":true,"safetyWeakeningAllowed":false,"targetPrsToLivePending":2,"targetPrsThroughLivePassClosure":3,"machineKnownFactReentryTarget":0},
+  "hardeningUnits":[
     {"id":"R2_1_A_ONE_SHOT_RETIREMENT","classification":"FIX","priority":"FIRST","status":"CLOSED"},
-    {"id":"R2_1_B_GENERIC_CANDIDATE_CONTROLLER","classification":"FIX","priority":"HIGH","status":"CI_VERIFIED_PENDING_MERGE"},
-    {"id":"R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC","classification":"FIX","priority":"HIGH","status":"DESIGNED_SHADOW_FIRST"},
+    {"id":"R2_1_B_GENERIC_CANDIDATE_CONTROLLER","classification":"FIX","priority":"HIGH","status":"CLOSED"},
+    {"id":"R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC","classification":"FIX","priority":"HIGH","status":"CI_VERIFIED_PENDING_MERGE"},
     {"id":"R2_1_D_LIVE_PENDING_STATE_CONVERGENCE","classification":"FIX","priority":"HIGH","status":"DESIGNED"},
     {"id":"R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION","classification":"GATED_DESIGN_OBJECTIVE","priority":"AFTER_B_C_D_QUALIFIED","status":"DESIGNED_NOT_ACTIVE"}
   ],
-  "feedbackDisposition": {
-    "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC":"R2_1_B_CI_VERIFIED",
-    "CANDIDATE_RETRY_EXACT_REF_ALREADY_EXISTS":"R2_1_B_CI_VERIFIED",
-    "06407_CANDIDATE_ONE_SHOT_WORKFLOWS_STILL_ACTIVE":"FIXED_R2_1_A",
-    "CANDIDATE_PREPARATION_OBSERVABILITY_NOT_PERMANENT":"R2_1_B_CI_VERIFIED",
-    "LIVE_PENDING_DURABLE_CLOSURE_FRAGMENTED":"R2_1_D",
-    "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY":"R2_1_C_D",
-    "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR":"R2_1_E_GATED",
-    "PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING":"WATCH_RETAIN",
-    "CANDIDATE_TRANSPORT_REF_RETIREMENT":"DEFER_TOOL_SURFACE",
-    "GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24":"WATCH_NON_BLOCKING"
-  },
+  "feedbackDisposition":{"R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC":"FIXED_R2_1_B","CANDIDATE_RETRY_EXACT_REF_ALREADY_EXISTS":"FIXED_R2_1_B","06407_CANDIDATE_ONE_SHOT_WORKFLOWS_STILL_ACTIVE":"FIXED_R2_1_A","CANDIDATE_PREPARATION_OBSERVABILITY_NOT_PERMANENT":"FIXED_R2_1_B","LIVE_PENDING_DURABLE_CLOSURE_FRAGMENTED":"R2_1_D","MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY":"R2_1_C_D","RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR":"R2_1_E_GATED","PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING":"WATCH_RETAIN","CANDIDATE_TRANSPORT_REF_RETIREMENT":"DEFER_TOOL_SURFACE","GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24":"WATCH_NON_BLOCKING"},
   "steadyStateOperatorPath":["PR1_PRODUCT_PLUS_RELEASE_INTENT","GENERIC_CANDIDATE_AND_MACHINE_RECEIPT","PR2_EXACT_RELEASE_APPROVAL","PERMANENT_PUBLICATION_AND_LIVE_PENDING_CONVERGENCE","HUMAN_REAL_LONG_CHAT","PR3_LIVE_PASS_CLOSURE"],
   "preservedSafety":{"singlePublisher":true,"exactCandidateParentBinding":true,"candidateRequired":true,"fastForwardOnlyProduction":true,"latestInstallEquality":true,"recoveryCannotRepublish":true,"humanLivePassRequired":true,"manualGithubGovernanceDependency":false,"documentationClosureRequiredForComplete":true},
   "qualificationPlan":["A_RETIRE_ONE_SHOT_WORKFLOWS","B_REPLAY_06407_GENERIC_CANDIDATE","C_EXACT_EXISTING_IDEMPOTENCY_PASS_AND_CONFLICT_BLOCK","D_REPLAY_06407_STATE_AS_ALREADY_CONVERGED","E_SHADOW_MACHINE_SPEC_AND_APPROVAL_RESOLUTION","NEXT_GENUINE_RUNTIME_RELEASE_OPERATIONAL_PROOF"],
   "activationRules":{"genericCandidateMayActivateAfter":"R2_1_B_PERMANENT_NEGATIVES_PASS","machineDerivedSpecMayActivateAfter":"R2_1_C_SHADOW_EQUIVALENCE_AND_RELEASE_MODE_PROOFS_PASS","approvalConsolidationMayActivateAfter":"R2_1_B_C_D_QUALIFIED","productionMutationFromDesign":"FORBIDDEN"},
-  "implementationAuthorized":true,
-  "currentProductGateUnchanged":"06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
-  "runtimeMutation":"NONE",
-  "releaseSimcoreMutation":"NONE",
-  "currentEvidence":{
-    "r2_1_a":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_A_ONE_SHOT_RETIREMENT_EVIDENCE.md",
-    "r2_1_a_merge":"b65e544ef8096d2b606fc0aa9f0076a08291b6c1",
-    "r2_1_a_ci_run":32760795368,
-    "r2_1_a_verify_job":97538963918,
-    "r2_1_a_required_job":97539064125,
-    "r2_1_b":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_B_GENERIC_CANDIDATE_EVIDENCE.md",
-    "r2_1_b_ci_run":32762117327,
-    "r2_1_b_verify_job":97543197684,
-    "r2_1_b_required_job":97543371370,
-    "r2_1_b_first_failure_run":32761786586
-  },
-  "recommendedNextWorkItemAfterApproval":"R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC"
+  "implementationAuthorized":true,"currentProductGateUnchanged":"06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT","runtimeMutation":"NONE","releaseSimcoreMutation":"NONE",
+  "currentEvidence":{"r2_1_a":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_A_ONE_SHOT_RETIREMENT_EVIDENCE.md","r2_1_a_merge":"b65e544ef8096d2b606fc0aa9f0076a08291b6c1","r2_1_b":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_B_GENERIC_CANDIDATE_EVIDENCE.md","r2_1_b_merge":"4e4bc5643c5d01276f6b012bbd170a2fbd4b2e86","r2_1_b_final_ci_run":32762290800,"r2_1_b_final_verify_job":97543722229,"r2_1_b_final_required_job":97543821074,"r2_1_c":"docs/SIMCORE_RELEASE_SYSTEM_V2_1_C_MACHINE_RECEIPT_EVIDENCE.md","r2_1_c_first_failure_run":32763177565,"r2_1_c_ci_run":32763365884,"r2_1_c_verify_job":97547209654,"r2_1_c_required_job":97547337778},
+  "recommendedNextWorkItemAfterApproval":"R2_1_D_LIVE_PENDING_STATE_CONVERGENCE"
 }

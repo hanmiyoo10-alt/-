@@ -29,7 +29,7 @@ const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
 const BUNDLED_ENGINE_VERSION = '1.6.22';
-const BUNDLED_ENGINE_SHA256 = 'a78de5c9187f6d745054425a0667eb5ded7fa7507499e4f52989b44cf465b1df';
+const BUNDLED_ENGINE_SHA256 = '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69';
 const MANAGED_CLI_PACKAGE = '@llmgateway/cli';
 const MANAGED_CLI_VERSION = '1.9.0';
 const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';

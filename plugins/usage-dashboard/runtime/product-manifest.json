@@ -20,7 +20,7 @@
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-engine.mjs",
       "lifecycleManaged": true,
       "sourceBundled": true,
-      "sha256": "a78de5c9187f6d745054425a0667eb5ded7fa7507499e4f52989b44cf465b1df"
+      "sha256": "85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69"
     },
     "bridgeManager": {
       "mode": "sidecar-manager",
@@ -34,7 +34,7 @@
       "selfUpdate": true,
       "engineManaged": true,
       "artifact": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bridge-manager.cjs",
-      "sha256": "bf49385dcf209ca40fb886acd3ea1f905ec678bc667dfea79c739d933d2ac9df",
+      "sha256": "631156e1b12b2665c6e98d4ee6ff10791dc0fc0ce926ab89c4b4390add7b679a",
       "bootstrap": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
       "bootstrapSha256": "4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c",
       "service": "local-usage-runtime-manager",

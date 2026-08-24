@@ -4,9 +4,11 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const {execFileSync} = require('node:child_process');
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
 const TOOL = 'plugins/usage-dashboard/tools/reconcile_release_candidate.py';
-const SPEC = '.github/usage-dashboard/releases/5.71.json';
+const release = assertCurrentReleaseArtifacts();
+const SPEC = release.specPath;
 const CRITICAL = [
   'plugins/usage-dashboard/latest.js',
   'plugins/usage-dashboard/runtime/bridge-engine.mjs',
@@ -30,9 +32,9 @@ for (const marker of [
   'MATERIALIZER_IDEMPOTENT:',
 ]) assert.ok(source.includes(marker), `generic reconciler missing ${marker}`);
 
-assert.ok(!source.includes('3.0.0-alpha.5.71'), 'generic reconciler must not hardcode the current Product version');
-assert.ok(!source.includes('1.6.22'), 'generic reconciler must not hardcode the current Engine version');
-assert.ok(!source.includes('Cross-Scope Request Provenance'), 'generic reconciler must not hardcode the current release title');
+assert.ok(!source.includes(release.productVersion), 'generic reconciler must not hardcode the current Product version');
+assert.ok(!source.includes(release.engineVersion), 'generic reconciler must not hardcode the current Engine version');
+assert.ok(!source.includes(release.releaseTitle), 'generic reconciler must not hardcode the current release title');
 
 function sha(path) {
   return crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex');
@@ -53,9 +55,9 @@ const output = execFileSync('python3', [TOOL, '--spec', SPEC, '--two-pass'], {
   encoding:'utf8',
   env:{...process.env, PYTHONPYCACHEPREFIX:'/tmp/usage-dashboard-pycache'},
 });
-assert.match(output, /MATERIALIZER_IDEMPOTENT:3\.0\.0-alpha\.5\.71/);
+assert.ok(output.includes(`MATERIALIZER_IDEMPOTENT:${release.productVersion}`), 'two-pass reconciliation must report the current release identity');
 assert.equal(status(), '', 'two-pass reconciliation must leave a complete candidate clean');
 const after = Object.fromEntries(CRITICAL.map((path) => [path, sha(path)]));
 assert.deepEqual(after, before, 'two-pass reconciliation must preserve production-critical bytes on an already-reconciled candidate');
 
-console.log('usage-dashboard candidate reconciliation contract: OK · generic two-pass reconciliation is clean and hash-stable on 5.71');
+console.log(`usage-dashboard candidate reconciliation contract: OK · generic two-pass reconciliation is clean and hash-stable on ${release.productVersion}`);

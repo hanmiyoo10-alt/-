@@ -87,10 +87,6 @@ function snapshot() {
 }
 
 (async () => {
-  assert.equal(currentRelease.productVersion, '3.0.0-alpha.5.71');
-  assert.equal(currentRelease.engineVersion, '1.6.22');
-  assert.equal(currentRelease.managerVersion, '1.3.0');
-
   const run = await runDashboard({
     state:initialState(), token:'request-provenance-fixture-token', snapshot:snapshot(),
     captureSettingsViews:true, captureRefreshViews:true, waitFor:'views', expectedViews:1, timeoutMs:5_000,
@@ -127,7 +123,7 @@ function snapshot() {
   assert.ok(!serialized.includes('requestProjectId'));
   assert.ok(!serialized.includes('requestOrganizationId'));
 
-  console.log('usage-dashboard request provenance behavior: OK · explicit DevPass/Credits/UNKNOWN survives normalization, UNKNOWN enriches in place, scope labels render without raw identity');
+  console.log(`usage-dashboard request provenance behavior: OK · ${currentRelease.productVersion} preserves explicit DevPass/Credits/UNKNOWN, in-place enrichment, scope labels, and privacy`);
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

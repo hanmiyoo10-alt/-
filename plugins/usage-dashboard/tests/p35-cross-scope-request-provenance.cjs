@@ -5,9 +5,6 @@ const fs = require('node:fs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
 const release = assertCurrentReleaseArtifacts();
-assert.equal(release.productVersion, '3.0.0-alpha.5.71');
-assert.equal(release.engineVersion, '1.6.22');
-assert.equal(release.managerVersion, '1.3.0');
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 
@@ -37,14 +34,14 @@ assert.ok(capture.includes("'account-wide-fetch'"));
 assert.ok(capture.includes("'project-fallback-fetch'"));
 assert.ok(capture.includes("'account-wide-node-request'"));
 assert.ok(capture.includes("'project-fallback-node-request'"));
-assert.ok(capture.includes('let ensureCaptureTapRequestProvenanceInFlight = null;'), '5.71 capture tap patching must own a single-flight guard');
+assert.ok(capture.includes('let ensureCaptureTapRequestProvenanceInFlight = null;'), 'capture tap patching must own a single-flight guard');
 assert.ok(capture.includes('if (ensureCaptureTapRequestProvenanceInFlight) return ensureCaptureTapRequestProvenanceInFlight;'), 'parallel capture launches must join one tap patch operation');
 assert.ok(capture.includes("requestProjectId: requestProject.value === null ? '' : String(requestProject.value)"));
 assert.ok(capture.includes("requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value)"));
 assert.ok(capture.includes("requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value)"));
 assert.ok(cliRuntime.includes("u.searchParams.set('limit', '100')"));
 assert.ok(cliRuntime.includes('safe.slice(0, 100)'));
-assert.equal((cliRuntime.match(/pathname = \(prefix \+ '\/logs'\)/g) || []).length, 1, '5.71 must reuse the single /logs capture path');
+assert.equal((cliRuntime.match(/pathname = \(prefix \+ '\/logs'\)/g) || []).length, 1, 'provenance must reuse the single /logs capture path');
 assert.ok(cliRuntime.includes('Prompt/response bodies,'));
 assert.ok(cliRuntime.includes('messages, custom headers, cookies, and auth material are never persisted.'));
 assert.ok(engineSources.includes('try { await fs.unlink(captureFile); } catch {}'), 'ephemeral account capture file must be removed in finally');
@@ -91,7 +88,7 @@ assert.ok(!requestKey.includes('projectId'));
 assert.ok(!requestKey.includes('organizationId'));
 assert.ok(ledger.includes('const current = byKey.get(key) || null;'), 'same request identity must enrich rather than duplicate');
 
-assert.ok(engine.includes("const VERSION = '1.6.22';"));
+assert.ok(engine.includes(`const VERSION = '${release.engineVersion}';`));
 assert.match(engine, /const CLI_CONCURRENCY = Math\.max\(1, Math\.min\(2,/);
 assert.match(engine, /timeout: 25_000/);
 assert.match(engine, /const SECONDARY_REFRESH_CONCURRENCY = 1;/);
@@ -100,10 +97,10 @@ assert.match(engine, /const CACHE_STALE_MAX_MS = 30 \* 60_000;/);
 assert.ok(engine.includes("accountCapture: 30_000"));
 assert.ok(engine.includes("'activity:24h': 60_000"));
 assert.ok(engine.includes('creditsEarlyStart'));
-assert.ok(engineCore.includes("const CLI_CONCURRENCY = Math.max(1, Math.min(2"));
+assert.ok(engineCore.includes('const CLI_CONCURRENCY = Math.max(1, Math.min(2'));
 
-assert.ok(manager.includes("const MANAGER_VERSION = '1.3.0';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.71';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.22';"));
+assert.ok(manager.includes(`const MANAGER_VERSION = '${release.managerVersion}';`));
+assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`));
+assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${release.engineVersion}';`));
 
-console.log('usage-dashboard P35 Cross-Scope Request Provenance: OK · project authority first, Credits requires org+usedMode, UNKNOWN preserved, account-wide capture bounded, raw IDs discarded');
+console.log(`usage-dashboard P35 Cross-Scope Request Provenance: OK · ${release.productVersion} keeps project authority first, Credits org+usedMode, UNKNOWN, bounded account capture, and raw-ID privacy`);

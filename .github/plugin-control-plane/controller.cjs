@@ -114,7 +114,7 @@ async function classifyIssue() {
   let desired = bodyResult.labels;
   if (!bodyResult.explicit) {
     desired = current.filter((label) => managedLabel(label, registry));
-    if (!desired.some((label) => label.startsWith('plugin:') || label.startsWith('scope:'))) {
+    if (!desired.some((label) => label.startsWith('plugin:') || label.startsWith('product:') || label.startsWith('scope:'))) {
       desired = ['scope:unclassified'];
     }
   }
@@ -144,16 +144,16 @@ function parsePluginVersion(source) {
   return match ? match[1] : null;
 }
 
-async function usageDashboardStatus(repo, plugin) {
-  const branch = plugin.authority.releaseBranch;
+async function usageDashboardStatus(repo, owner) {
+  const branch = owner.authority.releaseBranch;
   const productionSha = await branchHead(repo, branch);
-  const source = await fetchContent(repo, plugin.authority.artifact, branch);
+  const source = await fetchContent(repo, owner.authority.artifact, branch);
   const version = parsePluginVersion(source);
   let spec = null;
   if (version) {
     const match = version.match(/alpha\.(\d+\.\d+)$/);
     if (match) {
-      const raw = await fetchContent(repo, `${plugin.authority.releaseSpecDir}/${match[1]}.json`, 'main');
+      const raw = await fetchContent(repo, `${owner.authority.releaseSpecDir}/${match[1]}.json`, 'main');
       if (raw) {
         try { spec = JSON.parse(raw); } catch (_) { spec = null; }
       }
@@ -164,7 +164,7 @@ async function usageDashboardStatus(repo, plugin) {
     ? `VERIFIED — ${baseline}`
     : baseline === 'UNKNOWN' ? 'UNKNOWN' : `PENDING — ${baseline}`;
   return [
-    ['Lifecycle', plugin.lifecycle],
+    ['Lifecycle', owner.lifecycle],
     ['Production version', version || 'UNKNOWN'],
     ['Production branch', branch],
     ['Production SHA', productionSha || 'UNKNOWN'],
@@ -175,17 +175,17 @@ async function usageDashboardStatus(repo, plugin) {
   ];
 }
 
-async function simcoreStatus(repo, plugin) {
-  const raw = await fetchContent(repo, plugin.authority.manifest, 'main');
-  if (!raw) return [['Lifecycle', plugin.lifecycle], ['Production version', 'UNKNOWN'], ['Authority', 'manifest missing']];
+async function simcoreStatus(repo, owner) {
+  const raw = await fetchContent(repo, owner.authority.manifest, 'main');
+  if (!raw) return [['Lifecycle', owner.lifecycle], ['Production version', 'UNKNOWN'], ['Authority', 'manifest missing']];
   let manifest;
-  try { manifest = JSON.parse(raw); } catch (_) { return [['Lifecycle', plugin.lifecycle], ['Production version', 'UNKNOWN'], ['Authority', 'manifest invalid']]; }
+  try { manifest = JSON.parse(raw); } catch (_) { return [['Lifecycle', owner.lifecycle], ['Production version', 'UNKNOWN'], ['Authority', 'manifest invalid']]; }
   const branch = manifest.release_branch || 'UNKNOWN';
   const actualHead = branch === 'UNKNOWN' ? null : await branchHead(repo, branch);
   const recorded = manifest.release_commit || 'UNKNOWN';
   const parity = actualHead && recorded !== 'UNKNOWN' ? (actualHead === recorded ? 'MATCH' : 'MISMATCH') : 'UNKNOWN';
   return [
-    ['Lifecycle', plugin.lifecycle],
+    ['Lifecycle', owner.lifecycle],
     ['Production version', manifest.production_version || 'UNKNOWN'],
     ['Release branch', branch],
     ['Recorded release SHA', recorded],
@@ -196,36 +196,74 @@ async function simcoreStatus(repo, plugin) {
   ];
 }
 
-async function devpassStatus(repo, plugin) {
-  const declaration = await fetchContent(repo, plugin.authority.declaredBy, 'main');
-  const artifact = await fetchContent(repo, plugin.authority.artifact, plugin.authority.ref || 'main');
+async function devpassStatus(repo, owner) {
+  const declaration = await fetchContent(repo, owner.authority.declaredBy, 'main');
+  const artifact = await fetchContent(repo, owner.authority.artifact, owner.authority.ref || 'main');
   const version = parsePluginVersion(artifact);
   return [
-    ['Lifecycle', plugin.lifecycle],
-    ['Declared update channel', declaration ? plugin.authority.artifact : 'UNKNOWN'],
+    ['Lifecycle', owner.lifecycle],
+    ['Declared update channel', declaration ? owner.authority.artifact : 'UNKNOWN'],
     ['Production version', version || 'UNKNOWN'],
     ['Artifact state', artifact ? 'PRESENT' : 'DECLARED_MISSING'],
-    ['Authority ref', plugin.authority.ref || 'main'],
+    ['Authority ref', owner.authority.ref || 'main'],
   ];
 }
 
-async function prototypeStatus(repo, plugin) {
-  const evidence = await fetchContent(repo, plugin.authority.evidence, 'main');
+async function prototypeStatus(repo, owner) {
+  const evidence = await fetchContent(repo, owner.authority.evidence, 'main');
   const explicitNoProduction = evidence && /not[^\n]*production release/i.test(evidence);
   return [
-    ['Lifecycle', plugin.lifecycle],
+    ['Lifecycle', owner.lifecycle],
     ['Production version', 'N/A'],
     ['Production authority', explicitNoProduction ? 'NONE — source explicitly marks this as non-production prototype' : 'UNKNOWN'],
-    ['Evidence', plugin.authority.evidence],
+    ['Evidence', owner.authority.evidence],
   ];
 }
 
-async function statusFor(repo, plugin) {
-  if (plugin.statusAdapter === 'usage-dashboard') return usageDashboardStatus(repo, plugin);
-  if (plugin.statusAdapter === 'simcore') return simcoreStatus(repo, plugin);
-  if (plugin.statusAdapter === 'devpass') return devpassStatus(repo, plugin);
-  if (plugin.statusAdapter === 'prototype') return prototypeStatus(repo, plugin);
-  return [['Lifecycle', plugin.lifecycle || 'UNKNOWN'], ['Status adapter', 'UNKNOWN']];
+async function evidenceStatus(repo, owner) {
+  const evidence = await fetchContent(repo, owner.authority.evidence, 'main');
+  return [
+    ['Lifecycle', owner.lifecycle || 'UNKNOWN'],
+    ['Status evidence', evidence ? 'PRESENT' : 'MISSING'],
+    ['Evidence', owner.authority.evidence || 'UNKNOWN'],
+  ];
+}
+
+async function pocketRisuHelperStatus(repo, owner) {
+  const raw = await fetchContent(repo, owner.authority.manifest, 'main');
+  const current = await fetchContent(repo, owner.authority.currentState, 'main');
+  if (!raw) {
+    return [
+      ['Lifecycle', owner.lifecycle || 'UNKNOWN'],
+      ['Manifest', 'MISSING'],
+      ['Current state evidence', current ? 'PRESENT' : 'MISSING'],
+    ];
+  }
+  let manifest;
+  try { manifest = JSON.parse(raw); } catch (_) {
+    return [
+      ['Lifecycle', owner.lifecycle || 'UNKNOWN'],
+      ['Manifest', 'INVALID'],
+      ['Current state evidence', current ? 'PRESENT' : 'MISSING'],
+    ];
+  }
+  return [
+    ['Lifecycle', owner.lifecycle || 'UNKNOWN'],
+    ['Validation', manifest.validation_status || 'UNKNOWN'],
+    ['Current priority', manifest.current_priority || 'UNKNOWN'],
+    ['Source repo', manifest.source_repo || 'UNKNOWN'],
+    ['Current state evidence', current ? 'PRESENT' : 'MISSING'],
+  ];
+}
+
+async function statusFor(repo, owner) {
+  if (owner.statusAdapter === 'usage-dashboard') return usageDashboardStatus(repo, owner);
+  if (owner.statusAdapter === 'simcore') return simcoreStatus(repo, owner);
+  if (owner.statusAdapter === 'devpass') return devpassStatus(repo, owner);
+  if (owner.statusAdapter === 'prototype') return prototypeStatus(repo, owner);
+  if (owner.statusAdapter === 'evidence') return evidenceStatus(repo, owner);
+  if (owner.statusAdapter === 'pocketrisu-helper-mod') return pocketRisuHelperStatus(repo, owner);
+  return [['Lifecycle', owner.lifecycle || 'UNKNOWN'], ['Status adapter', 'UNKNOWN']];
 }
 
 async function searchCount(query) {
@@ -233,10 +271,10 @@ async function searchCount(query) {
   return row.total_count || 0;
 }
 
-async function findStatusIssue(repo, pluginId) {
-  const labels = encodeURIComponent(`control-plane:status,plugin:${pluginId}`);
+async function findStatusIssue(repo, kind, id) {
+  const labels = encodeURIComponent(`control-plane:status,${kind}:${id}`);
   const rows = await api(repo, `/issues?state=all&labels=${labels}&per_page=100`);
-  const title = `[plugin-status:${pluginId}]`;
+  const title = `[${kind}-status:${id}]`;
   return rows.find((issue) => !issue.pull_request && issue.title === title) || null;
 }
 
@@ -249,19 +287,24 @@ async function refreshStatus() {
   const repo = repoFrom(event);
   const registry = loadRegistry();
   await ensureLabels(repo, registry);
-  const only = process.env.PLUGIN_ID || null;
+  const only = process.env.WORKSTREAM_ID || process.env.PLUGIN_ID || null;
+  const owners = [
+    ...Object.entries(registry.plugins || {}).map(([id, owner]) => ({kind: 'plugin', id, owner})),
+    ...Object.entries(registry.products || {}).map(([id, owner]) => ({kind: 'product', id, owner})),
+  ];
 
-  for (const [id, plugin] of Object.entries(registry.plugins)) {
+  for (const {kind, id, owner} of owners) {
     if (only && id !== only) continue;
-    const rows = await statusFor(repo, plugin);
-    const openPrs = await searchCount(`repo:${repo} is:pr is:open label:"plugin:${id}"`);
-    const openIssues = await searchCount(`repo:${repo} is:issue is:open label:"plugin:${id}" -label:"control-plane:status"`);
-    const prUrl = `https://github.com/${repo}/pulls?q=is%3Aopen+label%3A%22plugin%3A${encodeURIComponent(id)}%22`;
-    const issueUrl = `https://github.com/${repo}/issues?q=is%3Aopen+is%3Aissue+label%3A%22plugin%3A${encodeURIComponent(id)}%22+-label%3A%22control-plane%3Astatus%22`;
+    const label = `${kind}:${id}`;
+    const rows = await statusFor(repo, owner);
+    const openPrs = await searchCount(`repo:${repo} is:pr is:open label:"${label}"`);
+    const openIssues = await searchCount(`repo:${repo} is:issue is:open label:"${label}" -label:"control-plane:status"`);
+    const prUrl = `https://github.com/${repo}/pulls?q=is%3Aopen+label%3A%22${encodeURIComponent(label)}%22`;
+    const issueUrl = `https://github.com/${repo}/issues?q=is%3Aopen+is%3Aissue+label%3A%22${encodeURIComponent(label)}%22+-label%3A%22control-plane%3Astatus%22`;
     const body = [
-      `# ${plugin.displayName} — Operational View`,
+      `# ${owner.displayName} — Operational View`,
       '',
-      '> Generated by the repository Plugin Control Plane. This issue is a view over plugin-owned authorities, not a source of truth.',
+      '> Generated by the repository control plane. This issue is a view over workstream-owned authorities, not a source of truth.',
       '',
       '## Authority status',
       '',
@@ -274,27 +317,27 @@ async function refreshStatus() {
       '',
       '## Scope',
       '',
-      `- Label: \`plugin:${id}\``,
-      `- Lifecycle: \`${plugin.lifecycle}\``,
+      `- Label: \`${label}\``,
+      `- Lifecycle: \`${owner.lifecycle}\``,
       '',
       `Last refreshed: ${new Date().toISOString()}`,
       '',
       '<!-- plugin-control-plane-status -->',
     ].join('\n');
 
-    const existing = await findStatusIssue(repo, id);
+    const existing = await findStatusIssue(repo, kind, id);
     if (existing) {
       await api(repo, `/issues/${existing.number}`, {method: 'PATCH', body: {body, state: 'open'}});
-      const current = (existing.labels || []).map((label) => label.name);
-      await replaceManagedLabels(repo, existing.number, current, [`plugin:${id}`, 'control-plane:status'], registry);
-      console.log(`UPDATED_STATUS:${id}:#${existing.number}`);
+      const current = (existing.labels || []).map((row) => row.name);
+      await replaceManagedLabels(repo, existing.number, current, [label, 'control-plane:status'], registry);
+      console.log(`UPDATED_STATUS:${kind}:${id}:#${existing.number}`);
     } else {
       const created = await api(repo, '/issues', {method: 'POST', body: {
-        title: `[plugin-status:${id}]`,
+        title: `[${kind}-status:${id}]`,
         body,
-        labels: [`plugin:${id}`, 'control-plane:status'],
+        labels: [label, 'control-plane:status'],
       }});
-      console.log(`CREATED_STATUS:${id}:#${created.number}`);
+      console.log(`CREATED_STATUS:${kind}:${id}:#${created.number}`);
     }
   }
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -117,6 +118,19 @@ def validate_identity(spec: dict) -> None:
         fail('RECONCILE_MANAGER_EMBEDDED_ENGINE_HASH_MISMATCH')
 
 
+def validate_release_memory_contract(spec_path: Path) -> None:
+    env = os.environ.copy()
+    env['UD_RELEASE_SPEC'] = spec_path.as_posix()
+    result = subprocess.run(
+        ['node', 'plugins/usage-dashboard/tests/current-release-contract.cjs'],
+        env=env,
+        check=False,
+    )
+    if result.returncode != 0:
+        fail('RELEASE_MEMORY_CONTRACT_REJECTED', spec_path.as_posix())
+    print(f'RELEASE_MEMORY_CONTRACT_GREEN:{spec_path.as_posix()}')
+
+
 def reconcile_once(spec_path: Path, spec: dict) -> None:
     run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write')
     run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
@@ -128,6 +142,7 @@ def reconcile_once(spec_path: Path, spec: dict) -> None:
     run('python3', str(TOOLS / 'sync_project_guidelines.py'))
     validate_identity(spec)
     run('python3', str(TOOLS / 'validate_release_candidate.py'), '--spec', str(spec_path))
+    validate_release_memory_contract(spec_path)
 
 
 def tree_state() -> dict[str, str]:

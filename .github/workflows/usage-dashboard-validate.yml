@@ -25,5 +25,15 @@ permissions:
   contents: read
 
 jobs:
+  deterministic-stage-pr-note:
+    if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'stage/usage-dashboard-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Declare exact-SHA authority for deterministic candidate PRs
+        run: |
+          echo 'CANDIDATE_PR_EVENT_NONAUTHORITATIVE:deterministic-stage-pr'
+          echo 'Authoritative gate: owner-triggered exact-SHA full registry.'
+
   validate:
+    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'stage/usage-dashboard-') }}
     uses: ./.github/workflows/reusable-usage-dashboard-validate.yml

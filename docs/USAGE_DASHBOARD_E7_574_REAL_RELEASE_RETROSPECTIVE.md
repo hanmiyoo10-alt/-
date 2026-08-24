@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E7 5.74 Real-Release Retrospective
 
-Status: **FEEDBACK / DESIGN ONLY — no hardening implementation started**
+Status: **FEEDBACK CLOSED — findings promoted to E8 design #312**
 
 Recorded: `2026-08-25`
 
@@ -12,6 +12,7 @@ Evidence basis:
 - authoritative registry: `TEST_REGISTRY_GREEN:81`
 - main merge: `0c3cd21d6c4bc07df71f4b0f6c69024835375601`
 - production `release-usage-dashboard`: `0a97ea22a9f4f15c13de379099e175d0043d385a`
+- promoted next-generation design: Issue `#312` / E8
 
 ## Verdict
 
@@ -30,7 +31,7 @@ fail closed
 → promote exact bytes
 ```
 
-That is the correct release-system direction. The next work should reduce avoidable coordination/noise without removing validation layers.
+That is the correct release-system direction. The next generation should reduce avoidable coordination/noise without removing validation layers.
 
 ## What E7 proved successfully
 
@@ -92,81 +93,67 @@ The existing `current-release-contract.cjs` caught this correctly, but only afte
 
 **Feedback:** run the cheap current-release/release-memory contract during read-only stage validation **before candidate bundle/write**. This would have kept the broken materialization from ever becoming a candidate SHA.
 
-This is the highest-value E7 hardening item.
+This is the highest-value next-generation hardening item.
 
 ### F3. Ordinary PR `action_required` remains noisy
 
-E7-C made this state non-authoritative, which is good, but a controller-authored candidate branch repair still leaves noisy `action_required` workflow results on the PR.
+E7-C made this state non-authoritative, which is good, but a controller-authored candidate branch repair can still leave noisy `action_required` workflow results on the PR.
 
 That noise can look like a broken release even when exact-SHA authority is GREEN.
 
-**Feedback:** make ordinary PR workflows candidate-aware so deterministic Usage Dashboard stage branches either:
-- run only when they provide independent value; or
-- terminate in an explicitly benign/neutral way when exact-SHA validation is the authoritative lane.
+**Feedback:** make ordinary PR workflows candidate-aware so deterministic Usage Dashboard stage branches either run only when they provide independent value or surface an explicitly benign/non-authoritative signal. Do not weaken the full exact-SHA registry.
 
-Do not weaken the full exact-SHA registry.
+### F4. E7 documentation closure became stale/inexact
 
-### F4. E7 documentation closure is now stale/inexact
+The E7 implementation document was written before the 5.74 real-release proof and therefore retained a point-in-time `E7-E pending` status.
 
-`USAGE_DASHBOARD_PR_LIFECYCLE_E7_CONFIG_FREE_ORCHESTRATION.md` still says E7-E real-release proof is pending, but 5.74 has now supplied that proof.
+The release also proved that deployment receipt is automatic while final repository evidence closure is assistant-owned and physical verification is user/device-owned.
 
-The document also describes `automatic repository documentation closure`; in 5.74 the deployment receipt was automatic, while final issue/body closure was assistant-owned through the connected control surface.
-
-**Feedback:** update the runbook to distinguish:
-- automatic deployment receipt;
-- assistant-owned repository evidence closure;
-- user-owned actual-device verification.
-
-E7-E should move from `pending` to `COMPLETE` only using the 5.74 evidence above.
+**Feedback:** the next generation must become the current cohesive runbook, explicitly mark E7-E complete, and state those three closure authorities accurately. Historical E7 documents remain evidence rather than current authority.
 
 ### F5. Connected-control-surface ref mutation needs a tighter operator invariant
 
 During final merge handling an accidental transient branch `tmp-noop-should-not-create` was created by an incorrect connector action. It did not change source, candidate, main or production bytes and was not release authority, but it exposed a useful operator-safety rule.
 
-**Feedback:** after `CANDIDATE_READY`, the connected control surface should be allowed to manage PR metadata/comments/validation activation/exact-head merge, but **must not create or rewrite Git refs**. Candidate ref creation/advancement remains controller-owned.
+**Feedback:** after `CANDIDATE_READY`, the connected control surface should be allowed to manage PR metadata/comments/validation activation/exact-head merge, but must not create or rewrite release Git refs. Candidate ref creation/advancement remains controller-owned and production ref mutation remains promoter-owned.
 
-This belongs in the E7 operator runbook even if no code change is required.
+## E-series promotion rule
 
-## Proposed E7.1 / E7-F hardening order
+This retrospective closes the E7 feedback pass. Per the release-system generation convention:
 
-### P0 — close the evidence gap
+```text
+complete E(n)
+→ real release / operation
+→ retrospective / feedback
+→ E(n+1)
+```
 
-Update the E7 runbook from `E7-E pending` to `E7-E COMPLETE` using 5.74 exact evidence. Correct the documentation-closure wording.
+Therefore these findings are **not** an `E7.1` or same-generation hardening suffix. They are promoted directly to **E8**, design Issue `#312`.
 
-### P1 — pre-candidate release-memory gate
+## E8 mapping
 
-Add `current-release-contract.cjs` or a smaller equivalent release-memory contract to the read-only stage validation lane before candidate payload creation.
-
-Acceptance: the exact 5.74 verified-baseline omission class fails before candidate mutation.
-
-### P2 — permanent historical-literal hygiene
-
-Make unannotated historical current-release literals fail normal repository regression, not only the next release preflight.
-
-Acceptance: new historical fixtures require explicit `UD_HISTORICAL_VERSION_LOCK` when they are introduced.
-
-### P3 — candidate PR noise reduction
-
-Remove misleading ordinary `action_required` noise for deterministic `stage/usage-dashboard-*` repair updates while retaining exact-SHA full validation as authority and preserving defense-in-depth where useful.
-
-### P4 — connected-control-surface mutation boundary
-
-Codify that post-candidate assistant operations cannot create/update release Git refs; only the trusted stage/promoter controllers own those mutations.
+- **E8-A — Generation Closure & Evidence Authority:** close E7-E using 5.74 evidence and establish the exact integer generation rule.
+- **E8-B — Pre-Candidate Release-Memory Gate:** run current-release/release-memory validation in the read-only materialization path before candidate write.
+- **E8-C — Continuous Historical-Literal Hygiene:** make unannotated stale current-release assertions fail normal regression rather than waiting for release day.
+- **E8-D — Deterministic Candidate PR Signal Normalization:** reduce misleading ordinary PR noise while preserving exact-SHA authority.
+- **E8-E — Connected Control-Surface Ref Mutation Boundary:** connected assistant operations do not mutate candidate/production refs after `CANDIDATE_READY`.
+- **E8-F — Next Real Release Proof:** prove E8 in the next real product release.
 
 ## Deliberately deferred
 
-Do **not** use this feedback batch to redesign the product materializer architecture wholesale.
+Do **not** use E8 to redesign the product materializer architecture wholesale.
 
-The materializer omission suggests a future generic release-memory synchronization helper could reduce per-version scripting risk, but that is larger than the minimum E7 hardening needed before the next bounded product release.
+The materializer omission suggests a future generic release-memory synchronization helper could reduce per-version scripting risk, but that is larger than the minimum E8 hardening justified by 5.74.
 
-Do not combine product runtime slimming, parser consolidation, timer/listener pruning or unrelated S1 cleanup into this release-system feedback work.
+Do not combine product runtime slimming, parser consolidation, timer/listener pruning or unrelated S1 cleanup into release-system work.
 
 ## Recommended next state
 
 ```text
-E7 core architecture: PROVEN
-E7-E real-release proof: COMPLETE via 5.74
-E7.1/E7-F hardening: DESIGN READY, implementation not started
+E7 core architecture: PROVEN / COMPLETE
+E7 retrospective: CLOSED
+E8 design authority: #312
+E8 implementation: proceeds separately from product bytes
 5.74 physical verification: separate and still PENDING until PocketRisu evidence exists
 ```
 

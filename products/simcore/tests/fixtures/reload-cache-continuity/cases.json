@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "reload-cache-continuity-v1",
+  "suite": "reload-cache-continuity",
+  "input": {
+    "cases": [
+      "unchanged-reload-control",
+      "reload-full-match",
+      "reload-retained-signature-partial-match",
+      "reload-mismatch-control",
+      "stale-capsule",
+      "malformed-session-capsule",
+      "disabled-session-storage",
+      "provider-cache-header-absent",
+      "same-request-memory-priority-control",
+      "pre-reload-in-memory-control"
+    ],
+    "sessionKey": "__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__",
+    "maxSessionChars": 16384,
+    "maxAgeMs": 600000
+  },
+  "expected": {
+    "transportPriority": ["memory", "session", "none"],
+    "providerCache": "UNVERIFIED",
+    "rawBodiesRetained": false,
+    "sessionScope": "same-tab",
+    "staleAccepted": false,
+    "malformedAccepted": false,
+    "disabledFatal": false
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06407_RELOAD_CACHE_CONTINUITY_ACTIVATION.md"
+  }
+}

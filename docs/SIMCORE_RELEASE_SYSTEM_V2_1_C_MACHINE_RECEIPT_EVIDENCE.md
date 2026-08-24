@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — C Machine Candidate Receipt / Spec Shadow Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · PENDING PERMANENT CI · SHADOW-FIRST · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI REQUALIFICATION ACTIVE · SHADOW-FIRST · NON-RUNTIME**
 
 ## Purpose
 
@@ -68,7 +68,7 @@ receipt job:
 
 The receipt job writes only the exact receipt and spec-shadow paths and shares the `simcore-main-state-sync` concurrency group. It has no release publisher.
 
-## Operation finding
+## Operation findings
 
 During implementation, a contents-API update used a commit SHA where a blob SHA was required and returned HTTP 409 before mutation.
 
@@ -78,5 +78,38 @@ CANDIDATE_RECEIPT_CONTENT_SHA_PREWRITE_MISMATCH
 ```
 
 Impact: none; no repository write occurred from the rejected call.
+
+PR `#270`, first permanent CI run `32763177565`:
+
+```text
+Verify   97546535805  FAIL
+Required 97546699689  FAIL
+GATE_CI_SELF       PASS
+GATE_STATIC        PASS
+GATE_ARCH          PASS
+GATE_STATE         PASS
+GATE_COORDINATION  PASS
+GATE_REGRESSION    FAIL
+reason = candidate-materialize: candidate workflow publication primitive: repo-main-write.py
+```
+
+Classification:
+
+```text
+R2_1_C_B_AUTHORITY_TEST_SCOPE_TOO_WIDE
+= FIX / TEST_BOUNDARY / NON_RUNTIME / PRE_MERGE
+```
+
+Cause: the R2.1-B authority test inspected the entire shared workflow text. R2.1-C legitimately adds a separate receipt job that owns a bounded `repo-main-write.py` state write, so the old assertion falsely treated that state writer as if the candidate materialize job had acquired publication authority.
+
+Repair: preserve the negative invariant but scope it to the `materialize` job boundary only. The materialize application/tool and job must still contain no `release-publish.mjs`, `repo-main-write.py`, force-update, or production publication primitive; the separate receipt job is independently constrained by C tests and the main-write gateway.
+
+Production impact:
+
+```text
+runtime mutation = NONE
+release-simcore mutation = NONE
+v0.64.7 production unchanged
+```
 
 R2.1-C is not closed until permanent Verify/Required PASS, merge, and durable-main re-observation.

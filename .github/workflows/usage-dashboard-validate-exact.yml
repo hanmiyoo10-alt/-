@@ -37,18 +37,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CONTROL_COMMAND: ${{ github.event.comment.body }}
+          CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CONTROL_ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'failure_reason=VALIDATION_UNTRUSTED_WORKFLOW_REF' >> "$GITHUB_OUTPUT"; exit 1; }
-          PARSED="$(node - "$CONTROL_COMMAND" <<'NODE'
-          const command=process.argv[2];
-          const m=String(command||'').match(/^\/usage-dashboard validate ([1-9]\d*) ([0-9a-f]{40})\s*$/);
-          if(!m) throw new Error('VALIDATION_COMMAND_DENIED');
-          process.stdout.write(JSON.stringify({prNumber:m[1],candidateSha:m[2]}));
-          NODE
-          )"
-          PR_NUMBER="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.prNumber)' "$PARSED")"
-          CANDIDATE_SHA="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.candidateSha)' "$PARSED")"
+          node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
+          PR_NUMBER="$(node plugins/usage-dashboard/tools/release_control_command.cjs --validate-pr "$CONTROL_COMMAND")"
+          CANDIDATE_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --validate-sha "$CONTROL_COMMAND")"
           if ! curl --fail-with-body --silent --show-error \
             -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GITHUB_TOKEN" \

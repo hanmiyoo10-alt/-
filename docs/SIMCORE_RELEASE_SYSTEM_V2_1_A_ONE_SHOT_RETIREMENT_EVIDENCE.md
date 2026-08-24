@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — A One-Shot Retirement Evidence
 
 Date: 2026-08-25
-Status: **IMPLEMENTED · PENDING PERMANENT CI · NON-RUNTIME**
+Status: **CI VERIFIED · NON-RUNTIME · READY TO MERGE**
 Scope: retire v0.64.7-only candidate orchestration after the first real R release
 
 ## Decision
@@ -30,4 +30,14 @@ Classification:
 = FIX / R2.1-A / NON_RUNTIME
 ```
 
-Acceptance requires permanent SimCore CI PASS and direct confirmation that both workflows are absent from durable `main` after merge.
+## Permanent CI evidence
+
+PR `#266` initial permanent CI:
+
+```text
+run      32760672505
+Verify   97538492831  PASS
+Required 97538636908  PASS
+```
+
+The removal is therefore accepted by the permanent verifier. Final merge must still be followed by durable-main absence re-observation before R2.1-A is called closed.

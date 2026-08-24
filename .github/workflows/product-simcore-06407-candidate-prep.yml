@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - scripts/simcore-06407-reload-cache-continuity.py
+      - products/simcore/tooling/build-06407-reload-cache-continuity.py
       - products/simcore/tests/registry.mjs
       - products/simcore/tests/suites/reload-cache-continuity.test.mjs
       - products/simcore/tests/fixtures/reload-cache-continuity/cases.json
@@ -37,14 +37,14 @@ jobs:
           test "$(git rev-parse HEAD:plugins/simcore/latest.js)" = '34da01aa131f760b92d65d961a7843e9cc0d37d6'
           test "$(git rev-parse HEAD:plugins/simcore/install.js)" = '34da01aa131f760b92d65d961a7843e9cc0d37d6'
           git fetch --no-tags origin main
-          git show origin/main:scripts/simcore-06407-reload-cache-continuity.py > /tmp/simcore-06407-reload-cache-continuity.py
-          python3 -m py_compile /tmp/simcore-06407-reload-cache-continuity.py
+          git show origin/main:products/simcore/tooling/build-06407-reload-cache-continuity.py > /tmp/simcore-06407-build.py
+          python3 -m py_compile /tmp/simcore-06407-build.py
 
       - name: Build exact v0.64.7 candidate
         shell: bash
         run: |
           set -euo pipefail
-          python3 /tmp/simcore-06407-reload-cache-continuity.py
+          python3 /tmp/simcore-06407-build.py
           cmp -s plugins/simcore/latest.js plugins/simcore/install.js
           node --check plugins/simcore/latest.js
           node --check plugins/simcore/install.js

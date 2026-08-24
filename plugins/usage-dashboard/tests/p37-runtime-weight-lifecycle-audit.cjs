@@ -49,9 +49,9 @@ for (const forbidden of [
   'store.setItem(', 'scheduleRefresh(', 'schedulePanelRender(', 'renderSettings(', 'renderSettingsPartial(',
 ]) assert.ok(!audit.includes(forbidden), `P37 audit must not introduce side effect/I/O: ${forbidden}`);
 
-assert.doesNotMatch(audit, /\bstate\.[A-Za-z0-9_]+\s*=/, 'P37 audit must not mutate persistent state');
-assert.doesNotMatch(audit, /\bperformanceRuntime\.[A-Za-z0-9_]+\s*=/, 'P37 audit must not mutate performance counters');
-assert.doesNotMatch(audit, /\bpowerRuntime\.[A-Za-z0-9_]+\s*=/, 'P37 audit must not mutate power counters');
+assert.doesNotMatch(audit, /\bstate\.[A-Za-z0-9_]+\s*=(?!=)/, 'P37 audit must not mutate persistent state');
+assert.doesNotMatch(audit, /\bperformanceRuntime\.[A-Za-z0-9_]+\s*=(?!=)/, 'P37 audit must not mutate performance counters');
+assert.doesNotMatch(audit, /\bpowerRuntime\.[A-Za-z0-9_]+\s*=(?!=)/, 'P37 audit must not mutate power counters');
 assert.ok(!audit.includes('diagnosticsWorkspaceBasicModel ='), 'P37 Basic diagnostics must remain untouched');
 assert.ok(!audit.includes('diagnosticsWorkspaceBasicHtml ='), 'P37 Basic diagnostics rendering must remain untouched');
 assert.ok(audit.includes('diagnosticsWorkspaceDetailedSections = function runtimeWeightAuditDetailedSections()'), 'P37 audit must be Detailed-only');

@@ -19,7 +19,10 @@
     "n10PermanentOwner": "RS2_4D_S8"
   },
   "pffl": {
-    "accidentalFailures": ["RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND"],
+    "accidentalFailures": [
+      "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",
+      "RS2_4E_AUTH_NEGATIVE_TARGETED_WRONG_GATE"
+    ],
     "openBlockers": [],
     "openFixes": [],
     "residualDefers": ["SHADOW_PROOF_REF_DELETE_TOOL_SURFACE_UNAVAILABLE"]

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../../..');
 const POST = path.join(REPO, 'products/simcore/tooling/post-publish-state.mjs');
+const CONVERGE = path.join(REPO, 'products/simcore/tooling/release-state-converge.mjs');
 
 function sh(cwd, command, args, check = true) {
   const r = spawnSync(command, args, { cwd, encoding:'utf8', maxBuffer:1024*1024 });
@@ -64,13 +65,17 @@ function testP1BoundedLivePending(base) {
   const root=path.join(base,'p1'); fs.mkdirSync(root); const f=initFixture(root);
   runPost(root);
   const report=readJson(root,'.simcore-release/post-publish-report.json');
-  if(report.releaseAuthority!=='RS2_4_PERMANENT'||report.productionMutation!=='ALREADY_PUBLISHED_UPSTREAM'||report.mainMutation!=='LOCAL_PAYLOAD_PENDING_GATEWAY'||report.lifecycleState!=='LIVE_PENDING') throw new Error(`P1 report ${JSON.stringify(report)}`);
-  const expected=['product-manifest.json','docs/CURRENT_DEVELOPMENT.md','docs/SIMCORE_GUIDELINES.md',`products/simcore/releases/records/${f.input.releaseId}.json`];
+  if(report.tool!=='release-state-converge'||report.releaseAuthority!=='RS2_4_PERMANENT'||report.productionMutation!=='ALREADY_PUBLISHED_UPSTREAM'||report.mainMutation!=='LOCAL_PAYLOAD_PENDING_GATEWAY'||report.lifecycleState!=='LIVE_PENDING'||report.rLifecycleState!=='REAL_RELEASE_LIVE_PENDING') throw new Error(`P1 report ${JSON.stringify(report)}`);
+  const expected=['product-manifest.json','docs/CURRENT_DEVELOPMENT.md','docs/SIMCORE_GUIDELINES.md',`products/simcore/releases/records/${f.input.releaseId}.json`,`products/simcore/releases/state-receipts/${f.input.releaseId}.json`];
   if(JSON.stringify(report.changedPaths)!==JSON.stringify(expected)) throw new Error(`P1 paths ${JSON.stringify(report.changedPaths)}`);
   const m=readJson(root,'product-manifest.json');
-  if(m.release_commit!==f.C||m.release_blob!==f.blob||m.validation_status!=='PENDING_REAL_LONG_CHAT') throw new Error(`P1 manifest ${JSON.stringify(m)}`);
+  if(m.release_commit!==f.C||m.release_blob!==f.blob||m.validation_status!=='PENDING_REAL_LONG_CHAT'||m.current_priority!==f.input.liveScenarioId) throw new Error(`P1 manifest ${JSON.stringify(m)}`);
   const rec=readJson(root,`products/simcore/releases/records/${f.input.releaseId}.json`);
-  if(rec.releaseState!=='LIVE_PENDING'||rec.productionTruth!=='PUBLISHED_IDENTITY_VERIFIED'||rec.stateSyncStatus!=='PASS') throw new Error(`P1 record ${JSON.stringify(rec)}`);
+  if(rec.releaseState!=='LIVE_PENDING'||rec.productionTruth!=='PUBLISHED_IDENTITY_VERIFIED'||rec.stateSyncStatus!=='PASS'||rec.liveGate?.scenarioId!==f.input.liveScenarioId) throw new Error(`P1 record ${JSON.stringify(rec)}`);
+  const receipt=readJson(root,`products/simcore/releases/state-receipts/${f.input.releaseId}.json`);
+  if(receipt.lifecycleState!=='REAL_RELEASE_LIVE_PENDING'||receipt.result!=='PASS'||receipt.publisherRunId!==f.input.publisherRunId||receipt.liveScenarioId!==f.input.liveScenarioId) throw new Error(`P1 receipt ${JSON.stringify(receipt)}`);
+  const dev=fs.readFileSync(path.join(root,'docs/CURRENT_DEVELOPMENT.md'),'utf8');
+  if(!dev.includes('SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN')||!dev.includes(`Current priority / live gate: \`${f.input.liveScenarioId}\``)||!dev.includes('REAL_RELEASE_LIVE_PENDING')) throw new Error('P1 development live gate block');
 }
 function testP2ObservedIdentityMismatch(base) {
   const root=path.join(base,'p2'); fs.mkdirSync(root); initFixture(root); write(root,'.published/install.js','diverged\n');
@@ -81,7 +86,7 @@ function testP2ObservedIdentityMismatch(base) {
 function testP3IdempotentRecovery(base) {
   const root=path.join(base,'p3'); fs.mkdirSync(root); initFixture(root); runPost(root); runPost(root);
   const r=readJson(root,'.simcore-release/post-publish-report.json');
-  if(r.disposition!=='ADMIN_STATE_ALREADY_SYNCED'||r.changedPaths.length!==0) throw new Error(`P3 ${JSON.stringify(r)}`);
+  if(r.disposition!=='ALREADY_CONVERGED'||r.mainMutation!=='NONE'||r.changedPaths.length!==0) throw new Error(`P3 ${JSON.stringify(r)}`);
 }
 function testP4NewerReleaseProtection(base) {
   const root=path.join(base,'p4'); fs.mkdirSync(root); initFixture(root); const m=readJson(root,'product-manifest.json'); m.release_commit='9'.repeat(40); writeJson(root,'product-manifest.json',m);
@@ -94,10 +99,31 @@ function testP5PublishedTruthSurvivesAdminFailure(base) {
   const first=runPost(root,false);
   if(first.status===0||!first.stderr.includes('STATE_SYNC_RENDER_FAILED')) throw new Error(`P5 first ${first.stderr}`);
   const after=readJson(root,'product-manifest.json');
-  if(after.release_commit!==f.C||after.validation_status!=='PENDING_REAL_LONG_CHAT') throw new Error(`P5 truth lost ${JSON.stringify(after)}`);
+  if(after.release_commit!==f.C||after.validation_status!=='PENDING_REAL_LONG_CHAT'||after.current_priority!==f.input.liveScenarioId) throw new Error(`P5 truth lost ${JSON.stringify(after)}`);
   write(root,'docs/CURRENT_DEVELOPMENT.md','<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->\nstale\n<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->\n');
   const second=runPost(root);
   if(second.status!==0) throw new Error(`P5 recovery ${second.stderr}`);
+}
+function testDRequiredLiveGate(base) {
+  const root=path.join(base,'dn7'); fs.mkdirSync(root); initFixture(root);
+  const i=readJson(root,'.input.json'); delete i.liveScenarioId; writeJson(root,'.input.json',i);
+  const before=readJson(root,'product-manifest.json');
+  const r=runPost(root,false);
+  if(r.status===0||!r.stderr.includes('STATE_CONVERGE_INPUT_INVALID')) throw new Error(`D-N7 ${r.stderr}`);
+  if(JSON.stringify(readJson(root,'product-manifest.json'))!==JSON.stringify(before)) throw new Error('D-N7 mutation before live gate validation');
+}
+function testDReceiptConflict(base) {
+  const root=path.join(base,'dn12'); fs.mkdirSync(root); const f=initFixture(root); runPost(root);
+  const rel=`products/simcore/releases/state-receipts/${f.input.releaseId}.json`;
+  const receipt=readJson(root,rel); receipt.productionBlob='9'.repeat(40); writeJson(root,rel,receipt);
+  const r=runPost(root,false);
+  if(r.status===0||!r.stderr.includes('STATE_RECEIPT_CONFLICT')) throw new Error(`D-N12 ${r.stderr}`);
+}
+function testSharedOwnerBoundary() {
+  const adapter=fs.readFileSync(POST,'utf8');
+  const owner=fs.readFileSync(CONVERGE,'utf8');
+  if(!adapter.includes("from './release-state-converge.mjs'")||!adapter.includes('convergeRun(argv)')) throw new Error('D shared owner adapter missing');
+  for(const token of ['release-publish.mjs','git push --force','force-with-lease','+refs/heads/release-simcore']) if(adapter.includes(token)||owner.includes(token)) throw new Error(`D-N9 publication primitive ${token}`);
 }
 
 function main() {
@@ -108,6 +134,9 @@ function main() {
     testP3IdempotentRecovery(base);
     testP4NewerReleaseProtection(base);
     testP5PublishedTruthSurvivesAdminFailure(base);
+    testDRequiredLiveGate(base);
+    testDReceiptConflict(base);
+    testSharedOwnerBoundary();
     console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5');
   } finally { fs.rmSync(base,{recursive:true,force:true}); }
 }

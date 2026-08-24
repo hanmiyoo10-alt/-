@@ -22,6 +22,10 @@ TARGET_VERSION = '3.0.0-alpha.5.71'
 BASE_ENGINE = '1.6.21'
 TARGET_ENGINE = '1.6.22'
 TARGET_MANAGER = '1.3.0'
+BASE_RELEASE_TITLE = 'Request Duration Fidelity'
+TARGET_RELEASE_TITLE = 'Cross-Scope Request Provenance'
+BASE_RELEASE_MEMORY = f'Current release implementation: `{BASE_VERSION} — {BASE_RELEASE_TITLE}`.'
+TARGET_RELEASE_MEMORY = f'Current release implementation: `{TARGET_VERSION} — {TARGET_RELEASE_TITLE}`.'
 
 
 def sha256(path: Path) -> str:
@@ -48,6 +52,16 @@ def run(*args: str) -> None:
     subprocess.run(list(args), check=True)
 
 
+def sync_release_memory() -> None:
+    text = GUIDELINES.read_text(encoding='utf-8')
+    if TARGET_RELEASE_MEMORY in text:
+        return
+    count = text.count(BASE_RELEASE_MEMORY)
+    if count != 1:
+        raise SystemExit(f'5.71 release memory sync: expected exactly one 5.70 memory line, found {count}')
+    GUIDELINES.write_text(text.replace(BASE_RELEASE_MEMORY, TARGET_RELEASE_MEMORY, 1), encoding='utf-8')
+
+
 def validate_target() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     bridge = manifest.get('components', {}).get('bridge', {})
@@ -68,6 +82,8 @@ def validate_target() -> None:
         raise SystemExit('5.71 Manager hash mismatch')
     if manager.get('bootstrapSha256') != sha256(BOOTSTRAP):
         raise SystemExit('5.71 bootstrap hash mismatch')
+    if TARGET_RELEASE_MEMORY not in GUIDELINES.read_text(encoding='utf-8'):
+        raise SystemExit('5.71 current release memory mismatch')
 
     engine_text = ENGINE.read_text(encoding='utf-8')
     manager_text = MANAGER.read_text(encoding='utf-8')
@@ -106,6 +122,8 @@ def validate_target() -> None:
 manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
 current = str(manifest.get('productVersion') or '')
 if current == TARGET_VERSION:
+    sync_release_memory()
+    run('python3', str(TOOLS / 'sync_project_guidelines.py'))
     run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
     run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
     validate_target()
@@ -154,6 +172,7 @@ MANIFEST.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 
 run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
 run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
+sync_release_memory()
 run('python3', str(TOOLS / 'sync_project_guidelines.py'))
 run('node', '--check', str(ROOT / 'latest.js'))
 run('node', '--check', str(MANAGER))

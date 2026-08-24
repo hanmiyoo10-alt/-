@@ -1,4 +1,4 @@
-name: Plugin Control Plane — Status views
+name: Repository Control Plane — Status views
 
 on:
   workflow_dispatch:
@@ -34,10 +34,17 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Reconcile open PR ownership from trusted main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! node .github/plugin-control-plane/pr-classifier.cjs; then
+            echo "::warning::Repository Control Plane PR fallback reconciliation failed; release/product CI remains authoritative and unblocked."
+          fi
       - name: Refresh mutable GitHub status issues
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! node .github/plugin-control-plane/controller.cjs refresh-status; then
-            echo "::warning::Plugin Control Plane status refresh failed; no release/product authority is affected."
+            echo "::warning::Repository Control Plane status refresh failed; no release/product authority is affected."
           fi

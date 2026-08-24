@@ -1,6 +1,6 @@
 # Local Usage Dashboard — Runtime Slimming S0 Evidence at 5.73
 
-Status: **S0 REPOSITORY MEASUREMENT RELEASE SHIPPED — REAL-DEVICE EVIDENCE PENDING**
+Status: **S0 PHYSICAL BASELINE VERIFIED — READY FOR EVIDENCE-LED S1 DESIGN**
 
 Recorded: `2026-08-25`
 
@@ -19,9 +19,9 @@ The S0 measurement-only release is:
 - production release branch: `87b934a0e153c1c7ddd77ab44750154cd195f57b`
 - Engine SHA-256: `85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69`
 - exact-byte parity: `VERIFIED`
-- physical verification: `PENDING`
+- physical verification: `PASS`
 
-## What S0 now measures in production code
+## What S0 measures
 
 5.73 adds a Detailed-Diagnostics-only `Runtime Weight Audit` backed only by already-existing runtime state and counters.
 
@@ -56,8 +56,6 @@ The following values are intentionally **not inferred**:
 
 Where no authoritative runtime source exists, the audit reports `UNKNOWN` or leaves the measurement to a later real-device check.
 
-No estimate based on package name, source size or model metadata is a substitute for actual device evidence.
-
 ## No-cleanup guarantee
 
 S0 changes observation only.
@@ -72,13 +70,13 @@ S0 changes observation only.
 
 It does not remove fallbacks, shrink the Request Ledger bound, alter cache TTL/stale policy, change CLI concurrency/timeouts, change scheduling semantics, or alter UNKNOWN handling.
 
-The release-visible decision line is intentionally:
+The release-visible decision line remains:
 
 ```text
 Slimming decision: S0 evidence only · removal classification pending repository/real-device evidence
 ```
 
-## Repository evidence available now
+## Repository evidence
 
 Repository/CI evidence proves:
 
@@ -87,18 +85,52 @@ Repository/CI evidence proves:
 - P37 prevents new network/CLI/polling/persistence/render scheduling side effects from the audit module;
 - P37 preserves the Engine hash exactly;
 - P36 preserves the prior instant Diagnostics mode-switch behavior;
-- the module registry contains 28 plugin parts and remains authoritative;
-- generic two-pass reconciliation is idempotent;
 - the complete test registry is GREEN at `78` tests;
 - main-to-production exact-byte promotion is verified.
 
-This is enough to say **S0 measurement infrastructure is shipped safely**.
+## Real-device evidence — 2026-08-25
 
-It is not enough to say any particular runtime path is safe to remove.
+PocketRisu/Android physical verification captured 5.73 in READY state after more than 2.5 hours of runtime uptime.
+
+Verified health:
+
+- Product `3.0.0-alpha.5.73`;
+- Engine `1.6.22`;
+- Manager `1.3.0`;
+- READY / Health ok;
+- active local errors `0`;
+- failures `0`;
+- Bridge modules stale `0`;
+- updater compatible / sync current;
+- Request fidelity exact `98/98` at the diagnostic checkpoint;
+- account-wide provenance capture active with no conflicts.
+
+Detailed Diagnostics physically displayed the `Runtime Weight Audit` section with the following observed snapshot:
+
+```text
+Runtime Weight Audit: measurement-only · network 0 · CLI 0 · polling 0 · heap bytes UNKNOWN · pruning 0
+Retained state: Request Ledger 105/2000 · state keys 49 · widget cache fields 4/4 · responsive style keys 6
+Lifecycle ownership: timers 4/8 [refresh,reset-sync,ui-stall-probe,resume-measure] · idle handles 0/2 · long-task observer idle
+Listener ownership: remote 5 · widget remote 5 · DOM 5
+In-flight ownership: refresh idle · resume idle · resume measure pending · stale async drops 0
+Scheduler counters: queued 58 · merged 1 · executed 58 · interaction deferred 0
+Bridge retained work: cache entries 25 · cache in-flight 0 · CLI active 0 · CLI queued 0 · secondary queued 0 · running 0
+Local cost: normalize-ledger 0ms · persist 125ms · widget-render phase 0ms · last render 0ms · panel 12ms · persist writes 65
+Slimming decision: S0 evidence only · removal classification pending repository/real-device evidence
+```
+
+Interpretation at this checkpoint:
+
+- the Request Ledger remains far below its explicit `2000`-row bound;
+- no stale async drops were observed;
+- no Bridge cache in-flight, CLI queued/active, or secondary-refresh queued/running work remained at capture time;
+- local normalize/render costs were tiny in the observed sample while persistence remained measurable but sub-second;
+- listener/timer counts are now physically observable and bounded by named ownership slots, but this single snapshot does not by itself prove long-term non-accumulation across all lifecycle patterns;
+- no runtime path is reclassified as removable merely from these counts.
+
+A previously observed one-off render spike dominated by `ensure` (`7328ms` of `7345ms`) remains a `MEASURE MORE` candidate rather than a cleanup target because it was isolated, did not coincide with render overlap, and has not yet been reproduced as a stable bottleneck.
 
 ## Candidate classification state
-
-At this checkpoint, broad removal classifications remain deliberately conservative.
 
 ### KEEP — active contract
 
@@ -123,36 +155,20 @@ No fallback is reclassified as removable solely because 5.73 can observe lifecyc
 
 ### MEASURE MORE
 
-Still requires repository plus, where relevant, actual-device evidence:
-
-- whether repeated PocketRisu initialization/resume accumulates any timer/listener ownership unexpectedly;
+- repeated PocketRisu initialization/resume timer/listener ownership across longer lifecycle samples;
 - managed CLI installed footprint;
-- real-device distribution of local normalize/persist/render costs;
+- real-device distribution of local persistence cost;
+- isolated long `ensure` render spike;
 - whether any compatibility path has become truly unreachable in current production;
 - actual retained-memory impact beyond bounded container counts.
 
 ### SAFE REMOVAL CANDIDATE
 
-**None declared at this S0 checkpoint.**
+**None declared by S0 alone.**
 
 A candidate must be named path-by-path in a later S1 design with evidence showing replacement/obsolescence and regression coverage.
 
-## Real-device evidence still needed
-
-5.73 physical evidence should eventually capture at least:
-
-- successful `+` update to 5.73;
-- Basic/Detailed Diagnostics switching remains responsive;
-- `Runtime Weight Audit` is visible in Detailed mode;
-- reported values remain plausible/bounded across normal refresh/resume use;
-- no obvious repeated timer/listener accumulation across realistic device lifecycle use;
-- any device-only measurement requested for an S1 decision, especially managed CLI installed footprint.
-
-UNKNOWN is an acceptable observation where the source does not provide an authoritative value.
-
 ## S1 entry rule
-
-Do not start a broad cleanup pass from this file alone.
 
 An S1 change is allowed only when it names one bounded removal or consolidation target and provides:
 

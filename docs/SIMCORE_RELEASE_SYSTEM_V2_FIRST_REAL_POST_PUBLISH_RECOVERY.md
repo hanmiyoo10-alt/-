@@ -1,7 +1,7 @@
 # SimCore Release System v2 — First Real Post-Publish State Recovery
 
 Date: 2026-08-25
-Status: **RECOVERED · REAL_RELEASE_LIVE_PENDING · R FEEDBACK CLOSED · NON-RUNTIME**
+Status: **RECOVERED · REAL_RELEASE_LIVE_PENDING · R FEEDBACK CLOSED · DOCUMENTATION CLOSURE COMPLETE · NON-RUNTIME**
 Release: `simcore-v0.64.7-new-01`
 
 ## 1. Production truth
@@ -403,3 +403,54 @@ one-shot admin transition retired after synchronization
 ```
 
 Real long-chat `LIVE_PASS` remains a separate human-evidence gate and must not be claimed by this recovery closure.
+
+## 14. Durable priority synchronization and final cleanup
+
+The documentation/machine-state closure PR first installed the bounded one-shot transition and passed permanent CI:
+
+```text
+closure PR: #257
+closure merge: 13befdabace0027ca8918943c690e24a9182f4e2
+SimCore CI run: 32753581445
+Verify job: 97515905732 SUCCESS
+Required job: 97515992131 SUCCESS
+transition id: 06407-real-release-live-pending-priority
+```
+
+The transition was then executed only through the canonical durable-memory transport:
+
+```text
+command PR: #258
+command title: SimCore durable memory sync command
+command disposition: CLOSED WITHOUT MERGE
+state-sync run: 32753769277
+sync job: 97516497658 SUCCESS
+generated main commit: 4d7256e23acb9ad8e13859c6925673b89c01b723
+writer: github-actions[bot]
+```
+
+Observed durable state after the write:
+
+```text
+product-manifest.production_version = 0.64.7
+product-manifest.release_commit = a7ce8ce33a97797630f885c6753415e4b2ccc7fc
+product-manifest.release_blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
+product-manifest.validation_status = PENDING_REAL_LONG_CHAT
+product-manifest.current_priority = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+release-simcore mutation = NONE
+```
+
+The one-shot `products/simcore/state-sync/active-admin-transition.json` is retired by the final cleanup work after its successful application. It must not remain as latent write authority.
+
+The documentation/admin closure for this recovery is therefore **COMPLETE at the `REAL_RELEASE_LIVE_PENDING` boundary** once the cleanup PR containing this record and the transition deletion is merged and reobserved on `main`.
+
+This statement does not close the whole first real release. The following remain pending by design:
+
+```text
+real long-chat LIVE_PASS
+firstRealReleaseProof = true
+PERMANENT_RELEASE_AUTHORITY_ACTIVE
+authority cutover
+legacy release authority retirement
+RS2_4_CLOSED
+```

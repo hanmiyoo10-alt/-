@@ -1,0 +1,27 @@
+name: Plugin Control Plane — PR scope
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted default branch controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Classify changed paths without executing PR code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! node .github/plugin-control-plane/controller.cjs classify-pr; then
+            echo "::warning::Plugin Control Plane PR classification failed; release/product CI remains authoritative and unblocked."
+          fi

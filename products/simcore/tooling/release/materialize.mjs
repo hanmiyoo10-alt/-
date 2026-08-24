@@ -31,13 +31,14 @@ function parseArgs(argv) {
   return out;
 }
 
-function gitEnv(cwd, args, env, code = 'CANDIDATE_MATERIALIZATION_IDENTITY_MISMATCH') {
+function gitEnv(cwd, args, env, code = 'CANDIDATE_MATERIALIZATION_IDENTITY_MISMATCH', options = {}) {
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf8',
     timeout: 30000,
     maxBuffer: 2 * 1024 * 1024,
     env: { ...process.env, ...env },
+    input: options.input,
   });
   if (result.status !== 0) fail(code, String(result.stderr || result.stdout || 'git command failed').trim().slice(0, 2048));
   return String(result.stdout || '').trimEnd();

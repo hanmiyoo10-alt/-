@@ -54,4 +54,27 @@ Stages: `CI | PR_SUBMISSION | PR_REVIEW | MERGE | DEPLOY | POST_DEPLOY_VERIFY`
 - re-validation: `PASS` — the corrected run applied direct-child selective clone support, ran Stage B+C+D Vitest suites plus `node --check` for both helpers and `server.cjs`, removed diagnostics/temp workflow, and the verified result was rebuilt as clean Stage-D commit `c3ec3b5e63f7f0bcdb6888d8475f836cc9f31ca3`.
 - rollback: unvalidated runtime wiring was never committed/deployed; no server phone or DB state changed.
 
+### 2026-08-25 — Stage A upstream review accepted empty-patch half and rejected opaque ETag half for now
+- stage: `PR_REVIEW`
+- PR: `PocketRisu/PocketRisu#67`
+- head: `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`
+- result: `PARTIAL_ACCEPTANCE / CLOSED_SUPERSEDED`
+- cause: `CONFIRMED`
+- confirmed facts: maintainer stated that the empty-patch early return was adopted into `develop` in follow-up commit `e3a63daafdac00c52968c4e668af0ac6f7adcc3b`. The opaque revision ETag was not accepted because `/api/read` and 409 responses still mint content-MD5 ETags; mixing random `rev-…` tokens with content-hash ETags can produce a false 409 after another tab performs a read. The maintainer said ETag unification belongs with the served-view/revision redesign around upstream #66, then closed #67 because the remaining piece is superseded.
+- feedback/fix: preserve the accepted empty-patch behavior; do not re-submit the isolated opaque-ETag change. Any future ETag revision model must be designed consistently across patch success, `/api/read`, 409 responses, and the #66 served-view work.
+- re-validation: upstream `develop` contains the accepted empty-patch behavior; #68 and #69 were independently merged and the maintainer added endpoint-level regression coverage in `test/compat/db-patch-endpoint.test.ts`.
+- rollback: not applicable; no local/server-phone deployment was performed by this automation.
+
+### 2026-08-25 — Stage D official upstream PR creation blocked by integration permission
+- stage: `PR_SUBMISSION`
+- source branch: `hanmiyoo10-alt/PocketRisu:feat/db-save-optimization-plugin-storage-child-upstream`
+- source head: `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`
+- official target: `PocketRisu/PocketRisu:develop`
+- result: `SUBMISSION_BLOCKED`
+- cause: `CONFIRMED`
+- confirmed facts: the clean Stage-D branch is exactly one commit ahead and zero commits behind current upstream `develop`, changing only `server/node/patch-hash-cache.cjs`, `server/node/patch-selective-clone.cjs`, and `test/plugin-storage-patch-optimization.test.ts`. Cross-repository PR creation through the connected GitHub integration returned HTTP 403 `Resource not accessible by integration`.
+- feedback/fix: keep the clean Stage-D branch intact and submit it through a GitHub identity/integration with upstream PR-creation permission. Do not fall back to the older stacked draft #7, which carries obsolete ancestry relative to current upstream.
+- re-validation: branch comparison against current upstream `develop` remains `ahead 1 / behind 0`; no official Stage-D PR exists yet.
+- rollback: not applicable; no upstream repository write and no server-phone deployment occurred.
+
 Historical synthetic/atomicity/performance verification remains preserved in README/UPSTREAM; runtime failures must continue to be recorded separately from documentation CI failures.

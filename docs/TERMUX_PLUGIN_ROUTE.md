@@ -13,10 +13,19 @@ plugins/
   termux/
 ```
 
+## Durable operating contract
+
+All Termux plugin development, diagnostic, release, evidence, regression, and production-handling work must follow:
+
+`docs/TERMUX_DEVELOPMENT_GUIDELINES.md`
+
+That document is the durable project memory and takes precedence over conversation memory for project operating rules. Production state must still be re-read from the actual repository/release artifacts rather than inferred from memory.
+
 ## Current state
 
 - The route is intentionally empty except for `.gitkeep`.
 - No `latest.js` or `install.js` is published yet.
+- No Termux production release branch, production manifest, or production version has been established yet; preserve these as `UNKNOWN` until repository evidence establishes them.
 - Existing plugin paths such as `plugins/simcore/`, `plugins/devpass/`, and `plugins/usage-dashboard/` are untouched.
 - No credentials, tokens, session data, or private configuration belong in this route.
 

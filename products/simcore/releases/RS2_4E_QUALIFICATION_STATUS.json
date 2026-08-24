@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "phase": "RS2-4E",
-  "status": "CONTROLLER_PRIMITIVE_CI_VERIFIED",
+  "status": "REPOSITORY_BOUND_QUALIFIED_ADMIN_FIX_PENDING",
   "controllerPrimitiveCiVerified": true,
   "permanentReleaseAvailable": false,
-  "permanentReleaseShadowVerified": false,
-  "rollbackRehearsalVerified": false,
+  "permanentReleaseShadowVerified": true,
+  "rollbackRehearsalVerified": true,
   "realReleaseReady": false,
   "authorityBinding": {
     "exactCandidateParent": true,
@@ -19,25 +19,52 @@
     "negative": ["E-A2", "E-A3", "E-A4", "E-A5", "E-A6_AUTHORITY", "E-A6_VERIFIER", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8", "N9"],
     "n10PermanentOwner": "RS2_4D_S8"
   },
-  "validation": {
-    "head": "f8e03486bc9fb90f21e070c8854af282a4513dc1",
-    "run": 32730877768,
-    "verifyJob": 97442651173,
-    "requiredJob": 97442762842,
+  "controllerValidation": {
+    "head": "99c3686028200b0df79ed0f313f0a4bae827d716",
+    "run": 32731077286,
+    "verifyJob": 97443243549,
+    "requiredJob": 97443348273,
     "result": "PASS"
+  },
+  "repositoryQualification": {
+    "currentProductionCommit": "47969d24771f6cc188df6e32150fc6fde519182d",
+    "currentProductionBlob": "34da01aa131f760b92d65d961a7843e9cc0d37d6",
+    "p1Noop": {
+      "candidateCommit": "08af3d2aac63b85c699bf264ebb2c207018a1e22",
+      "directParent": "47969d24771f6cc188df6e32150fc6fde519182d",
+      "priorLiveShadowRun": 32723671966,
+      "result": "REQUALIFIED_COMPOSED_EVIDENCE"
+    },
+    "rollback": {
+      "approvedSafeVersion": "0.64.5",
+      "approvedSafeCommit": "6c43c8167375b836a87277c005c63f93b028dde4",
+      "approvedSafeBlob": "a4b4633343cd856954857e7c490528fc713620da",
+      "liveEvidence": "docs/SIMCORE_LIVE_06405_VALIDATION.md",
+      "ancestry": "SAFE_SOURCE_IS_REAL_PRODUCTION_ANCESTOR",
+      "result": "QUALIFIED"
+    }
+  },
+  "adminState": {
+    "status": "FIX_REQUIRED",
+    "finding": "MAIN_ADMIN_STATE_DRIFT",
+    "desiredValidationStatus": "LIVE_PASS",
+    "desiredCurrentPriority": "RS2_4E_REAL_RELEASE_READY_QUALIFICATION"
   },
   "pffl": {
     "accidentalFailures": [
       "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",
       "RS2_4E_AUTH_NEGATIVE_TARGETED_WRONG_GATE"
     ],
-    "openBlockers": [],
-    "openFixes": [],
+    "openBlockers": ["MAIN_ADMIN_STATE_DRIFT"],
+    "openFixes": ["MAIN_ADMIN_STATE_DRIFT"],
     "residualDefers": ["SHADOW_PROOF_REF_DELETE_TOOL_SURFACE_UNAVAILABLE"]
   },
   "productionMutation": "NONE",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE",
-  "nextStep": "REPOSITORY_BOUND_P1_ROLLBACK_AND_ADMIN_DRIFT_FIX",
-  "evidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_QUALIFICATION_EVIDENCE.md"
+  "nextStep": "PROJECT_OWNED_ADMIN_STATE_FIX_THEN_RS2_4_RELEASE_CALLER_ACTIVATION",
+  "evidence": [
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_QUALIFICATION_EVIDENCE.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_REPOSITORY_BOUND_QUALIFICATION.md"
+  ]
 }

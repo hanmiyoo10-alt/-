@@ -196,6 +196,7 @@ jobs:
 
           SPEC_AUTH_COMMIT="$(git log -1 --format=%H -- "$SPEC_PATH")"
           [[ "$SPEC_AUTH_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          export SPEC_AUTH_COMMIT
 
           node - <<'NODE'
           const fs=require('fs'),crypto=require('crypto');
@@ -222,8 +223,6 @@ jobs:
           fs.writeFileSync('.simcore-release/post-publish-identity.json',JSON.stringify({schemaVersion:1,product:'SimCore',resolvedBranch:'release-simcore',resolvedCommit:spec.candidateCommit,latest:{path:'.simcore-release/post-publish-source/latest.js',blob:spec.candidateReleaseBlob},install:{path:'.simcore-release/post-publish-source/install.js',blob:spec.candidateReleaseBlob}},null,2)+'\n');
           fs.appendFileSync(process.env.GITHUB_OUTPUT,`release_mode=${spec.releaseMode}\n`);
           NODE
-        env:
-          SPEC_AUTH_COMMIT: ${{ env.SPEC_AUTH_COMMIT }}
 
       - name: Exercise local post-publish state path
         if: ${{ steps.state.outputs.release_mode != 'NOOP_IDENTICAL' }}

@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.6`
-- Release: `Post-B_END C Clock Handoff Authority`
+- Version: `0.64.7`
+- Release: `Cross-Reload Cache Observer Continuity`
 - Release branch: `release-simcore`
-- Release commit: `47969d24771f6cc188df6e32150fc6fde519182d`
-- Release blob: `34da01aa131f760b92d65d961a7843e9cc0d37d6`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `a7ce8ce33a97797630f885c6753415e4b2ccc7fc`
+- Release blob: `676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-2`

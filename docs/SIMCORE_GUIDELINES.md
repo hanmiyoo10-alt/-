@@ -883,8 +883,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.6 — Post-B_END C Clock Handoff Authority
-Release commit: 47969d24771f6cc188df6e32150fc6fde519182d
+SimCore v0.64.7 — Cross-Reload Cache Observer Continuity
+Release commit: a7ce8ce33a97797630f885c6753415e4b2ccc7fc
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

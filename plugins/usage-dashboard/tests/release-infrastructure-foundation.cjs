@@ -9,6 +9,7 @@ const callerPath = currentRelease.callerWorkflow;
 const publisherPath = currentRelease.publisherWorkflow;
 const promoterToolPath = 'plugins/usage-dashboard/tools/promote_release_blobs.cjs';
 const resolverPath = 'plugins/usage-dashboard/tools/resolve_release_spec.cjs';
+const reconcilerPath = 'plugins/usage-dashboard/tools/reconcile_release_candidate.py';
 const adapterPath = 'plugins/usage-dashboard/tools/prepare_release_regressions.py';
 const candidateValidatorPath = 'plugins/usage-dashboard/tools/validate_release_candidate.py';
 
@@ -19,6 +20,7 @@ const caller = fs.readFileSync(callerPath, 'utf8');
 const publisher = fs.readFileSync(publisherPath, 'utf8');
 const promoterTool = fs.readFileSync(promoterToolPath, 'utf8');
 const resolver = fs.readFileSync(resolverPath, 'utf8');
+const reconciler = fs.readFileSync(reconcilerPath, 'utf8');
 const candidateValidator = fs.readFileSync(candidateValidatorPath, 'utf8');
 
 assert.deepEqual(
@@ -32,11 +34,18 @@ assert.match(validatorWorkflow, /permissions:\s*\n\s*contents: read/);
 assert.doesNotMatch(validatorWorkflow, /contents: write|repo-main-write\.py|git push|git switch|inputs\.publish/);
 assert.match(validatorWorkflow, /CANDIDATE_NOT_MATERIALIZED/);
 assert.match(validatorWorkflow, /resolve_release_spec\.cjs/);
-assert.match(validatorWorkflow, /build_bridge_engine\.cjs --write/);
-assert.match(validatorWorkflow, /build_usage_dashboard\.cjs --write/);
+assert.match(validatorWorkflow, /reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
 assert.match(validatorWorkflow, /tests\/run-all\.cjs/);
 assert.doesNotMatch(validatorWorkflow, /\btests=\(/, 'validator must delegate test discovery to the registry runner');
 assert.doesNotMatch(validatorWorkflow, /product\s*=\s*['"]3\.0\.0-alpha\./, 'validator must remain version-generic');
+for (const marker of [
+  "build_bridge_engine.cjs'), '--write'",
+  'sync_manager_engine_hash()',
+  'sync_manifest_hashes()',
+  "build_usage_dashboard.cjs'), '--write'",
+  'MATERIALIZER_NOT_IDEMPOTENT',
+  'MATERIALIZER_IDEMPOTENT:',
+]) assert.ok(reconciler.includes(marker), `generic reconciler must retain ${marker}`);
 
 assert.ok(caller.length < 2400, 'generic validation caller must remain small');
 assert.match(caller, /permissions:\s*\n\s*contents: read/);
@@ -71,4 +80,4 @@ assert.equal(fs.existsSync(adapterPath), false, 'historical regression adapter m
 assert.match(candidateValidator, /sha256 mismatch/);
 assert.match(candidateValidator, /snapshot contract/);
 
-console.log('Usage Dashboard release infrastructure foundation: OK · generic registry validation + merged exact-byte promotion');
+console.log('Usage Dashboard release infrastructure foundation: OK · generic reconciliation + registry validation + merged exact-byte promotion');

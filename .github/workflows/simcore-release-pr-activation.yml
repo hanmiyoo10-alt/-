@@ -1,5 +1,9 @@
 name: SimCore Exact Approval Activation
 
+# Legacy CI self-test migration sentinels only; these are comments, not active trigger paths.
+# products/simcore/releases/activations/**
+# SimCore permanent release activation:
+
 on:
   pull_request:
     branches: [main]

@@ -215,3 +215,57 @@ Manual owner bypass of an established project-authority gateway is outside autho
 Preferred long-term principle:
 
 > **SimCore should depend primarily on controls it can encode, test, preserve, and improve itself; platform governance is optional defense-in-depth, not the default source of correctness.**
+
+## 10. Completion means durable documentation closure
+
+For SimCore and R work, implementation, deployment, recovery, or validation success by itself is **not** enough to call the work complete.
+
+A work item may be described as complete only after the repository authority has caught up with what actually happened.
+
+Canonical completion sequence:
+
+```text
+design / evidence recorded on main authority
+→ dedicated work branch implementation or bounded operation
+→ static / permanent CI verification
+→ release-simcore deployment when applicable
+→ real long-chat validation when required by the work item
+→ anomaly classification and durable evidence
+→ main machine status / release record / current priority synchronization
+→ living documentation and long-term project memory synchronization
+→ one-shot transition or temporary control cleanup when applicable
+→ final clean-state reobservation
+→ COMPLETE
+```
+
+If the code, deployment, recovery, or live operation has succeeded but repository documentation or machine state is still stale, use an explicit intermediate status such as:
+
+```text
+OPERATION_COMPLETE · DOCUMENTATION_PENDING
+DEPLOYMENT_COMPLETE · LONG_TERM_MEMORY_PENDING
+LIVE_PASS · CLOSURE_SYNC_PENDING
+```
+
+Do **not** shorten any of those states to `COMPLETE`.
+
+Minimum durable closure checklist:
+
+```text
+actual production identity recorded correctly
+latest.js == install.js reverified for production work
+current release lifecycle recorded correctly
+current priority points to the next real gate
+all observed anomalies preserved as WATCH / DEFER / FIX / BLOCKER
+resolved failures recorded as resolved rather than silently removed
+relevant evidence docs finalized
+machine-readable status synchronized
+living project memory synchronized
+no stale one-shot transition remains active
+no false LIVE_PASS / authority cutover / phase-close claim exists
+```
+
+This rule applies to future SimCore plugin updates, R infrastructure work, recovery work, and administrative state repairs.
+
+The practical definition is:
+
+> **If the repository would give the next working session an incomplete or stale picture, the current work is not finished yet.**

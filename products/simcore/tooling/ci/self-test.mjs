@@ -30,6 +30,7 @@ ok('release-system-classification', () => {
     'products/simcore/tooling/post-publish-state.mjs',
     'products/simcore/tests/release-controller-qualification.test.mjs',
     'products/simcore/tests/post-publish-state-permanent.test.mjs',
+    'products/simcore/tests/release-declaration-transition.test.mjs',
     'products/simcore/releases/release-schema-v1.json',
   ]) {
     const r=classifyPaths([p]);
@@ -44,6 +45,7 @@ ok('state-sync-classification', () => {
     'products/simcore/tooling/post-publish-state.mjs',
     'products/simcore/tests/post-publish-state-shadow.test.mjs',
     'products/simcore/tests/post-publish-state-permanent.test.mjs',
+    'products/simcore/tests/release-declaration-transition.test.mjs',
     'products/simcore/tooling/admin-state-transition.mjs',
     'products/simcore/tests/admin-state-transition.test.mjs',
     '.github/workflows/simcore-release-state-sync.yml',
@@ -129,7 +131,20 @@ ok('permanent-release-controller-boundary', () => {
   const writes=[...workflow.matchAll(/contents:\s+write/g)];
   expect(writes.length===2,`permanent caller write scope count=${writes.length}`);
   expect(workflow.includes('permissions:\n  contents: read\n  actions: read'),'permanent caller top-level read-only permission missing');
-  for(const token of ['authority_confirmation','RS2_4_RELEASE','uses: ./.github/workflows/simcore-release-required.yml','release-publish.mjs','--mode publish','post-publish-state.mjs','repo-main-write.py','--required-profile MAIN_HEALTH','--required-job Required','PENDING_REAL_LONG_CHAT']) expect(workflow.includes(token),`permanent caller required token missing: ${token}`);
+  for(const token of [
+    'authority_confirmation',
+    'RS2_4_RELEASE',
+    'uses: ./.github/workflows/simcore-release-required.yml',
+    'release-publish.mjs',
+    '--mode publish',
+    'post-publish-state.mjs',
+    'repo-main-write.py',
+    '--required-profile MAIN_HEALTH',
+    '--required-job Required',
+    'PENDING_REAL_LONG_CHAT',
+    'group: simcore-main-state-sync',
+    'GH_TOKEN: ${{ github.token }}',
+  ]) expect(workflow.includes(token),`permanent caller required token missing: ${token}`);
   for(const token of ['--force','force-with-lease','git push --force','+refs/heads/release-simcore']) expect(!workflow.includes(token),`permanent caller forbidden token: ${token}`);
   expect(!/uses:\s+actions\/(?:checkout|download-artifact|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'permanent caller external action is not pinned');
 });
@@ -138,6 +153,12 @@ ok('permanent-required-authority-set-bounded', () => {
   const check=fs.readFileSync('products/simcore/tooling/check.mjs','utf8');
   expect(check.includes("new Set(['RS2_4_SHADOW', 'RS2_4_RELEASE'])"),'CANDIDATE_REQUIRED authority set is not exact');
   expect(check.includes('CANDIDATE_REQUIRED_RESERVED_FOR_RS2_4'),'reserved authority failure code missing');
+});
+
+ok('release-declaration-validation-reset-static', () => {
+  const script=fs.readFileSync('scripts/simcore-sync-memory.py','utf8');
+  expect(script.includes("production_identity_changed = previous_release_commit != release_commit"),'production identity transition detector missing');
+  expect(script.includes("manifest['validation_status'] = 'PENDING_REAL_LONG_CHAT'"),'new production validation reset missing');
 });
 
 ok('release-shadow-deterministic-tests', () => {
@@ -170,6 +191,12 @@ ok('post-publish-state-permanent-deterministic-tests', () => {
   expect(String(r.stdout).includes('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5'),'RS2-4E permanent state pass marker missing');
 });
 
+ok('release-declaration-transition-deterministic-tests', () => {
+  const r=spawnSync(process.execPath,['products/simcore/tests/release-declaration-transition.test.mjs'],{encoding:'utf8',timeout:60000,maxBuffer:1024*1024});
+  expect(r.status===0,`RS2-4E release declaration transition failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_4E_RELEASE_DECLARATION_TRANSITION_TEST_PASS NEW SAME ROLLBACK'),'release declaration transition pass marker missing');
+});
+
 ok('legacy-map-complete', () => {
   const map = JSON.parse(fs.readFileSync('products/simcore/ci/legacy-gate-map.json','utf8'));
   const mapped = new Set(map.workflows.map((row) => row.legacyWorkflow));
@@ -180,7 +207,7 @@ ok('legacy-map-complete', () => {
     .map((name) => `.github/workflows/${name}`);
   for (const file of files) expect(mapped.has(file), `LEGACY_GATE_UNCLASSIFIED: ${file}`);
   for (const row of map.workflows) expect(row.status !== 'UNMAPPED', `unmapped workflow: ${row.legacyWorkflow}`);
-  expect(map.status === 'SHADOW_VERIFIED', `legacy map status=${map.status}`);
+  expect(map.status === 'SHADOW_VERIFIED', `shadow status=${map.status}`);
   const pure = map.workflows.find((row) => row.class === 'CHECK_ONLY_PREDECESSOR');
   expect(pure?.status === 'SHADOW_VERIFIED' && pure?.retirementEligibility === 'YES', 'pure predecessor is not retirement-eligible');
   for (const row of map.workflows.filter((x) => x.class === 'MIXED_BUILD_VALIDATOR')) {

@@ -133,6 +133,8 @@ verify C/latest/install exact production identity
 
 If the admin handoff fails after publication, production truth remains C and recovery must resume from the C identity. Never move `release-simcore` backward merely to repair main state.
 
+The permanent post-publish writer and the existing automatic state-sync writer share the repository-wide `simcore-main-state-sync` concurrency group. Either writer may arrive first after a real publication; both must converge idempotently on the same observed C identity.
+
 ## 7. Qualification without publication
 
 Caller activation is qualified by permanent CI/static contracts and deterministic controller/state tests. The production caller itself is **not dispatched with a publishable product spec** during this work item.
@@ -185,3 +187,80 @@ WATCH / DEFER / FIX / BLOCKER
 ```
 
 No caller-activation failure may trigger a runtime change or a release-simcore write.
+
+## 10. Qualification findings preserved during implementation
+
+### `PRELIVE_STATUS_INHERITANCE_RACE`
+
+Classification:
+
+```text
+FIX / STATE_SYNC / NON_RUNTIME
+production mutation = NONE
+runtime mutation = NONE
+```
+
+Finding:
+
+The existing `simcore-release-state-sync` push path can observe a newly published `release-simcore` commit before the permanent post-publish handoff runs. Its transitional `--manifest-only` declaration previously updated release identity while preserving the previous release's `validation_status`. A prior `LIVE_PASS` could therefore be temporarily attached to a newly published C identity.
+
+Permanent repair:
+
+```text
+previous release_commit != observed release_commit
+→ validation_status = PENDING_REAL_LONG_CHAT
+
+previous release_commit == observed release_commit
+→ preserve current validation_status
+```
+
+This rule is owned by `scripts/simcore-sync-memory.py` and permanent deterministic transition coverage. It applies to NEW_VERSION, SAME_VERSION_CORRECTION, and ROLLBACK identity changes.
+
+### `POST_PUBLISH_MAIN_WRITER_RACE`
+
+Classification:
+
+```text
+FIX / COORDINATION / NON_RUNTIME
+production mutation = NONE during qualification
+```
+
+Finding:
+
+A real permanent publish to `release-simcore` automatically triggers the existing release-state-sync workflow while the permanent caller also needs to land its bounded LIVE_PENDING release record/state payload.
+
+Permanent repair:
+
+```text
+existing state-sync workflow
+permanent post-publish state job
+→ shared concurrency group: simcore-main-state-sync
+→ cancel-in-progress = false
+→ idempotent C-based convergence
+```
+
+The automatic writer may land identity/docs first or the permanent caller may land the full payload first. The second writer must safely observe the same C and converge without changing production backward.
+
+### `POST_PUBLISH_GATEWAY_TOKEN_MISSING`
+
+Classification:
+
+```text
+FIX / HARNESS / NON_RUNTIME
+production mutation = NONE
+```
+
+Finding:
+
+The project-owned `repo-main-write.py` protected mode requires `GH_TOKEN` or `GITHUB_TOKEN` for its exact-commit Required dispatch/gate. The initial caller draft did not pass that environment explicitly.
+
+Permanent repair:
+
+```text
+post-publish bounded main job
+→ contents: write
+→ GH_TOKEN = github.token
+→ repo-main-write.py protected MAIN_HEALTH / Required gateway
+```
+
+This is permanently checked by the caller static qualification.

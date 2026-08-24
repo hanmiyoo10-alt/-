@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS",
-  "status": "IMPLEMENTATION_COMPLETE_OPERATION_POLICY_DEFERRED",
+  "status": "DELEGATED_OPERATOR_POLICY_IMPLEMENTED_PENDING_CI",
   "date": "2026-08-25",
   "parentFeedback": "products/simcore/releases/R_FIRST_REAL_RELEASE_FEEDBACK_STATUS.json",
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md",
@@ -11,14 +11,16 @@
     "safetyWeakeningAllowed": false,
     "targetPrsToLivePending": 2,
     "targetPrsThroughLivePassClosure": 3,
-    "machineKnownFactReentryTarget": 0
+    "machineKnownFactReentryTarget": 0,
+    "userManualPreLiveGithubActionsTarget": 0
   },
   "hardeningUnits": [
     { "id": "R2_1_A_ONE_SHOT_RETIREMENT", "classification": "FIX", "priority": "FIRST", "status": "CLOSED" },
     { "id": "R2_1_B_GENERIC_CANDIDATE_CONTROLLER", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_D_LIVE_PENDING_STATE_CONVERGENCE", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
-    { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "CLOSED_IMPLEMENTED_NOT_ACTIVE" }
+    { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "CLOSED_IMPLEMENTED_NOT_ACTIVE" },
+    { "id": "R2_1_E_DELEGATED_OPERATOR_POLICY", "classification": "FIX", "priority": "AFTER_E_IMPLEMENTATION", "status": "IMPLEMENTED_PENDING_CI" }
   ],
   "feedbackDisposition": {
     "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC": "FIXED_R2_1_B",
@@ -26,14 +28,15 @@
     "06407_CANDIDATE_ONE_SHOT_WORKFLOWS_STILL_ACTIVE": "FIXED_R2_1_A",
     "CANDIDATE_PREPARATION_OBSERVABILITY_NOT_PERMANENT": "FIXED_R2_1_B",
     "LIVE_PENDING_DURABLE_CLOSURE_FRAGMENTED": "FIXED_R2_1_D",
-    "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY": "FIXED_R2_1_C_D",
-    "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR": "R2_1_E_IMPLEMENTED_NOT_ACTIVE",
+    "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY": "FIXED_R2_1_C_D_E_PACKAGE",
+    "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR": "FIXED_BY_EXACT_APPROVAL_PR_DESIGN_PENDING_OPERATIONAL_PROOF",
     "R2_1_E_ROLLBACK_MACHINE_SPEC_MISSING_ROLLBACK_BLOCK": "FIXED_PRE_ACTIVATION",
     "R2_1_E_PREMERGE_BASE_DRIFT": "FIXED_FRESH_REBASE_AND_MAIN_MERGE",
-    "R2_1_E_OPERATIONAL_APPROVAL_POLICY": "DEFER_USER_DISCUSSION",
+    "R2_1_E_OPERATIONAL_APPROVAL_POLICY": "FIXED_POLICY_DELEGATED_OPERATOR_TO_LIVE_PENDING_PENDING_CI",
     "PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING": "WATCH_RETAIN",
     "CANDIDATE_TRANSPORT_REF_RETIREMENT": "DEFER_TOOL_SURFACE",
-    "GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24": "WATCH_NON_BLOCKING"
+    "GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24": "WATCH_NON_BLOCKING",
+    "LEGACY_ACTIVATION_SELF_TEST_SENTINELS": "DEFER_REMOVE_AFTER_SELF_TEST_MIGRATION_NON_OPERATIONAL"
   },
   "preservedSafety": {
     "singlePublisher": true,
@@ -46,28 +49,50 @@
     "manualGithubGovernanceDependency": false,
     "documentationClosureRequiredForComplete": true
   },
+  "operatorPolicy": {
+    "mode": "DELEGATED_OPERATOR_TO_LIVE_PENDING",
+    "explicitReleaseWorkItemRequired": true,
+    "standingBackgroundReleaseAuthority": false,
+    "assistantMayCreateApprovalPr": true,
+    "assistantMayMergeApprovalPrAfterRequiredPass": true,
+    "userManualPreLiveGithubActions": 0,
+    "userNextPhysicalAction": "APPLY_PLUGIN_PLUS_AND_REAL_LONG_CHAT",
+    "userCanInterruptBeforePublication": true
+  },
+  "steadyStateOperatorPath": [
+    "EXPLICIT_USER_RELEASE_WORK_ITEM",
+    "PR1_PRODUCT_PLUS_RELEASE_INTENT",
+    "GENERIC_CANDIDATE_AND_MACHINE_RECEIPT",
+    "PR2_DELEGATED_EXACT_APPROVAL_PACKAGE",
+    "ASSISTANT_MERGES_PR2_AFTER_VERIFY_REQUIRED_PASS",
+    "PERMANENT_PUBLICATION_AND_LIVE_PENDING_CONVERGENCE",
+    "HANDOFF_TO_USER_PLUS_AND_REAL_LONG_CHAT",
+    "PR3_LIVE_PASS_CLOSURE"
+  ],
   "qualificationPlan": [
     "A_RETIRE_ONE_SHOT_WORKFLOWS",
     "B_REPLAY_06407_GENERIC_CANDIDATE",
     "C_EXACT_EXISTING_IDEMPOTENCY_PASS_AND_CONFLICT_BLOCK",
     "D_REPLAY_06407_STATE_AS_ALREADY_CONVERGED",
     "E_SHADOW_MACHINE_SPEC_AND_APPROVAL_RESOLUTION",
-    "DISCUSS_E_OPERATIONAL_APPROVAL_MODEL",
+    "E_DELEGATED_APPROVAL_PACKAGE_AND_ADAPTER_STATIC_NEGATIVES",
     "NEXT_GENUINE_RUNTIME_RELEASE_OPERATIONAL_PROOF"
   ],
   "activationRules": {
     "genericCandidateMayActivateAfter": "R2_1_B_PERMANENT_NEGATIVES_PASS",
     "machineDerivedSpecMayActivateAfter": "R2_1_C_SHADOW_EQUIVALENCE_AND_RELEASE_MODE_PROOFS_PASS",
     "approvalConsolidationMayActivateAfter": "R2_1_B_C_D_QUALIFIED",
-    "approvalOperationalDispatchMayActivateAfter": "EXPLICIT_FUTURE_OPERATOR_POLICY_DECISION",
+    "approvalOperationalDispatchMayActivateAfter": "EXPLICIT_RELEASE_WORK_ITEM_AND_EXACT_APPROVAL_PR_VERIFY_REQUIRED_PASS",
     "productionMutationFromDesign": "FORBIDDEN"
   },
   "implementationAuthorized": true,
   "implementationComplete": true,
   "approvalResolverImplemented": true,
   "approvalResolverOperationallyActive": false,
-  "machineDerivedSpecAuthority": "SHADOW_ONLY",
-  "publicationDispatchFromR2_1_E": "DISABLED_PENDING_OPERATOR_DECISION",
+  "delegatedOperatorAdapterImplemented": true,
+  "delegatedOperatorAdapterActive": false,
+  "machineDerivedSpecAuthority": "SHADOW_ONLY_UNTIL_APPROVAL_PACKAGE_COMMIT",
+  "publicationDispatchFromR2_1_E": "PENDING_DELEGATED_ADAPTER_CI",
   "currentProductGateUnchanged": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE",
@@ -79,21 +104,8 @@
     "qualification": "products/simcore/releases/R_V2_1_QUALIFICATION_STATUS.json",
     "qualificationMerge": "47028d800965fb7eeae8b00385c2ba7acdbc39e8",
     "r2_1_e": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_E_EXACT_APPROVAL_EVIDENCE.md",
-    "supersededEPr": 286,
-    "supersededFirstCiRun": 32766766843,
-    "supersededFirstVerifyJob": 97557881830,
-    "supersededFirstRequiredJob": 97558019582,
-    "supersededFinalCiRun": 32766947598,
-    "supersededFinalVerifyJob": 97558454976,
-    "supersededFinalRequiredJob": 97558550787,
-    "finalEPr": 289,
-    "freshBaseCiRun": 32767651870,
-    "freshBaseVerifyJob": 97560658706,
-    "freshBaseRequiredJob": 97560832118,
-    "finalMergeHeadCiRun": 32767935072,
-    "finalMergeHeadVerifyJob": 97561541664,
-    "finalMergeHeadRequiredJob": 97561670705,
-    "eImplementationMerge": "3d23e088980d409a3085c58cb435a733e8d67cef"
+    "eImplementationMerge": "3d23e088980d409a3085c58cb435a733e8d67cef",
+    "operatorDelegationPolicy": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_OPERATOR_DELEGATION_POLICY.md"
   },
-  "recommendedNextWorkItemAfterApproval": "DISCUSS_R2_1_E_OPERATIONAL_APPROVAL_POLICY"
+  "recommendedNextWorkItemAfterApproval": "PERMANENT_CI_AND_MERGE_DELEGATED_OPERATOR_ADAPTER"
 }

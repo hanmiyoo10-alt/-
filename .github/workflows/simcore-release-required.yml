@@ -1,0 +1,166 @@
+name: SimCore Permanent Release Required
+
+on:
+  workflow_call:
+    inputs:
+      candidate_commit:
+        required: true
+        type: string
+      candidate_fetch_ref:
+        required: false
+        type: string
+      expected_production_commit:
+        required: true
+        type: string
+      verifier_commit:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      conclusion: ${{ steps.outcome.outputs.conclusion }}
+    steps:
+      - name: Checkout exact verifier policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.verifier_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+          cache: ''
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.x'
+          cache: ''
+
+      - name: Validate immutable authority inputs
+        shell: bash
+        env:
+          CANDIDATE: ${{ inputs.candidate_commit }}
+          EXPECTED_PRODUCTION: ${{ inputs.expected_production_commit }}
+          VERIFIER_COMMIT: ${{ inputs.verifier_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PRODUCTION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VERIFIER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$VERIFIER_COMMIT"
+          echo 'RS2_4_RELEASE_REQUIRED_INPUTS_BOUND'
+
+      - name: Materialize exact production and candidate
+        shell: bash
+        env:
+          CANDIDATE: ${{ inputs.candidate_commit }}
+          FETCH_REF: ${{ inputs.candidate_fetch_ref }}
+          EXPECTED_PRODUCTION: ${{ inputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          P="$(git rev-parse origin/release-simcore)"
+          test "$P" = "$EXPECTED_PRODUCTION"
+          if [[ -n "${FETCH_REF:-}" ]]; then
+            git fetch --no-tags origin "$FETCH_REF"
+          fi
+          git cat-file -e "$CANDIDATE^{commit}"
+          mkdir -p .simcore-release-required
+          git show "$P:plugins/simcore/latest.js" > .simcore-release-required/production-latest.js
+          git show "$P:plugins/simcore/install.js" > .simcore-release-required/production-install.js
+          PL="$(git rev-parse "$P:plugins/simcore/latest.js")"
+          PI="$(git rev-parse "$P:plugins/simcore/install.js")"
+          test "$PL" = "$PI"
+          git show "$CANDIDATE:plugins/simcore/latest.js" > .simcore-release-required/candidate-latest.js
+          git show "$CANDIDATE:plugins/simcore/install.js" > .simcore-release-required/candidate-install.js
+          cat > .simcore-release-required/production-identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$P","latest":{"path":".simcore-release-required/production-latest.js","blob":"$PL"},"install":{"path":".simcore-release-required/production-install.js","blob":"$PI"}}
+          EOF
+          cat > .simcore-release-required/scope.json <<'EOF'
+          {"schemaVersion":1,"labels":["FULL_BASELINE"],"unrelated":false,"docOnly":false,"paths":[]}
+          EOF
+
+      - name: Run exact permanent verifier
+        id: verifier
+        shell: bash
+        env:
+          CANDIDATE: ${{ inputs.candidate_commit }}
+          EXPECTED_PRODUCTION: ${{ inputs.expected_production_commit }}
+          VERIFIER_COMMIT: ${{ inputs.verifier_commit }}
+        run: |
+          set -euo pipefail
+          set +e
+          node products/simcore/tooling/check.mjs \
+            --profile CANDIDATE_REQUIRED \
+            --source .simcore-release-required/candidate-latest.js \
+            --mirror-source .simcore-release-required/candidate-install.js \
+            --production-identity .simcore-release-required/production-identity.json \
+            --scope-file .simcore-release-required/scope.json \
+            --verifier-commit "$VERIFIER_COMMIT" \
+            --candidate-commit "$CANDIDATE" \
+            --expected-production-commit "$EXPECTED_PRODUCTION" \
+            --candidate-required-authority RS2_4_RELEASE \
+            --report .simcore-release-required/simcore-ci-report.json
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve bounded conclusion
+        id: outcome
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .simcore-release-required/simcore-ci-report.json
+          conclusion="$(python3 - <<'PY'
+          import json
+          p=json.load(open('.simcore-release-required/simcore-ci-report.json'))
+          print(p['conclusion'])
+          PY
+          )"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          cat .simcore-release-required/simcore-ci-report.json
+
+      - name: Upload exact Required report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simcore-release-required-${{ github.run_id }}
+          path: .simcore-release-required/simcore-ci-report.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce verifier conclusion
+        shell: bash
+        env:
+          EXIT_CODE: ${{ steps.verifier.outputs.exit_code }}
+          CONCLUSION: ${{ steps.outcome.outputs.conclusion }}
+        run: |
+          set -euo pipefail
+          test "$EXIT_CODE" = 0
+          test "$CONCLUSION" = PASS
+
+  required:
+    name: Required
+    needs: verify
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Aggregate stable permanent release gate
+        shell: bash
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          VERIFY_CONCLUSION: ${{ needs.verify.outputs.conclusion }}
+        run: |
+          set -euo pipefail
+          test "$VERIFY_RESULT" = success
+          test "$VERIFY_CONCLUSION" = PASS
+          echo 'RS2_4_RELEASE_REQUIRED_PASS'

@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   candidate-ready:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard ready ')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && (startsWith(github.event.comment.body, '/usage-dashboard ready ') || startsWith(github.event.comment.body, '/usage-dashboard ready-branch '))) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout immutable trusted release control parser
@@ -29,6 +29,7 @@ jobs:
         id: request
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RAW_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           CONTROL_COMMAND: ${{ github.event.comment.body }}
           CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -39,8 +40,22 @@ jobs:
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo "CANDIDATE_READY_UNTRUSTED_WORKFLOW_REF:$GITHUB_REF"; exit 1; }
           if [[ "$GITHUB_EVENT_NAME" == 'issue_comment' ]]; then
             node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
-            CANDIDATE_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --ready-sha "$CONTROL_COMMAND")"
-            echo "CANDIDATE_READY_CONTROL_COMMENT:$CANDIDATE_SHA"
+            if [[ "$CONTROL_COMMAND" == '/usage-dashboard ready-branch '* ]]; then
+              CANDIDATE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --ready-branch "$CONTROL_COMMAND")"
+              node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$CANDIDATE_BRANCH"
+              RESPONSE="$(curl --fail-with-body --silent --show-error \
+                -H 'Accept: application/vnd.github+json' \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/$CANDIDATE_BRANCH")"
+              CANDIDATE_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("object",{}).get("sha",""))' <<< "$RESPONSE")"
+              [[ "$CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'CANDIDATE_READY_BRANCH_SHA_INVALID'; exit 1; }
+              CANDIDATE_SHA="${CANDIDATE_SHA,,}"
+              echo "CANDIDATE_READY_CONTROL_BRANCH:$CANDIDATE_BRANCH:$CANDIDATE_SHA"
+            else
+              CANDIDATE_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --ready-sha "$CONTROL_COMMAND")"
+              echo "CANDIDATE_READY_CONTROL_COMMENT:$CANDIDATE_SHA"
+            fi
           else
             [[ "$RAW_CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'CANDIDATE_READY_INVALID_SHA'; exit 1; }
             CANDIDATE_SHA="${RAW_CANDIDATE_SHA,,}"

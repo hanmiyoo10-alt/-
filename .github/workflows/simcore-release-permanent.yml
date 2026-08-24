@@ -1,0 +1,361 @@
+name: SimCore Permanent Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_spec_path:
+        description: Immutable authorized SimCore release spec path on main
+        required: true
+        type: string
+      candidate_fetch_ref:
+        description: Optional same-repository candidate transport ref
+        required: false
+        type: string
+      authority_confirmation:
+        description: Must equal RS2_4_RELEASE
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: simcore-release-production
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve Permanent Authorization
+    runs-on: ubuntu-24.04
+    outputs:
+      candidate_commit: ${{ steps.spec.outputs.candidate_commit }}
+      expected_production_commit: ${{ steps.spec.outputs.expected_production_commit }}
+      release_id: ${{ steps.spec.outputs.release_id }}
+      spec_path: ${{ steps.spec.outputs.spec_path }}
+      authorization_commit: ${{ steps.spec.outputs.authorization_commit }}
+      verifier_commit: ${{ steps.spec.outputs.verifier_commit }}
+    steps:
+      - name: Checkout canonical release policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate permanent authority readiness
+        shell: bash
+        env:
+          CONFIRM: ${{ inputs.authority_confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRM" = 'RS2_4_RELEASE'
+          python3 - <<'PY'
+          import json
+          s=json.load(open('products/simcore/releases/RS2_4E_QUALIFICATION_STATUS.json'))
+          assert s['permanentReleaseAvailable'] is True
+          assert s['permanentReleaseShadowVerified'] is True
+          assert s['rollbackRehearsalVerified'] is True
+          assert s['realReleaseReady'] is True
+          assert s['authorityBinding']['releaseAuthorityMarker'] == 'RS2_4_RELEASE'
+          assert s['adminState']['result'] == 'PASS'
+          print('RS2_4_RELEASE_REAL_RELEASE_READY_BOUNDARY_PASS')
+          PY
+
+      - name: Resolve immutable release spec and policy identity
+        id: spec
+        shell: bash
+        env:
+          SPEC_PATH: ${{ inputs.release_spec_path }}
+        run: |
+          set -euo pipefail
+          case "$SPEC_PATH" in
+            products/simcore/releases/specs/*.json) ;;
+            *) echo 'RELEASE_SPEC_PATH_INVALID' >&2; exit 2 ;;
+          esac
+          test -f "$SPEC_PATH"
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          p=os.environ['SPEC_PATH']
+          s=json.load(open(p))
+          for k in ['releaseId','candidateCommit','expectedProductionCommit','candidateReleaseBlob','version','releaseName']:
+              if k not in s: raise SystemExit('RELEASE_SPEC_MISSING_FIELD:'+k)
+          for k in ['candidateCommit','expectedProductionCommit','candidateReleaseBlob']:
+              if not re.fullmatch(r'[0-9a-f]{40}',s[k]): raise SystemExit('RELEASE_SPEC_IDENTITY_INVALID:'+k)
+          policy=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          touches=subprocess.check_output(['git','log','--format=%H','--',p],text=True).split()
+          if len(touches)!=1: raise SystemExit('RELEASE_SPEC_AUTHORIZATION_HISTORY_INVALID')
+          auth=touches[0]
+          out=os.environ['GITHUB_OUTPUT']
+          with open(out,'a') as f:
+              f.write('candidate_commit='+s['candidateCommit']+'\n')
+              f.write('expected_production_commit='+s['expectedProductionCommit']+'\n')
+              f.write('release_id='+s['releaseId']+'\n')
+              f.write('spec_path='+p+'\n')
+              f.write('authorization_commit='+auth+'\n')
+              f.write('verifier_commit='+policy+'\n')
+          PY
+
+  candidate-required:
+    name: Candidate Required
+    needs: resolve
+    uses: ./.github/workflows/simcore-release-required.yml
+    with:
+      candidate_commit: ${{ needs.resolve.outputs.candidate_commit }}
+      candidate_fetch_ref: ${{ inputs.candidate_fetch_ref }}
+      expected_production_commit: ${{ needs.resolve.outputs.expected_production_commit }}
+      verifier_commit: ${{ needs.resolve.outputs.verifier_commit }}
+
+  publish:
+    name: Publish Exact Candidate
+    needs: [resolve, candidate-required]
+    if: ${{ needs.candidate-required.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      publication_disposition: ${{ steps.publish.outputs.publication_disposition }}
+    steps:
+      - name: Checkout exact canonical policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.verifier_commit }}
+          fetch-depth: 0
+
+      - name: Fetch immutable candidate transport hint
+        if: ${{ inputs.candidate_fetch_ref != '' }}
+        shell: bash
+        env:
+          FETCH_REF: ${{ inputs.candidate_fetch_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$FETCH_REF"
+
+      - name: Download exact RS2_4_RELEASE Required report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: simcore-release-required-${{ github.run_id }}
+          path: .simcore-release/required
+
+      - name: Publish through permanent controller
+        id: publish
+        shell: bash
+        env:
+          SPEC_PATH: ${{ needs.resolve.outputs.spec_path }}
+          AUTHORIZATION_COMMIT: ${{ needs.resolve.outputs.authorization_commit }}
+          VERIFIER_COMMIT: ${{ needs.resolve.outputs.verifier_commit }}
+          EXPECTED_PRODUCTION: ${{ needs.resolve.outputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_PRODUCTION"
+          node products/simcore/tooling/release-publish.mjs \
+            --spec "$SPEC_PATH" \
+            --ci-report .simcore-release/required/simcore-ci-report.json \
+            --authorization-commit "$AUTHORIZATION_COMMIT" \
+            --expected-verifier "$VERIFIER_COMMIT" \
+            --mode publish \
+            --report .simcore-release/publication-report.json
+          disposition="$(python3 - <<'PY'
+          import json
+          print(json.load(open('.simcore-release/publication-report.json'))['publicationDisposition'])
+          PY
+          )"
+          case "$disposition" in PUBLISHED|NOOP) ;; *) exit 2 ;; esac
+          echo "publication_disposition=$disposition" >> "$GITHUB_OUTPUT"
+
+      - name: Build immutable post-publish handoff
+        if: ${{ steps.publish.outputs.publication_disposition == 'PUBLISHED' }}
+        shell: bash
+        env:
+          SPEC_PATH: ${{ needs.resolve.outputs.spec_path }}
+          AUTHORIZATION_COMMIT: ${{ needs.resolve.outputs.authorization_commit }}
+          VERIFIER_COMMIT: ${{ needs.resolve.outputs.verifier_commit }}
+        run: |
+          set -euo pipefail
+          SPEC_PATH="$SPEC_PATH" AUTHORIZATION_COMMIT="$AUTHORIZATION_COMMIT" VERIFIER_COMMIT="$VERIFIER_COMMIT" node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const spec=JSON.parse(fs.readFileSync(process.env.SPEC_PATH,'utf8'));
+          const ciPath='.simcore-release/required/simcore-ci-report.json';
+          const ciBytes=fs.readFileSync(ciPath);
+          const ci=JSON.parse(ciBytes);
+          const pub=JSON.parse(fs.readFileSync('.simcore-release/publication-report.json','utf8'));
+          if(pub.publicationDisposition!=='PUBLISHED') throw new Error('POST_PUBLISH_HANDOFF_REQUIRES_PUBLISHED');
+          if(pub.after!==spec.candidateCommit) throw new Error('POST_PUBLISH_HANDOFF_CANDIDATE_MISMATCH');
+          if(ci.candidateRequiredAuthority!=='RS2_4_RELEASE'||ci.conclusion!=='PASS') throw new Error('POST_PUBLISH_HANDOFF_REQUIRED_INVALID');
+          const specBytes=Buffer.from(JSON.stringify(spec)+'\n');
+          const out={
+            schemaVersion:1,product:'SimCore',releaseId:spec.releaseId,releaseMode:spec.releaseMode,
+            authorizationCommit:process.env.AUTHORIZATION_COMMIT,releaseSpecPath:process.env.SPEC_PATH,
+            releaseSpecSha256:crypto.createHash('sha256').update(specBytes).digest('hex'),
+            productionCommit:spec.candidateCommit,previousProductionCommit:spec.expectedProductionCommit,
+            productionBlob:spec.candidateReleaseBlob,version:spec.version,releaseName:spec.releaseName,
+            verificationReportSha256:crypto.createHash('sha256').update(ciBytes).digest('hex'),
+            verifierCommit:process.env.VERIFIER_COMMIT,
+            liveScenarioId:spec.liveGate?.scenarioId||'UNASSIGNED',publisherRunId:String(process.env.GITHUB_RUN_ID||'')
+          };
+          fs.writeFileSync('.simcore-release/post-publish-input.json',JSON.stringify(out,null,2)+'\n');
+          NODE
+
+      - name: Upload publication transaction handoff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simcore-permanent-publication-${{ github.run_id }}
+          path: |
+            .simcore-release/publication-report.json
+            .simcore-release/post-publish-input.json
+          if-no-files-found: error
+          retention-days: 90
+
+  post-publish-state:
+    name: Declare Published State
+    needs: [resolve, publish]
+    if: ${{ needs.publish.result == 'success' && needs.publish.outputs.publication_disposition == 'PUBLISHED' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout current main administrative authority
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download immutable publication handoff
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: simcore-permanent-publication-${{ github.run_id }}
+          path: .simcore-release/handoff
+
+      - name: Materialize exact observed production
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT=.simcore-release/handoff/post-publish-input.json
+          test -f "$INPUT"
+          C="$(python3 - <<'PY'
+          import json
+          print(json.load(open('.simcore-release/handoff/post-publish-input.json'))['productionCommit'])
+          PY
+          )"
+          BLOB="$(python3 - <<'PY'
+          import json
+          print(json.load(open('.simcore-release/handoff/post-publish-input.json'))['productionBlob'])
+          PY
+          )"
+          RELEASE_ID="$(python3 - <<'PY'
+          import json
+          print(json.load(open('.simcore-release/handoff/post-publish-input.json'))['releaseId'])
+          PY
+          )"
+          [[ "$C" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BLOB" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$C"
+          mkdir -p .simcore-release/observed
+          git show "$C:plugins/simcore/latest.js" > .simcore-release/observed/latest.js
+          git show "$C:plugins/simcore/install.js" > .simcore-release/observed/install.js
+          node --check .simcore-release/observed/latest.js
+          node --check .simcore-release/observed/install.js
+          cmp -s .simcore-release/observed/latest.js .simcore-release/observed/install.js
+          L="$(git rev-parse "$C:plugins/simcore/latest.js")"
+          I="$(git rev-parse "$C:plugins/simcore/install.js")"
+          test "$L" = "$BLOB"
+          test "$I" = "$BLOB"
+          cat > .simcore-release/observed/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$C","latest":{"path":".simcore-release/observed/latest.js","blob":"$L"},"install":{"path":".simcore-release/observed/install.js","blob":"$I"}}
+          EOF
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "production_commit=$C" >> "$GITHUB_OUTPUT"
+
+      - name: Build bounded LIVE_PENDING administrative payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/post-publish-state.mjs \
+            --root . \
+            --input .simcore-release/handoff/post-publish-input.json \
+            --production-identity .simcore-release/observed/identity.json \
+            --report .simcore-release/post-publish-state-report.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('.simcore-release/post-publish-state-report.json'))
+          assert p['releaseAuthority']=='RS2_4_PERMANENT'
+          assert p['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
+          assert p['mainMutation']=='LOCAL_PAYLOAD_PENDING_GATEWAY'
+          assert p['lifecycleState']=='LIVE_PENDING'
+          allowed=set(p['persistentPayloadAllowlist'])
+          changed=set(p['changedPaths'])
+          assert changed <= allowed
+          print('RS2_4_POST_PUBLISH_PAYLOAD_BOUNDARY_PASS')
+          PY
+          git diff --check
+
+      - name: Commit and gate bounded main state
+        shell: bash
+        env:
+          RELEASE_ID: ${{ steps.state.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          RECORD="products/simcore/releases/records/${RELEASE_ID}.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md "$RECORD"
+          git diff --cached --quiet && { echo 'POST_PUBLISH_STATE_PAYLOAD_MISSING' >&2; exit 2; }
+          git commit -m "state(simcore): declare ${RELEASE_ID} live pending"
+          PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+          python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
+            --allow product-manifest.json \
+            --allow docs/CURRENT_DEVELOPMENT.md \
+            --allow docs/SIMCORE_GUIDELINES.md \
+            --allow "$RECORD" \
+            --required-workflow simcore-ci.yml \
+            --required-profile MAIN_HEALTH \
+            --required-job Required \
+            --staging-prefix simcore-rs2-4-post-publish
+
+      - name: Reobserve durable main truth
+        shell: bash
+        env:
+          EXPECTED_C: ${{ steps.state.outputs.production_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main release-simcore
+          test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_C"
+          git show origin/main:product-manifest.json > .simcore-release/durable-manifest.json
+          EXPECTED_C="$EXPECTED_C" python3 - <<'PY'
+          import json, os
+          m=json.load(open('.simcore-release/durable-manifest.json'))
+          assert m['release_commit']==os.environ['EXPECTED_C']
+          assert m['validation_status']=='PENDING_REAL_LONG_CHAT'
+          print('RS2_4_POST_PUBLISH_DURABLE_MAIN_PASS')
+          PY
+
+  required:
+    name: Permanent Release Required
+    if: always()
+    needs: [resolve, candidate-required, publish, post-publish-state]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce permanent transaction result
+        shell: bash
+        env:
+          RESOLVE_RESULT: ${{ needs.resolve.result }}
+          CI_RESULT: ${{ needs.candidate-required.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          PUBLICATION_DISPOSITION: ${{ needs.publish.outputs.publication_disposition }}
+          STATE_RESULT: ${{ needs.post-publish-state.result }}
+        run: |
+          set -euo pipefail
+          test "$RESOLVE_RESULT" = success
+          test "$CI_RESULT" = success
+          test "$PUBLISH_RESULT" = success
+          case "$PUBLICATION_DISPOSITION" in
+            PUBLISHED) test "$STATE_RESULT" = success ;;
+            NOOP) test "$STATE_RESULT" = skipped ;;
+            *) exit 2 ;;
+          esac
+          echo 'RS2_4_PERMANENT_RELEASE_TRANSACTION_PASS'

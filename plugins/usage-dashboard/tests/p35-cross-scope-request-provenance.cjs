@@ -37,6 +37,8 @@ assert.ok(capture.includes("'account-wide-fetch'"));
 assert.ok(capture.includes("'project-fallback-fetch'"));
 assert.ok(capture.includes("'account-wide-node-request'"));
 assert.ok(capture.includes("'project-fallback-node-request'"));
+assert.ok(capture.includes('let ensureCaptureTapRequestProvenanceInFlight = null;'), '5.71 capture tap patching must own a single-flight guard');
+assert.ok(capture.includes('if (ensureCaptureTapRequestProvenanceInFlight) return ensureCaptureTapRequestProvenanceInFlight;'), 'parallel capture launches must join one tap patch operation');
 assert.ok(capture.includes("requestProjectId: requestProject.value === null ? '' : String(requestProject.value)"));
 assert.ok(capture.includes("requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value)"));
 assert.ok(capture.includes("requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value)"));

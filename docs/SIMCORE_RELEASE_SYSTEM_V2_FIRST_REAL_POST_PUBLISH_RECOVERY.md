@@ -147,9 +147,102 @@ accept a different production commit/blob
 recover an older release over a newer production declaration
 ```
 
-## 6. Expected durable result
+## 6. First infrastructure PR feedback
 
-After recovery:
+Recovery infrastructure PR:
+
+```text
+PR #251
+branch: fix/simcore-r-post-publish-state-recovery
+initial head: a158ecc773fb3866b27fa076dfa96507dc886267
+initial SimCore CI run: 32751057850
+```
+
+The first CI attempt failed in the **trusted predecessor lane before proposed recovery code execution**.
+
+The predecessor `MAIN_HEALTH` verifier was run from main commit `bb7e51101da55b2877e5cd0ee6350e058a1e2299` against already-published production `a7ce8ce33a97797630f885c6753415e4b2ccc7fc`. At that moment main still declared v0.64.6, so the predecessor state gate could not establish current production identity.
+
+Classification:
+
+```text
+POST_PUBLISH_RECOVERY_TRUSTED_CI_BOOTSTRAP_CYCLE
+= FIX / R_FEEDBACK / CI_TRUST_BOUNDARY / ADMIN_STATE / NON_RUNTIME
+```
+
+This is not a runtime defect and not a publication defect. It is a recovery bootstrap cycle:
+
+```text
+production already advanced
+→ main administrative identity stale
+→ trusted predecessor MAIN_HEALTH rejects stale identity
+→ recovery infrastructure PR cannot reach proposed verifier
+```
+
+The correction must not bypass trusted CI. Use the already-installed canonical durable-memory sync authority to synchronize only the production identity first, then rerun the recovery infrastructure PR normally.
+
+## 7. Canonical durable-memory bootstrap
+
+Existing repository precedent uses an unmerged transport PR titled exactly:
+
+```text
+SimCore durable memory sync command
+```
+
+The same project-owned path was used for v0.64.7:
+
+```text
+command PR: #252
+command branch: command/simcore-06407-durable-memory-bootstrap
+command payload: products/simcore/releases/commands/rs2-4e-06407-post-publish-bootstrap.json
+merge disposition: CLOSED WITHOUT MERGE
+state-sync run: 32751352655
+state-sync result: SUCCESS
+durable main commit: abd8a60653b9bb176ce034920ccf5dbaa4c85cfc
+release-simcore mutation: NONE
+```
+
+After bootstrap, durable main truth is:
+
+```text
+production_version = 0.64.7
+release_name = Cross-Reload Cache Observer Continuity
+release_commit = a7ce8ce33a97797630f885c6753415e4b2ccc7fc
+release_blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
+validation_status = PENDING_REAL_LONG_CHAT
+```
+
+This bootstrap intentionally does **not** create the permanent RS2-4 release record. It only removes the stale production/admin contradiction so trusted permanent CI can evaluate the actual recovery infrastructure.
+
+## 8. Permanent regression ownership
+
+The permanent CI self-test now owns the recovery surface explicitly:
+
+```text
+normal durable-memory writer bot identity = github-actions[bot]
+permanent recovery writer bot identity = github-actions[bot]
+recovery PR must be a merged single recovery JSON path
+recovery authority marker = RS2_4_POST_PUBLISH_RECOVERY
+recovery consumes prior permanent publication artifact by publisherRunId
+recovery uses post-publish-state.mjs
+recovery requires MAIN_HEALTH / Required
+recovery targets PENDING_REAL_LONG_CHAT / LIVE_PENDING
+recovery workflow must not invoke release-publish.mjs
+recovery workflow must not contain force publication paths
+future permanent post-publish state job must have actions: write
+```
+
+An initial work-branch-only copied workflow interpolation typo was detected before CI and corrected before merge review:
+
+```text
+RECOVERY_WORKFLOW_SOURCE_METADATA_INTERPOLATION_TYPO
+= FIX / HARNESS / WORK_BRANCH_ONLY / PRE_CI / NON_RUNTIME
+```
+
+It never reached main, production, or `release-simcore`.
+
+## 9. Expected durable recovery result
+
+After the permanent recovery request completes:
 
 ```text
 product-manifest.production_version = 0.64.7

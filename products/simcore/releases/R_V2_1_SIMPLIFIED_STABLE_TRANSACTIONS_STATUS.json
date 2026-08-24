@@ -14,7 +14,7 @@
     "machineKnownFactReentryTarget": 0
   },
   "hardeningUnits": [
-    {"id":"R2_1_A_ONE_SHOT_RETIREMENT","classification":"FIX","priority":"FIRST","status":"IMPLEMENTED_PENDING_CI"},
+    {"id":"R2_1_A_ONE_SHOT_RETIREMENT","classification":"FIX","priority":"FIRST","status":"CI_VERIFIED_PENDING_MERGE"},
     {"id":"R2_1_B_GENERIC_CANDIDATE_CONTROLLER","classification":"FIX","priority":"HIGH","status":"DESIGNED"},
     {"id":"R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC","classification":"FIX","priority":"HIGH","status":"DESIGNED_SHADOW_FIRST"},
     {"id":"R2_1_D_LIVE_PENDING_STATE_CONVERGENCE","classification":"FIX","priority":"HIGH","status":"DESIGNED"},
@@ -23,7 +23,7 @@
   "feedbackDisposition": {
     "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC": "R2_1_B",
     "CANDIDATE_RETRY_EXACT_REF_ALREADY_EXISTS": "R2_1_B",
-    "06407_CANDIDATE_ONE_SHOT_WORKFLOWS_STILL_ACTIVE": "R2_1_A_IMPLEMENTED_PENDING_CI",
+    "06407_CANDIDATE_ONE_SHOT_WORKFLOWS_STILL_ACTIVE": "R2_1_A_CI_VERIFIED",
     "CANDIDATE_PREPARATION_OBSERVABILITY_NOT_PERMANENT": "R2_1_B",
     "LIVE_PENDING_DURABLE_CLOSURE_FRAGMENTED": "R2_1_D",
     "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY": "R2_1_C_D",
@@ -82,5 +82,11 @@
   "currentProductGateUnchanged": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE",
+  "currentEvidence": {
+    "r2_1_a": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_A_ONE_SHOT_RETIREMENT_EVIDENCE.md",
+    "r2_1_a_ci_run": 32760672505,
+    "r2_1_a_verify_job": 97538492831,
+    "r2_1_a_required_job": 97538636908
+  },
   "recommendedNextWorkItemAfterApproval": "R2_1_B_GENERIC_CANDIDATE_CONTROLLER"
 }

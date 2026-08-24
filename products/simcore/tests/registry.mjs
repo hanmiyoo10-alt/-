@@ -5,7 +5,8 @@ export const registry = Object.freeze([
   { id: 'broadcast-closure', module: './suites/broadcast-closure.test.mjs', fixtureDir: 'broadcast-closure', coverage: 'HYBRID_TRANSITIONAL', required: true, goldenGate: true },
   { id: 'diagnostic-copy', module: './suites/diagnostic-copy.test.mjs', fixtureDir: 'diagnostic-copy', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'candidate-materialize', module: './suites/candidate-materialize.test.mjs', fixtureDir: 'candidate-materialize', coverage: 'EXECUTABLE', required: true, goldenGate: true }
+  { id: 'candidate-materialize', module: './suites/candidate-materialize.test.mjs', fixtureDir: 'candidate-materialize', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'candidate-receipt', module: './suites/candidate-receipt.test.mjs', fixtureDir: 'candidate-receipt', coverage: 'EXECUTABLE', required: true, goldenGate: true }
 ]);
 
 export const packAliases = Object.freeze({

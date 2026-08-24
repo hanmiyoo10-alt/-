@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "apply documented REAL_RELEASE_LIVE_PENDING current-priority transition after v0.64.7 recovery closure",
+  "expectedProductionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "expectedProductionBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+  "expectedTransitionId": "06407-real-release-live-pending-priority",
+  "mergeThisCommandPayload": false
+}

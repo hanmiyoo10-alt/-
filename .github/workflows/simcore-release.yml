@@ -1,0 +1,163 @@
+name: SimCore Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_spec_path:
+        description: Immutable SimCore release spec path on main
+        required: true
+        type: string
+      candidate_fetch_ref:
+        description: Optional same-repository ref containing the immutable candidate
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simcore-release-shadow
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve Shadow Authorization
+    runs-on: ubuntu-24.04
+    outputs:
+      candidate_commit: ${{ steps.spec.outputs.candidate_commit }}
+      expected_production_commit: ${{ steps.spec.outputs.expected_production_commit }}
+      release_id: ${{ steps.spec.outputs.release_id }}
+      spec_path: ${{ steps.spec.outputs.spec_path }}
+    steps:
+      - name: Checkout canonical release policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate shadow authority boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          s=json.load(open('products/simcore/ci/RS2_3_STATUS.json'))
+          assert s['phaseStatus'] == 'PROMOTION_READY'
+          assert s['permanentCiAvailable'] is True
+          assert s['permanentCiShadowVerified'] is True
+          assert s['candidateRequiredInterface'] == 'READY'
+          assert s['requiredCiActive'] is False
+          assert s['rs2_4EntryAuthorized'] is False
+          print('RS2_4_SHADOW_AUTHORITY_BOUNDARY_PASS')
+          PY
+
+      - name: Resolve immutable release spec
+        id: spec
+        shell: bash
+        env:
+          SPEC_PATH: ${{ inputs.release_spec_path }}
+        run: |
+          set -euo pipefail
+          case "$SPEC_PATH" in
+            products/simcore/releases/specs/*.json) ;;
+            *) echo 'RELEASE_SPEC_PATH_INVALID' >&2; exit 2 ;;
+          esac
+          test -f "$SPEC_PATH"
+          node products/simcore/tooling/release-shadow.mjs --self-test
+          python3 - <<'PY'
+          import json, os, re
+          p=os.environ['SPEC_PATH']
+          s=json.load(open(p))
+          for k in ['releaseId','candidateCommit','expectedProductionCommit','candidateReleaseBlob']:
+              if k not in s: raise SystemExit('RELEASE_SPEC_MISSING_FIELD:'+k)
+          if not re.fullmatch(r'[0-9a-f]{40}',s['candidateCommit']): raise SystemExit('CANDIDATE_IDENTITY_INVALID')
+          if not re.fullmatch(r'[0-9a-f]{40}',s['expectedProductionCommit']): raise SystemExit('PRODUCTION_IDENTITY_INVALID')
+          out=os.environ['GITHUB_OUTPUT']
+          with open(out,'a') as f:
+              f.write('candidate_commit='+s['candidateCommit']+'\n')
+              f.write('expected_production_commit='+s['expectedProductionCommit']+'\n')
+              f.write('release_id='+s['releaseId']+'\n')
+              f.write('spec_path='+p+'\n')
+          PY
+
+  candidate-required:
+    name: Candidate Required
+    needs: resolve
+    uses: ./.github/workflows/simcore-ci.yml
+    with:
+      profile: CANDIDATE_REQUIRED
+      candidate_commit: ${{ needs.resolve.outputs.candidate_commit }}
+      candidate_fetch_ref: ${{ inputs.candidate_fetch_ref }}
+      expected_production_commit: ${{ needs.resolve.outputs.expected_production_commit }}
+    secrets: inherit
+
+  shadow-plan:
+    name: Shadow Publication Plan
+    needs: [resolve, candidate-required]
+    if: ${{ needs.candidate-required.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout canonical release policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch immutable candidate transport hint
+        if: ${{ inputs.candidate_fetch_ref != '' }}
+        shell: bash
+        env:
+          FETCH_REF: ${{ inputs.candidate_fetch_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$FETCH_REF"
+
+      - name: Materialize bounded shadow publication plan
+        shell: bash
+        env:
+          SPEC_PATH: ${{ needs.resolve.outputs.spec_path }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore
+          mkdir -p .simcore-release
+          node products/simcore/tooling/release-shadow.mjs \
+            --spec "$SPEC_PATH" \
+            --ci-conclusion PASS \
+            --report .simcore-release/shadow-plan.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('.simcore-release/shadow-plan.json'))
+          assert p['releaseAuthority']=='SHADOW_ONLY'
+          assert p['productionMutation']=='NONE'
+          assert p['publicationDisposition'] in ('WOULD_PUBLISH','WOULD_NOOP')
+          print(json.dumps({k:p[k] for k in ['releaseAuthority','publicationDisposition','productionMutation']},sort_keys=True))
+          PY
+
+      - name: Upload bounded shadow plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simcore-release-shadow-${{ needs.resolve.outputs.release_id }}
+          path: .simcore-release/shadow-plan.json
+          if-no-files-found: error
+          retention-days: 14
+
+  shadow-required:
+    name: Shadow Required
+    if: always()
+    needs: [resolve, candidate-required, shadow-plan]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce shadow-only terminal result
+        shell: bash
+        env:
+          RESOLVE_RESULT: ${{ needs.resolve.result }}
+          CI_RESULT: ${{ needs.candidate-required.result }}
+          PLAN_RESULT: ${{ needs.shadow-plan.result }}
+        run: |
+          set -euo pipefail
+          test "$RESOLVE_RESULT" = success
+          test "$CI_RESULT" = success
+          test "$PLAN_RESULT" = success
+          echo 'RS2_4_SHADOW_REQUIRED_PASS'

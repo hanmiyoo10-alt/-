@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.64.7-new-01",
+  "publisherRunId": "32749519307",
+  "productionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "productionBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+  "authorityConfirmation": "RS2_4_POST_PUBLISH_RECOVERY",
+  "failureCode": "POST_PUBLISH_MAIN_GATE_ACTIONS_PERMISSION_GAP"
+}

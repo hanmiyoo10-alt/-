@@ -34,7 +34,7 @@ const i64 = partFiles.indexOf('64-runtime-weight-audit.part.js');
 assert.ok(i62 >= 0 && i62 < i63 && i63 < i64, 'P38 module order must remain 62 -> 63 -> 64');
 
 assert.doesNotMatch(workspace, /const\s+setMode\s*=\s*async\b/, 'P38 module 62 must not retain the superseded async setMode closure');
-assert.doesNotMatch(workspace, /q\('#diagnostics-mode-(?:basic|detailed)'\)\)\s*q\('#diagnostics-mode-(?:basic|detailed)'\)\.onclick/, 'P38 module 62 must not bind Diagnostics mode onclick handlers');
+assert.doesNotMatch(workspace, /q\('#diagnostics-mode-(?:basic|detailed)'\)\.onclick/, 'P38 module 62 must not bind Diagnostics mode onclick handlers');
 assert.doesNotMatch(workspace, /state\.diagnosticsMode\s*=\s*next;\s*await\s+persist\(\);\s*renderSettings\(\);/s, 'P38 module 62 must not retain the persistence-before-render path');
 
 for (const marker of [

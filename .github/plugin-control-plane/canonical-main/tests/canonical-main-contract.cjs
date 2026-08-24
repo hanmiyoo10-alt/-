@@ -21,11 +21,15 @@ const root = path.resolve(__dirname, '../../../..');
 const policy = loadPolicy();
 const examplePath = path.join(__dirname, '../examples/voyage-token-check.check-only.json');
 const example = JSON.parse(fs.readFileSync(examplePath, 'utf8'));
+const registeredPath = path.join(__dirname, '../descriptors/voyage-token-check.json');
+const registered = JSON.parse(fs.readFileSync(registeredPath, 'utf8'));
 
 assert.equal(policy.schemaVersion, 1);
-assert.equal(policy.operations.eventAdaptersComplete, false, 'Phase A must fail closed until event adapters are proved');
+assert.equal(policy.operations.eventAdaptersComplete, false, 'Phase B shadow must fail closed until live adapter proof');
 assert.deepEqual(validateDescriptor(example, policy), []);
 assert.deepEqual(repositoryBindingErrors(example, root), []);
+assert.deepEqual(validateDescriptor(registered, policy), []);
+assert.deepEqual(repositoryBindingErrors(registered, root), []);
 
 const rendered = renderGuidelines(example, 'hanmiyoo10-alt/-');
 assert.match(rendered, /^# Voyage Token Check — Development & Operations Guidelines/m);
@@ -93,6 +97,7 @@ const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-ma
 assert.match(workflow, /schedule:/);
 assert.match(workflow, /workflow_dispatch:/);
 assert.match(workflow, /contents:\s*read/);
+assert.match(workflow, /actions:\s*read/);
 assert.match(workflow, /issues:\s*write/);
 assert.match(workflow, /ref:\s*main/);
 assert.match(workflow, /persist-credentials:\s*false/);
@@ -101,10 +106,19 @@ assert.doesNotMatch(workflow, /(?:^|\n)\s*pull_request(?:_target)?:/);
 assert.doesNotMatch(workflow, /contents:\s*write/);
 assert.doesNotMatch(workflow, /git\s+push/);
 
+const adapter = fs.readFileSync(path.join(__dirname, '../adapters.cjs'), 'utf8');
+assert.match(adapter, /observeRequiredCi/);
+assert.match(adapter, /observeProductionAuthority/);
+assert.match(adapter, /MAIN_WRITE_RETRY_EXHAUSTED/);
+assert.match(adapter, /MAIN_WRITE_CONTENT_CONFLICT/);
+assert.match(adapter, /MEMORY_SYNC_PATH_ESCAPE/);
+
 const controller = fs.readFileSync(path.join(__dirname, '../ops-controller.cjs'), 'utf8');
 assert.match(controller, /eventAdaptersComplete/);
-assert.match(controller, /Operator state/);
-assert.match(controller, /UNKNOWN.*Phase A/);
+assert.match(controller, /observeAll/);
+assert.match(controller, /reconcileIncidentEvents/);
+assert.match(controller, /canonical-main-correlation/);
+assert.match(controller, /Current adapter observations valid/);
 assert.match(controller, /LEGACY\/UNREGISTERED_FOR_STANDARD/);
 assert.doesNotMatch(controller, /git\s+push/);
 

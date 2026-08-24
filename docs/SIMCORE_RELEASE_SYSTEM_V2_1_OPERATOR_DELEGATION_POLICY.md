@@ -1,7 +1,7 @@
 # SimCore Release System v2.1 — Delegated Operator Policy
 
 Date: 2026-08-25
-Status: **DESIGN / IMPLEMENTATION AUTHORIZED BY USER · NON-RUNTIME**
+Status: **ACTIVE POLICY · IMPLEMENTED · PERMANENT-CI QUALIFIED · AWAITING GENUINE RELEASE PROOF · NON-RUNTIME**
 
 ## Operator experience decision
 
@@ -35,6 +35,8 @@ A release work item still requires an explicit user instruction in the active wo
 
 The assistant may create, verify, and merge the exact approval PR on the user's behalf as the delegated operator.
 
+The user may interrupt or revoke a not-yet-published work item. Any `BLOCKER` or unresolved `FIX` still stops publication until repaired and reverified.
+
 ## Exact approval remains an audit/safety object
 
 The exact approval record is retained. What changes is who performs the GitHub operation.
@@ -59,13 +61,15 @@ The approval JSON contains only:
 }
 ```
 
-The authorized release spec must be machine-derived from the bound `SHADOW_ONLY` spec and must be semantically identical to it. C/P/blob values are therefore not manually re-entered.
+The authorized release spec must be machine-derived from the bound `SHADOW_ONLY` spec and semantically identical to it. C/P/blob values are therefore not manually re-entered.
+
+`products/simcore/tooling/release-approval-package.mjs` is the bounded package materializer for this transaction. It has no production publication primitive.
 
 ## Operational release trigger
 
 The merge of the exact two-file approval PR is the repository transaction boundary. Under delegated-operator mode the assistant performs that merge only after permanent SimCore `Verify` and `Required` pass.
 
-After merge, the PR activation adapter must:
+After merge, `.github/workflows/simcore-release-pr-activation.yml` must:
 
 1. verify the merge changed exactly one approval JSON and its exact matching release spec;
 2. require each path to have its first/only authorization touch at the approval merge;
@@ -101,18 +105,43 @@ The existing permanent caller remains the single publication authority.
 
 ## Human boundary after activation
 
-The intended steady-state human boundary is now:
+The steady-state human boundary is:
 
 ```text
 pre-live manual GitHub actions by user = 0
 user's next physical action = apply plugin with `+` and run real long-chat validation
 ```
 
-The user may still interrupt or revoke a work item before publication. Failures classified BLOCKER/FIX still stop publication until repaired and reverified.
+The assistant owns the pre-live repository/release transaction only after the user explicitly authorizes that release work item.
+
+## Qualification and activation
+
+Implementation PR:
+
+```text
+#292
+merge = ff3d2233b8acac795aa1d62d219c4ef6538427f2
+```
+
+Permanent CI evidence:
+
+```text
+first run  32769662790
+Verify     97566934048 PASS
+Required   97567062169 PASS
+
+final run  32769840775
+Verify     97567528932 PASS
+Required   97567646673 PASS
+```
+
+The delegated approval adapter is therefore active on durable `main`.
+
+This is **implementation/qualification evidence**, not yet an end-to-end real release proof. The next genuine runtime release must exercise PR1 → candidate/receipt → PR2 exact delegated approval → permanent publication → LIVE_PENDING convergence before R2.1 delegated operation can be called operationally proven.
 
 ## Tooling anomalies during policy recording
 
-Two non-runtime tooling mistakes occurred before this branch was established:
+Two non-runtime tooling mistakes occurred before the work branch was established:
 
 ```text
 R2_1_OPERATOR_POLICY_PREWRITE_BRANCH_MISSING
@@ -124,11 +153,27 @@ R2_1_OPERATOR_POLICY_ACCIDENTAL_MAIN_NOOP_MARKER
 
 The accidental `noop.tmp` marker was immediately removed from main. It never touched `release-simcore`, runtime source, release state, or product authority.
 
+## Residual cleanup
+
+```text
+LEGACY_ACTIVATION_SELF_TEST_SENTINELS
+= DEFER / TEST_HARNESS_CLEANUP / NON_OPERATIONAL / NON_BLOCKING
+```
+
+Two historical activation strings remain only as comments for compatibility with an older broad self-test. The dedicated release-approval suite verifies that the active trigger is `approvals/**`, not `activations/**`. Removing those comments is cleanup, not a release blocker.
+
 ## Classification
 
 ```text
 R2_1_E_OPERATIONAL_APPROVAL_POLICY
-= FIXED_POLICY / DELEGATED_OPERATOR_TO_LIVE_PENDING / NON_RUNTIME
+= FIXED_POLICY / DELEGATED_OPERATOR_TO_LIVE_PENDING / ACTIVE / NON_RUNTIME
 ```
 
-Operational proof still requires the next genuine runtime release to exercise this path end to end. Until then the policy may be implemented and CI-qualified but must be described as awaiting genuine-release operational proof.
+Operational proof status:
+
+```text
+implementation = ACTIVE
+permanent CI = PASS
+genuine runtime release proof = PENDING
+human LIVE_PASS requirement = PRESERVED
+```

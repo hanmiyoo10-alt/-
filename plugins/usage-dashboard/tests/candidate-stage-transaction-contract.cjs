@@ -5,100 +5,101 @@ const fs = require('node:fs');
 const control = require('../tools/release_control_command.cjs');
 const e6 = require('../tools/candidate_stage_e6.cjs');
 
-const workflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e6.yml','utf8');
-const fallback = fs.readFileSync('.github/workflows/usage-dashboard-prepare-candidate.yml','utf8');
+const stage = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
+const exact = fs.readFileSync('.github/workflows/usage-dashboard-validate-exact.yml','utf8');
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-validate.yml','utf8');
+const reusable = fs.readFileSync('.github/workflows/reusable-usage-dashboard-validate.yml','utf8');
+const fallback = fs.readFileSync('.github/workflows/usage-dashboard-prepare-candidate.yml','utf8');
 const promoter = fs.readFileSync('.github/workflows/usage-dashboard-promote.yml','utf8');
-const smoke = fs.readFileSync('plugins/usage-dashboard/tools/run_behavior_smoke.cjs','utf8');
 
-const sourceBranch='release/usage-dashboard-5.73-fixture';
+const sourceBranch='release/usage-dashboard-5.74-fixture';
 assert.deepEqual(control.parseStageCommand(`/usage-dashboard stage ${sourceBranch}`),{candidateBranch:sourceBranch});
-assert.equal(e6.deriveCandidateBranch('3.0.0-alpha.5.73'),'stage/usage-dashboard-3.0.0-alpha.5.73');
+assert.equal(e6.deriveCandidateBranch('3.0.0-alpha.5.74'),'stage/usage-dashboard-3.0.0-alpha.5.74');
+assert.equal(fs.existsSync('.github/workflows/usage-dashboard-stage-e6.yml'),false,'E6 normal stage workflow must be retired after E7 takeover');
 
-assert.match(workflow, /^name: Usage Dashboard E6 Repairable Stage$/m);
-assert.match(workflow, /group: usage-dashboard-e6-stage/);
-assert.match(workflow, /github\.event\.issue\.number == 197/);
-assert.match(workflow, /github\.actor == github\.repository_owner/);
-assert.match(workflow, /release_control_command\.cjs --stage-branch/);
-assert.match(workflow, /candidate_stage_e6\.cjs --inspect/);
-assert.match(workflow, /E6_STAGE_SOURCE_FROZEN/);
-assert.match(workflow, /source_branch: \$\{\{ steps\.resolve\.outputs\.source_branch \}\}/);
-assert.match(workflow, /candidate_branch: \$\{\{ steps\.resolve\.outputs\.candidate_branch \}\}/);
+assert.match(stage,/^name: Usage Dashboard E7 Candidate-Ready Stage$/m);
+assert.match(stage,/group: usage-dashboard-e7-stage/);
+assert.match(stage,/github\.event\.issue\.number == 197/);
+assert.match(stage,/github\.actor == github\.repository_owner/);
+assert.match(stage,/startsWith\(github\.event\.comment\.body, '\/usage-dashboard stage '\)/);
+assert.match(stage,/candidate_stage_e6\.cjs --inspect/,'E7 inherits proven E6 source-derived authority helper');
+assert.match(stage,/E7_STAGE_SOURCE_FROZEN/);
+assert.doesNotMatch(stage,/pull-requests: write|actions: write/,'stage must not own PR bootstrap or validation activation');
+assert.doesNotMatch(stage,/\/pulls|workflow.*dispatches/,'stage must end at candidate authority');
+assert.equal((stage.match(/contents: write/g)||[]).length,1,'E7 stage owns exactly one constrained contents writer');
 
-const resolveAt=workflow.indexOf('\n  resolve_stage:');
-const materializeAt=workflow.indexOf('\n  materialize_stage:');
-const writerAt=workflow.indexOf('\n  write_candidate:');
-const managerAt=workflow.indexOf('\n  manage_pr:');
-const readyAt=workflow.indexOf('\n  receipt_ready:');
-assert.ok(resolveAt>0 && materializeAt>resolveAt && writerAt>materializeAt && managerAt>writerAt && readyAt>managerAt);
-
-const materialize=workflow.slice(materializeAt,writerAt);
-assert.match(materialize,/ref: \$\{\{ needs\.resolve_stage\.outputs\.trusted_base_sha \}\}/);
-assert.match(materialize,/persist-credentials: false/);
+const resolveAt=stage.indexOf('\n  resolve_stage:');
+const materializeAt=stage.indexOf('\n  materialize_stage:');
+const writerAt=stage.indexOf('\n  write_candidate:');
+const readyAt=stage.indexOf('\n  receipt_ready:');
+assert.ok(resolveAt>0 && materializeAt>resolveAt && writerAt>materializeAt && readyAt>writerAt);
+const materialize=stage.slice(materializeAt,writerAt);
+const preflightAt=materialize.indexOf('release_generic_preflight.cjs --spec "$RELEASE_SPEC"');
+const materializerAt=materialize.indexOf('python3 "$UD_MATERIALIZER"');
+assert.ok(preflightAt>0 && materializerAt>preflightAt,'release-generic preflight must run before materializer/expensive smoke');
+assert.match(materialize,/RELEASE_PREFLIGHT_REJECTED/);
 assert.match(materialize,/git diff --binary "\$INTENT_BASE_SHA" "\$SOURCE_SHA"/);
 assert.match(materialize,/git apply --index --3way/);
 assert.match(materialize,/SOURCE_INTENT_CONFLICT/);
-assert.match(materialize,/python3 "\$UD_MATERIALIZER"/);
 assert.match(materialize,/reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
 assert.match(materialize,/run_behavior_smoke\.cjs --repeat 3/);
 assert.match(materialize,/run_behavior_smoke\.cjs --repeat 1/);
 assert.match(materialize,/git commit-tree "\$TREE_SHA" -p "\$CANDIDATE_PARENT_SHA"/);
 assert.match(materialize,/candidate_stage_e6\.cjs --verify-derived/);
-assert.match(materialize,/git bundle create/);
 assert.doesNotMatch(materialize,/contents: write/);
 
-const writer=workflow.slice(writerAt,managerAt);
+const writer=stage.slice(writerAt,readyAt);
 assert.match(writer,/permissions:\n      contents: write/);
-assert.match(writer,/E6_CANDIDATE_CAS_FAILED/);
-assert.match(writer,/candidate_stage_e6\.cjs --verify-derived/);
+assert.match(writer,/E7_CANDIDATE_CAS_FAILED/);
+assert.match(writer,/E7_CANDIDATE_POSTVERIFY_FAILED/);
 assert.match(writer,/git push origin "\$PAYLOAD_SHA:refs\/heads\/\$CANDIDATE_BRANCH"/);
-assert.match(writer,/E6_CANDIDATE_POSTVERIFY_FAILED/);
 assert.doesNotMatch(writer,/--force|--force-with-lease/);
-for(const forbidden of ['python3 "$UD_MATERIALIZER"','reconcile_release_candidate.py','run_behavior_smoke.cjs','candidate_stage_policy.cjs','tests/run-all.cjs']) {
+for(const forbidden of ['python3 "$UD_MATERIALIZER"','reconcile_release_candidate.py','run_behavior_smoke.cjs','tests/run-all.cjs']) {
   assert.ok(!writer.includes(forbidden),`write-only job must not execute ${forbidden}`);
 }
-assert.equal((workflow.match(/contents: write/g)||[]).length,1,'E6 stage owns one contents writer only');
 
-const manager=workflow.slice(managerAt,readyAt);
-assert.match(manager,/pull-requests: write/);
-assert.match(manager,/actions: write/);
-assert.match(manager,/state=open/);
-assert.match(manager,/base=main/);
-assert.match(manager,/head=\$OWNER:\$CANDIDATE_BRANCH/);
-assert.match(manager,/E6_MULTIPLE_OPEN_RELEASE_PRS/);
-assert.match(manager,/usage-dashboard-validate\.yml\/dispatches/);
-assert.match(manager,/E6_PR_READY/);
-for(const forbidden of ['UD_MATERIALIZER','reconcile_release_candidate.py','run_behavior_smoke.cjs','git apply --index']) {
-  assert.ok(!manager.includes(forbidden),`PR manager must not execute ${forbidden}`);
-}
+const ready=stage.slice(readyAt);
+assert.match(ready,/UD_CANDIDATE_READY/);
+assert.match(ready,/base_sha: \$BASE_SHA/);
+assert.match(ready,/next: ensure deterministic PR \+ exact-SHA validation/);
+assert.match(stage,/UD_STAGE_ACCEPTED/);
+assert.match(stage,/UD_STAGE_REJECTED/);
+assert.doesNotMatch(ready,/validation: DISPATCHED|pr: #/,'candidate-ready receipt must not claim PR/validation completion');
 
-assert.match(workflow,/UD_STAGE_ACCEPTED/);
-assert.match(workflow,/UD_CANDIDATE_READY/);
-assert.match(workflow,/UD_STAGE_REJECTED/);
-assert.match(workflow,/next: materializing/);
-assert.match(workflow,/next: full PR CI/);
-assert.match(workflow,/run the same stage command again/);
+assert.match(exact,/^name: Usage Dashboard E7 Exact-SHA Validation$/m);
+assert.match(exact,/github\.event\.issue\.number == 197/);
+assert.match(exact,/github\.actor == github\.repository_owner/);
+assert.match(exact,/startsWith\(github\.event\.comment\.body, '\/usage-dashboard validate '\)/);
+assert.match(exact,/^stage\\\/usage-dashboard-3\\\.0\\\.0-alpha\\\.5\\\.\\d\+\$/m);
+assert.match(exact,/pr\.base\?\.ref!=='main'/);
+assert.match(exact,/pr\.head\?\.sha!==candidateSha/);
+assert.match(exact,/VALIDATION_IDENTITY_MISMATCH/);
+assert.match(exact,/uses: \.\/\.github\/workflows\/reusable-usage-dashboard-validate\.yml/);
+assert.match(exact,/candidate_sha: \$\{\{ needs\.resolve_validation\.outputs\.candidate_sha \}\}/);
+assert.match(exact,/UD_VALIDATION_ACCEPTED/);
+assert.match(exact,/UD_VALIDATION_RESULT/);
+assert.match(exact,/validated_sha: \$CANDIDATE_SHA/);
+assert.match(exact,/UD_VALIDATION_REJECTED/);
+assert.doesNotMatch(exact,/close PR|reopen PR|state.*closed/,'E7 validation must not depend on close/reopen trust choreography');
 
-assert.match(validator,/^  workflow_dispatch:$/m);
-assert.match(validator,/usage-dashboard-stage-e6\.yml/);
-assert.match(promoter,/usage-dashboard-stage-e6\.yml/);
+assert.match(reusable,/candidate_sha:/);
+assert.match(reusable,/ref: \$\{\{ inputs\.candidate_sha != '' && inputs\.candidate_sha \|\| github\.sha \}\}/);
+assert.match(reusable,/UD_VALIDATING_EXACT_SHA/);
+assert.match(reusable,/VALIDATION_IDENTITY_MISMATCH/);
+assert.match(validator,/^  workflow_dispatch:$/m,'ordinary manual/defense-in-depth validation remains available');
+assert.match(validator,/^  pull_request:$/m,'ordinary PR validation remains defense in depth');
+assert.match(validator,/usage-dashboard-stage-e7\.yml/);
+assert.match(validator,/usage-dashboard-validate-exact\.yml/);
+
+assert.match(promoter,/usage-dashboard-stage-e7\.yml/);
+assert.match(promoter,/usage-dashboard-validate-exact\.yml/);
 assert.match(promoter,/^  release-receipt:/m);
 assert.match(promoter,/UD_RELEASE_DEPLOYED/);
 assert.match(promoter,/exact_byte_parity: VERIFIED/);
 assert.match(promoter,/physical_verification: PENDING/);
-assert.match(promoter,/check_release_blob_parity\.cjs/);
 
 const fallbackIf=fallback.match(/^    if:.*$/m)?.[0]||'';
 assert.match(fallbackIf,/\/usage-dashboard prepare /);
-assert.doesNotMatch(fallbackIf,/\/usage-dashboard stage /,'E6 must be the sole normal stage owner');
-for(const legacy of ['/usage-dashboard ready ','/usage-dashboard ready-branch ']) {
-  const readyFallback=fs.readFileSync('.github/workflows/usage-dashboard-candidate-ready.yml','utf8');
-  assert.ok(readyFallback.includes(legacy),`readiness emergency fallback must remain: ${legacy}`);
-}
+assert.doesNotMatch(fallbackIf,/\/usage-dashboard stage /,'fallback preparation must not own the normal E7 stage command');
 
-assert.match(smoke,/const suite = discoverTests\(\)/);
-assert.match(smoke,/value < 1 \|\| value > 3/);
-assert.match(smoke,/BEHAVIOR_SMOKE_FAILED/);
-assert.match(smoke,/BEHAVIOR_SMOKE_GREEN/);
-
-console.log('usage-dashboard E6 stage transaction contract: OK · source-only intent, reentrant derived candidate, same-PR dispatch, actionable receipts, exact-byte deploy receipt');
+console.log('usage-dashboard E7 stage transaction contract: OK · candidate-ready boundary, config-free PR authority split, exact-SHA full validation, preflight, exact-byte promotion preserved');

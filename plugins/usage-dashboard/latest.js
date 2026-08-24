@@ -2762,7 +2762,7 @@ async function importLegacyTodayBaselines() {
     if (bridgeDiag?.compatible !== true) blockers.push(`bridge compatibility ${bridgeDiag?.compatible === false ? 'no' : 'unknown'}`);
     if (String(bridgeDiag?.version || '') !== REQUIRED_BRIDGE_VERSION) blockers.push(`engine ${bridgeDiag?.version || '—'}`);
     if (!runtimeBridge?.managerInstalled) blockers.push('manager absent');
-    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge.managerVersion || '—'}`);
+    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
     const managerProduct = String(state.bridgeManagerRuntime?.productVersion || '');
     const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
     if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);
@@ -2801,8 +2801,9 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     const diagCacheObservability = requestCacheObservabilityStats(diagLedgerRows);
     const diagDurationFidelity = requestDurationStats(diagLedgerRows);
-    const diagTierFidelity = requestServiceTierStats(diagLedgerRows);
-    const diagOutcome = requestOutcomeStats(diagLedgerRows);
+    const diagDevpassRows = requestLedgerRowsForScope('devpass');
+    const diagTierFidelity = requestServiceTierStats(diagDevpassRows);
+    const diagOutcome = requestOutcomeStats(diagDevpassRows);
     const stableReadiness = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const diagAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     return [
@@ -2853,7 +2854,7 @@ async function importLegacyTodayBaselines() {
       `UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed`,
       `Navigation: tabbed · overview/devpass/credits/analytics/settings · view ${state.dashboardView || 'overview'} · persisted`,
       `Recent UI: filter ${['all','success','error'].includes(String(state.recentRequestFilter)) ? state.recentRequestFilter : 'all'} · aggregate chips · mobile compact`,
-      `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source recent · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
+      `Request ledger: rows ${diagLedgerRows.length} · hours ${diagLedgerHours} · source ${diagUsage?.recentSourceKey || 'none'} · 24h local observed · selected ${state.selectedHourKey || 'none'} · since ${state.requestLedgerStartedAt ? age(state.requestLedgerStartedAt) : '—'}`,
       `Request fidelity: exact ${diagLedgerFidelity.exact}/${diagLedgerFidelity.rows} · bucket ${diagLedgerFidelity.bucket}/${diagLedgerFidelity.rows} · cache known ${diagLedgerFidelity.cacheKnown}/${diagLedgerFidelity.rows} · cache tokens ${diagLedgerFidelity.cacheTokenKnown}/${diagLedgerFidelity.rows} · ids ${diagLedgerFidelity.ids}/${diagLedgerFidelity.rows}`,
       `Request duration fidelity: explicit ${diagDurationFidelity.explicit}/${diagDurationFidelity.rows} · unknown ${diagDurationFidelity.unknown}/${diagDurationFidelity.rows} · source ${diagDurationFidelity.sources.join(',') || 'none'} · average ${formatRequestDurationMs(diagDurationFidelity.averageMs)} · slowest ${formatRequestDurationMs(diagDurationFidelity.slowestMs)}`,
       `Cache observability: ${cacheObservabilitySummaryText(diagCacheObservability)} · token rows ${diagCacheObservability.tokenKnown}/${diagCacheObservability.rows} · 5m write ${Number(diagCacheObservability.cacheCreation5mTokens || 0).toLocaleString()} · 1h write ${Number(diagCacheObservability.cacheCreation1hTokens || 0).toLocaleString()}`,
@@ -2863,58 +2864,127 @@ async function importLegacyTodayBaselines() {
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
-      `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingTier || '—'} · pending ${diagAccount?.pendingServiceTier || '—'} · personal org ${diagAccount?.personalOrganizationId || '—'}`,
-      `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.billingCycle || '—'} · status ${diagAccount?.status || '—'} · reset total ${money(diagAccount?.resetTotal)} · purchased ${money(diagAccount?.purchasedCreditsUsed)} · included remaining ${money(diagAccount?.includedCreditsRemaining)} · price ${diagAccount?.monthlyPrice === null || diagAccount?.monthlyPrice === undefined ? '—' : money(diagAccount.monthlyPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${diagAccount?.regularCreditsEnabled ? 'on' : 'off'}`,
+      `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
+      `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${money(diagAccount?.regularCredits)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
-      `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(powerRuntime.hourlyDetailWrites || 0)} · skips ${Number(powerRuntime.hourlyDetailSkips || 0)} · fallback ${Number(powerRuntime.hourlyDetailFallbacks || 0)}`,
-      `Runtime state: ${performanceRuntime.runtimeState} · transitions ${performanceRuntime.runtimeTransitions} · reason ${performanceRuntime.runtimeStateReason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
-      `Last sync: ${state.lastSyncAt || '—'}`,
-      `Duration: ${state.lastSyncDurationMs ?? '—'}ms`,
+      `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
+      `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
+      `Last sync: ${state.lastSyncAt ? new Date(Number(state.lastSyncAt)).toISOString() : '—'}`,
+      `Duration: ${num(state.lastSyncDurationMs) ? `${state.lastSyncDurationMs}ms` : '—'}`,
       `Refresh phase duration: ${refreshPhaseTimingText()}`,
       `Refresh slowest phase: ${performanceRuntime.lastRefreshSlowestPhase || '—'} · ${num(performanceRuntime.lastRefreshSlowestPhaseMs) ? `${roundPerfMs(performanceRuntime.lastRefreshSlowestPhaseMs)}ms` : '—'}`,
       `Reason: ${state.lastRefreshReason || '—'}`,
-      `Success count: ${state.refreshCount}`,
-      `Refresh requests: ${refreshAttributionSummary(refreshAttributionRuntime.requested)}`,
-      `Refresh executions: ${refreshAttributionSummary(refreshAttributionRuntime.executed)} · active ${refreshAttributionRuntime.active?.reason || 'none'}`,
-      `Last manual refresh: requested ${refreshAttributionRuntime.requested.manual || 0} · executed ${refreshAttributionRuntime.executed.manual || 0} · last ${refreshAttributionRuntime.lastManualAt ? age(refreshAttributionRuntime.lastManualAt) : 'none'}`,
-      `Last timer refresh: requested ${refreshAttributionRuntime.requested.timer || 0} · executed ${refreshAttributionRuntime.executed.timer || 0} · last ${refreshAttributionRuntime.lastTimerAt ? age(refreshAttributionRuntime.lastTimerAt) : 'none'}`,
-      `Last visibility refresh: requested ${refreshAttributionRuntime.requested.visibility || 0} · executed ${refreshAttributionRuntime.executed.visibility || 0} · last ${refreshAttributionRuntime.lastVisibilityAt ? age(refreshAttributionRuntime.lastVisibilityAt) : 'none'}`,
-      `Performance guard: ${state.performanceGuard ? 'on' : 'off'} · x${performanceRuntime.adaptiveMultiplier} · timer-only`,
-      `Performance settings: focus ${state.syncOnFocus ? 'on' : 'off'} · guard ${state.performanceGuard ? 'on' : 'off'} · adaptive ${state.adaptiveRefresh ? 'on' : 'off'} · background pause ${state.backgroundPause ? 'on' : 'off'}`,
+      `Success count: ${Number(state.refreshCount || 0)}`,
+      `Refresh requests: manual ${Number(refreshAttributionRuntime.requested.manual || 0)} · timer ${Number(refreshAttributionRuntime.requested.timer || 0)} · visibility ${Number(refreshAttributionRuntime.requested.visibility || 0)} · init ${Number(refreshAttributionRuntime.requested.init || 0)} · other ${Object.entries(refreshAttributionRuntime.requested).filter(([key]) => !['manual','timer','visibility','init'].includes(key)).reduce((sum,[,value]) => sum + Number(value || 0), 0)}`,
+      `Refresh executions: manual ${Number(refreshAttributionRuntime.executed.manual?.count || 0)} · timer ${Number(refreshAttributionRuntime.executed.timer?.count || 0)} · visibility ${Number(refreshAttributionRuntime.executed.visibility?.count || 0)} · init ${Number(refreshAttributionRuntime.executed.init?.count || 0)} · active ${refreshAttributionRuntime.active?.key || 'none'}`,
+      `Last manual refresh: ${refreshAttributionDetail('manual')}`,
+      `Last timer refresh: ${refreshAttributionDetail('timer')}`,
+      `Last visibility refresh: ${refreshAttributionDetail('visibility')}`,
+      `Performance guard: ${state.performanceGuard === false ? 'off' : performanceRuntime.mode} · x${Number(performanceRuntime.adaptiveMultiplier || 1)} · timer-only`,
+      `Performance settings: focus ${state.syncOnFocus === false ? 'off' : 'on'} · guard ${state.performanceGuard === false ? 'off' : 'on'} · adaptive ${state.adaptiveRefresh === false ? 'off' : 'on'} · background pause ${state.backgroundPause === false ? 'off' : 'on'}`,
       `Power guard: adaptive-probe · idle ${UI_STALL_PROBE_IDLE_INTERVAL_MS}ms · burst ${UI_STALL_PROBE_INTERVAL_MS}ms · timer-burst ${UI_STALL_PROBE_TIMER_BURST_MS}ms · active-burst ${UI_STALL_PROBE_ACTIVE_BURST_MS}ms`,
-      `Power activity: probe ${uiStallProbeIntervalMs() === UI_STALL_PROBE_INTERVAL_MS ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,
+      `Power activity: probe ${Date.now() < Number(powerRuntime.probeBurstUntil || 0) ? 'burst' : 'idle'} · wakeups ${powerRuntime.probeWakeups} · idle ${powerRuntime.probeIdleWakeups} · burst ${powerRuntime.probeBurstWakeups} · persist writes ${powerRuntime.persistWrites} · widget renders ${powerRuntime.widgetRenderCalls}`,
       `Mobile style cache: writes ${powerRuntime.responsiveStyleWrites} · skips ${powerRuntime.responsiveStyleSkips} · layout ${widgetRenderCache.layout || 'none'}`,
-      `Guard samples: timer ${performanceRuntime.timerSamples} · ignored ${performanceRuntime.ignoredSamples} · slow streak ${performanceRuntime.slowRefreshes}`,
-      `UI stall probe: ${performanceRuntime.uiStallProbeActive ? 'active' : 'inactive'} · ≥50ms ${performanceRuntime.uiStallCount50} · ≥100ms ${performanceRuntime.uiStallCount100} · ≥200ms ${performanceRuntime.uiStallCount200} · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)}ms`,
-      `Last UI stall: ${num(performanceRuntime.lastUiStallAt) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · ${age(performanceRuntime.lastUiStallAt)} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · render overlap ${performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}${performanceRuntime.lastUiStallRenderReason ? ` (${performanceRuntime.lastUiStallRenderReason} ${roundPerfMs(performanceRuntime.lastUiStallRenderMs)}ms)` : ''}` : 'none'}`,
-      `Resume probe: events ${performanceRuntime.resumeEvents} · reason ${performanceRuntime.lastResumeReason || '—'} · main-thread lag ${num(performanceRuntime.lastResumeMainThreadLagMs) ? `${roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)}ms` : '—'} · after ${num(performanceRuntime.lastResumeProbeAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeProbeAfterMs)}ms` : '—'} · refresh overlap ${performanceRuntime.lastResumeProbeDuringRefresh ? 'yes' : 'no'}`,
+      `Guard samples: timer ${Number(performanceRuntime.timerSamples || 0)} · ignored ${Number(performanceRuntime.ignoredSamples || 0)} · slow streak ${Number(performanceRuntime.slowRefreshes || 0)}`,
+      `UI stall probe: ${performanceRuntime.uiStallProbeActive ? 'active' : 'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50 || 0)} · ≥100ms ${Number(performanceRuntime.uiStallCount100 || 0)} · ≥200ms ${Number(performanceRuntime.uiStallCount200 || 0)} · max ${roundPerfMs(performanceRuntime.uiStallMaxMs) || 0}ms`,
+      `Last UI stall: ${num(performanceRuntime.lastUiStallMs) ? `${roundPerfMs(performanceRuntime.lastUiStallMs)}ms · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap ? 'yes' : 'no'} · render overlap ${performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}${performanceRuntime.lastUiStallRenderOverlap ? ` (${performanceRuntime.lastUiStallRenderReason || 'unknown'} · ${num(performanceRuntime.lastUiStallRenderMs) ? `${roundPerfMs(performanceRuntime.lastUiStallRenderMs)}ms` : '—'})` : ''} · ${age(performanceRuntime.lastUiStallAt)}` : 'none'}`,
+      `Resume probe: events ${Number(performanceRuntime.resumeEvents || 0)} · reason ${performanceRuntime.lastResumeReason || '—'} · main-thread lag ${num(performanceRuntime.lastResumeMainThreadLagMs) ? `${roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)}ms` : '—'} · after ${num(performanceRuntime.lastResumeProbeAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeProbeAfterMs)}ms` : '—'} · refresh overlap ${performanceRuntime.lastResumeProbeDuringRefresh ? 'yes' : 'no'}`,
       `Resume input: first ${num(performanceRuntime.lastResumeFirstInputAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)}ms` : '—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs) ? `${roundPerfMs(performanceRuntime.lastResumeInputDelayMs)}ms` : '—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs) ? `${roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)}ms` : '—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh ? 'yes' : 'no'}`,
-      `Resume refresh: started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)}ms` : '—'} · duration ${num(performanceRuntime.lastResumeRefreshMs) ? `${roundPerfMs(performanceRuntime.lastResumeRefreshMs)}ms` : '—'} · render ${num(performanceRuntime.lastResumeRenderMs) ? `${roundPerfMs(performanceRuntime.lastResumeRenderMs)}ms` : '—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry ? 'yes' : 'no'}`,
-      `Resume route: requested ${performanceRuntime.lastResumeRequestedReason || '—'} · actual ${performanceRuntime.lastResumeActualReason || '—'} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced ? `yes → ${performanceRuntime.lastResumeCoalescedIntoReason || 'active'}` : 'no'}`,
-      `Resume long task: ${performanceRuntime.longTaskSupported ? 'supported' : 'unsupported'} · count ${performanceRuntime.resumeLongTaskCount} · last ${num(performanceRuntime.lastResumeLongTaskMs) ? `${roundPerfMs(performanceRuntime.lastResumeLongTaskMs)}ms · after ${roundPerfMs(performanceRuntime.lastResumeLongTaskStartedAfterMs)}ms · refresh overlap ${performanceRuntime.lastResumeLongTaskDuringRefresh ? 'yes' : 'no'}` : 'none'}`,
-      `Resume grace: ${performanceRuntime.resumePending ? 'pending' : 'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs) ? `${roundPerfMs(performanceRuntime.lastResumeDelayMs)}ms` : '—'} · deferred ${performanceRuntime.resumeDeferred} · coalesced ${performanceRuntime.resumeCoalesced} · quiet ${RESUME_INTERACTION_QUIET_MS}ms · max ${RESUME_MAX_DEFER_MS}ms`,
-      `Scheduler: pending ${refreshSchedulerTimer || refreshSchedulerIdleHandle ? 'yes' : 'no'} · running ${refreshInFlight ? 'yes' : 'no'} · queued ${performanceRuntime.schedulerQueued} · merged ${performanceRuntime.schedulerMerged} · executed ${performanceRuntime.schedulerExecuted} · interaction defer ${performanceRuntime.schedulerDeferredForInteraction} · last ${performanceRuntime.lastSchedulerReason || '—'}`,
-      `Render: widget ${num(performanceRuntime.lastRenderMs) ? `${roundPerfMs(performanceRuntime.lastRenderMs)}ms` : '—'} · panel ${num(performanceRuntime.lastPanelRenderMs) ? `${roundPerfMs(performanceRuntime.lastPanelRenderMs)}ms` : '—'} · reason ${performanceRuntime.lastRenderReason || '—'} · phases ${performanceRuntime.lastRenderBreakdown ? Object.entries(performanceRuntime.lastRenderBreakdown).map(([k,v])=>`${k} ${roundPerfMs(v)}ms`).join(' · ') : '—'}`,
-      `Render spike: ≥${RENDER_SPIKE_THRESHOLD_MS}ms · count ${performanceRuntime.renderSpikeCount} · last ${num(performanceRuntime.lastRenderSpikeAt) ? `${roundPerfMs(performanceRuntime.lastRenderSpikeMs)}ms · ${age(performanceRuntime.lastRenderSpikeAt)} · ${performanceRuntime.lastRenderSpikeReason || '—'}` : 'none'}`,
-      `Stall/render coincidence: ${performanceRuntime.lastUiStallRefreshOverlap || performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}`,
-      `Panel render scheduler: ${panelRenderTimer || panelIdleHandle ? 'pending' : 'idle'} · coalesced ${performanceRuntime.panelRenderCoalesced} · interaction quiet 700ms · defer 750ms`,
-      `Panel partial: mode ${performanceRuntime.lastPanelRenderMode || 'full'} · partial ${performanceRuntime.panelPartialRenders} · full ${performanceRuntime.panelFullRenders} · section writes ${performanceRuntime.panelSectionWrites} · skips ${performanceRuntime.panelSectionSkips}`,
+      `Resume refresh: started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs) ? `${roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)}ms after` : '—'} · duration ${num(performanceRuntime.lastResumeRefreshMs) ? `${roundPerfMs(performanceRuntime.lastResumeRefreshMs)}ms` : '—'} · render ${num(performanceRuntime.lastResumeRenderMs) ? `${roundPerfMs(performanceRuntime.lastResumeRenderMs)}ms` : '—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry ? 'yes' : 'no'}`,
+      `Resume route: requested ${performanceRuntime.lastResumeRequestedReason || '—'} · actual ${performanceRuntime.lastResumeActualReason || '—'} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced ? 'yes' : 'no'}${performanceRuntime.lastResumeRefreshWasCoalesced ? ` · into ${performanceRuntime.lastResumeCoalescedIntoReason || 'unknown'}` : ''}`,
+      `Resume long task: ${performanceRuntime.longTaskSupported ? 'supported' : 'unsupported'} · count ${Number(performanceRuntime.resumeLongTaskCount || 0)} · ${num(performanceRuntime.lastResumeLongTaskMs) ? `last ${roundPerfMs(performanceRuntime.lastResumeLongTaskMs)}ms @ +${roundPerfMs(performanceRuntime.lastResumeLongTaskStartedAfterMs)}ms · refresh overlap ${performanceRuntime.lastResumeLongTaskDuringRefresh ? 'yes' : 'no'}` : 'last none'}`,
+      `Resume grace: ${performanceRuntime.resumePending ? 'pending' : 'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs) ? `${Number(performanceRuntime.lastResumeDelayMs)}ms` : '—'} · deferred ${Number(performanceRuntime.resumeDeferred || 0)} · coalesced ${Number(performanceRuntime.resumeCoalesced || 0)} · quiet ${RESUME_INTERACTION_QUIET_MS}ms · max ${RESUME_MAX_DEFER_MS}ms`,
+      `Scheduler: pending ${refreshSchedulerState.pending ? 'yes' : 'no'} · running ${refreshSchedulerState.running ? 'yes' : 'no'} · queued ${Number(performanceRuntime.schedulerQueued || 0)} · merged ${Number(performanceRuntime.schedulerMerged || 0)} · executed ${Number(performanceRuntime.schedulerExecuted || 0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction || 0)} · last ${refreshSchedulerState.lastReason || '—'}`,
+      `Render: widget ${num(performanceRuntime.lastRenderMs) ? `${roundPerfMs(performanceRuntime.lastRenderMs)}ms` : '—'} · panel ${num(performanceRuntime.lastPanelRenderMs) ? `${roundPerfMs(performanceRuntime.lastPanelRenderMs)}ms` : '—'} · reason ${performanceRuntime.lastRenderReason || '—'} · phases ${renderBreakdownText(performanceRuntime.lastRenderBreakdown)}`,
+      `Render spike: ≥${RENDER_SPIKE_THRESHOLD_MS}ms · count ${Number(performanceRuntime.renderSpikeCount || 0)} · ${num(performanceRuntime.lastRenderSpikeMs) ? `last ${roundPerfMs(performanceRuntime.lastRenderSpikeMs)}ms · reason ${performanceRuntime.lastRenderSpikeReason || '—'} · refresh overlap ${performanceRuntime.lastRenderSpikeRefreshOverlap ? 'yes' : 'no'} · phases ${renderBreakdownText(performanceRuntime.lastRenderSpikeBreakdown)}` : 'last none'}`,
+      `Stall/render coincidence: ${performanceRuntime.lastUiStallRenderOverlap ? 'yes' : 'no'}${performanceRuntime.lastUiStallRenderOverlap ? ` · ${performanceRuntime.lastUiStallRenderReason || 'unknown'} · ${num(performanceRuntime.lastUiStallRenderMs) ? `${roundPerfMs(performanceRuntime.lastUiStallRenderMs)}ms` : '—'}` : ''}`,
+      `Panel render scheduler: ${panelRenderTimer || panelIdleHandle !== null ? 'pending' : 'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced || 0)} · interaction quiet 700ms · defer 750ms`,
+      `Panel partial: mode ${performanceRuntime.lastPanelRenderMode || 'full'} · partial ${Number(performanceRuntime.panelPartialRenders || 0)} · full ${Number(performanceRuntime.panelFullRenders || 0)} · section writes ${Number(performanceRuntime.panelSectionWrites || 0)} · skips ${Number(performanceRuntime.panelSectionSkips || 0)}`,
       `P4 partial: auto section patch · diagnostics live · settings preserved`,
-      `Render cache: widget html writes ${powerRuntime.widgetHtmlWrites || 0} · skips ${powerRuntime.widgetHtmlSkips || 0} · style writes ${powerRuntime.widgetStyleWrites || 0} · skips ${powerRuntime.widgetStyleSkips || 0} · closed panel skips ${performanceRuntime.panelRenderSkippedClosed}`,
+      `Render cache: widget html writes ${Number(performanceRuntime.widgetHtmlWrites || 0)} · skips ${Number(performanceRuntime.widgetHtmlSkips || 0)} · style writes ${Number(performanceRuntime.widgetStyleWrites || 0)} · skips ${Number(performanceRuntime.widgetStyleSkips || 0)} · closed panel skips ${Number(performanceRuntime.panelRenderSkippedClosed || 0)}`,
       `P4 render: closed-panel skip · widget DOM dedup`,
-      `Floating widget UX: ${state.widgetVisible ? 'visible' : 'hidden'} · mobile ${widgetMobileViewport ? 'yes' : 'no'} · expanded ${widgetMobileExpanded ? 'yes' : 'no'} · dock ${state.widgetDockSide || 'none'} · position ${num(state.widgetX) && num(state.widgetY) ? 'custom' : 'default'} · gesture handle-drag/arrow-toggle`,
-      `Credits organization: selected ${state.selectedCreditsOrgId || 'default'} · available ${state.data?.organizations?.organizations?.length || 0} · fallbacks ${Number(state.creditsOrgFallbackCount || 0)}`,
-      `Local runtime errors: total ${localRuntimeErrors.count} · active ${localRuntimeActiveCount()} · recoveries ${localRuntimeErrors.recoveredCount} · persist ${localRuntimeErrors.persistFailures} · render ${localRuntimeErrors.renderFailures} · last ${localRuntimeErrors.lastStage || 'none'} · recovery ${localRuntimeErrors.lastRecoveryStage || 'none'}`,
+      `Floating widget UX: ${state.widgetVisible===false?'hidden':'visible'} · mobile ${widgetMobileViewport?'yes':'no'} · expanded ${widgetMobileExpanded?'yes':'no'} · dock ${state.widgetDockSide || 'none'} · position ${num(state.widgetX)&&num(state.widgetY)?`${Math.round(Number(state.widgetX))},${Math.round(Number(state.widgetY))}`:'default'} · gesture handle-drag/arrow-toggle`,
+      `Credits organization: selected ${state.data?.creditsOrganizationId || state.selectedCreditsOrgId || 'default'} · available ${Array.isArray(state.data?.organizations) ? state.data.organizations.filter(org=>String(org?.kind||'default')==='default'&&String(org?.status||'active')!=='deleted').length : 0} · fallbacks ${Number(state.creditsOrgFallbackCount || 0)}${state.creditsOrgLastFallbackFrom ? ` · last ${state.creditsOrgLastFallbackFrom} → ${state.creditsOrgLastFallbackTo || 'default'}` : ''}`,
+      `Local runtime errors: total ${Number(localRuntimeErrors.count || 0)} · active ${localRuntimeActiveCount()} · recoveries ${Number(localRuntimeErrors.recoveredCount || 0)} · persist ${Number(localRuntimeErrors.persistFailures || 0)} · render ${Number(localRuntimeErrors.renderFailures || 0)} · last ${localRuntimeErrors.lastAt ? `${localRuntimeErrors.lastStage || 'runtime'} · ${age(localRuntimeErrors.lastAt)} · ${localRuntimeErrors.lastMessage || 'error'}` : 'none'} · recovery ${localRuntimeErrors.lastRecoveryAt ? `${localRuntimeErrors.lastRecoveryStage || 'runtime'} · ${age(localRuntimeErrors.lastRecoveryAt)}` : 'none'}`,
       `Effective refresh: ${effectiveRefreshMs()}ms`,
-      `Data age: ${state.lastSyncAt ? age(state.lastSyncAt) : '대기'}`,
-      `Stale after: ${state.staleAfterMs > 0 ? `${state.staleAfterMs}ms` : 'off'}`,
-      `Failures: ${state.consecutiveFailures}`,
-      `Retry delay: ${state.retryDelayMs}ms`,
-      `Next retry: ${state.nextRetryAt ? new Date(state.nextRetryAt).toLocaleTimeString('ko-KR',{hour12:false}) : '—'}`,
+      `Data age: ${state.data?.fetchedAt ? age(state.data.fetchedAt) : '—'}`,
+      `Stale after: ${Number(state.staleAfterMs) > 0 ? `${Math.round(Number(state.staleAfterMs)/1000)}s` : 'off'}`,
+      `Failures: ${Number(state.consecutiveFailures || 0)}`,
+      `Retry delay: ${Number(state.retryDelayMs || 0)}ms`,
+      `Next retry: ${state.nextRetryAt ? new Date(Number(state.nextRetryAt)).toISOString() : '—'}`,
       `Error: ${state.bridgeError || 'none'}`,
       `Updater: ${UPDATE_URL}`
     ].join('\n');
   }
+
+  async function copyDiag() {
+    try { if (navigator?.clipboard?.writeText) { await navigator.clipboard.writeText(diagText()); return true; } } catch (_) {}
+    return false;
+  }
+
+  function card(title, b, cls='') {
+    if (!b) return `<section class="panel metric ${cls}"><small>${esc(title)}</small><strong>—</strong><p>데이터 없음</p></section>`;
+    return `<section class="panel metric ${cls}"><small>${esc(b.label || title)}</small><strong>${money(b.used)} <em>/ ${money(b.limit)}</em></strong><div class="bar"><i style="width:${pct(b.percent)}%"></i></div><p>남음 ${money(b.remaining)}${num(b.todayUsed)?` · 오늘 ${money(b.todayUsed,4)}`:''}</p></section>`;
+  }
+
+  function dashboardDateText(value, short = false) {
+  const ts = resetTimestamp(value);
+  if (!Number.isFinite(ts)) return '—';
+  return new Date(ts).toLocaleString('ko-KR', short
+    ? {timeZone:KST_TIME_ZONE, month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'}
+    : {timeZone:KST_TIME_ZONE});
+}
+
+function previousMonthlyStart(resetValue) {
+  const end = resetTimestamp(resetValue);
+  if (!Number.isFinite(end)) return null;
+  const kst = new Date(end + 9 * 3600000);
+  const originalDay = kst.getUTCDate();
+  let year = kst.getUTCFullYear();
+  let month = kst.getUTCMonth() - 1;
+  if (month < 0) { month = 11; year -= 1; }
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return Date.UTC(year, month, Math.min(originalDay, lastDay), kst.getUTCHours(), kst.getUTCMinutes(), kst.getUTCSeconds(), kst.getUTCMilliseconds()) - 9 * 3600000;
+}
+
+function remainingTimeForDashboard(value) {
+  const timestamp=resetTimestamp(value);
+  if (!Number.isFinite(timestamp)) return '—';
+  const diff=timestamp-Date.now();
+  if (diff<=0) return '곧 초기화';
+  const totalMinutes=Math.ceil(diff/60000);
+  const days=Math.floor(totalMinutes/1440);
+  const hours=Math.floor((totalMinutes%1440)/60);
+  const minutes=totalMinutes%60;
+  if (days>0) return days+'일 '+hours+'시간 '+minutes+'분';
+  if (hours>0) return hours+'시간 '+minutes+'분';
+  return minutes+'분';
+}
+
+function todayOverviewMetrics(d) {
+  const m=d?.monthly, w=d?.weekly, c=d?.credits, a=d?.activity;
+  const devToday=num(m?.todayUsed)?Number(m.todayUsed):null;
+  const premiumToday=num(w?.todayUsed)?Number(w.todayUsed):null;
+  const creditsToday=num(c?.todayUsed)?Number(c.todayUsed):null;
+  const observedDailyTotal=(num(devToday)||num(creditsToday)) ? Number(devToday||0)+Number(creditsToday||0) : null;
+  const now=Date.now();
+  const monthEnd=resetTimestamp(m?.resetAt);
+  const weekEnd=resetTimestamp(w?.resetAt);
+  const monthlyDays=Number.isFinite(monthEnd)&&monthEnd>now ? Math.max(1,Math.ceil((monthEnd-now)/86400000)) : null;
+  const weeklyDays=Number.isFinite(weekEnd)&&weekEnd>now ? Math.max(1,Math.ceil((weekEnd-now)/86400000)) : 7;
+  const monthlyTarget=monthlyDays&&num(m?.remaining)&&num(devToday) ? (Math.max(0,Number(m.remaining))+Number(devToday))/monthlyDays : null;
+  const weeklyTarget=weeklyDays&&num(w?.remaining)&&num(premiumToday) ? (Math.max(0,Number(w.remaining))+Number(premiumToday))/weeklyDays : null;
+  const monthlyLeft=num(monthlyTarget)&&num(devToday) ? Math.max(0,Number(monthlyTarget)-Number(devToday)) : null;
+  const weeklyLeft=num(weeklyTarget)&&num(premiumToday) ? Math.max(0,Number(weeklyTarget)-Number(premiumToday)) : null;
+  let projected=null, projectedPercent=null;
+  const monthStart=previousMonthlyStart(monthEnd);
+  if (Number.isFinite(monthStart)&&Number.isFinite(monthEnd)&&monthStart<now&&now<monthEnd&&num(m?.used)&&num(m?.limit)&&Number(m.limit)>0) {
+    const elapsed=now-monthStart, total=monthEnd-monthStart;
+    projected=Math.max(Number(m.used),Number(m.used)*total/elapsed);
+    projectedPercent=projected/Number(m.limit)*100;
+  }
+  return {devToday,premiumToday,creditsToday,observedDailyTotal,monthEnd,monthlyLeft,weeklyLeft,projected,projectedPercent,cost24h:num(a?.cost24h)?Number(a.cost24h):null,resetPasses:num(w?.resetPasses)?Number(w.resetPasses):null,resetPassesExact:w?.resetPassesExact===true};
+}
 
   function requestProvenanceDiagnosticMetadata() {
     const source = state.data?.usageScopes?.scopes?.all?.requestProvenance || null;
@@ -2936,10 +3006,22 @@ async function importLegacyTodayBaselines() {
   const diagTextBeforeRequestProvenance = diagText;
   diagText = function diagTextWithRequestProvenance() {
     const base = diagTextBeforeRequestProvenance();
+    const key = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
+    const scopeRows = requestLedgerRowsForScope(key);
+    const tier = requestServiceTierStats(scopeRows);
+    const outcome = requestOutcomeStats(scopeRows);
+    const lines = String(base || '').split('\n');
+    const replaceLine = (prefix, next) => {
+      const index = lines.findIndex(line => line.startsWith(prefix));
+      if (index >= 0) lines[index] = next;
+    };
+    replaceLine('Service tier fidelity:', `Service tier fidelity: requested known ${tier.requestedKnown}/${tier.rows} · served known ${tier.servedKnown}/${tier.rows} · served flex ${tier.flex} · standard ${tier.standard} · priority ${tier.priority} · unknown ${tier.unknown}`);
+    replaceLine('Service tier source fields:', `Service tier source fields: requested ${tier.requestedSources.join(',') || 'none'} · served ${tier.servedSources.join(',') || 'none'}`);
+    replaceLine('Request outcome taxonomy:', `Request outcome taxonomy: success ${outcome.success} · error ${outcome.error} · cancelled ${outcome.cancelled} · unknown ${outcome.unknown} · rows ${outcome.rows}`);
     const p = requestProvenanceDiagnosticMetadata();
     const rows = Math.max(0, Number(p?.rows || 0));
     const mode = ['account-wide','project-fallback'].includes(String(p?.captureMode)) ? String(p.captureMode) : 'unknown';
-    return `${base}\nAccount request capture: ${mode} · rows ${rows} · fallback ${Math.max(0, Number(p?.fallbackCount || 0))}\nRequest account scope fidelity: DevPass ${Math.max(0, Number(p?.devpass || 0))}/${rows} · Credits ${Math.max(0, Number(p?.credits || 0))}/${rows} · Unknown ${Math.max(0, Number(p?.unknown || 0))}/${rows} · conflict ${Math.max(0, Number(p?.conflict || 0))}\nScope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`;
+    return `${lines.join('\n')}\nAccount request capture: ${mode} · rows ${rows} · fallback ${Math.max(0, Number(p?.fallbackCount || 0))}\nRequest account scope fidelity: DevPass ${Math.max(0, Number(p?.devpass || 0))}/${rows} · Credits ${Math.max(0, Number(p?.credits || 0))}/${rows} · Unknown ${Math.max(0, Number(p?.unknown || 0))}/${rows} · conflict ${Math.max(0, Number(p?.conflict || 0))}\nScope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`;
   };
 
   function settingsHtml() {

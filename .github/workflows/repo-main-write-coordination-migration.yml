@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: repo-main-write-coordination-migration
@@ -85,3 +86,72 @@ jobs:
           fi
           git commit -m 'build(repo): serialize product main writes without cross-product cancellation'
           git push origin HEAD:repo-main-write-coordination-implementation
+
+  protected-main-shadow:
+    if: github.event.pull_request.title == 'Repository protected-main required-check compatibility proof'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout proposed infrastructure head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Static helper and writer validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/repo-main-write.py scripts/test-repo-main-write.py
+          python3 scripts/test-repo-main-write.py
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          required = {
+            '.github/workflows/simcore-release-state-sync.yml': 'simcore-main-write-gate',
+            '.github/workflows/usage-dashboard-project-memory.yml': 'usage-dashboard-main-write-gate',
+          }
+          for path, prefix in required.items():
+              text = Path(path).read_text(encoding='utf-8')
+              for needle in [
+                  'actions: write',
+                  '--required-workflow simcore-ci.yml',
+                  '--required-profile MAIN_HEALTH',
+                  '--required-job Required',
+                  prefix,
+              ]:
+                  if needle not in text:
+                      raise SystemExit(f'protected writer contract missing: {path}: {needle}')
+          print('protected writer static contract: PASS')
+          PY
+
+      - name: Prove exact-candidate gate without main mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test -n "$BEFORE_MAIN"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          printf 'protected-main gate shadow proof %s\n' "$GITHUB_RUN_ID" > .repo-main-write-gate-proof.txt
+          git add .repo-main-write-gate-proof.txt
+          git commit -m 'test(repo): protected-main gate shadow payload'
+          PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+          PREFIX="repo-main-write-shadow-${GITHUB_RUN_ID}"
+          python3 scripts/repo-main-write.py \
+            --commit "$PAYLOAD_COMMIT" \
+            --allow .repo-main-write-gate-proof.txt \
+            --required-workflow simcore-ci.yml \
+            --required-profile MAIN_HEALTH \
+            --required-job Required \
+            --staging-prefix "$PREFIX" \
+            --verify-gate-only
+          AFTER_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$BEFORE_MAIN" = "$AFTER_MAIN"
+          if git ls-remote --heads origin "refs/heads/${PREFIX}/*" | grep -q .; then
+            echo 'temporary staging ref remained after gate-only proof' >&2
+            exit 1
+          fi
+          echo "protected-main shadow proof: PASS main=${BEFORE_MAIN}"

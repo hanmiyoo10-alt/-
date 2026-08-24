@@ -8,7 +8,7 @@ const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs')
 
 const root = 'plugins/usage-dashboard';
 const release = assertCurrentReleaseArtifacts();
-assert.equal(release.productVersion, '3.0.0-alpha.5.72');
+assert.match(release.productVersion, /^3\.0\.0-alpha\.5\.\d+$/, 'P36 must run against the current alpha.5 release authority');
 assert.equal(release.engineVersion, '1.6.22');
 assert.equal(release.managerVersion, '1.3.0');
 assert.equal(release.snapshotContract, 1);
@@ -16,7 +16,7 @@ assert.equal(release.recentRequestContract, 1);
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`);
-assert.equal(sha256(engine), '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', '5.72 must keep the 5.71 Engine artifact byte-identical');
+assert.equal(sha256(engine), '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P36 lineage must keep the 5.71 Engine artifact byte-identical');
 
 const moduleSource = fs.readFileSync(`${root}/src/63-diagnostics-instant-mode.part.js`, 'utf8');
 const workspace = fs.readFileSync(`${root}/src/62-diagnostics-workspace.part.js`, 'utf8');

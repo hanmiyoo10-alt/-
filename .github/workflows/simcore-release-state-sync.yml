@@ -95,6 +95,22 @@ jobs:
           set -euo pipefail
           python3 scripts/simcore-sync-memory.py --manifest-only
 
+      - name: Apply registered administrative transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRANSITION='products/simcore/state-sync/active-admin-transition.json'
+          if test -f "$TRANSITION"; then
+            node products/simcore/tooling/admin-state-transition.mjs \
+              --root . \
+              --transition "$TRANSITION" \
+              --manifest product-manifest.json \
+              --write \
+              --report .simcore-state-sync/admin-transition-report.json
+          else
+            echo 'No registered SimCore administrative transition.'
+          fi
+
       - name: Render registered document state
         shell: bash
         run: |

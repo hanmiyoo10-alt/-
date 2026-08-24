@@ -13,9 +13,9 @@ This keeps normal Risu usage uncluttered while preserving the product's core pro
 
 ### Purpose
 
-Show only the minimum live information needed while Voyage is actively being used.
+Show only whether Voyage is actively being used.
 
-The mini widget is not a second dashboard and must remain visually lightweight.
+The mini widget is a presence/status surface, not a usage meter and not a second dashboard.
 
 ### Visibility contract
 
@@ -29,17 +29,20 @@ Preferred behavior:
 
 The exact activity timeout is **UNKNOWN until real-device UX measurement**. Do not hard-code a long-lived timeout before validation.
 
-### Suggested contents
+### Display contract
 
-Keep the mini widget to a small set of high-signal fields:
+When active, the widget should be intentionally minimal:
 
-- Voyage active/live indicator;
-- current model when VERIFIED from runtime evidence;
-- latest request token usage or current observed usage when available;
-- authoritative remaining quota only if an authoritative source is later VERIFIED;
-- freshness state when useful.
+```text
+● Voyage 사용중
+```
 
-Unknown model metadata or quota must remain unknown rather than being guessed.
+- use a green status dot for the active state;
+- do not show token counts, request usage, remaining quota, cost, rate limits, or model-by-model details in the mini widget;
+- do not turn the widget into a continuously changing numeric display;
+- if Voyage activity cannot be determined reliably, hide the widget rather than guessing an active state.
+
+The full dashboard remains the place for numeric usage/quota information.
 
 ### Interaction
 
@@ -49,7 +52,7 @@ It should not expose diagnostics, detailed cost tables, full rate-limit metadata
 
 ### Refresh behavior
 
-While visible, the mini widget may reuse the bounded visible-only refresh strategy from `LIVE_REFRESH_CONTRACT.md`.
+While visible, the mini widget may reuse the bounded visible-only refresh strategy from `LIVE_REFRESH_CONTRACT.md` only as needed to determine active/inactive state.
 
 - do not create a separate high-frequency background poller;
 - reuse the same normalized snapshot/state pipeline as the dashboard;
@@ -83,6 +86,34 @@ The full dashboard is the primary product surface and may show:
 
 The dashboard should reproduce the useful decision-making information from the Voyage website, not clone unrelated website navigation or account-management UI.
 
+### Model priority and folding contract
+
+The model section must prioritize models the user is actually using rather than presenting the entire Voyage model catalog at equal prominence.
+
+Preferred presentation:
+
+```text
+사용 중 / 사용한 모델
+  voyage-model-a
+  voyage-model-b
+
+미사용 모델 ▸
+```
+
+Rules:
+
+- models with VERIFIED current or recent user activity appear in the upper, visible section;
+- a model currently involved in Voyage activity should sort ahead of merely historical/recent models when that distinction is available;
+- otherwise prefer recency of VERIFIED activity rather than a hard-coded model order;
+- models for which the plugin has no VERIFIED user-usage evidence belong in a collapsed **unused models** section by default;
+- the unused section must be expandable on demand but should not consume normal dashboard space while collapsed;
+- a newly released Voyage model that is observed in real user activity must automatically move into the visible used-model section without requiring a hard-coded model-list update;
+- a newly discovered model with no user-usage evidence remains in the collapsed unused section if the product has a legitimate source for listing it;
+- do not infer that a model is used merely because it exists in Voyage documentation, pricing metadata, or a model catalog;
+- do not invent model usage when evidence is unavailable.
+
+Exact thresholds for what counts as `recent` remain **UNKNOWN until implementation and real-device evidence define the available timestamps/lifecycle**. The semantic requirement is stable: actual user activity gets priority; unused catalog entries stay out of the way.
+
 ## 3. Shared state architecture
 
 The mini widget and full dashboard must consume the same normalized `VoyageSnapshot` state.
@@ -103,7 +134,7 @@ Voyage / Host / Risu sources
  Mini widget   Full dashboard
 ```
 
-This prevents the widget and dashboard from showing contradictory token values.
+This prevents the widget and dashboard from disagreeing about whether Voyage is active or about numeric dashboard values.
 
 ## 4. Fidelity rules
 
@@ -114,6 +145,7 @@ Both surfaces inherit the project data-fidelity contract:
 - authoritative remaining quota is shown only when its source is VERIFIED;
 - unknown models are data, not errors;
 - model identity must not be used to guess unsupported pricing/quota semantics;
+- model `used` / `unused` placement requires real user-usage evidence, not catalog membership;
 - stale trustworthy data may remain visible with an explicit freshness indication during temporary source failure.
 
 ## 5. Security and privacy
@@ -134,17 +166,21 @@ The mini widget in particular should avoid showing unnecessary account-identifyi
 **DESIGN DECISION:** use a two-tier interface.
 
 - Voyage inactive → no mini widget.
-- Voyage active → compact live mini widget may appear.
+- Voyage active → show only a compact green-dot `Voyage 사용중` status surface.
 - User opens the plugin → full dashboard appears immediately.
+- Dashboard → actively/recently used models are visible first; unused models are collapsed by default.
 - Tapping/opening from the mini widget → same full dashboard, not a separate detail implementation.
 
-This makes the mini widget a contextual glance surface and the full plugin view the authoritative dashboard surface.
+This makes the mini widget a quiet activity indicator and the full plugin view the authoritative dashboard surface.
 
 ## Current evidence status
 
 - VERIFIED: the project already has a provider/snapshot architecture suitable for two presentation surfaces.
 - VERIFIED: visible-only bounded refresh is the current live-refresh design.
+- DESIGN DECISION: mini widget shows active state only and intentionally omits token counts.
+- DESIGN DECISION: used models are prioritized and unused models are collapsed by default.
 - UNKNOWN: exact real-device trigger and timeout that best define `Voyage active` without flicker or lingering UI.
+- UNKNOWN: exact timestamp/lifecycle evidence available for distinguishing current versus recent model activity.
 - UNKNOWN: exact host UI mechanism/location for the mini widget until implementation evidence verifies the safest supported integration point.
 
 ## Next evidence gate
@@ -156,6 +192,8 @@ During real-device validation, measure:
 - how quickly the widget should appear after activity;
 - how long it should remain after the final request;
 - whether the chosen placement obstructs chat or mobile controls;
-- whether the widget and dashboard remain numerically consistent under repeated requests.
+- whether used-model detection remains correct across model switches and repeated requests;
+- whether previously unused new models automatically move into the visible section after real use;
+- whether the widget and dashboard remain state-consistent under repeated requests.
 
-Do not implement a permanent UI placement or inactivity timeout before this evidence is collected.
+Do not implement a permanent UI placement, inactivity timeout, or recency threshold before this evidence is collected.

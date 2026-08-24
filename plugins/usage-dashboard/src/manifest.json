@@ -5,7 +5,7 @@
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "1f181cf5d2442a9adcfce1333bf7c166f8a416adcd916bc0cac4b71127be58b0",
+  "artifactSha256": "bee5573fa65560ae5c7cb4c1438057ad3e1c74107f127b4cd3d52f38e56e2af0",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
@@ -88,8 +88,8 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 43983,
-      "sha256": "c98ca837fc8aa9f010c82728b6f42230e0819acbebb1d5a4f01ca3e34ebecfd9"
+      "bytes": 38000,
+      "sha256": "e3671a03dfec7455fdad58e53c63e420d65d62af055c6b9fbdd02ad7772fa228"
     },
     {
       "file": "42-request-provenance-diagnostics.part.js",

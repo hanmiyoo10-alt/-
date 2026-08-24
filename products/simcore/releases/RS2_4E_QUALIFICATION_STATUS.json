@@ -1,12 +1,12 @@
 {
   "schemaVersion": 3,
   "phase": "RS2-4E",
-  "status": "REPOSITORY_BOUND_QUALIFIED_CALLER_ACTIVATION_PENDING",
+  "status": "REAL_RELEASE_READY",
   "controllerPrimitiveCiVerified": true,
-  "permanentReleaseAvailable": false,
+  "permanentReleaseAvailable": true,
   "permanentReleaseShadowVerified": true,
   "rollbackRehearsalVerified": true,
-  "realReleaseReady": false,
+  "realReleaseReady": true,
   "authorityBinding": {
     "exactCandidateParent": true,
     "requiredReportBound": true,
@@ -60,10 +60,29 @@
     "oneShotTransitionRetired": true,
     "result": "PASS"
   },
+  "callerActivation": {
+    "implementationPr": 231,
+    "implementationHead": "cba197f70c5a6f4b2ef240cd30924c74bc5ab7dd",
+    "implementationMerge": "f3709c8a59a086c5f0819f61891c05c380c14277",
+    "ciRun": 32737576404,
+    "verifyJob": 97463990548,
+    "requiredJob": 97464126315,
+    "permanentRequiredWorkflow": ".github/workflows/simcore-release-required.yml",
+    "permanentReleaseWorkflow": ".github/workflows/simcore-release-permanent.yml",
+    "postPublishStateOwner": "products/simcore/tooling/post-publish-state.mjs",
+    "sharedStateWriterConcurrency": "simcore-main-state-sync",
+    "validationResetOnProductionIdentityChange": true,
+    "result": "PASS"
+  },
   "pffl": {
     "accidentalFailures": [
       "RS2_4E_SANDBOX_REPO_CWD_NOT_BOUND",
       "RS2_4E_AUTH_NEGATIVE_TARGETED_WRONG_GATE"
+    ],
+    "fixedFindings": [
+      "PRELIVE_STATUS_INHERITANCE_RACE",
+      "POST_PUBLISH_MAIN_WRITER_RACE",
+      "POST_PUBLISH_GATEWAY_TOKEN_MISSING"
     ],
     "openBlockers": [],
     "openFixes": [],
@@ -73,11 +92,17 @@
   "productionMutation": "NONE",
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE",
-  "nextStep": "ACTIVATE_RS2_4_RELEASE_CALLER_THEN_REAL_RELEASE_READY",
+  "firstRealReleaseProof": false,
+  "permanentReleaseAuthorityActive": false,
+  "legacyReleaseAuthorityRetired": false,
+  "rs2_4Closed": false,
+  "nextStep": "FIRST_GENUINE_R_RELEASE",
   "evidence": [
     "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_QUALIFICATION_EVIDENCE.md",
     "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_REPOSITORY_BOUND_QUALIFICATION.md",
     "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ADMIN_STATE_REPAIR_PATH.md",
-    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ADMIN_STATE_REPAIR_EVIDENCE.md"
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_ADMIN_STATE_REPAIR_EVIDENCE.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_CALLER_ACTIVATION.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_RS2_4E_CALLER_ACTIVATION_EVIDENCE.md"
   ]
 }

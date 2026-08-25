@@ -1,6 +1,6 @@
 # SimCore Post-Architecture Next Element Menu — 2026-08-26
 
-Status: `ROADMAP / ADMIN MAP · ARCHITECTURE RESEARCH CLOSED · NO IMPLEMENTATION · NO RUNTIME CHANGE`
+Status: `ROADMAP / ADMIN MAP · ARCHITECTURE RESEARCH CLOSED · DOC-ONLY DRIFT CLOSED · NO IMPLEMENTATION · NO RUNTIME CHANGE`
 
 Production authority: `release-simcore` v0.64.7.
 
@@ -123,7 +123,7 @@ Canonical sequence:
 ```text
 v0.64.7 real-long-chat close
 → M2-3 Edit Reconcile implementation/stabilization
-→ direct current-line genuine-edit close control
+→ direct post-M2-3 genuine-edit close control
 → M2-4A actual post-M2-3 responsibility inventory
 → rebase M2-4B/C/D/E
 → bounded physical M2-4 slices
@@ -141,7 +141,7 @@ Known items:
 R2.1 genuine release end-to-end operational proof
 open PR / repository hygiene review when selected
 machine-managed authority/document synchronization
-stale administrative wording cleanup
+future evidence-backed documentation drift cleanup
 ```
 
 R2.1 proof belongs to the next genuine runtime release after the current v0.64.7 gate.
@@ -163,11 +163,13 @@ a real legacy state specimen appears
 
 Do not manufacture destructive legacy state solely for coverage.
 
-## 9. Immediate administrative drift
+## 9. Administrative drift closure
 
-`SIMCORE_DEFERRED_LEDGER.md` still contains a stale current-baseline / next-action paragraph from the v0.64.2 era.
+The previously identified current-status documentation drift is closed.
 
-Classification:
+### `SIMCORE_DEFERRED_LEDGER_CURRENT_BASELINE_STALE`
+
+Previous classification:
 
 ```text
 FIX
@@ -176,7 +178,48 @@ NON_RUNTIME
 NON_BLOCKING
 ```
 
-This should be repaired as a separate documentation/admin-only change, not bundled into runtime, fixture, architecture, or release-system work.
+Resolved on 2026-08-26:
+
+```text
+production baseline updated to v0.64.7
+current live gate updated to 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+genuine-edit status updated with the v0.64.5 DIRECT LIVE PASS baseline
+post-M2-3 genuine-edit recheck separated from the already-proven pre-M2-3 control
+Summary Scope moved from ACTIVE_MINI_VALIDATION to natural VALIDATION_ONLY status
+next action updated to v0.64.7 close → M2-3 sequencing
+R2.1 active/pending-proof status synchronized
+```
+
+Commit:
+
+```text
+5d54fb21e79e4759ec98d78a39b26534abd1ef00
+```
+
+### `SIMCORE_RELEASE_SYSTEM_V2_PLAN` status drift
+
+The original plan is now explicitly marked as a historical base plan rather than a current `PLANNED / NOT ACTIVE` authority.
+
+Current delegated-operation truth points to the later R2.1 policy/evidence documents.
+
+Commit:
+
+```text
+3282dfc106b6fe6d5d5668e6f776800b52133a7b
+```
+
+Current classification:
+
+```text
+KNOWN CURRENT DOC_DRIFT
+= CLOSED FOR THIS SWEEP
+
+HISTORICAL POINT-IN-TIME DOCS
+= PRESERVE AS EVIDENCE
+= NOT AUTOMATICALLY REWRITE TO CURRENT VERSION
+```
+
+Historical release/watch/evidence files may legitimately contain v0.64.2 or earlier point-in-time facts. Their age alone is not documentation drift when they are scoped as historical evidence.
 
 ## 10. Current priority map
 
@@ -186,7 +229,6 @@ PRODUCTION AUTHORITY FIRST
 
 SAFE PARALLEL NON-RUNTIME WORK
 → permanent regression fixtures
-→ admin/doc drift repair
 
 NEXT RUNTIME ARCHITECTURE
 → M2-3
@@ -200,6 +242,10 @@ EVIDENCE-TRIGGERED ONLY
 
 NEXT GENUINE RELEASE INFRA PROOF
 → R2.1 end-to-end operation
+
+ADMIN DOC
+→ no promoted current drift item after this sweep
+→ reopen only when a concrete contradiction is observed
 ```
 
 ## 11. Selection rule
@@ -223,6 +269,9 @@ Then keep that work item isolated from the other classes unless an explicit depe
 
 ```text
 BROAD ARCHITECTURE IDEATION
+= CLOSED
+
+CURRENT DOC-ONLY DRIFT SWEEP
 = CLOSED
 
 NEXT ELEMENT SPACE

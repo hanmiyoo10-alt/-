@@ -100,6 +100,39 @@ Builder never writes the repository.
 Raw bodies are excluded from the default packet.
 ```
 
+### S-12 — Natural Evidence Corpus Index
+
+```text
+Importance: 4
+Difficulty: 2
+Design status: DESIGN FROZEN
+Parking: PARKED FOR STABILIZATION
+Design doc: docs/SIMCORE_NATURAL_EVIDENCE_CORPUS_INDEX_DESIGN.md
+Implementation: NONE
+```
+
+Frozen evidence-index split:
+
+```text
+S-04
+= capture-time bounded packet
+
+S-09
+= contract-centric evidence index
+
+S-12
+= specimen-centric natural evidence corpus
+
+one real event documented in multiple files
+→ one Specimen ID
+
+same scenario recurs naturally later
+→ new Specimen ID
+
+synthetic / CI / shadow / controlled-test-only evidence
+→ excluded from S-12 natural corpus
+```
+
 ## Current active queue
 
 Using the frozen priority rule:
@@ -114,23 +147,23 @@ open design gate
 Current next candidates:
 
 ```text
-1. S-12 Natural Evidence Corpus Index
+1. S-01 MINI_WARNING_WIDGET_V1
    Importance 4 / Difficulty 2 / NOW
 
-2. S-01 MINI_WARNING_WIDGET_V1
-   Importance 4 / Difficulty 2 / NOW
-
-3. M-11 Architecture Dependency Snapshot Generator
+2. M-11 Architecture Dependency Snapshot Generator
    Importance 5 / Difficulty 3 / NOW
 
-4. M-10 Live Diagnostic → Fixture Skeleton Generator
+3. M-10 Live Diagnostic → Fixture Skeleton Generator
    Importance 4 / Difficulty 3 / NOW
 
-5. S-03 Diagnostic Copy Profiles
+4. S-03 Diagnostic Copy Profiles
+   Importance 3 / Difficulty 2 / NOW
+
+5. S-11 Stale PR Hygiene Classifier
    Importance 3 / Difficulty 2 / NOW
 ```
 
-`S-12` now leads the open easy-design queue because the Importance-5 / Difficulty-1–2 SMALL pool is fully frozen or gated.
+`S-01` now leads because it is the remaining open Importance-4 / Difficulty-2 designable SMALL item.
 
 ## Gated high-value candidates remain gated
 
@@ -170,15 +203,16 @@ LATER STABILIZATION PHASE
 ## Current verdict
 
 ```text
-FROZEN SMALL DESIGNS = 4
+FROZEN SMALL DESIGNS = 5
 
 S-09 Evidence Index Entry Format      COMPLETE / PARKED
 S-02 Diagnostic Quick Summary         COMPLETE / PARKED
 S-10 Authority Drift Check / Scan     COMPLETE / PARKED
 S-04 Live Evidence Packet Builder     COMPLETE / PARKED
+S-12 Natural Evidence Corpus Index    COMPLETE / PARKED
 
 NEXT ACTIVE DESIGN
-= S-12 Natural Evidence Corpus Index
+= S-01 MINI_WARNING_WIDGET_V1
 
 RUNTIME CHANGE
 = NONE

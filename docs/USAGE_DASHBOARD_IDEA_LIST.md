@@ -83,7 +83,7 @@ Tracking issue: #412
 | ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
 | `NV-SOURCE-MATRIX` | Feature Source / Truth Matrix | 높음 | **IMPLEMENTED** · #414 · `docs/USAGE_DASHBOARD_SOURCE_TRUTH_MATRIX.md` | 계획된 기능마다 authoritative source field, UNKNOWN 규칙, privacy 금지선, 추가 네트워크 필요 여부를 한 표로 관리한다. 실제 구현 전 source truth 확인 비용을 줄인다. |
-| `NV-REPO-HISTORY` | 과거 patch/release helper 분류 및 archive 후보표 | 중간 | Runtime Slimming Backlog §6 | 오래된 patch script / release helper를 `KEEP / ARCHIVE / RETIRE CANDIDATE`로 분류한다. 삭제 자체는 별도 evidence 후 진행한다. |
+| `NV-REPO-HISTORY` | 과거 patch/release helper 분류 및 archive 후보표 | 중간 | **IMPLEMENTED** · #415 · `docs/USAGE_DASHBOARD_REPO_HISTORY_INVENTORY.md` | 오래된 patch script / release helper를 `KEEP / ARCHIVE / RETIRE CANDIDATE`로 분류한다. 삭제 자체는 별도 evidence 후 진행한다. |
 
 ## 난이도: 중간
 
@@ -205,6 +205,7 @@ read-only 우선 후보:
 # 7. 현재 authority 링크
 
 - Feature Source / Truth Matrix: `docs/USAGE_DASHBOARD_SOURCE_TRUTH_MATRIX.md`
+- Repository History / Tool Inventory: `docs/USAGE_DASHBOARD_REPO_HISTORY_INVENTORY.md`
 - Request Metadata Fidelity design: #343
 - DevPass/Credits parity backlog: #348
 - Release PR bootstrap follow-up: #254

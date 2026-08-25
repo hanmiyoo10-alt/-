@@ -1,4 +1,4 @@
-# Canonical Main Automation — Phase C Notification Handoff
+# Canonical Main Automation — Phase D Native Mail Bridge
 
 This directory implements the shared, non-runtime canonical-main automation designed in issues #295, #297, #298, #301, and #302.
 
@@ -11,15 +11,26 @@ Phase B added trusted-main read-only observation adapters for:
 - active workflows that can integrate bounded durable/admin payloads through `scripts/repo-main-write.py`;
 - registered project bootstrap descriptors.
 
-Phase C adds the repository-side external notification handoff:
+Phase C added the repository notification outbox:
 
 - deterministic alert envelopes embedded in incident issues;
-- immediate-delivery eligibility only for first P0/P1 OPEN transitions and OPEN → RECOVERED transitions;
+- delivery eligibility only for first P0/P1 OPEN transitions and OPEN → RECOVERED transitions;
 - repeated observations while the same incident remains OPEN are evidence updates, not new delivery candidates;
-- an external GitHub App contract requiring only Metadata read + Issues read/write;
-- an email handoff payload and bounded delivery-receipt contract with all recipient/provider credentials kept outside the repository.
+- deterministic `deliveryKey` semantics;
+- an optional external GitHub App reference implementation.
 
-The repository-side outbox is active, but the external GitHub App remains explicitly `NOT_INSTALLED` until separate installation/runtime evidence exists. Email delivery must not be claimed live merely because the handoff contract exists.
+Phase D makes the currently available native delivery path canonical:
+
+- ChatGPT condition-watch automation reads canonical-main operations and incident state from GitHub;
+- eligible P0/P1 OPEN and RECOVERED transitions are delivered through the connected Gmail account;
+- the condition watch runs hourly, which is the supported automation polling floor;
+- duplicate delivery is suppressed using the repository incident/correlation and `deliveryKey` semantics;
+- recipient/account credentials remain outside the repository and are managed by the connected Gmail integration;
+- the external GitHub App path is optional fallback infrastructure, not a required setup step.
+
+The native bridge is recorded as `ACTIVE_PROVEN` after a bounded synthetic proof produced exactly one OPEN email, zero repeated-OPEN emails, and exactly one RECOVERED email without creating a repository incident.
+
+See `native-mail-bridge.json` for the frozen operational contract and proof summary.
 
 ## Observation epoch
 
@@ -27,24 +38,24 @@ Writer-workflow incident observation starts at the Phase B shadow deployment epo
 
 Runs older than that epoch are historical baseline evidence and cannot open a new incident merely because they are the latest historical run for an infrequently invoked workflow. Runs at or after the epoch remain observable until a later matching recovery.
 
-This boundary was added after the live shadow proof correctly exposed that a pre-adapter historical `SimCore Permanent Release` failure would otherwise be misclassified as a current incident.
-
 ## Refresh model
 
 `.github/workflows/canonical-main-ops.yml` refreshes the operator surface through:
 
-- `workflow_run` completion events for Required CI and active writer workflows, providing near-immediate re-observation;
+- `workflow_run` completion events for Required CI and active writer workflows;
 - selected `main` pushes;
 - a bounded schedule as self-healing fallback;
 - manual workflow dispatch.
 
 ## Notification handoff
 
-Canonical incident issues are the notification outbox. Eligible issue bodies contain a machine-readable `canonical-main-alert-envelope` marker. The external bot consumes GitHub `issues` webhooks, verifies the webhook signature, parses only eligible envelopes, deduplicates by `deliveryKey`, and forwards the normalized handoff to the configured channel.
+Canonical incident issues remain the repository notification outbox. Eligible issue bodies contain a machine-readable `canonical-main-alert-envelope` marker.
 
-The first supported channel is `email`. Recipient addresses, OAuth credentials, SMTP credentials, provider API keys, and webhook secrets must remain external secret configuration.
+The primary delivery bridge is `Main Incident Mail`, a ChatGPT condition-watch automation over the connected GitHub and Gmail capabilities. It sends only newly eligible P0/P1 OPEN or RECOVERED transitions. Healthy state and repeated unchanged failures are silent.
 
-See `.github/plugin-control-plane/canonical-main/notification-bot/` for the GitHub App permission contract and webhook/email reference implementation.
+The repository does not store Gmail passwords, OAuth tokens, recipient addresses, SMTP credentials, provider API keys, or webhook secrets.
+
+`.github/plugin-control-plane/canonical-main/notification-bot/` is retained as an optional event-driven GitHub App reference for a future environment where a no-poll webhook runtime is available without manual setup.
 
 ## Trust boundary
 
@@ -56,13 +67,7 @@ The canonical-main operations workflow runs trusted code checked out from `main`
 
 It never executes PR-head code with metadata-write authority, mutates product/release branches, or pushes Git refs.
 
-The external notification GitHub App has a separate, narrower target permission surface:
-
-- Metadata: read;
-- Issues: read/write;
-- Issues webhook only.
-
-It does not require repository contents, actions, workflows, checks, pull requests, statuses, or Git ref write authority.
+The native Gmail delivery bridge is observability-only. Email failure cannot fail a release, mutate production authority, or block a canonical-main write.
 
 ## Bootstrap descriptor check
 
@@ -85,6 +90,6 @@ node .github/plugin-control-plane/canonical-main/bootstrap.cjs render \
 
 ## Operations state
 
-`policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability is deliberately separate from repository health.
+`policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability remains deliberately separate from repository health.
 
-The operator state still fails closed to `UNKNOWN` whenever a required current repository observation is missing, pending, conflicting, or stale. `CLEAR` means only that the configured repository feedback coverage is current and has no unresolved actionable incident; it is not a claim that every product is bug-free or that external email delivery is available.
+`CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free. The mail bridge has its own `ACTIVE_PROVEN` state and does not participate in release/main authority.

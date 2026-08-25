@@ -71,7 +71,6 @@
       {"workflow": "simcore-release-permanent.yml", "mode": "active"},
       {"workflow": "product-simcore-candidate-materialize.yml", "mode": "active"},
       {"workflow": "usage-dashboard-project-memory.yml", "mode": "active"},
-      {"workflow": "canonical-main-protection-guard.yml", "mode": "active"},
       {"workflow": "simcore-release-command.yml", "mode": "legacy-dormant"},
       {"workflow": "repo-main-write-coordination-migration.yml", "mode": "one-shot-migration"}
     ],

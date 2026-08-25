@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.77",
+  "version": "3.0.0-alpha.5.78",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "cbcd913b904fa29e234791169fbe763461d5e51d66bb478146ce749ccd2305f6",
+  "artifactSha256": "2a6a7263c67d0802b7122605b16d16276836db0db81458677bbe813a84f4fcfe",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "a9122f1124276c011103c9a12184e2e8d9bd88049cb4f4cd3a76d6bb9975225b"
+      "sha256": "89631b9fe0be3b1f1d2f6e3827a3297333dd95da20facf0c538f0efbd10eb9aa"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -111,15 +111,9 @@
     },
     {
       "file": "62-diagnostics-workspace.part.js",
-      "label": "diagnostics workspace",
-      "bytes": 14993,
-      "sha256": "5c7ff1ef1485d5002a9c22f7c5dc648cae3c572787ecc02169c83f6dd2302e77"
-    },
-    {
-      "file": "64-runtime-weight-audit.part.js",
-      "label": "diagnostics runtime weight audit",
-      "bytes": 6909,
-      "sha256": "536afa3aa9d93c22520a64e7211af8b14525a51622fc0066a0916cfd6479f7ca"
+      "label": "diagnostics workspace + runtime weight audit",
+      "bytes": 21651,
+      "sha256": "a47234a0ba6e461a9dfc24bbc16a35fafd23c7bbe9ef83ef44d787c15bf17b96"
     },
     {
       "file": "70-widget-render.part.js",

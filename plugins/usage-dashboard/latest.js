@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.79
+//@version 3.0.0-alpha.5.80
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.79';
+  const VERSION = '3.0.0-alpha.5.80';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1379,6 +1379,19 @@ async function importLegacyTodayBaselines() {
     return onHourBoundary && !requestNumber ? 'hour-estimated' : 'exact';
   }
 
+  function requestAccountScopeValue(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return ['devpass','credits','unknown'].includes(text) ? text : 'unknown';
+  }
+
+  function requestScopeFidelityValue(value, scope = 'unknown') {
+    const text = String(value || '').trim().toLowerCase();
+    const normalizedScope = requestAccountScopeValue(scope);
+    if (normalizedScope === 'devpass' && text === 'explicit-project') return text;
+    if (normalizedScope === 'credits' && text === 'explicit-org-billing') return text;
+    return 'unknown';
+  }
+
   function normalizeRecentRequestRows(rows, limit = 12) {
     if (!Array.isArray(rows)) return [];
     return rows.map(row => {
@@ -1411,6 +1424,9 @@ async function importLegacyTodayBaselines() {
       const servedServiceTierSource = String(recentRequestValue(row, ['servedServiceTierSource','served_service_tier_source'], servedTierField.key) || servedTierField.key || '');
       const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
       const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
+      const requestAccountScope = requestNumber ? requestAccountScopeValue(recentRequestValue(row, ['requestAccountScope','request_account_scope'], 'unknown')) : 'unknown';
+      const requestScopeFidelity = requestNumber ? requestScopeFidelityValue(recentRequestValue(row, ['requestScopeFidelity','request_scope_fidelity'], 'unknown'), requestAccountScope) : 'unknown';
+      const requestScopeConflict = requestNumber ? row?.requestScopeConflict === true : false;
       const status = String(recentRequestValue(row, ['status','state'], '') || '').toLowerCase();
       const errorCodeRaw = recentRequestValue(row, ['errorCode','error_code','statusCode','status_code','httpStatus','http_status','error.code'], null);
       const errorTypeRaw = recentRequestValue(row, ['errorType','error_type','error.type'], null);
@@ -1449,6 +1465,9 @@ async function importLegacyTodayBaselines() {
         requestedServiceTierSource,
         servedServiceTierSource,
         requestNumber,
+        requestAccountScope,
+        requestScopeFidelity,
+        requestScopeConflict,
         requestStatus:status,
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
@@ -1558,6 +1577,8 @@ async function importLegacyTodayBaselines() {
   }
 
   function requestLedgerKey(row) {
+    const requestNumber = String(row?.requestNumber || '').trim();
+    if (requestNumber) return `request:${requestNumber}`;
     return [
       Number(row?.timestamp || 0),
       String(row?.requestNumber || ''),
@@ -1635,10 +1656,11 @@ async function importLegacyTodayBaselines() {
   function requestLedgerRowsForScope(scopeKey) {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     const key = ['all','devpass','credits'].includes(String(scopeKey)) ? String(scopeKey) : 'all';
-    return (Array.isArray(state.requestLedger) ? state.requestLedger : [])
+    const rows = (Array.isArray(state.requestLedger) ? state.requestLedger : [])
       .filter(row => row && num(row.timestamp) && Number(row.timestamp) >= cutoff)
-      .filter(row => key === 'all' || (Array.isArray(row.scopes) && row.scopes.includes(key)))
       .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+    if (key === 'all') return rows;
+    return rows.filter((row) => requestAccountScopeValue(row?.requestAccountScope) === key);
   }
 
   function requestHourKey(timestamp) {
@@ -1858,19 +1880,6 @@ async function importLegacyTodayBaselines() {
     return baseHtml + hourlyRequestDrilldownHtml(scopeKey);
   }
 
-  function requestAccountScopeValue(value) {
-    const text = String(value || '').trim().toLowerCase();
-    return ['devpass','credits','unknown'].includes(text) ? text : 'unknown';
-  }
-
-  function requestScopeFidelityValue(value, scope = 'unknown') {
-    const text = String(value || '').trim().toLowerCase();
-    const normalizedScope = requestAccountScopeValue(scope);
-    if (normalizedScope === 'devpass' && text === 'explicit-project') return text;
-    if (normalizedScope === 'credits' && text === 'explicit-org-billing') return text;
-    return 'unknown';
-  }
-
   function requestAccountScopeLabel(value) {
     const scope = requestAccountScopeValue(value);
     if (scope === 'devpass') return 'DevPass';
@@ -1888,42 +1897,6 @@ async function importLegacyTodayBaselines() {
     }
     return stats;
   }
-
-  const requestLedgerKeyBeforeProvenance = requestLedgerKey;
-  requestLedgerKey = function requestLedgerKeyWithProvenance(row) {
-    const requestNumber = String(row?.requestNumber || '').trim();
-    return requestNumber ? `request:${requestNumber}` : requestLedgerKeyBeforeProvenance(row);
-  };
-
-  const normalizeRecentRequestRowsBeforeProvenance = normalizeRecentRequestRows;
-  normalizeRecentRequestRows = function normalizeRecentRequestRowsWithProvenance(rows, limit = 12) {
-    const normalized = normalizeRecentRequestRowsBeforeProvenance(rows, limit);
-    const sourceByRequest = new Map();
-    for (const row of (Array.isArray(rows) ? rows : [])) {
-      if (!row || typeof row !== 'object') continue;
-      const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
-      const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
-      if (requestNumber) sourceByRequest.set(requestNumber, row);
-    }
-    return normalized.map((row) => {
-      const source = sourceByRequest.get(String(row?.requestNumber || '')) || null;
-      const scope = requestAccountScopeValue(recentRequestValue(source || {}, ['requestAccountScope','request_account_scope'], 'unknown'));
-      return {
-        ...row,
-        requestAccountScope:scope,
-        requestScopeFidelity:requestScopeFidelityValue(recentRequestValue(source || {}, ['requestScopeFidelity','request_scope_fidelity'], 'unknown'), scope),
-        requestScopeConflict:source?.requestScopeConflict === true,
-      };
-    });
-  };
-
-  const requestLedgerRowsForScopeBeforeProvenance = requestLedgerRowsForScope;
-  requestLedgerRowsForScope = function requestLedgerRowsForScopeWithProvenance(scopeKey) {
-    const key = ['all','devpass','credits'].includes(String(scopeKey)) ? String(scopeKey) : 'all';
-    const rows = requestLedgerRowsForScopeBeforeProvenance('all');
-    if (key === 'all') return rows;
-    return rows.filter((row) => requestAccountScopeValue(row?.requestAccountScope) === key);
-  };
 
   const requestServiceTierTextBeforeProvenance = requestServiceTierText;
   requestServiceTierText = function requestServiceTierTextWithProvenance(row) {

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · M-10 FROZEN · NR DIFFICULTY-3 OPEN · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · M-13 FROZEN · NR DIFFICULTY-3 DESIGN TIER CLOSED · HARVEST REVIEW PENDING · NO RUNTIME CHANGE`
 
 Purpose: track design-freeze completion and SAFE_NON_RUNTIME harvest state after the canonical NON_RUNTIME / RUNTIME queue split.
 
@@ -127,7 +127,7 @@ Difficulty: 3
 Runtime class: NON_RUNTIME
 Design: FROZEN
 Design doc: docs/SIMCORE_ARCHITECTURE_DEPENDENCY_SNAPSHOT_GENERATOR_DESIGN.md
-Implementation: PENDING NR DIFFICULTY-3 TIER CLOSE
+Implementation: PENDING NR DIFFICULTY-3 HARVEST REVIEW
 Runtime/release change: NONE
 ```
 
@@ -153,7 +153,7 @@ Runtime class: NON_RUNTIME
 Design: FROZEN
 Design doc: docs/SIMCORE_LIVE_DIAGNOSTIC_FIXTURE_SKELETON_GENERATOR_DESIGN.md
 Design commit: 0badd8d4164c36c2975fd35159b024a149f85a5d
-Implementation: PENDING NR DIFFICULTY-3 TIER CLOSE
+Implementation: PENDING NR DIFFICULTY-3 HARVEST REVIEW
 Runtime/release change: NONE
 ```
 
@@ -178,7 +178,54 @@ semantic inference = FORBIDDEN
 second diagnostic parser = FORBIDDEN
 ```
 
-The skeleton keeps `unknowns` first-class and intentionally unasserted. Production version/runtime identity/performance/warning disposition remain provenance/observational context unless the exact fact is itself the explicit contract under test.
+### M-13 — Evidence Index Generator
+
+```text
+Importance: 4
+Difficulty: 3
+Runtime class: NON_RUNTIME
+Design: FROZEN
+Design doc: docs/SIMCORE_EVIDENCE_INDEX_GENERATOR_DESIGN.md
+Design commit: 86ab827bb250d26eba33a7a6ec005db40093dd07
+Implementation: PENDING NR DIFFICULTY-3 HARVEST REVIEW
+Runtime/release change: NONE
+Open design questions: 0
+```
+
+Frozen M-13 architecture:
+
+```text
+existing semantic/evidence authorities
+→ explicit reviewed evidence-index-source-v1.json
+→ mechanical validation
+→ fixture execution class from products/simcore/tests/registry.mjs
+→ deterministic docs/SIMCORE_EVIDENCE_INDEX.md
+```
+
+Authority split:
+
+```text
+contract/evidence/gate/debt docs
+= meaning + evidence posture authority
+
+evidence-index-source-v1.json
+= index curation source only
+
+docs/SIMCORE_EVIDENCE_INDEX.md
+= generated human navigation view
+```
+
+Hard boundary:
+
+```text
+repo-wide evidence discovery = FORBIDDEN
+latest-evidence inference = FORBIDDEN
+semantic Owner inference = FORBIDDEN
+PASS/WATCH/GAP inference = FORBIDDEN
+fixture-exists → PASS inference = FORBIDDEN
+semantic contradiction auto-reconcile = FORBIDDEN
+release/CI authority change = FORBIDDEN
+```
 
 ### Runtime frozen / parked designs
 
@@ -223,17 +270,17 @@ NR_DIFFICULTY_2_SAFE_NON_RUNTIME_HARVEST = COMPLETE
 NR_DIFFICULTY_2_HARVEST_QUEUE = EMPTY
 ```
 
-### NR Difficulty 3 — OPEN
+### NR Difficulty 3 — CLOSED / HARVEST REVIEW PENDING
 
-Currently designable pool:
+Currently designable bounded pool:
 
 ```text
 M-11 Architecture Dependency Snapshot Generator   FROZEN
 M-10 Live Diagnostic → Fixture Skeleton Generator FROZEN
-M-13 Evidence Index Generator                     OPEN
+M-13 Evidence Index Generator                     FROZEN
 ```
 
-Gated items do not block this current bounded close:
+Gated items do not block this bounded close:
 
 ```text
 M-08 POST_M2_3
@@ -244,19 +291,26 @@ M-15 POST_M2_3
 Therefore:
 
 ```text
-NR_DIFFICULTY_3_DESIGN_TIER = OPEN
-M-11 HARVEST = NOT YET AUTHORIZED
-M-10 HARVEST = NOT YET AUTHORIZED
-NEXT NR DESIGN = M-13
+NR_DIFFICULTY_3_DESIGN_TIER = CLOSED
+NR_DIFFICULTY_3_SAFE_NON_RUNTIME_HARVEST = REVIEW_REQUIRED
 ```
 
-Close condition:
+Next NR operation:
 
 ```text
-M-13 DESIGN FROZEN
-→ NR Difficulty 3 CLOSED
-→ separate SAFE_NON_RUNTIME review for M-11 / M-10 / M-13
+strict SAFE_NON_RUNTIME review
+→ M-11
+→ M-10
+→ M-13
+
+for each item:
+PASS → separate bounded implementation transaction
+FAIL/PROTECTED → remain parked
 ```
+
+No Difficulty-3 implementation was performed as part of M-13 design freeze.
+
+Previously gated items that later open form a new incremental cycle for Difficulty 3; they do not retroactively invalidate this bounded close.
 
 ---
 
@@ -264,7 +318,8 @@ M-13 DESIGN FROZEN
 
 ```text
 NR
-NEXT = M-13 Evidence Index Generator
+NEXT = Difficulty-3 SAFE_NON_RUNTIME harvest review
+Candidates = M-11 / M-10 / M-13
 
 R
 1. S-03 Diagnostic Copy Profiles
@@ -285,6 +340,8 @@ WATCH_ONLY / VERIFICATION_COVERAGE / NON_RUNTIME / NON_BLOCKING
 ```
 
 because permanent CI does not automatically execute arbitrary new standalone tooling `.test.mjs` files. That CI-discovery concern remains separate from completed harvest items and must not be silently bundled into M-10 or M-13.
+
+M-13 design explicitly preserves the same rule: focused tooling tests are required when implemented, but generalized CI-discovery changes are a separate repo/CI work item.
 
 ---
 
@@ -315,11 +372,12 @@ release-simcore      = UNCHANGED
 ```text
 NR Difficulty 1 = CLOSED / HARVEST COMPLETE
 NR Difficulty 2 = CLOSED / HARVEST COMPLETE
-NR Difficulty 3 = OPEN
+NR Difficulty 3 = CLOSED / HARVEST REVIEW PENDING
 
-M-11 = DESIGN FROZEN / WAIT
-M-10 = DESIGN FROZEN / WAIT
-M-13 = NEXT ACTIVE NR DESIGN
+M-11 = DESIGN FROZEN / REVIEW NEXT
+M-10 = DESIGN FROZEN / REVIEW NEXT
+M-13 = DESIGN FROZEN / REVIEW NEXT
 
+NR ACTIVE DESIGN = NONE in current bounded Difficulty-1/2/3 pool
 RUNTIME frozen designs remain parked.
 ```

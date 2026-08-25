@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "termux-large-doc-editor",
+  "kind": "plugin",
+  "displayName": "Termux Large Doc Editor",
+  "lifecycle": "prototype",
+  "projectPath": "plugins/termux/large-doc-editor",
+  "guidelines": "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "plugins/termux/large-doc-editor/README.md"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "releaseTitle": "Runtime Weight Audit Ownership Consolidation",
+  "productVersion": "3.0.0-alpha.5.78",
+  "engineVersion": "1.6.22",
+  "managerVersion": "1.3.0",
+  "cliVersion": "1.9.0",
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.77 — Diagnostics Instant Mode Patch-Layer Consolidation`",
+  "materializer": "plugins/usage-dashboard/tools/release_runtime_weight_audit_578.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
+  "newTests": [
+    "p42-runtime-weight-audit-patch-layer-consolidation.cjs"
+  ]
+}

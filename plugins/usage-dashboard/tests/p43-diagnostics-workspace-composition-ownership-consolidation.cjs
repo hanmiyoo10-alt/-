@@ -57,7 +57,8 @@ assert.equal((markup.match(/\$\{diagnosticsWorkspacePanelHtml\(\)\}/g) || []).le
 assert.equal((latest.match(/<summary><b>Runtime Diagnostics<\/b>/g) || []).length, 1, 'P43 built plugin must own exactly one Runtime Diagnostics panel template');
 assert.ok(latest.indexOf('function settingsHtml()') >= 0, 'P43 built settingsHtml owner missing');
 assert.ok(latest.indexOf('function diagnosticsWorkspacePanelHtml()') > latest.indexOf('function settingsHtml()'), 'P43 locks later-declared Diagnostics panel helper topology');
-assert.ok(latest.indexOf('async function openSettings()') > latest.indexOf('function diagnosticsWorkspacePanelHtml()'), 'P43 Settings invocation path must occur after Diagnostics helper initialization in parsed source order');
+assert.match(settings, /async function openSettings\(\) \{[\s\S]*?renderSettings\(\);/, 'P43 openSettings must enter the native renderSettings pipeline');
+assert.match(settings, /function renderSettings\(\) \{[\s\S]*?document\.body\.innerHTML = settingsHtml\(\);/, 'P43 native renderSettings pipeline must invoke settingsHtml');
 
 assert.equal((workspace.match(/function bindDiagnosticsWorkspaceControls\(\)/g) || []).length, 1, 'P43 module 62 must own one normal Diagnostics controls binder');
 assert.equal((settings.match(/bindDiagnosticsWorkspaceControls\(\);/g) || []).length, 1, 'P43 native module-60 bindSettings must call Diagnostics binder exactly once');

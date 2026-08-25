@@ -6,12 +6,12 @@ set -euo pipefail
 
 ISSUE_NUMBER="${PROTECTION_ISSUE_NUMBER:-321}"
 API_VERSION="2026-03-10"
-MARKER='<!-- canonical-main-protection-activation-attempt -->'
 
 comment_once() {
-  local body="$1"
+  local marker="$1"
+  local body="$2"
   local found
-  found="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments" --paginate --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" | head -n 1 || true)"
+  found="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments" --paginate --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
   if [[ -z "$found" ]]; then
     gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
   fi
@@ -34,7 +34,8 @@ required_app_id="$(gh api \
 
 if [[ -z "$required_app_id" ]]; then
   echo 'PROTECTED_MAIN_REQUIRED_CHECK_IDENTITY_UNRESOLVED' >&2
-  comment_once "${MARKER}
+  marker='<!-- canonical-main-protection-activation-blocked -->'
+  comment_once "$marker" "${marker}
 ## Automatic protection activation attempt
 
 Result: \`BLOCKED_BEFORE_MUTATION\`
@@ -81,7 +82,8 @@ if [[ "$rc" -ne 0 ]]; then
     class='PROTECTION_API_VALIDATION_REJECTED'
   fi
   echo "PROTECTED_MAIN_ACTIVATION_BLOCKED:${class}" >&2
-  comment_once "${MARKER}
+  marker='<!-- canonical-main-protection-activation-blocked -->'
+  comment_once "$marker" "${marker}
 ## Automatic protection activation attempt
 
 Result: \`${class}\`
@@ -99,7 +101,8 @@ if [[ "$protected_after" != 'true' ]] || ! grep -Fxq 'Required' <<<"$required_af
 fi
 
 echo 'PROTECTED_MAIN_ACTIVATION_ENFORCED'
-comment_once "${MARKER}
+marker='<!-- canonical-main-protection-activation-enforced -->'
+comment_once "$marker" "${marker}
 ## Automatic protection activation attempt
 
 Result: \`ENFORCED\`

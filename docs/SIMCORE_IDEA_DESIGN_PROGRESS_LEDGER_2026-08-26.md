@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN SELECTION STATE · DESIGN-FIRST · TIERED SAFE_NON_RUNTIME HARVEST ACTIVE · FIRST HARVEST COMPLETE · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN SELECTION STATE · DESIGN-FIRST · TIERED SAFE_NON_RUNTIME HARVEST ACTIVE · FIRST HARVEST COMPLETE · M-11 FROZEN · NO RUNTIME CHANGE`
 
 Purpose: track which entries from the size/priority idea inventories have completed the mandatory design-freeze process and which closed design tiers have become eligible for the bounded non-runtime harvest exception.
 
@@ -57,6 +57,7 @@ SAFE_NON_RUNTIME_READY
 ```text
 Importance: 5
 Difficulty: 1
+Runtime class: NON_RUNTIME
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md
 Implementation disposition: SAFE_NON_RUNTIME_IMPLEMENTED
@@ -72,6 +73,7 @@ Runtime/plugin/release-simcore change: NONE
 ```text
 Importance: 5
 Difficulty: 1
+Runtime class: RUNTIME
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_DIAGNOSTIC_QUICK_SUMMARY_DESIGN.md
 Current implementation disposition: PARKED FOR STABILIZATION
@@ -84,6 +86,7 @@ Implementation: NONE
 ```text
 Importance: 5
 Difficulty: 2
+Runtime class: NON_RUNTIME
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_AUTHORITY_DRIFT_CHECK_DESIGN.md
 Implementation disposition: PENDING DIFFICULTY-2 TIER CLOSE
@@ -104,6 +107,7 @@ historical evidence remains excluded
 ```text
 Importance: 5
 Difficulty: 2
+Runtime class: RUNTIME
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_LIVE_EVIDENCE_PACKET_BUILDER_DESIGN.md
 Implementation disposition: PARKED FOR STABILIZATION
@@ -116,6 +120,7 @@ Implementation: NONE
 ```text
 Importance: 4
 Difficulty: 2
+Runtime class: NON_RUNTIME
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_NATURAL_EVIDENCE_CORPUS_INDEX_DESIGN.md
 Implementation disposition: PENDING DIFFICULTY-2 TIER CLOSE
@@ -140,6 +145,7 @@ S-12
 ```text
 Importance: 4
 Difficulty: 2
+Runtime class: RUNTIME
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_MINI_WARNING_WIDGET_V1_DESIGN.md
 Implementation disposition: PARKED FOR STABILIZATION
@@ -160,6 +166,39 @@ click/tap/keyboard activation → existing diagnostic panel
 explicit canonical quarantine fact only; never infer quarantine from warning wording
 UI/DOM failure → fail silent without creating a Core warning
 ```
+
+### M-11 — Architecture Dependency Snapshot Generator
+
+```text
+Importance: 5
+Difficulty: 3
+Runtime class: NON_RUNTIME
+Design status: DESIGN FROZEN
+Design doc: docs/SIMCORE_ARCHITECTURE_DEPENDENCY_SNAPSHOT_GENERATOR_DESIGN.md
+Implementation disposition: PENDING DIFFICULTY-3 TIER CLOSE
+Implementation: NONE
+```
+
+Frozen architecture-tooling boundary:
+
+```text
+existing simcore-architecture-check.py
+= parser + Contracts v2 enforcement authority
+
+M-11
+= deterministic snapshot projection of that same extracted graph/check disposition
+
+preferred implementation
+= optional --snapshot-out on the existing checker
+
+second dependency parser      FORBIDDEN
+second architecture validator FORBIDDEN
+auto-repair                   FORBIDDEN
+new CI gate                   FORBIDDEN
+runtime/plugin changes        FORBIDDEN
+```
+
+Snapshot v1 is deterministic JSON with no wall-clock timestamp or raw source body. Before/after M2 evidence uses ordinary Git/evidence diff between immutable snapshots; behavioral equivalence remains owned by fixtures/live evidence.
 
 ## Difficulty-tier harvest state
 
@@ -201,7 +240,7 @@ No additional Difficulty-1 harvest item remains.
 
 ### Difficulty 2 — OPEN
 
-Several Difficulty-2 NOW items remain undesigned, including:
+Several Difficulty-2 NOW items remain undesigned:
 
 ```text
 S-03 Diagnostic Copy Profiles
@@ -218,7 +257,35 @@ Therefore:
 DIFFICULTY_2_DESIGN_TIER = OPEN
 ```
 
-No Difficulty-2 SAFE_NON_RUNTIME harvest begins until that currently designable pool is fully frozen.
+Already-frozen NON_RUNTIME Difficulty-2 items:
+
+```text
+S-10 Authority Drift Check
+S-12 Natural Evidence Corpus Index
+```
+
+They remain pending until the currently designable Difficulty-2 tier closes.
+
+### Difficulty 3 — OPEN
+
+Current designable Difficulty-3 pool after M-11 freeze:
+
+```text
+M-11 Architecture Dependency Snapshot Generator   FROZEN / NON_RUNTIME
+M-10 Live Diagnostic → Fixture Skeleton Generator OPEN / NON_RUNTIME
+M-13 Evidence Index Generator                     OPEN / NON_RUNTIME
+```
+
+Gated Difficulty-3 items such as M-01/M-02/M-05/M-08/M-14/M-15 do not block the currently designable tier close until their own gates open.
+
+Therefore:
+
+```text
+DIFFICULTY_3_DESIGN_TIER = OPEN
+M-11 HARVEST = NOT YET AUTHORIZED
+```
+
+When M-10 and M-13 also reach full design freeze, the Difficulty-3 tier may close and each NON_RUNTIME item receives a separate SAFE_NON_RUNTIME eligibility review.
 
 ## Current design queue
 
@@ -231,36 +298,27 @@ open design gate
 → higher leverage tie-break
 ```
 
-Current next design candidates remain:
+Current next candidates:
 
 ```text
-1. M-11 Architecture Dependency Snapshot Generator
-   Importance 5 / Difficulty 3 / NOW
+1. M-10 Live Diagnostic → Fixture Skeleton Generator
+   Importance 4 / Difficulty 3 / NON_RUNTIME / NOW
 
-2. M-10 Live Diagnostic → Fixture Skeleton Generator
-   Importance 4 / Difficulty 3 / NOW
+2. M-13 Evidence Index Generator
+   Importance 4 / Difficulty 3 / NON_RUNTIME / NOW
+   S-09 prerequisite = satisfied
 
 3. S-03 Diagnostic Copy Profiles
-   Importance 3 / Difficulty 2 / NOW
+   Importance 3 / Difficulty 2 / RUNTIME / NOW
 
 4. S-11 Stale PR Hygiene Classifier
-   Importance 3 / Difficulty 2 / NOW
+   Importance 3 / Difficulty 2 / NON_RUNTIME / NOW
 
 5. S-07 Host Capability Receipt
-   Importance 3 / Difficulty 2 / NOW
+   Importance 3 / Difficulty 2 / RUNTIME / NOW
 ```
 
-The design-priority queue and harvest queue are separate:
-
-```text
-DESIGN QUEUE
-= choose next idea to freeze
-
-HARVEST QUEUE
-= closed-tier SAFE_NON_RUNTIME implementations
-```
-
-A harvest work item should be completed separately rather than silently bundled into the next idea design.
+The design-priority queue and harvest queue remain separate.
 
 ## Gated high-value candidates remain gated
 
@@ -302,15 +360,18 @@ LATER STABILIZATION PHASE
 
 ```text
 FROZEN SMALL DESIGNS = 6
+FROZEN MEDIUM DESIGNS = 1
 
 DIFFICULTY 1 DESIGN TIER = CLOSED
-S-09 SAFE_NON_RUNTIME HARVEST = IMPLEMENTED / VERIFIED / MAIN MATERIALIZED
-DIFFICULTY 1 HARVEST QUEUE = EMPTY
+DIFFICULTY 1 HARVEST = COMPLETE
 
 DIFFICULTY 2 DESIGN TIER = OPEN
+DIFFICULTY 3 DESIGN TIER = OPEN
+
+M-11 = DESIGN FROZEN / NON_RUNTIME / PENDING TIER CLOSE
 
 NEXT ACTIVE DESIGN
-= M-11 Architecture Dependency Snapshot Generator
+= M-10 Live Diagnostic → Fixture Skeleton Generator
 
 RUNTIME CHANGE
 = NONE

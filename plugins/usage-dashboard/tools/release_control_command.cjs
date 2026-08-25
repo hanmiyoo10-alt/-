@@ -6,6 +6,7 @@ const PREPARE_RE = /^\/usage-dashboard prepare (release\/usage-dashboard-[A-Za-z
 const READY_RE = /^\/usage-dashboard ready ([0-9a-fA-F]{40})$/;
 const READY_BRANCH_RE = /^\/usage-dashboard ready-branch (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
 const STAGE_RE = /^\/usage-dashboard stage (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
+const STAGE_ISSUE_TITLE_RE = /^\[usage-dashboard-stage\] (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
 const VALIDATE_RE = /^\/usage-dashboard validate ([1-9]\d*) ([0-9a-fA-F]{40})$/;
 
 function fail(code, detail = '') {
@@ -23,6 +24,15 @@ function assertControlEnvelope(issueNumber, actor, owner) {
   const actorText = String(actor || '').trim();
   const ownerText = String(owner || '').trim();
   if (!actorText || actorText !== ownerText) fail('UD_CONTROL_ACTOR_DENIED', actorText || 'missing');
+  return true;
+}
+
+function assertStageIssueEnvelope(actor, issueAuthor, owner) {
+  const actorText = String(actor || '').trim();
+  const authorText = String(issueAuthor || '').trim();
+  const ownerText = String(owner || '').trim();
+  if (!ownerText || actorText !== ownerText) fail('UD_STAGE_ISSUE_ACTOR_DENIED', actorText || 'missing');
+  if (authorText !== ownerText) fail('UD_STAGE_ISSUE_AUTHOR_DENIED', authorText || 'missing');
   return true;
 }
 
@@ -58,6 +68,13 @@ function parseStageCommand(value) {
   return {candidateBranch: match[1]};
 }
 
+function parseStageIssueTitle(value) {
+  const text = singleLine(value, 'UD_STAGE_ISSUE_TITLE_DENIED');
+  const match = STAGE_ISSUE_TITLE_RE.exec(text);
+  if (!match) fail('UD_STAGE_ISSUE_TITLE_DENIED');
+  return {candidateBranch: match[1]};
+}
+
 function parseValidateCommand(value) {
   const text = singleLine(value, 'UD_CONTROL_VALIDATE_DENIED');
   const match = VALIDATE_RE.exec(text);
@@ -71,6 +88,11 @@ function main() {
   if (command === '--check-envelope') {
     assertControlEnvelope(args[0], args[1], args[2]);
     process.stdout.write('UD_CONTROL_ENVELOPE_OK');
+    return;
+  }
+  if (command === '--check-stage-issue-envelope') {
+    assertStageIssueEnvelope(args[0], args[1], args[2]);
+    process.stdout.write('UD_STAGE_ISSUE_ENVELOPE_OK');
     return;
   }
   if (command === '--prepare-target') {
@@ -97,6 +119,10 @@ function main() {
     process.stdout.write(parseStageCommand(args.join(' ')).candidateBranch);
     return;
   }
+  if (command === '--stage-issue-branch') {
+    process.stdout.write(parseStageIssueTitle(args.join(' ')).candidateBranch);
+    return;
+  }
   if (command === '--validate-pr') {
     process.stdout.write(String(parseValidateCommand(args.join(' ')).prNumber));
     return;
@@ -114,12 +140,15 @@ module.exports = {
   READY_RE,
   READY_BRANCH_RE,
   STAGE_RE,
+  STAGE_ISSUE_TITLE_RE,
   VALIDATE_RE,
   assertControlEnvelope,
+  assertStageIssueEnvelope,
   parsePrepareCommand,
   parseReadyCommand,
   parseReadyBranchCommand,
   parseStageCommand,
+  parseStageIssueTitle,
   parseValidateCommand,
 };
 

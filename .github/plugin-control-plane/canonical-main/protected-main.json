@@ -1,10 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "branch": "main",
   "declaredReadiness": "READY_TO_ACTIVATE",
   "enforcementExpected": false,
   "requiredCheck": {
     "displayName": "SimCore CI / Required",
+    "apiContext": "Required",
     "workflow": "simcore-ci.yml",
     "profile": "MAIN_HEALTH",
     "job": "Required"
@@ -16,9 +17,10 @@
     "bypassActorRequired": false
   },
   "activeWriters": [
-    "simcore-release-state-sync.yml",
-    "simcore-release-permanent.yml",
+    "canonical-main-protection-guard.yml",
     "product-simcore-candidate-materialize.yml",
+    "simcore-release-permanent.yml",
+    "simcore-release-state-sync.yml",
     "usage-dashboard-project-memory.yml"
   ],
   "shadowProof": {
@@ -32,9 +34,25 @@
   },
   "activation": {
     "desired": true,
+    "automaticAttempt": true,
+    "workflow": "canonical-main-protection-guard.yml",
+    "script": ".github/plugin-control-plane/canonical-main/protection-activate.sh",
     "requiresDirectReadback": true,
     "broadBypassAllowed": false,
-    "requiredStatusCheckEnforcement": true
+    "requiredStatusCheckEnforcement": true,
+    "enforceAdmins": true,
+    "forcePushAllowed": false
+  },
+  "softEnforcement": {
+    "enabled": true,
+    "workflow": "canonical-main-protection-guard.yml",
+    "script": ".github/plugin-control-plane/canonical-main/required-guard.sh",
+    "trigger": "SimCore CI workflow_run completed for push/main",
+    "strategy": "exact-current-tip-required-gated-revert",
+    "verifyGateOnlyBeforeLanding": true,
+    "finalMainIdentityBarrier": true,
+    "forcePushAllowed": false,
+    "nativeProtectionEquivalent": false
   },
   "authority": {
     "releaseBlocking": false,

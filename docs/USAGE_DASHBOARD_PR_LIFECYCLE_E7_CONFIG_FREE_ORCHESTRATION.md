@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E7 Config-Free Release Orchestration
 
-Status: **IMPLEMENTED — E7-A/B/C/D merged and full regression GREEN; E7-E real-release operational proof pending**
+Status: **IMPLEMENTED — E7-A/B/C/D merged; E7-E real-release proof executed on 5.75, with one residual PR-CI activation anomaly carried forward**
 
 Recorded: `2026-08-25`
 
@@ -9,16 +9,14 @@ Design: Issue `#261`.
 PR-bootstrap/event-trust follow-up: Issue `#254`.
 Implementation PR: `#263`.
 Implementation merge SHA: `65a62b03288546ba1196271dd619499e8ff8b9ed`.
-Authoritative validation: `Usage Dashboard Candidate Validation` run `#112`.
-Registry result: `TEST_REGISTRY_GREEN:80`.
+First real E7 feature-release proof: Local Usage Dashboard `3.0.0-alpha.5.75`, PR `#351`.
+5.75 live proof: `docs/USAGE_DASHBOARD_575_E8F_LIVE_PROOF.md`.
 
 ## Latest-generation rule
 
-E7 is the current complete release-system generation for Local Usage Dashboard.
+E7 is the cohesive release-orchestration baseline inherited by later Usage Dashboard hardening work.
 
-It does not mean that E1–E6 were deleted and replaced by only the newest feedback items.
-
-Operationally:
+It does not mean E1–E6 were deleted. Operationally:
 
 ```text
 E7
@@ -28,15 +26,11 @@ all previously proven E1–E6 contracts that remain valid
 E7 PR/bootstrap/validation simplification
 ```
 
-A normal operator should use this E7 document as the current cohesive runbook instead of mentally composing E1, E2, E3, E4, E5 and E6 separately.
-
-Historical E-generation documents remain evidence for how the current contracts were established.
+Later E8 hardening adds earlier failure detection and stage-request recovery without weakening E7's exact-SHA or exact-byte authorities.
 
 ---
 
 # 1. Inherited from E1–E6 — unchanged
-
-These are E7 baseline contracts. E7 did not redesign or weaken them.
 
 ## Source / derived-candidate authority
 
@@ -50,24 +44,16 @@ These are E7 baseline contracts. E7 did not redesign or weaken them.
 
 ## Reentrant repair
 
-The normal release-stage command remains one command:
-
-```text
-/usage-dashboard stage <source-branch>
-```
-
-It is used both for the first candidate and after a source repair.
-
-Normal repair remains:
+The normal release-stage operation remains one reentrant stage transaction. Ordinary repair is:
 
 ```text
 source fix
-→ same stage command
+→ same stage path
 → same derived candidate branch advances
 → same release PR is reused
 ```
 
-No normal `restage` command, no `-v2/-v3` successor candidate and no replacement PR are required for ordinary repair.
+No replacement `-v2/-v3` candidate branch or replacement PR is required for ordinary repair.
 
 ## Privilege separation
 
@@ -84,7 +70,7 @@ No normal `restage` command, no `-v2/-v3` successor candidate and no replacement
 - Stage smoke remains pre-PR protection only.
 - The complete registered Usage Dashboard regression remains authoritative.
 - Regression registration remains fail-closed.
-- Engine/plugin behavior contracts, UNKNOWN semantics, privacy, cache/CLI/scheduler behavior and product data fidelity remain unchanged by E7.
+- Engine/plugin behavior contracts, UNKNOWN semantics, privacy, cache/CLI/scheduler behavior and product data fidelity remain protected.
 
 ## Merge authority
 
@@ -101,7 +87,7 @@ current PR head is re-read
 
 ## Production promotion
 
-The established strongest release boundary remains unchanged:
+The strongest release boundary remains:
 
 ```text
 merged main candidate
@@ -122,15 +108,11 @@ Production is never rebuilt during promotion.
 
 ---
 
-# 2. New in E7 — changed from E6
+# 2. E7-A — `stage` succeeds at `CANDIDATE_READY`
 
-E7 changes only the remaining PR/bootstrap/validation friction observed on the 5.73 release.
+E7 separated a valid candidate transaction from PR-bootstrap success.
 
-## E7-A — `stage` succeeds at `CANDIDATE_READY`
-
-E6 coupled successful candidate preparation to PR creation/validation activation. On 5.73, candidate materialization succeeded but the Actions-token PR POST failed with HTTP 403, causing a valid candidate transaction to be reported as failed.
-
-E7 ends the stage transaction at exact candidate authority:
+The stage terminal boundary is:
 
 ```text
 SOURCE
@@ -141,23 +123,11 @@ SOURCE
 → UD_CANDIDATE_READY
 ```
 
-`UD_CANDIDATE_READY` is a successful stage terminal state.
+`UD_CANDIDATE_READY` is a successful stage terminal state. PR bootstrap or validation activation failure does not invalidate already-verified candidate bytes.
 
-The receipt records:
+---
 
-- release identity;
-- source branch and exact source SHA;
-- trusted base SHA;
-- candidate branch and exact candidate SHA;
-- stage transaction identity;
-- focused smoke result;
-- next orchestration boundary.
-
-PR bootstrap or validation activation failure does not invalidate already-verified candidate bytes.
-
-## E7-B — deterministic PR orchestration leaves the Actions-token critical path
-
-The candidate-stage workflow no longer receives or uses `pull-requests: write` or `actions: write` for normal PR bootstrap.
+# 3. E7-B — deterministic PR orchestration outside the Actions-token critical path
 
 After `CANDIDATE_READY`, the assistant's authorized connected GitHub control surface owns deterministic PR ensure:
 
@@ -172,23 +142,15 @@ The assistant must:
 2. create it when zero matches exist;
 3. reuse it when exactly one match exists;
 4. fail closed when multiple matching open PRs exist;
-5. never alter candidate bytes merely to create/reuse the PR.
+5. never alter candidate bytes merely to create or reuse the PR.
 
-This removes the 5.73 Actions-token HTTP-403 bootstrap dependency from the normal stage transaction and requires no user repository-setting change.
+The 5.75 release reused exactly one deterministic PR, `#351`, throughout same-branch repair.
 
-## E7-C — exact-SHA authoritative validation
+---
 
-E7 no longer depends on GitHub deciding that a controller-authored PR branch update is a trusted `pull_request` event.
+# 4. E7-C — exact-SHA authoritative validation
 
-An owner-only control command on control Issue `#197` binds an open deterministic release PR to an exact candidate SHA:
-
-```text
-/usage-dashboard validate <pr-number> <candidate-sha>
-```
-
-This is an internal assistant/control-plane command. It is not a new user-facing release command.
-
-The trusted controller verifies:
+The authoritative controller binds an open deterministic release PR to an exact candidate SHA and verifies:
 
 ```text
 PR is open
@@ -199,9 +161,7 @@ PR head SHA == requested candidate SHA
 remote candidate branch SHA == requested candidate SHA
 ```
 
-Only then does it call the same full reusable Usage Dashboard validator with the exact candidate SHA.
-
-The reusable validator independently checks its checkout identity before running the existing complete regression.
+Only then does it run the complete reusable Usage Dashboard validator at that exact SHA.
 
 The acceptance invariant is:
 
@@ -211,34 +171,44 @@ VALIDATED_SHA == CURRENT_PR_HEAD_SHA == CANDIDATE_READY_SHA
 
 A mismatch fails closed.
 
-Ordinary `pull_request` validation remains available as defense in depth, but the E7 authoritative activation path no longer requires the 5.73 no-byte-change close/reopen workaround.
-
-## E7-D — release-generic preflight
-
-E7 adds a narrow fail-closed preflight before release materialization/expensive smoke.
-
-Its first protected stale-current-release pattern is a direct `assert.equal` / `assert.strictEqual` assertion against `.productVersion` using an older `3.0.0-alpha.5.N` literal when the current release spec targets a newer version.
-
-This catches the class of mistake that caused the 5.73 P36 stale-5.72 CI failure before the expensive full integration gate.
-
-Legitimate historical version locks remain possible only when explicitly annotated with:
+For 5.75, final authoritative validation run `32822385385` bound PR `#351` to:
 
 ```text
-UD_HISTORICAL_VERSION_LOCK
+0dd0605baea5017b17a9fb4effd8da028f132422
 ```
 
-The preflight does not rewrite tests automatically, does not infer intended versions and does not reject every historical version string merely for existing.
+and completed with:
+
+```text
+P35 Cross-Scope Request Provenance: OK
+P38 Diagnostics Mode Handler Ownership: OK
+P39 Provenance Analytics Wrapper Consolidation: OK
+TEST_REGISTRY_GREEN:83
+validated 3.0.0-alpha.5.75 / Engine 1.6.22 / Manager 1.3.0 / contracts 1/1
+```
 
 ---
 
-# 3. Current E7 normal flow
+# 5. E7-D — release-generic preflight
 
-The latest normal release flow is:
+E7 added a narrow fail-closed preflight before expensive release materialization and full integration validation.
+
+Protected stale-current-release assertions fail early. Legitimate historical locks remain possible only when explicitly annotated; the preflight does not rewrite tests, infer intended versions or fabricate current values.
+
+The 5.75 real release proved this boundary was useful: stale release-memory debt was rejected before production and repaired in source intent rather than silently normalized.
+
+Later E8 hardening expands this early-failure philosophy while retaining E7 authority boundaries.
+
+---
+
+# 6. Current normal flow
+
+The current cohesive flow is:
 
 ```text
 assistant implements source/tests/spec/materializer
-→ /usage-dashboard stage <source-branch>
-→ release-generic preflight
+→ trusted stage request
+→ release-generic / E8 early preflight
 → trusted materialization
 → derived candidate CAS write
 → CANDIDATE_READY
@@ -250,7 +220,7 @@ If full validation is RED:
 
 ```text
 fix source only
-→ same stage command
+→ same stage path
 → same candidate branch advances
 → same PR reused
 → exact-SHA full validation for the new candidate head
@@ -263,139 +233,78 @@ re-read PR head
 → require PR_HEAD_SHA == VALIDATED_SHA
 → re-read mergeability
 → exact-head squash merge
-→ existing classifier / monotonic guard
+→ classifier / monotonic guard
 → exact-byte production promotion
 → deployment receipt
-→ automatic repository documentation closure
-→ user only PocketRisu + / physical verification when product bytes changed
+→ repository documentation closure
+→ user only PocketRisu + physical verification when product bytes changed
 ```
 
 ---
 
-# 4. Operational state reduction
+# 7. E7-E — 5.75 real feature-release proof result
 
-The assistant should normally need to track only:
+E7-E was deliberately deferred until a real feature release could exercise the whole orchestration chain. Local Usage Dashboard `3.0.0-alpha.5.75` provided that proof.
+
+Final successful lineage:
 
 ```text
-SOURCE_BRANCH
-SOURCE_SHA
-CANDIDATE_SHA
-PR_NUMBER
-VALIDATED_SHA
-MERGE_SHA
-PRODUCTION_SHA
+source branch: release/usage-dashboard-575-provenance-analytics-wrapper-consolidation
+final source SHA: 2fdacbf32b778e45035313a87b2bd14cf0dd259f
+candidate branch: stage/usage-dashboard-3.0.0-alpha.5.75
+candidate SHA: 0dd0605baea5017b17a9fb4effd8da028f132422
+PR: #351
+exact validator: 32822385385 / TEST_REGISTRY_GREEN:83
+main merge SHA: 3d4a32bfee6a2d15a2de593f713f8c5bcf4ebd3f
+promotion run: 32822577653
+production SHA: ffa3dae31bad70ca68059fbc085d63b9a2d862ca
+exact-byte parity: VERIFIED
 ```
 
-The normal E7 runbook does not require state for:
+The real release proved:
 
-- replacement candidate branches;
-- replacement PRs;
-- `restage`;
-- `prepare → ready` fallback choreography;
-- close/reopen trusted-event workarounds;
-- user GitHub settings.
+- no Actions-token PR creation HTTP 403 was required on the normal path;
+- ordinary repair reused the same deterministic candidate branch and PR;
+- no user GitHub UI/settings action was required;
+- the full authoritative registry remained mandatory;
+- candidate / PR / validated SHA identity was exact before merge;
+- exact-head squash merge used the validated SHA;
+- production promotion remained monotonic and exact-byte with no rebuild;
+- the deployment receipt independently verified production parity.
 
-Historical `prepare`, `ready` and `ready-branch` paths remain emergency/diagnostic fallbacks only.
+One original E7-E acceptance item was **not** cleanly satisfied: a controller-authored candidate head update produced an `action_required` / no-job ordinary PR-CI activation anomaly, and PR owner reactivation was used to restore the defense-in-depth PR CI lane. The exact-SHA authoritative validator remained usable and production safety was not weakened.
+
+Therefore the E7-E real-release experiment is **EXECUTED and materially proven, but not declared perfectly clean**. The remaining PR-CI activation anomaly is retained as the next diagnostic/design input rather than rewritten as success.
+
+The complete 5.75 release itself is closed under E8-F because all candidate, exact-validation, merge, monotonic promotion and deployment acceptance gates completed successfully. See `docs/USAGE_DASHBOARD_575_E8F_LIVE_PROOF.md`.
 
 ---
 
-# 5. Implementation evidence
+# 8. Current deployed and physical-verification boundary
 
-Implementation PR `#263` changed Usage Dashboard release-control/test infrastructure only.
-
-No product release specification, plugin generated runtime, Engine runtime, Manager runtime or product manifest was intentionally changed by E7 maintenance.
-
-Final PR candidate validation run `#112` proved:
+Current deployed production is:
 
 ```text
-usage-dashboard E7 stage transaction contract: OK
-usage-dashboard E7 validation control command contract: OK
-usage-dashboard E7 release-generic preflight contract: OK
-P36 Diagnostics Instant Mode Switch: OK
-P37 Runtime Weight & Lifecycle Audit: OK
-TEST_REGISTRY_GREEN:80
-validated 3.0.0-alpha.5.73 / Engine 1.6.22 / Manager 1.3.0 / contracts 1/1
+Product: 3.0.0-alpha.5.75
+Engine: 1.6.22
+Manager: 1.3.0
+Contracts: 1 / 1
+release-usage-dashboard: ffa3dae31bad70ca68059fbc085d63b9a2d862ca
+Engine SHA256: 85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69
 ```
 
-Engine remained byte-identical with SHA-256:
+Repository/CI/deployment closure is complete. Physical verification is a separate boundary and remains:
 
 ```text
-85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69
+PENDING
 ```
 
-PR `#263` was squash-merged with exact head:
-
-```text
-PR head: fddd0a144bbb4b954d0fbe1479e371d54c67a8ee
-main merge: 65a62b03288546ba1196271dd619499e8ff8b9ed
-```
-
-The maintenance merge did not promote a new Local Usage Dashboard release.
-
-Production remained:
-
-```text
-Product: 3.0.0-alpha.5.73
-release-usage-dashboard: 87b934a0e153c1c7ddd77ab44750154cd195f57b
-```
-
-Post-merge main/release Git blobs were rechecked exact-equal for at least:
-
-- `plugins/usage-dashboard/runtime/product-manifest.json` — `48fdeb4b67a16cdd40e8bd0bf761dca8ce079037`;
-- `plugins/usage-dashboard/latest.js` — `a61a94019e6d3cf67f796202ab6cc0b72bcbf2a5`;
-- `plugins/usage-dashboard/runtime/bridge-engine.mjs` — `c9090717394ed4da4458923535f5f089205e65da`.
-
-Therefore E7 infrastructure implementation is product-byte neutral.
-
----
-
-# 6. E7-E — next real feature-release proof
-
-E7-A/B/C/D are implemented and repository-regression proven.
-
-E7-E remains deliberately open because an infrastructure-only maintenance PR cannot prove the complete new PR/bootstrap/exact-SHA orchestration under a real feature candidate.
-
-The next real Local Usage Dashboard feature release must prove:
-
-```text
-source
-→ stage
-→ CANDIDATE_READY
-→ deterministic PR ensure through connected control surface
-→ exact-SHA authoritative full validation
-→ if RED: source fix → same stage → same PR → new exact-SHA validation
-→ GREEN
-→ exact-head merge
-→ exact-byte promotion
-→ deployment receipt
-```
-
-Acceptance requires:
-
-- no Actions-token PR creation HTTP 403 on the normal path because Actions no longer owns PR bootstrap;
-- no `action_required` close/reopen workaround;
-- no replacement branch/PR for ordinary repair;
-- no user GitHub UI/settings action;
-- full authoritative registry remains required;
-- candidate/PR/validated SHA identity remains exact;
-- exact-byte production promotion remains unchanged.
-
-Until that real-release evidence exists, E7 is **implemented but operational proof pending**.
-
----
-
-# 7. Physical verification boundary
-
-E7-A/B/C/D are release-infrastructure maintenance only and changed no production Usage Dashboard bytes, so they require no new PocketRisu update or device acceptance by themselves.
-
-The currently deployed Product remains 5.73. Its separate physical-verification state remains whatever is recorded by the 5.73 release closure; E7 infrastructure maintenance must not fabricate or promote that device status.
+No PocketRisu result is inferred. The next user action is only the normal `+` update and actual-device acceptance when requested.
 
 ---
 
 ## Verdict
 
-E7 preserves the strongest proven release guarantees and simplifies only coordination boundaries.
+E7's core design is operationally proven by a real feature release: simplify coordination without removing validation, exact identity or production safety boundaries.
 
-The design principle is now operationally encoded:
-
-> **Simplify by removing coordination state and GitHub-event dependence, not by removing validation layers.**
+The 5.75 release also supplied useful negative evidence: event/PR-CI activation is still not perfectly deterministic. That residual issue belongs in the next design cycle; it does not invalidate the successfully deployed 5.75 exact-byte release.

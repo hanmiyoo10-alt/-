@@ -104,6 +104,83 @@ Value:
 - allows real A/B measurement across reload/update,
 - makes future cache optimization attributable.
 
+### 4A. Feasibility finding — Local Usage Dashboard already observes the required class of evidence
+
+Repository evidence from `plugins/usage-dashboard` confirms that the local Usage Dashboard already owns an independent, privacy-bounded cache observer over authenticated sanitized `LLMGateway /logs`.
+
+Its existing parser recognizes gateway/provider cache fields including:
+
+```text
+cachedTokens
+cacheWriteTokens
+cacheWrite5mTokens
+cacheWrite1hTokens
+cacheReadInputTokens
+cacheCreationInputTokens
+cachedContentTokenCount
+OpenAI cached-token detail fields
+```
+
+The observer deliberately separates:
+
+```text
+gateway request HIT / replay semantics
+provider cache Read tokens
+provider cache Write tokens
+cached total
+unknown / unavailable
+```
+
+A particularly important fidelity rule already exists:
+
+```text
+LLMGateway `cachedTokens`
+→ treated as explicit provider cache Read only when the object is clearly an LLMGateway log row
+   (request identity + request timestamp + gateway log cache fields)
+```
+
+Generic cached-token fields are not blindly promoted to explicit Read authority.
+
+This materially changes Candidate A feasibility:
+
+```text
+CACHE_RECEIPT_DATA_AVAILABILITY
+= VERIFIED IN LOCAL USAGE DASHBOARD
+
+SIMCORE_INTEGRATION_BOUNDARY
+= NOT YET FROZEN
+```
+
+Usage Dashboard 5.50 also intentionally removed its earlier Provider Manager IPC dependency and moved to its own independent bridge observer. Therefore there is no current architectural basis for casually making SimCore depend on Usage Dashboard as a required runtime service.
+
+Preferred research boundary:
+
+```text
+Usage Dashboard
+= reference implementation + independent gateway/cache evidence authority
+
+SimCore
+= remains independent
+= provider cache stays UNVERIFIED unless a bounded supported receipt path is explicitly designed
+```
+
+Possible future integration choices, in order of preference:
+
+```text
+A. manual/cross-diagnostic correlation only
+   → zero plugin coupling
+
+B. optional bounded read-only receipt surface
+   → only if a supported plugin IPC/public bridge contract is deliberately added
+   → Usage Dashboard absence must degrade to UNVERIFIED
+
+C. duplicate LLMGateway /logs observer inside SimCore
+   → avoid by default because it duplicates auth/parser/network ownership
+```
+
+Do not copy the Usage Dashboard bridge wholesale into SimCore.
+Do not add a required SimCore→Usage Dashboard dependency during an unrelated mini.
+
 ## 5. Candidate B — Cache ABI / Prefix Stability CI Gate
 
 Use existing compiler tiers as release contracts.
@@ -298,13 +375,16 @@ changing routing/provider automatically based on cache heuristics
 
 ## 13. Proposed research order
 
+Updated after Usage Dashboard evidence:
+
 ```text
 v0.64.7 live close
-→ collect authoritative gateway/cache metadata availability
-→ Candidate A: Cache Receipt Adapter feasibility
+→ use Usage Dashboard as the existing gateway/cache evidence source
+→ characterize which receipt fields are available in actual long-chat requests
+→ decide whether manual correlation is sufficient or an optional bounded receipt surface is justified
 → Candidate B: Cache ABI CI gate
 → Candidate C: deterministic serialization audit
-→ observe real first-break distribution
+→ observe real first-break distribution against actual provider Read/Write evidence
 → only if early SimCore-owned bytes are a measured limiter:
    Candidate D: Two-Plane Prompt Architecture research
 ```
@@ -323,12 +403,13 @@ Observe
 ## 14. Current classification
 
 ```text
-CACHE_RECEIPT_ADAPTER        HIGH VALUE / LOW SEMANTIC RISK / RESEARCH FIRST
+CACHE_RECEIPT_DATA           VERIFIED AVAILABLE VIA LOCAL USAGE DASHBOARD
+CACHE_RECEIPT_INTEGRATION    DESIGN OPEN / KEEP PLUGINS DECOUPLED BY DEFAULT
 CACHE_ABI_CI                 HIGH VALUE / LOW RUNTIME RISK
 DETERMINISTIC_SERIALIZATION  MEDIUM-HIGH VALUE / EVIDENCE-GATED
 TWO_PLANE_PROMPT             POTENTIALLY VERY HIGH VALUE / HIGH RISK
 PREFIX_MUTATION_BUDGET       OBSERVABILITY / LOW RISK
-ROUTE_AFFINITY               GATEWAY-DEPENDENT / VERIFY API FIRST
+ROUTE_AFFINITY               GATEWAY-DEPENDENT / VERIFY FIELDS FIRST
 TTL_CORRELATION              GATEWAY-DEPENDENT / OBSERVE FIRST
 CACHE_HEALTH_WIDGET          UX CANDIDATE / LATER
 ```

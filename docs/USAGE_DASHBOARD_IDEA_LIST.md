@@ -60,6 +60,20 @@ Tracking issue: #412
 3. 같은 난이도에서는 **중요도가 높은 아이디어를 먼저** 둔다.
 4. 새 아이디어를 추가할 때 기존 ID는 유지하고 위치만 재정렬한다.
 
+### 설계 → 구현 배치 규칙
+
+표시 순서는 난이도 중심이지만, 실제 실행은 **같은 중요도 안의 같은 난이도 그룹**을 하나의 배치 단위로 본다.
+
+1. 같은 중요도 + 같은 난이도에 속한 아이디어를 먼저 모두 개별 설계한다.
+2. 각 아이디어가 source authority, UNKNOWN/privacy/identity 규칙, non-goal, regression, physical acceptance까지 갖춘 `DESIGN READY` 상태가 될 때까지 구현하지 않는다.
+3. 해당 중요도/난이도 그룹의 대상 아이디어가 모두 `DESIGN READY`가 되면 그룹 전체를 한 번에 **IMPLEMENTATION BATCH READY**로 승격한다.
+4. 이후에는 사용자에게 항목마다 다시 승인을 요구하지 않고, ChatGPT가 배치 안의 구현을 연속 진행한다. 실제 기기에서만 확인 가능한 physical acceptance 시점에만 사용자를 호출한다.
+5. `한 번에 구현`은 **한 제품 버전에 무조건 합친다**는 뜻이 아니다. 서로 강하게 묶이고 regression/rollback 경계가 안전하면 하나의 bounded release로 묶을 수 있고, 그렇지 않으면 같은 implementation batch 안에서 여러 monotonic release로 연속 처리한다.
+6. 기존 원칙 `one release = one primary goal`, full regression, PR/CI, exact production materialization, monotonic deployment, physical acceptance는 그대로 유지한다.
+7. 한 항목이 prerequisite/evidence 미충족으로 막히면 그 항목은 fail-closed로 남긴다. 안전하게 독립적인 나머지 항목까지 불필요하게 막지는 않되, prerequisite 관계가 있는 후속 항목은 진행하지 않는다.
+
+즉 실행 모델은 **아이디어 분류 → 같은 중요도/난이도 그룹 전체 설계 → IMPLEMENTATION BATCH READY → 안전한 release 단위로 연속 구현**이다.
+
 ---
 
 # 3. 버전 업데이트 없이 적용 가능
@@ -180,9 +194,11 @@ read-only 우선 후보:
 5. 관련 regression 설계;
 6. 현재 stabilization/feature gate와 충돌하지 않는지 확인;
 7. 별도 issue에 **DESIGN ONLY** 상태로 구체화;
-8. 사용자 승인 이후에만 구현 flow로 이동.
+8. 같은 중요도 + 같은 난이도 그룹의 대상 아이디어가 모두 `DESIGN READY`인지 확인;
+9. 그룹 전체를 **IMPLEMENTATION BATCH READY**로 승격;
+10. 이후 사용자의 추가 항목별 승인 없이 안전한 release 단위로 연속 구현하고, 실기 확인이 필요한 시점에만 사용자를 호출한다.
 
-즉 **아이디어 → 설계 → 구현**은 서로 다른 상태다.
+즉 **아이디어 → 개별 설계 → 그룹 DESIGN READY → IMPLEMENTATION BATCH READY → 안전한 단위의 연속 구현**은 서로 다른 상태다.
 
 ---
 

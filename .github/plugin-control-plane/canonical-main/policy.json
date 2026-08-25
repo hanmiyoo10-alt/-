@@ -51,7 +51,9 @@
   "protection": {
     "contract": ".github/plugin-control-plane/canonical-main/protected-main.json",
     "observeBranchApi": true,
-    "operatorSurface": true
+    "operatorSurface": true,
+    "automaticActivationAttempt": true,
+    "softEnforcementFallback": true
   },
   "adapters": {
     "observationEpoch": "2026-08-24T20:37:22Z",
@@ -61,7 +63,8 @@
       {"id": "simcore-release-state-sync", "workflow": "simcore-release-state-sync.yml", "scope": ["plugin:simcore"], "events": ["push", "workflow_run", "workflow_dispatch"]},
       {"id": "simcore-permanent-release-state", "workflow": "simcore-release-permanent.yml", "scope": ["plugin:simcore"], "events": ["workflow_dispatch"]},
       {"id": "simcore-candidate-receipt", "workflow": "product-simcore-candidate-materialize.yml", "scope": ["plugin:simcore"], "events": ["push"]},
-      {"id": "usage-dashboard-project-memory", "workflow": "usage-dashboard-project-memory.yml", "scope": ["plugin:usage-dashboard"], "events": ["push"]}
+      {"id": "usage-dashboard-project-memory", "workflow": "usage-dashboard-project-memory.yml", "scope": ["plugin:usage-dashboard"], "events": ["push"]},
+      {"id": "canonical-main-protection-guard", "workflow": "canonical-main-protection-guard.yml", "scope": ["scope:repo"], "events": ["push", "workflow_run", "workflow_dispatch"]}
     ],
     "writerInventory": [
       {"workflow": "simcore-release-state-sync.yml", "mode": "active"},

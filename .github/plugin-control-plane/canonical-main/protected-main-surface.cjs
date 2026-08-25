@@ -17,12 +17,15 @@ function renderProtectionSection(observation) {
     `- Protection state: \`${observation.state}\``,
     `- GitHub branch protected: \`${observation.protected}\``,
     `- Required status-check enforcement: \`${observation.enforcementLevel}\``,
-    `- Required target: \`${observation.requiredName}\` — \`${observation.requiredPresent ? 'PRESENT' : 'NOT_ENFORCED'}\``,
+    `- Required target: \`${observation.requiredName}\` / API context \`${observation.requiredApiContext}\` — \`${observation.requiredPresent ? 'PRESENT' : 'NOT_ENFORCED'}\``,
     `- Observed required checks: ${checks}`,
     `- Protected writer gateway: \`${observation.writerGatewayReady ? 'READY' : 'DRIFT'}\` — ${observation.activeWriterCount} active writers`,
     `- Exact-candidate shadow proof: \`${observation.shadowProof}\``,
+    `- Automatic native activation attempt: \`${observation.automaticActivationAttempt ? 'ENABLED' : 'DISABLED'}\``,
+    `- Soft enforcement fallback: \`${observation.softEnforcementEnabled ? 'ACTIVE' : 'DISABLED'}\` — \`${observation.softEnforcementStrategy}\``,
+    `- Soft fallback equals native protection: \`${observation.nativeProtectionEquivalent}\``,
     ...(observation.writerErrors.length ? observation.writerErrors.map((row) => `- Writer contract error: \`${row}\``) : []),
-    '- This is direct GitHub governance read-back. A PASS Required run alone does not mean branch protection is enabled.',
+    '- This is direct GitHub governance read-back. A PASS Required run or ACTIVE soft fallback alone does not mean native branch protection is enabled.',
     END,
   ].join('\n');
 }
@@ -47,7 +50,7 @@ async function refresh() {
       headers: {
         Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
+        'X-GitHub-Api-Version': '2026-03-10',
         'User-Agent': 'canonical-main-protection-surface',
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),

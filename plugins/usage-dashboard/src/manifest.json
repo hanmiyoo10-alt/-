@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.75",
+  "version": "3.0.0-alpha.5.76",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "768b941b2b41c0085ce089e3131bb0477179a3e1636e5bd1a9ad79484a80aaa2",
+  "artifactSha256": "0e3f21f5398e34121adf606b01a6f4f9fa02cbb2448b779b19f66da3644ae608",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "cb5d4c87c4016448ed3b7c5fe90b2165cafedcd937d38d964ba3d2b1c78021a9"
+      "sha256": "6498ce33cbbf5c98cd8fe272909429224e0e8000d97313e3cb026c2233444504"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -82,14 +82,8 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 43983,
-      "sha256": "c98ca837fc8aa9f010c82728b6f42230e0819acbebb1d5a4f01ca3e34ebecfd9"
-    },
-    {
-      "file": "42-request-provenance-diagnostics.part.js",
-      "label": "request provenance diagnostics",
-      "bytes": 2624,
-      "sha256": "58b6b7152874e472791845470db6877113a4cb7f0c23d404351817b4608d6a6e"
+      "bytes": 45521,
+      "sha256": "f8e67202a744e7bd4d15417419652e9afb2502f6c66eeba48cbfda717ba8c2fd"
     },
     {
       "file": "50-dashboard-context.part.js",

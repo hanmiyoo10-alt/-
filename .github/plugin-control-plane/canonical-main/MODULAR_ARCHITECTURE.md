@@ -5,10 +5,11 @@ Phase J converts the proven Phase A–I control plane into a modular single-writ
 ## Runtime flow
 
 ```text
-read-only observers
+static capability registry
+→ read-only observers
 → immutable repository snapshot
 → pure domain derivation
-→ bounded incident reconciliation
+→ bounded incident reconciliation + consistency repair
 → pure surface rendering
 → one orchestrator
 → one #305 body PATCH
@@ -22,16 +23,26 @@ read-only observers
 - `infra/`: bounded GitHub/Actions/issue/file access.
 - `observers/`: read-only evidence collection through injected infrastructure.
 - `domains/`: side-effect-free repository rules and derivations.
-- `surfaces/`: pure Markdown rendering only.
-- `modules/`: static audited observer registry; dynamic plugin loading is forbidden.
+- `surfaces/`: pure Markdown rendering only, including bounded incident transition history.
+- `modules/`: static audited observer registry. Each observer declares its phase and bounded capabilities; dynamic plugin loading is forbidden.
 - `orchestrator/`: bounded side-effect sequencing and the single #305 write path.
 - `rehearsal/`: isolated synthetic proof contract/client/cycle modules.
 
-## Automatic split rule
+## Automatic split and dependency rule
 
-`module-boundaries.json` is the durable architecture budget. `tests/module-architecture-contract.cjs` fails with `MODULE_SPLIT_REQUIRED` when a managed module exceeds its reviewed line budget or crosses a layer responsibility boundary. The normal repair is extraction/splitting before merge, not increasing the budget.
+`module-boundaries.json` is the durable architecture budget. `tests/module-architecture-contract.cjs` rejects oversized modules, dependency cycles, forbidden managed-layer imports, and excessive fan-in/fan-out. Failures stay under the `MODULE_SPLIT_REQUIRED` contract with stable subcodes.
 
-> If a canonical-main module becomes too large or mixes responsibilities, split or extract it as part of the same work before landing the change.
+> If a canonical-main module becomes too large, cyclic, over-coupled, or mixes responsibilities, split or extract it as part of the same work before landing the change. Do not raise limits as the default repair.
+
+## Incident durability
+
+Incident issue labels and GitHub open/closed state remain the lifecycle truth used by the operator model. The orchestrator automatically repairs a stale body `State` field to that lifecycle truth. Normal OPEN/RECOVERED updates retain a bounded transition history and bounded prior event IDs, so recovery does not erase the failure footprint and repeated observations do not create unbounded issue bodies.
+
+## Automatic steady state
+
+Normal operation requires no user action. The operations workflow is driven by selected main events and an hourly self-healing schedule; `workflow_dispatch` is retained only as a break-glass diagnostic path and is not required for correctness, freshness, recovery, notification handoff, or #305 convergence. Workflow-run observation is restricted to `main`, while latest-wins concurrency remains enabled.
+
+The durable policy is `operations.automationMode=event-plus-hourly-self-heal` and `operations.manualActionRequired=false`.
 
 ## Stable contracts
 

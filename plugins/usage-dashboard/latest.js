@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.74
+//@version 3.0.0-alpha.5.75
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.74';
+  const VERSION = '3.0.0-alpha.5.75';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1932,6 +1932,27 @@ async function importLegacyTodayBaselines() {
     return `${scopeText} · ${tierText}`;
   };
 
+  function normalizeRequestProvenanceMetadata(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const captureMode = ['account-wide','project-fallback','unknown'].includes(String(raw.captureMode))
+      ? String(raw.captureMode)
+      : 'unknown';
+    const bounded = value => num(value) ? Math.max(0, Number(value)) : 0;
+    return {
+      captureMode,
+      rows:bounded(raw.rows),
+      fallbackCount:bounded(raw.fallbackCount),
+      devpass:bounded(raw.devpass),
+      credits:bounded(raw.credits),
+      unknown:bounded(raw.unknown),
+      conflict:bounded(raw.conflict),
+      modelInference:0,
+      authority:String(raw.authority || '') === 'project-exact+credits-org-used-mode'
+        ? 'project-exact+credits-org-used-mode'
+        : 'unknown',
+    };
+  }
+
   function normalizeScopeActivity(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const rows = value => Array.isArray(value) ? value.map(row => ({
@@ -1974,7 +1995,7 @@ async function importLegacyTodayBaselines() {
     const recent = normalizeRecentRequestRows(rawRecent);
     const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
     if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {
@@ -2228,37 +2249,6 @@ async function importLegacyTodayBaselines() {
     try { await renderWidget(reason); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }
-
-  function normalizeRequestProvenanceMetadata(raw) {
-    if (!raw || typeof raw !== 'object') return null;
-    const captureMode = ['account-wide','project-fallback','unknown'].includes(String(raw.captureMode))
-      ? String(raw.captureMode)
-      : 'unknown';
-    const bounded = value => num(value) ? Math.max(0, Number(value)) : 0;
-    return {
-      captureMode,
-      rows:bounded(raw.rows),
-      fallbackCount:bounded(raw.fallbackCount),
-      devpass:bounded(raw.devpass),
-      credits:bounded(raw.credits),
-      unknown:bounded(raw.unknown),
-      conflict:bounded(raw.conflict),
-      modelInference:0,
-      authority:String(raw.authority || '') === 'project-exact+credits-org-used-mode'
-        ? 'project-exact+credits-org-used-mode'
-        : 'unknown',
-    };
-  }
-
-  const normalizeScopeActivityBeforeProvenance = normalizeScopeActivity;
-  normalizeScopeActivity = function normalizeScopeActivityWithProvenance(raw) {
-    const normalized = normalizeScopeActivityBeforeProvenance(raw);
-    if (!normalized) return normalized;
-    return {
-      ...normalized,
-      requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),
-    };
-  };
 
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');

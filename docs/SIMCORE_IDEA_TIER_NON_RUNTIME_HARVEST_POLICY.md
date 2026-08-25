@@ -1,12 +1,13 @@
 # SimCore Idea Tier Non-Runtime Harvest Policy
 
-Status: `CANONICAL OPERATIONAL POLICY · DESIGN-TIER HARVEST · NON-RUNTIME ONLY · NO PLUGIN VERSION CHANGE`
+Status: `CANONICAL OPERATIONAL POLICY · NR-LANE DESIGN-TIER HARVEST · NON-RUNTIME ONLY · NO PLUGIN VERSION CHANGE`
 
-Purpose: allow immediately useful non-runtime idea implementations to be applied after a design-difficulty tier closes, without breaking the existing design-first discipline or starting runtime stabilization early.
+Purpose: allow immediately useful non-runtime idea implementations to be applied after the corresponding **NON_RUNTIME design-difficulty tier** closes, without breaking the existing design-first discipline or starting runtime stabilization early.
 
 Related authority:
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
 - `docs/SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md`
+- `docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_GUIDELINES.md`
 
@@ -16,33 +17,35 @@ Related authority:
 
 The current idea phase remains design-first.
 
-However, after one **currently designable difficulty tier** is fully frozen, SimCore may immediately implement/apply the frozen items from that tier that satisfy the strict `SAFE_NON_RUNTIME` gate.
+After the NR/R queue split, harvest accounting is lane-local. A NON_RUNTIME item does not wait for RUNTIME ideas of the same difficulty to finish design.
 
 Canonical flow:
 
 ```text
-CURRENTLY DESIGNABLE Difficulty N pool
-→ every open-gate item reaches DESIGN FROZEN
-→ Difficulty N DESIGN TIER CLOSED
-→ classify each frozen item for implementation impact
+CURRENTLY DESIGNABLE NR Difficulty N pool
+→ every open-gate NR item reaches DESIGN FROZEN
+→ NR Difficulty N DESIGN TIER CLOSED
+→ classify each frozen NR item for implementation impact
 → SAFE_NON_RUNTIME items only
 → immediate bounded implementation/application
 → static verification
 → main evidence/status synchronization
 → no plugin version bump
 → no release-simcore deployment
-→ continue next design tier
+→ continue NR design queue
 ```
 
 This is a narrow exception to the ordinary `DESIGN FROZEN → PARKED` rule.
 
 It does not start the general stabilization/runtime implementation phase.
 
+RUNTIME designs are tracked independently in the R queue and never block an NR harvest tier.
+
 ---
 
-## 2. What counts as a closed difficulty tier
+## 2. What counts as a closed NR difficulty tier
 
-A difficulty tier closes when every idea of that difficulty whose **design gate is currently open** has completed its full design.
+An NR difficulty tier closes when every NON_RUNTIME idea of that difficulty whose **design gate is currently open** has completed its full design.
 
 Open for tier-close accounting:
 
@@ -63,9 +66,19 @@ implementation-bound gates
 unmet dependency gates
 ```
 
-Therefore a gated idea does not prevent the currently designable portion of its difficulty tier from closing.
+RUNTIME ideas are also excluded from NR tier-close accounting because they belong to the independent R queue.
 
-When a previously gated item later becomes designable, it enters a new incremental tier-close cycle for its same difficulty.
+Therefore:
+
+```text
+NR Difficulty N close
+!= all Difficulty N ideas globally frozen
+
+NR Difficulty N close
+= all currently designable NON_RUNTIME Difficulty N ideas frozen
+```
+
+When a previously gated NR item later becomes designable, it enters a new incremental NR tier-close cycle for its same difficulty.
 
 ---
 
@@ -75,6 +88,7 @@ An idea may be harvested immediately only when **all** of the following are true
 
 ```text
 DESIGN FROZEN = YES
+Runtime Class = NON_RUNTIME
 plugin version change = NONE
 plugins/simcore/latest.js change = NONE
 plugins/simcore/install.js change = NONE
@@ -136,7 +150,7 @@ S-01 MINI_WARNING_WIDGET_V1
 S-04 Live Evidence Packet Builder
 ```
 
-are runtime/product surfaces and therefore are **not** eligible for immediate non-runtime harvest despite their small scope.
+are runtime/product surfaces and therefore are not eligible for immediate non-runtime harvest.
 
 ---
 
@@ -148,21 +162,23 @@ Canonical non-runtime path:
 
 ```text
 frozen design on main
+→ dedicated working branch
 → bounded implementation work
 → static/self-test verification appropriate to the artifact
 → confirm plugin bytes unchanged
 → confirm release-simcore unchanged
+→ PR / merge to main
 → record implementation evidence/status on main
 ```
 
 No runtime deployment or real-long-chat live gate is performed because the eligibility contract forbids runtime change.
 
-If implementation unexpectedly requires touching plugin bytes, runtime semantics, release workflows, or repository authority:
+If implementation unexpectedly requires touching plugin bytes, runtime semantics, release workflows, repository writer authority, or network behavior:
 
 ```text
 STOP
 → item loses SAFE_NON_RUNTIME eligibility
-→ classify PARKED FOR STABILIZATION
+→ classify SAFE_NON_RUNTIME_REVOKED / PARKED FOR STABILIZATION as appropriate
 → do not widen the harvest work item
 ```
 
@@ -175,11 +191,11 @@ The policy itself and a harvested implementation should not be introduced in the
 Canonical adoption sequence:
 
 ```text
-1. freeze this policy
+1. freeze/update policy
 2. subsequent work item applies it
 ```
 
-Likewise, unrelated SAFE_NON_RUNTIME ideas should not be bundled merely because they belong to the same difficulty tier.
+Likewise, unrelated SAFE_NON_RUNTIME ideas should not be bundled merely because they belong to the same NR difficulty tier.
 
 Default:
 
@@ -195,16 +211,16 @@ A batch is allowed only when several outputs are inseparable parts of one alread
 
 ---
 
-## 7. Status vocabulary extension
+## 7. Status vocabulary
 
-Frozen ideas may now receive one implementation disposition:
+Frozen NON_RUNTIME ideas may receive one implementation disposition:
 
 ```text
 PARKED_FOR_STABILIZATION
-= runtime/versioned or otherwise not eligible now
+= not eligible now despite design completion
 
 SAFE_NON_RUNTIME_READY
-= design frozen and eligible after its tier close
+= design frozen, NR tier closed, strict eligibility passed
 
 SAFE_NON_RUNTIME_IMPLEMENTED
 = implemented/applied under this policy and statically verified
@@ -219,7 +235,7 @@ SAFE_NON_RUNTIME_REVOKED
 
 ## 8. Difficulty is a design axis, not an implementation promise
 
-The matrix difficulty score measures difficulty of completing the design, not implementation LOC or operational risk.
+Difficulty measures effort to complete the design, not implementation LOC or operational risk.
 
 Therefore:
 
@@ -231,35 +247,45 @@ Difficulty 3
 != automatically runtime/versioned
 ```
 
-Every frozen idea must independently pass `SAFE_NON_RUNTIME` eligibility.
+Every frozen NR idea must independently pass `SAFE_NON_RUNTIME` eligibility.
 
-The tier rule determines **when to review for immediate implementation**.
+The NR tier rule determines **when to review for immediate implementation**.
 The safety gate determines **whether implementation is allowed**.
 
 ---
 
-## 9. Current application at policy-adoption time
+## 9. Current lane interpretation after NR/R split
 
-At adoption time, the currently designable Difficulty 1 pool is already fully frozen:
-
-```text
-S-09 Evidence Index Entry Format
-S-02 Diagnostic Quick Summary
-```
-
-Initial impact classification:
+The selection authority is now:
 
 ```text
-S-09 Evidence Index Entry Format
-→ candidate SAFE_NON_RUNTIME
-→ implementation/apply review allowed in the next work item
-
-S-02 Diagnostic Quick Summary
-→ runtime diagnostic UI surface
-→ PARKED_FOR_STABILIZATION
+docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md
 ```
 
-This policy document does not implement S-09 itself because policy adoption and idea implementation remain separate work items.
+Examples:
+
+```text
+NR Difficulty 1
+S-09 Evidence Index Entry Format
+→ FROZEN
+→ SAFE_NON_RUNTIME_IMPLEMENTED
+
+R Difficulty 1
+S-02 Diagnostic Quick Summary
+→ independent R queue
+→ does not block NR Difficulty 1
+→ PARKED FOR STABILIZATION
+```
+
+For NR Difficulty 2, the current open-gate pool is:
+
+```text
+S-10 Authority Drift Check / Scan
+S-11 Stale PR Hygiene Classifier
+S-12 Natural Evidence Corpus Index
+```
+
+The NR Difficulty-2 tier closes when these three designs are frozen. RUNTIME Difficulty-2 ideas do not participate in that close condition.
 
 ---
 
@@ -278,7 +304,7 @@ repo design/evidence
 → main documentation / durable-memory sync
 ```
 
-The tier harvest policy only removes needless waiting for truly non-runtime artifacts.
+The NR tier harvest policy only removes needless waiting for truly non-runtime artifacts.
 
 ---
 
@@ -288,8 +314,11 @@ The tier harvest policy only removes needless waiting for truly non-runtime arti
 DESIGN-FIRST DISCIPLINE
 = PRESERVED
 
-CURRENTLY DESIGNABLE DIFFICULTY TIER CLOSED
-→ REVIEW FROZEN ITEMS FOR SAFE_NON_RUNTIME
+NR / R QUEUES
+= INDEPENDENT FOR TIER ACCOUNTING
+
+CURRENTLY DESIGNABLE NR DIFFICULTY TIER CLOSED
+→ REVIEW FROZEN NR ITEMS FOR SAFE_NON_RUNTIME
 
 SAFE_NON_RUNTIME
 → IMPLEMENT/APPLY IMMEDIATELY IN SUBSEQUENT BOUNDED WORK ITEM
@@ -298,11 +327,8 @@ SAFE_NON_RUNTIME
 → NO PLUGIN VERSION CHANGE
 → NO RELEASE-SIMCORE
 
-RUNTIME / RELEASE / REPO-AUTHORITY IMPACT
-→ PARK FOR STABILIZATION
-
-CURRENT FIRST HARVEST CANDIDATE
-= S-09 Evidence Index Entry Format
+RUNTIME / RELEASE / REPO-AUTHORITY / NETWORK IMPACT
+→ NOT HARVESTABLE
 
 RUNTIME CHANGE
 = NONE

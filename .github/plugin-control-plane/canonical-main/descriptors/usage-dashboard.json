@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "usage-dashboard",
+  "kind": "plugin",
+  "displayName": "Local Usage Dashboard",
+  "lifecycle": "production",
+  "projectPath": "plugins/usage-dashboard",
+  "guidelines": "docs/USAGE_DASHBOARD_GUIDELINES.md",
+  "authority": {
+    "type": "release",
+    "releaseBranch": "release-usage-dashboard",
+    "artifact": "plugins/usage-dashboard/latest.js"
+  },
+  "memory": {
+    "profile": "production-state-block",
+    "outputs": [
+      "docs/USAGE_DASHBOARD_GUIDELINES.md"
+    ],
+    "workflow": ".github/workflows/usage-dashboard-project-memory.yml"
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

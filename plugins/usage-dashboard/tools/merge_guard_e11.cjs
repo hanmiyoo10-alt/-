@@ -13,6 +13,8 @@ const PROTECTED_EXACT = new Set([
   'scripts/bootstrap-usage-dashboard.sh',
 ]);
 const MATERIALIZATION_MESSAGE = /^materialize: Usage Dashboard (3\.0\.0-alpha\.5\.\d+) from source ([0-9a-f]{40})(?:\r?\n|$)/;
+const FROZEN_MAIN_TRAILER_PREFIX = 'Usage-Dashboard-Frozen-Main:';
+const FROZEN_MAIN_TRAILER = /^Usage-Dashboard-Frozen-Main: ([0-9a-f]{40})$/;
 const MAX_MATERIALIZATION_CHAIN = 64;
 
 function fail(code, detail = '') {
@@ -40,17 +42,37 @@ function candidateParent(candidateSha, options = {}) {
   return row[1];
 }
 
+function frozenMainFromMessage(message) {
+  const trailerLines = String(message || '').split(/\r?\n/)
+    .filter((line) => line.startsWith(FROZEN_MAIN_TRAILER_PREFIX));
+  if (!trailerLines.length) return null;
+  if (trailerLines.length !== 1) fail('E11_FROZEN_MAIN_TRAILER_COUNT',String(trailerLines.length));
+  const match = trailerLines[0].match(FROZEN_MAIN_TRAILER);
+  if (!match) fail('E11_FROZEN_MAIN_TRAILER_INVALID',trailerLines[0]);
+  return normalizeSha(match[1],'E11_FROZEN_MAIN_SHA_INVALID');
+}
+
 function materializationIdentity(commitSha, options = {}) {
   const sha = normalizeSha(commitSha,'E11_CANDIDATE_SHA_INVALID');
   const message = git(['show','-s','--format=%B',sha],options);
   const match = message.match(MATERIALIZATION_MESSAGE);
-  return match ? {version:match[1],sourceSha:match[2]} : null;
+  if (!match) return null;
+  return {
+    version:match[1],
+    sourceSha:match[2],
+    frozenMainSha:frozenMainFromMessage(message),
+  };
 }
 
 function candidateBase(candidateSha, options = {}) {
   const candidate = normalizeSha(candidateSha,'E11_CANDIDATE_SHA_INVALID');
   const identity = materializationIdentity(candidate,options);
   if (!identity) return candidateParent(candidate,options);
+  if (identity.frozenMainSha) {
+    try { git(['cat-file','-e',`${identity.frozenMainSha}^{commit}`],options); }
+    catch { fail('E11_FROZEN_MAIN_COMMIT_MISSING',identity.frozenMainSha); }
+    return identity.frozenMainSha;
+  }
   let cursor = candidate;
   for (let depth = 0; depth < MAX_MATERIALIZATION_CHAIN; depth += 1) {
     const parent = candidateParent(cursor,options);
@@ -95,6 +117,7 @@ function classify(candidateSha, currentMainSha, options = {}) {
   try { git(['cat-file','-e',`${main}^{commit}`],options); }
   catch { fail('E11_MAIN_COMMIT_MISSING',main); }
   const parent = candidateParent(candidate,options);
+  const identity = materializationIdentity(candidate,options);
   const base = candidateBase(candidate,options);
   try { execFileSync('git',['merge-base','--is-ancestor',base,main],{stdio:'ignore',...options}); }
   catch { fail('E11_MAIN_NOT_DESCENDANT_OF_CANDIDATE_BASE',`${base}:${main}`); }
@@ -103,6 +126,7 @@ function classify(candidateSha, currentMainSha, options = {}) {
     candidateSha:candidate,
     candidateParentSha:parent,
     candidateBaseSha:base,
+    candidateBaseSource:identity?.frozenMainSha ? 'explicit-frozen-main-trailer' : 'ancestry-compatibility-fallback',
     currentMainSha:main,
     ...result,
   };
@@ -122,8 +146,11 @@ module.exports = {
   PROTECTED_PREFIXES,
   PROTECTED_EXACT,
   MATERIALIZATION_MESSAGE,
+  FROZEN_MAIN_TRAILER_PREFIX,
+  FROZEN_MAIN_TRAILER,
   MAX_MATERIALIZATION_CHAIN,
   candidateParent,
+  frozenMainFromMessage,
   materializationIdentity,
   candidateBase,
   changedPaths,

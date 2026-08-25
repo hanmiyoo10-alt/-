@@ -11,7 +11,7 @@ const root = 'plugins/usage-dashboard';
 const src = `${root}/src`;
 const workspacePath = `${src}/62-diagnostics-workspace.part.js`;
 const instantPath = `${src}/63-diagnostics-instant-mode.part.js`;
-const auditPath = `${src}/64-runtime-weight-audit.part.js`;
+const retiredAuditPath = [src, '64-runtime-weight-audit.part.js'].join('/');
 const enginePath = `${root}/runtime/bridge-engine.mjs`;
 const latestPath = `${root}/latest.js`;
 
@@ -24,16 +24,20 @@ assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 
 const workspace = fs.readFileSync(workspacePath, 'utf8');
-const audit = fs.readFileSync(auditPath, 'utf8');
 const latest = fs.readFileSync(latestPath, 'utf8');
 const {PARTS} = require('../src/parts.cjs');
 const partFiles = PARTS.map(part => part.file);
 const i62 = partFiles.indexOf('62-diagnostics-workspace.part.js');
 const i63 = partFiles.indexOf('63-diagnostics-instant-mode.part.js');
 const i64 = partFiles.indexOf('64-runtime-weight-audit.part.js');
-assert.ok(i62 >= 0 && i64 > i62, 'P38 module order must retain workspace -> runtime audit');
+const i70 = partFiles.indexOf('70-widget-render.part.js');
+assert.ok(i62 >= 0 && i70 > i62, 'P38 module order must retain workspace before widget rendering');
 assert.equal(i63, -1, 'P38 module 63 patch layer must remain retired');
 assert.equal(fs.existsSync(instantPath), false, 'P38 module 63 source file must remain absent');
+if (Number(lineage[1]) >= 78) {
+  assert.equal(i64, -1, 'P38 module 64 audit patch layer must remain retired from 5.78 onward');
+  assert.equal(fs.existsSync(retiredAuditPath), false, 'P38 module 64 source file must remain absent from 5.78 onward');
+}
 
 assert.doesNotMatch(workspace, /const\s+setMode\s*=\s*async\b/, 'P38 module 62 must not restore the superseded async setMode closure');
 assert.doesNotMatch(workspace, /state\.diagnosticsMode\s*=\s*next;\s*await\s+persist\(\);\s*renderSettings\(\);/s, 'P38 must not restore persistence-before-render');
@@ -65,10 +69,12 @@ assert.doesNotMatch(instantSource, /renderSettings\(\)|schedulePanelRender\(|nat
 const basicFunction = workspace.match(/function diagnosticsWorkspaceBasicModel\(\) \{([\s\S]*?)\n  \}\n\n  function diagnosticsWorkspaceBasicText/);
 assert.ok(basicFunction);
 assert.equal(basicFunction[1].includes('diagText('), false, 'P38 Basic must remain independent of diagText()');
+assert.equal(basicFunction[1].includes('runtimeWeightAudit'), false, 'P38 Basic must remain independent of Runtime Weight Audit');
 assert.match(workspace, /for \(const line of diagText\(\)\.split\('\\n'\)\)/, 'P38 Detailed must remain lazy over diagText()');
+assert.match(workspace, /title:'Runtime Weight Audit'/, 'P38 Runtime Weight Audit must be directly owned by module 62');
+assert.doesNotMatch(workspace, /diagnosticsRuntimeWeightLegacyDetailedSections/, 'P38 retired audit wrapper symbol must remain absent');
 assert.match(workspace, /id="copy-diag-summary"/);
 assert.match(workspace, /id="copy-diag"/);
-assert.match(audit, /Runtime Weight Audit/);
 assert.match(latest, /Runtime Weight Audit/);
 
 const suite = discoverTests();
@@ -79,4 +85,4 @@ assert.ok(suite.regressions.includes('p38-diagnostics-mode-handler-ownership.cjs
 const engineSha = crypto.createHash('sha256').update(fs.readFileSync(enginePath)).digest('hex');
 assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69');
 
-console.log('P38 Diagnostics Mode Handler Ownership: OK · module 62 sole owner · module 63 retired · P36 behavior authority retained · P37 audit retained · zero new I/O · Engine byte-identical');
+console.log('P38 Diagnostics Mode Handler Ownership: OK · module 62 sole instant/audit workspace owner · module 63 retired · P36/P37 authority retained · zero new I/O · Engine byte-identical');

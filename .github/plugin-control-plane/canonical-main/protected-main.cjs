@@ -24,12 +24,24 @@ function workflowText(root, name) {
   return fs.readFileSync(file, 'utf8');
 }
 
+function gatewayText(root, workflowName) {
+  const text = workflowText(root, workflowName);
+  if (text === null) return null;
+  const delegated = [];
+  const scriptPattern = /(?:bash\s+)?(\.github\/plugin-control-plane\/canonical-main\/[A-Za-z0-9._/-]+\.(?:sh|py|cjs))/g;
+  for (const match of text.matchAll(scriptPattern)) {
+    const file = path.join(root, match[1]);
+    if (fs.existsSync(file)) delegated.push(fs.readFileSync(file, 'utf8'));
+  }
+  return [text, ...delegated].join('\n');
+}
+
 function directWriterInventory(root) {
   const dir = path.join(root, '.github', 'workflows');
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir)
     .filter((name) => /\.ya?ml$/.test(name))
-    .filter((name) => fs.readFileSync(path.join(dir, name), 'utf8').includes('scripts/repo-main-write.py'))
+    .filter((name) => (gatewayText(root, name) || '').includes('scripts/repo-main-write.py'))
     .sort();
 }
 
@@ -49,17 +61,22 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
   }
 
   for (const name of declaredActive) {
-    const text = workflowText(root, name);
-    if (text === null) {
+    const workflow = workflowText(root, name);
+    const text = gatewayText(root, name);
+    if (workflow === null || text === null) {
       errors.push(`PROTECTED_MAIN_ACTIVE_WRITER_MISSING:${name}`);
       continue;
     }
     if (!text.includes('scripts/repo-main-write.py')) errors.push(`PROTECTED_MAIN_GATEWAY_MISSING:${name}`);
-    if (!/actions:\s*write/.test(text)) errors.push(`PROTECTED_MAIN_ACTIONS_WRITE_MISSING:${name}`);
+    if (!/actions:\s*write/.test(workflow)) errors.push(`PROTECTED_MAIN_ACTIONS_WRITE_MISSING:${name}`);
     if (!/--required-workflow\s+simcore-ci\.yml/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_WORKFLOW_MISSING:${name}`);
     if (!/--required-profile\s+MAIN_HEALTH/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_PROFILE_MISSING:${name}`);
     if (!/--required-job\s+Required/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_JOB_MISSING:${name}`);
     if (/--force(?:\s|$)|force-with-lease/.test(text)) errors.push(`PROTECTED_MAIN_FORCE_PATH_FORBIDDEN:${name}`);
+  }
+
+  for (const [name] of inventory.entries()) {
+    if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
   }
 
   const helperPath = path.join(root, contract.gateway?.helper || 'scripts/repo-main-write.py');
@@ -92,10 +109,11 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
 function observeProtection(branch, {root, policy, contract = loadProtectedMainContract()} = {}) {
   const writerErrors = root && policy ? writerContractErrors(root, policy, contract) : [];
   const names = requiredCheckNames(branch);
-  const requiredName = contract.requiredCheck?.displayName || 'UNKNOWN';
+  const requiredDisplayName = contract.requiredCheck?.displayName || 'UNKNOWN';
+  const requiredApiContext = contract.requiredCheck?.apiContext || requiredDisplayName;
   const protectedFlag = branch?.protected === true;
   const enforcementLevel = branch?.protection?.required_status_checks?.enforcement_level || 'off';
-  const requiredPresent = names.includes(requiredName);
+  const requiredPresent = names.includes(requiredApiContext) || names.includes(requiredDisplayName);
   const readiness = writerErrors.length === 0 && contract.declaredReadiness === 'READY_TO_ACTIVATE';
 
   let state;
@@ -111,19 +129,26 @@ function observeProtection(branch, {root, policy, contract = loadProtectedMainCo
     state,
     protected: protectedFlag,
     enforcementLevel,
-    requiredName,
+    requiredName: requiredDisplayName,
+    requiredApiContext,
     requiredPresent,
     requiredChecks: names,
     writerGatewayReady: writerErrors.length === 0,
     writerErrors,
     shadowProof: contract.shadowProof?.result || 'UNKNOWN',
     activeWriterCount: (contract.activeWriters || []).length,
+    automaticActivationAttempt: contract.activation?.automaticAttempt === true,
+    softEnforcementEnabled: contract.softEnforcement?.enabled === true,
+    softEnforcementStrategy: contract.softEnforcement?.strategy || 'NONE',
+    nativeProtectionEquivalent: contract.softEnforcement?.nativeProtectionEquivalent === true,
   };
 }
 
 module.exports = {
   loadProtectedMainContract,
   requiredCheckNames,
+  workflowText,
+  gatewayText,
   directWriterInventory,
   writerContractErrors,
   observeProtection,

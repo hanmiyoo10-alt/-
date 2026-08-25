@@ -31,6 +31,8 @@ const partFiles = PARTS.map(part => part.file);
 assert.equal(fs.existsSync(wrapperPath), false, 'P39 superseded module 18 must be deleted');
 assert.equal(partFiles.includes('18-request-provenance-analytics.part.js'), false, 'P39 module 18 must be absent from PARTS');
 assert.equal(PARTS.length, 27, 'P39 production plugin module count must be 27');
+const usagePart = PARTS.find(part => part.file === '16-usage-analytics.part.js');
+assert.equal(usagePart?.marker, '\n  function normalizeRequestProvenanceMetadata(raw) {', 'P39 module 16 registry boundary must follow the consolidated provenance owner');
 
 const i15 = partFiles.indexOf('15-request-provenance.part.js');
 const i16 = partFiles.indexOf('16-usage-analytics.part.js');
@@ -73,4 +75,4 @@ assert.ok(suite.regressions.includes('p39-provenance-analytics-wrapper-consolida
 const engineSha = crypto.createHash('sha256').update(fs.readFileSync(enginePath)).digest('hex');
 assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P39 Engine must remain byte-identical to 5.74');
 
-console.log('P39 Provenance Analytics Wrapper Consolidation: OK · module 16 direct owner · module 18 removed · 27 parts · request provenance behavior authority retained · Engine byte-identical');
+console.log('P39 Provenance Analytics Wrapper Consolidation: OK · module 16 direct owner · module 18 removed · 27 parts · consolidated boundary locked · request provenance behavior authority retained · Engine byte-identical');

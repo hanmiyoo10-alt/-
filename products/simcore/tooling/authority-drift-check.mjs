@@ -96,13 +96,15 @@ export function parseOperatorAuthority(policyText, evidenceText) {
   const evidenceStatus = topStatus(evidenceText);
   if (!policyStatus || !evidenceStatus) return { status: 'BLOCKED' };
 
+  const normalizedPolicy = String(policyText).replace(/\*/g, '');
+  const normalizedEvidence = String(evidenceText).replace(/\*/g, '');
   const active = /ACTIVE POLICY/i.test(policyStatus) && /POLICY ACTIVE/i.test(evidenceStatus);
   const pending = /AWAITING GENUINE RELEASE PROOF/i.test(policyStatus)
     && /AWAITING GENUINE RELEASE PROOF/i.test(evidenceStatus);
   const proven = /GENUINE RELEASE PROOF[^\n]*(?:PROVEN|COMPLETE|PASS)/i.test(policyStatus)
     && /GENUINE RELEASE PROOF[^\n]*(?:PROVEN|COMPLETE|PASS)/i.test(evidenceStatus);
-  const backgroundFalse = /not standing authority for autonomous or background releases/i.test(policyText)
-    && /standing\/background release authority\s*=\s*NO/i.test(evidenceText);
+  const backgroundFalse = /not standing authority for autonomous or background releases/i.test(normalizedPolicy)
+    && /standing\/background release authority\s*=\s*NO/i.test(normalizedEvidence);
 
   if (!active || (!pending && !proven) || !backgroundFalse) return { status: 'BLOCKED' };
   return {

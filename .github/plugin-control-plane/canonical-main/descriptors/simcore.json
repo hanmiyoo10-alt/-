@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "simcore",
+  "kind": "plugin",
+  "displayName": "SimCore",
+  "lifecycle": "production",
+  "projectPath": "plugins/simcore",
+  "guidelines": "docs/SIMCORE_GUIDELINES.md",
+  "authority": {
+    "type": "release",
+    "releaseBranch": "release-simcore",
+    "manifest": "product-manifest.json",
+    "artifact": "plugins/simcore/latest.js"
+  },
+  "memory": {
+    "profile": "registered-renderer",
+    "outputs": [
+      "product-manifest.json",
+      "docs/CURRENT_DEVELOPMENT.md",
+      "docs/SIMCORE_GUIDELINES.md"
+    ],
+    "workflow": ".github/workflows/simcore-release-state-sync.yml",
+    "renderer": "products/simcore/tooling/sync-state.mjs",
+    "targets": "products/simcore/state-sync/target-registry.json"
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

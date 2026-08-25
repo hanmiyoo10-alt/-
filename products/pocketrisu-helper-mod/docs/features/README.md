@@ -12,6 +12,8 @@
 
 새 기능은 코드를 먼저 만들고 나중에 분리하지 않는다. 먼저 Feature-ID/폴더를 만들고 그 경계 안에서 작업한다.
 
+전체 PocketRisu PR 결과의 빠른 인덱스는 [`../../PR-HISTORY.md`](../../PR-HISTORY.md)에 두고, 상세 근거와 후속 작업은 각 Feature-ID dossier에 둔다.
+
 ## 📱 메인폰
 - [SSH core tunnel](main-phone/main-ssh-tunnel/README.md)
 - [notification relay](main-phone/main-notification-relay/README.md)
@@ -29,6 +31,7 @@
 ## 📱 양쪽/공통
 - [last active chat restore](shared/restore-last-active-chat/README.md)
 - [response notification](shared/response-notification/README.md)
+- [plugin update fetch compatibility](shared/plugin-update-fetch/README.md)
 - [V3 plugin targeted reload](shared/plugin-targeted-reload/README.md)
 - [session/write-lock](shared/session-write-lock/README.md)
 - [long-chat refresh stall](shared/long-chat-refresh-stall/README.md)

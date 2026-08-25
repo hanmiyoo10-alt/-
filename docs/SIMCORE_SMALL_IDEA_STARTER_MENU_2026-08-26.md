@@ -1,12 +1,19 @@
 # SimCore Small-Idea Starter Menu — 2026-08-26
 
-Status: `IDEA MENU · SMALL SCOPE ONLY · DESIGN MUST FREEZE BEFORE STOP · NO IMPLEMENTATION · NO RUNTIME CHANGE`
+Status: `IDEA MENU · S4/S-09 FROZEN/PARKED · SMALL SCOPE ONLY · DESIGN MUST FREEZE BEFORE STOP · NO IMPLEMENTATION · NO RUNTIME CHANGE`
 
 Purpose: provide a bounded set of genuinely small SimCore ideas that can be designed independently without reopening broad architecture research or mixing feature, release-system, and runtime ownership work.
 
 Broad architecture research remains closed. This menu is intentionally limited to narrow ideas that can be completed as bounded designs and, if later implemented during the stabilization/implementation phase, should remain one bounded work item.
 
 Canonical idea-work policy: `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`.
+
+Canonical size-inventory identity is used by the master matrix. This starter menu predates that numbering, so:
+
+```text
+starter S4 Evidence Index Entry Format
+= master S-09 Evidence Index Entry Format
+```
 
 ## Selection rule
 
@@ -112,31 +119,53 @@ Future implementation class: `NON_RUNTIME TOOLING / SEPARATE FROM PRODUCT RELEAS
 
 ### S4. Evidence Index Entry Format
 
+Master inventory ID: `S-09`
 Category: `EVIDENCE / REPO_MEMORY`
 
-Idea: define one compact index-entry format connecting an important contract to its evidence without copying the evidence body.
-
-Example:
+Status:
 
 ```text
-contract ID
-semantic owner
-latest live evidence doc
-fixture/suite ID
-release/version
-status: PASS / WATCH / GAP
-related debt/watch ID
+DESIGN FROZEN
+PARKED FOR STABILIZATION
+IMPLEMENTATION = NONE
 ```
 
-Rules:
+Frozen design:
+`docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md`
+
+Frozen v1 entry:
+
+```text
+Contract
+Owner
+Authority
+Live Evidence
+Fixture
+Evidence Release
+Status
+Related
+```
+
+Frozen status vocabulary:
+
+```text
+PASS
+WATCH
+GAP
+```
+
+Key rules:
 - index only;
 - no raw diagnostic duplication;
 - existing dedicated evidence documents remain authoritative;
-- no second roadmap authority.
+- no second roadmap authority;
+- Owner means semantic/contract owner, not writer/holder convenience;
+- historical Evidence Release is preserved rather than rewritten to current production;
+- fixture existence alone cannot create PASS when required live proof is still missing.
 
-Designability now: `YES · MAY BE SELECTED FOR FULL DESIGN`
-Implementation timing: `PARK AFTER DESIGN · IMPLEMENT LATER`
-Future implementation class: `DOC/TOOLING ONLY`
+Designability now: `COMPLETE · DO NOT RESELECT DURING IDEA PHASE`
+Implementation timing: `PARKED · IMPLEMENT LATER`
+Future implementation class: `NON_RUNTIME / REPO_MEMORY`
 
 ## Tier S+ — small, but not selectable until ownership milestones expose enough truth
 
@@ -200,16 +229,24 @@ Reason: freezing the receipt schema against the imagined pre-M2-3 flow would vio
 
 ## Recommended design-exploration order
 
-For idea-only work now:
+Completed:
+
+```text
+S4 / master S-09 Evidence Index Entry Format
+→ DESIGN FROZEN / PARKED
+```
+
+Remaining starter-menu order:
 
 ```text
 1. S1 Diagnostic Quick Summary
-2. S4 Evidence Index Entry Format
-3. S3 Authority Drift Check
-4. S2 Diagnostic Copy Profiles
+2. S3 Authority Drift Check
+3. S2 Diagnostic Copy Profiles
 ```
 
-For every selected item above:
+The master priority matrix additionally places `Live Evidence Packet Builder` in the A1 pool; use `SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md` as the canonical cross-menu selection order.
+
+For every selected item:
 
 ```text
 FULL DESIGN FIRST
@@ -217,12 +254,6 @@ FULL DESIGN FIRST
 → PARKED FOR STABILIZATION
 → NO IMPLEMENTATION
 ```
-
-Why:
-- S1 is the smallest user-visible product thought experiment;
-- S4 is the smallest repository-memory improvement;
-- S3 directly improves SimCore's authority discipline;
-- S2 is useful but touches an existing troubleshooting workflow and deserves slightly more care.
 
 S5/S6 remain candidates only until M2-3 exposes the actual application-service boundary.
 
@@ -248,8 +279,11 @@ If a small idea starts requiring one of those, stop expanding the scope, reclass
 SMALL IDEA RULE
 = SMALL SCOPE / FULL DESIGN RIGOR
 
-SELECTED IDEA
-= MUST REACH DESIGN FROZEN
+COMPLETED SMALL DESIGN
+= S4 / master S-09 Evidence Index Entry Format
+
+S-09 STATE
+= DESIGN FROZEN / PARKED FOR STABILIZATION
 
 AFTER DESIGN FREEZE
 = PARK + STOP
@@ -257,13 +291,10 @@ AFTER DESIGN FREEZE
 IMPLEMENTATION DURING CURRENT IDEA PHASE
 = NONE
 
-BEST TINY PRODUCT DESIGN CANDIDATE
+NEXT BEST TINY PRODUCT DESIGN CANDIDATE
 = S1 Diagnostic Quick Summary
 
-BEST TINY REPO/MEMORY DESIGN CANDIDATE
-= S4 Evidence Index Entry Format
-
-BEST TINY SAFETY/AUTOMATION DESIGN CANDIDATE
+NEXT TINY SAFETY/AUTOMATION DESIGN CANDIDATE
 = S3 Authority Drift Check
 
 POST-M2-3 CANDIDATES

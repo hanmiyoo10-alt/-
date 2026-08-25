@@ -33,6 +33,15 @@ const candidateTreeIndex = stage.indexOf('git add -A');
 assert.ok(reconcileIndex >= 0 && candidateTreeIndex > reconcileIndex, 'reconciliation including release-memory gate must finish before candidate tree/bundle creation');
 assert.match(stage, /write_candidate:\n\s+needs: \[resolve_stage, materialize_stage\]/);
 assert.match(stage, /if: \$\{\{ needs\.resolve_stage\.result == 'success' && needs\.materialize_stage\.result == 'success' \}\}/);
+assert.match(stage, /issues:\n\s+types: \[opened\]/, 'connected stage trigger must use issue-open only');
+assert.match(stage, /github\.actor == github\.repository_owner/);
+assert.match(stage, /github\.event\.issue\.user\.login == github\.repository_owner/);
+assert.match(stage, /startsWith\(github\.event\.issue\.title, '\[usage-dashboard-stage\] '\)/);
+assert.match(stage, /--check-stage-issue-envelope/);
+assert.match(stage, /--stage-issue-branch/);
+assert.match(stage, /E8_STAGE_CONNECTED_ISSUE_REQUEST/);
+assert.match(stage, /github\.event\.issue\.number == 197/,'legacy #197 stage command path must remain');
+assert.match(stage, /\/usage-dashboard stage /,'legacy slash-command stage path must remain');
 
 const ordinary = fs.readFileSync('.github/workflows/usage-dashboard-validate.yml', 'utf8');
 assert.match(ordinary, /deterministic-stage-pr-note:/);
@@ -60,4 +69,4 @@ for (const token of [
   'must not create or advance release Git refs',
 ]) assert.ok(runbook.includes(token), `E8 runbook missing ${token}`);
 
-console.log(`usage-dashboard E8 early-failure/orchestration contract: OK · ${release.productVersion} · continuous hygiene + pre-candidate release-memory gate + exact-SHA authority + ref boundary`);
+console.log(`usage-dashboard E8 early-failure/orchestration contract: OK · ${release.productVersion} · continuous hygiene + pre-candidate release-memory gate + owner issue stage trigger + exact-SHA authority + ref boundary`);

@@ -17,4 +17,16 @@ assert.equal(control.assertControlEnvelope(197,'hanmiyoo10-alt','hanmiyoo10-alt'
 assert.throws(()=>control.assertControlEnvelope(198,'hanmiyoo10-alt','hanmiyoo10-alt'),/UD_CONTROL_ISSUE_DENIED/);
 assert.throws(()=>control.assertControlEnvelope(197,'github-actions[bot]','hanmiyoo10-alt'),/UD_CONTROL_ACTOR_DENIED/);
 
-console.log('usage-dashboard E7 validation control command contract: OK · owner-only #197 envelope, exact PR number + 40hex candidate SHA');
+const sourceBranch='release/usage-dashboard-575-provenance-analytics-wrapper-consolidation';
+assert.deepEqual(control.parseStageIssueTitle(`[usage-dashboard-stage] ${sourceBranch}`),{candidateBranch:sourceBranch});
+for(const denied of [
+  `[usage-dashboard-stage] feature/not-allowed`,
+  `[usage-dashboard-stage] ${sourceBranch} extra`,
+  `[usage-dashboard-stage] ${sourceBranch}\nextra`,
+  `usage-dashboard-stage ${sourceBranch}`,
+]) assert.throws(()=>control.parseStageIssueTitle(denied),/UD_STAGE_ISSUE_TITLE_DENIED/);
+assert.equal(control.assertStageIssueEnvelope('hanmiyoo10-alt','hanmiyoo10-alt','hanmiyoo10-alt'),true);
+assert.throws(()=>control.assertStageIssueEnvelope('github-actions[bot]','hanmiyoo10-alt','hanmiyoo10-alt'),/UD_STAGE_ISSUE_ACTOR_DENIED/);
+assert.throws(()=>control.assertStageIssueEnvelope('hanmiyoo10-alt','someone-else','hanmiyoo10-alt'),/UD_STAGE_ISSUE_AUTHOR_DENIED/);
+
+console.log('usage-dashboard E7 validation control command contract: OK · owner-only #197 command envelope + owner-only exact stage-request issue title + exact PR/SHA validation');

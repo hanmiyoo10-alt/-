@@ -60,24 +60,25 @@ Operational rule:
 ## Current baseline
 
 ```text
-Production: v0.64.2 — Diagnostic Copy Resilience (M2-2 diagnostic hardening)
-Primary current phase: M2-2 final live validation + v0.64.1 summary-scope validation
-Next physical move: M2-3 Edit Reconcile extraction may begin after one successful v0.64.2 live copy result
-v0.64.x genuine-edit direct revalidation: DEFERRED_NON_BLOCKING; required before M2-3 closes or M2-4 begins
+Production: v0.64.7 — Cross-Reload Cache Observer Continuity
+Production validation: PENDING_REAL_LONG_CHAT
+Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
+Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
+Safe parallel non-runtime work: summary-scope → narrative-clock → frame → broadcast-closure lifecycle/airtime fixture expansion
+Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
+R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
 ```
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
 ## Deferred / non-blocking validation
 
-### v0.64.x genuine visible user-edit direct revalidation
+### M2-3 genuine visible user-edit direct control
 
-Status: `DEFERRED_NON_BLOCKING`
+Status: `PRE_M2_3_BASELINE_ESTABLISHED / POST_M2_3_RECHECK_REQUIRED`
 
-The direct v0.64.x positive-control sample remains useful but no longer blocks **starting** M2-3.
-
-Expected behavior remains frozen:
+The current v0.64.x line now has direct positive-control evidence, including the v0.64.5 real-long-chat sample:
 
 ```text
 Prior representation: EXACT
@@ -88,23 +89,20 @@ current visible fingerprint != Fresh
 → snapshot UPDATED
 ```
 
-Why deferral is acceptable:
+The v0.64.5 sample is recorded in `SIMCORE_M2_3_GENUINE_EDIT_LIVE_CONTROL_06405.md` as `DIRECT LIVE PASS / REGRESSION_CONTROL / M2-3 GOLDEN`. It confirms that the pre-extraction production line still distinguishes genuine visible edits from Representation drift and returns to a healthy exact output afterward.
+
+This removes the old documentation state in which a direct v0.64.x positive control was still merely deferred.
+
+The remaining requirement is different:
 
 ```text
-- genuine hand-edit behavior already has historical live positive evidence before M2-2;
-- M2-2 moved Representation ownership mechanically and retained the genuine-edit decision markers/semantics;
-- v0.64.0 live evidence directly proved the complementary representation-drift fast path after the ownership move;
-- ordinary exact carryover, B lifecycle, reload continuity, Deferred Mirror and Representation ownership have direct v0.64.x live controls;
-- forcing an artificial hand edit solely to satisfy sequencing would stall the architectural step without evidence of current edit corruption.
+M2-3 physical extraction lands and stabilizes
+→ run one direct harmless genuine visible edit against the post-M2-3 line
+→ require USER_EDIT_CANDIDATE → MANUAL_EDIT_REBUILT → snapshot UPDATED
+→ only then may M2-4 begin
 ```
 
-Risk retained by deferral:
-
-```text
-A failure discovered later cannot be attributed as cleanly to pre-M2-3 versus the M2-3 extraction itself.
-```
-
-Therefore this is a **start-gate deferral, not a deletion of the control**. Capture the sample naturally if it occurs earlier; otherwise perform one deliberate harmless visible edit before M2-3 is declared complete. M2-4 must not begin until the direct v0.64.x/M2-3-line genuine-edit control has passed.
+This post-M2-3 recheck is an extraction-close control, not a reason to repeat the pre-M2-3 baseline now.
 
 ### B_END closure natural revalidation
 
@@ -129,13 +127,13 @@ warnings: 8
 state quarantine: response=1, COMMUNITY=1/2
 ```
 
-v0.63.59 addresses the exact B_END closure boundary. Natural revalidation remains desirable but does not block M2-2 live validation or, by itself, justify delaying the Representation ownership checkpoint.
+v0.63.59 addresses the exact B_END closure boundary. Natural revalidation remains desirable but does not block the current v0.64.7 live close, M2-3 after that gate, or fixture-only work.
 
 ### Legacy/bootstrap migration path
 
 Status: `DEFERRED_NON_BLOCKING`
 
-Ordinary COLD_INIT and reload behavior have been observed, but a true legacy/history-bootstrap schema migration path has not been meaningfully exercised. Do not force destructive state mutation solely to obtain this sample. M2-2 did not touch migration ownership. Revisit only when a later checkpoint changes bootstrap/migration coordination or a natural legacy path exposes new evidence.
+Ordinary COLD_INIT and reload behavior have been observed, but a true legacy/history-bootstrap schema migration path has not been meaningfully exercised. Do not force destructive state mutation solely to obtain this sample. M2-2 did not touch migration ownership. Revisit only when a later checkpoint changes bootstrap/migration coordination, Recovery retirement reaches migration callers, schema evolution requires it, or a natural legacy path exposes new evidence.
 
 ### Explicit past-scene allowance under Current Timeline Authority
 
@@ -143,11 +141,13 @@ Status: `DEFERRED_NATURAL_SAMPLE`
 
 v0.63.57 current-era containment has positive evidence. A natural explicit flashback/past-scene allowance sample remains useful, but is not a blocker unless chronology ownership is changed.
 
-### Summary Scope Authority live validation
+### Summary Scope Authority rendered-semantics validation
 
-Status: `DEFERRED_NON_BLOCKING / ACTIVE_MINI_VALIDATION`
+Status: `DEFERRED_NATURAL_SAMPLE / VALIDATION_ONLY`
 
-v0.64.1 adds request-scoped `ANNUAL_ONLY` versus `CUMULATIVE_YOY` temporal authority after direct long-chat evidence of annual-scope omission/contamination and an internally inconsistent historical baseline in a YoY summary. Re-run the natural annual-only and cumulative-YoY request families. Keep the repeated standalone-C lineage over-chain on WATCH; v0.64.1 intentionally does not patch Lineage/Recurrence implementation so the live result can separate temporal-scope authority from source-chain debt.
+v0.64.1 established the deterministic request-scoped `ANNUAL_ONLY` versus `CUMULATIVE_YOY` temporal authority contract. Broad fixture research is now closed and `summary-scope` has a separate implementation-ready permanent fixture design for the deterministic classifier/authority facts.
+
+Natural annual-only and cumulative-YoY outputs remain useful for renderer-semantic validation, but they are no longer the active production mini gate. Keep the repeated standalone-C lineage over-chain on WATCH and do not patch Lineage/Recurrence without new attributable evidence.
 
 ## WATCH_ONLY anomalies
 
@@ -210,14 +210,14 @@ B_END could unlock successfully while retaining the opening frame airtime instea
 
 ## Validated M2 regression controls
 
-Preserve these behaviors through M2-2 and M2-3:
+Preserve these behaviors through M2-3 and later narrowing work:
 
 ```text
 normal canonical == Fresh EXACT                         PASS
 small output representation mismatch                   OBSERVED
 next-turn REPRESENTATION_FAST_RECONCILED               PASS
-genuine user hand-edit -> USER_EDIT_CANDIDATE          PASS (historical live control; direct v0.64.x recheck deferred)
-genuine user hand-edit -> MANUAL_EDIT_REBUILT          PASS (historical live control; direct v0.64.x recheck deferred)
+genuine user hand-edit -> USER_EDIT_CANDIDATE          PASS (direct v0.64.5 live control; post-M2-3 recheck required)
+genuine user hand-edit -> MANUAL_EDIT_REBUILT          PASS (direct v0.64.5 live control; post-M2-3 recheck required)
 same-turn reroll replacement                           PASS
 historical response-variant restore                    PASS
 historical restore -> reroll returns to new authority  PASS
@@ -248,9 +248,11 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 ## Next action
 
 ```text
-Harden diagnostic-copy observability without changing runtime semantics.
-Then M2-3 Edit Reconcile extraction may begin.
-The direct v0.64.x genuine-edit positive control is deferred from the M2-3 start gate to the M2-3 close gate.
-Do not begin M2-4 until that control passes.
-Capture natural B_END and Summary Scope confirmations whenever they occur without stalling M2.
+1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
+2. Preserve any live anomaly immediately before moving on.
+3. Non-runtime permanent fixture work may proceed independently when selected: summary-scope → narrative-clock → frame → broadcast-closure expansion.
+4. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.
+5. After M2-3 lands, run the direct genuine-edit post-extraction close control before M2-4.
+6. R2.1 end-to-end delegated release proof belongs to the next genuine runtime release and remains non-blocking for the current live gate.
+7. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
 ```

@@ -1,13 +1,14 @@
 # Local Usage Dashboard — E9 Durable Release Transaction
 
-Status: **IMPLEMENTATION CANDIDATE — E9-A..E encoded; regression/merge proof pending**
+Status: **IMPLEMENTED CANDIDATE — E9-A..E encoded and first full regression GREEN; final-head merge proof pending**
 
 Design authority: Issue `#356`.
+Implementation PR: `#357`.
 E8 retrospective: `docs/USAGE_DASHBOARD_E8_575_REAL_RELEASE_RETROSPECTIVE.md`.
 
 ## Generation rule
 
-E9 is the next integer generation after E8 real-release feedback. It inherits every still-valid E1–E8 safety guarantee and changes only orchestration state.
+E9 is the next integer generation after E8 real-release feedback. It inherits every still-valid E1–E8 safety guarantee and changes orchestration state only.
 
 ```text
 complete E(n)
@@ -17,8 +18,6 @@ complete E(n)
 ```
 
 ## E9 objective
-
-E9 reduces the normal release-control state to:
 
 ```text
 one durable release request
@@ -32,33 +31,28 @@ Events are wake-ups, never authority.
 ## Inherited guarantees — unchanged
 
 E9 keeps:
-
 - `release/usage-dashboard-*` source-of-intent branches;
 - generated/runtime-output denial on source branches;
 - controller-owned deterministic `stage/usage-dashboard-<version>` candidate refs;
-- read-only candidate materialization;
-- trusted candidate writer only;
+- read-only candidate materialization and trusted writer only;
 - CAS / fast-forward-only / postverify candidate writes;
-- no force push;
-- no connected-control candidate or production ref mutation;
+- no force push and no connected-control candidate/production ref mutation;
 - exact-SHA complete registered Usage Dashboard validation as merge authority;
-- current PR head == validated SHA before merge;
-- expected-head squash merge;
-- classifier + monotonic guard;
-- exact-byte `release-usage-dashboard` promotion without rebuild;
+- current PR head == validated SHA before expected-head squash merge;
+- classifier + monotonic guard + exact-byte production promotion without rebuild;
 - automatic deployment receipt;
 - UNKNOWN/data/privacy/source-truth semantics;
 - actual-device verification as a separate user boundary.
 
 ## E9-A — one durable release request
 
-Normal E9 releases use one owner-authored issue:
+A normal E9 release uses one owner-authored issue:
 
 ```text
 [usage-dashboard-release] 3.0.0-alpha.5.N
 ```
 
-with strict body fields:
+with strict fields:
 
 ```text
 release_version: 3.0.0-alpha.5.N
@@ -70,7 +64,7 @@ release_generation: E9
 pr_number: PENDING
 ```
 
-The connected assistant creates/updates this request. A source repair changes `source_sha` on the same issue. It does not create a successor request, candidate branch, or release PR.
+The connected assistant creates/updates this request. A source repair changes `source_sha` on the same issue; it does not create a successor request, candidate branch, or release PR.
 
 Attempt identity is exact:
 
@@ -78,9 +72,9 @@ Attempt identity is exact:
 release_version + source_sha
 ```
 
-`release_request_e9.cjs` owns request parsing and marker interpretation. Duplicate delivery is harmless because `usage-dashboard-e9-release-reconcile.yml` uses one serialized reconciler and durable issue markers.
+`release_request_e9.cjs` owns strict parsing, attempt identity and durable marker interpretation. `usage-dashboard-e9-release-reconcile.yml` is serialized and uses durable markers, so duplicate wake-ups converge on the same semantic attempt.
 
-Public states remain small:
+Public request states remain:
 
 ```text
 REQUESTED
@@ -99,75 +93,56 @@ Before E9 accepts candidate authority, the exact requested source SHA must prove
 SOURCE_SHA_READY:<source_sha>
 ```
 
-`source_readiness_e9.cjs` binds readiness to exact trusted main + exact source SHA and runs only cheap deterministic checks:
-
-- source/release namespace and monotonic target through existing stage policy;
-- generated-output denial through existing stage policy;
+`source_readiness_e9.cjs` binds readiness to exact trusted main + exact source SHA and performs only cheap deterministic checks:
+- existing source/release namespace, generated-output and monotonic checks;
 - stale-current/historical-literal hygiene on changed Usage Dashboard tests;
-- canonical A/M/D/R/T change semantics;
+- canonical A/M/D/R/T source-change semantics;
 - deleted module direct-reference detection in Usage Dashboard tests;
 - touched part boundary-marker consistency where the source tree can prove it cheaply.
 
-A source branch move invalidates readiness. The reconciler emits `SOURCE_SHA_NOT_READY` and waits for the same durable request to be updated to the new exact SHA.
+A source branch move invalidates readiness and emits `SOURCE_SHA_NOT_READY`. Existing stage/materializer/full-registry checks remain defense in depth; readiness never replaces full validation.
 
-The existing stage/materializer/full-registry checks remain defense in depth. Readiness is not a replacement for full validation.
+## E9-C — canonical source-change semantics
 
-## E9-C — one canonical source-change semantic resolver
-
-`source_change_semantics.cjs` is the Usage Dashboard authority for source change discovery. It normalizes at least:
+`source_change_semantics.cjs` is the Usage Dashboard source-change authority. It normalizes:
 
 ```text
 A / M / D / R / T
 ```
 
-including both sides of a rename when computing changed paths.
+and includes both sides of a rename when computing changed paths.
 
-`candidate_stage_policy.cjs` consumes this helper instead of carrying an independent `git diff --diff-filter=...` implementation. The same helper is reused by E9 source readiness.
+`candidate_stage_policy.cjs` now consumes this helper instead of owning an independent `git diff --diff-filter=...` implementation. E9 source readiness uses the same helper. This closes the 5.75 deletion-semantics drift class without broadening source authority.
 
-This prevents the 5.75 deleted-path drift class where patch reconstruction and policy discovery disagreed about whether a deleted source module was part of source intent.
+The impact-aware gate stays deliberately narrow. Behavior/integration authority remains the full exact-SHA registry.
 
-## E9-D — exact-SHA validation without PR-event choreography
+## E9-D — one exact-SHA validation authority
 
-The deterministic PR is still created/reused by the connected assistant and must include:
+The deterministic PR remains assistant-created/reused and must include:
 
 ```text
 Usage-Dashboard-Release-Request: #<request-issue>
 ```
 
-The same durable request is updated with its `pr_number`.
+The durable request records its `pr_number`. The reconciler binds PR base/repository/branch/head to the current deterministic candidate and dispatches `usage-dashboard-e9-validate.yml`.
 
-The reconciler then verifies:
+That workflow independently binds durable request + PR + exact candidate SHA, verifies the remote candidate ref, and invokes the unchanged reusable complete Usage Dashboard registry.
 
-```text
-PR base == main
-PR head repo == canonical repo
-PR head branch == stage/usage-dashboard-<release_version>
-PR head SHA == current candidate SHA
-PR body points back to the durable release request
-```
+Normal E9 therefore needs no `/usage-dashboard validate ...` comment and no close/reopen/reactivation choreography. Ordinary `pull_request` CI remains optional defense-in-depth observability rather than release authority.
 
-and dispatches `usage-dashboard-e9-validate.yml`.
-
-That trusted workflow binds request + PR + candidate identity again and invokes the unchanged reusable complete Usage Dashboard registry for the exact SHA.
-
-Normal E9 flow therefore needs no `/usage-dashboard validate ...` comment and no close/reopen/reactivation choreography. Ordinary `pull_request` CI may remain observability/defense in depth, but it is not a release milestone.
-
-Merge authority remains:
+Merge invariant remains:
 
 ```text
 VALIDATED_SHA == CURRENT_PR_HEAD_SHA == CURRENT_CANDIDATE_SHA
 ```
 
-## E9-E — idempotent production/closure convergence
+## E9-E — idempotent production and generation closure
 
-Promotion itself is unchanged: classifier → monotonic guard → exact-byte promoter.
+Promotion remains the existing classifier → monotonic guard → exact-byte promoter.
 
-The E9 reconciler observes a merged validated PR and does not mark deployment complete until:
+After an expected-head merged validated PR, the reconciler waits until `release-usage-dashboard` reports the requested version and independently runs `check_release_blob_parity.cjs` against the merged main SHA.
 
-- `release-usage-dashboard` reports the requested product version;
-- `check_release_blob_parity.cjs` proves production exact-byte parity against the merged main SHA.
-
-Only then it records on the durable request:
+Only then it records:
 
 ```text
 DEPLOYED
@@ -177,9 +152,9 @@ exact_byte_parity: VERIFIED
 physical_verification: PENDING
 ```
 
-and closes the request as repository/CI/deployment complete.
+and closes the durable release request as repository/CI/deployment complete.
 
-The first real E9 feature release also posts `E9_F_RELEASE_PROOF` to Issue #356 and closes the E9 generation issue. Physical PocketRisu evidence remains separate and is never inferred.
+The first real E9 feature release additionally posts `E9_F_RELEASE_PROOF` to Issue #356 and closes that generation issue. Physical PocketRisu evidence remains separate and is never inferred.
 
 ## Normal E9 flow
 
@@ -187,20 +162,20 @@ The first real E9 feature release also posts `E9_F_RELEASE_PROOF` to Issue #356 
 assistant implements source/spec/tests/materializer
 → assistant creates/updates one durable E9 release request
 → reconciler proves SOURCE_SHA_READY for exact source SHA
-→ reconciler dispatches existing trusted stage writer
-→ reconciler accepts candidate only when candidate commit identifies that exact source SHA
-→ assistant ensures/reuses one deterministic PR and records pr_number on the same request
+→ reconciler dispatches the existing trusted stage writer
+→ candidate authority is accepted only for that exact source SHA
+→ assistant ensures/reuses one deterministic PR and records pr_number
 → reconciler dispatches one exact-SHA authoritative validator
 → GREEN
 → assistant re-reads head/mergeability and expected-head merges
 → existing exact-byte promoter deploys
 → reconciler independently verifies production version + exact-byte parity
 → durable request closes DEPLOYED
-→ E9-F generation proof closes on the first real E9 release
+→ first real E9 release closes E9-F proof
 → user is called only for `+` / actual-device verification
 ```
 
-If source validation is RED:
+If RED:
 
 ```text
 fix source only
@@ -211,50 +186,63 @@ fix source only
 → exact-SHA validation binds the new head
 ```
 
-## Event model
+## Event model and idempotency
 
-The reconciler can wake from issue edits, relevant trusted-main pushes, schedules, explicit workflow dispatch, or merged PR events.
-
-All wake-ups execute the same state reducer. A repeated event does not become a new release transaction.
+The reconciler can wake from issue edits, relevant trusted-main pushes, schedules, explicit workflow dispatch, or merged PR events. All wake-ups execute one state reducer.
 
 ```text
 transient event != authority
 durable request + exact SHA + receipt == authority
 ```
 
+A repeated wake-up does not become a new release transaction.
+
 ## Legacy compatibility
 
-E8/E7 stage and validation command paths remain temporarily available as diagnostic/emergency compatibility surfaces. They are not the normal E9 path.
+E7/E8 stage and validation command paths remain temporarily available as diagnostic/emergency compatibility surfaces; they are not the normal E9 path.
 
-E9 deliberately reuses the proven E7 stage writer rather than rewriting candidate materialization/ref mutation in the same generation that simplifies orchestration. Candidate/ref safety code therefore remains stable while coordination moves to the durable request model.
+E9 deliberately reuses the proven E7 stage materializer/writer instead of rewriting candidate/ref mutation while also simplifying orchestration. Candidate/ref safety code therefore stays stable.
+
+## Regression evidence
+
+First complete PR validation against PR #357 head `4155c0d4efeef839d48337cabac773ffeacdb07f`:
+
+```text
+Usage Dashboard Candidate Validation run: 32826721688 — SUCCESS
+RELEASE_MEMORY_CONTRACT_GREEN:.github/usage-dashboard/releases/5.75.json ×2
+MATERIALIZER_IDEMPOTENT:3.0.0-alpha.5.75
+usage-dashboard E8 early-failure/orchestration contract: OK
+usage-dashboard E9 durable release transaction contract: OK
+P35 Cross-Scope Request Provenance: OK
+P38 Diagnostics Mode Handler Ownership: OK
+P39 Provenance Analytics Wrapper Consolidation: OK
+TEST_REGISTRY_GREEN:84
+validated 3.0.0-alpha.5.75 / Engine 1.6.22 / Manager 1.3.0 / contracts 1/1
+Engine SHA256: 85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69
+```
+
+Cross-scope SimCore CI run `32826721430` also completed `Verify: SUCCESS` and `Required: SUCCESS`.
+
+This evidence update intentionally changes the PR head after the first full regression. The final PR head must pass the same complete gates again before exact-head merge.
+
+## Retained negative operational evidence
+
+During initial E9 tool setup, the connected control surface accidentally created `docs/E9_PLACEHOLDER` directly on `main` in `f50255b5afae7e75b24787430fbb8131d33e77a2`. The file contained only `placeholder` and changed no product/runtime/release bytes. It was immediately removed in `57f4326119921206c1e1f1c3ed3dcdb70e1bc3e3`, restoring the exact prior tree. Issue #356 retains this as operator/control-surface feedback: content writes must never be used as branch-existence probes or setup checks.
 
 ## Non-goals
 
-E9 does not change Local Usage Dashboard product runtime behavior, Engine or Manager semantics, product data contracts, full-registry coverage, promotion bytes, merge protection, or PocketRisu update UX.
+E9 does not change Local Usage Dashboard product runtime behavior, Engine/Manager semantics, product data contracts, full-registry coverage, promotion bytes, merge protection, or PocketRisu update UX. It adds no force push, connected ref mutation, broad automatic merge authority, inferred physical verification, or second release request for ordinary repair.
 
-It does not add force push, connected ref mutation, broad automatic merge authority, inferred physical verification, or a second release request for ordinary repair.
+## Maintenance completion target
 
-## Implementation acceptance
-
-E9-A..E maintenance is ready to merge only when the complete Usage Dashboard registry proves:
-
-- durable request parsing and exact attempt identity;
-- duplicate wake-up/idempotency markers;
-- exact source-SHA readiness;
-- A/M/D/R/T canonical semantics;
-- stage policy reuse of canonical changes;
-- one serialized reconciler;
-- exact-SHA validator dispatch with request/PR/head binding;
-- no ref mutation in reconciler/validator;
-- unchanged promoter exact-byte authority;
-- maintenance merge leaves current production bytes unchanged.
-
-After maintenance merge, E9 status is:
+After final-head GREEN + expected-head merge + byte-neutral production verification:
 
 ```text
 E9-A..E: IMPLEMENTED / REGRESSION-PROVEN
 E9-F: NEXT REAL RELEASE PROOF PENDING
 ```
+
+Issue #356 remains open as E9 generation authority until E9-F is proven by the next real feature release.
 
 ## Principle
 

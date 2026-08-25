@@ -22,12 +22,34 @@ function receiptMarker(receipt) {
   return `<!-- canonical-main-delivery-receipt-v1:${encoded} -->`;
 }
 
+function compactReceiptMarker(receipt) {
+  const normalized = assertReceipt({...receipt});
+  if (/[|\s>]/.test(normalized.deliveryKey)) throw new Error('deliveryKey is not compact-marker safe');
+  return `<!-- canonical-main-delivery-receipt-v1|${normalized.status}|${normalized.channel}|${normalized.deliveryKey}|${normalized.observedAt} -->`;
+}
+
 function parseReceipt(body = '', metadata = {}) {
   const structured = body.match(/<!-- canonical-main-delivery-receipt-v1:([A-Za-z0-9_-]+) -->/);
   if (structured) {
     try {
       const parsed = JSON.parse(Buffer.from(structured[1], 'base64url').toString('utf8'));
       return assertReceipt(parsed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const compact = body.match(/<!-- canonical-main-delivery-receipt-v1\|([^|\s>]+)\|([^|\s>]+)\|([^|\s>]+)\|([^\s>]+) -->/);
+  if (compact) {
+    try {
+      return assertReceipt({
+        schemaVersion: 1,
+        bridge: 'chatgpt-github-gmail-condition-watch',
+        status: compact[1],
+        channel: compact[2],
+        deliveryKey: compact[3],
+        observedAt: compact[4],
+      });
     } catch (_) {
       return null;
     }
@@ -98,6 +120,7 @@ module.exports = {
   VALID_STATUS,
   assertReceipt,
   receiptMarker,
+  compactReceiptMarker,
   parseReceipt,
   receiptFromComment,
   summarizeReceipts,

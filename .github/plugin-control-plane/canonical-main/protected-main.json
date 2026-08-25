@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "branch": "main",
+  "declaredReadiness": "READY_TO_ACTIVATE",
+  "enforcementExpected": false,
+  "requiredCheck": {
+    "displayName": "SimCore CI / Required",
+    "workflow": "simcore-ci.yml",
+    "profile": "MAIN_HEALTH",
+    "job": "Required"
+  },
+  "gateway": {
+    "helper": "scripts/repo-main-write.py",
+    "mode": "exact-candidate-required",
+    "forcePushAllowed": false,
+    "bypassActorRequired": false
+  },
+  "activeWriters": [
+    "simcore-release-state-sync.yml",
+    "simcore-release-permanent.yml",
+    "product-simcore-candidate-materialize.yml",
+    "usage-dashboard-project-memory.yml"
+  ],
+  "shadowProof": {
+    "result": "PASS",
+    "evidenceDocument": "docs/REPO_PROTECTED_MAIN_REQUIRED_CHECK_COMPAT_IMPLEMENTATION_EVIDENCE.md",
+    "proofWorkflowRun": 32718301857,
+    "requiredWorkflowRun": 32718319764,
+    "candidateCommit": "5b4143a22b4ba2f587238f8536cdcda46bf0a768",
+    "mainMutation": "NONE",
+    "stagingRefCleaned": true
+  },
+  "activation": {
+    "desired": true,
+    "requiresDirectReadback": true,
+    "broadBypassAllowed": false,
+    "requiredStatusCheckEnforcement": true
+  },
+  "authority": {
+    "releaseBlocking": false,
+    "productionMutation": false,
+    "releaseMutation": false
+  }
+}

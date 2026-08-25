@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN SELECTION STATE · DESIGN-FIRST · TIERED SAFE_NON_RUNTIME HARVEST ACTIVE · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN SELECTION STATE · DESIGN-FIRST · TIERED SAFE_NON_RUNTIME HARVEST ACTIVE · FIRST HARVEST COMPLETE · NO RUNTIME CHANGE`
 
 Purpose: track which entries from the size/priority idea inventories have completed the mandatory design-freeze process and which closed design tiers have become eligible for the bounded non-runtime harvest exception.
 
@@ -59,9 +59,12 @@ Importance: 5
 Difficulty: 1
 Design status: DESIGN FROZEN
 Design doc: docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md
-Current implementation disposition: SAFE_NON_RUNTIME_READY
-Reason: repository evidence/navigation materialization can be implemented without plugin/runtime/release authority change
-Implementation: NOT YET STARTED
+Implementation disposition: SAFE_NON_RUNTIME_IMPLEMENTED
+Materialized artifact: docs/SIMCORE_EVIDENCE_INDEX.md
+Implementation evidence: docs/SIMCORE_S09_EVIDENCE_INDEX_IMPLEMENTATION_EVIDENCE_2026-08-26.md
+PR: #394
+Main merge: 31d46cfeded5171c49503fe4cd4a11fe4cc8a573
+Runtime/plugin/release-simcore change: NONE
 ```
 
 ### S-02 — Diagnostic Quick Summary
@@ -160,7 +163,7 @@ UI/DOM failure → fail silent without creating a Core warning
 
 ## Difficulty-tier harvest state
 
-### Difficulty 1 — CLOSED
+### Difficulty 1 — CLOSED / HARVEST COMPLETE
 
 Currently designable Difficulty-1 pool:
 
@@ -173,24 +176,28 @@ Tier verdict:
 
 ```text
 DIFFICULTY_1_DESIGN_TIER = CLOSED
+DIFFICULTY_1_SAFE_NON_RUNTIME_HARVEST = COMPLETE
 ```
 
-Immediate implementation classification:
+Implementation classification/result:
 
 ```text
-S-09 → SAFE_NON_RUNTIME_READY
+S-09 → SAFE_NON_RUNTIME_IMPLEMENTED
 S-02 → PARKED_FOR_STABILIZATION
 ```
 
-Next harvest work item:
+S-09 implementation transaction:
 
 ```text
-S-09 Evidence Index Entry Format
-→ bounded non-runtime implementation/application
-→ no plugin version change
+work/s09-evidence-index-harvest
+→ PR #394
+→ static verification PASS
+→ main merge 31d46cfeded5171c49503fe4cd4a11fe4cc8a573
+→ docs/SIMCORE_EVIDENCE_INDEX.md materialized
+→ plugin version/release-simcore unchanged
 ```
 
-The tier-policy adoption work item itself does not implement S-09.
+No additional Difficulty-1 harvest item remains.
 
 ### Difficulty 2 — OPEN
 
@@ -297,7 +304,8 @@ LATER STABILIZATION PHASE
 FROZEN SMALL DESIGNS = 6
 
 DIFFICULTY 1 DESIGN TIER = CLOSED
-FIRST SAFE_NON_RUNTIME HARVEST = S-09
+S-09 SAFE_NON_RUNTIME HARVEST = IMPLEMENTED / VERIFIED / MAIN MATERIALIZED
+DIFFICULTY 1 HARVEST QUEUE = EMPTY
 
 DIFFICULTY 2 DESIGN TIER = OPEN
 
@@ -307,5 +315,7 @@ NEXT ACTIVE DESIGN
 RUNTIME CHANGE
 = NONE
 PLUGIN VERSION CHANGE
+= NONE
+release-simcore CHANGE
 = NONE
 ```

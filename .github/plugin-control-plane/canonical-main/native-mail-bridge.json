@@ -7,6 +7,7 @@
   "source": {
     "repository": "hanmiyoo10-alt/-",
     "operationsIssue": 305,
+    "healthIssue": 317,
     "incidentSelector": "P0/P1 OPEN or RECOVERED",
     "dedupe": "repository deliveryKey / incident correlation semantics"
   },
@@ -14,10 +15,18 @@
     "channel": "email",
     "provider": "connected Gmail",
     "recipient": "authenticated account self",
-    "credentialsInRepository": false
+    "credentialsInRepository": false,
+    "receiptMarker": "canonical-main-delivery-receipt:email:<deliveryKey>"
+  },
+  "health": {
+    "surfaceTitle": "[repo-mail-bridge]",
+    "freshnessMinutes": 150,
+    "states": ["ACTIVE_PROVEN", "DEGRADED", "STALE", "UNKNOWN"],
+    "counters": ["successCount", "failureCount", "suppressedDuplicateCount", "consecutiveFailureCount"],
+    "nonAuthoritative": true
   },
   "proof": {
-    "performedAt": "2026-08-25T03:25:00Z",
+    "performedAt": "2026-08-25T03:36:52Z",
     "syntheticOnly": true,
     "reasonCode": "NATIVE_MAIL_BRIDGE_PROOF",
     "firstOpenSent": 1,

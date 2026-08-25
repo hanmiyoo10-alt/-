@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simcore-fixture-skeleton-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "skeletonId",
+    "sourceDigest",
+    "source",
+    "proofUnit",
+    "target",
+    "inputFacts",
+    "expectedCandidates",
+    "protectedInvariants",
+    "observationalFacts",
+    "unknowns",
+    "minimizationNeeds",
+    "promotion"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "simcore-fixture-skeleton" },
+    "skeletonId": { "type": "string", "pattern": "^FKS1-[a-f0-9]{64}$" },
+    "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "source": { "type": "object" },
+    "proofUnit": { "type": "object" },
+    "target": { "type": "object" },
+    "inputFacts": { "type": "array" },
+    "expectedCandidates": { "type": "array" },
+    "protectedInvariants": { "type": "array" },
+    "observationalFacts": { "type": "array" },
+    "unknowns": { "type": "array" },
+    "minimizationNeeds": { "type": "array" },
+    "promotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "fixtureV1Ready", "blockers", "reviewFlags"],
+      "properties": {
+        "state": { "const": "REVIEW_REQUIRED" },
+        "fixtureV1Ready": { "const": false },
+        "blockers": { "type": "array", "items": { "type": "string" } },
+        "reviewFlags": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

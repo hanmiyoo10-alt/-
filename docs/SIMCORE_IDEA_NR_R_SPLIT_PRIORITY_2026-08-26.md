@@ -1,6 +1,6 @@
 # SimCore Idea Priority — NON_RUNTIME / RUNTIME Split Queues — 2026-08-26
 
-Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2 HARVEST COMPLETE · M-10 FROZEN · NR DIFFICULTY-3 STILL OPEN · NO RUNTIME CHANGE`
+Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2 HARVEST COMPLETE · NR DIFFICULTY-3 DESIGN TIER CLOSED · HARVEST REVIEW PENDING · NO RUNTIME CHANGE`
 
 Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling harvest work and future runtime stabilization do not compete in one mixed queue.
 
@@ -55,37 +55,44 @@ NON_RUNTIME = 14
 |---|---|---|---|---:|---:|---|
 | IMPLEMENTED | S-09 | Evidence Index Entry Format | SMALL | 5 | 1 | FROZEN · SAFE_NON_RUNTIME_IMPLEMENTED |
 | IMPLEMENTED | S-10 | Authority Drift Check / Scan | SMALL | 5 | 2 | FROZEN · SAFE_NON_RUNTIME_IMPLEMENTED |
-| FROZEN | M-11 | Architecture Dependency Snapshot Generator | MEDIUM | 5 | 3 | wait NR Difficulty-3 close |
+| FROZEN | M-11 | Architecture Dependency Snapshot Generator | MEDIUM | 5 | 3 | NR Difficulty-3 closed · harvest review pending |
 | GATED | M-07 | Commit / Observation Separation Guard | MEDIUM | 5 | 4 | POST_M2_4 |
 | GATED | M-12 | State Writer Static Audit | MEDIUM | 5 | 4 | POST_M2_3 |
 | GATED | M-16 | Differential Architecture Fixtures | MEDIUM | 5 | 4 | M2 implementation slice |
 | IMPLEMENTED | S-12 | Natural Evidence Corpus Index | SMALL | 4 | 2 | FROZEN · SAFE_NON_RUNTIME_IMPLEMENTED |
-| FROZEN | M-10 | Live Diagnostic → Fixture Skeleton Generator | MEDIUM | 4 | 3 | DESIGN FROZEN · wait NR Difficulty-3 close |
-| ACTIVE | M-13 | Evidence Index Generator | MEDIUM | 4 | 3 | NOW · S-09 dependency satisfied |
+| FROZEN | M-10 | Live Diagnostic → Fixture Skeleton Generator | MEDIUM | 4 | 3 | NR Difficulty-3 closed · harvest review pending |
+| FROZEN | M-13 | Evidence Index Generator | MEDIUM | 4 | 3 | DESIGN FROZEN · NR Difficulty-3 closed · harvest review pending |
 | GATED | M-08 | Snapshot Schema Inventory Generator | MEDIUM | 4 | 3 | POST_M2_3 |
 | GATED | M-14 | Release Evidence Packet | MEDIUM | 4 | 3 | dependency: R2.1 genuine release proof |
 | GATED | M-15 | Fixture Coverage Matrix by Ownership | MEDIUM | 4 | 3 | POST_M2_3 |
 | FUTURE | L-01 | Development-source Modular Build | LARGE | 4 | 5 | FUTURE / POST_M2 |
 | IMPLEMENTED | S-11 | Stale PR Hygiene Classifier | SMALL | 3 | 2 | FROZEN · SAFE_NON_RUNTIME_IMPLEMENTED |
 
-## 2.1 Current active NR ordering
+## 2.1 Current NR selection state
 
-Completed/frozen items are not reselected.
-Among undesigned + gate-open NR ideas:
+There are currently no undesigned + gate-open NR items in the bounded Difficulty-1/2/3 design pool.
 
-```text
-NR-1  M-13 Evidence Index Generator
-      importance 4 / difficulty 3
-      S-09 prerequisite satisfied
-```
-
-M-10 is no longer active; its frozen design is:
+The just-completed Difficulty-3 design set is:
 
 ```text
-docs/SIMCORE_LIVE_DIAGNOSTIC_FIXTURE_SKELETON_GENERATOR_DESIGN.md
+M-11 Architecture Dependency Snapshot Generator   FROZEN
+M-10 Live Diagnostic → Fixture Skeleton Generator FROZEN
+M-13 Evidence Index Generator                     FROZEN
 ```
 
-Frozen M-10 boundary:
+The next NR operation is not another design selection. It is:
+
+```text
+NR Difficulty-3 SAFE_NON_RUNTIME HARVEST REVIEW
+→ review M-11
+→ review M-10
+→ review M-13
+→ authorize only items that pass the strict boundary
+```
+
+Gated/future NR items remain untouched until their own gates open.
+
+## 2.2 Frozen M-10 boundary
 
 ```text
 reviewed live evidence descriptor
@@ -100,7 +107,51 @@ raw live body retention = FORBIDDEN
 semantic inference = FORBIDDEN
 ```
 
-## 2.2 NR difficulty buckets / harvest state
+## 2.3 Frozen M-13 boundary
+
+Design authority:
+
+```text
+docs/SIMCORE_EVIDENCE_INDEX_GENERATOR_DESIGN.md
+```
+
+Canonical M-13 flow:
+
+```text
+review semantic/evidence authorities
+→ explicitly maintain evidence-index-source-v1.json
+→ validate mechanical invariants
+→ resolve fixture execution class from permanent registry
+→ deterministic docs/SIMCORE_EVIDENCE_INDEX.md render/check
+```
+
+Frozen authority split:
+
+```text
+contract/evidence/gate/debt documents
+= semantic + evidence authority
+
+evidence-index-source-v1.json
+= reviewed index-curation source only
+
+docs/SIMCORE_EVIDENCE_INDEX.md
+= generated human navigation view
+```
+
+Forbidden:
+
+```text
+repo-wide evidence discovery
+latest-evidence inference
+Owner inference
+PASS/WATCH/GAP inference
+fixture-exists → PASS inference
+automatic semantic reconciliation
+auto-commit / auto-PR
+CI/release-policy restructuring
+```
+
+## 2.4 NR difficulty buckets / harvest state
 
 ```text
 NR Difficulty 1
@@ -116,11 +167,12 @@ NR Difficulty 2
 NR Difficulty 3
 - M-11  importance 5  FROZEN
 - M-10  importance 4  FROZEN
-- M-13  importance 4  NOW
+- M-13  importance 4  FROZEN
 - M-08  importance 4  POST_M2_3
 - M-14  importance 4  DEPENDENCY
 - M-15  importance 4  POST_M2_3
-→ CURRENTLY DESIGNABLE TIER OPEN
+→ CURRENTLY DESIGNABLE TIER CLOSED
+→ SAFE_NON_RUNTIME HARVEST REVIEW PENDING
 
 NR Difficulty 4
 - M-07  importance 5  POST_M2_4
@@ -131,18 +183,9 @@ NR Difficulty 5
 - L-01  importance 4  FUTURE
 ```
 
-Current close condition:
+Previously gated NR items that open later form a new incremental cycle; they do not retroactively invalidate an already completed bounded design/harvest tier.
 
-```text
-freeze M-13
-→ all currently-designable NR Difficulty-3 items frozen
-→ NR Difficulty 3 CLOSED
-→ review M-11 / M-10 / M-13 independently for SAFE_NON_RUNTIME harvest
-```
-
-Previously gated NR items that open later form a new incremental cycle; they do not retroactively invalidate an already completed bounded harvest.
-
-## 2.3 Completed easy NR harvest
+## 2.5 Completed easy NR harvest
 
 ```text
 S-09
@@ -177,7 +220,7 @@ runtime semantics unchanged
 
 S-10/S-11 carry a non-blocking verification-coverage WATCH because current permanent CI does not automatically execute arbitrary new standalone tooling `.test.mjs` files. CI-discovery changes remain a separate repo/CI item.
 
-## 2.4 NR implementation rule
+## 2.6 NR implementation rule
 
 ```text
 NR DESIGN FROZEN
@@ -254,12 +297,13 @@ S-10
 S-11
 S-12
 
-NR FROZEN / WAITING DIFFICULTY-3 CLOSE
+NR DIFFICULTY-3 FROZEN / HARVEST REVIEW PENDING
 M-11
 M-10
+M-13
 
-NR ACTIVE
-M-13 only
+NR ACTIVE DESIGN
+NONE in current open Difficulty-1/2/3 pool
 
 R FROZEN / PARKED
 S-01
@@ -272,10 +316,10 @@ S-07
 S-08
 ```
 
-Current next selections:
+Current next operations:
 
 ```text
-NEXT NR = M-13 Evidence Index Generator
+NEXT NR = Difficulty-3 SAFE_NON_RUNTIME harvest review
 NEXT R  = S-03 Diagnostic Copy Profiles
 ```
 

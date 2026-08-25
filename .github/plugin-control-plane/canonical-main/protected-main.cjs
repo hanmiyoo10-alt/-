@@ -24,25 +24,55 @@ function workflowText(root, name) {
   return fs.readFileSync(file, 'utf8');
 }
 
-function gatewayText(root, workflowName) {
-  const text = workflowText(root, workflowName);
-  if (text === null) return null;
-  const delegated = [];
-  const scriptPattern = /(?:bash\s+)?(\.github\/plugin-control-plane\/canonical-main\/[A-Za-z0-9._/-]+\.(?:sh|py|cjs))/g;
-  for (const match of text.matchAll(scriptPattern)) {
-    const file = path.join(root, match[1]);
-    if (fs.existsSync(file)) delegated.push(fs.readFileSync(file, 'utf8'));
-  }
-  return [text, ...delegated].join('\n');
-}
-
 function directWriterInventory(root) {
   const dir = path.join(root, '.github', 'workflows');
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir)
     .filter((name) => /\.ya?ml$/.test(name))
-    .filter((name) => (gatewayText(root, name) || '').includes('scripts/repo-main-write.py'))
+    .filter((name) => fs.readFileSync(path.join(dir, name), 'utf8').includes('scripts/repo-main-write.py'))
     .sort();
+}
+
+function softEnforcementContractErrors(root, contract = loadProtectedMainContract()) {
+  const errors = [];
+  const soft = contract.softEnforcement || {};
+  if (soft.enabled !== true) return errors;
+
+  const workflowName = soft.workflow;
+  const scriptPath = soft.script;
+  const workflow = workflowName ? workflowText(root, workflowName) : null;
+  const scriptFile = scriptPath ? path.join(root, scriptPath) : null;
+  const script = scriptFile && fs.existsSync(scriptFile) ? fs.readFileSync(scriptFile, 'utf8') : null;
+
+  if (!workflow) errors.push('PROTECTED_MAIN_SOFT_GUARD_WORKFLOW_MISSING');
+  if (!script) errors.push('PROTECTED_MAIN_SOFT_GUARD_SCRIPT_MISSING');
+  if (!workflow || !script) return errors;
+
+  if (!workflow.includes(scriptPath)) errors.push('PROTECTED_MAIN_SOFT_GUARD_DELEGATION_MISSING');
+  if (!/actions:\s*write/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_ACTIONS_WRITE_MISSING');
+  if (!/contents:\s*write/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_CONTENTS_WRITE_MISSING');
+  if (!/workflow_run:/.test(workflow) || !/SimCore CI/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_TRIGGER_MISSING');
+  if (!/github\.event\.workflow_run\.event == 'push'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_PUSH_SCOPE_MISSING');
+  if (!/github\.event\.workflow_run\.head_branch == 'main'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_MAIN_SCOPE_MISSING');
+
+  for (const token of [
+    'scripts/repo-main-write.py',
+    '--attempts 1',
+    '--required-workflow simcore-ci.yml',
+    '--required-profile MAIN_HEALTH',
+    '--required-job Required',
+    '--verify-gate-only',
+    'SOFT_GUARD_VERIFIED_PARENT_MISMATCH',
+    'SOFT_GUARD_BASE_MOVED_AFTER_GATE',
+  ]) {
+    if (!script.includes(token)) errors.push(`PROTECTED_MAIN_SOFT_GUARD_CONTRACT_MISSING:${token}`);
+  }
+  if (/--force(?:\s|$)|force-with-lease/.test(script)) errors.push('PROTECTED_MAIN_SOFT_GUARD_FORCE_FORBIDDEN');
+  if (soft.writerClassification !== 'recovery-delegated') errors.push('PROTECTED_MAIN_SOFT_GUARD_CLASSIFICATION_INVALID');
+  if (soft.verifyGateOnlyBeforeLanding !== true || soft.finalMainIdentityBarrier !== true) errors.push('PROTECTED_MAIN_SOFT_GUARD_IDENTITY_BARRIER_INVALID');
+  if (soft.nativeProtectionEquivalent !== false) errors.push('PROTECTED_MAIN_SOFT_GUARD_NATIVE_EQUIVALENCE_INVALID');
+
+  return errors;
 }
 
 function writerContractErrors(root, policy, contract = loadProtectedMainContract()) {
@@ -60,23 +90,22 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
     if (!inventory.has(name)) errors.push(`PROTECTED_MAIN_WRITER_UNCLASSIFIED:${name}`);
   }
 
+  for (const name of inventory.keys()) {
+    if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
+  }
+
   for (const name of declaredActive) {
-    const workflow = workflowText(root, name);
-    const text = gatewayText(root, name);
-    if (workflow === null || text === null) {
+    const text = workflowText(root, name);
+    if (text === null) {
       errors.push(`PROTECTED_MAIN_ACTIVE_WRITER_MISSING:${name}`);
       continue;
     }
     if (!text.includes('scripts/repo-main-write.py')) errors.push(`PROTECTED_MAIN_GATEWAY_MISSING:${name}`);
-    if (!/actions:\s*write/.test(workflow)) errors.push(`PROTECTED_MAIN_ACTIONS_WRITE_MISSING:${name}`);
+    if (!/actions:\s*write/.test(text)) errors.push(`PROTECTED_MAIN_ACTIONS_WRITE_MISSING:${name}`);
     if (!/--required-workflow\s+simcore-ci\.yml/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_WORKFLOW_MISSING:${name}`);
     if (!/--required-profile\s+MAIN_HEALTH/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_PROFILE_MISSING:${name}`);
     if (!/--required-job\s+Required/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_JOB_MISSING:${name}`);
     if (/--force(?:\s|$)|force-with-lease/.test(text)) errors.push(`PROTECTED_MAIN_FORCE_PATH_FORBIDDEN:${name}`);
-  }
-
-  for (const [name] of inventory.entries()) {
-    if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
   }
 
   const helperPath = path.join(root, contract.gateway?.helper || 'scripts/repo-main-write.py');
@@ -103,6 +132,7 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
     errors.push('PROTECTED_MAIN_SHADOW_PROOF_INVALID');
   }
 
+  errors.push(...softEnforcementContractErrors(root, contract));
   return errors;
 }
 
@@ -148,8 +178,8 @@ module.exports = {
   loadProtectedMainContract,
   requiredCheckNames,
   workflowText,
-  gatewayText,
   directWriterInventory,
+  softEnforcementContractErrors,
   writerContractErrors,
   observeProtection,
 };

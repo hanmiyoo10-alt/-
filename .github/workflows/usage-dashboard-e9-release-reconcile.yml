@@ -7,7 +7,7 @@ on:
     branches: [main]
     types: [closed]
   workflow_run:
-    workflows: ["Usage Dashboard Exact-Byte Promotion"]
+    workflows: ["Usage Dashboard Exact-Byte Promotion", "Usage Dashboard E9 Exact-SHA Validation"]
     types: [completed]
   push:
     branches: [main]
@@ -19,6 +19,7 @@ on:
       - 'plugins/usage-dashboard/tools/source_readiness_e9.cjs'
       - 'plugins/usage-dashboard/tools/source_change_semantics.cjs'
       - 'plugins/usage-dashboard/tools/merge_guard_e11.cjs'
+      - 'plugins/usage-dashboard/tools/merge_guard_receipt_e12.cjs'
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
@@ -32,7 +33,7 @@ concurrency:
 
 jobs:
   reconcile:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Usage Dashboard E9 Exact-SHA Validation' || (github.event.workflow_run.name == 'Usage Dashboard Exact-Byte Promotion' && github.event.workflow_run.conclusion == 'success') }}
     permissions:
       contents: read
       issues: write
@@ -55,6 +56,7 @@ jobs:
           E9_GENERATION_ISSUE: '356'
           E10_GENERATION_ISSUE: '365'
           E11_GENERATION_ISSUE: '372'
+          E12_GENERATION_ISSUE: '383'
         run: |
           set -euo pipefail
 
@@ -250,19 +252,7 @@ jobs:
             MERGE_GUARD_VERDICT="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.verdict)' "$MERGE_GUARD_JSON")"
             MERGE_GUARD_MARKER="UD_E11_MERGE_GUARD:$CANDIDATE_SHA:$CURRENT_MAIN_SHA"
             if ! has_line "$MERGE_GUARD_MARKER"; then
-              MERGE_GUARD_BODY="$(node - "$MERGE_GUARD_MARKER" "$MERGE_GUARD_JSON" <<'NODE'
-          const [marker,json]=process.argv.slice(2);
-          const row=JSON.parse(json);
-          const lines=[marker,`verdict: ${row.verdict}`,`candidate_parent_sha: ${row.candidateParentSha}`,`current_main_sha: ${row.currentMainSha}`];
-          const changed=row.changedPaths||[];
-          const protectedPaths=row.protectedPaths||[];
-          if(changed.length) lines.push(`changed_paths: ${changed.slice(0,20).join(',')}${changed.length>20?`,...(+${changed.length-20})`:''}`);
-          if(protectedPaths.length) lines.push(`protected_paths: ${protectedPaths.slice(0,20).join(',')}${protectedPaths.length>20?`,...(+${protectedPaths.length-20})`:''}`);
-          if(row.verdict==='MERGE_BLOCKED_PROTECTED_MAIN_DRIFT') lines.push('next: refresh the same source branch on current main, update source_sha on the same durable request, then re-stage/revalidate');
-          else lines.push('next: assistant re-reads PR head/candidate/main/mergeability and performs expected-head merge only while this receipt is fresh');
-          process.stdout.write(lines.join('\n'));
-          NODE
-              )"
+              MERGE_GUARD_BODY="$(node plugins/usage-dashboard/tools/merge_guard_receipt_e12.cjs --format "$MERGE_GUARD_MARKER" "$MERGE_GUARD_JSON")"
               post_comment "$REQUEST_NUMBER" "$MERGE_GUARD_BODY"
               api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
             fi
@@ -321,6 +311,11 @@ jobs:
               GENERATION_ISSUE="$E11_GENERATION_ISSUE"
               GENERATION_PROOF_MARKER='E11_REAL_RELEASE_PROOF'
               GENERATION_VERDICT='E11 real-release diagnosable merge-readiness proof COMPLETE'
+              ;;
+            E12)
+              GENERATION_ISSUE="$E12_GENERATION_ISSUE"
+              GENERATION_PROOF_MARKER='E12_REAL_RELEASE_PROOF'
+              GENERATION_VERDICT='E12 real-release event-convergence and release-control simplification proof COMPLETE'
               ;;
             *)
               echo "E9_GENERATION_UNSUPPORTED:$RELEASE_GENERATION"

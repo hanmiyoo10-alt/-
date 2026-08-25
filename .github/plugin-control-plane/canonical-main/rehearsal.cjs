@@ -201,11 +201,17 @@ async function materialize(apiClient, transition, mainSha) {
   return {touched: true, duplicate: false, issue, event, key, severity, envelope};
 }
 
-function runOpsRefresh() {
-  const controller = path.join(__dirname, 'ops-controller.cjs');
-  const result = spawnSync(process.execPath, [controller, 'refresh'], {stdio: 'inherit', env: process.env});
+function runSurface(script, label) {
+  const target = path.join(__dirname, script);
+  const result = spawnSync(process.execPath, [target, 'refresh'], {stdio: 'inherit', env: process.env});
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`canonical ops refresh failed with status ${result.status}`);
+  if (result.status !== 0) throw new Error(`${label} refresh failed with status ${result.status}`);
+}
+
+function runOpsRefresh() {
+  runSurface('ops-controller.cjs', 'canonical ops controller');
+  runSurface('protected-main-surface.cjs', 'protected-main surface');
+  runSurface('bootstrap-surface.cjs', 'bootstrap coverage surface');
 }
 
 async function assertOpsSurface(apiClient, expectedState, issueNumber, mainSha) {
@@ -216,6 +222,8 @@ async function assertOpsSurface(apiClient, expectedState, issueNumber, mainSha) 
   if (!body.includes(`**Operator state: ${expectedState}**`)) throw new Error(`expected operator state ${expectedState}`);
   if (!body.includes(`Observed SHA: \`${mainSha}\``)) throw new Error('ops surface observed a different main SHA');
   if (!body.includes('Production authority observation: MATCH')) throw new Error('production authority ceased to MATCH during rehearsal');
+  if (!body.includes('Coverage: `COMPLETE`')) throw new Error('bootstrap coverage regressed during rehearsal');
+  if (!body.includes('Legacy/unregistered scopes: none')) throw new Error('legacy/unregistered bootstrap scope reappeared during rehearsal');
   if (expectedState === 'INCIDENT' && !body.includes(`#${issueNumber}`)) throw new Error('open rehearsal incident missing from ops surface');
   if (expectedState === 'CLEAR' && !body.includes(`#${issueNumber}`)) throw new Error('recovered rehearsal incident missing from recent recoveries');
 }
@@ -228,6 +236,8 @@ async function cycle({token, repo, expectedMainSha, fetchImpl = fetch}) {
 
   const initial = rehearsalState(await apiClient.listIssues('all'), expectedMainSha);
   if (initial.state === 'PROVEN') {
+    runOpsRefresh();
+    await assertOpsSurface(apiClient, 'CLEAR', initial.issue.number, expectedMainSha);
     console.log(`CANONICAL_MAIN_REHEARSAL:ALREADY_PROVEN:#${initial.issue.number}:${expectedMainSha}`);
     return {issueNumber: initial.issue.number, mainSha: expectedMainSha, alreadyProven: true};
   }
@@ -284,4 +294,6 @@ module.exports = {
   rehearsalState,
   materialize,
   assertMainIdentity,
+  runSurface,
+  runOpsRefresh,
 };

@@ -20,7 +20,9 @@ const e10Body = [
 const request = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body);
 assert.equal(request.releaseGeneration,'E10');
 assert.match(request.attemptId,/^[0-9a-f]{24}$/);
-assert.throws(() => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E11')),/E9_REQUEST_GENERATION_DENIED/);
+const e11Transition = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E11'));
+assert.equal(e11Transition.releaseGeneration,'E11');
+assert.throws(() => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E12')),/E9_REQUEST_GENERATION_DENIED/);
 
 readiness.assertPythonSyntax('def materialize():\n    return True\n','good.py');
 assert.throws(

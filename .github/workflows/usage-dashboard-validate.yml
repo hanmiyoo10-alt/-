@@ -26,13 +26,22 @@ permissions:
 
 jobs:
   deterministic-stage-pr-note:
+    name: Non-authoritative deterministic release PR lane
     if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'stage/usage-dashboard-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Declare exact-SHA authority for deterministic candidate PRs
         run: |
           echo 'CANDIDATE_PR_EVENT_NONAUTHORITATIVE:deterministic-stage-pr'
-          echo 'Authoritative gate: owner-triggered exact-SHA full registry.'
+          echo 'NON-AUTHORITATIVE PR LANE — exact-SHA validator owns release decision'
+          echo 'Authoritative gate: durable-request exact-SHA full registry.'
+          {
+            echo '### NON-AUTHORITATIVE PR LANE'
+            echo ''
+            echo 'This deterministic release PR does not own the release decision.'
+            echo ''
+            echo '**Authoritative gate:** durable-request exact-SHA full registry.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   validate:
     if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'stage/usage-dashboard-') }}

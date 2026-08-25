@@ -64,7 +64,7 @@ for (const token of [
   'SOURCE_SHA_NOT_READY',
   'historical-literal',
   'deleted-owner',
-  'E9_READINESS_PART_BOUNDARY_STALE',
+  'stale-part-boundary',
   'E9_READINESS_CHANGE_SEMANTICS_DRIFT',
   'assertMaterializerSyntax',
   'materializer-syntax',
@@ -125,4 +125,4 @@ for (const token of [
   'E9-F',
 ]) assert.ok(runbook.includes(token),`E9 runbook missing ${token}`);
 
-console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure`);
+console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10/E11 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure`);

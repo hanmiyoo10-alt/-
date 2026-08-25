@@ -18,6 +18,7 @@ on:
       - 'plugins/usage-dashboard/tools/release_request_e9.cjs'
       - 'plugins/usage-dashboard/tools/source_readiness_e9.cjs'
       - 'plugins/usage-dashboard/tools/source_change_semantics.cjs'
+      - 'plugins/usage-dashboard/tools/merge_guard_e11.cjs'
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
@@ -53,6 +54,7 @@ jobs:
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           E9_GENERATION_ISSUE: '356'
           E10_GENERATION_ISSUE: '365'
+          E11_GENERATION_ISSUE: '372'
         run: |
           set -euo pipefail
 
@@ -125,8 +127,27 @@ jobs:
           if ! has_line "$READY_MARKER"; then
             TRUSTED_BASE_SHA="$(git rev-parse HEAD)"
             if ! READINESS="$(node plugins/usage-dashboard/tools/source_readiness_e9.cjs --inspect "$TRUSTED_BASE_SHA" "$SOURCE_SHA" 2>&1)"; then
-              REASON="$(printf '%s\n' "$READINESS" | tail -n1 | cut -c1-500)"
-              post_comment "$REQUEST_NUMBER" "$(printf 'SOURCE_SHA_NOT_READY:%s\nstate: BLOCKED\nreason: %s\nnext: repair source and update source_sha on this same request' "$SOURCE_SHA" "$REASON")"
+              SENTINEL="$(printf '%s\n' "$READINESS" | grep '^UD_SOURCE_READINESS_ERROR:' | tail -n1 || true)"
+              if [[ -n "$SENTINEL" ]]; then
+                RECEIPT_JSON="${SENTINEL#UD_SOURCE_READINESS_ERROR:}"
+              else
+                RECEIPT_JSON='{"reason_code":"unexpected-readiness-error","detail":"structured readiness receipt missing","offending_path":"","owner_path":"","repair_hint":"inspect trusted readiness logs before changing source"}'
+              fi
+              BLOCK_BODY="$(node - "$SOURCE_SHA" "$RECEIPT_JSON" <<'NODE'
+          const [sha,json]=process.argv.slice(2);
+          let receipt;
+          try { receipt=JSON.parse(json); }
+          catch { receipt={reason_code:'unexpected-readiness-error',detail:'invalid structured readiness receipt',repair_hint:'inspect trusted readiness logs before changing source'}; }
+          const lines=[`SOURCE_SHA_NOT_READY:${sha}`,'state: BLOCKED',`reason_code: ${receipt.reason_code||'unexpected-readiness-error'}`];
+          if(receipt.offending_path) lines.push(`offending_path: ${receipt.offending_path}`);
+          if(receipt.owner_path) lines.push(`owner_path: ${receipt.owner_path}`);
+          if(receipt.detail) lines.push(`detail: ${String(receipt.detail).slice(0,500)}`);
+          if(receipt.repair_hint) lines.push(`repair_hint: ${receipt.repair_hint}`);
+          lines.push('next: repair source and update source_sha on this same request');
+          process.stdout.write(lines.join('\n'));
+          NODE
+              )"
+              post_comment "$REQUEST_NUMBER" "$BLOCK_BODY"
               printf '%s\n' "$READINESS" >&2
               exit 1
             fi
@@ -218,17 +239,48 @@ jobs:
             exit 0
           fi
 
-          VALIDATED_MARKER="UD_E9_VALIDATED:$CANDIDATE_SHA"
-          if ! has_line "$VALIDATED_MARKER"; then
-            post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: VALIDATED\nnext: re-read head/mergeability and expected-head merge' "$VALIDATED_MARKER" "$PR_NUMBER")"
-          fi
-
           PR_STATE="$(jq -r '.state' "$RUNNER_TEMP/pr.json")"
           MERGED="$(jq -r '.merged' "$RUNNER_TEMP/pr.json")"
+          VALIDATED_MARKER="UD_E9_VALIDATED:$CANDIDATE_SHA"
+
           if [[ "$PR_STATE" != 'closed' || "$MERGED" != 'true' ]]; then
-            echo "E9_VALIDATED_WAITING_FOR_MERGE:$PR_NUMBER:$CANDIDATE_SHA"
+            git fetch --no-tags origin 'refs/heads/main:refs/remotes/origin/e11-main'
+            CURRENT_MAIN_SHA="$(git rev-parse refs/remotes/origin/e11-main)"
+            MERGE_GUARD_JSON="$(node plugins/usage-dashboard/tools/merge_guard_e11.cjs --classify "$CANDIDATE_SHA" "$CURRENT_MAIN_SHA")"
+            MERGE_GUARD_VERDICT="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.verdict)' "$MERGE_GUARD_JSON")"
+            MERGE_GUARD_MARKER="UD_E11_MERGE_GUARD:$CANDIDATE_SHA:$CURRENT_MAIN_SHA"
+            if ! has_line "$MERGE_GUARD_MARKER"; then
+              MERGE_GUARD_BODY="$(node - "$MERGE_GUARD_MARKER" "$MERGE_GUARD_JSON" <<'NODE'
+          const [marker,json]=process.argv.slice(2);
+          const row=JSON.parse(json);
+          const lines=[marker,`verdict: ${row.verdict}`,`candidate_parent_sha: ${row.candidateParentSha}`,`current_main_sha: ${row.currentMainSha}`];
+          const changed=row.changedPaths||[];
+          const protectedPaths=row.protectedPaths||[];
+          if(changed.length) lines.push(`changed_paths: ${changed.slice(0,20).join(',')}${changed.length>20?`,...(+${changed.length-20})`:''}`);
+          if(protectedPaths.length) lines.push(`protected_paths: ${protectedPaths.slice(0,20).join(',')}${protectedPaths.length>20?`,...(+${protectedPaths.length-20})`:''}`);
+          if(row.verdict==='MERGE_BLOCKED_PROTECTED_MAIN_DRIFT') lines.push('next: refresh the same source branch on current main, update source_sha on the same durable request, then re-stage/revalidate');
+          else lines.push('next: assistant re-reads PR head/candidate/main/mergeability and performs expected-head merge only while this receipt is fresh');
+          process.stdout.write(lines.join('\n'));
+          NODE
+              )"
+              post_comment "$REQUEST_NUMBER" "$MERGE_GUARD_BODY"
+              api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+            fi
+            if [[ "$MERGE_GUARD_VERDICT" == 'MERGE_BLOCKED_PROTECTED_MAIN_DRIFT' ]]; then
+              echo "E11_MERGE_BLOCKED_PROTECTED_MAIN_DRIFT:$CANDIDATE_SHA:$CURRENT_MAIN_SHA"
+              exit 0
+            fi
+            if ! has_line "$VALIDATED_MARKER"; then
+              post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: VALIDATED\nmerge_guard: %s\nmain_sha: %s\nnext: re-read head/candidate/main/mergeability and expected-head merge' "$VALIDATED_MARKER" "$PR_NUMBER" "$MERGE_GUARD_VERDICT" "$CURRENT_MAIN_SHA")"
+            fi
+            echo "E9_VALIDATED_WAITING_FOR_MERGE:$PR_NUMBER:$CANDIDATE_SHA:$MERGE_GUARD_VERDICT"
             exit 0
           fi
+
+          if ! has_line "$VALIDATED_MARKER"; then
+            post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: VALIDATED\nnext: merge already recorded; await exact-byte deployment parity' "$VALIDATED_MARKER" "$PR_NUMBER")"
+          fi
+
           MERGE_SHA="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/pr.json")"
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E9_MERGE_SHA_INVALID'; exit 1; }
 
@@ -264,6 +316,11 @@ jobs:
               GENERATION_ISSUE="$E10_GENERATION_ISSUE"
               GENERATION_PROOF_MARKER='E10_REAL_RELEASE_PROOF'
               GENERATION_VERDICT='E10 real-release immediate-convergence proof COMPLETE'
+              ;;
+            E11)
+              GENERATION_ISSUE="$E11_GENERATION_ISSUE"
+              GENERATION_PROOF_MARKER='E11_REAL_RELEASE_PROOF'
+              GENERATION_VERDICT='E11 real-release diagnosable merge-readiness proof COMPLETE'
               ;;
             *)
               echo "E9_GENERATION_UNSUPPORTED:$RELEASE_GENERATION"

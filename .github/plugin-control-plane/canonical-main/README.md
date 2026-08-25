@@ -1,4 +1,4 @@
-# Canonical Main Automation — Phase E Delivery Receipts
+# Canonical Main Automation — Phase F Protected-Main Readiness
 
 This directory implements the shared, non-runtime canonical-main automation designed in issues #295, #297, #298, #301, and #302.
 
@@ -36,6 +36,19 @@ Phase E makes delivery auditable:
 - `[repo-ops:main]` aggregates a bounded set of P0/P1 incident comments and renders bridge health, last success/failure, receipt totals, unresolved delivery failures, and unique duplicate-suppression proofs;
 - bridge health is separate from repository/release health and cannot block a release or a canonical-main write.
 
+Phase F canonicalizes protected-main readiness:
+
+- `protected-main.json` freezes the required target as `SimCore CI / Required` and the writer gateway as `scripts/repo-main-write.py` exact-candidate required mode;
+- every active direct main writer must remain inventory-classified, request `actions: write`, and dispatch `simcore-ci.yml` with `MAIN_HEALTH` / `Required` before attempting a main fast-forward;
+- the existing bounded GitHub shadow proof is retained as evidence that a temporary staging candidate can receive the exact Required PASS and be cleaned without mutating `main`;
+- `protected-main-surface.cjs` reads the GitHub branch response and adds a bounded `Protected main` section to `[repo-ops:main]`;
+- protection presentation states are `OFF`, `READY_TO_ACTIVATE`, `ENFORCED`, and `DRIFT`;
+- `READY_TO_ACTIVATE` means the writer gateway contract and shadow proof are ready while GitHub enforcement is still off;
+- `ENFORCED` is rendered only from direct GitHub read-back showing the branch protected and the configured required check present with enforcement enabled;
+- a successful `SimCore CI / Required` run by itself never proves branch protection is enabled.
+
+The Phase F repository contract deliberately does not add a bypass actor, PAT, deploy key, force push, runtime mutation, or release mutation. GitHub-side branch/ruleset activation remains an administration action and must never be claimed complete without direct API read-back.
+
 Bridge-health semantics:
 
 - `HEALTHY`: at least one structured/legacy delivery receipt exists and no delivery key has an unresolved latest `FAILED` receipt;
@@ -43,7 +56,7 @@ Bridge-health semantics:
 - `PROVEN_IDLE`: no live receipt exists yet, but the bounded Phase D bridge proof remains valid;
 - `UNKNOWN`: no receipt and no valid proof baseline exists.
 
-See `native-mail-bridge.json` for the frozen bridge contract and `delivery-receipt.cjs` for receipt parsing/aggregation semantics.
+See `native-mail-bridge.json` for the frozen bridge contract, `delivery-receipt.cjs` for receipt parsing/aggregation semantics, and `protected-main.json` for the protected-main readiness contract.
 
 ## Observation epoch
 
@@ -59,6 +72,8 @@ Runs older than that epoch are historical baseline evidence and cannot open a ne
 - selected `main` pushes;
 - a bounded schedule as self-healing fallback;
 - manual workflow dispatch.
+
+The same trusted job then runs the protected-main governance renderer, which updates only the bounded protection section in the existing operations issue.
 
 ## Notification handoff
 
@@ -84,6 +99,8 @@ It never executes PR-head code with metadata-write authority, mutates product/re
 
 The native Gmail delivery bridge is observability-only. Email failure cannot fail a release, mutate production authority, or block a canonical-main write.
 
+Protected-mode main writers are a separate bounded authority: they may use `contents: write` and `actions: write` only to publish a temporary candidate ref, dispatch the exact required workflow, and fast-forward the already-checked candidate when the main base is unchanged. They may not force push or bypass the required gate.
+
 ## Bootstrap descriptor check
 
 Registered descriptors live under `.github/plugin-control-plane/canonical-main/descriptors/`.
@@ -105,6 +122,6 @@ node .github/plugin-control-plane/canonical-main/bootstrap.cjs render \
 
 ## Operations state
 
-`policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability remains deliberately separate from repository health.
+`policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability and branch-protection governance are rendered separately from product/release authority.
 
-`CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free. The mail bridge has its own static `ACTIVE_PROVEN` contract state and dynamic receipt-derived bridge health.
+`CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free, and it is not a claim that GitHub branch protection is enabled. Read the dedicated `Protected main` section for that fact.

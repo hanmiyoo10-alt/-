@@ -1,9 +1,10 @@
 # Local Usage Dashboard — E9 Durable Release Transaction
 
-Status: **IMPLEMENTED CANDIDATE — E9-A..E encoded and first full regression GREEN; final-head merge proof pending**
+Status: **IMPLEMENTED — E9-A..E merged/regression-proven; E9-F real-release proof PENDING**
 
 Design authority: Issue `#356`.
 Implementation PR: `#357`.
+Implementation merge: `67fe58d0e9cf358074814ef64f0bf1a70264e5f5`.
 E8 retrospective: `docs/USAGE_DASHBOARD_E8_575_REAL_RELEASE_RETROSPECTIVE.md`.
 
 ## Generation rule
@@ -112,7 +113,7 @@ A / M / D / R / T
 
 and includes both sides of a rename when computing changed paths.
 
-`candidate_stage_policy.cjs` now consumes this helper instead of owning an independent `git diff --diff-filter=...` implementation. E9 source readiness uses the same helper. This closes the 5.75 deletion-semantics drift class without broadening source authority.
+`candidate_stage_policy.cjs` consumes this helper instead of owning an independent `git diff --diff-filter=...` implementation. E9 source readiness uses the same helper. This closes the 5.75 deletion-semantics drift class without broadening source authority.
 
 The impact-aware gate stays deliberately narrow. Behavior/integration authority remains the full exact-SHA registry.
 
@@ -203,12 +204,30 @@ E7/E8 stage and validation command paths remain temporarily available as diagnos
 
 E9 deliberately reuses the proven E7 stage materializer/writer instead of rewriting candidate/ref mutation while also simplifying orchestration. Candidate/ref safety code therefore stays stable.
 
-## Regression evidence
+## Implementation / regression evidence
 
-First complete PR validation against PR #357 head `4155c0d4efeef839d48337cabac773ffeacdb07f`:
+Implementation PR `#357` changed release-control/test/docs only. No `latest.js`, Engine, Manager, product manifest tuple or product release spec was intentionally changed.
+
+First complete validation:
 
 ```text
-Usage Dashboard Candidate Validation run: 32826721688 — SUCCESS
+head: 4155c0d4efeef839d48337cabac773ffeacdb07f
+Usage Dashboard Candidate Validation: 32826721688 — SUCCESS
+SimCore CI: 32826721430 — Verify SUCCESS / Required SUCCESS
+TEST_REGISTRY_GREEN:84
+```
+
+The evidence update moved the final PR head to:
+
+```text
+125c6f2f9572da86e6ad1ce29373856edf804289
+```
+
+That exact final head was revalidated:
+
+```text
+Usage Dashboard Candidate Validation: 32826996735 — SUCCESS
+SimCore CI: 32826996456 — Verify SUCCESS / Required SUCCESS
 RELEASE_MEMORY_CONTRACT_GREEN:.github/usage-dashboard/releases/5.75.json ×2
 MATERIALIZER_IDEMPOTENT:3.0.0-alpha.5.75
 usage-dashboard E8 early-failure/orchestration contract: OK
@@ -221,21 +240,41 @@ validated 3.0.0-alpha.5.75 / Engine 1.6.22 / Manager 1.3.0 / contracts 1/1
 Engine SHA256: 85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69
 ```
 
-Cross-scope SimCore CI run `32826721430` also completed `Verify: SUCCESS` and `Required: SUCCESS`.
+PR #357 was re-read with `head == 125c6f2f...`, `mergeable == true`, and unchanged base. It was squash-merged with `expected_head_sha` set to that exact validated head.
 
-This evidence update intentionally changes the PR head after the first full regression. The final PR head must pass the same complete gates again before exact-head merge.
+Main implementation merge:
+
+```text
+67fe58d0e9cf358074814ef64f0bf1a70264e5f5
+```
+
+## Maintenance byte-neutral closure
+
+The E9-A..E implementation merge is maintenance-only. Post-merge production remained:
+
+```text
+Product: 3.0.0-alpha.5.75
+Engine: 1.6.22
+Manager: 1.3.0
+Contracts: 1 / 1
+release-usage-dashboard: ffa3dae31bad70ca68059fbc085d63b9a2d862ca
+```
+
+Direct main/release Git blob parity after merge:
+
+```text
+runtime/product-manifest.json: 1013d9e7a06db21667c098c79fcb2a5dfd9227de == 1013d9e7a06db21667c098c79fcb2a5dfd9227de
+latest.js: c356924fd2f1068d3bb9fdb7b7ee86a5e177aac0 == c356924fd2f1068d3bb9fdb7b7ee86a5e177aac0
+runtime/bridge-engine.mjs: c9090717394ed4da4458923535f5f089205e65da == c9090717394ed4da4458923535f5f089205e65da
+```
+
+Therefore E9-A..E changed no deployed Local Usage Dashboard product bytes and requires no PocketRisu device acceptance by itself.
 
 ## Retained negative operational evidence
 
 During initial E9 tool setup, the connected control surface accidentally created `docs/E9_PLACEHOLDER` directly on `main` in `f50255b5afae7e75b24787430fbb8131d33e77a2`. The file contained only `placeholder` and changed no product/runtime/release bytes. It was immediately removed in `57f4326119921206c1e1f1c3ed3dcdb70e1bc3e3`, restoring the exact prior tree. Issue #356 retains this as operator/control-surface feedback: content writes must never be used as branch-existence probes or setup checks.
 
-## Non-goals
-
-E9 does not change Local Usage Dashboard product runtime behavior, Engine/Manager semantics, product data contracts, full-registry coverage, promotion bytes, merge protection, or PocketRisu update UX. It adds no force push, connected ref mutation, broad automatic merge authority, inferred physical verification, or second release request for ordinary repair.
-
-## Maintenance completion target
-
-After final-head GREEN + expected-head merge + byte-neutral production verification:
+## Current generation state
 
 ```text
 E9-A..E: IMPLEMENTED / REGRESSION-PROVEN
@@ -243,6 +282,10 @@ E9-F: NEXT REAL RELEASE PROOF PENDING
 ```
 
 Issue #356 remains open as E9 generation authority until E9-F is proven by the next real feature release.
+
+## Non-goals
+
+E9 does not change Local Usage Dashboard product runtime behavior, Engine/Manager semantics, product data contracts, full-registry coverage, promotion bytes, merge protection, or PocketRisu update UX. It adds no force push, connected ref mutation, broad automatic merge authority, inferred physical verification, or second release request for ordinary repair.
 
 ## Principle
 

@@ -139,10 +139,11 @@ for (const token of [
 ]) assert.ok(mergeGuardSource.includes(token),`E11 merge guard missing ${token}`);
 
 const stageWorkflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
-for (const token of [
-  'Usage-Dashboard-Frozen-Main: $TRUSTED_BASE_SHA',
-  'E7_FROZEN_MAIN_TRAILER_MISMATCH',
-]) assert.ok(stageWorkflow.includes(token),`E11 trusted stage missing ${token}`);
+assert.ok(
+  stageWorkflow.includes('Usage-Dashboard-Frozen-Main: %s\\n\' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA"'),
+  'E11 trusted stage must bind the frozen-main trailer format to exact TRUSTED_BASE_SHA'
+);
+assert.ok(stageWorkflow.includes('E7_FROZEN_MAIN_TRAILER_MISMATCH'),'E11 trusted stage must reverify the imported frozen-main identity');
 
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
 for (const token of [

@@ -1,0 +1,153 @@
+name: Usage Dashboard E9 Exact-SHA Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Deterministic release PR number
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact candidate SHA to validate
+        required: true
+        type: string
+      request_issue:
+        description: Durable E9 release request issue number
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usage-dashboard-e9-validation
+  cancel-in-progress: false
+
+jobs:
+  resolve_validation:
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      request_issue: ${{ steps.resolve.outputs.request_issue }}
+      candidate_sha: ${{ steps.resolve.outputs.candidate_sha }}
+      candidate_branch: ${{ steps.resolve.outputs.candidate_branch }}
+    steps:
+      - name: Checkout trusted main validation controller
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bind durable request, PR and exact candidate SHA
+        id: resolve
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RAW_PR_NUMBER: ${{ inputs.pr_number }}
+          RAW_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RAW_REQUEST_ISSUE: ${{ inputs.request_issue }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'E9_VALIDATION_UNTRUSTED_REF'; exit 1; }
+          [[ "$RAW_PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo 'E9_VALIDATION_PR_NUMBER_INVALID'; exit 1; }
+          [[ "$RAW_REQUEST_ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo 'E9_VALIDATION_REQUEST_NUMBER_INVALID'; exit 1; }
+          CANDIDATE_SHA="$(printf '%s' "$RAW_CANDIDATE_SHA" | tr 'A-F' 'a-f')"
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E9_VALIDATION_SHA_INVALID'; exit 1; }
+
+          curl --fail-with-body --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$RAW_REQUEST_ISSUE" > "$RUNNER_TEMP/request.json"
+          curl --fail-with-body --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls/$RAW_PR_NUMBER" > "$RUNNER_TEMP/pr.json"
+
+          node - "$RUNNER_TEMP/request.json" "$RUNNER_TEMP/pr.json" "$GITHUB_REPOSITORY" "$REPOSITORY_OWNER" "$RAW_REQUEST_ISSUE" "$CANDIDATE_SHA" <<'NODE'
+          const fs=require('node:fs');
+          const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
+          const [requestFile,prFile,repo,owner,requestNumber,candidateSha]=process.argv.slice(2);
+          const issue=JSON.parse(fs.readFileSync(requestFile,'utf8'));
+          const pr=JSON.parse(fs.readFileSync(prFile,'utf8'));
+          if(issue.state!=='open') throw new Error('E9_VALIDATION_REQUEST_NOT_OPEN');
+          if(issue.user?.login!==owner) throw new Error('E9_VALIDATION_REQUEST_OWNER_DENIED');
+          const request=rr.parseIssue(issue.title,issue.body);
+          if(request.prNumber!==Number(pr.number)) throw new Error(`E9_VALIDATION_REQUEST_PR_MISMATCH:${request.prNumber}:expected=${pr.number}`);
+          if(pr.state!=='open') throw new Error('E9_VALIDATION_PR_NOT_OPEN');
+          if(pr.base?.ref!=='main') throw new Error('E9_VALIDATION_PR_BASE_DENIED');
+          if(pr.head?.repo?.full_name!==repo) throw new Error('E9_VALIDATION_PR_REPOSITORY_DENIED');
+          const expectedBranch=`stage/usage-dashboard-${request.releaseVersion}`;
+          if(pr.head?.ref!==expectedBranch) throw new Error(`E9_VALIDATION_PR_BRANCH_MISMATCH:${pr.head?.ref}:expected=${expectedBranch}`);
+          if(pr.head?.sha!==candidateSha) throw new Error(`E9_VALIDATION_IDENTITY_MISMATCH:${pr.head?.sha}:expected=${candidateSha}`);
+          if(!String(pr.body||'').includes(`Usage-Dashboard-Release-Request: #${requestNumber}`)) throw new Error('E9_VALIDATION_PR_REQUEST_MARKER_MISSING');
+          NODE
+
+          CANDIDATE_BRANCH="$(jq -r '.head.ref' "$RUNNER_TEMP/pr.json")"
+          REMOTE_SHA="$(git ls-remote https://github.com/$GITHUB_REPOSITORY.git "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          [[ "$REMOTE_SHA" == "$CANDIDATE_SHA" ]] || { echo 'E9_VALIDATION_REMOTE_IDENTITY_MISMATCH'; exit 1; }
+          {
+            echo "pr_number=$RAW_PR_NUMBER"
+            echo "request_issue=$RAW_REQUEST_ISSUE"
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "candidate_branch=$CANDIDATE_BRANCH"
+          } >> "$GITHUB_OUTPUT"
+          echo "E9_VALIDATION_IDENTITY_BOUND:$RAW_REQUEST_ISSUE:$RAW_PR_NUMBER:$CANDIDATE_BRANCH:$CANDIDATE_SHA"
+
+  validate_exact:
+    needs: resolve_validation
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-usage-dashboard-validate.yml
+    with:
+      candidate_sha: ${{ needs.resolve_validation.outputs.candidate_sha }}
+
+  publish_result:
+    needs: [resolve_validation, validate_exact]
+    if: ${{ always() && needs.resolve_validation.result == 'success' }}
+    permissions:
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish exact-SHA authoritative result
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUEST_ISSUE: ${{ needs.resolve_validation.outputs.request_issue }}
+          PR_NUMBER: ${{ needs.resolve_validation.outputs.pr_number }}
+          CANDIDATE_SHA: ${{ needs.resolve_validation.outputs.candidate_sha }}
+          VALIDATION_RESULT: ${{ needs.validate_exact.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$VALIDATION_RESULT" == 'success' ]]; then STATUS='GREEN'; NEXT='expected-head merge after current PR identity/mergeability re-read';
+          else STATUS='RED'; NEXT='repair source, update source_sha on the same durable release request, and let E9 reconcile again'; fi
+          BODY="$(cat <<EOF
+          UD_VALIDATION_RESULT
+          validated_sha: $CANDIDATE_SHA
+          status: $STATUS
+          request: #$REQUEST_ISSUE
+          pr: #$PR_NUMBER
+          transaction: $GITHUB_RUN_ID
+          authority: E9 exact-SHA full registry
+          next: $NEXT
+          EOF
+          )"
+          jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/result.json"
+          for ISSUE in "$REQUEST_ISSUE" "$PR_NUMBER"; do
+            curl --fail-with-body --silent --show-error -X POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" \
+              --data-binary @"$RUNNER_TEMP/result.json" >/dev/null
+          done
+          echo "E9_VALIDATION_RESULT:$STATUS:$REQUEST_ISSUE:$PR_NUMBER:$CANDIDATE_SHA"
+          [[ "$STATUS" == 'GREEN' ]]

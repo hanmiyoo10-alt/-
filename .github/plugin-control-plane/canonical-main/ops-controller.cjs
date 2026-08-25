@@ -14,6 +14,7 @@ const {
   buildAlertEnvelope,
   envelopeMarker,
 } = require('./notification.cjs');
+const {summarizeReceipts} = require('./delivery-receipt.cjs');
 
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'registry.json'), 'utf8'));
 const policy = loadPolicy();
@@ -57,6 +58,16 @@ async function listIssues(state = 'open') {
     if (rows.length < 100) return result;
   }
   throw new Error('issue pagination exceeded safety bound');
+}
+
+async function listIssueComments(issueNumber) {
+  const result = [];
+  for (let page = 1; page <= 2; page += 1) {
+    const rows = await api(`/issues/${issueNumber}/comments?per_page=100&page=${page}`);
+    result.push(...rows);
+    if (rows.length < 100) return result;
+  }
+  throw new Error(`issue #${issueNumber} comment pagination exceeded safety bound`);
 }
 
 async function ensureLabel(name, color, description) {
@@ -211,6 +222,10 @@ function fmtTime(ms) {
   return ms === null ? 'UNKNOWN' : new Date(ms).toISOString();
 }
 
+function fmtOptionalTime(value) {
+  return value || 'NONE';
+}
+
 function renderIncidentRows(incidents) {
   if (!incidents.length) return '- none observed within current adapter coverage';
   return incidents.map(({issue, severity, state}) => `- **${severity}** ${state} — #${issue.number} ${issue.title}`).join('\n');
@@ -237,14 +252,34 @@ function renderBootstrap(status) {
   return status.statuses.map((row) => `- \`${row.id}\`: \`${row.ready ? 'BOOTSTRAP_READY' : 'BOOTSTRAP_INCOMPLETE'}\` / \`${row.profile}\``).join('\n');
 }
 
-function renderNotificationStatus() {
+async function deliveryReceiptSummary(incidentRows) {
+  const config = policy.notifications?.receiptTracking || {};
+  const baselineProofAt = config.baselineProofAt || null;
+  if (config.enabled !== true) return summarizeReceipts([], {baselineProofAt});
+  const maxIssues = Number.isInteger(config.maxIncidentIssues) ? config.maxIncidentIssues : 25;
+  const candidates = incidentRows
+    .filter((row) => row.severity === 'P0' || row.severity === 'P1')
+    .sort((a, b) => Date.parse(b.issue.updated_at) - Date.parse(a.issue.updated_at))
+    .slice(0, maxIssues);
+  const comments = [];
+  for (const row of candidates) comments.push(...await listIssueComments(row.issue.number));
+  return summarizeReceipts(comments, {baselineProofAt});
+}
+
+function renderNotificationStatus(receiptSummary = null) {
   const config = policy.notifications || {};
   const severityText = (config.severities || []).join('/') || 'NONE';
   const channels = (config.channels || []).join(', ') || 'NONE';
+  const summary = receiptSummary || summarizeReceipts([], {baselineProofAt: config.receiptTracking?.baselineProofAt});
   return [
     `- Outbox: \`${config.outboxEnabled === true ? 'ACTIVE' : 'DISABLED'}\` — ${severityText} OPEN${config.includeRecovery === true ? ' + RECOVERED' : ''}`,
     `- Channel handoff: \`${channels}\``,
     `- Delivery bridge: \`${config.bridgeState || 'UNKNOWN'}\` / \`${config.deliveryBridge || 'UNKNOWN'}\``,
+    `- Bridge health: \`${summary.health}\``,
+    `- Last delivery success: ${fmtOptionalTime(summary.lastSuccessAt)}${summary.lastSuccessAt ? '' : summary.baselineProofAt ? ` — baseline proof ${summary.baselineProofAt}` : ''}`,
+    `- Last delivery failure: ${fmtOptionalTime(summary.lastFailureAt)}`,
+    `- Delivery receipts: ${summary.receiptCount} total / ${summary.unresolvedFailureCount} unresolved failure`,
+    `- Unique duplicate suppressions recorded: ${summary.suppressedDuplicateCount}`,
     '- Delivery bridge health is intentionally non-authoritative for release/main health.',
   ].join('\n');
 }
@@ -261,6 +296,7 @@ async function refresh() {
 
   const projects = ownerRows(openIssues);
   const incidentRows = allIssues.map(incidentFromIssue).filter(Boolean);
+  const receiptSummary = await deliveryReceiptSummary(incidentRows);
   const active = incidentRows.filter((row) => row.state === 'OPEN');
   const activeP2 = active.filter((row) => row.severity === 'P2');
   const allProjectViewsFresh = projects.every((row) => row.fresh);
@@ -297,7 +333,7 @@ async function refresh() {
     '',
     '## Notification outbox / external bridge',
     '',
-    renderNotificationStatus(),
+    renderNotificationStatus(receiptSummary),
     '',
     '## Active P0/P1 incidents',
     '',
@@ -359,5 +395,6 @@ module.exports = {
   markerForKey,
   markerForEvent,
   renderIncidentBody,
+  deliveryReceiptSummary,
   renderNotificationStatus,
 };

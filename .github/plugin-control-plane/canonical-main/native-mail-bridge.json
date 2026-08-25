@@ -16,6 +16,17 @@
     "recipient": "authenticated account self",
     "credentialsInRepository": false
   },
+  "receipts": {
+    "enabled": true,
+    "storage": "incident-comments",
+    "statuses": ["DELIVERED", "FAILED", "SUPPRESSED_DUPLICATE"],
+    "structuredMarker": "canonical-main-delivery-receipt-v1",
+    "recipientDataAllowed": false,
+    "credentialDataAllowed": false,
+    "bridgeHealthStates": ["HEALTHY", "DEGRADED", "PROVEN_IDLE", "UNKNOWN"],
+    "releaseBlocking": false,
+    "mainWriteBlocking": false
+  },
   "proof": {
     "performedAt": "2026-08-25T03:25:00Z",
     "syntheticOnly": true,

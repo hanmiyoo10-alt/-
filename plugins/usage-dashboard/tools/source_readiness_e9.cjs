@@ -63,6 +63,35 @@ function assertTouchedPartBoundaries(sourceSha, changeRows) {
   }
 }
 
+function assertPythonSyntax(text, filename = '<materializer>') {
+  try {
+    execFileSync('python3',[
+      '-c',
+      'import ast,sys; ast.parse(sys.stdin.read(), filename=sys.argv[1])',
+      filename,
+    ],{input:String(text),encoding:'utf8',stdio:['pipe','pipe','pipe']});
+  } catch (error) {
+    const detail = String(error?.stderr || error?.message || '').trim().replace(/\s+/g,' ').slice(0,300);
+    fail('SOURCE_SHA_NOT_READY', `materializer-syntax:${filename}${detail ? `:${detail}` : ''}`);
+  }
+}
+
+function assertMaterializerSyntax(sourceSha, releaseSpecPath) {
+  const specText = showText(sourceSha, releaseSpecPath);
+  if (specText === null) fail('SOURCE_SHA_NOT_READY', `release-spec-missing:${releaseSpecPath}`);
+  let spec;
+  try { spec = JSON.parse(specText); }
+  catch { fail('SOURCE_SHA_NOT_READY', `release-spec-json:${releaseSpecPath}`); }
+  const materializer = String(spec?.materializer || '');
+  if (!/^plugins\/usage-dashboard\/tools\/[A-Za-z0-9._/-]+\.py$/.test(materializer) || materializer.includes('..')) {
+    fail('SOURCE_SHA_NOT_READY', `materializer-path:${materializer || '<missing>'}`);
+  }
+  const text = showText(sourceSha, materializer);
+  if (text === null) fail('SOURCE_SHA_NOT_READY', `materializer-missing:${materializer}`);
+  assertPythonSyntax(text, materializer);
+  return materializer;
+}
+
 function inspectReadiness(trustedBaseSha, sourceSha) {
   const transaction = stage.inspectTransaction(trustedBaseSha, sourceSha);
   const changeRows = changes.resolveChanges(transaction.intentBaseSha, transaction.sourceSha);
@@ -89,11 +118,13 @@ function inspectReadiness(trustedBaseSha, sourceSha) {
   if (staleOwners.length) fail('SOURCE_SHA_NOT_READY', `deleted-owner:${staleOwners.join(',')}`);
 
   assertTouchedPartBoundaries(transaction.sourceSha, changeRows);
+  const materializer = assertMaterializerSyntax(transaction.sourceSha, transaction.releaseSpec);
 
   return {
     sourceSha:transaction.sourceSha,
     productVersion:transaction.productVersion,
     releaseSpec:transaction.releaseSpec,
+    materializer,
     candidateBranch:transaction.candidateBranch,
     files:canonicalFiles,
     changes:changeRows,
@@ -111,7 +142,7 @@ function main() {
   fail('E9_READINESS_USAGE');
 }
 
-module.exports = {showText,grepTree,parsePartsAt,assertTouchedPartBoundaries,inspectReadiness};
+module.exports = {showText,grepTree,parsePartsAt,assertTouchedPartBoundaries,assertPythonSyntax,assertMaterializerSyntax,inspectReadiness};
 
 if (require.main === module) {
   try { main(); }

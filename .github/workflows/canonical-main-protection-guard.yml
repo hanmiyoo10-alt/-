@@ -27,7 +27,12 @@ concurrency:
 jobs:
   activation-attempt:
     name: Attempt Native Protection
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout trusted main protection controller
@@ -36,6 +41,15 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Confirm successful result still belongs to current main
+        if: github.event_name == 'workflow_run'
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$TARGET_SHA"
 
       - name: Attempt GitHub-native main protection
         env:

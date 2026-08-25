@@ -1,6 +1,4 @@
 
-  const diagnosticsWorkspaceLegacySettingsHtml = settingsHtml;
-  const diagnosticsWorkspaceLegacyBindSettings = bindSettings;
   const DIAGNOSTICS_WORKSPACE_SECTIONS = Object.freeze([
     {key:'runtime',title:'Runtime & Update'},
     {key:'bridge',title:'Bridge & Managed CLI'},
@@ -280,15 +278,8 @@
     return `<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>Basic · Detailed · Full Copy</span></summary><div class="advanced-body"><style>.diag-workspace-capture{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:0 0 8px;color:var(--m);font-size:9px}.diag-workspace-capture b{color:var(--t);font-size:10px}.diag-workspace-tabs{display:flex;gap:6px;margin:2px 0 10px}.diag-workspace-tabs button{flex:1}.diag-workspace-tabs button.active{background:var(--g);border-color:var(--g);color:#15170f}.diag-workspace-basic{grid-template-columns:repeat(5,minmax(0,1fr))}.diag-workspace-basic .mini small{display:block;color:var(--m);font-size:9px;margin-top:4px;white-space:normal}.diag-workspace-issues{border:1px solid var(--e);border-radius:9px;padding:9px;margin:8px 0}.diag-workspace-issues>b{color:var(--e);font-size:10px}.diag-workspace-issues p{margin:4px 0 0}.diag-workspace-section{border:1px solid var(--l);border-radius:9px;margin-top:7px;overflow:hidden}.diag-workspace-section>summary{display:flex;justify-content:space-between;gap:8px;padding:9px;cursor:pointer;list-style:none}.diag-workspace-section>summary::-webkit-details-marker{display:none}.diag-workspace-section>summary span{color:var(--m);font-size:9px}.diag-workspace-section[open]>summary{border-bottom:1px solid var(--l)}.diag-workspace-lines{padding:5px 9px}.diag-workspace-lines p{margin:5px 0;font-size:10px;overflow-wrap:anywhere}@media(max-width:680px){.diag-workspace-basic{grid-template-columns:1fr 1fr}.diag-workspace-basic .mini:last-child{grid-column:1/-1}}</style><div class="diag-workspace-tabs" role="group" aria-label="Diagnostics view"><button id="diagnostics-mode-basic" class="${mode === 'basic' ? 'active' : ''}" aria-pressed="${mode === 'basic' ? 'true' : 'false'}">Basic</button><button id="diagnostics-mode-detailed" class="${mode === 'detailed' ? 'active' : ''}" aria-pressed="${mode === 'detailed' ? 'true' : 'false'}">Detailed</button></div>${body}<div class="actions"><button id="copy-diag-summary">요약 복사</button><button id="copy-diag">전체 Diagnostics 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>`;
   }
 
-  settingsHtml = function diagnosticsWorkspaceSettingsHtml() {
-    const legacyHtml = diagnosticsWorkspaceLegacySettingsHtml();
-    const diagnosticsPanel = /<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics<\/b><span>요약 · 전체 진단<\/span><\/summary><div class="advanced-body">[\s\S]*?<\/div><\/details>/;
-    if (!diagnosticsPanel.test(legacyHtml)) return legacyHtml;
-    return legacyHtml.replace(diagnosticsPanel, diagnosticsWorkspacePanelHtml());
-  };
 
-  bindSettings = function diagnosticsWorkspaceBindSettings() {
-    diagnosticsWorkspaceLegacyBindSettings();
+  function bindDiagnosticsWorkspaceControls() {
     const q = selector => document.querySelector(selector);
     if (q('#copy-diag-summary')) q('#copy-diag-summary').onclick = async e => {
       let copied = false;
@@ -304,4 +295,4 @@
     const detailed = q('#diagnostics-mode-detailed');
     if (basic) basic.onclick = () => setDiagnosticsModeInstant('basic');
     if (detailed) detailed.onclick = () => setDiagnosticsModeInstant('detailed');
-  };
+  }

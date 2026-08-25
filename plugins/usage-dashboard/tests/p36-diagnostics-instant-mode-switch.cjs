@@ -34,6 +34,9 @@ const instantSource = workspace.slice(instantStart, instantEnd);
 assert.doesNotMatch(instantSource, /renderSettings\(\)|schedulePanelRender\(|nativeFetch\(|enqueueRefresh\(|fetchSnapshot\(|runCli\(|setTimeout\(|setInterval\(/);
 assert.match(settingsRuntime, /Keep Local Bridge config inputs untouched so typed-but-unsaved values survive/);
 assert.match(settingsRuntime, /const diagnosticsCurrent = currentAdvanced\[1\]\?\.querySelector\('\.advanced-body'\)/);
+assert.equal((settingsRuntime.match(/bindDiagnosticsWorkspaceControls\(\);/g) || []).length, 1, 'native bindSettings must invoke Diagnostics controls exactly once');
+assert.match(workspace, /function bindDiagnosticsWorkspaceControls\(\)/, 'module 62 must expose the normal Diagnostics controls binder');
+assert.doesNotMatch(workspace, /diagnosticsWorkspaceLegacyBindSettings|bindSettings\s*=\s*function/, 'P36 must not restore the legacy bindSettings wrapper');
 assert.match(diagnostics, /interaction quiet 700ms · defer 750ms/);
 
 const basicFunction = workspace.match(/function diagnosticsWorkspaceBasicModel\(\) \{([\s\S]*?)\n  \}\n\n  function diagnosticsWorkspaceBasicText/);
@@ -60,12 +63,9 @@ function buildHarness() {
     '#diagnostics-mode-detailed':{onclick:null},
   };
   let persistCalls = 0;
-  let legacyBinds = 0;
   const context = {Promise, console:{log() {}}};
   const wrapper = `(function(){\n` +
     `const state = __state;\n` +
-    `let settingsHtml = () => '';\n` +
-    `let bindSettings = () => { __legacyBinds(); };\n` +
     `const renderSettingsPartial = () => { __renders.push(state.diagnosticsMode); };\n` +
     `const runtimeDisposed = false;\n` +
     `const dropStaleAsync = () => undefined;\n` +
@@ -74,12 +74,11 @@ function buildHarness() {
     `const store = {setItem:(key,payload)=>__persist(key,payload)};\n` +
     `const document = {querySelector:(selector)=>__buttons[selector] || null};\n` +
     workspace +
-    `\nbindSettings();\nreturn {buttons:__buttons,state,powerRuntime};\n})()`;
+    `\nbindDiagnosticsWorkspaceControls();\nreturn {buttons:__buttons,state,powerRuntime};\n})()`;
   Object.assign(context, {
     __state:state,
     __renders:renders,
     __buttons:buttons,
-    __legacyBinds:() => { legacyBinds += 1; },
     __persist:(key, payload) => {
       assert.equal(key, 'local-usage-dashboard-v3');
       persistCalls += 1;
@@ -90,7 +89,7 @@ function buildHarness() {
     },
   });
   const api = vm.runInNewContext(wrapper, context);
-  return {api,state,renders,persisted,gates,buttons,get persistCalls(){return persistCalls;},get legacyBinds(){return legacyBinds;}};
+  return {api,state,renders,persisted,gates,buttons,get persistCalls(){return persistCalls;}};
 }
 
 async function settleUntil(predicate, label) {
@@ -103,7 +102,6 @@ async function settleUntil(predicate, label) {
 
 (async () => {
   const one = buildHarness();
-  assert.equal(one.legacyBinds, 1, 'workspace binder must preserve exactly one legacy Settings bind');
   one.buttons['#diagnostics-mode-basic'].onclick();
   assert.deepEqual(one.renders, [], 'same-mode click must remain a no-op');
   assert.equal(one.persistCalls, 0);
@@ -159,7 +157,7 @@ async function settleUntil(predicate, label) {
   await settleUntil(() => failure.persisted.length === 1, 'post-failure Basic write resolves');
   assert.equal(failure.persisted.at(-1).diagnosticsMode, 'basic');
 
-  console.log('P36 Diagnostics Instant Mode Switch: OK · module 62 direct owner · immediate partial render · click-time serialized persistence · zero mode-switch network/CLI I/O · Engine byte-identical');
+  console.log('P36 Diagnostics Instant Mode Switch: OK · module 62 direct controls owner · native module-60 bind · immediate partial render · click-time serialized persistence · zero mode-switch network/CLI I/O · Engine byte-identical');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

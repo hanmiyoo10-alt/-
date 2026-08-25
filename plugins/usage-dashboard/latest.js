@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.78
+//@version 3.0.0-alpha.5.79
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.78';
+  const VERSION = '3.0.0-alpha.5.79';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -3183,7 +3183,7 @@ function todayOverviewMetrics(d) {
         <div class="settings-section-title"><b>Lifecycle & Recovery</b><span>연결 · 일시정지 · 복구 · 위젯 위치</span></div>
         ${bridgeControlsHtml()}
       </div></details>
-      <details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>요약 · 전체 진단</span></summary><div class="advanced-body"><div class="minis diag-summary"><div class="mini"><span>Runtime</span><b>${esc(performanceRuntime.runtimeState || '—')}</b></div><div class="mini"><span>Bridge</span><b>${bridgeDiag.version ? `v${esc(bridgeDiag.version)}` : '—'}</b></div><div class="mini"><span>Manager</span><b>${productRuntime.managerVersion ? `v${esc(productRuntime.managerVersion)}` : '—'}</b></div><div class="mini"><span>Lifecycle</span><b>${esc(String(lifecycleMode || 'off').toUpperCase())}</b></div><div class="mini"><span>Errors</span><b>${Number(localRuntimeErrors.count || 0)}</b></div><div class="mini"><span>Last Sync</span><b>${state.lastSyncAt ? age(state.lastSyncAt) : '—'}</b></div></div><div class="minis"><div class="mini"><span>Protocol</span><b>${num(d.protocolVersion)?`v${d.protocolVersion}`:'—'}</b></div><div class="mini"><span>Health</span><b>${esc(h.status || '—')}</b></div><div class="mini"><span>원인</span><b>${esc(state.lastRefreshReason || '—')}</b></div><div class="mini"><span>성공</span><b>${Number(state.refreshCount||0)}회</b></div></div><p>Updater · GitHub HTTPS · ${VERSION}</p><p>Bridge Stability · ${bridgeDiag.version?`v${esc(bridgeDiag.version)}`:'—'} · required ≥${esc(REQUIRED_BRIDGE_VERSION)} · compatible ${bridgeDiag.compatible===null?'unknown':bridgeDiag.compatible?'yes':'no'} · modules ${bridgeDiag.moduleCount??'—'} · stale ${bridgeDiag.staleModules??'—'} · errors ${bridgeDiag.errorModules??'—'} · partial ${bridgeDiag.partialModules??'—'}</p><p>Bridge Modules · freshness ${esc(bridgeModuleFreshnessText(bridgeDiag.moduleDetails))} · duration ${esc(bridgeModuleDurationText(bridgeDiag.moduleDetails))}</p><p>Bridge Runtime · cache ${bridgeDiag.cacheHitRate===null?'—':bridgeDiag.cacheHitRate.toFixed(0)+'%'} · entries ${bridgeDiag.cacheEntries??'—'} · in-flight ${bridgeDiag.inFlight??'—'} · stale fallback ${bridgeDiag.staleFallbacks??'—'} · CLI ${bridgeDiag.cliActive??'—'}/${bridgeDiag.cliQueued??'—'} · circuit ${bridgeDiag.openCircuits??'—'} open / ${bridgeDiag.circuitRecoveries??'—'} recoveries</p><p>Runtime State · ${esc(performanceRuntime.runtimeState)} · transitions ${Number(performanceRuntime.runtimeTransitions||0)} · reason ${esc(state.runtimeStatus?.reason||'—')} · healthy ${performanceRuntime.lastHealthySyncAt?age(performanceRuntime.lastHealthySyncAt):'—'} · degraded ${performanceRuntime.degradedSince?age(performanceRuntime.degradedSince):'none'}</p><p>Performance Guard · ${state.performanceGuard===false?'off':performanceRuntime.mode} · 실효 갱신 ${effectiveRefreshMs()?Math.round(effectiveRefreshMs()/1000)+'초':'수동'} · ×${Number(performanceRuntime.adaptiveMultiplier||1)} · timer-only</p><p>UI Stall Probe · ${performanceRuntime.uiStallProbeActive?'active':'paused'} · ≥50ms ${Number(performanceRuntime.uiStallCount50||0)}회 · ≥100ms ${Number(performanceRuntime.uiStallCount100||0)}회 · ≥200ms ${Number(performanceRuntime.uiStallCount200||0)}회 · max ${roundPerfMs(performanceRuntime.uiStallMaxMs)||0}ms</p><p>Stall / Render · coincidence ${performanceRuntime.lastUiStallRenderOverlap?'yes':'no'}${performanceRuntime.lastUiStallRenderOverlap?` · ${esc(performanceRuntime.lastUiStallRenderReason||'unknown')} · ${num(performanceRuntime.lastUiStallRenderMs)?roundPerfMs(performanceRuntime.lastUiStallRenderMs)+'ms':'—'}`:''} · refresh overlap ${performanceRuntime.lastUiStallRefreshOverlap?'yes':'no'}</p><p>Resume Diagnostics · ${Number(performanceRuntime.resumeEvents||0)}회 · ${performanceRuntime.lastResumeReason||'대기'} · main-thread ${num(performanceRuntime.lastResumeMainThreadLagMs)?roundPerfMs(performanceRuntime.lastResumeMainThreadLagMs)+'ms':'—'} · Long Task ${performanceRuntime.longTaskSupported?(Number(performanceRuntime.resumeLongTaskCount||0)+'회'):'미지원'}</p><p>Resume Input · first ${num(performanceRuntime.lastResumeFirstInputAfterMs)?roundPerfMs(performanceRuntime.lastResumeFirstInputAfterMs)+'ms':'—'} · event delay ${num(performanceRuntime.lastResumeInputDelayMs)?roundPerfMs(performanceRuntime.lastResumeInputDelayMs)+'ms':'—'} · frame ${num(performanceRuntime.lastResumeFrameDelayMs)?roundPerfMs(performanceRuntime.lastResumeFrameDelayMs)+'ms':'—'} · refresh overlap ${performanceRuntime.lastResumeInputDuringRefresh?'yes':'no'}</p><p>Resume Refresh · started ${num(performanceRuntime.lastResumeRefreshStartedAfterMs)?roundPerfMs(performanceRuntime.lastResumeRefreshStartedAfterMs)+'ms after':'—'} · duration ${num(performanceRuntime.lastResumeRefreshMs)?roundPerfMs(performanceRuntime.lastResumeRefreshMs)+'ms':'—'} · render ${num(performanceRuntime.lastResumeRenderMs)?roundPerfMs(performanceRuntime.lastResumeRenderMs)+'ms':'—'} · active at entry ${performanceRuntime.lastResumeHadRefreshAtEntry?'yes':'no'}</p><p>Resume Route · requested ${esc(performanceRuntime.lastResumeRequestedReason||'—')} · actual ${esc(performanceRuntime.lastResumeActualReason||'—')} · merged ${performanceRuntime.lastResumeRefreshWasCoalesced?'yes':'no'}${performanceRuntime.lastResumeRefreshWasCoalesced?` · into ${esc(performanceRuntime.lastResumeCoalescedIntoReason||'unknown')}`:''}</p><p>Resume Grace · ${performanceRuntime.resumePending?'pending':'idle'} · delay ${num(performanceRuntime.lastResumeDelayMs)?Number(performanceRuntime.lastResumeDelayMs)+'ms':'—'} · deferred ${Number(performanceRuntime.resumeDeferred||0)}회 · coalesced ${Number(performanceRuntime.resumeCoalesced||0)}회</p><p>Scheduler · ${refreshSchedulerState.pending?'pending':(refreshSchedulerState.running?'running':'idle')} · queued ${Number(performanceRuntime.schedulerQueued||0)} · merged ${Number(performanceRuntime.schedulerMerged||0)} · executed ${Number(performanceRuntime.schedulerExecuted||0)} · interaction defer ${Number(performanceRuntime.schedulerDeferredForInteraction||0)}</p><p>Render · widget ${num(performanceRuntime.lastRenderMs)?roundPerfMs(performanceRuntime.lastRenderMs)+'ms':'—'} · panel ${num(performanceRuntime.lastPanelRenderMs)?roundPerfMs(performanceRuntime.lastPanelRenderMs)+'ms':'—'} · spike ≥${RENDER_SPIKE_THRESHOLD_MS}ms ${Number(performanceRuntime.renderSpikeCount||0)}회</p><p>Panel Render · ${panelRenderTimer || panelIdleHandle !== null?'pending':'idle'} · coalesced ${Number(performanceRuntime.panelRenderCoalesced||0)}회 · interaction defer 750ms</p><div class="actions"><button id="copy-diag">진단 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>
+      ${diagnosticsWorkspacePanelHtml()}
     </main></div>`;
   }
 
@@ -3613,6 +3613,7 @@ function todayOverviewMetrics(d) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 0);
     };
+    bindDiagnosticsWorkspaceControls();
   }
 
   async function openSettings() {
@@ -3627,8 +3628,6 @@ function todayOverviewMetrics(d) {
     await renderWidget('panel-open-settled');
   }
 
-  const diagnosticsWorkspaceLegacySettingsHtml = settingsHtml;
-  const diagnosticsWorkspaceLegacyBindSettings = bindSettings;
   const DIAGNOSTICS_WORKSPACE_SECTIONS = Object.freeze([
     {key:'runtime',title:'Runtime & Update'},
     {key:'bridge',title:'Bridge & Managed CLI'},
@@ -3908,15 +3907,8 @@ function todayOverviewMetrics(d) {
     return `<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>Basic · Detailed · Full Copy</span></summary><div class="advanced-body"><style>.diag-workspace-capture{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:0 0 8px;color:var(--m);font-size:9px}.diag-workspace-capture b{color:var(--t);font-size:10px}.diag-workspace-tabs{display:flex;gap:6px;margin:2px 0 10px}.diag-workspace-tabs button{flex:1}.diag-workspace-tabs button.active{background:var(--g);border-color:var(--g);color:#15170f}.diag-workspace-basic{grid-template-columns:repeat(5,minmax(0,1fr))}.diag-workspace-basic .mini small{display:block;color:var(--m);font-size:9px;margin-top:4px;white-space:normal}.diag-workspace-issues{border:1px solid var(--e);border-radius:9px;padding:9px;margin:8px 0}.diag-workspace-issues>b{color:var(--e);font-size:10px}.diag-workspace-issues p{margin:4px 0 0}.diag-workspace-section{border:1px solid var(--l);border-radius:9px;margin-top:7px;overflow:hidden}.diag-workspace-section>summary{display:flex;justify-content:space-between;gap:8px;padding:9px;cursor:pointer;list-style:none}.diag-workspace-section>summary::-webkit-details-marker{display:none}.diag-workspace-section>summary span{color:var(--m);font-size:9px}.diag-workspace-section[open]>summary{border-bottom:1px solid var(--l)}.diag-workspace-lines{padding:5px 9px}.diag-workspace-lines p{margin:5px 0;font-size:10px;overflow-wrap:anywhere}@media(max-width:680px){.diag-workspace-basic{grid-template-columns:1fr 1fr}.diag-workspace-basic .mini:last-child{grid-column:1/-1}}</style><div class="diag-workspace-tabs" role="group" aria-label="Diagnostics view"><button id="diagnostics-mode-basic" class="${mode === 'basic' ? 'active' : ''}" aria-pressed="${mode === 'basic' ? 'true' : 'false'}">Basic</button><button id="diagnostics-mode-detailed" class="${mode === 'detailed' ? 'active' : ''}" aria-pressed="${mode === 'detailed' ? 'true' : 'false'}">Detailed</button></div>${body}<div class="actions"><button id="copy-diag-summary">요약 복사</button><button id="copy-diag">전체 Diagnostics 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>`;
   }
 
-  settingsHtml = function diagnosticsWorkspaceSettingsHtml() {
-    const legacyHtml = diagnosticsWorkspaceLegacySettingsHtml();
-    const diagnosticsPanel = /<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics<\/b><span>요약 · 전체 진단<\/span><\/summary><div class="advanced-body">[\s\S]*?<\/div><\/details>/;
-    if (!diagnosticsPanel.test(legacyHtml)) return legacyHtml;
-    return legacyHtml.replace(diagnosticsPanel, diagnosticsWorkspacePanelHtml());
-  };
 
-  bindSettings = function diagnosticsWorkspaceBindSettings() {
-    diagnosticsWorkspaceLegacyBindSettings();
+  function bindDiagnosticsWorkspaceControls() {
     const q = selector => document.querySelector(selector);
     if (q('#copy-diag-summary')) q('#copy-diag-summary').onclick = async e => {
       let copied = false;
@@ -3932,7 +3924,7 @@ function todayOverviewMetrics(d) {
     const detailed = q('#diagnostics-mode-detailed');
     if (basic) basic.onclick = () => setDiagnosticsModeInstant('basic');
     if (detailed) detailed.onclick = () => setDiagnosticsModeInstant('detailed');
-  };
+  }
 
   function widgetHtml() {
     const d=state.data||{}, m=d.monthly, w=d.weekly, c=d.credits, a=d.activity, detailed=state.widgetMode==='detailed';

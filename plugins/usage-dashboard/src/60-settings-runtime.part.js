@@ -383,6 +383,7 @@
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 0);
     };
+    bindDiagnosticsWorkspaceControls();
   }
 
   async function openSettings() {

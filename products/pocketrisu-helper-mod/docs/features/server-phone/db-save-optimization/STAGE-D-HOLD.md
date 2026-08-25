@@ -1,39 +1,52 @@
-# Stage D/E hold — plugin storage architecture change
+# Stage D/E outcome — plugin storage architecture superseded
 
 Feature-ID: `db-save-optimization`
 Date: `2026-08-25`
-Status: `HOLD_ARCHITECTURE`
+Status: `CLOSED_SUPERSEDED_ARCHITECTURE`
 
 ## Trigger
 Official upstream Stage D PR: `PocketRisu/PocketRisu#73`.
 
 Maintainer review found no correctness defect in the implementation:
-- incremental hash matched the real `calculateHash` bit-for-bit across integer-like keys, `__proto__`, move in/out, root operations and plugin storage type transitions;
+- incremental hash matched the real `calculateHash` bit-for-bit across integer-like keys, `__proto__`, move in/out, root operations, plugin storage type transitions and delete/re-add cases;
 - selective clone behavior was safe: copy deep-cloned, move cloned the `from` child, and only untouched siblings preserved identity;
-- review suite: 19/19 passed.
+- review suite passed 19/19 before the architecture decision.
 
-The merge was deferred for architectural direction, not code quality.
+The final closure was architectural, not a code or CI failure.
 
-## Why Stage D/E are on hold
-Upstream is moving `pluginCustomStorage` out of `database.bin` and `/api/patch` toward server-side per-key storage with on-demand browser reads. The motivating user failure is browser OOM from keeping large plugin data in multiple browser-side copies, not primarily server patch latency.
+## Final upstream outcome
+On 2026-08-25 the maintainer closed #73 without merging after the plugin-storage lazy migration landed in `develop` as `f0d4eee3`.
 
-If that migration lands, `pluginCustomStorage` becomes effectively empty on the database patch path and the direct-child/depth-3 optimizations in Stage D/E lose their target hot path.
+The new architecture removes the hot path Stage D/E targeted:
+- `pluginCustomStorage` values no longer live in `database.bin`;
+- plugin values are stored per key in server KV under `plugin-storage/<key>`;
+- the browser-side DB keeps `pluginCustomStorage` empty;
+- plugin-storage patch operations are reflected to the per-key KV path rather than forcing whole plugin-storage hash/clone work in the old database patch representation.
 
-Related upstream direction: `PocketRisu/PocketRisu#74`.
+Therefore the direct-child and depth-3 optimizations are now preserved only as validated fallback designs. Their target execution path no longer exists in current upstream.
 
-## Current action
-- Do not add more Stage D/E code while the upstream migration direction is active.
-- Preserve official PR #73 and local drafts as validated fallback designs.
-- Local draft `hanmiyoo10-alt/PocketRisu#7` is marked HOLD in its PR body.
-- Local draft `hanmiyoo10-alt/PocketRisu#8` is marked HOLD in its PR body and must not be revived independently of Stage D.
-- General Stage B/C work remains valid history: upstream #68/#69 were already merged.
-- Stage A empty-patch fast path was adopted upstream; isolated opaque ETag was superseded by broader revision-model work.
+## Maintainer final notes
+The closing comment explicitly reiterated that correctness had been verified and recorded three historical improvement points:
+1. the old hot path still had O(total plugin keys) work from shallow storage copy, `new Map(childHashes)`, and per-key key-hash composition;
+2. `collectPluginStorageChildKeys` was duplicated across two `.cjs` helpers and should have been centralized or parity-tested;
+3. the submitted tests were weighted toward happy paths, while the maintainer's adversarial parity cases covered the important boundaries.
 
-## Revisit checklist if the plugin-storage migration is abandoned
-1. Make the Stage D direct-child hash hot path O(touched keys), not O(total plugin keys): avoid repeated `{...storage}`, full `new Map(childHashes)`, and per-key `calculateHash(key)` composition by caching each child contribution (`imul(hash(key), 31) + childHash`) together with a running total.
-2. Remove duplicated `collectPluginStorageChildKeys` implementations. Export one canonical parser/helper and consume it from both hash-cache and selective-clone code.
-3. Re-run the maintainer adversarial cases after rebasing on current `develop`: integer-like keys, `__proto__`, move in/out, root operations, storage type transitions, copy/move clone safety and failed-patch atomicity.
-4. Re-benchmark on the then-current architecture before arguing for merge; historical Stage D/E latency wins are not sufficient if the hot path has moved.
+The maintainer also stated that upstream #68 and #69 remain accepted and are going into v1.11.0.
 
-## Automation note
-The connected GitHub integration can read the official upstream PR but cannot edit its body (`403 Resource not accessible by integration`). Local fork PR metadata and this helper repository can be maintained automatically. Do not treat the upstream write failure as a code or CI failure.
+## Local draft disposition
+- `hanmiyoo10-alt/PocketRisu#7`: keep as an open draft/historical fallback, not an active merge candidate.
+- `hanmiyoo10-alt/PocketRisu#8`: same; do not promote independently.
+- Do not add more code to Stage D/E unless upstream architecture later recreates a comparable large in-DB plugin storage hot path.
+
+## If a future architecture revives this path
+1. Re-inspect current upstream first; do not resurrect old code blindly.
+2. Make the direct-child hash update O(touched keys), including cached key contributions/running totals rather than rewalking all keys.
+3. Centralize JSON Pointer child-key collection in one canonical helper/export.
+4. Add adversarial parity tests for integer-like keys, `__proto__`, move in/out, root ops, storage type transitions, delete/re-add, copy/move clone safety, and failed-patch atomicity.
+5. Re-benchmark before proposing a new PR because the historical performance evidence applies to the retired architecture only.
+
+## Surviving value from the series
+- Stage B / upstream #68: merged compositional DB hash cache.
+- Stage C / upstream #69: merged selective top-level clone.
+- Stage A empty-patch fast path: adopted via upstream follow-up `e3a63daa` while the isolated opaque ETag portion was superseded.
+- Stage D/E: correctness-validated engineering record, superseded by the per-key plugin storage redesign rather than rejected for defects.

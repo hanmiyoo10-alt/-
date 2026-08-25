@@ -2,6 +2,9 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {execFileSync} = require('node:child_process');
 const rr = require('../tools/release_request_e9.cjs');
 const readiness = require('../tools/source_readiness_e9.cjs');
 const mergeGuard = require('../tools/merge_guard_e11.cjs');
@@ -61,12 +64,86 @@ assert.deepEqual(protectedResult.protectedPaths,[
 assert.equal(mergeGuard.isProtected('.github/plugin-control-plane/canonical-main/ops-controller.cjs'),true);
 assert.equal(mergeGuard.isProtected('docs/USAGE_DASHBOARD_GUIDELINES.md'),true);
 assert.equal(mergeGuard.isProtected('docs/SIMCORE_GEMINI_CACHE_IDEA.md'),false);
+
+function fixtureGit(cwd,args,input) {
+  return execFileSync('git',args,{cwd,encoding:'utf8',input}).trim();
+}
+
+const restageDir = fs.mkdtempSync(path.join(os.tmpdir(),'ud-e11-restage-'));
+try {
+  fixtureGit(restageDir,['init','-q']);
+  fixtureGit(restageDir,['config','user.email','usage-dashboard-e11@example.invalid']);
+  fixtureGit(restageDir,['config','user.name','usage-dashboard-e11-fixture']);
+  fs.writeFileSync(path.join(restageDir,'fixture.txt'),'base\n');
+  fixtureGit(restageDir,['add','fixture.txt']);
+  fixtureGit(restageDir,['commit','-q','-m','fixture base']);
+  const frozenMainBase = fixtureGit(restageDir,['rev-parse','HEAD']);
+
+  fs.writeFileSync(path.join(restageDir,'fixture.txt'),'candidate-one\n');
+  fixtureGit(restageDir,['add','fixture.txt']);
+  fixtureGit(restageDir,['commit','-q','-m',`materialize: Usage Dashboard ${release.productVersion} from source ${'1'.repeat(40)}`]);
+  const firstCandidate = fixtureGit(restageDir,['rev-parse','HEAD']);
+
+  fs.writeFileSync(path.join(restageDir,'fixture.txt'),'candidate-two\n');
+  fixtureGit(restageDir,['add','fixture.txt']);
+  fixtureGit(restageDir,['commit','-q','-m',`materialize: Usage Dashboard ${release.productVersion} from source ${'2'.repeat(40)}`]);
+  const repeatedCandidate = fixtureGit(restageDir,['rev-parse','HEAD']);
+
+  assert.equal(mergeGuard.candidateParent(repeatedCandidate,{cwd:restageDir}),firstCandidate,'E11 direct parent records the prior deterministic candidate after restage');
+  assert.equal(mergeGuard.materializationIdentity(repeatedCandidate,{cwd:restageDir}).version,release.productVersion);
+  assert.equal(mergeGuard.materializationIdentity(repeatedCandidate,{cwd:restageDir}).frozenMainSha,null,'legacy deterministic candidates have no explicit frozen-main trailer');
+  assert.equal(mergeGuard.candidateBase(repeatedCandidate,{cwd:restageDir}),frozenMainBase,'E11 legacy repeated materialization must resolve the original frozen main base');
+  const repeatedResult = mergeGuard.classify(repeatedCandidate,frozenMainBase,{cwd:restageDir});
+  assert.equal(repeatedResult.candidateParentSha,firstCandidate);
+  assert.equal(repeatedResult.candidateBaseSha,frozenMainBase);
+  assert.equal(repeatedResult.candidateBaseSource,'ancestry-compatibility-fallback');
+  assert.equal(repeatedResult.verdict,'MERGE_READY_NO_DRIFT','E11 legacy repeated materialization must not classify candidate payload as main drift');
+
+  fixtureGit(restageDir,['checkout','-q',frozenMainBase]);
+  const protectedFixture = path.join(restageDir,'plugins/usage-dashboard/runtime/frozen-main-fixture.txt');
+  fs.mkdirSync(path.dirname(protectedFixture),{recursive:true});
+  fs.writeFileSync(protectedFixture,'protected main refresh\n');
+  fixtureGit(restageDir,['add','plugins/usage-dashboard/runtime/frozen-main-fixture.txt']);
+  fixtureGit(restageDir,['commit','-q','-m','fixture protected main refresh']);
+  const refreshedMain = fixtureGit(restageDir,['rev-parse','HEAD']);
+
+  const repeatedTree = fixtureGit(restageDir,['rev-parse',`${repeatedCandidate}^{tree}`]);
+  const refreshedMessage = `materialize: Usage Dashboard ${release.productVersion} from source ${'3'.repeat(40)}\n\nUsage-Dashboard-Frozen-Main: ${refreshedMain}\n`;
+  const refreshedCandidate = fixtureGit(restageDir,['commit-tree',repeatedTree,'-p',repeatedCandidate],refreshedMessage);
+  const refreshedIdentity = mergeGuard.materializationIdentity(refreshedCandidate,{cwd:restageDir});
+  assert.equal(refreshedIdentity.version,release.productVersion);
+  assert.equal(refreshedIdentity.frozenMainSha,refreshedMain,'new deterministic candidates authenticate the exact trusted main used for reconstruction');
+  assert.equal(mergeGuard.candidateParent(refreshedCandidate,{cwd:restageDir}),repeatedCandidate,'refreshed candidate still fast-forwards the deterministic candidate chain');
+  assert.equal(mergeGuard.candidateBase(refreshedCandidate,{cwd:restageDir}),refreshedMain,'explicit frozen-main trailer must override the older ancestry fallback base');
+  const refreshedResult = mergeGuard.classify(refreshedCandidate,refreshedMain,{cwd:restageDir});
+  assert.equal(refreshedResult.candidateBaseSha,refreshedMain);
+  assert.equal(refreshedResult.candidateBaseSource,'explicit-frozen-main-trailer');
+  assert.equal(refreshedResult.verdict,'MERGE_READY_NO_DRIFT','already-absorbed protected drift must not block a refreshed candidate forever');
+
+  const malformedMessage = `materialize: Usage Dashboard ${release.productVersion} from source ${'4'.repeat(40)}\n\nUsage-Dashboard-Frozen-Main: not-a-sha\n`;
+  const malformedCandidate = fixtureGit(restageDir,['commit-tree',repeatedTree,'-p',repeatedCandidate],malformedMessage);
+  assert.throws(() => mergeGuard.candidateBase(malformedCandidate,{cwd:restageDir}),/E11_FROZEN_MAIN_TRAILER_INVALID/,'malformed explicit frozen-main identity must fail closed');
+} finally {
+  fs.rmSync(restageDir,{recursive:true,force:true});
+}
+
 const mergeGuardSource = fs.readFileSync('plugins/usage-dashboard/tools/merge_guard_e11.cjs','utf8');
 for (const token of [
   'MERGE_READY_NO_DRIFT',
   'MERGE_READY_WITH_UNRELATED_MAIN_DRIFT',
   'MERGE_BLOCKED_PROTECTED_MAIN_DRIFT',
+  'candidateBase',
+  'MATERIALIZATION_MESSAGE',
+  'FROZEN_MAIN_TRAILER',
+  'explicit-frozen-main-trailer',
 ]) assert.ok(mergeGuardSource.includes(token),`E11 merge guard missing ${token}`);
+
+const stageWorkflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
+assert.ok(
+  stageWorkflow.includes('Usage-Dashboard-Frozen-Main: %s\\n\' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA"'),
+  'E11 trusted stage must bind the frozen-main trailer format to exact TRUSTED_BASE_SHA'
+);
+assert.ok(stageWorkflow.includes('E7_FROZEN_MAIN_TRAILER_MISMATCH'),'E11 trusted stage must reverify the imported frozen-main identity');
 
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
 for (const token of [
@@ -95,6 +172,8 @@ for (const token of [
   'structured source-readiness failure receipts',
   'E11-B',
   'read-only post-validation main-drift merge guard',
+  'Usage-Dashboard-Frozen-Main',
+  'compatibility fallback',
   'E11-C',
   'NON-AUTHORITATIVE PR LANE',
   'E11-D',
@@ -102,4 +181,4 @@ for (const token of [
   'Issue `#372`',
 ]) assert.ok(runbook.includes(token),`E11 runbook missing ${token}`);
 
-console.log(`usage-dashboard E11 diagnosable merge-readiness contract: OK · ${release.productVersion} · structured readiness + read-only merge guard + explicit PR authority`);
+console.log(`usage-dashboard E11 diagnosable merge-readiness contract: OK · ${release.productVersion} · structured readiness + explicit frozen-main identity with legacy ancestry fallback + read-only merge guard + explicit PR authority`);

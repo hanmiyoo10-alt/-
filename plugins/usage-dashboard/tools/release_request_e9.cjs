@@ -7,7 +7,7 @@ const TITLE_RE = /^\[usage-dashboard-release\] (3\.0\.0-alpha\.5\.\d+)$/;
 const BRANCH_RE = /^release\/usage-dashboard-[A-Za-z0-9._-]+$/;
 const SPEC_RE = /^\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
-const GENERATION_RE = /^(E9|E10|E11|E12)$/;
+const GENERATION_RE = /^(E9|E10|E11|E12|E13)$/;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);

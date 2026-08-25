@@ -23,8 +23,10 @@ const body = [
 ].join('\n');
 const request = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`, body);
 assert.equal(request.releaseGeneration, 'E12');
+const e13Transition = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`, body.replace('release_generation: E12','release_generation: E13'));
+assert.equal(e13Transition.releaseGeneration, 'E13');
 assert.throws(
-  () => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`, body.replace('release_generation: E12','release_generation: E13')),
+  () => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`, body.replace('release_generation: E12','release_generation: E14')),
   /E9_REQUEST_GENERATION_DENIED/
 );
 
@@ -78,7 +80,7 @@ assert.throws(() => receipt.formatMergeGuardReceipt(marker,{
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml','utf8');
 assert.ok(reconciler.includes('Usage Dashboard Exact-Byte Promotion'), 'E12 must retain promotion-complete wake');
-assert.ok(reconciler.includes('Usage Dashboard E9 Exact-SHA Validation'), 'E12 may retain validation workflow_run as a best-effort external-origin fallback');
+assert.ok(!reconciler.includes('Usage Dashboard E9 Exact-SHA Validation'), 'E13-compatible E12 semantics must not depend on the disproven validation workflow_run edge');
 assert.ok(reconciler.includes("E12_GENERATION_ISSUE: '383'"), 'E12 generation issue wiring missing');
 assert.ok(reconciler.includes("GENERATION_PROOF_MARKER='E12_REAL_RELEASE_PROOF'"), 'E12 one-shot proof wiring missing');
 assert.ok(reconciler.includes('merge_guard_receipt_e12.cjs --format'), 'E12 reducer must delegate receipt formatting to executable helper');
@@ -88,12 +90,10 @@ assert.ok(!reconciler.includes('github.event.workflow_run.head_sha'), 'E12 wake 
 assert.ok(!reconciler.includes('github.event.workflow_run.head_branch'), 'E12 wake payload must not become branch authority');
 assert.ok(!reconciler.includes('git push'), 'E12 reducer must remain candidate/production ref read-only');
 
-assert.ok(validator.includes('actions: write'), 'E12 validator publish job must be allowed to issue the platform-safe reducer wake');
-assert.ok(validator.includes('actions/workflows/usage-dashboard-e9-release-reconcile.yml/dispatches'), 'E12 validator must explicitly wake the durable reducer after publishing authority');
-assert.ok(validator.includes("jq -n '{ref:\"main\"}' > \"$RUNNER_TEMP/reconcile-dispatch.json\""), 'E12 reducer wake must carry only the trusted main ref and no release authority inputs');
-assert.ok(validator.includes('E12_VALIDATION_WAKE_DISPATCHED:'), 'E12 validator must emit a diagnosable platform-safe wake receipt');
+assert.ok(validator.includes('actions: write'), 'E12 validator publish job must remain allowed to issue the platform-safe reducer wake');
+assert.ok(validator.includes('reducer_wake_e13.sh validation'), 'E12 validation authority must continue to converge via the canonical platform-safe wake');
 const resultPublish = validator.indexOf('$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments');
-const reducerWake = validator.indexOf('$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/usage-dashboard-e9-release-reconcile.yml/dispatches');
+const reducerWake = validator.indexOf('reducer_wake_e13.sh validation');
 assert.ok(resultPublish >= 0 && reducerWake > resultPublish, 'E12 must publish authoritative validation evidence before issuing the authority-free reducer wake');
 assert.equal(validator.includes('reconcile_nonce'), false, 'E12 platform-safe wake must not reintroduce reconcile nonce mutation');
 

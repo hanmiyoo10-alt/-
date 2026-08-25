@@ -352,9 +352,17 @@ jobs:
     needs: [resolve_stage, write_candidate]
     if: ${{ needs.resolve_stage.result == 'success' && needs.write_candidate.result == 'success' }}
     permissions:
+      actions: write
       issues: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout canonical reducer wake helper
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Post authoritative candidate-ready receipt
         shell: bash
         env:
@@ -388,6 +396,14 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/197/comments" \
             --data-binary @"$RUNNER_TEMP/receipt.json" >/dev/null
           echo "E7_CANDIDATE_READY:$PRODUCT_VERSION:$CANDIDATE_BRANCH:$CANDIDATE_SHA"
+
+      - name: Wake durable reducer after candidate publication
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash plugins/usage-dashboard/tools/reducer_wake_e13.sh stage
 
   receipt_failure:
     needs: [resolve_stage, materialize_stage, write_candidate]

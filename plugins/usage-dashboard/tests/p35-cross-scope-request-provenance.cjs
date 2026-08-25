@@ -77,13 +77,14 @@ assert.ok(provenance.includes('modelInference:0'));
 assert.ok(provenance.includes("capturedLogs?.rows) ? capturedLogs.rows.slice(0, 100) : []"), 'raw account-wide rows must stay bounded to 100 before request-id matching');
 assert.ok(provenance.includes("normalizedRows = normalizeCapturedRecentLogs(capturedLogs).slice(0, 100)"), 'normalized account-wide rows must stay bounded to 100');
 
-for (const publicPluginSource of [pluginProvenance, pluginAnalytics, pluginDiagnostics]) {
+for (const publicPluginSource of [ledger, pluginProvenance, pluginAnalytics, pluginDiagnostics]) {
   assert.ok(!/requestProjectId|requestOrganizationId|project_id|organization_id/.test(publicPluginSource), 'raw project/org identity must never enter plugin code');
 }
-assert.ok(pluginProvenance.includes("requestAccountScope:'unknown'" ) || pluginProvenance.includes("return ['devpass','credits','unknown'].includes"));
-assert.ok(pluginProvenance.includes("text === 'explicit-project'"));
-assert.ok(pluginProvenance.includes("text === 'explicit-org-billing'"));
-assert.ok(pluginProvenance.includes("requestAccountScopeValue(row?.requestAccountScope) === key"), 'DevPass/Credits ledger filters must use provenance, not stale scope membership');
+assert.ok(ledger.includes("return ['devpass','credits','unknown'].includes(text) ? text : 'unknown';"), 'module 14 must own normalized request account scope');
+assert.ok(ledger.includes("text === 'explicit-project'"));
+assert.ok(ledger.includes("text === 'explicit-org-billing'"));
+assert.ok(ledger.includes("requestAccountScopeValue(row?.requestAccountScope) === key"), 'DevPass/Credits ledger filters must use provenance, not stale scope membership');
+assert.ok(pluginProvenance.includes('requestServiceTierTextBeforeProvenance'), 'module 15 must retain the service-tier presentation wrapper for 5.80');
 assert.ok(pluginAnalytics.includes('normalizeRequestProvenanceMetadata'));
 assert.ok(pluginDiagnostics.includes('Account request capture: ${diagRequestProvenanceMode} · rows ${diagRequestProvenanceRows} · fallback'));
 assert.ok(pluginDiagnostics.includes('Request account scope fidelity: DevPass'));
@@ -92,8 +93,11 @@ assert.ok(pluginDiagnostics.includes('Scope authority: DevPass project exact · 
 const keyStart = ledger.indexOf('function requestLedgerKey(row)');
 const keyEnd = ledger.indexOf('function collectRecentRequestLedger', keyStart);
 const requestKey = ledger.slice(keyStart, keyEnd);
+assert.ok(requestKey.includes("const requestNumber = String(row?.requestNumber || '').trim();"), 'module 14 must directly normalize exact request identity');
+assert.ok(requestKey.includes('if (requestNumber) return `request:${requestNumber}`;'), 'exact request number must be the direct ledger identity');
 assert.ok(!requestKey.includes('requestAccountScope'));
 assert.ok(!requestKey.includes('requestScopeFidelity'));
+assert.ok(!requestKey.includes('requestScopeConflict'));
 assert.ok(!requestKey.includes('projectId'));
 assert.ok(!requestKey.includes('organizationId'));
 assert.ok(ledger.includes('const current = byKey.get(key) || null;'), 'same request identity must enrich rather than duplicate');
@@ -113,4 +117,4 @@ assert.ok(manager.includes(`const MANAGER_VERSION = '${release.managerVersion}';
 assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`));
 assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${release.engineVersion}';`));
 
-console.log(`usage-dashboard P35 Cross-Scope Request Provenance: OK · ${release.productVersion} keeps project authority first, Credits org+usedMode, UNKNOWN, bounded account capture, and raw-ID privacy`);
+console.log(`usage-dashboard P35 Cross-Scope Request Provenance: OK · ${release.productVersion} keeps project authority first, Credits org+usedMode, UNKNOWN, bounded account capture, direct ledger provenance ownership, and raw-ID privacy`);

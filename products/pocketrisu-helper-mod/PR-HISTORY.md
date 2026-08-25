@@ -18,7 +18,7 @@
 | #67 `perf: skip empty patches and avoid full DB encode for patch ETag` | 2026-08-23 → 2026-08-24 | db-save-optimization Stage A | **PARTIAL ADOPTION / CLOSED** | empty-patch early return은 `e3a63daa`로 채택. opaque revision ETag는 `/api/read`/409의 content-MD5 ETag와 혼용 위험 때문에 보류/상위 revision 모델로 이관. | `docs/features/server-phone/db-save-optimization/UPSTREAM.md` |
 | #68 `perf: cache compositional DB patch hash` | 2026-08-23 → 2026-08-24 | db-save-optimization Stage B | **MERGED** | compositional hash cache가 `7159bf9f`로 develop에 병합. maintainer 독립 검증에서 reference `calculateHash()`와 bit-identical 확인. | `docs/features/server-phone/db-save-optimization/UPSTREAM.md` |
 | #69 `perf: clone only touched DB patch branches` | 2026-08-23 → 2026-08-24 | db-save-optimization Stage C | **MERGED** | selective clone이 `7e0e61af`로 병합. atomicity/copy deep-copy/path+from 보장 검토 완료; follow-up `e3a63daa`에서 root handling/invariant 보강. | `docs/features/server-phone/db-save-optimization/UPSTREAM.md` |
-| #73 `perf(db-save-optimization): optimize plugin storage child patching` | 2026-08-24 → 2026-08-25 | db-save-optimization Stage D | **CLOSED / SUPERSEDED BY ARCHITECTURE** | 코드 정합성은 maintainer 검증에서 재확인됐지만, plugin storage lazy 전환이 `develop`의 `f0d4eee3`로 반영되면서 최적화 대상 경로가 제거됨. `pluginCustomStorage` 값은 `database.bin`에서 빠지고 server KV `plugin-storage/<key>`로 저장되며 클라이언트 DB 값은 비어 있음. 따라서 코드 실패가 아니라 아키텍처 supersede로 미병합 종료. #68/#69 저장 경로 최적화는 v1.11.0에 포함 예정이라고 maintainer가 명시. | `docs/features/server-phone/db-save-optimization/STAGE-D-HOLD.md` |
+| #73 `perf(db-save-optimization): optimize plugin storage child patching` | 2026-08-24 → 2026-08-25 | db-save-optimization Stage D | **CLOSED / SUPERSEDED BY ARCHITECTURE** | 코드 정합성은 maintainer 검증에서 재확인됐지만, plugin storage lazy 전환이 `develop`의 `f0d4eee3`로 반영되면서 최적화 대상 경로가 제거됨. 코드 실패가 아니라 아키텍처 supersede로 미병합 종료. 종료 뒤 작성자는 새 방향을 찾았으며 추후 새 PR로 다시 제안하겠다고 명시했으므로, 후속 PR은 기존 Stage D 재개가 아니라 새 아키텍처 기준의 별도 제안으로 추적한다. | `docs/features/server-phone/db-save-optimization/STAGE-D-HOLD.md` |
 
 ## Personal fork PRs — hanmiyoo10-alt/PocketRisu
 
@@ -33,7 +33,7 @@
 | #7 `perf(db-save-optimization): optimize plugin storage child patching` | 2026-08-23 → 현재 | db-save-optimization Stage D local | **OPEN DRAFT / SUPERSEDED FALLBACK** | official #73의 검증 ancestry. upstream plugin storage lazy 전환 `f0d4eee3`가 실제로 landed해 현재 경로에서는 대상 hot path가 사라짐. 향후 방향이 다시 바뀔 때만 검증된 fallback 설계로 참고. | `docs/features/server-phone/db-save-optimization/STAGE-D-HOLD.md` |
 | #8 `perf(db-save-optimization): optimize deep plugin storage patching` | 2026-08-23 → 현재 | db-save-optimization Stage E local | **OPEN DRAFT / SUPERSEDED FALLBACK** | Stage D 이후 depth-3 fallback 설계. 현재 upstream 구조에서는 plugin storage가 per-key KV로 이동해 대상 경로가 사라졌으므로 활성 merge 후보가 아님. | `docs/features/server-phone/db-save-optimization/STAGE-D-HOLD.md` |
 
-## Current totals (snapshot: 2026-08-25)
+## Current totals (snapshot: 2026-08-26)
 
 - Official upstream PRs found: **7**
   - merged directly: **4** (#60, #61, #68, #69)

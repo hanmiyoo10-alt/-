@@ -1,6 +1,6 @@
 # SimCore Runtime-Idea PREP_NON_RUNTIME Policy
 
-Status: `CANONICAL OPERATIONAL POLICY · RUNTIME CORE REMAINS PARKED · REPO-MEMORY PREPARATION ALLOWED · NO RUNTIME CHANGE`
+Status: `CANONICAL OPERATIONAL POLICY · RUNTIME CORE REMAINS PARKED · REPO-MEMORY PREPARATION ALLOWED · DOC-APPLY SUBCLASSIFICATION ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: allow bounded repository-memory preparation for frozen RUNTIME ideas without starting runtime/plugin implementation or weakening the existing stabilization gate.
 
@@ -9,6 +9,7 @@ Related authority:
 - `docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md`
+- `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md` — canonical R document-only applicability/status queue
 
 ---
 
@@ -35,12 +36,18 @@ RUNTIME idea selected
 → complete full design
 → DESIGN FROZEN
 → runtime implementation PARKED
+→ assign DOC APPLY CLASS
 
-if a separable repo-memory preparation exists:
-→ R_PREP_NON_RUNTIME review
-→ bounded prep transaction
+DOC_APPLICABLE
+→ later separate R_PREP_NON_RUNTIME transaction
+→ bounded prep artifact
 → static/path verification
-→ main documentation / durable-memory sync
+→ main durable-memory sync
+→ DOC_APPLIED
+→ runtime item remains PARKED
+
+DOC_NOT_REQUIRED
+→ no prep implementation
 → runtime item remains PARKED
 ```
 
@@ -78,6 +85,42 @@ explicit cross-reference map
 The artifact may organize already-frozen semantics.
 It may not invent new runtime semantics.
 
+### 2A. DOC APPLY classification
+
+Every R idea now also carries a document-only applicability state under:
+
+```text
+docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md
+```
+
+Frozen vocabulary:
+
+```text
+DOC_APPLICABLE
+DOC_APPLIED
+DOC_NOT_REQUIRED
+DOC_UNASSESSED
+```
+
+Interpretation:
+
+```text
+DOC_APPLICABLE
+= useful separable document-only artifact exists
+
+DOC_APPLIED
+= that artifact was applied under a separate R_PREP transaction
+
+DOC_NOT_REQUIRED
+= frozen design already contains sufficient durable memory
+
+DOC_UNASSESSED
+= design not frozen enough to judge safely
+```
+
+A design being documented does not automatically make it `DOC_APPLICABLE`.
+The test is whether an additional independently useful repository artifact can be applied before runtime work.
+
 ---
 
 ## 3. Hard eligibility gate
@@ -86,6 +129,7 @@ A preparatory slice is eligible only when **all** are true:
 
 ```text
 parent R idea = DESIGN FROZEN
+DOC APPLY CLASS = DOC_APPLICABLE
 plugin bytes = unchanged
 latest.js/install.js = unchanged
 plugin version = unchanged
@@ -180,6 +224,7 @@ Allowed parent status notation:
 
 ```text
 DESIGN FROZEN
+DOC APPLY CLASS = DOC_APPLIED
 R_PREP_NON_RUNTIME = COMPLETE
 RUNTIME IMPLEMENTATION = PARKED FOR STABILIZATION
 ```
@@ -228,7 +273,7 @@ As of 2026-08-26:
 
 ```text
 RUNTIME core: PARKED
-R_PREP_NON_RUNTIME candidate now: NONE REQUIRED
+DOC APPLY CLASS: DOC_NOT_REQUIRED
 ```
 
 Reason: the frozen design already contains the necessary durable-memory contracts; the remaining meaningful work is UI/runtime implementation and verification.
@@ -237,7 +282,7 @@ Reason: the frozen design already contains the necessary durable-memory contract
 
 ```text
 RUNTIME core: PARKED
-R_PREP_NON_RUNTIME candidate now: NONE REQUIRED
+DOC APPLY CLASS: DOC_NOT_REQUIRED
 ```
 
 Reason: the frozen design already records the six-field contract, same-observation rule, stale/current presentation semantics, and verification obligations. Additional repository structure would duplicate the design rather than reduce future implementation risk.
@@ -246,7 +291,7 @@ Reason: the frozen design already records the six-field contract, same-observati
 
 ```text
 RUNTIME core: PARKED
-R_PREP_NON_RUNTIME candidate now: YES
+DOC APPLY CLASS: DOC_APPLICABLE
 candidate: repository evidence-review / classification-handoff template
 ```
 
@@ -258,14 +303,19 @@ The template must remain usable with manually transcribed evidence before S-04 r
 
 ## 9. Active / undesigned R ideas
 
-An R idea still in `ACTIVE / DESIGN IN PROGRESS` is not eligible for prep implementation.
+An R idea still in `ACTIVE / DESIGN IN PROGRESS`, gated, or future-only remains:
+
+```text
+DOC_UNASSESSED
+```
 
 Canonical rule:
 
 ```text
 finish design first
 → DESIGN FROZEN
-→ only then inspect for separable R_PREP_NON_RUNTIME work
+→ assign DOC_APPLICABLE or DOC_NOT_REQUIRED
+→ runtime core PARKED
 ```
 
 This prevents preparatory artifacts from freezing semantics before the parent idea is actually designed.
@@ -278,7 +328,7 @@ S-07 Host Capability Receipt
 S-08 History Frontier Confidence Surface
 ```
 
-Each may be reviewed for prep only after its own design freezes.
+Each receives a document-applicability verdict in the same work item that freezes its design.
 
 ---
 
@@ -295,6 +345,7 @@ no plugin version change
 no executable/tooling/workflow files added
 no runtime-current fact fabricated
 no parent runtime implementation status accidentally promoted
+DOC APPLY state moves only DOC_APPLICABLE → DOC_APPLIED after successful prep
 ```
 
 Real long-chat validation is not required for prep-only repository memory.
@@ -311,7 +362,7 @@ Keep these systems separate.
 NR SAFE_NON_RUNTIME HARVEST
 = implementation of a NON_RUNTIME idea after its NR difficulty-tier close
 
-R_PREP_NON_RUNTIME
+R_PREP_NON_RUNTIME / DOC APPLY
 = ancillary repository-memory preparation for a frozen RUNTIME idea
 ```
 
@@ -327,20 +378,21 @@ If the proposed slice grows into reusable executable tooling, stop and classify/
 RUNTIME CORE
 = STILL PARKED
 
-FROZEN R IDEA
-+ useful separable repo-memory artifact
-+ strict R_PREP_NON_RUNTIME PASS
-→ may prepare now in a separate work item
+DOC APPLY QUEUE
+= frozen R ideas whose DOC APPLY CLASS = DOC_APPLICABLE
 
-NO USEFUL PREP ARTIFACT
-→ do nothing; design doc remains sufficient
+CURRENT DOC APPLY QUEUE
+1. S-04 repository evidence-review / classification-handoff template
 
-EXECUTABLE / RUNTIME / CI / RELEASE EFFECT
-→ NOT R_PREP
-→ PARK OR SEPARATE NR DESIGN
+CURRENT DOC_NOT_REQUIRED
+S-01
+S-02
+
+CURRENT DOC_UNASSESSED
+all other R ideas until their design freezes
 ```
 
-Current first candidate after this policy transaction:
+Current first document-only application after this policy transaction:
 
 ```text
 S-04

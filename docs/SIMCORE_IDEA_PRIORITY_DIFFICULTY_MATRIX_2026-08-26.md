@@ -1,411 +1,386 @@
 # SimCore Idea Priority / Difficulty Matrix — 2026-08-26
 
-Status: `MASTER IDEA PRIORITIZATION · S-09 FROZEN/PARKED · DESIGN-SELECTION ORDER · NO IMPLEMENTATION · NO RUNTIME CHANGE`
+Status: `MASTER IDEA PRIORITIZATION · DESIGN DIFFICULTY + RUNTIME CLASS · TIERED NON-RUNTIME HARVEST AWARE · NO RUNTIME CHANGE`
 
-Purpose: add strategic importance and design difficulty to the size-classified SimCore idea inventory so the current idea/design phase can select high-value, low-difficulty ideas first without ignoring readiness gates.
+Purpose: rank the SimCore idea inventory by strategic importance, design difficulty, readiness gate, and expected implementation runtime class so the design queue and later non-runtime harvest can be reasoned about without conflating these axes.
 
 Related authority:
 - `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
-- `docs/SIMCORE_IDEA_SPACE_CLASSIFICATION_2026-08-26.md`
-- `docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md`
+- `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md`
+- `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 
-This matrix ranks **design selection during the current idea phase**. It does not authorize implementation. Frozen designs remain parked until the later stabilization / implementation phase.
+This matrix ranks **design selection**. `Runtime Class = NON_RUNTIME` does not by itself authorize immediate implementation; closed-tier harvest still requires the stricter `SAFE_NON_RUNTIME` gate.
 
 ---
 
-## 1. Scales
+## 1. Axes
 
 ### Importance
 
 ```text
 5 = VERY HIGH
-    strong leverage on correctness, evidence discipline, everyday debugging, or future stabilization
-
 4 = HIGH
-    clear recurring value or strong support for later implementation/release work
-
 3 = MEDIUM
-    useful improvement, but not central to the present SimCore path
-
 2 = LOW
-    situational value; mainly useful when a particular symptom/evidence appears
-
 1 = VERY LOW
-    speculative convenience with little current leverage
 ```
 
-Importance is **current strategic importance**, not permanent product value. It may be re-scored when new production evidence changes priorities.
+Importance is current strategic value and may be re-scored only when material evidence/ownership/dependency changes.
 
 ### Difficulty
 
 ```text
 1 = VERY EASY
-    one bounded contract/surface; little cross-owner reasoning
-
 2 = EASY
-    narrow design with a few existing facts/contracts to reconcile
-
 3 = MODERATE
-    multiple owners or tooling/evidence surfaces must be reconciled
-
 4 = HARD
-    broad cross-owner, performance, static-analysis, migration, or external-boundary reasoning
-
 5 = VERY HARD
-    foundational build/storage architecture or multi-stage future work
 ```
 
-Difficulty is the difficulty of reaching a **complete frozen design**, not estimated implementation LOC.
+Difficulty means effort to reach a **complete frozen design**, not implementation LOC.
+
+### Runtime Class
+
+Exactly two top-level implementation classes are used:
+
+```text
+RUNTIME
+= intended implementation changes or participates in plugin/runtime behavior,
+  runtime diagnostics/UI/Host observation, prompt/state/persistence behavior,
+  or another execution-path concern that requires versioned runtime treatment
+
+NON_RUNTIME
+= intended implementation lives in repository tooling, static analysis,
+  indexes/catalogs, test/evidence infrastructure, build/release presentation,
+  or other non-plugin execution surfaces
+```
+
+Important:
+
+```text
+NON_RUNTIME
+!= SAFE_NON_RUNTIME_READY
+```
+
+A NON_RUNTIME item may still be ineligible for immediate harvest because it changes release workflow authority, repository writer behavior, CI policy, build topology, or another protected operational system.
+
+The final runtime class may be corrected at design freeze if source inspection proves the candidate's actual implementation boundary differs from the inventory expectation.
 
 ### Design gate
 
 ```text
 NOW
-= enough current truth exists to select and fully freeze the design now
-
 DEPENDENCY
-= another small frozen contract should come first
-
 POST_M2_3
-= actual physical Edit Reconcile / application flow must exist first
-
 POST_M2_4
-= Session/Runtime Mirror/finalization ownership must settle first
-
 EVIDENCE
-= natural production evidence must justify the design
-
 EXTERNAL
-= trustworthy Host/provider receipt or external capability must exist
-
 FUTURE
-= explicitly future/post-M2 experiment
-
 FROZEN
-= design is complete and parked; remove it from the active design queue
+implementation-bound gate
 ```
+
+A closed gate always overrides importance/difficulty.
 
 ---
 
-## 2. Canonical selection rule
+## 2. Canonical selection and harvest rules
 
-Current idea/design work uses this order:
+Design selection:
 
 ```text
-1. DESIGN GATE must be open
-2. higher IMPORTANCE first
-3. lower DIFFICULTY first
-4. when tied, prefer the idea with greater leverage on later designs / repo memory
+1. gate open
+2. higher importance
+3. lower difficulty
+4. higher downstream leverage
 ```
 
-Canonical shorthand:
+Shorthand:
 
 ```text
-HIGH IMPORTANCE + LOW DIFFICULTY + NOW
+HIGH IMPORTANCE + LOW DIFFICULTY + OPEN GATE
 = FIRST
 ```
 
-This is intentionally not a blind arithmetic score. A `5 / 1` idea behind `POST_M2_3` does not leapfrog a `4 / 2` idea that can be completed now.
-
-Every selected idea still follows:
+Selected idea:
 
 ```text
 SELECT
 → COMPLETE FULL DESIGN
 → DESIGN FROZEN
+→ stop that idea's design work
+```
+
+After a currently designable Difficulty tier closes:
+
+```text
+RUNTIME
 → PARKED FOR STABILIZATION
-→ STOP
-```
 
-A frozen item leaves the active queue. It is not repeatedly re-selected merely because its importance remains high.
+NON_RUNTIME
+→ evaluate strict SAFE_NON_RUNTIME gate
+→ eligible only if all harvest-policy restrictions pass
+```
 
 ---
 
-# 3. SMALL ideas
+# 3. Difficulty 1 — VERY EASY
 
-| ID | Idea | Importance | Difficulty | Gate | Current design priority |
-|---|---|---:|---:|---|---|
-| S-01 | MINI_WARNING_WIDGET_V1 | 4 | 2 | NOW | A2 |
-| S-02 | Diagnostic Quick Summary | 5 | 1 | NOW | A1 |
-| S-03 | Diagnostic Copy Profiles | 3 | 2 | NOW | B2 |
-| S-04 | Live Evidence Packet Builder | 5 | 2 | NOW | A1 |
-| S-05 | Reconcile Differential Receipt | 5 | 2 | POST_M2_3 | GATED-HIGH |
-| S-06 | Persistence Footprint Watch | 2 | 2 | EVIDENCE | GATED-LOW |
-| S-07 | Host Capability Receipt | 3 | 2 | NOW | B2 |
-| S-08 | History Frontier Confidence Surface | 2 | 2 | NOW | C |
-| S-09 | Evidence Index Entry Format | 5 | 1 | FROZEN | PARKED |
-| S-10 | Authority Drift Check / Scan | 5 | 2 | NOW | A1 |
-| S-11 | Stale PR Hygiene Classifier | 3 | 2 | NOW | B2 |
-| S-12 | Natural Evidence Corpus Index | 4 | 2 | NOW | A2 |
+| ID | Idea | Importance | Runtime Class | Gate | Design state / priority |
+|---|---|---:|---|---|---|
+| S-02 | Diagnostic Quick Summary | 5 | RUNTIME | FROZEN | PARKED runtime product |
+| S-09 | Evidence Index Entry Format | 5 | NON_RUNTIME | FROZEN | SAFE_NON_RUNTIME_READY after tier close |
 
-### SMALL interpretation
-
-Completed/parked:
+Tier composition:
 
 ```text
-S-09 Evidence Index Entry Format
-5 / 1 / DESIGN FROZEN
-→ docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md
-→ implementation deferred
+RUNTIME     = 1
+NON_RUNTIME = 1
+TOTAL       = 2
 ```
 
-The strongest active current cluster is now:
-
-```text
-A1
-S-02 Diagnostic Quick Summary          5 / 1 / NOW
-S-04 Live Evidence Packet Builder      5 / 2 / NOW
-S-10 Authority Drift Check             5 / 2 / NOW
-```
-
-Then:
-
-```text
-A2
-S-01 MINI_WARNING_WIDGET_V1            4 / 2 / NOW
-S-12 Natural Evidence Corpus Index     4 / 2 / NOW
-```
-
-`S-05 Reconcile Differential Receipt` is strategically very important but must remain parked until post-M2-3 source exists. Its high importance does not override the gate.
+Current tier state: `CLOSED`.
 
 ---
 
-# 4. MEDIUM ideas
+# 4. Difficulty 2 — EASY
 
-| ID | Idea | Importance | Difficulty | Gate | Current design priority |
-|---|---|---:|---:|---|---|
-| M-01 | Turn Transaction / Phase Receipt | 4 | 3 | POST_M2_3 | GATED-HIGH |
-| M-02 | Ownership-aware Diagnostic Attribution | 3 | 3 | POST_M2_3 | GATED-MEDIUM |
-| M-03 | Genuine Edit Rebuild Performance Study | 5 | 4 | POST_M2_3 | GATED-HIGH |
-| M-04 | Store Write Cost / Commit Budget | 3 | 4 | EVIDENCE | GATED-MEDIUM |
-| M-05 | Phase Performance Budget | 3 | 3 | POST_M2_3 | GATED-MEDIUM |
-| M-06 | State Invariant Snapshot | 4 | 4 | POST_M2_4 | GATED-HIGH |
-| M-07 | Commit / Observation Separation Guard | 5 | 4 | POST_M2_4 | GATED-HIGH |
-| M-08 | Snapshot Schema Inventory Generator | 4 | 3 | POST_M2_3 | GATED-HIGH |
-| M-09 | Provider Cache Receipt Integration | 3 | 4 | EXTERNAL | GATED-MEDIUM |
-| M-10 | Live Diagnostic → Fixture Skeleton Generator | 4 | 3 | NOW | B1 |
-| M-11 | Architecture Dependency Snapshot Generator | 5 | 3 | NOW | A3 |
-| M-12 | State Writer Static Audit | 5 | 4 | POST_M2_3 | GATED-HIGH |
-| M-13 | Evidence Index Generator | 4 | 3 | NOW | B1 |
-| M-14 | Release Evidence Packet | 4 | 3 | DEPENDENCY: R2.1 proof | DEPENDENCY |
-| M-15 | Fixture Coverage Matrix by Ownership | 4 | 3 | POST_M2_3 | GATED-HIGH |
-| M-16 | Differential Architecture Fixtures | 5 | 4 | M2 implementation slice | IMPLEMENTATION-BOUND |
-| M-17 | Pure State Seam | 3 | 4 | FUTURE / TD-09 | FUTURE |
+| ID | Idea | Importance | Runtime Class | Gate | Design state / priority |
+|---|---|---:|---|---|---|
+| S-01 | MINI_WARNING_WIDGET_V1 | 4 | RUNTIME | FROZEN | PARKED runtime product |
+| S-03 | Diagnostic Copy Profiles | 3 | RUNTIME | NOW | B2 |
+| S-04 | Live Evidence Packet Builder | 5 | RUNTIME | FROZEN | PARKED runtime diagnostic/clipboard |
+| S-05 | Reconcile Differential Receipt | 5 | RUNTIME | POST_M2_3 | GATED-HIGH |
+| S-06 | Persistence Footprint Watch | 2 | RUNTIME | EVIDENCE | GATED-LOW |
+| S-07 | Host Capability Receipt | 3 | RUNTIME | NOW | B2 |
+| S-08 | History Frontier Confidence Surface | 2 | RUNTIME | NOW | C |
+| S-10 | Authority Drift Check / Scan | 5 | NON_RUNTIME | FROZEN | harvest eligibility after tier close |
+| S-11 | Stale PR Hygiene Classifier | 3 | NON_RUNTIME | NOW | B2 |
+| S-12 | Natural Evidence Corpus Index | 4 | NON_RUNTIME | FROZEN | harvest eligibility after tier close |
 
-### MEDIUM interpretation
+Tier composition:
 
-The strongest medium idea that can actually be frozen now is:
+```text
+RUNTIME     = 7
+NON_RUNTIME = 3
+TOTAL       = 10
+```
+
+Current tier state: `OPEN` because the currently designable pool still contains S-03 / S-07 / S-08 / S-11.
+
+Gated S-05/S-06 do not block the current tier-close cycle.
+
+---
+
+# 5. Difficulty 3 — MODERATE
+
+| ID | Idea | Importance | Runtime Class | Gate | Current design priority |
+|---|---|---:|---|---|---|
+| M-01 | Turn Transaction / Phase Receipt | 4 | RUNTIME | POST_M2_3 | GATED-HIGH |
+| M-02 | Ownership-aware Diagnostic Attribution | 3 | RUNTIME | POST_M2_3 | GATED-MEDIUM |
+| M-05 | Phase Performance Budget | 3 | RUNTIME | POST_M2_3 | GATED-MEDIUM |
+| M-08 | Snapshot Schema Inventory Generator | 4 | NON_RUNTIME | POST_M2_3 | GATED-HIGH |
+| M-10 | Live Diagnostic → Fixture Skeleton Generator | 4 | NON_RUNTIME | NOW | B1 |
+| M-11 | Architecture Dependency Snapshot Generator | 5 | NON_RUNTIME | NOW | A3 |
+| M-13 | Evidence Index Generator | 4 | NON_RUNTIME | NOW | B1 · S-09 dependency satisfied |
+| M-14 | Release Evidence Packet | 4 | NON_RUNTIME | DEPENDENCY: R2.1 proof | DEPENDENCY |
+| M-15 | Fixture Coverage Matrix by Ownership | 4 | NON_RUNTIME | POST_M2_3 | GATED-HIGH |
+
+Tier composition:
+
+```text
+RUNTIME     = 3
+NON_RUNTIME = 6
+TOTAL       = 9
+```
+
+Current designable leaders:
 
 ```text
 M-11 Architecture Dependency Snapshot Generator
-Importance 5
-Difficulty 3
-Gate NOW
+M-10 Live Diagnostic → Fixture Skeleton Generator
+M-13 Evidence Index Generator
 ```
 
-S-09 is now frozen, so the design dependency for `M-13 Evidence Index Generator` is satisfied:
-
-```text
-S-09 FORMAT FROZEN
-→ M-13 DESIGN GATE = NOW
-```
-
-M-13 still does not authorize implementation and remains lower than the current easy/high-importance SMALL queue.
-
-`M-03`, `M-07`, `M-12`, and `M-16` have very high strategic importance, but their gates are intentionally closed today.
+NON_RUNTIME status does not pre-authorize harvest; each frozen item still passes the strict policy independently.
 
 ---
 
-# 5. LARGE ideas
+# 6. Difficulty 4 — HARD
 
-| ID | Idea | Importance | Difficulty | Gate | Current design priority |
-|---|---|---:|---:|---|---|
-| L-01 | Development-source Modular Build | 4 | 5 | FUTURE / POST_M2 | FUTURE |
-| L-02 | Performance-aware SnapshotStore Evolution | 3 | 5 | EVIDENCE / FUTURE | FUTURE |
+| ID | Idea | Importance | Runtime Class | Gate | Current design priority |
+|---|---|---:|---|---|---|
+| M-03 | Genuine Edit Rebuild Performance Study | 5 | RUNTIME | POST_M2_3 | GATED-HIGH |
+| M-04 | Store Write Cost / Commit Budget | 3 | RUNTIME | EVIDENCE | GATED-MEDIUM |
+| M-06 | State Invariant Snapshot | 4 | RUNTIME | POST_M2_4 | GATED-HIGH |
+| M-07 | Commit / Observation Separation Guard | 5 | NON_RUNTIME | POST_M2_4 | GATED-HIGH |
+| M-09 | Provider Cache Receipt Integration | 3 | RUNTIME | EXTERNAL | GATED-MEDIUM |
+| M-12 | State Writer Static Audit | 5 | NON_RUNTIME | POST_M2_3 | GATED-HIGH |
+| M-16 | Differential Architecture Fixtures | 5 | NON_RUNTIME | M2 implementation slice | IMPLEMENTATION-BOUND |
+| M-17 | Pure State Seam | 3 | RUNTIME | FUTURE / TD-09 | FUTURE |
 
-Neither LARGE idea belongs in the current design queue.
+Tier composition:
 
-The classification exists so the ideas are not lost, not so that broad future architecture crowds out smaller high-leverage work.
+```text
+RUNTIME     = 5
+NON_RUNTIME = 3
+TOTAL       = 8
+```
+
+Performance-study/budget candidates are conservatively classed RUNTIME because a useful implementation is expected to participate in runtime measurement/observation unless their later frozen design proves a purely offline boundary.
 
 ---
 
-# 6. Priority bands
+# 7. Difficulty 5 — VERY HARD
 
-Use the following bands for design selection:
+| ID | Idea | Importance | Runtime Class | Gate | Current design priority |
+|---|---|---:|---|---|---|
+| L-01 | Development-source Modular Build | 4 | NON_RUNTIME | FUTURE / POST_M2 | FUTURE |
+| L-02 | Performance-aware SnapshotStore Evolution | 3 | RUNTIME | EVIDENCE / FUTURE | FUTURE |
+
+Tier composition:
 
 ```text
-A1
-= Importance 5 + Difficulty 1–2 + Gate NOW
-= preferred first design pool
-
-A2
-= Importance 4 + Difficulty 1–2 + Gate NOW
-= preferred second pool
-
-A3
-= Importance 5 + Difficulty 3 + Gate NOW
-= high-value medium work after easy wins
-
-B1/B2
-= useful NOW candidates with lower importance or moderate difficulty
-
-GATED-HIGH
-= strategically important, but selecting it now would violate design-freeze rigor
-
-DEPENDENCY
-= another frozen design/evidence milestone must come first
-
-FROZEN/PARKED
-= design complete; remove from active idea queue until stabilization/implementation selection
-
-EVIDENCE / EXTERNAL / FUTURE
-= do not promote without trigger
+RUNTIME     = 1
+NON_RUNTIME = 1
+TOTAL       = 2
 ```
+
+`L-01` is the canonical example that `NON_RUNTIME` does not mean small or safe to harvest: changing development/build topology is a major protected repository/build-system work item.
 
 ---
 
-# 7. Recommended current design queue
+# 8. Runtime-class master count
 
-Default queue under the user's preferred rule `easy + important first`, after S-09 design freeze:
-
-```text
-1. S-02 Diagnostic Quick Summary
-   Importance 5 / Difficulty 1 / NOW
-
-2. S-10 Authority Drift Check
-   Importance 5 / Difficulty 2 / NOW
-
-3. S-04 Live Evidence Packet Builder
-   Importance 5 / Difficulty 2 / NOW
-
-4. S-12 Natural Evidence Corpus Index
-   Importance 4 / Difficulty 2 / NOW
-
-5. S-01 MINI_WARNING_WIDGET_V1
-   Importance 4 / Difficulty 2 / NOW
-
-6. M-11 Architecture Dependency Snapshot Generator
-   Importance 5 / Difficulty 3 / NOW
-
-7. M-10 Live Diagnostic → Fixture Skeleton Generator
-   Importance 4 / Difficulty 3 / NOW
-
-8. M-13 Evidence Index Generator
-   Importance 4 / Difficulty 3 / NOW
-   prerequisite S-09 = FROZEN
-
-9. S-03 Diagnostic Copy Profiles
-   Importance 3 / Difficulty 2 / NOW
-
-10. S-11 Stale PR Hygiene Classifier
-    Importance 3 / Difficulty 2 / NOW
-
-11. S-07 Host Capability Receipt
-    Importance 3 / Difficulty 2 / NOW
-
-12. S-08 History Frontier Confidence Surface
-    Importance 2 / Difficulty 2 / NOW
-```
-
-### S-09 completion effect
-
-S-09 was selected first and reached:
+Across all 31 size-classified ideas:
 
 ```text
-DESIGN FROZEN
-PARKED FOR STABILIZATION
-IMPLEMENTATION = NONE
+RUNTIME     = 17
+NON_RUNTIME = 14
+----------------
+TOTAL       = 31
 ```
 
-Its frozen contract now removes the design dependency that previously blocked M-13. This is exactly the intended use of the queue: finish one design completely, park it, then allow downstream design gates to open without leaking into implementation.
+By difficulty:
+
+```text
+Difficulty 1: RUNTIME 1 / NON_RUNTIME 1
+Difficulty 2: RUNTIME 7 / NON_RUNTIME 3
+Difficulty 3: RUNTIME 3 / NON_RUNTIME 6
+Difficulty 4: RUNTIME 5 / NON_RUNTIME 3
+Difficulty 5: RUNTIME 1 / NON_RUNTIME 1
+```
+
+This distribution is expected: easy product/diagnostic ideas tend to be runtime surfaces, while the moderate tier contains many developer/evidence/static-analysis tools.
 
 ---
 
-# 8. Important distinction: design priority vs later implementation priority
+# 9. Runtime-class interpretation by family
 
-The scores above optimize the **current design-completion phase**.
-
-They must not be copied blindly into the future implementation phase.
-
-When stabilization/implementation begins:
+Typical RUNTIME families:
 
 ```text
-re-read production evidence
-→ re-score importance if needed
-→ re-score implementation difficulty
-→ respect dependency/live-release gates
-→ select one frozen design
-→ implement through normal SimCore workflow
+Product UX rendered by SimCore runtime
+Diagnostic/runtime observation receipts
+Host capability/history surfaces
+Runtime performance instrumentation/budgets
+State/persistence runtime evolution
+Provider receipt runtime integration
+future semantic/runtime seams
 ```
 
-Example:
+Typical NON_RUNTIME families:
 
 ```text
-S-02 may be a 5/1 design today,
-but a correctness regression discovered during stabilization could make S-05 or M-07 the higher implementation priority later.
+repo evidence/index materialization
+repo safety/static analysis
+fixture/test generation infrastructure
+architecture dependency/static writer audits
+coverage matrices
+release evidence presentation
+build/source topology work
 ```
 
-Therefore:
+Again:
 
 ```text
-CURRENT MATRIX
-= DESIGN SELECTION AUTHORITY
+NON_RUNTIME classification
+→ only says plugin/runtime execution is not the intended implementation surface
 
-FUTURE IMPLEMENTATION ORDER
-= RE-EVALUATE AT STABILIZATION START
+SAFE_NON_RUNTIME eligibility
+→ separately proves the work can be applied immediately under the closed-tier harvest policy
 ```
 
 ---
 
-# 9. Re-scoring rule
+# 10. Current practical consequence
 
-Update a score only when one of these changes materially:
+Difficulty 1 is already closed:
 
 ```text
-new real-long-chat evidence
-new repeated user/operator pain
-M2-3 or M2-4 changes the physical ownership surface
-external provider/Host evidence becomes available
-another frozen idea removes a dependency
-an idea is shown to duplicate an existing authority
+S-09 NON_RUNTIME
+→ SAFE_NON_RUNTIME_READY
+
+S-02 RUNTIME
+→ PARKED FOR STABILIZATION
 ```
 
-Do not churn scores merely because time passed.
+Difficulty 2 remains open. When its currently designable pool closes, the frozen NON_RUNTIME entries are reviewed for harvest individually:
+
+```text
+S-10 Authority Drift Check
+S-11 Stale PR Hygiene Classifier
+S-12 Natural Evidence Corpus Index
+```
+
+Runtime entries remain parked regardless of tier close.
 
 ---
 
-# 10. Verdict
+# 11. Reclassification rule
+
+Runtime Class may change only when a completed design or implementation inspection establishes a materially different boundary.
+
+Examples:
 
 ```text
-IDEA SIZE
-= scope classification
+candidate marked NON_RUNTIME
+but implementation requires plugin Host reads
+→ reclassify RUNTIME
+→ no immediate harvest
+
+candidate marked RUNTIME
+but frozen design proves a pure offline analyzer using existing repo artifacts only
+→ may reclassify NON_RUNTIME
+→ still must pass SAFE_NON_RUNTIME separately
+```
+
+Do not reclassify merely to make an item eligible for immediate implementation.
+
+---
+
+# 12. Verdict
+
+```text
+SIZE
+= scope breadth
 
 IMPORTANCE
-= current strategic value
+= strategic value
 
 DIFFICULTY
-= effort to reach complete frozen design
+= design-completion effort
+
+RUNTIME CLASS
+= intended implementation execution boundary
 
 DESIGN GATE
-= whether enough truth exists now
+= whether complete design is legitimate now
 
-DEFAULT SELECTION POLICY
-= HIGH IMPORTANCE + LOW DIFFICULTY + OPEN GATE FIRST
+HARVEST ELIGIBILITY
+= separate stricter SAFE_NON_RUNTIME decision after tier close
 
-COMPLETED DESIGN
-= S-09 Evidence Index Entry Format
-  DESIGN FROZEN / PARKED
-
-CURRENT FIRST ACTIVE POOL
-= S-02 / S-10 / S-04
-
-NEWLY UNBLOCKED DEPENDENCY
-= M-13 Evidence Index Generator design
-
-IMPLEMENTATION NOW
-= NONE
-
-AFTER EACH SELECTED IDEA
-= DESIGN FROZEN → PARKED → STOP
+CURRENT TOTAL
+= 17 RUNTIME / 14 NON_RUNTIME
 ```

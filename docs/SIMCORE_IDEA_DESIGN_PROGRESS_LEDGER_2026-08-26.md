@@ -133,6 +133,31 @@ synthetic / CI / shadow / controlled-test-only evidence
 → excluded from S-12 natural corpus
 ```
 
+### S-01 — MINI_WARNING_WIDGET_V1
+
+```text
+Importance: 4
+Difficulty: 2
+Design status: DESIGN FROZEN
+Parking: PARKED FOR STABILIZATION
+Design doc: docs/SIMCORE_MINI_WARNING_WIDGET_V1_DESIGN.md
+Implementation: NONE
+```
+
+Frozen product boundary:
+
+```text
+fixed compact floating badge
+hidden when healthy
+current finalized ordinary warning authority only
+one exact current output-warning occurrence
+one DOM node
+no timer / polling / persistence
+click/tap/keyboard activation → existing diagnostic panel
+explicit canonical quarantine fact only; never infer quarantine from warning wording
+UI/DOM failure → fail silent without creating a Core warning
+```
+
 ## Current active queue
 
 Using the frozen priority rule:
@@ -147,23 +172,23 @@ open design gate
 Current next candidates:
 
 ```text
-1. S-01 MINI_WARNING_WIDGET_V1
-   Importance 4 / Difficulty 2 / NOW
-
-2. M-11 Architecture Dependency Snapshot Generator
+1. M-11 Architecture Dependency Snapshot Generator
    Importance 5 / Difficulty 3 / NOW
 
-3. M-10 Live Diagnostic → Fixture Skeleton Generator
+2. M-10 Live Diagnostic → Fixture Skeleton Generator
    Importance 4 / Difficulty 3 / NOW
 
-4. S-03 Diagnostic Copy Profiles
+3. S-03 Diagnostic Copy Profiles
    Importance 3 / Difficulty 2 / NOW
 
-5. S-11 Stale PR Hygiene Classifier
+4. S-11 Stale PR Hygiene Classifier
+   Importance 3 / Difficulty 2 / NOW
+
+5. S-07 Host Capability Receipt
    Importance 3 / Difficulty 2 / NOW
 ```
 
-`S-01` now leads because it is the remaining open Importance-4 / Difficulty-2 designable SMALL item.
+`M-11` now leads because every open Importance-5 / Difficulty-1–2 SMALL design is frozen, and M-11 is the highest-importance remaining designable-now item.
 
 ## Gated high-value candidates remain gated
 
@@ -203,16 +228,17 @@ LATER STABILIZATION PHASE
 ## Current verdict
 
 ```text
-FROZEN SMALL DESIGNS = 5
+FROZEN SMALL DESIGNS = 6
 
 S-09 Evidence Index Entry Format      COMPLETE / PARKED
 S-02 Diagnostic Quick Summary         COMPLETE / PARKED
 S-10 Authority Drift Check / Scan     COMPLETE / PARKED
 S-04 Live Evidence Packet Builder     COMPLETE / PARKED
 S-12 Natural Evidence Corpus Index    COMPLETE / PARKED
+S-01 MINI_WARNING_WIDGET_V1           COMPLETE / PARKED
 
 NEXT ACTIVE DESIGN
-= S-01 MINI_WARNING_WIDGET_V1
+= M-11 Architecture Dependency Snapshot Generator
 
 RUNTIME CHANGE
 = NONE

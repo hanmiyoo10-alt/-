@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E11 Diagnosable Merge-Readiness
 
-Status: **E11-A..D IMPLEMENTATION IN PROGRESS / E11-E REAL RELEASE PROOF PENDING**
+Status: **E11-A..D IMPLEMENTED / REGRESSION-PROVEN — E11-E REAL RELEASE PROOF PENDING**
 
 Generation authority: Issue `#372`.
 
@@ -86,6 +86,28 @@ Generation qualification remains one-shot and separate from normal release closu
 - later E11 releases are generation-proof no-ops.
 
 The focused `e11-diagnosable-merge-readiness-contract.cjs` is registered in the full Usage Dashboard test registry and locks structured readiness, merge-guard path classification, PR-lane observability, generation wiring, and the no-new-writer rule.
+
+## E11-A..D implementation evidence
+
+Implementation PR `#374` final head:
+`b92db942d40a00e1061a964640bb8e4982f529fe`
+
+Final gates:
+- Usage Dashboard Candidate Validation `32853928592` — SUCCESS;
+- E9 durable release transaction contract — GREEN;
+- E10 immediate convergence contract — GREEN;
+- E11 diagnosable merge-readiness contract — GREEN;
+- `TEST_REGISTRY_GREEN:88`;
+- SimCore CI `32853928459` — SUCCESS;
+- Engine SHA256 unchanged: `85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69`.
+
+Retained RED:
+- first run `32853637245` failed only because the focused E11 contract duplicated the three merge-guard verdict literals into the reducer ownership assertion. The contract was corrected to assert verdict ownership in `merge_guard_e11.cjs`; no release-control behavior or product bytes changed.
+
+Main advanced from the implementation branch base only through unrelated SimCore documentation. The final expected-head squash merge succeeded without candidate or product mutation:
+`c37d5547340273b98a2d7839059b73f177914260`.
+
+Post-merge product manifest on main and `release-usage-dashboard` remains byte-identical at blob `ef1ae25970e9496a425b259e6d371eff364d1b1f`, still Product `3.0.0-alpha.5.77` / Engine `1.6.22` / Manager `1.3.0` / contracts `1/1`.
 
 ## E11-E — first real release proof
 

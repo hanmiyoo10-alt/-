@@ -33,6 +33,14 @@ The closing comment explicitly reiterated that correctness had been verified and
 
 The maintainer also stated that upstream #68 and #69 remain accepted and are going into v1.11.0.
 
+## Author follow-up after closure
+After #73 was closed, the author replied that they had found a new direction and intended to submit a new PR later. No implementation details or replacement scope were provided in that comment, so this is recorded only as a follow-up intent, not as a revived Stage D plan.
+
+Tracking rule for that future PR:
+- treat it as a new architecture proposal unless its actual diff proves it is a direct continuation of Stage D;
+- inspect current upstream/plugin-storage KV behavior before assigning a Feature-ID or reusing old Stage D/E code;
+- link the future PR back here for provenance, but do not reopen the superseded result classification for #73.
+
 ## Local draft disposition
 - `hanmiyoo10-alt/PocketRisu#7`: keep as an open draft/historical fallback, not an active merge candidate.
 - `hanmiyoo10-alt/PocketRisu#8`: same; do not promote independently.

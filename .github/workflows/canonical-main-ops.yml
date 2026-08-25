@@ -11,6 +11,7 @@ on:
       - SimCore Permanent Release
       - SimCore Generic Candidate Materialize
       - Usage Dashboard Project Memory
+      - Canonical Main Protection Guard
     types: [completed]
   push:
     branches: [main]
@@ -18,6 +19,7 @@ on:
       - '.github/plugin-control-plane/canonical-main/**'
       - '.github/plugin-control-plane/registry.json'
       - '.github/workflows/canonical-main-ops.yml'
+      - '.github/workflows/canonical-main-protection-guard.yml'
       - '.github/workflows/simcore-ci.yml'
       - '.github/workflows/simcore-release-state-sync.yml'
       - '.github/workflows/simcore-release-permanent.yml'

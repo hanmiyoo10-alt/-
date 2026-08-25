@@ -8,19 +8,19 @@ const {createIssueStore} = require('../infra/issue-store.cjs');
 const {createActionsStore} = require('../infra/actions-store.cjs');
 const {createRepoFiles} = require('../infra/repo-files.cjs');
 const {safeObserve} = require('../observers/common.cjs');
-const deliveryReceipts = require('../observers/delivery-receipts.cjs');
-const {modules} = require('../modules/registry.cjs');
+const {modulesForPhase, modulesWithCapability} = require('../modules/registry.cjs');
 const {deriveCoverage} = require('../domains/bootstrap.cjs');
 const {incidentFromIssue, planIncident} = require('../domains/incidents.cjs');
 const {renderIncidentBody} = require('../surfaces/incidents.cjs');
+const {normalizeIncidentBodyState} = require('../surfaces/incident-history.cjs');
 const {renderOpsView} = require('../surfaces/ops-view.cjs');
 
 const LABEL_DEFS = [['control-plane:operations','5319e7','Canonical main repository operations surface'],['control-plane:incident','b60205','Canonical main normalized incident record'],['incident:open','d73a4a','Incident is currently open'],['incident:recovered','0e8a16','Incident is proven recovered'],['severity:P0','b60205','Repository or authority integrity incident'],['severity:P1','d93f0b','Actionable workflow failure'],['severity:P2','fbca04','Operational follow-up'],['severity:P3','c5def5','Informational repository churn']];
 
 function loadRegistry(root) { return JSON.parse(fs.readFileSync(path.join(root, '.github/plugin-control-plane/registry.json'), 'utf8')); }
-async function applyIncidentPlan(issueStore, plan) {
+async function applyIncidentPlan(issueStore, plan, policy = loadPolicy()) {
   if (plan.action === 'none') return null;
-  const body = renderIncidentBody(plan.event, plan.severity, plan.transition, plan.key, plan.alertEnvelope);
+  const body = renderIncidentBody(plan.event, plan.severity, plan.transition, plan.key, plan.alertEnvelope, plan.issue?.body || '', policy.operations.incidentHistoryLimit);
   let issue;
   if (plan.action === 'update') {
     issue = await issueStore.updateIssue(plan.issue.number, {title: plan.title, body, state: plan.transition === 'RECOVERED' ? 'closed' : 'open'});
@@ -28,12 +28,28 @@ async function applyIncidentPlan(issueStore, plan) {
   } else issue = await issueStore.createIssue({title: plan.title, body, labels: plan.labels});
   return {number: issue.number, transition: plan.transition, severity: plan.severity, reason: plan.event.observation.reasonCode, notificationEligible: plan.alertEnvelope.eligible, deliveryKey: plan.alertEnvelope.deliveryKey};
 }
-async function collectBaseObservations(context) {
-  const pairs = await Promise.all(modules.map(async (module) => [module.id, await safeObserve(module.id, () => module.observe(context))]));
+async function collectObservations(context, phase = 'base') {
+  const pairs = await Promise.all(modulesForPhase(phase).map(async (module) => [module.id, await safeObserve(module.id, () => module.observe(context))]));
   return Object.fromEntries(pairs);
 }
-function adapterEvents(observations) { return [...(observations.requiredCi.events || []), ...(observations.productionAuthority.events || []), ...(observations.writers.events || []), ...(observations.bootstrap.events || [])]; }
-function observationCoverageValid(observations) { return observations.requiredCi.known === true && observations.productionAuthority.known === true && observations.writers.known === true && observations.bootstrap.known === true; }
+async function collectBaseObservations(context) { return collectObservations(context, 'base'); }
+function adapterEvents(observations) { return modulesWithCapability('events').flatMap((module) => observations[module.id]?.events || []); }
+function observationCoverageValid(observations) { return modulesWithCapability('requiredCoverage').every((module) => observations[module.id]?.known === true); }
+async function repairIncidentConsistency(issueStore, allIssues) {
+  const repaired = [];
+  for (const issue of allIssues) {
+    const row = incidentFromIssue(issue);
+    if (!row || row.state === 'UNKNOWN') continue;
+    const expectedIssueState = row.state === 'RECOVERED' ? 'closed' : 'open';
+    const normalizedBody = normalizeIncidentBodyState(issue.body || '', row.state);
+    if (normalizedBody === (issue.body || '') && issue.state === expectedIssueState) continue;
+    const patch = {state: expectedIssueState};
+    if (normalizedBody !== (issue.body || '')) patch.body = normalizedBody;
+    await issueStore.updateIssue(issue.number, patch);
+    repaired.push(issue.number);
+  }
+  return repaired;
+}
 
 async function refresh(options = {}) {
   const root = options.root || process.cwd();
@@ -50,12 +66,15 @@ async function refresh(options = {}) {
   const observations = await collectBaseObservations(context);
   const touched = [];
   for (const event of adapterEvents(observations)) {
-    const result = await applyIncidentPlan(issueStore, planIncident(event, allIssues, policy));
+    const result = await applyIncidentPlan(issueStore, planIncident(event, allIssues, policy), policy);
     if (result) touched.push(result);
   }
   if (touched.length) { allIssues = await issueStore.listIssues('all'); context.allIssues = allIssues; }
+  const repaired = await repairIncidentConsistency(issueStore, allIssues);
+  if (repaired.length) { allIssues = await issueStore.listIssues('all'); context.allIssues = allIssues; }
   const incidentRows = allIssues.map(incidentFromIssue).filter(Boolean);
-  observations.delivery = await safeObserve('delivery-receipts', () => deliveryReceipts.observe(context, incidentRows));
+  context.incidentRows = incidentRows;
+  Object.assign(observations, await collectObservations(context, 'post-incidents'));
   const active = incidentRows.filter((row) => row.state === 'OPEN');
   const activeP2 = active.filter((row) => row.severity === 'P2');
   const projectRows = observations.projectStatus.data || [];
@@ -79,12 +98,13 @@ async function refresh(options = {}) {
   }
   console.log(`CANONICAL_MAIN_PROTECTION_SURFACE:#${opsIssue.number}:${observations.protection.data?.state || 'UNKNOWN'}`);
   console.log(`CANONICAL_MAIN_BOOTSTRAP_SURFACE:#${opsIssue.number}:${bootstrapCoverage.complete ? 'COMPLETE' : 'INCOMPLETE'}:${bootstrapCoverage.readyCount}/${bootstrapCoverage.expectedCount}`);
+  for (const number of repaired) console.log(`CANONICAL_MAIN_INCIDENT_REPAIRED:#${number}`);
   for (const row of touched) {
     console.log(`CANONICAL_MAIN_INCIDENT_${row.transition}:#${row.number}:${row.severity}:${row.reason}`);
     if (row.notificationEligible) console.log(`CANONICAL_MAIN_NOTIFICATION_OUTBOX:#${row.number}:${row.severity}:${row.transition}:${row.deliveryKey}`);
   }
-  return {snapshot, opsIssue, touched};
+  return {snapshot, opsIssue, touched, repaired};
 }
 async function main() { if (process.argv[2] !== 'refresh') throw new Error('usage: orchestrator/refresh.cjs refresh'); await refresh(); }
 if (require.main === module) main().catch((error) => { console.error(error.stack || String(error)); process.exitCode = 1; });
-module.exports = {LABEL_DEFS, loadRegistry, applyIncidentPlan, collectBaseObservations, adapterEvents, observationCoverageValid, refresh};
+module.exports = {LABEL_DEFS, loadRegistry, applyIncidentPlan, collectObservations, collectBaseObservations, adapterEvents, observationCoverageValid, repairIncidentConsistency, refresh};

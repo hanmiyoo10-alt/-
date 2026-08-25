@@ -2,7 +2,8 @@
 
 const {summarizeReceipts} = require('../delivery-receipt.cjs');
 
-async function observe(context, incidentRows) {
+async function observe(context, incidentRowsOverride = null) {
+  const incidentRows = incidentRowsOverride || context.incidentRows || [];
   const config = context.policy.notifications?.receiptTracking || {};
   const baselineProofAt = config.baselineProofAt || null;
   if (config.enabled !== true) return {known: true, summary: 'DISABLED', events: [], data: summarizeReceipts([], {baselineProofAt})};

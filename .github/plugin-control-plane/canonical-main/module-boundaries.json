@@ -5,5 +5,19 @@
   "defaultMaxLines": 220,
   "overrides": {"orchestrator/refresh.cjs": 260},
   "managedDirectories": ["core","infra","observers","domains","surfaces","modules","orchestrator","rehearsal"],
-  "principles": ["one-responsibility-per-module","extract-when-line-budget-exceeded","extract-when-side-effect-boundary-is-crossed","no-dynamic-plugin-loading","single-ops-view-writer"]
+  "dependencyPolicy": {
+    "defaultMaxFanOut": 12,
+    "defaultMaxFanIn": 12,
+    "allowedLayers": {
+      "core": ["core"],
+      "infra": ["core", "infra"],
+      "observers": ["core", "domains", "infra", "observers"],
+      "domains": ["core", "domains"],
+      "surfaces": ["core", "domains", "surfaces"],
+      "modules": ["observers", "modules"],
+      "orchestrator": ["core", "infra", "observers", "domains", "surfaces", "modules", "orchestrator"],
+      "rehearsal": ["core", "infra", "observers", "domains", "surfaces", "modules", "orchestrator", "rehearsal"]
+    }
+  },
+  "principles": ["one-responsibility-per-module","extract-when-line-budget-exceeded","extract-when-side-effect-boundary-is-crossed","reject-dependency-cycles","bound-module-coupling","no-dynamic-plugin-loading","single-ops-view-writer"]
 }

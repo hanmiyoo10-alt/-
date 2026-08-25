@@ -100,7 +100,10 @@
   "operations": {
     "issueTitle": "[repo-ops:main]",
     "recentRecoveryLimit": 10,
+    "incidentHistoryLimit": 6,
     "projectStatusFreshnessMinutes": 150,
-    "eventAdaptersComplete": true
+    "eventAdaptersComplete": true,
+    "automationMode": "event-plus-hourly-self-heal",
+    "manualActionRequired": false
   }
 }

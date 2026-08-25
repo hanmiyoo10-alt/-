@@ -166,7 +166,7 @@ Owners remain:
 
 ```text
 frame
-ntime
+time
 reaction
 ```
 

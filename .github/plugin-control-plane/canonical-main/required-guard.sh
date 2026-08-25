@@ -53,8 +53,8 @@ git checkout --detach "$TARGET_SHA"
 git config user.name 'github-actions[bot]'
 git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-mapfile -t parents < <(git rev-list --parents -n 1 "$TARGET_SHA")
-parent_count=$(( ${#parents[@]} - 1 ))
+read -r -a ancestry <<<"$(git rev-list --parents -n 1 "$TARGET_SHA")"
+parent_count=$(( ${#ancestry[@]} - 1 ))
 if (( parent_count == 1 )); then
   git revert --no-edit "$TARGET_SHA"
 elif (( parent_count > 1 )); then

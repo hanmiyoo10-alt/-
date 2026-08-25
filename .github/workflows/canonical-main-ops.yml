@@ -1,9 +1,10 @@
 name: Canonical Main Operations
 
 on:
+  # Break-glass only. Steady-state operation is fully automatic through events + schedule.
   workflow_dispatch:
   schedule:
-    - cron: '11,41 * * * *'
+    - cron: '17 * * * *'
   workflow_run:
     workflows:
       - SimCore CI
@@ -13,6 +14,7 @@ on:
       - Usage Dashboard Project Memory
       - Canonical Main Protection Guard
     types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:

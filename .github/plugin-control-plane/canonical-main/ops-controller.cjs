@@ -331,7 +331,7 @@ async function refresh() {
     '',
     renderWriterStatus(adapterResult.writers),
     '',
-    '## Notification outbox / delivery bridge',
+    '## Notification outbox / external bridge',
     '',
     renderNotificationStatus(receiptSummary),
     '',

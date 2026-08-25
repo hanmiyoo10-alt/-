@@ -9,6 +9,7 @@
   "authority": {
     "type": "release",
     "releaseBranch": "release-usage-dashboard",
+    "manifest": "plugins/usage-dashboard/runtime/product-manifest.json",
     "artifact": "plugins/usage-dashboard/latest.js"
   },
   "memory": {

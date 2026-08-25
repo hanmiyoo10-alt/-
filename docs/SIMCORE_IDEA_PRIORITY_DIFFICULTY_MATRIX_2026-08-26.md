@@ -1,6 +1,6 @@
 # SimCore Idea Priority / Difficulty Matrix — 2026-08-26
 
-Status: `MASTER IDEA PRIORITIZATION · DESIGN-SELECTION ORDER · NO IMPLEMENTATION · NO RUNTIME CHANGE`
+Status: `MASTER IDEA PRIORITIZATION · S-09 FROZEN/PARKED · DESIGN-SELECTION ORDER · NO IMPLEMENTATION · NO RUNTIME CHANGE`
 
 Purpose: add strategic importance and design difficulty to the size-classified SimCore idea inventory so the current idea/design phase can select high-value, low-difficulty ideas first without ignoring readiness gates.
 
@@ -8,6 +8,7 @@ Related authority:
 - `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
 - `docs/SIMCORE_IDEA_SPACE_CLASSIFICATION_2026-08-26.md`
+- `docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md`
 
 This matrix ranks **design selection during the current idea phase**. It does not authorize implementation. Frozen designs remain parked until the later stabilization / implementation phase.
 
@@ -80,6 +81,9 @@ EXTERNAL
 
 FUTURE
 = explicitly future/post-M2 experiment
+
+FROZEN
+= design is complete and parked; remove it from the active design queue
 ```
 
 ---
@@ -114,6 +118,8 @@ SELECT
 → STOP
 ```
 
+A frozen item leaves the active queue. It is not repeatedly re-selected merely because its importance remains high.
+
 ---
 
 # 3. SMALL ideas
@@ -128,19 +134,27 @@ SELECT
 | S-06 | Persistence Footprint Watch | 2 | 2 | EVIDENCE | GATED-LOW |
 | S-07 | Host Capability Receipt | 3 | 2 | NOW | B2 |
 | S-08 | History Frontier Confidence Surface | 2 | 2 | NOW | C |
-| S-09 | Evidence Index Entry Format | 5 | 1 | NOW | A1 |
+| S-09 | Evidence Index Entry Format | 5 | 1 | FROZEN | PARKED |
 | S-10 | Authority Drift Check / Scan | 5 | 2 | NOW | A1 |
 | S-11 | Stale PR Hygiene Classifier | 3 | 2 | NOW | B2 |
 | S-12 | Natural Evidence Corpus Index | 4 | 2 | NOW | A2 |
 
 ### SMALL interpretation
 
-The strongest current cluster is:
+Completed/parked:
+
+```text
+S-09 Evidence Index Entry Format
+5 / 1 / DESIGN FROZEN
+→ docs/SIMCORE_EVIDENCE_INDEX_ENTRY_FORMAT_DESIGN.md
+→ implementation deferred
+```
+
+The strongest active current cluster is now:
 
 ```text
 A1
 S-02 Diagnostic Quick Summary          5 / 1 / NOW
-S-09 Evidence Index Entry Format       5 / 1 / NOW
 S-04 Live Evidence Packet Builder      5 / 2 / NOW
 S-10 Authority Drift Check             5 / 2 / NOW
 ```
@@ -173,7 +187,7 @@ S-12 Natural Evidence Corpus Index     4 / 2 / NOW
 | M-10 | Live Diagnostic → Fixture Skeleton Generator | 4 | 3 | NOW | B1 |
 | M-11 | Architecture Dependency Snapshot Generator | 5 | 3 | NOW | A3 |
 | M-12 | State Writer Static Audit | 5 | 4 | POST_M2_3 | GATED-HIGH |
-| M-13 | Evidence Index Generator | 4 | 3 | DEPENDENCY: S-09 | DEPENDENCY |
+| M-13 | Evidence Index Generator | 4 | 3 | NOW | B1 |
 | M-14 | Release Evidence Packet | 4 | 3 | DEPENDENCY: R2.1 proof | DEPENDENCY |
 | M-15 | Fixture Coverage Matrix by Ownership | 4 | 3 | POST_M2_3 | GATED-HIGH |
 | M-16 | Differential Architecture Fixtures | 5 | 4 | M2 implementation slice | IMPLEMENTATION-BOUND |
@@ -190,7 +204,14 @@ Difficulty 3
 Gate NOW
 ```
 
-It is therefore a good candidate **after the easy/high-importance small designs are exhausted**, not before them.
+S-09 is now frozen, so the design dependency for `M-13 Evidence Index Generator` is satisfied:
+
+```text
+S-09 FORMAT FROZEN
+→ M-13 DESIGN GATE = NOW
+```
+
+M-13 still does not authorize implementation and remains lower than the current easy/high-importance SMALL queue.
 
 `M-03`, `M-07`, `M-12`, and `M-16` have very high strategic importance, but their gates are intentionally closed today.
 
@@ -235,6 +256,9 @@ GATED-HIGH
 DEPENDENCY
 = another frozen design/evidence milestone must come first
 
+FROZEN/PARKED
+= design complete; remove from active idea queue until stabilization/implementation selection
+
 EVIDENCE / EXTERNAL / FUTURE
 = do not promote without trigger
 ```
@@ -243,32 +267,33 @@ EVIDENCE / EXTERNAL / FUTURE
 
 # 7. Recommended current design queue
 
-Default queue under the user's preferred rule `easy + important first`:
+Default queue under the user's preferred rule `easy + important first`, after S-09 design freeze:
 
 ```text
-1. S-09 Evidence Index Entry Format
+1. S-02 Diagnostic Quick Summary
    Importance 5 / Difficulty 1 / NOW
 
-2. S-02 Diagnostic Quick Summary
-   Importance 5 / Difficulty 1 / NOW
-
-3. S-10 Authority Drift Check
+2. S-10 Authority Drift Check
    Importance 5 / Difficulty 2 / NOW
 
-4. S-04 Live Evidence Packet Builder
+3. S-04 Live Evidence Packet Builder
    Importance 5 / Difficulty 2 / NOW
 
-5. S-12 Natural Evidence Corpus Index
+4. S-12 Natural Evidence Corpus Index
    Importance 4 / Difficulty 2 / NOW
 
-6. S-01 MINI_WARNING_WIDGET_V1
+5. S-01 MINI_WARNING_WIDGET_V1
    Importance 4 / Difficulty 2 / NOW
 
-7. M-11 Architecture Dependency Snapshot Generator
+6. M-11 Architecture Dependency Snapshot Generator
    Importance 5 / Difficulty 3 / NOW
 
-8. M-10 Live Diagnostic → Fixture Skeleton Generator
+7. M-10 Live Diagnostic → Fixture Skeleton Generator
    Importance 4 / Difficulty 3 / NOW
+
+8. M-13 Evidence Index Generator
+   Importance 4 / Difficulty 3 / NOW
+   prerequisite S-09 = FROZEN
 
 9. S-03 Diagnostic Copy Profiles
    Importance 3 / Difficulty 2 / NOW
@@ -283,22 +308,17 @@ Default queue under the user's preferred rule `easy + important first`:
     Importance 2 / Difficulty 2 / NOW
 ```
 
-### Tie-break reasoning for #1 vs #2
+### S-09 completion effect
 
-Both are `5 / 1 / NOW`.
-
-`S-09 Evidence Index Entry Format` is placed first because it has repo-wide leverage:
+S-09 was selected first and reached:
 
 ```text
-one tiny frozen contract
-→ improves long-term evidence navigation
-→ becomes prerequisite for M-13 Evidence Index Generator
-→ supports later stabilization work without touching runtime
+DESIGN FROZEN
+PARKED FOR STABILIZATION
+IMPLEMENTATION = NONE
 ```
 
-`S-02 Diagnostic Quick Summary` follows immediately as the easiest high-value user/operator-facing design.
-
-This ordering is a recommendation, not an immutable dependency. Either S-09 or S-02 can safely be selected first.
+Its frozen contract now removes the design dependency that previously blocked M-13. This is exactly the intended use of the queue: finish one design completely, park it, then allow downstream design gates to open without leaking into implementation.
 
 ---
 
@@ -373,8 +393,15 @@ DESIGN GATE
 DEFAULT SELECTION POLICY
 = HIGH IMPORTANCE + LOW DIFFICULTY + OPEN GATE FIRST
 
-CURRENT FIRST POOL
-= S-09 / S-02 / S-10 / S-04
+COMPLETED DESIGN
+= S-09 Evidence Index Entry Format
+  DESIGN FROZEN / PARKED
+
+CURRENT FIRST ACTIVE POOL
+= S-02 / S-10 / S-04
+
+NEWLY UNBLOCKED DEPENDENCY
+= M-13 Evidence Index Generator design
 
 IMPLEMENTATION NOW
 = NONE

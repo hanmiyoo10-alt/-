@@ -1,17 +1,27 @@
 # SimCore Release System v2 Plan
 
-Status: **PLANNED · NOT ACTIVE · NON-RUNTIME**
+Status: **HISTORICAL BASE PLAN · IMPLEMENTATION HAS ADVANCED BEYOND THIS SNAPSHOT · NON-RUNTIME**
 
-Authority class: future release-infrastructure plan
+Authority class: historical release-infrastructure design baseline
 
-Current production authority remains:
+Current status note:
+
+- this document preserves the original Release System v2 design and phased adoption rationale;
+- it is **not** the current operational-status authority for RS2/R2.1;
+- Release System v2 infrastructure has advanced through later dedicated design, implementation, qualification, promotion, and delegated-operator documents;
+- R2.1 delegated operation is currently `ACTIVE · IMPLEMENTED · PERMANENT-CI QUALIFIED · AWAITING GENUINE RELEASE PROOF`;
+- the next genuine runtime release must provide the remaining end-to-end operational proof;
+- current production sequencing is defined by `docs/CURRENT_DEVELOPMENT.md`, not by historical “current action” prose preserved in this base plan.
+
+Current authorities:
 
 - runtime behavior: `release-simcore` production source
 - release identity: `product-manifest.json`
 - immediate development action: `docs/CURRENT_DEVELOPMENT.md`
 - durable development principles: `docs/SIMCORE_GUIDELINES.md`
+- current delegated release policy: `docs/SIMCORE_RELEASE_SYSTEM_V2_1_OPERATOR_DELEGATION_POLICY.md`
 
-This document records a future infrastructure design. It does **not** describe current production behavior, authorize a runtime change, replace the current promoted action, or start M2-3. Promotion requires an explicit later decision.
+The plan text below remains useful as historical architecture/rationale. Where it uses phrases such as “current”, “planned”, or “next review point”, treat those as the state at the time this base plan was recorded unless a dedicated later RS2/R2.1 document says otherwise.
 
 ---
 
@@ -281,6 +291,8 @@ Do not combine large modularization with M2 behavioral work. A single production
 
 ## 11. Adoption phases
 
+The phase list below is the original adoption plan. Actual implementation/proof status is recorded by the dedicated `SIMCORE_RELEASE_SYSTEM_V2_RS2_*` and R2.1 policy/evidence documents.
+
 ### Phase RS2-0 — Plan only
 
 - preserve this document
@@ -341,30 +353,23 @@ If Release System v2 blocks an urgent correctness mini, use the last verified re
 
 ## 13. Relationship to the current roadmap
 
-Current promoted action remains:
+### Historical note
 
-    Capture one ordinary v0.64.2 production diagnostic-copy result.
+The original base-plan roadmap at the time of recording centered on the v0.64.2 diagnostic-copy live result and deciding whether RS2-1 should start before M2-3. That decision point has been superseded by later work and must not be treated as current authority.
 
-Current live routing remains:
+Current roadmap authority is `docs/CURRENT_DEVELOPMENT.md`.
 
-    COPIED or COPIED_FALLBACK
-      -> v0.64.2 live gate PASS
-      -> M2-3 may begin
+As of this documentation refresh:
 
-    REPORT_BUILD_FAILED
-      -> separate narrow builder-repair mini before M2-3
+```text
+production = v0.64.7 Cross-Reload Cache Observer Continuity
+current runtime gate = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT / PENDING_REAL_LONG_CHAT
+M2-3 physical implementation = blocked until that gate is classified and closed
+R2.1 delegated operation = ACTIVE / IMPLEMENTED / PERMANENT-CI QUALIFIED
+R2.1 genuine release end-to-end proof = PENDING on the next genuine runtime release
+```
 
-    CLIPBOARD_WRITE_FAILED
-      -> clipboard transport investigation
-
-Recommended decision point after the v0.64.2 live gate:
-
-1. Decide whether RS2-1 should be promoted before active M2-3 implementation.
-2. If promoted, keep RS2-1 strictly infrastructure-only.
-3. If not promoted, preserve this plan and continue M2-3.
-4. Do not allow the existence of this plan to silently reorder the roadmap.
-
-The genuine visible-edit control remains deferred from the M2-3 start gate and required before M2-3 closes or M2-4 begins.
+The old v0.64.2-specific decision text remains represented by repository history and earlier evidence documents; it is no longer repeated here as a current instruction.
 
 ---
 
@@ -385,12 +390,25 @@ Release System v2 succeeds when:
 
 ## 15. Current disposition
 
-Status: **PLANNED · NOT PROMOTED**
+Status: **HISTORICAL BASE PLAN · CURRENT OPERATIONAL STATUS OWNED BY LATER RS2/R2.1 DOCUMENTS**
 
-Immediate action: none from this document.
+Current operational facts:
 
-Next review point: after the v0.64.2 diagnostic-copy live result.
+```text
+Release System v2 implementation = advanced beyond this base plan
+R2.1 delegated operator policy = ACTIVE
+permanent CI qualification = PASS
+genuine runtime release end-to-end proof = PENDING
+human real-long-chat LIVE_PASS boundary = PRESERVED
+```
 
-Promotion authority: an explicit update to `docs/CURRENT_DEVELOPMENT.md` based on the then-current production state.
+Immediate action from this document: **NONE**.
 
-Last recorded: 2026-08-22
+Use:
+
+- `docs/CURRENT_DEVELOPMENT.md` for immediate product/release sequencing;
+- `docs/SIMCORE_RELEASE_SYSTEM_V2_1_OPERATOR_DELEGATION_POLICY.md` for current delegated-operation policy;
+- dedicated `SIMCORE_RELEASE_SYSTEM_V2_RS2_*` evidence/contract documents for phase-specific implementation truth.
+
+Last base-plan record: 2026-08-22
+Documentation-status refresh: 2026-08-26

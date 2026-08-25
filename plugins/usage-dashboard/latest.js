@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.75
+//@version 3.0.0-alpha.5.76
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.75';
+  const VERSION = '3.0.0-alpha.5.76';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -2779,6 +2779,23 @@ async function importLegacyTodayBaselines() {
     return `independent · protocol cache-observability-v1 · parser provider-usage-v3 · source sanitized LLMGateway /logs · token rows ${tokenRows.length}/${list.length} · read known ${readKnown}/${list.length} · write known ${writeKnown}/${list.length} · write reported ${writeReported}/${list.length} · write not-reported ${writeNotReported}/${list.length} · write unknown-on-cache ${writeUnknownOnCache}/${list.length} · read/no-write-value ${readWithoutWriteValue}/${list.length} · ttl reported ${ttlReported}/${list.length} · parser sources ${sources.join(',') || 'none'}`;
   }
 
+  function requestProvenanceDiagnosticMetadata() {
+    const source = state.data?.usageScopes?.scopes?.all?.requestProvenance || null;
+    if (source && typeof source === 'object') return source;
+    const stats = requestAccountScopeStats(requestLedgerRowsForScope('all'));
+    return {
+      captureMode:'unknown',
+      rows:stats.rows,
+      fallbackCount:0,
+      devpass:stats.devpass,
+      credits:stats.credits,
+      unknown:stats.unknown,
+      conflict:stats.conflict,
+      modelInference:0,
+      authority:'unknown',
+    };
+  }
+
   function diagText() {
     const diagnosticCapturedAt = Date.now();
     const d = state.data || {}, h = d.health || {};
@@ -2791,9 +2808,13 @@ async function importLegacyTodayBaselines() {
     const diagLedgerFidelity = requestLedgerCapabilities(diagLedgerRows);
     const diagCacheObservability = requestCacheObservabilityStats(diagLedgerRows);
     const diagDurationFidelity = requestDurationStats(diagLedgerRows);
-    const diagDevpassRows = requestLedgerRowsForScope('devpass');
-    const diagTierFidelity = requestServiceTierStats(diagDevpassRows);
-    const diagOutcome = requestOutcomeStats(diagDevpassRows);
+    const diagTierFidelity = requestServiceTierStats(diagLedgerRows);
+    const diagOutcome = requestOutcomeStats(diagLedgerRows);
+    const diagRequestProvenance = requestProvenanceDiagnosticMetadata();
+    const diagRequestProvenanceRows = Math.max(0, Number(diagRequestProvenance?.rows || 0));
+    const diagRequestProvenanceMode = ['account-wide','project-fallback'].includes(String(diagRequestProvenance?.captureMode))
+      ? String(diagRequestProvenance.captureMode)
+      : 'unknown';
     const stableReadiness = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const diagAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     return [
@@ -2854,6 +2875,9 @@ async function importLegacyTodayBaselines() {
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
+      `Account request capture: ${diagRequestProvenanceMode} · rows ${diagRequestProvenanceRows} · fallback ${Math.max(0, Number(diagRequestProvenance?.fallbackCount || 0))}`,
+      `Request account scope fidelity: DevPass ${Math.max(0, Number(diagRequestProvenance?.devpass || 0))}/${diagRequestProvenanceRows} · Credits ${Math.max(0, Number(diagRequestProvenance?.credits || 0))}/${diagRequestProvenanceRows} · Unknown ${Math.max(0, Number(diagRequestProvenance?.unknown || 0))}/${diagRequestProvenanceRows} · conflict ${Math.max(0, Number(diagRequestProvenance?.conflict || 0))}`,
+      `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${money(diagAccount?.regularCredits)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
@@ -2975,44 +2999,6 @@ function todayOverviewMetrics(d) {
   }
   return {devToday,premiumToday,creditsToday,observedDailyTotal,monthEnd,monthlyLeft,weeklyLeft,projected,projectedPercent,cost24h:num(a?.cost24h)?Number(a.cost24h):null,resetPasses:num(w?.resetPasses)?Number(w.resetPasses):null,resetPassesExact:w?.resetPassesExact===true};
 }
-
-  function requestProvenanceDiagnosticMetadata() {
-    const source = state.data?.usageScopes?.scopes?.all?.requestProvenance || null;
-    if (source && typeof source === 'object') return source;
-    const stats = requestAccountScopeStats(requestLedgerRowsForScope('all'));
-    return {
-      captureMode:'unknown',
-      rows:stats.rows,
-      fallbackCount:0,
-      devpass:stats.devpass,
-      credits:stats.credits,
-      unknown:stats.unknown,
-      conflict:stats.conflict,
-      modelInference:0,
-      authority:'unknown',
-    };
-  }
-
-  const diagTextBeforeRequestProvenance = diagText;
-  diagText = function diagTextWithRequestProvenance() {
-    const base = diagTextBeforeRequestProvenance();
-    const key = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
-    const scopeRows = requestLedgerRowsForScope(key);
-    const tier = requestServiceTierStats(scopeRows);
-    const outcome = requestOutcomeStats(scopeRows);
-    const lines = String(base || '').split('\n');
-    const replaceLine = (prefix, next) => {
-      const index = lines.findIndex(line => line.startsWith(prefix));
-      if (index >= 0) lines[index] = next;
-    };
-    replaceLine('Service tier fidelity:', `Service tier fidelity: requested known ${tier.requestedKnown}/${tier.rows} · served known ${tier.servedKnown}/${tier.rows} · served flex ${tier.flex} · standard ${tier.standard} · priority ${tier.priority} · unknown ${tier.unknown}`);
-    replaceLine('Service tier source fields:', `Service tier source fields: requested ${tier.requestedSources.join(',') || 'none'} · served ${tier.servedSources.join(',') || 'none'}`);
-    replaceLine('Request outcome taxonomy:', `Request outcome taxonomy: success ${outcome.success} · error ${outcome.error} · cancelled ${outcome.cancelled} · unknown ${outcome.unknown} · rows ${outcome.rows}`);
-    const p = requestProvenanceDiagnosticMetadata();
-    const rows = Math.max(0, Number(p?.rows || 0));
-    const mode = ['account-wide','project-fallback'].includes(String(p?.captureMode)) ? String(p.captureMode) : 'unknown';
-    return `${lines.join('\n')}\nAccount request capture: ${mode} · rows ${rows} · fallback ${Math.max(0, Number(p?.fallbackCount || 0))}\nRequest account scope fidelity: DevPass ${Math.max(0, Number(p?.devpass || 0))}/${rows} · Credits ${Math.max(0, Number(p?.credits || 0))}/${rows} · Unknown ${Math.max(0, Number(p?.unknown || 0))}/${rows} · conflict ${Math.max(0, Number(p?.conflict || 0))}\nScope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`;
-  };
 
   function settingsHtml() {
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};

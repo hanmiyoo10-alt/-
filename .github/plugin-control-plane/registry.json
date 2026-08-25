@@ -17,6 +17,7 @@
       "statusAdapter": "usage-dashboard",
       "authority": {
         "releaseBranch": "release-usage-dashboard",
+        "manifest": "plugins/usage-dashboard/runtime/product-manifest.json",
         "artifact": "plugins/usage-dashboard/latest.js",
         "releaseSpecDir": ".github/usage-dashboard/releases"
       }
@@ -35,6 +36,7 @@
       ],
       "statusAdapter": "simcore",
       "authority": {
+        "releaseBranch": "release-simcore",
         "manifest": "product-manifest.json"
       }
     },

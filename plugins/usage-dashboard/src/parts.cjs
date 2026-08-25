@@ -9,7 +9,7 @@ const PARTS = Object.freeze([
   {file:'10-request-normalize.part.js', marker:'\n  function recentRequestValue(row, keys, fallback = null) {', label:'request normalization'},
   {file:'12-service-tier.part.js', marker:'\n  function normalizeServiceTierValue(value) {', label:'request/service tier fidelity'},
   {file:'14-request-ledger.part.js', marker:'\n  function requestTimestampPrecision(timestamp, sourceKey, requestNumber) {', label:'request ledger + drilldown'},
-  {file:'15-request-provenance.part.js', marker:'\n  function requestAccountScopeValue(value) {', label:'request account provenance'},
+  {file:'15-request-provenance.part.js', marker:'\n  function requestAccountScopeLabel(value) {', label:'request account provenance'},
   {file:'16-usage-analytics.part.js', marker:'\n  function normalizeRequestProvenanceMetadata(raw) {', label:'usage + analytics normalization'},
   {file:'20-bridge-io.part.js', marker:'\n  async function fetchSnapshot() {', label:'bridge I/O'},
   {file:'30-refresh-runtime.part.js', marker:"  async function refresh(reason = 'manual', silent = false) {", label:'refresh runtime'},

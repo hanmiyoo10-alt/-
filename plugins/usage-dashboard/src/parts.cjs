@@ -14,7 +14,6 @@ const PARTS = Object.freeze([
   {file:'20-bridge-io.part.js', marker:'\n  async function fetchSnapshot() {', label:'bridge I/O'},
   {file:'30-refresh-runtime.part.js', marker:"  async function refresh(reason = 'manual', silent = false) {", label:'refresh runtime'},
   {file:'40-diagnostics.part.js', marker:'\n  function refreshPhaseTimingText(phases = performanceRuntime.lastRefreshPhases) {', label:'diagnostics + release hardening'},
-  {file:'42-request-provenance-diagnostics.part.js', marker:'\n  function requestProvenanceDiagnosticMetadata() {', label:'request provenance diagnostics'},
   {file:'50-dashboard-context.part.js', marker:'\n  function settingsHtml() {', label:'dashboard/context'},
   {file:'52-analytics-context.part.js', marker:"    const analyticsScopeKey = ['all','devpass','credits'].includes(String(state.analyticsScopeView)) ? String(state.analyticsScopeView) : 'all';", label:'dashboard/analytics context'},
   {file:'54-dashboard-markup.part.js', marker:'    return `<style>', label:'dashboard/markup'},

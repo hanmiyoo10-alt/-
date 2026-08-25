@@ -162,6 +162,10 @@ function renderIncidentBody(event, severity, state, key, alertEnvelope = null) {
     `- Subject: \`${event.subject.kind}:${event.subject.id ?? event.subject.number ?? 'UNKNOWN'}\``,
     `- Summary: ${event.summary || 'No summary provided.'}`,
     `- Observed transition: \`${event.observation.from || 'UNKNOWN'} → ${event.observation.to || 'UNKNOWN'}\``,
+    ...(alertEnvelope ? [
+      `- Notification eligible: \`${alertEnvelope.eligible}\``,
+      `- Delivery key: \`${alertEnvelope.deliveryKey}\``,
+    ] : []),
     '',
     '## Evidence',
     '',

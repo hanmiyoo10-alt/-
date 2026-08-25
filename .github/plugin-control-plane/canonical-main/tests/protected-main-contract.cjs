@@ -40,6 +40,7 @@ assert.equal(contract.activation.automaticAttempt, true);
 assert.equal(contract.activation.enforceAdmins, true);
 assert.equal(contract.activation.forcePushAllowed, false);
 assert.equal(contract.softEnforcement.enabled, true);
+assert.equal(contract.softEnforcement.writerClassification, 'recovery-delegated');
 assert.equal(contract.softEnforcement.verifyGateOnlyBeforeLanding, true);
 assert.equal(contract.softEnforcement.finalMainIdentityBarrier, true);
 assert.equal(contract.softEnforcement.forcePushAllowed, false);
@@ -50,8 +51,8 @@ assert.equal(policy.protection.automaticActivationAttempt, true);
 assert.equal(policy.protection.softEnforcementFallback, true);
 
 const inventory = (policy.adapters.writerInventory || []).map((row) => row.workflow).sort();
-assert.deepEqual(directWriterInventory(root), inventory, 'every direct/delegated repo-main-write workflow must be inventory-classified');
-assert.deepEqual(writerContractErrors(root, policy, contract), [], 'all active writers must use exact-candidate Required gating');
+assert.deepEqual(directWriterInventory(root), inventory, 'every direct repo-main-write workflow must be inventory-classified');
+assert.deepEqual(writerContractErrors(root, policy, contract), [], 'regular writers and delegated recovery guard must satisfy protected-main gating');
 
 const offBranch = {
   protected: false,
@@ -62,7 +63,7 @@ assert.equal(ready.state, 'READY_TO_ACTIVATE');
 assert.equal(ready.protected, false);
 assert.equal(ready.requiredPresent, false);
 assert.equal(ready.writerGatewayReady, true);
-assert.equal(ready.activeWriterCount, 5);
+assert.equal(ready.activeWriterCount, 4);
 assert.equal(ready.automaticActivationAttempt, true);
 assert.equal(ready.softEnforcementEnabled, true);
 assert.equal(ready.nativeProtectionEquivalent, false);
@@ -113,7 +114,7 @@ const section = renderProtectionSection(ready);
 assert.match(section, /Protection state: `READY_TO_ACTIVATE`/);
 assert.match(section, /GitHub branch protected: `false`/);
 assert.match(section, /Required target: `SimCore CI \/ Required` \/ API context `Required` — `NOT_ENFORCED`/);
-assert.match(section, /Protected writer gateway: `READY` — 5 active writers/);
+assert.match(section, /Protected writer gateway: `READY` — 4 active writers/);
 assert.match(section, /Automatic native activation attempt: `ENABLED`/);
 assert.match(section, /Soft enforcement fallback: `ACTIVE`/);
 assert.match(section, /Soft fallback equals native protection: `false`/);

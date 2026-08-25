@@ -235,7 +235,7 @@ jobs:
           [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]] || { git status --short plugins/usage-dashboard/tests; echo 'TEST_TREE_MUTATED'; exit 1; }
           git add -A
           TREE_SHA="$(git write-tree)"
-          PAYLOAD_SHA="$(printf 'materialize: Usage Dashboard %s from source %s\n' "$PRODUCT_VERSION" "$SOURCE_SHA" | git commit-tree "$TREE_SHA" -p "$CANDIDATE_PARENT_SHA")"
+          PAYLOAD_SHA="$(printf 'materialize: Usage Dashboard %s from source %s\n\nUsage-Dashboard-Frozen-Main: %s\n' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA" | git commit-tree "$TREE_SHA" -p "$CANDIDATE_PARENT_SHA")"
           node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --verify-derived "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON"
           git branch -f candidate-payload "$PAYLOAD_SHA"
           BUNDLE="$RUNNER_TEMP/usage-dashboard-e7-candidate.bundle"
@@ -326,6 +326,17 @@ jobs:
           git fetch "$BUNDLE" 'refs/heads/candidate-payload:refs/e7/candidate-payload'
           IMPORTED_SHA="$(git rev-parse refs/e7/candidate-payload)"
           [[ "$IMPORTED_SHA" == "$PAYLOAD_SHA" ]] || { echo 'E7_PAYLOAD_SHA_MISMATCH'; exit 1; }
+          if ! RECORDED_FROZEN_MAIN="$(node - "$PAYLOAD_SHA" <<'NODE'
+          const {execFileSync}=require('node:child_process');
+          const guard=require('./plugins/usage-dashboard/tools/merge_guard_e11.cjs');
+          const message=execFileSync('git',['show','-s','--format=%B',process.argv[2]],{encoding:'utf8'});
+          process.stdout.write(guard.frozenMainFromMessage(message)||'');
+          NODE
+          )"; then
+            echo 'E7_FROZEN_MAIN_TRAILER_INVALID'
+            exit 1
+          fi
+          [[ "$RECORDED_FROZEN_MAIN" == "$TRUSTED_BASE_SHA" ]] || { echo "E7_FROZEN_MAIN_TRAILER_MISMATCH:$RECORDED_FROZEN_MAIN:expected=$TRUSTED_BASE_SHA"; exit 1; }
           node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --verify-derived "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON"
           REMOTE_RECHECK="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
           [[ "$REMOTE_RECHECK" == "$REMOTE_BEFORE" ]] || { echo 'E7_CANDIDATE_CAS_RECHECK_FAILED'; exit 1; }

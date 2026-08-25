@@ -1,0 +1,18 @@
+'use strict';
+
+const assert=require('assert'),fs=require('fs'),path=require('path');
+const root=path.resolve(__dirname,'../../../..'),base=path.join(root,'.github/plugin-control-plane/canonical-main');
+const boundary=JSON.parse(fs.readFileSync(path.join(base,'module-boundaries.json'),'utf8')),architectureDirs=boundary.managedDirectories;
+function listCjs(dir){const out=[];for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory())out.push(...listCjs(full));else if(entry.isFile()&&entry.name.endsWith('.cjs'))out.push(full);}return out;}
+const files=architectureDirs.flatMap((name)=>listCjs(path.join(base,name)));assert(files.length>=20,'modular architecture should contain explicit small modules');
+assert.equal(boundary.schemaVersion,1);assert.equal(boundary.policy,'split-before-merge');assert.equal(boundary.failureCode,'MODULE_SPLIT_REQUIRED');
+const overrides=new Map(Object.entries(boundary.overrides||{}));
+for(const file of files){const rel=path.relative(base,file).replace(/\\/g,'/'),source=fs.readFileSync(file,'utf8'),lines=source.split(/\r?\n/).length,budget=overrides.get(rel)||boundary.defaultMaxLines;assert(lines<=budget,`MODULE_SPLIT_REQUIRED:${rel}:${lines}>${budget} — extract responsibilities instead of growing the module`);}
+for(const layer of ['core','domains','surfaces'])for(const file of listCjs(path.join(base,layer))){const source=fs.readFileSync(file,'utf8');assert.doesNotMatch(source,/https:\/\/api\.github\.com|process\.env|(?:^|[^\w])fetch\s*\(/,`${layer} must remain side-effect free`);}
+for(const file of listCjs(path.join(base,'surfaces'))){const source=fs.readFileSync(file,'utf8');assert.doesNotMatch(source,/\basync\b|\bawait\b|method:\s*['"](?:POST|PUT|PATCH|DELETE)/,'surface modules must be pure renderers');}
+for(const file of listCjs(path.join(base,'observers'))){const source=fs.readFileSync(file,'utf8');assert.doesNotMatch(source,/method:\s*['"](?:POST|PUT|PATCH|DELETE)|replaceLabels\(|updateIssue\(|createIssue\(/,'observers must remain read-only');assert.doesNotMatch(source,/https:\/\/api\.github\.com|process\.env/,'observers must use injected infrastructure');}
+const registry=fs.readFileSync(path.join(base,'modules/registry.cjs'),'utf8');for(const id of ['requiredCi','productionAuthority','writers','bootstrap','protection','projectStatus'])assert.match(registry,new RegExp(`id: '${id}'`),`static module registry missing ${id}`);assert.doesNotMatch(registry,/readdirSync|require\s*\(\s*[^'"]/,'dynamic plugin loading is forbidden');
+const workflow=fs.readFileSync(path.join(root,'.github/workflows/canonical-main-ops.yml'),'utf8');assert.match(workflow,/orchestrator\/refresh\.cjs refresh/);assert.equal((workflow.match(/orchestrator\/refresh\.cjs refresh/g)||[]).length,1,'ops workflow must invoke exactly one #305 orchestrator');const runLines=workflow.split(/\r?\n/).filter((line)=>/^\s*run:\s*/.test(line)).join('\n');assert.doesNotMatch(runLines,/ops-controller\.cjs refresh|protected-main-surface\.cjs refresh|bootstrap-surface\.cjs refresh/);
+for(const legacy of ['ops-controller.cjs','protected-main-surface.cjs','bootstrap-surface.cjs']){const source=fs.readFileSync(path.join(base,legacy),'utf8');assert.doesNotMatch(source,/https:\/\/api\.github\.com/,`${legacy} must be compatibility-only`);}
+const orchestrator=fs.readFileSync(path.join(base,'orchestrator/refresh.cjs'),'utf8');assert.match(orchestrator,/issueStore\.updateIssue\(opsIssue\.number/);assert.match(orchestrator,/renderOpsView\(snapshot\)/);assert.match(orchestrator,/schemaVersion:\s*1/);assert.match(orchestrator,/Object\.freeze/);
+console.log('CANONICAL_MAIN_MODULE_ARCHITECTURE:OK');

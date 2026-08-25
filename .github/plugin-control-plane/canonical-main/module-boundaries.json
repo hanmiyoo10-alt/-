@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "policy": "split-before-merge",
+  "failureCode": "MODULE_SPLIT_REQUIRED",
+  "defaultMaxLines": 220,
+  "overrides": {"orchestrator/refresh.cjs": 260},
+  "managedDirectories": ["core","infra","observers","domains","surfaces","modules","orchestrator","rehearsal"],
+  "principles": ["one-responsibility-per-module","extract-when-line-budget-exceeded","extract-when-side-effect-boundary-is-crossed","no-dynamic-plugin-loading","single-ops-view-writer"]
+}

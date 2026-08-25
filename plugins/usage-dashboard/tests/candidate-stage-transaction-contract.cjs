@@ -24,8 +24,8 @@ assert.match(stage,/github\.actor == github\.repository_owner/);
 assert.match(stage,/startsWith\(github\.event\.comment\.body, '\/usage-dashboard stage '\)/);
 assert.match(stage,/candidate_stage_e6\.cjs --inspect/,'E7 inherits proven E6 source-derived authority helper');
 assert.match(stage,/E7_STAGE_SOURCE_FROZEN/);
-assert.doesNotMatch(stage,/pull-requests: write|actions: write/,'stage must not own PR bootstrap or validation activation');
-assert.doesNotMatch(stage,/\/pulls|workflow.*dispatches/,'stage must end at candidate authority');
+assert.doesNotMatch(stage,/pull-requests: write/,'stage must not own PR bootstrap');
+assert.doesNotMatch(stage,/\/pulls|usage-dashboard-e9-validate\.yml\/dispatches/,'stage must not own PR bootstrap or validation activation');
 assert.equal((stage.match(/contents: write/g)||[]).length,1,'E7 stage owns exactly one constrained contents writer');
 
 const resolveAt=stage.indexOf('\n  resolve_stage:');

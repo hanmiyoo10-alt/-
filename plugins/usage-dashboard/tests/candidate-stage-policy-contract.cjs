@@ -37,6 +37,7 @@ try {
   git(temp, ['config', 'user.email', 'test@example.invalid']);
   write(temp, 'plugins/usage-dashboard/runtime/product-manifest.json', JSON.stringify({productVersion:'3.0.0-alpha.5.71'}) + '\n');
   write(temp, 'plugins/usage-dashboard/src/00-runtime-core.part.js', 'base\n');
+  write(temp, 'plugins/usage-dashboard/src/18-request-provenance-analytics.part.js', 'superseded-wrapper\n');
   git(temp, ['add', '.']);
   git(temp, ['commit', '-m', 'base']);
   const base = git(temp, ['rev-parse', 'HEAD']);
@@ -50,7 +51,8 @@ try {
   write(temp, 'plugins/usage-dashboard/src/10-request-normalize.part.js', 'source\n');
   write(temp, 'plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs', 'engine\n');
   write(temp, 'plugins/usage-dashboard/tests/behavior-fixture.cjs', 'console.log("fixture")\n');
-  git(temp, ['add', '.']);
+  fs.rmSync(path.join(temp, 'plugins/usage-dashboard/src/18-request-provenance-analytics.part.js'));
+  git(temp, ['add', '-A']);
   git(temp, ['commit', '-m', 'feature']);
   const source = git(temp, ['rev-parse', 'HEAD']);
   process.chdir(temp);
@@ -61,6 +63,8 @@ try {
   assert.equal(inspected.productVersion, '3.0.0-alpha.5.72');
   assert.equal(inspected.engineChanged, true);
   assert.equal(inspected.pluginChanged, true);
+  assert.ok(inspected.files.includes('plugins/usage-dashboard/src/18-request-provenance-analytics.part.js'), 'deleted plugin source must remain in frozen source intent');
+  assert.equal(inspected.classes['plugins/usage-dashboard/src/18-request-provenance-analytics.part.js'], 'plugin-source');
 
   git(temp, ['checkout', '-q', base]);
   write(temp, '.github/usage-dashboard/releases/5.72.json', JSON.stringify(spec) + '\n');
@@ -84,4 +88,4 @@ try {
   fs.rmSync(temp, {recursive:true, force:true});
 }
 
-console.log('usage-dashboard candidate stage policy contract: OK · one spec, semantic diff budget, generated-output denial, monotonic target');
+console.log('usage-dashboard candidate stage policy contract: OK · one spec, semantic diff budget including deletions, generated-output denial, monotonic target');

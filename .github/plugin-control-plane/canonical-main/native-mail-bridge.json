@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "bridge": "chatgpt-github-gmail-condition-watch",
+  "state": "ACTIVE_PROVEN",
+  "automationTitle": "Main Incident Mail",
+  "cadence": "hourly",
+  "source": {
+    "repository": "hanmiyoo10-alt/-",
+    "operationsIssue": 305,
+    "incidentSelector": "P0/P1 OPEN or RECOVERED",
+    "dedupe": "repository deliveryKey / incident correlation semantics"
+  },
+  "delivery": {
+    "channel": "email",
+    "provider": "connected Gmail",
+    "recipient": "authenticated account self",
+    "credentialsInRepository": false
+  },
+  "proof": {
+    "performedAt": "2026-08-25T03:25:00Z",
+    "syntheticOnly": true,
+    "reasonCode": "NATIVE_MAIL_BRIDGE_PROOF",
+    "firstOpenSent": 1,
+    "repeatedOpenSent": 0,
+    "recoveredSent": 1,
+    "repositoryIncidentCreated": false
+  },
+  "authority": {
+    "releaseBlocking": false,
+    "mainWriteBlocking": false,
+    "productionMutation": false
+  },
+  "fallback": {
+    "externalGithubApp": "optional-not-required"
+  }
+}

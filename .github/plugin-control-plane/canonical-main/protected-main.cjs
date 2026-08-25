@@ -54,6 +54,10 @@ function softEnforcementContractErrors(root, contract = loadProtectedMainContrac
   if (!/workflow_run:/.test(workflow) || !/SimCore CI/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_TRIGGER_MISSING');
   if (!/github\.event\.workflow_run\.event == 'push'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_PUSH_SCOPE_MISSING');
   if (!/github\.event\.workflow_run\.head_branch == 'main'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_MAIN_SCOPE_MISSING');
+  if (!/github\.event\.workflow_run\.conclusion == 'success'/.test(workflow)) errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_SUCCESS_GATE_MISSING');
+  if (!/Confirm successful result still belongs to current main/.test(workflow) || !/git rev-parse origin\/main/.test(workflow)) {
+    errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_MAIN_IDENTITY_BARRIER_MISSING');
+  }
 
   for (const token of [
     'scripts/repo-main-write.py',

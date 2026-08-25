@@ -1,4 +1,4 @@
-# Canonical Main Automation — Phase D Native Mail Bridge
+# Canonical Main Automation — Phase E Delivery Receipts
 
 This directory implements the shared, non-runtime canonical-main automation designed in issues #295, #297, #298, #301, and #302.
 
@@ -19,18 +19,31 @@ Phase C added the repository notification outbox:
 - deterministic `deliveryKey` semantics;
 - an optional external GitHub App reference implementation.
 
-Phase D makes the currently available native delivery path canonical:
+Phase D made the currently available native delivery path canonical:
 
 - ChatGPT condition-watch automation reads canonical-main operations and incident state from GitHub;
 - eligible P0/P1 OPEN and RECOVERED transitions are delivered through the connected Gmail account;
 - the condition watch runs hourly, which is the supported automation polling floor;
-- duplicate delivery is suppressed using the repository incident/correlation and `deliveryKey` semantics;
+- duplicate delivery is suppressed using repository incident/correlation and `deliveryKey` semantics;
 - recipient/account credentials remain outside the repository and are managed by the connected Gmail integration;
 - the external GitHub App path is optional fallback infrastructure, not a required setup step.
 
-The native bridge is recorded as `ACTIVE_PROVEN` after a bounded synthetic proof produced exactly one OPEN email, zero repeated-OPEN emails, and exactly one RECOVERED email without creating a repository incident.
+Phase E makes delivery auditable:
 
-See `native-mail-bridge.json` for the frozen operational contract and proof summary.
+- each native delivery attempt writes a structured receipt to the corresponding incident issue comment;
+- supported receipt states are `DELIVERED`, `FAILED`, and one-time `SUPPRESSED_DUPLICATE` evidence;
+- receipts contain delivery metadata only and must not contain recipient addresses, OAuth tokens, passwords, secrets, API keys, or provider credentials;
+- `[repo-ops:main]` aggregates a bounded set of P0/P1 incident comments and renders bridge health, last success/failure, receipt totals, unresolved delivery failures, and unique duplicate-suppression proofs;
+- bridge health is separate from repository/release health and cannot block a release or a canonical-main write.
+
+Bridge-health semantics:
+
+- `HEALTHY`: at least one structured/legacy delivery receipt exists and no delivery key has an unresolved latest `FAILED` receipt;
+- `DEGRADED`: at least one delivery key has a latest `FAILED` receipt;
+- `PROVEN_IDLE`: no live receipt exists yet, but the bounded Phase D bridge proof remains valid;
+- `UNKNOWN`: no receipt and no valid proof baseline exists.
+
+See `native-mail-bridge.json` for the frozen bridge contract and `delivery-receipt.cjs` for receipt parsing/aggregation semantics.
 
 ## Observation epoch
 
@@ -51,7 +64,9 @@ Runs older than that epoch are historical baseline evidence and cannot open a ne
 
 Canonical incident issues remain the repository notification outbox. Eligible issue bodies contain a machine-readable `canonical-main-alert-envelope` marker.
 
-The primary delivery bridge is `Main Incident Mail`, a ChatGPT condition-watch automation over the connected GitHub and Gmail capabilities. It sends only newly eligible P0/P1 OPEN or RECOVERED transitions. Healthy state and repeated unchanged failures are silent.
+The primary delivery bridge is `Main Incident Mail`, a ChatGPT condition-watch automation over the connected GitHub and Gmail capabilities. It sends only newly eligible P0/P1 OPEN or RECOVERED transitions. Before sending it checks the incident comments for a prior successful receipt for the same `deliveryKey`.
+
+After a successful Gmail send it writes a `DELIVERED` structured receipt comment. A failed send writes `FAILED` evidence when GitHub remains reachable. A repeated eligible candidate that already has a successful receipt is not emailed again; at most one `SUPPRESSED_DUPLICATE` receipt is recorded for that delivery key.
 
 The repository does not store Gmail passwords, OAuth tokens, recipient addresses, SMTP credentials, provider API keys, or webhook secrets.
 
@@ -92,4 +107,4 @@ node .github/plugin-control-plane/canonical-main/bootstrap.cjs render \
 
 `policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability remains deliberately separate from repository health.
 
-`CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free. The mail bridge has its own `ACTIVE_PROVEN` state and does not participate in release/main authority.
+`CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free. The mail bridge has its own static `ACTIVE_PROVEN` contract state and dynamic receipt-derived bridge health.

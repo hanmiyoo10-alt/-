@@ -50,7 +50,7 @@ function assertAllowedPaths(files, materializerPath) {
 function changedPaths(baseSha, sourceSha) {
   const base = normalizeSha(baseSha, 'CANDIDATE_STAGE_BASE_SHA_INVALID');
   const source = normalizeSha(sourceSha, 'CANDIDATE_STAGE_SOURCE_SHA_INVALID');
-  const text = execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMRT', base, source, '--'], {encoding:'utf8'});
+  const text = execFileSync('git', ['diff', '--name-only', '--diff-filter=ACDMRT', base, source, '--'], {encoding:'utf8'});
   return [...new Set(text.split(/\r?\n/).map(v => v.trim()).filter(Boolean))].sort();
 }
 
@@ -121,6 +121,7 @@ module.exports = {
   GENERATED,
   classifyPath,
   assertAllowedPaths,
+  changedPaths,
   changedReleaseSpecs,
   parseAlphaBuild,
   inspectCandidate,

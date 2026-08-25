@@ -8,6 +8,19 @@
     return onHourBoundary && !requestNumber ? 'hour-estimated' : 'exact';
   }
 
+  function requestAccountScopeValue(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return ['devpass','credits','unknown'].includes(text) ? text : 'unknown';
+  }
+
+  function requestScopeFidelityValue(value, scope = 'unknown') {
+    const text = String(value || '').trim().toLowerCase();
+    const normalizedScope = requestAccountScopeValue(scope);
+    if (normalizedScope === 'devpass' && text === 'explicit-project') return text;
+    if (normalizedScope === 'credits' && text === 'explicit-org-billing') return text;
+    return 'unknown';
+  }
+
   function normalizeRecentRequestRows(rows, limit = 12) {
     if (!Array.isArray(rows)) return [];
     return rows.map(row => {
@@ -40,6 +53,9 @@
       const servedServiceTierSource = String(recentRequestValue(row, ['servedServiceTierSource','served_service_tier_source'], servedTierField.key) || servedTierField.key || '');
       const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
       const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
+      const requestAccountScope = requestNumber ? requestAccountScopeValue(recentRequestValue(row, ['requestAccountScope','request_account_scope'], 'unknown')) : 'unknown';
+      const requestScopeFidelity = requestNumber ? requestScopeFidelityValue(recentRequestValue(row, ['requestScopeFidelity','request_scope_fidelity'], 'unknown'), requestAccountScope) : 'unknown';
+      const requestScopeConflict = requestNumber ? row?.requestScopeConflict === true : false;
       const status = String(recentRequestValue(row, ['status','state'], '') || '').toLowerCase();
       const errorCodeRaw = recentRequestValue(row, ['errorCode','error_code','statusCode','status_code','httpStatus','http_status','error.code'], null);
       const errorTypeRaw = recentRequestValue(row, ['errorType','error_type','error.type'], null);
@@ -78,6 +94,9 @@
         requestedServiceTierSource,
         servedServiceTierSource,
         requestNumber,
+        requestAccountScope,
+        requestScopeFidelity,
+        requestScopeConflict,
         requestStatus:status,
         success,
         errorCode:success ? '' : String(errorCodeRaw ?? ''),
@@ -187,6 +206,8 @@
   }
 
   function requestLedgerKey(row) {
+    const requestNumber = String(row?.requestNumber || '').trim();
+    if (requestNumber) return `request:${requestNumber}`;
     return [
       Number(row?.timestamp || 0),
       String(row?.requestNumber || ''),
@@ -264,10 +285,11 @@
   function requestLedgerRowsForScope(scopeKey) {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     const key = ['all','devpass','credits'].includes(String(scopeKey)) ? String(scopeKey) : 'all';
-    return (Array.isArray(state.requestLedger) ? state.requestLedger : [])
+    const rows = (Array.isArray(state.requestLedger) ? state.requestLedger : [])
       .filter(row => row && num(row.timestamp) && Number(row.timestamp) >= cutoff)
-      .filter(row => key === 'all' || (Array.isArray(row.scopes) && row.scopes.includes(key)))
       .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+    if (key === 'all') return rows;
+    return rows.filter((row) => requestAccountScopeValue(row?.requestAccountScope) === key);
   }
 
   function requestHourKey(timestamp) {

@@ -41,12 +41,22 @@ Examples include deleted-owner references, historical product literals, stale pa
 
 After authoritative exact-SHA validation is GREEN and before the assistant merges, the existing durable reducer calls `plugins/usage-dashboard/tools/merge_guard_e11.cjs`.
 
-The helper reads only Git history. On the first deterministic materialization, the candidate's single parent is the frozen candidate-main base. If the same release is legitimately restaged before merge, the trusted stage writer fast-forwards the deterministic candidate branch with another `materialize: Usage Dashboard <same version> from source <sha>` commit. In that case the guard walks backward through the consecutive trusted materialization chain for that same product version and uses the first non-materialization parent as the frozen candidate-main base. It never treats prior candidate payload commits as main drift.
+The helper reads only Git history. Every newly trusted deterministic materialization records the exact main commit used to reconstruct its tree as a commit-message trailer:
+
+```text
+Usage-Dashboard-Frozen-Main: <TRUSTED_BASE_SHA>
+```
+
+The E7 materialization job writes that identity into the immutable candidate payload, and the constrained writer verifies the imported payload carries exactly the same frozen-main SHA already authenticated in bundle metadata before it may fast-forward the deterministic candidate ref. The candidate topology remains single-parent and fast-forward-only; the trailer adds identity, not a second ancestry edge or a second writer.
+
+The merge guard prefers this explicit frozen-main identity whenever it is present. Candidates created before the trailer existed remain supported through a compatibility fallback: if the latest deterministic materialization has no explicit trailer, the guard walks backward through consecutive trusted `materialize: Usage Dashboard <same version> from source <sha>` commits and uses the first non-materialization parent as the legacy frozen main base. This preserves the already-created 5.78 evidence without rewriting candidate history.
 
 The resolution remains fail-closed:
+- an explicit `Usage-Dashboard-Frozen-Main` line must occur exactly once and contain one lowercase 40-hex commit SHA;
+- the explicit frozen-main commit must exist locally;
+- compatibility fallback follows only the trusted deterministic materialization message grammar for the same product version;
 - every traversed materialization commit must have exactly one parent;
-- only the trusted deterministic materialization message grammar is followed;
-- the walk is bounded;
+- the fallback walk is bounded;
 - the resolved frozen base must be an ancestor of current `main`;
 - the guard remains completely read-only and does not rewrite candidate history.
 
@@ -67,7 +77,7 @@ The three receipts are merge decisions, not new release states:
 
 Every receipt is keyed by exact `candidate_sha` and exact `current_main_sha`. If main moves again, the old receipt is stale and a new classification is required. The guard never rebases, force-pushes, writes candidate/main refs, or performs a merge.
 
-Protected drift fails closed and sends the same durable request back through source refresh → exact `source_sha` update → stage → exact-SHA validation.
+Protected drift fails closed and sends the same durable request back through source refresh → exact `source_sha` update → stage → exact-SHA validation. The refreshed candidate can then point its explicit frozen-main trailer at the newer trusted main even though its single parent remains the prior deterministic candidate, preventing already-absorbed protected drift from blocking the release forever.
 
 ## E11-C — unmistakable non-authoritative ordinary PR lane
 
@@ -92,7 +102,7 @@ Generation qualification remains one-shot and separate from normal release closu
 - first successful real E11 release may emit the marker once and close #372;
 - later E11 releases are generation-proof no-ops.
 
-The focused `e11-diagnosable-merge-readiness-contract.cjs` is registered in the full Usage Dashboard test registry and locks structured readiness, merge-guard path classification, repeated deterministic materialization base resolution, PR-lane observability, generation wiring, and the no-new-writer rule.
+The focused `e11-diagnosable-merge-readiness-contract.cjs` is registered in the full Usage Dashboard test registry and locks structured readiness, merge-guard path classification, explicit frozen-main identity, legacy repeated deterministic materialization compatibility fallback, protected-drift refresh convergence, PR-lane observability, generation wiring, and the no-new-writer rule.
 
 ## E11-A..D implementation evidence
 
@@ -116,19 +126,29 @@ Main advanced from the implementation branch base only through unrelated SimCore
 
 Post-merge product manifest on main and `release-usage-dashboard` remains byte-identical at blob `ef1ae25970e9496a425b259e6d371eff364d1b1f`, still Product `3.0.0-alpha.5.77` / Engine `1.6.22` / Manager `1.3.0` / contracts `1/1`.
 
-## E11-E live feedback — repeated deterministic materialization
+## E11-E live feedback — deterministic restage identity
 
-The first real E11 release proof, 5.78 request `#376`, exposed one merge-readiness edge case before PR merge authority was used.
+The first real E11 release proof, 5.78 request `#376`, exposed two merge-readiness edge cases before PR merge authority was consumed.
+
+### Feedback 1 — repeated materialization ancestry
 
 The same semantic 5.78 source tree was re-submitted under a new exact source SHA after a bookkeeping-only source write was reverted. E11 readiness correctly re-qualified the new SHA and the trusted stage writer correctly fast-forwarded the same deterministic 5.78 candidate branch. The latest candidate therefore had the prior 5.78 candidate as its direct parent, while the original frozen main base remained farther back in the same first-parent chain.
 
-The original E11-B implementation assumed the latest candidate's direct parent was always the main base. The retained fix does not rewrite or reset candidate refs. It resolves the frozen base through consecutive same-version trusted materialization commits, adds a real temporary-Git regression fixture proving a repeated materialization does not become false main drift, and leaves all candidate/main/production write authorities unchanged.
+The original E11-B implementation assumed the latest candidate's direct parent was always the main base. Maintenance PR `#378` retained the candidate evidence and repaired that assumption by walking backward through consecutive same-version trusted materialization commits. A real temporary-Git fixture proves a repeated legacy materialization does not become false main drift.
+
+### Feedback 2 — protected-drift refresh needs an explicit base
+
+Reviewing the protected-main-drift recovery path then exposed a second identity gap. E7 reconstructs every new candidate tree from exact `TRUSTED_BASE_SHA`, but its required single parent remains the prior deterministic candidate SHA. After refreshing a source branch onto a newer main, ancestry alone therefore cannot distinguish “old frozen base still applies” from “the candidate tree was intentionally rebuilt from this newer main.” An ancestry-only guard could keep reporting already-absorbed protected drift forever.
+
+The retained repair keeps all writer and ancestry boundaries unchanged and adds the authenticated `Usage-Dashboard-Frozen-Main: <TRUSTED_BASE_SHA>` trailer. E11 uses that explicit base first and retains the #378 ancestry walk only as compatibility fallback for candidates that predate the trailer. Focused real-Git coverage proves `old main → candidate1 → candidate2`, then a refreshed candidate whose direct parent remains candidate2 while its explicit frozen base advances to a newer main commit. A malformed explicit trailer fails closed.
+
+No candidate ref is reset or force-pushed, no production ref is touched by this repair, no new public release state is introduced, and 5.78 product/runtime bytes remain unchanged.
 
 ## E11-E — first real release proof
 
-Pending after E11-A..D maintenance merge.
+Pending after the explicit frozen-main maintenance repair is merged and the same 5.78 durable request is restaged from current trusted main.
 
-The next real Usage Dashboard release must prove:
+The real Usage Dashboard release must prove:
 
 ```text
 one durable request

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "pocketrisu-helper-mod",
+  "kind": "product",
+  "displayName": "PocketRisu Helper Mod",
+  "lifecycle": "operations-product-root",
+  "projectPath": "products/pocketrisu-helper-mod",
+  "guidelines": "docs/POCKETRISU_HELPER_MOD_GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "products/pocketrisu-helper-mod/CURRENT.md",
+    "manifest": "products/pocketrisu-helper-mod/product.json"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

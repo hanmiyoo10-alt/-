@@ -26,7 +26,7 @@ for (const marker of [
   '<b>Floating Widget</b><span>표시 정보</span>',
   '<b>Performance</b><span>복귀 · adaptive refresh</span>',
   '<b>Lifecycle & Recovery</b>',
-  '요약 · 전체 진단',
+  'Basic · Detailed · Full Copy',
   '<span>Manager</span>',
   '<span>Lifecycle</span>',
   '<span>Errors</span>',

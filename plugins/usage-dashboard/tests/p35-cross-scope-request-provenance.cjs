@@ -20,7 +20,7 @@ const pluginAnalyticsPath = fs.existsSync(legacyPluginAnalyticsPath)
   ? legacyPluginAnalyticsPath
   : 'plugins/usage-dashboard/src/16-usage-analytics.part.js';
 const pluginAnalytics = fs.readFileSync(pluginAnalyticsPath, 'utf8');
-const pluginDiagnostics = fs.readFileSync('plugins/usage-dashboard/src/42-request-provenance-diagnostics.part.js', 'utf8');
+const pluginDiagnostics = fs.readFileSync('plugins/usage-dashboard/src/40-diagnostics.part.js', 'utf8');
 const ledger = fs.readFileSync('plugins/usage-dashboard/src/14-request-ledger.part.js', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
 const engineParts = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/parts.json', 'utf8'));
@@ -35,7 +35,8 @@ if (pluginAnalyticsPath === legacyPluginAnalyticsPath) {
   assert.ok(pluginParts.includes("16-usage-analytics.part.js"));
   assert.ok(!pluginParts.includes("18-request-provenance-analytics.part.js"));
 }
-assert.ok(pluginParts.includes("42-request-provenance-diagnostics.part.js"));
+assert.ok(pluginParts.includes("40-diagnostics.part.js"));
+assert.ok(!pluginParts.includes("42-request-provenance-diagnostics.part.js"));
 
 assert.ok(capture.includes("next.searchParams.delete('projectId')"), 'normal /logs candidate must be account-wide');
 assert.ok(capture.includes('return [...new Map([...accountWide, ...projectScoped]'), 'account-wide candidates must precede DevPass project fallback');
@@ -84,7 +85,7 @@ assert.ok(pluginProvenance.includes("text === 'explicit-project'"));
 assert.ok(pluginProvenance.includes("text === 'explicit-org-billing'"));
 assert.ok(pluginProvenance.includes("requestAccountScopeValue(row?.requestAccountScope) === key"), 'DevPass/Credits ledger filters must use provenance, not stale scope membership');
 assert.ok(pluginAnalytics.includes('normalizeRequestProvenanceMetadata'));
-assert.ok(pluginDiagnostics.includes('Account request capture: ${mode} · rows ${rows} · fallback'));
+assert.ok(pluginDiagnostics.includes('Account request capture: ${diagRequestProvenanceMode} · rows ${diagRequestProvenanceRows} · fallback'));
 assert.ok(pluginDiagnostics.includes('Request account scope fidelity: DevPass'));
 assert.ok(pluginDiagnostics.includes('Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0'));
 

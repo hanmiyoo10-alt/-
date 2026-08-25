@@ -10,6 +10,17 @@
     "incidentSelector": "P0/P1 OPEN or RECOVERED",
     "dedupe": "repository deliveryKey / incident correlation semantics"
   },
+  "aggregation": {
+    "enabled": true,
+    "unit": "system-per-check",
+    "groupBy": "most-specific-operational-scope",
+    "maxMessagesPerSystemPerCheck": 1,
+    "mergeAcrossSystems": false,
+    "preserveIndividualDeliveryKeys": true,
+    "preserveIndividualReceipts": true,
+    "sameCorrelationOpenRecovered": "single-bundle-history",
+    "ordering": "severity-then-transition-time"
+  },
   "delivery": {
     "channel": "email",
     "provider": "connected Gmail",

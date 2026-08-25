@@ -130,7 +130,9 @@ function r21CurrentSummary(text) {
 }
 
 function compactSyncFinding(finding) {
-  const out = { code: String(finding?.code || 'UNKNOWN_SYNC_FINDING'), family: 'productionIdentity' };
+  const code = String(finding?.code || 'UNKNOWN_SYNC_FINDING');
+  const family = /^HUMAN_CURRENT_/.test(code) ? 'currentProductionClaims' : 'productionIdentity';
+  const out = { code, family };
   if (finding?.severity) out.severity = String(finding.severity);
   if (finding?.path) out.path = String(finding.path);
   if (finding?.probeId) out.probeId = String(finding.probeId);
@@ -244,6 +246,29 @@ function writeBoundedReport(file, report) {
   fs.writeFileSync(file, bytes);
 }
 
+function sourceFailureReport(error, rel) {
+  const source = typeof error?.source === 'string' ? error.source : null;
+  const findings = [nativeFinding(
+    error?.auditCode === 'CURRENT_AUTHORITY_PARSE_AMBIGUOUS'
+      ? 'CURRENT_AUTHORITY_PARSE_AMBIGUOUS'
+      : 'CURRENT_AUTHORITY_SOURCE_UNAVAILABLE',
+    'currentAuthorityInputs',
+    source,
+  )];
+  return {
+    schemaVersion: 1,
+    tool: 'authority-drift-check',
+    result: 'AUTHORITY_BLOCKED',
+    families: {
+      productionIdentity: source === rel.manifest || source === rel.productionIdentity ? 'BLOCKED' : 'CLEAN',
+      currentOperationalGate: source === rel.manifest || source === rel.currentDevelopment ? 'BLOCKED' : 'CLEAN',
+      currentProductionClaims: source === rel.currentDevelopment ? 'BLOCKED' : 'CLEAN',
+      r2_1OperatorStatus: [rel.currentDevelopment, rel.operatorPolicy, rel.operatorEvidence].includes(source) ? 'BLOCKED' : 'CLEAN',
+    },
+    findings,
+  };
+}
+
 export function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const root = path.resolve(args.root || ROOT);
@@ -258,24 +283,44 @@ export function run(argv = process.argv.slice(2)) {
     operatorEvidence: args['operator-evidence'] || 'docs/SIMCORE_RELEASE_SYSTEM_V2_1_OPERATOR_DELEGATION_EVIDENCE.md',
   };
 
-  const syncReport = runSyncState([
-    '--check',
-    '--root', root,
-    '--manifest', rel.manifest,
-    '--production-identity', rel.productionIdentity,
-    '--targets', rel.targets,
-    '--probes', rel.probes,
-    '--writer-policy', rel.writerPolicy,
-  ]);
+  let syncReport;
+  try {
+    syncReport = runSyncState([
+      '--check',
+      '--root', root,
+      '--manifest', rel.manifest,
+      '--production-identity', rel.productionIdentity,
+      '--targets', rel.targets,
+      '--probes', rel.probes,
+      '--writer-policy', rel.writerPolicy,
+    ]);
+  } catch (error) {
+    syncReport = {
+      schemaVersion: 1,
+      tool: 'sync-state',
+      result: 'CHECK_BLOCKED',
+      findings: [{ code: error?.syncCode || 'SYNC_STATE_BLOCKED', severity: 'BLOCKER' }],
+    };
+  }
 
-  const report = auditAuthorityState({
-    syncReport,
-    manifest: readJson(root, rel.manifest),
-    currentDevelopment: readText(root, rel.currentDevelopment),
-    operatorPolicy: readText(root, rel.operatorPolicy),
-    operatorEvidence: readText(root, rel.operatorEvidence),
-    paths: rel,
-  });
+  let report;
+  try {
+    report = auditAuthorityState({
+      syncReport,
+      manifest: readJson(root, rel.manifest),
+      currentDevelopment: readText(root, rel.currentDevelopment),
+      operatorPolicy: readText(root, rel.operatorPolicy),
+      operatorEvidence: readText(root, rel.operatorEvidence),
+      paths: rel,
+    });
+  } catch (error) {
+    report = sourceFailureReport(error, rel);
+    if (syncReport.result === 'CHECK_BLOCKED') {
+      report.families.productionIdentity = 'BLOCKED';
+      report.families.currentProductionClaims = 'BLOCKED';
+      for (const finding of syncReport.findings || []) report.findings.push(compactSyncFinding(finding));
+    }
+  }
 
   writeBoundedReport(path.resolve(args.report), report);
   return report;

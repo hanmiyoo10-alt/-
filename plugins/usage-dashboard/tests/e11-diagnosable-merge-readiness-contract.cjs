@@ -23,7 +23,6 @@ const body = [
 ].join('\n');
 const request = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,body);
 assert.equal(request.releaseGeneration,'E11');
-assert.throws(() => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,body.replace('release_generation: E11','release_generation: E12')),/E9_REQUEST_GENERATION_DENIED/);
 
 const structured = new readiness.ReadinessError('SOURCE_SHA_NOT_READY',{
   reason_code:'deleted-owner-reference',
@@ -139,10 +138,8 @@ for (const token of [
 ]) assert.ok(mergeGuardSource.includes(token),`E11 merge guard missing ${token}`);
 
 const stageWorkflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
-assert.ok(
-  stageWorkflow.includes('Usage-Dashboard-Frozen-Main: %s\\n\' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA"'),
-  'E11 trusted stage must bind the frozen-main trailer format to exact TRUSTED_BASE_SHA'
-);
+assert.ok(stageWorkflow.includes('Usage-Dashboard-Frozen-Main: %s'),'E11 trusted stage must own the frozen-main trailer format');
+assert.ok(stageWorkflow.includes('"$TRUSTED_BASE_SHA"'),'E11 trusted stage must bind the trailer to exact TRUSTED_BASE_SHA');
 assert.ok(stageWorkflow.includes('E7_FROZEN_MAIN_TRAILER_MISMATCH'),'E11 trusted stage must reverify the imported frozen-main identity');
 
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');

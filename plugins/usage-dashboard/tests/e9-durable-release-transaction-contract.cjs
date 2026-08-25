@@ -119,7 +119,7 @@ const runbook = fs.readFileSync('docs/USAGE_DASHBOARD_PR_LIFECYCLE_E9_DURABLE_TR
 for (const token of [
   'one durable release request',
   'SOURCE_SHA_READY',
-  'A / M / D / R / T',
+  'A/M/D/R/T',
   'VALIDATED_SHA == CURRENT_PR_HEAD_SHA == CURRENT_CANDIDATE_SHA',
   'exact-byte',
   'E9-F',

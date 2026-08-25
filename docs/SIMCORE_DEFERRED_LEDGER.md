@@ -64,7 +64,7 @@ Production: v0.64.7 — Cross-Reload Cache Observer Continuity
 Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
-Safe parallel non-runtime work: summary-scope → narrative-clock → frame → broadcast-closure lifecycle/airtime fixture expansion
+Safe parallel non-runtime work: frozen fixture work plus NR idea design / closed-tier SAFE_NON_RUNTIME harvest under the dedicated queue policy
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -150,6 +150,55 @@ v0.64.1 established the deterministic request-scoped `ANNUAL_ONLY` versus `CUMUL
 Natural annual-only and cumulative-YoY outputs remain useful for renderer-semantic validation, but they are no longer the active production mini gate. Keep the repeated standalone-C lineage over-chain on WATCH and do not patch Lineage/Recurrence without new attributable evidence.
 
 ## WATCH_ONLY anomalies
+
+### NR standalone tooling-test discovery coverage
+
+Status: `WATCH_ONLY / VERIFICATION_COVERAGE / NON_RUNTIME / NON_BLOCKING`
+
+Observed during the S-10 and S-11 SAFE_NON_RUNTIME harvests on 2026-08-26.
+
+Both work items added focused standalone test sources:
+
+```text
+products/simcore/tooling/authority-drift-check.test.mjs
+products/simcore/tooling/stale-pr-hygiene.test.mjs
+```
+
+Their PR-level SimCore CI workflows completed successfully, but the current path classifier does not register arbitrary new `products/simcore/tooling/*.test.mjs` files as semantic test lanes. The permanent verifier therefore treated the new standalone tooling paths as outside the planned SimCore gates; it did not automatically execute those focused semantic test files.
+
+Preserved evidence:
+
+```text
+S-10 PR #396
+SimCore CI run 32890770492
+Verify PASS
+Required PASS
+standalone S-10 semantic test execution by current CI: NOT CLAIMED
+
+S-11 PR #398
+SimCore CI run 32891014549
+Verify PASS
+Required PASS
+standalone S-11 semantic test execution by current CI: NOT CLAIMED
+```
+
+Dedicated implementation evidence:
+
+```text
+docs/SIMCORE_S10_AUTHORITY_DRIFT_IMPLEMENTATION_EVIDENCE_2026-08-26.md
+docs/SIMCORE_S11_STALE_PR_HYGIENE_IMPLEMENTATION_EVIDENCE_2026-08-26.md
+```
+
+Current disposition:
+
+```text
+runtime correctness impact: NONE
+release-simcore impact: NONE
+implementation blocker: NO
+current NR easy-tier close blocker: NO
+```
+
+Do not silently widen the permanent CI classifier, harness registry, or release-gate policy inside S-10/S-11 just to erase this WATCH. If generalized standalone tooling-test discovery becomes desirable, design it as a separate repository/CI item so CI authority changes are not mixed with product/tool harvest work.
 
 ### GENERATION_SEMANTIC_EXCURSION
 
@@ -250,9 +299,10 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 ```text
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on.
-3. Non-runtime permanent fixture work may proceed independently when selected: summary-scope → narrative-clock → frame → broadcast-closure expansion.
-4. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.
-5. After M2-3 lands, run the direct genuine-edit post-extraction close control before M2-4.
-6. R2.1 end-to-end delegated release proof belongs to the next genuine runtime release and remains non-blocking for the current live gate.
-7. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
+3. NR Difficulty 1 and 2 SAFE_NON_RUNTIME harvests are complete; NR Difficulty 3 design may continue independently (M-10 → M-13, with M-11 already frozen).
+4. Non-runtime permanent fixture work may proceed independently when selected: summary-scope → narrative-clock → frame → broadcast-closure expansion.
+5. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.
+6. After M2-3 lands, run the direct genuine-edit post-extraction close control before M2-4.
+7. R2.1 end-to-end delegated release proof belongs to the next genuine runtime release and remains non-blocking for the current live gate.
+8. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
 ```

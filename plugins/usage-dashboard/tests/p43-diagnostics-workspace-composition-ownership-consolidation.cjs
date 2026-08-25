@@ -57,6 +57,8 @@ assert.equal((markup.match(/\$\{diagnosticsWorkspacePanelHtml\(\)\}/g) || []).le
 assert.equal((latest.match(/<summary><b>Runtime Diagnostics<\/b>/g) || []).length, 1, 'P43 built plugin must own exactly one Runtime Diagnostics panel template');
 assert.ok(latest.indexOf('function settingsHtml()') >= 0, 'P43 built settingsHtml owner missing');
 assert.ok(latest.indexOf('function diagnosticsWorkspacePanelHtml()') > latest.indexOf('function settingsHtml()'), 'P43 locks later-declared Diagnostics panel helper topology');
+assert.equal((settings.match(/async function openSettings\(\)/g) || []).length, 1, 'P43 native settings runtime must own exactly one openSettings entry point');
+assert.equal((settings.match(/function renderSettings\(\)/g) || []).length, 1, 'P43 native settings runtime must own exactly one renderSettings pipeline');
 assert.match(settings, /async function openSettings\(\) \{[\s\S]*?renderSettings\(\);/, 'P43 openSettings must enter the native renderSettings pipeline');
 assert.match(settings, /function renderSettings\(\) \{[\s\S]*?document\.body\.innerHTML = settingsHtml\(\);/, 'P43 native renderSettings pipeline must invoke settingsHtml');
 
@@ -108,4 +110,4 @@ for (const name of [
   'p43-diagnostics-workspace-composition-ownership-consolidation.cjs',
 ]) assert.ok(suite.regressions.includes(name), `P43 registry missing ${name}`);
 
-console.log('P43 Diagnostics Workspace Composition Ownership Consolidation: OK · native settings composition/binding · module 62 direct workspace owner · 24 parts · P36/P37/P38 GREEN · Engine byte-identical');
+console.log('P43 Diagnostics Workspace Composition Ownership Consolidation: OK · native settings composition/binding · semantic settings invocation ownership · module 62 direct workspace owner · 24 parts · P36/P37/P38 GREEN · Engine byte-identical');

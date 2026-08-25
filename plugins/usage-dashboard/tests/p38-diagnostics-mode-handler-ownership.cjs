@@ -16,7 +16,8 @@ const enginePath = `${root}/runtime/bridge-engine.mjs`;
 const latestPath = `${root}/latest.js`;
 
 const release = assertCurrentReleaseArtifacts();
-assert.equal(release.productVersion, '3.0.0-alpha.5.74');
+const p38Lineage = /^3\.0\.0-alpha\.5\.(\d+)$/.exec(release.productVersion);
+assert.ok(p38Lineage && Number(p38Lineage[1]) >= 74, 'P38 applies to alpha.5 build 74 and later');
 assert.equal(release.engineVersion, '1.6.22');
 assert.equal(release.managerVersion, '1.3.0');
 assert.equal(release.snapshotContract, 1);

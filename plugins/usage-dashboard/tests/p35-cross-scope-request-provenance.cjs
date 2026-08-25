@@ -15,7 +15,11 @@ const engineSources = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridg
 const engineCore = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/00-core.part.mjs', 'utf8');
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
 const pluginProvenance = fs.readFileSync('plugins/usage-dashboard/src/15-request-provenance.part.js', 'utf8');
-const pluginAnalytics = fs.readFileSync('plugins/usage-dashboard/src/18-request-provenance-analytics.part.js', 'utf8');
+const legacyPluginAnalyticsPath = 'plugins/usage-dashboard/src/18-request-provenance-analytics.part.js';
+const pluginAnalyticsPath = fs.existsSync(legacyPluginAnalyticsPath)
+  ? legacyPluginAnalyticsPath
+  : 'plugins/usage-dashboard/src/16-usage-analytics.part.js';
+const pluginAnalytics = fs.readFileSync(pluginAnalyticsPath, 'utf8');
 const pluginDiagnostics = fs.readFileSync('plugins/usage-dashboard/src/42-request-provenance-diagnostics.part.js', 'utf8');
 const ledger = fs.readFileSync('plugins/usage-dashboard/src/14-request-ledger.part.js', 'utf8');
 const manager = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-manager.cjs', 'utf8');
@@ -25,7 +29,12 @@ const pluginParts = fs.readFileSync('plugins/usage-dashboard/src/parts.cjs', 'ut
 assert.ok(engineParts.parts.includes('35-request-provenance-capture.part.mjs'));
 assert.ok(engineParts.parts.includes('55-request-provenance.part.mjs'));
 assert.ok(pluginParts.includes("15-request-provenance.part.js"));
-assert.ok(pluginParts.includes("18-request-provenance-analytics.part.js"));
+if (pluginAnalyticsPath === legacyPluginAnalyticsPath) {
+  assert.ok(pluginParts.includes("18-request-provenance-analytics.part.js"));
+} else {
+  assert.ok(pluginParts.includes("16-usage-analytics.part.js"));
+  assert.ok(!pluginParts.includes("18-request-provenance-analytics.part.js"));
+}
 assert.ok(pluginParts.includes("42-request-provenance-diagnostics.part.js"));
 
 assert.ok(capture.includes("next.searchParams.delete('projectId')"), 'normal /logs candidate must be account-wide');

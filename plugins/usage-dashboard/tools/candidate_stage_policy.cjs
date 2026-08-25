@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
+const changeSemantics = require('./source_change_semantics.cjs');
 
 const RELEASE_SPEC_RE = /^\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json$/;
 const MATERIALIZER_RE = /^plugins\/usage-dashboard\/tools\/[A-Za-z0-9._-]+\.py$/;
@@ -50,8 +51,7 @@ function assertAllowedPaths(files, materializerPath) {
 function changedPaths(baseSha, sourceSha) {
   const base = normalizeSha(baseSha, 'CANDIDATE_STAGE_BASE_SHA_INVALID');
   const source = normalizeSha(sourceSha, 'CANDIDATE_STAGE_SOURCE_SHA_INVALID');
-  const text = execFileSync('git', ['diff', '--name-only', '--diff-filter=ACDMRT', base, source, '--'], {encoding:'utf8'});
-  return [...new Set(text.split(/\r?\n/).map(v => v.trim()).filter(Boolean))].sort();
+  return changeSemantics.changedPaths(base, source);
 }
 
 function changedReleaseSpecs(files) {

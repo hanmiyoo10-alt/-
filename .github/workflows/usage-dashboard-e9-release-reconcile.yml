@@ -1,0 +1,260 @@
+name: Usage Dashboard E9 Durable Release Reconciler
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    branches: [main]
+    types: [closed]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/usage-dashboard-e9-release-reconcile.yml'
+      - '.github/workflows/usage-dashboard-e9-validate.yml'
+      - '.github/workflows/usage-dashboard-stage-e7.yml'
+      - 'plugins/usage-dashboard/tools/release_request_e9.cjs'
+      - 'plugins/usage-dashboard/tools/source_readiness_e9.cjs'
+      - 'plugins/usage-dashboard/tools/source_change_semantics.cjs'
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usage-dashboard-e9-release-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted main control plane
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reconcile oldest durable E9 release request
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          E9_GENERATION_ISSUE: '356'
+        run: |
+          set -euo pipefail
+
+          api_get() {
+            local path="$1" out="$2"
+            curl --fail-with-body --silent --show-error \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/$path" > "$out"
+          }
+          post_comment() {
+            local issue="$1" body="$2"
+            jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+            curl --fail-with-body --silent --show-error -X POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$issue/comments" \
+              --data-binary @"$RUNNER_TEMP/comment.json" >/dev/null
+          }
+          has_line() {
+            local marker="$1"
+            node - "$RUNNER_TEMP/comments.json" "$marker" <<'NODE'
+          const fs=require('node:fs');
+          const [file,marker]=process.argv.slice(2);
+          const comments=JSON.parse(fs.readFileSync(file,'utf8'));
+          const ok=comments.some((row)=>String(row.body||'').split(/\r?\n/).some((line)=>line.trim()===marker));
+          process.exit(ok?0:1);
+          NODE
+          }
+
+          api_get 'issues?state=open&labels=plugin%3Ausage-dashboard&sort=created&direction=asc&per_page=100' "$RUNNER_TEMP/issues.json"
+          REQUEST_NUMBER="$(jq -r --arg owner "$REPOSITORY_OWNER" '.[] | select(.pull_request == null) | select(.user.login == $owner) | select(.title | test("^\\[usage-dashboard-release\\] 3\\.0\\.0-alpha\\.5\\.[0-9]+$")) | .number' "$RUNNER_TEMP/issues.json" | head -n1)"
+          if [[ -z "$REQUEST_NUMBER" ]]; then
+            echo 'E9_RELEASE_RECONCILE_IDLE:no-open-request'
+            exit 0
+          fi
+
+          api_get "issues/$REQUEST_NUMBER" "$RUNNER_TEMP/request.json"
+          api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+          REQUEST_JSON="$(node - "$RUNNER_TEMP/request.json" <<'NODE'
+          const fs=require('node:fs');
+          const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
+          const issue=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          process.stdout.write(JSON.stringify(rr.parseIssue(issue.title,issue.body)));
+          NODE
+          )"
+          RELEASE_VERSION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseVersion)' "$REQUEST_JSON")"
+          RELEASE_SPEC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseSpec)' "$REQUEST_JSON")"
+          SOURCE_BRANCH="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.sourceBranch)' "$REQUEST_JSON")"
+          SOURCE_SHA="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.sourceSha)' "$REQUEST_JSON")"
+          ATTEMPT_ID="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.attemptId)' "$REQUEST_JSON")"
+          PR_NUMBER="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.prNumber===null?"":String(j.prNumber))' "$REQUEST_JSON")"
+          CANDIDATE_BRANCH="stage/usage-dashboard-$RELEASE_VERSION"
+
+          git fetch --no-tags origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/e9-source"
+          ACTUAL_SOURCE_SHA="$(git rev-parse refs/remotes/origin/e9-source)"
+          if [[ "$ACTUAL_SOURCE_SHA" != "$SOURCE_SHA" ]]; then
+            MARKER="SOURCE_SHA_NOT_READY:$SOURCE_SHA"
+            if ! has_line "$MARKER"; then
+              post_comment "$REQUEST_NUMBER" "$(printf '%s\nrequested_sha: %s\nactual_branch_sha: %s\nstate: BLOCKED\nnext: update the same release request to the new exact source SHA' "$MARKER" "$SOURCE_SHA" "$ACTUAL_SOURCE_SHA")"
+            fi
+            echo "E9_SOURCE_SHA_MOVED:$SOURCE_SHA:$ACTUAL_SOURCE_SHA"
+            exit 0
+          fi
+
+          READY_MARKER="SOURCE_SHA_READY:$SOURCE_SHA"
+          if ! has_line "$READY_MARKER"; then
+            TRUSTED_BASE_SHA="$(git rev-parse HEAD)"
+            if ! READINESS="$(node plugins/usage-dashboard/tools/source_readiness_e9.cjs --inspect "$TRUSTED_BASE_SHA" "$SOURCE_SHA" 2>&1)"; then
+              REASON="$(printf '%s\n' "$READINESS" | tail -n1 | cut -c1-500)"
+              post_comment "$REQUEST_NUMBER" "$(printf 'SOURCE_SHA_NOT_READY:%s\nstate: BLOCKED\nreason: %s\nnext: repair source and update source_sha on this same request' "$SOURCE_SHA" "$REASON")"
+              printf '%s\n' "$READINESS" >&2
+              exit 1
+            fi
+            READINESS_SPEC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseSpec)' "$READINESS")"
+            [[ "$READINESS_SPEC" == "$RELEASE_SPEC" ]] || { echo "E9_REQUEST_SPEC_MISMATCH:$READINESS_SPEC:$RELEASE_SPEC"; exit 1; }
+            post_comment "$REQUEST_NUMBER" "$(printf '%s\nrelease: %s\nsource_branch: %s\nstate: REQUESTED\nreadiness: source-policy + historical hygiene + canonical change semantics + impact-aware ownership GREEN' "$READY_MARKER" "$RELEASE_VERSION" "$SOURCE_BRANCH")"
+            api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+          fi
+
+          CANDIDATE_SHA="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          CANDIDATE_MATCH='false'
+          if [[ -n "$CANDIDATE_SHA" ]]; then
+            git fetch --no-tags origin "$CANDIDATE_SHA"
+            CANDIDATE_MESSAGE="$(git show -s --format=%B "$CANDIDATE_SHA")"
+            if grep -Fq "from source $SOURCE_SHA" <<<"$CANDIDATE_MESSAGE"; then CANDIDATE_MATCH='true'; fi
+          fi
+
+          if [[ "$CANDIDATE_MATCH" != 'true' ]]; then
+            DISPATCH_MARKER="UD_E9_STAGE_DISPATCHED:$ATTEMPT_ID"
+            if ! has_line "$DISPATCH_MARKER"; then
+              jq -n --arg branch "$SOURCE_BRANCH" '{ref:"main",inputs:{source_branch:$branch}}' > "$RUNNER_TEMP/stage-dispatch.json"
+              curl --fail-with-body --silent --show-error -X POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/usage-dashboard-stage-e7.yml/dispatches" \
+                --data-binary @"$RUNNER_TEMP/stage-dispatch.json"
+              post_comment "$REQUEST_NUMBER" "$(printf '%s\nsource_sha: %s\nstate: REQUESTED\nnext: trusted stage writer' "$DISPATCH_MARKER" "$SOURCE_SHA")"
+              echo "E9_STAGE_DISPATCH_ACCEPTED:$REQUEST_NUMBER:$ATTEMPT_ID:$SOURCE_SHA"
+            else
+              echo "E9_STAGE_ALREADY_DISPATCHED:$REQUEST_NUMBER:$ATTEMPT_ID"
+            fi
+            exit 0
+          fi
+
+          CANDIDATE_MARKER="UD_E9_CANDIDATE_READY:$CANDIDATE_SHA"
+          if ! has_line "$CANDIDATE_MARKER"; then
+            post_comment "$REQUEST_NUMBER" "$(printf '%s\nsource_sha: %s\ncandidate_branch: %s\nstate: CANDIDATE_READY\nnext: ensure/reuse deterministic PR and record pr_number on this same request' "$CANDIDATE_MARKER" "$SOURCE_SHA" "$CANDIDATE_BRANCH")"
+            api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+          fi
+
+          if [[ -z "$PR_NUMBER" ]]; then
+            PR_MARKER="UD_E9_PR_REQUIRED:$CANDIDATE_SHA"
+            if ! has_line "$PR_MARKER"; then
+              post_comment "$REQUEST_NUMBER" "$(printf '%s\nstate: CANDIDATE_READY\nnext: assistant ensures exactly one deterministic PR and updates pr_number on this request' "$PR_MARKER")"
+            fi
+            echo "E9_PR_REQUIRED:$REQUEST_NUMBER:$CANDIDATE_SHA"
+            exit 0
+          fi
+
+          api_get "pulls/$PR_NUMBER" "$RUNNER_TEMP/pr.json"
+          node - "$RUNNER_TEMP/pr.json" "$GITHUB_REPOSITORY" "$REQUEST_NUMBER" "$CANDIDATE_BRANCH" "$CANDIDATE_SHA" <<'NODE'
+          const fs=require('node:fs');
+          const [file,repo,requestNumber,branch,sha]=process.argv.slice(2);
+          const pr=JSON.parse(fs.readFileSync(file,'utf8'));
+          if(pr.base?.ref!=='main') throw new Error('E9_PR_BASE_DENIED');
+          if(pr.head?.repo?.full_name!==repo) throw new Error('E9_PR_REPOSITORY_DENIED');
+          if(pr.head?.ref!==branch) throw new Error(`E9_PR_HEAD_BRANCH_MISMATCH:${pr.head?.ref}:expected=${branch}`);
+          if(pr.head?.sha!==sha) throw new Error(`E9_PR_HEAD_SHA_MISMATCH:${pr.head?.sha}:expected=${sha}`);
+          const marker=`Usage-Dashboard-Release-Request: #${requestNumber}`;
+          if(!String(pr.body||'').includes(marker)) throw new Error(`E9_PR_REQUEST_MARKER_MISSING:${marker}`);
+          NODE
+
+          VALIDATION_JSON="$(node - "$RUNNER_TEMP/comments.json" "$CANDIDATE_SHA" <<'NODE'
+          const fs=require('node:fs');
+          const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
+          const comments=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          process.stdout.write(JSON.stringify(rr.latestValidation(comments,process.argv[3])));
+          NODE
+          )"
+          VALIDATION_STATUS="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j?.status||"")' "$VALIDATION_JSON")"
+          if [[ "$VALIDATION_STATUS" == 'RED' ]]; then
+            echo "E9_VALIDATION_BLOCKED_RED:$CANDIDATE_SHA"
+            exit 0
+          fi
+          if [[ "$VALIDATION_STATUS" != 'GREEN' ]]; then
+            VALIDATE_MARKER="UD_E9_VALIDATION_DISPATCHED:$CANDIDATE_SHA"
+            if ! has_line "$VALIDATE_MARKER"; then
+              jq -n --arg pr "$PR_NUMBER" --arg sha "$CANDIDATE_SHA" --arg request "$REQUEST_NUMBER" '{ref:"main",inputs:{pr_number:$pr,candidate_sha:$sha,request_issue:$request}}' > "$RUNNER_TEMP/validate-dispatch.json"
+              curl --fail-with-body --silent --show-error -X POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/usage-dashboard-e9-validate.yml/dispatches" \
+                --data-binary @"$RUNNER_TEMP/validate-dispatch.json"
+              post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: CANDIDATE_READY\nnext: authoritative exact-SHA full registry' "$VALIDATE_MARKER" "$PR_NUMBER")"
+            fi
+            echo "E9_VALIDATION_PENDING:$PR_NUMBER:$CANDIDATE_SHA"
+            exit 0
+          fi
+
+          VALIDATED_MARKER="UD_E9_VALIDATED:$CANDIDATE_SHA"
+          if ! has_line "$VALIDATED_MARKER"; then
+            post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: VALIDATED\nnext: re-read head/mergeability and expected-head merge' "$VALIDATED_MARKER" "$PR_NUMBER")"
+          fi
+
+          PR_STATE="$(jq -r '.state' "$RUNNER_TEMP/pr.json")"
+          MERGED="$(jq -r '.merged' "$RUNNER_TEMP/pr.json")"
+          if [[ "$PR_STATE" != 'closed' || "$MERGED" != 'true' ]]; then
+            echo "E9_VALIDATED_WAITING_FOR_MERGE:$PR_NUMBER:$CANDIDATE_SHA"
+            exit 0
+          fi
+          MERGE_SHA="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/pr.json")"
+          [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E9_MERGE_SHA_INVALID'; exit 1; }
+
+          RELEASE_SHA="$(git ls-remote origin refs/heads/release-usage-dashboard | awk '{print $1}')"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E9_PRODUCTION_SHA_INVALID'; exit 1; }
+          git fetch --no-tags origin "$RELEASE_SHA"
+          DEPLOYED_VERSION="$(git show "$RELEASE_SHA:plugins/usage-dashboard/runtime/product-manifest.json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).productVersion||"")))')"
+          if [[ "$DEPLOYED_VERSION" != "$RELEASE_VERSION" ]]; then
+            echo "E9_DEPLOYMENT_PENDING:$RELEASE_VERSION:current=$DEPLOYED_VERSION"
+            exit 0
+          fi
+          node plugins/usage-dashboard/tools/check_release_blob_parity.cjs --repository "$GITHUB_REPOSITORY" --candidate-sha "$MERGE_SHA" --release-branch release-usage-dashboard
+
+          DEPLOY_MARKER="UD_E9_DEPLOYED:$RELEASE_SHA"
+          if ! has_line "$DEPLOY_MARKER"; then
+            post_comment "$REQUEST_NUMBER" "$(printf '%s\nUD_RELEASE_DEPLOYED\nrelease: %s\nmain_merge_sha: %s\nrelease_branch_sha: %s\nexact_byte_parity: VERIFIED\nphysical_verification: PENDING\nstate: DEPLOYED' "$DEPLOY_MARKER" "$RELEASE_VERSION" "$MERGE_SHA" "$RELEASE_SHA")"
+          fi
+          printf '%s\n' '{"state":"closed","state_reason":"completed"}' > "$RUNNER_TEMP/request-close.json"
+          curl --fail-with-body --silent --show-error -X PATCH \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$REQUEST_NUMBER" \
+            --data-binary @"$RUNNER_TEMP/request-close.json" >/dev/null
+
+          E9_PROOF="$(printf 'E9_F_RELEASE_PROOF\nrequest: #%s\nrelease: %s\nsource_sha: %s\ncandidate_sha: %s\nvalidated_sha: %s\nmerge_sha: %s\nproduction_sha: %s\nexact_byte_parity: VERIFIED\nphysical_verification: PENDING\nverdict: E9 real-release repository/CI/deployment proof COMPLETE' "$REQUEST_NUMBER" "$RELEASE_VERSION" "$SOURCE_SHA" "$CANDIDATE_SHA" "$CANDIDATE_SHA" "$MERGE_SHA" "$RELEASE_SHA")"
+          post_comment "$E9_GENERATION_ISSUE" "$E9_PROOF"
+          printf '%s\n' '{"state":"closed","state_reason":"completed"}' > "$RUNNER_TEMP/e9-close.json"
+          curl --fail-with-body --silent --show-error -X PATCH \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$E9_GENERATION_ISSUE" \
+            --data-binary @"$RUNNER_TEMP/e9-close.json" >/dev/null
+          echo "E9_RELEASE_TRANSACTION_COMPLETE:$REQUEST_NUMBER:$RELEASE_VERSION:$RELEASE_SHA"

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const rr = require('../tools/release_request_e9.cjs');
 const changes = require('../tools/source_change_semantics.cjs');
+const readinessHelper = require('../tools/source_readiness_e9.cjs');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
@@ -20,9 +21,12 @@ const requestBody = [
 const request = rr.parseIssue('[usage-dashboard-release] 3.0.0-alpha.5.76', requestBody);
 assert.equal(request.releaseVersion,'3.0.0-alpha.5.76');
 assert.equal(request.sourceSha,'0123456789abcdef0123456789abcdef01234567');
+assert.equal(request.releaseGeneration,'E9');
 assert.equal(request.prNumber,1000);
 assert.equal(request.attemptKey,'3.0.0-alpha.5.76:0123456789abcdef0123456789abcdef01234567');
 assert.match(request.attemptId,/^[0-9a-f]{24}$/);
+const e10Request = rr.parseIssue('[usage-dashboard-release] 3.0.0-alpha.5.76', requestBody.replace('release_generation: E9','release_generation: E10'));
+assert.equal(e10Request.releaseGeneration,'E10');
 assert.throws(() => rr.parseIssue('[usage-dashboard-release] 3.0.0-alpha.5.76', requestBody.replace('release_generation: E9','release_generation: E8')), /E9_REQUEST_GENERATION_DENIED/);
 assert.throws(() => rr.parseIssue('[usage-dashboard-release] 3.0.0-alpha.5.76', requestBody.replace('0123456789abcdef0123456789abcdef01234567','main')), /E9_REQUEST_SOURCE_SHA_DENIED/);
 
@@ -62,12 +66,19 @@ for (const token of [
   'deleted-owner',
   'E9_READINESS_PART_BOUNDARY_STALE',
   'E9_READINESS_CHANGE_SEMANTICS_DRIFT',
+  'assertMaterializerSyntax',
+  'materializer-syntax',
 ]) assert.ok(readiness.includes(token),`readiness missing ${token}`);
+readinessHelper.assertPythonSyntax('value = 1\n','fixture.py');
+assert.throws(() => readinessHelper.assertPythonSyntax('value = “broken”\n','fixture.py'),/SOURCE_SHA_NOT_READY:materializer-syntax:fixture\.py/);
 
 const reconcile = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
 for (const token of [
   'issues:',
   'types: [opened, edited, reopened]',
+  'workflow_run:',
+  'Usage Dashboard Exact-Byte Promotion',
+  "github.event.workflow_run.conclusion == 'success'",
   "cron: '*/5 * * * *'",
   'group: usage-dashboard-e9-release-reconcile',
   'SOURCE_SHA_READY:',
@@ -81,9 +92,11 @@ for (const token of [
   'check_release_blob_parity.cjs',
   'UD_E9_DEPLOYED:',
   'E9_F_RELEASE_PROOF',
+  'E10_REAL_RELEASE_PROOF',
+  "GENERATION_STATE\" == 'open'",
   'physical_verification: PENDING',
-]) assert.ok(reconcile.includes(token),`E9 reconciler missing ${token}`);
-assert.ok(!reconcile.includes('git push'),'E9 reconciler must never mutate candidate or production refs directly');
+]) assert.ok(reconcile.includes(token),`durable reconciler missing ${token}`);
+assert.ok(!reconcile.includes('git push'),'durable reconciler must never mutate candidate or production refs directly');
 
 const exact = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml','utf8');
 for (const token of [
@@ -95,7 +108,7 @@ for (const token of [
   'UD_VALIDATION_RESULT',
   'authority: E9 exact-SHA full registry',
 ]) assert.ok(exact.includes(token),`E9 validator missing ${token}`);
-assert.ok(!exact.includes('/usage-dashboard validate '),'normal E9 validation must not depend on a slash command');
+assert.ok(!exact.includes('/usage-dashboard validate '),'normal durable validation must not depend on a slash command');
 assert.ok(!exact.includes('git push'),'E9 exact validator must remain ref read-only');
 
 const promoter = fs.readFileSync('.github/workflows/reusable-usage-dashboard-promote.yml','utf8');
@@ -112,4 +125,4 @@ for (const token of [
   'E9-F',
 ]) assert.ok(runbook.includes(token),`E9 runbook missing ${token}`);
 
-console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · one request + exact source readiness + canonical changes + exact-SHA validation + idempotent closure`);
+console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure`);

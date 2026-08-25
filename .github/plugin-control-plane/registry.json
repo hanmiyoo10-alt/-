@@ -37,7 +37,8 @@
       "statusAdapter": "simcore",
       "authority": {
         "releaseBranch": "release-simcore",
-        "manifest": "product-manifest.json"
+        "manifest": "product-manifest.json",
+        "artifact": "plugins/simcore/latest.js"
       }
     },
     "devpass": {

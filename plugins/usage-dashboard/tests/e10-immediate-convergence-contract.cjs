@@ -10,7 +10,7 @@ const release = loadCurrentRelease();
 
 const e10Body = [
   `release_version: ${release.productVersion}`,
-  `release_spec: ${release.releaseSpecPath}`,
+  `release_spec: ${release.specPath}`,
   'source_branch: release/usage-dashboard-e10-fixture',
   'source_sha: 1234567890abcdef1234567890abcdef12345678',
   'feature_issue: #365',

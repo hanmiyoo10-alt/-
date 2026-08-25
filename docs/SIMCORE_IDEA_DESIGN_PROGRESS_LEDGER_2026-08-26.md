@@ -55,6 +55,26 @@ Design doc: docs/SIMCORE_DIAGNOSTIC_QUICK_SUMMARY_DESIGN.md
 Implementation: NONE
 ```
 
+### S-10 — Authority Drift Check / Scan
+
+```text
+Importance: 5
+Difficulty: 2
+Design status: DESIGN FROZEN
+Parking: PARKED FOR STABILIZATION
+Design doc: docs/SIMCORE_AUTHORITY_DRIFT_CHECK_DESIGN.md
+Implementation: NONE
+```
+
+Frozen architectural note:
+
+```text
+S-10 != second sync-state
+S-10 reuses existing sync-state --check for production identity / managed-block verification
+S-10 adds only bounded current-operational authority comparisons
+historical evidence remains excluded
+```
+
 ## Current active queue
 
 Using the frozen priority rule:
@@ -69,23 +89,23 @@ open design gate
 Current next candidates:
 
 ```text
-1. S-10 Authority Drift Check / Scan
+1. S-04 Live Evidence Packet Builder
    Importance 5 / Difficulty 2 / NOW
 
-2. S-04 Live Evidence Packet Builder
-   Importance 5 / Difficulty 2 / NOW
-
-3. S-12 Natural Evidence Corpus Index
+2. S-12 Natural Evidence Corpus Index
    Importance 4 / Difficulty 2 / NOW
 
-4. S-01 MINI_WARNING_WIDGET_V1
+3. S-01 MINI_WARNING_WIDGET_V1
    Importance 4 / Difficulty 2 / NOW
 
-5. M-11 Architecture Dependency Snapshot Generator
+4. M-11 Architecture Dependency Snapshot Generator
    Importance 5 / Difficulty 3 / NOW
+
+5. M-10 Live Diagnostic → Fixture Skeleton Generator
+   Importance 4 / Difficulty 3 / NOW
 ```
 
-`S-10` remains ahead of `S-04` under the current tie-break because it directly protects SimCore's repository/current-authority discipline and the recent documentation-drift sweep demonstrated recurring value.
+`S-04` is now the highest-importance open SMALL design at difficulty 2.
 
 ## Gated high-value candidates remain gated
 
@@ -125,13 +145,14 @@ LATER STABILIZATION PHASE
 ## Current verdict
 
 ```text
-FROZEN SMALL DESIGNS = 2
+FROZEN SMALL DESIGNS = 3
 
 S-09 Evidence Index Entry Format      COMPLETE / PARKED
 S-02 Diagnostic Quick Summary         COMPLETE / PARKED
+S-10 Authority Drift Check / Scan     COMPLETE / PARKED
 
 NEXT ACTIVE DESIGN
-= S-10 Authority Drift Check / Scan
+= S-04 Live Evidence Packet Builder
 
 RUNTIME CHANGE
 = NONE

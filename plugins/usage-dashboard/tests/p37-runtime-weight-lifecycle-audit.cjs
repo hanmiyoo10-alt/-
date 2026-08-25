@@ -4,16 +4,13 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 
-const auditPath = 'plugins/usage-dashboard/src/64-runtime-weight-audit.part.js';
 const workspacePath = 'plugins/usage-dashboard/src/62-diagnostics-workspace.part.js';
-const partsPath = 'plugins/usage-dashboard/src/parts.cjs';
 const ledgerPath = 'plugins/usage-dashboard/src/14-request-ledger.part.js';
 const refreshPath = 'plugins/usage-dashboard/src/30-refresh-runtime.part.js';
 const lifecyclePath = 'plugins/usage-dashboard/src/80-lifecycle.part.js';
 const bootstrapPath = 'plugins/usage-dashboard/src/90-bootstrap.part.js';
 const enginePath = 'plugins/usage-dashboard/runtime/bridge-engine.mjs';
 
-const audit = fs.readFileSync(auditPath, 'utf8');
 const workspace = fs.readFileSync(workspacePath, 'utf8');
 const ledger = fs.readFileSync(ledgerPath, 'utf8');
 const refresh = fs.readFileSync(refreshPath, 'utf8');
@@ -22,10 +19,15 @@ const bootstrap = fs.readFileSync(bootstrapPath, 'utf8');
 const {PARTS} = require('./../src/parts.cjs');
 
 const partFiles = PARTS.map(part => part.file);
-const auditIndex = partFiles.indexOf('64-runtime-weight-audit.part.js');
-assert.ok(auditIndex > partFiles.indexOf('62-diagnostics-workspace.part.js'), 'P37 audit must follow the direct Diagnostics workspace/instant-mode owner');
-assert.ok(auditIndex < partFiles.indexOf('70-widget-render.part.js'), 'P37 audit must remain inside the diagnostics module boundary');
-assert.equal(partFiles.filter(file => file === '64-runtime-weight-audit.part.js').length, 1, 'P37 audit module must be registered once');
+const workspaceIndex = partFiles.indexOf('62-diagnostics-workspace.part.js');
+assert.ok(workspaceIndex >= 0, 'P37 direct Diagnostics workspace owner must remain registered');
+assert.ok(workspaceIndex < partFiles.indexOf('70-widget-render.part.js'), 'P37 workspace/audit owner must remain before widget rendering');
+assert.equal(partFiles.includes('64-runtime-weight-audit.part.js'), false, 'P37 retired audit patch module must stay absent');
+
+const auditStart = workspace.indexOf('  const RUNTIME_WEIGHT_REQUEST_LEDGER_LIMIT = 2000;');
+const auditEnd = workspace.indexOf('  function diagnosticsWorkspaceDetailedSections()', auditStart);
+assert.ok(auditStart >= 0 && auditEnd > auditStart, 'P37 must find bounded Runtime Weight Audit helper slice in module 62');
+const audit = workspace.slice(auditStart, auditEnd);
 
 for (const marker of [
   'Runtime Weight Audit',
@@ -41,20 +43,25 @@ for (const marker of [
   'refreshInFlight',
   'bridgeDiag.cacheEntries',
   'secondary?.queued',
-  "title:'Runtime Weight Audit'",
 ]) assert.ok(audit.includes(marker), `P37 audit marker missing: ${marker}`);
 
 for (const forbidden of [
   'nativeFetch(', 'fetchSnapshot(', 'enqueueRefresh(', 'runCli(', 'setInterval(', 'setTimeout(',
   'store.setItem(', 'scheduleRefresh(', 'schedulePanelRender(', 'renderSettings(', 'renderSettingsPartial(',
-]) assert.ok(!audit.includes(forbidden), `P37 audit must not introduce side effect/I/O: ${forbidden}`);
+]) assert.ok(!audit.includes(forbidden), `P37 audit helper slice must not introduce side effect/I/O: ${forbidden}`);
 
 assert.doesNotMatch(audit, /\bstate\.[A-Za-z0-9_]+\s*=(?!=)/, 'P37 audit must not mutate persistent state');
 assert.doesNotMatch(audit, /\bperformanceRuntime\.[A-Za-z0-9_]+\s*=(?!=)/, 'P37 audit must not mutate performance counters');
 assert.doesNotMatch(audit, /\bpowerRuntime\.[A-Za-z0-9_]+\s*=(?!=)/, 'P37 audit must not mutate power counters');
-assert.ok(!audit.includes('diagnosticsWorkspaceBasicModel ='), 'P37 Basic diagnostics must remain untouched');
-assert.ok(!audit.includes('diagnosticsWorkspaceBasicHtml ='), 'P37 Basic diagnostics rendering must remain untouched');
-assert.ok(audit.includes('diagnosticsWorkspaceDetailedSections = function runtimeWeightAuditDetailedSections()'), 'P37 audit must be Detailed-only');
+assert.ok(!audit.includes('diagnosticsWorkspaceBasicModel ='), 'P37 Basic diagnostics must remain untouched by audit helpers');
+assert.ok(!audit.includes('diagnosticsWorkspaceBasicHtml ='), 'P37 Basic diagnostics rendering must remain untouched by audit helpers');
+
+const detailed = workspace.match(/function diagnosticsWorkspaceDetailedSections\(\) \{([\s\S]*?)\n  \}\n\n  function diagnosticsWorkspaceDetailedHtml/);
+assert.ok(detailed, 'P37 direct Detailed section owner must remain bounded');
+assert.match(detailed[1], /title:'Runtime Weight Audit'/, 'P37 Runtime Weight Audit must be directly appended by module 62');
+assert.match(detailed[1], /runtimeWeightAuditLines\(\)/, 'P37 Detailed owner must call current audit lines lazily');
+assert.doesNotMatch(workspace, /diagnosticsRuntimeWeightLegacyDetailedSections/, 'P37 legacy audit wrapper symbol must remain retired');
+assert.equal((workspace.match(/diagnosticsWorkspaceDetailedSections\s*=\s*function/g) || []).length, 0, 'P37 direct Detailed owner must not be reassigned later');
 
 assert.ok(ledger.includes('.slice(0, 2000);'), 'P37 Request Ledger bound must remain explicitly 2000');
 for (const phase of ["finishRefreshPhase('normalize-ledger'", "finishRefreshPhase('persist'", "finishRefreshPhase('widget-render'"]) {
@@ -73,9 +80,9 @@ for (const marker of [
   'renderSettingsPartial();',
   'void persistDiagnosticsModeSerialized(next);',
   'diagnosticsMode:capturedMode',
-]) assert.ok(workspace.includes(marker), `P37 must preserve 5.72 instant Diagnostics switch in the direct workspace owner: ${marker}`);
+]) assert.ok(workspace.includes(marker), `P37 must preserve instant Diagnostics switch in the direct workspace owner: ${marker}`);
 
 const engineSha = crypto.createHash('sha256').update(fs.readFileSync(enginePath)).digest('hex');
-assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P37 Engine must remain byte-identical to 5.72');
+assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P37 Engine must remain byte-identical');
 
-console.log('P37 Runtime Weight & Lifecycle Audit: OK · Detailed-only bounded evidence · direct workspace instant-mode owner retained · no new I/O/polling · UNKNOWN preserved · Engine byte-identical');
+console.log('P37 Runtime Weight & Lifecycle Audit: OK · module 62 direct audit owner · Detailed-only bounded evidence · no new I/O/polling · UNKNOWN preserved · Engine byte-identical');

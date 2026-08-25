@@ -1,6 +1,6 @@
 # SimCore Idea Priority — NON_RUNTIME / RUNTIME Split Queues — 2026-08-26
 
-Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · RUNTIME PARKING PRESERVED · NO RUNTIME CHANGE`
+Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · RUNTIME CORE PARKED · R_PREP_NON_RUNTIME ENABLED · NO RUNTIME CHANGE`
 
 Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling harvest work and future runtime stabilization do not compete in one mixed priority queue.
 
@@ -9,6 +9,7 @@ Related authority:
 - `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md` — S/M/L classification
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md` — design completion/freeze rule
 - `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md` — NR-lane harvest rule
+- `docs/SIMCORE_RUNTIME_IDEA_PREP_NON_RUNTIME_POLICY.md` — frozen-R repo-memory prep rule
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md` — completion/implementation history
 
 This document is the current NR/R selection queue authority.
@@ -27,7 +28,8 @@ NON_RUNTIME QUEUE (NR)
 RUNTIME QUEUE (R)
 = plugin/runtime/Host/state/prompt/runtime diagnostic surfaces
 = select/design inside R only
-= frozen runtime designs remain PARKED until stabilization
+= frozen runtime core remains PARKED until stabilization
+= after design freeze, optional separable repo-memory preparation may use R_PREP_NON_RUNTIME
 ```
 
 The lanes do not compete globally.
@@ -70,11 +72,7 @@ NON_RUNTIME = 14
 | FUTURE | L-01 | Development-source Modular Build | LARGE | 4 | 5 | FUTURE / POST_M2 |
 | IMPLEMENTED | S-11 | Stale PR Hygiene Classifier | SMALL | 3 | 2 | FROZEN · SAFE_NON_RUNTIME_IMPLEMENTED |
 
-## 2.1 NR current selection state
-
-There are currently no undesigned + gate-open NR ideas in the bounded Difficulty-1/2/3 pool.
-
-Completed harvest tiers:
+### 2.1 Completed harvest tiers
 
 ```text
 NR Difficulty 1
@@ -94,93 +92,28 @@ M-13 → IMPLEMENTED
 → CLOSED / HARVEST COMPLETE
 ```
 
-Gated Difficulty-3 items remain untouched:
+Gated NR remains:
 
 ```text
 M-08 POST_M2_3
-M-14 dependency: R2.1 genuine release proof
+M-14 R2.1 genuine release proof dependency
 M-15 POST_M2_3
+M-07 POST_M2_4
+M-12 POST_M2_3
+M-16 M2 implementation slice
+L-01 FUTURE / POST_M2
 ```
 
-If one later opens, it begins a new incremental Difficulty-3 design/harvest cycle.
+If one later opens, it begins a new incremental design/harvest cycle.
 
-## 2.2 Completed Difficulty-3 harvest
-
-```text
-M-11 Architecture Dependency Snapshot Generator
-→ scripts/simcore-architecture-check.py --snapshot-out
-→ PR #406
-→ main 7203b1c7f3292e1a636c01db6833b5fb0c2816bb
-
-M-10 Live Diagnostic → Fixture Skeleton Generator
-→ products/simcore/tooling/fixture-skeleton.mjs
-→ fixture-source-v1 / fixture-skeleton-v1 schemas
-→ PR #407
-→ main 873b3df323789d447d0973ce4051cfdbf0eb4d38
-
-M-13 Evidence Index Generator
-→ products/simcore/evidence/evidence-index-source-v1.json
-→ products/simcore/tooling/evidence-index.mjs
-→ generated docs/SIMCORE_EVIDENCE_INDEX.md
-→ PR #408
-→ main 534cfbea9142988913fae5dbcabb322a892192e0
-```
-
-Implementation evidence:
-
-```text
-docs/SIMCORE_M11_ARCHITECTURE_SNAPSHOT_IMPLEMENTATION_EVIDENCE_2026-08-26.md
-docs/SIMCORE_M10_FIXTURE_SKELETON_IMPLEMENTATION_EVIDENCE_2026-08-26.md
-docs/SIMCORE_M13_EVIDENCE_INDEX_GENERATOR_IMPLEMENTATION_EVIDENCE_2026-08-26.md
-```
-
-Verification WATCH:
-
-```text
-docs/SIMCORE_NR_DIFFICULTY3_HARVEST_VERIFICATION_WATCH_2026-08-26.md
-```
-
-All three preserve:
-
-```text
-plugin version unchanged
-plugins/simcore/latest.js unchanged
-plugins/simcore/install.js unchanged
-release-simcore unchanged
-runtime semantics unchanged
-```
-
-## 2.3 NR implementation rule remains active
-
-```text
-NR DESIGN FROZEN
-!= immediate implementation
-
-currently-designable NR difficulty tier CLOSED
-+ strict SAFE_NON_RUNTIME PASS
-→ separate bounded implementation
-→ static/CI verification as applicable
-→ main evidence sync
-```
-
-`NON_RUNTIME` alone is never sufficient. Protected build/release/repository-authority work may still be non-harvestable.
-
-## 2.4 Next NR
+### 2.2 Current NR selection state
 
 ```text
 CURRENT OPEN NR DESIGN = NONE
 CURRENT NR HARVEST QUEUE = EMPTY
 ```
 
-Do not select a gated/future NR merely because the easy/moderate queue is empty.
-
-Next NR work requires one of:
-
-```text
-an existing gate legitimately opens
-or
-user explicitly selects a future/protected NR idea whose gate is now satisfied
-```
+Do not select a gated/future NR merely because the current queue is empty.
 
 ---
 
@@ -192,29 +125,29 @@ Current total inventory:
 RUNTIME = 17
 ```
 
-Runtime queue remains design-only in the current phase.
+The R lane remains runtime-design-first. Runtime core implementation is still parked, but frozen R items may now have separable repo-memory preparation under `R_PREP_NON_RUNTIME`.
 
 | State | ID | Idea | Size | Importance | Difficulty | Gate / disposition |
 |---|---|---|---|---:|---:|---|
-| FROZEN | S-02 | Diagnostic Quick Summary | SMALL | 5 | 1 | PARKED |
-| FROZEN | S-04 | Live Evidence Packet Builder | SMALL | 5 | 2 | PARKED |
+| FROZEN | S-02 | Diagnostic Quick Summary | SMALL | 5 | 1 | runtime PARKED · R_PREP currently not required |
+| FROZEN | S-04 | Live Evidence Packet Builder | SMALL | 5 | 2 | runtime PARKED · R_PREP candidate YES |
 | GATED | S-05 | Reconcile Differential Receipt | SMALL | 5 | 2 | POST_M2_3 |
 | GATED | M-03 | Genuine Edit Rebuild Performance Study | MEDIUM | 5 | 4 | POST_M2_3 |
-| FROZEN | S-01 | MINI_WARNING_WIDGET_V1 | SMALL | 4 | 2 | PARKED |
+| FROZEN | S-01 | MINI_WARNING_WIDGET_V1 | SMALL | 4 | 2 | runtime PARKED · R_PREP currently not required |
 | GATED | M-01 | Turn Transaction / Phase Receipt | MEDIUM | 4 | 3 | POST_M2_3 |
 | GATED | M-06 | State Invariant Snapshot | MEDIUM | 4 | 4 | POST_M2_4 |
-| ACTIVE | S-03 | Diagnostic Copy Profiles | SMALL | 3 | 2 | NOW |
-| ACTIVE | S-07 | Host Capability Receipt | SMALL | 3 | 2 | NOW |
+| ACTIVE | S-03 | Diagnostic Copy Profiles | SMALL | 3 | 2 | NOW · design first |
+| ACTIVE | S-07 | Host Capability Receipt | SMALL | 3 | 2 | NOW · design first |
 | GATED | M-02 | Ownership-aware Diagnostic Attribution | MEDIUM | 3 | 3 | POST_M2_3 |
 | GATED | M-05 | Phase Performance Budget | MEDIUM | 3 | 3 | POST_M2_3 |
 | GATED | M-04 | Store Write Cost / Commit Budget | MEDIUM | 3 | 4 | EVIDENCE |
 | GATED | M-09 | Provider Cache Receipt Integration | MEDIUM | 3 | 4 | EXTERNAL |
 | FUTURE | M-17 | Pure State Seam | MEDIUM | 3 | 4 | FUTURE / TD-09 |
 | FUTURE | L-02 | Performance-aware SnapshotStore Evolution | LARGE | 3 | 5 | EVIDENCE / FUTURE |
-| ACTIVE | S-08 | History Frontier Confidence Surface | SMALL | 2 | 2 | NOW |
+| ACTIVE | S-08 | History Frontier Confidence Surface | SMALL | 2 | 2 | NOW · design first |
 | GATED | S-06 | Persistence Footprint Watch | SMALL | 2 | 2 | EVIDENCE |
 
-Current active R ordering:
+### 3.1 Current active R design ordering
 
 ```text
 R-1  S-03 Diagnostic Copy Profiles
@@ -227,16 +160,60 @@ R-3  S-08 History Frontier Confidence Surface
      importance 2 / difficulty 2
 ```
 
-Runtime completion rule remains:
+Active/undesigned R items cannot receive prep implementation before design freeze.
+
+### 3.2 Frozen-R prep review
+
+Policy authority:
+
+```text
+docs/SIMCORE_RUNTIME_IDEA_PREP_NON_RUNTIME_POLICY.md
+```
+
+Current review:
+
+```text
+S-01 MINI_WARNING_WIDGET_V1
+→ frozen runtime core remains PARKED
+→ additional R_PREP artifact: NONE REQUIRED
+
+S-02 Diagnostic Quick Summary
+→ frozen runtime core remains PARKED
+→ additional R_PREP artifact: NONE REQUIRED
+
+S-04 Live Evidence Packet Builder
+→ frozen runtime core remains PARKED
+→ R_PREP candidate: repository evidence-review / classification-handoff template
+→ eligible for a separate next work item
+```
+
+Reason for S-04 eligibility:
+
+```text
+runtime packet = transfer object only
+final classification/preservation = repository authority
+```
+
+Therefore a manual repo-side review template can be useful now without implementing packet construction, clipboard behavior, diagnostic projection, or runtime UI.
+
+### 3.3 R runtime completion rule
 
 ```text
 DESIGN COMPLETE
 → DESIGN FROZEN
-→ PARKED FOR STABILIZATION
-→ STOP
+→ RUNTIME CORE PARKED FOR STABILIZATION
 ```
 
-No R item becomes harvestable because NR tiers closed.
+Optional after freeze:
+
+```text
+useful separable repo-memory preparation
++ strict R_PREP_NON_RUNTIME PASS
+→ separate bounded prep work item
+→ parent runtime core still PARKED
+```
+
+No R item becomes runtime-harvestable because NR tiers closed or because an R_PREP artifact completed.
 
 ---
 
@@ -253,26 +230,33 @@ M-10
 M-13
 
 NR ACTIVE DESIGN
-NONE in the current gate-open Difficulty-1/2/3 pool
+NONE
 
 NR HARVEST QUEUE
 EMPTY
 
-R FROZEN / PARKED
+R FROZEN / CORE PARKED
 S-01
 S-02
 S-04
 
-R ACTIVE
+R_PREP CURRENT CANDIDATE
+S-04 repository evidence-review / classification-handoff template
+
+R ACTIVE DESIGN
 S-03
 S-07
 S-08
 ```
 
-Current next operation if continuing idea design:
+Current next operations if continuing:
 
 ```text
-NEXT R = S-03 Diagnostic Copy Profiles
+R_PREP path
+→ S-04 repo evidence-review / classification-handoff template
+
+R design path
+→ S-03 Diagnostic Copy Profiles
 ```
 
 Production boundary remains:

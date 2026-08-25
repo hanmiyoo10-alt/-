@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   receiptMarker,
+  compactReceiptMarker,
   parseReceipt,
   summarizeReceipts,
 } = require('../delivery-receipt.cjs');
@@ -29,8 +30,12 @@ const base = {
 
 const delivered = {...base, status: 'DELIVERED', providerMessageId: 'provider-1'};
 assert.deepEqual(parseReceipt(receiptMarker(delivered)), delivered);
+assert.deepEqual(parseReceipt(compactReceiptMarker(base.status ? base : {...base, status: 'DELIVERED'})), {...base, status: 'DELIVERED'});
 assert.doesNotMatch(receiptMarker(delivered), /@|password|oauth|secret|token/i);
 assert.throws(() => receiptMarker({...delivered, recipient: 'x@example.com'}), /forbidden receipt field/);
+
+const compactDelivered = {...base, status: 'DELIVERED'};
+assert.deepEqual(parseReceipt(compactReceiptMarker(compactDelivered)), compactDelivered);
 
 const provenIdle = summarizeReceipts([], {baselineProofAt: '2026-08-25T03:25:00Z'});
 assert.equal(provenIdle.health, 'PROVEN_IDLE');
@@ -59,6 +64,13 @@ const recoveredDelivery = summarizeReceipts([
 ]);
 assert.equal(recoveredDelivery.health, 'HEALTHY');
 assert.equal(recoveredDelivery.unresolvedFailureCount, 0);
+
+const compactSummary = summarizeReceipts([{
+  created_at: '2026-08-25T03:50:00Z',
+  body: compactReceiptMarker({...base, deliveryKey: 'compact-key', status: 'DELIVERED', observedAt: '2026-08-25T03:50:00Z'}),
+}]);
+assert.equal(compactSummary.health, 'HEALTHY');
+assert.equal(compactSummary.deliveredCount, 1);
 
 const legacy = parseReceipt(
   '<!-- canonical-main-delivery-receipt:email:legacy-key -->',

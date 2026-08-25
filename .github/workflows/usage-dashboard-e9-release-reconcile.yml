@@ -1,4 +1,4 @@
-name: Usage Dashboard E9 Durable Release Reconciler
+name: Usage Dashboard Durable Release Reconciler
 
 on:
   issues:
@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
     types: [closed]
+  workflow_run:
+    workflows: ["Usage Dashboard Exact-Byte Promotion"]
+    types: [completed]
   push:
     branches: [main]
     paths:
@@ -28,6 +31,7 @@ concurrency:
 
 jobs:
   reconcile:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       issues: write
@@ -42,12 +46,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Reconcile oldest durable E9 release request
+      - name: Reconcile oldest durable Usage Dashboard release request
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           E9_GENERATION_ISSUE: '356'
+          E10_GENERATION_ISSUE: '365'
         run: |
           set -euo pipefail
 
@@ -98,6 +103,7 @@ jobs:
           )"
           RELEASE_VERSION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseVersion)' "$REQUEST_JSON")"
           RELEASE_SPEC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseSpec)' "$REQUEST_JSON")"
+          RELEASE_GENERATION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseGeneration)' "$REQUEST_JSON")"
           SOURCE_BRANCH="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.sourceBranch)' "$REQUEST_JSON")"
           SOURCE_SHA="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.sourceSha)' "$REQUEST_JSON")"
           ATTEMPT_ID="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.attemptId)' "$REQUEST_JSON")"
@@ -126,7 +132,7 @@ jobs:
             fi
             READINESS_SPEC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.releaseSpec)' "$READINESS")"
             [[ "$READINESS_SPEC" == "$RELEASE_SPEC" ]] || { echo "E9_REQUEST_SPEC_MISMATCH:$READINESS_SPEC:$RELEASE_SPEC"; exit 1; }
-            post_comment "$REQUEST_NUMBER" "$(printf '%s\nrelease: %s\nsource_branch: %s\nstate: REQUESTED\nreadiness: source-policy + historical hygiene + canonical change semantics + impact-aware ownership GREEN' "$READY_MARKER" "$RELEASE_VERSION" "$SOURCE_BRANCH")"
+            post_comment "$REQUEST_NUMBER" "$(printf '%s\nrelease: %s\nsource_branch: %s\nstate: REQUESTED\nreadiness: source-policy + historical hygiene + canonical change semantics + impact-aware ownership + materializer syntax GREEN' "$READY_MARKER" "$RELEASE_VERSION" "$SOURCE_BRANCH")"
             api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
           fi
 
@@ -248,13 +254,39 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$REQUEST_NUMBER" \
             --data-binary @"$RUNNER_TEMP/request-close.json" >/dev/null
 
-          E9_PROOF="$(printf 'E9_F_RELEASE_PROOF\nrequest: #%s\nrelease: %s\nsource_sha: %s\ncandidate_sha: %s\nvalidated_sha: %s\nmerge_sha: %s\nproduction_sha: %s\nexact_byte_parity: VERIFIED\nphysical_verification: PENDING\nverdict: E9 real-release repository/CI/deployment proof COMPLETE' "$REQUEST_NUMBER" "$RELEASE_VERSION" "$SOURCE_SHA" "$CANDIDATE_SHA" "$CANDIDATE_SHA" "$MERGE_SHA" "$RELEASE_SHA")"
-          post_comment "$E9_GENERATION_ISSUE" "$E9_PROOF"
-          printf '%s\n' '{"state":"closed","state_reason":"completed"}' > "$RUNNER_TEMP/e9-close.json"
-          curl --fail-with-body --silent --show-error -X PATCH \
-            -H 'Accept: application/vnd.github+json' \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$E9_GENERATION_ISSUE" \
-            --data-binary @"$RUNNER_TEMP/e9-close.json" >/dev/null
+          case "$RELEASE_GENERATION" in
+            E9)
+              GENERATION_ISSUE="$E9_GENERATION_ISSUE"
+              GENERATION_PROOF_MARKER='E9_F_RELEASE_PROOF'
+              GENERATION_VERDICT='E9 real-release repository/CI/deployment proof COMPLETE'
+              ;;
+            E10)
+              GENERATION_ISSUE="$E10_GENERATION_ISSUE"
+              GENERATION_PROOF_MARKER='E10_REAL_RELEASE_PROOF'
+              GENERATION_VERDICT='E10 real-release immediate-convergence proof COMPLETE'
+              ;;
+            *)
+              echo "E9_GENERATION_UNSUPPORTED:$RELEASE_GENERATION"
+              exit 1
+              ;;
+          esac
+
+          api_get "issues/$GENERATION_ISSUE" "$RUNNER_TEMP/generation.json"
+          api_get "issues/$GENERATION_ISSUE/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+          GENERATION_STATE="$(jq -r '.state' "$RUNNER_TEMP/generation.json")"
+          if [[ "$GENERATION_STATE" == 'open' ]] && ! has_line "$GENERATION_PROOF_MARKER"; then
+            GENERATION_PROOF="$(printf '%s\nrequest: #%s\nrelease: %s\nsource_sha: %s\ncandidate_sha: %s\nvalidated_sha: %s\nmerge_sha: %s\nproduction_sha: %s\nexact_byte_parity: VERIFIED\nphysical_verification: PENDING\nverdict: %s' "$GENERATION_PROOF_MARKER" "$REQUEST_NUMBER" "$RELEASE_VERSION" "$SOURCE_SHA" "$CANDIDATE_SHA" "$CANDIDATE_SHA" "$MERGE_SHA" "$RELEASE_SHA" "$GENERATION_VERDICT")"
+            post_comment "$GENERATION_ISSUE" "$GENERATION_PROOF"
+            printf '%s\n' '{"state":"closed","state_reason":"completed"}' > "$RUNNER_TEMP/generation-close.json"
+            curl --fail-with-body --silent --show-error -X PATCH \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$GENERATION_ISSUE" \
+              --data-binary @"$RUNNER_TEMP/generation-close.json" >/dev/null
+            echo "E9_GENERATION_PROOF_COMPLETE:$RELEASE_GENERATION:$GENERATION_ISSUE:$RELEASE_SHA"
+          else
+            echo "E9_GENERATION_PROOF_NOOP:$RELEASE_GENERATION:$GENERATION_ISSUE:state=$GENERATION_STATE"
+          fi
+
           echo "E9_RELEASE_TRANSACTION_COMPLETE:$REQUEST_NUMBER:$RELEASE_VERSION:$RELEASE_SHA"

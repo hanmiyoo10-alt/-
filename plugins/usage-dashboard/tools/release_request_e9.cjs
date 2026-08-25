@@ -7,6 +7,7 @@ const TITLE_RE = /^\[usage-dashboard-release\] (3\.0\.0-alpha\.5\.\d+)$/;
 const BRANCH_RE = /^release\/usage-dashboard-[A-Za-z0-9._-]+$/;
 const SPEC_RE = /^\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
+const GENERATION_RE = /^(E9|E10)$/;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -37,7 +38,7 @@ function parseIssue(title, body) {
   if (!SHA_RE.test(sourceSha)) fail('E9_REQUEST_SOURCE_SHA_DENIED', fields.source_sha);
   const featureMatch = /^#([1-9]\d*)$/.exec(fields.feature_issue);
   if (!featureMatch) fail('E9_REQUEST_FEATURE_ISSUE_DENIED', fields.feature_issue);
-  if (fields.release_generation !== 'E9') fail('E9_REQUEST_GENERATION_DENIED', fields.release_generation);
+  if (!GENERATION_RE.test(fields.release_generation)) fail('E9_REQUEST_GENERATION_DENIED', fields.release_generation);
   let prNumber = null;
   if (fields.pr_number && fields.pr_number !== 'PENDING') {
     const prMatch = /^#?([1-9]\d*)$/.exec(fields.pr_number);
@@ -52,7 +53,7 @@ function parseIssue(title, body) {
     sourceBranch:fields.source_branch,
     sourceSha,
     featureIssue:Number(featureMatch[1]),
-    releaseGeneration:'E9',
+    releaseGeneration:fields.release_generation,
     prNumber,
     attemptKey,
     attemptId,
@@ -123,7 +124,7 @@ function main() {
   fail('E9_REQUEST_USAGE');
 }
 
-module.exports = {TITLE_RE,BRANCH_RE,SPEC_RE,SHA_RE,parseFieldLines,parseIssue,markerFor,hasMarker,latestCandidate,latestValidation,latestDeployment};
+module.exports = {TITLE_RE,BRANCH_RE,SPEC_RE,SHA_RE,GENERATION_RE,parseFieldLines,parseIssue,markerFor,hasMarker,latestCandidate,latestValidation,latestDeployment};
 
 if (require.main === module) {
   try { main(); }

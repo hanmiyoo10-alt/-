@@ -5,6 +5,12 @@ on:
     types: [created]
   issues:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Exact source branch in release/usage-dashboard-* namespace
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,7 +21,7 @@ concurrency:
 
 jobs:
   resolve_stage:
-    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard stage ')) || (github.event_name == 'issues' && github.actor == github.repository_owner && github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, '[usage-dashboard-stage] ')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard stage ')) || (github.event_name == 'issues' && github.actor == github.repository_owner && github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, '[usage-dashboard-stage] ')) }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -50,11 +56,15 @@ jobs:
           CONTROL_ISSUE_TITLE: ${{ github.event.issue.title }}
           CONTROL_ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           CONTROL_ACTOR: ${{ github.actor }}
+          RAW_SOURCE_BRANCH: ${{ inputs.source_branch }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'failure_reason=E7_UNTRUSTED_WORKFLOW_REF' >> "$GITHUB_OUTPUT"; exit 1; }
-          if [[ "$CONTROL_EVENT_NAME" == 'issues' ]]; then
+          if [[ "$CONTROL_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            SOURCE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-branch "/usage-dashboard stage $RAW_SOURCE_BRANCH")"
+            echo "E8_STAGE_TRUSTED_DISPATCH_REQUEST:$SOURCE_BRANCH"
+          elif [[ "$CONTROL_EVENT_NAME" == 'issues' ]]; then
             node plugins/usage-dashboard/tools/release_control_command.cjs --check-stage-issue-envelope "$CONTROL_ACTOR" "$CONTROL_ISSUE_AUTHOR" "$REPOSITORY_OWNER"
             SOURCE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-issue-branch "$CONTROL_ISSUE_TITLE")"
             echo "E8_STAGE_CONNECTED_ISSUE_REQUEST:$SOURCE_BRANCH"

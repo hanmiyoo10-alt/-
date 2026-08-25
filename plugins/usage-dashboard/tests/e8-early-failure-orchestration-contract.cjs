@@ -33,7 +33,10 @@ const candidateTreeIndex = stage.indexOf('git add -A');
 assert.ok(reconcileIndex >= 0 && candidateTreeIndex > reconcileIndex, 'reconciliation including release-memory gate must finish before candidate tree/bundle creation');
 assert.match(stage, /write_candidate:\n\s+needs: \[resolve_stage, materialize_stage\]/);
 assert.match(stage, /if: \$\{\{ needs\.resolve_stage\.result == 'success' && needs\.materialize_stage\.result == 'success' \}\}/);
-assert.match(stage, /issues:\n\s+types: \[opened\]/, 'connected stage trigger must use issue-open only');
+assert.match(stage, /issues:\n\s+types: \[opened\]/, 'owner issue stage request path must remain');
+assert.match(stage, /workflow_dispatch:\n\s+inputs:\n\s+source_branch:/, 'trusted stage workflow must accept exact source-branch dispatch');
+assert.match(stage, /github\.event_name == 'workflow_dispatch'/);
+assert.match(stage, /E8_STAGE_TRUSTED_DISPATCH_REQUEST/);
 assert.match(stage, /github\.actor == github\.repository_owner/);
 assert.match(stage, /github\.event\.issue\.user\.login == github\.repository_owner/);
 assert.match(stage, /startsWith\(github\.event\.issue\.title, '\[usage-dashboard-stage\] '\)/);
@@ -42,6 +45,20 @@ assert.match(stage, /--stage-issue-branch/);
 assert.match(stage, /E8_STAGE_CONNECTED_ISSUE_REQUEST/);
 assert.match(stage, /github\.event\.issue\.number == 197/,'legacy #197 stage command path must remain');
 assert.match(stage, /\/usage-dashboard stage /,'legacy slash-command stage path must remain');
+
+const selfHeal = fs.readFileSync('.github/workflows/usage-dashboard-stage-request-self-heal.yml', 'utf8');
+assert.match(selfHeal, /push:\n\s+branches: \[main\]/, 'self-healer must activate from trusted main push');
+assert.match(selfHeal, /schedule:\n\s+- cron: '\*\/5 \* \* \* \*'/, 'self-healer must retain bounded scheduled recovery');
+assert.match(selfHeal, /actions: write/,'self-healer needs only dispatch authority in addition to read/issue metadata');
+assert.match(selfHeal, /issues: write/,'self-healer consumes request metadata after successful dispatch');
+assert.match(selfHeal, /ref: main/,'self-healer must checkout and dispatch trusted main');
+assert.match(selfHeal, /state=open&labels=plugin%3Ausage-dashboard/);
+assert.match(selfHeal, /--stage-issue-branch/);
+assert.match(selfHeal, /\.user\.login/);
+assert.match(selfHeal, /actions\/workflows\/usage-dashboard-stage-e7\.yml\/dispatches/);
+assert.match(selfHeal, /\{ref:"main",inputs:\{source_branch:\$branch\}\}/);
+assert.match(selfHeal, /UD_STAGE_REQUEST_SELF_HEAL_DISPATCHED/);
+assert.ok(!selfHeal.includes('git push'), 'self-healer must never mutate candidate or production refs directly');
 
 const ordinary = fs.readFileSync('.github/workflows/usage-dashboard-validate.yml', 'utf8');
 assert.match(ordinary, /deterministic-stage-pr-note:/);
@@ -69,4 +86,4 @@ for (const token of [
   'must not create or advance release Git refs',
 ]) assert.ok(runbook.includes(token), `E8 runbook missing ${token}`);
 
-console.log(`usage-dashboard E8 early-failure/orchestration contract: OK · ${release.productVersion} · continuous hygiene + pre-candidate release-memory gate + owner issue stage trigger + exact-SHA authority + ref boundary`);
+console.log(`usage-dashboard E8 early-failure/orchestration contract: OK · ${release.productVersion} · continuous hygiene + pre-candidate release-memory gate + owner issue self-heal dispatch + exact-SHA authority + ref boundary`);

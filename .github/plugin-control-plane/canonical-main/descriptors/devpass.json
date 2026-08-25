@@ -8,8 +8,7 @@
   "guidelines": "docs/DEVPASS_GUIDELINES.md",
   "authority": {
     "type": "evidence",
-    "evidence": "plugins/devpass/README.md",
-    "artifact": "plugins/devpass/latest.js"
+    "evidence": "plugins/devpass/README.md"
   },
   "memory": {
     "profile": "check-only",

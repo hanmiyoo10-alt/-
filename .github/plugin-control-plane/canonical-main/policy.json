@@ -20,6 +20,7 @@
       "MEMORY_SYNC_FAILED": "P1",
       "PROJECT_BOOTSTRAP_VALIDATION_FAILED": "P1",
       "RELEASE_VALIDATION_FAILED": "P1",
+      "CANONICAL_MAIN_REHEARSAL": "P1",
       "CONTROL_PLANE_REFRESH_FAILED": "P2",
       "SCOPE_UNCLASSIFIED_PERSISTENT": "P2",
       "REAL_DEVICE_VALIDATION_PENDING": "P2",
@@ -54,6 +55,16 @@
     "operatorSurface": true,
     "automaticActivationAttempt": true,
     "softEnforcementFallback": true
+  },
+  "rehearsal": {
+    "enabled": true,
+    "id": "phase-h-v1",
+    "reasonCode": "CANONICAL_MAIN_REHEARSAL",
+    "severity": "P1",
+    "trackingIssue": 330,
+    "autoTriggerMarker": "[phase-h-rehearsal]",
+    "productionMutation": false,
+    "releaseMutation": false
   },
   "adapters": {
     "observationEpoch": "2026-08-24T20:37:22Z",

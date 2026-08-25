@@ -8,7 +8,9 @@ and direct SimCore-internal require edges only; it does not execute the plugin.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -17,6 +19,15 @@ DEFINE_RE = re.compile(
     r'SimCore\.define\("([^"]+)"\s*,\s*function\s*\(require,\s*module,\s*exports\)\s*\{'
 )
 REQUIRE_RE = re.compile(r"""require\(['"]\./([^'"]+)['"]\)""")
+
+SNAPSHOT_MAX_MODULES = 256
+SNAPSHOT_MAX_EDGES = 2048
+SNAPSHOT_MAX_TEXT = 2048
+SNAPSHOT_MAX_BYTES = 512 * 1024
+
+
+class SnapshotError(RuntimeError):
+    """Operational snapshot-generation failure; never changes architecture policy."""
 
 
 def extract_modules(source: str) -> Tuple[Dict[str, List[str]], List[str]]:
@@ -36,7 +47,32 @@ def extract_modules(source: str) -> Tuple[Dict[str, List[str]], List[str]]:
     return modules, sorted(set(duplicates))
 
 
-def check_source(path: Path, contract: dict) -> Tuple[Dict[str, List[str]], List[str], List[str]]:
+def classify_edge(name: str, dep: str, contract: dict) -> str:
+    """Serialize the same contract checks already enforced by the checker."""
+    declared = contract["modules"]
+    if name not in declared:
+        return "UNDECLARED"
+    if dep not in declared:
+        return "UNKNOWN_MODULE"
+
+    spec = declared[name]
+    dep_layer = declared[dep]["layer"]
+    exceptions = set(spec.get("transition_exceptions", []))
+    allowed = set(spec.get("allowed_dependencies", []))
+    allowed_layers = set(contract["layer_dependency_policy"].get(spec["layer"], []))
+
+    if spec["layer"] != "runtime" and dep_layer == "runtime":
+        return "FORBIDDEN_LAYER"
+    if dep_layer not in allowed_layers and dep not in exceptions:
+        return "FORBIDDEN_LAYER"
+    if dep not in allowed and dep not in exceptions:
+        return "UNDECLARED"
+    if dep in exceptions:
+        return "TRANSITION_EXCEPTION"
+    return "ALLOWED"
+
+
+def analyze_source(path: Path, contract: dict) -> dict:
     source = path.read_text(encoding="utf-8")
     actual, duplicates = extract_modules(source)
     failures: List[str] = []
@@ -119,7 +155,149 @@ def check_source(path: Path, contract: dict) -> Tuple[Dict[str, List[str]], List
     if missing:
         failures.append(f"{path}: missing required module definition(s): {missing}")
 
-    return actual, failures, notices
+    edges = [
+        {"from": name, "to": dep, "classification": classify_edge(name, dep, contract)}
+        for name in sorted(actual)
+        for dep in actual[name]
+    ]
+    return {
+        "graph": actual,
+        "failures": failures,
+        "notices": notices,
+        "edges": edges,
+    }
+
+
+def check_source(path: Path, contract: dict) -> Tuple[Dict[str, List[str]], List[str], List[str]]:
+    analysis = analyze_source(path, contract)
+    return analysis["graph"], analysis["failures"], analysis["notices"]
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def repo_relative(path: Path, root: Path) -> str:
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except ValueError as error:
+        raise SnapshotError(f"path outside repository root: {path}") from error
+    return relative.as_posix()
+
+
+def graph_digest(graph: Dict[str, List[str]]) -> str:
+    material = [[name, list(sorted(set(graph[name])))] for name in sorted(graph)]
+    encoded = json.dumps(material, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    return sha256_bytes(encoded)
+
+
+def build_snapshot(
+    *,
+    root: Path,
+    contract_path: Path,
+    contract_bytes: bytes,
+    contract: dict,
+    source_paths: List[Path],
+    analyses: Dict[str, dict],
+    failures: List[str],
+    notices: List[str],
+) -> dict:
+    contract_rel = repo_relative(contract_path, root)
+    source_rows = []
+
+    for source_path in source_paths:
+        analysis = analyses[str(source_path)]
+        graph = analysis["graph"]
+        edges = analysis["edges"]
+
+        if len(graph) > SNAPSHOT_MAX_MODULES:
+            raise SnapshotError(
+                f"{source_path}: physical module count {len(graph)} exceeds {SNAPSHOT_MAX_MODULES}"
+            )
+        if len(edges) > SNAPSHOT_MAX_EDGES:
+            raise SnapshotError(
+                f"{source_path}: direct edge count {len(edges)} exceeds {SNAPSHOT_MAX_EDGES}"
+            )
+
+        modules = []
+        for name in sorted(graph):
+            spec = contract["modules"].get(name)
+            modules.append(
+                {
+                    "name": name,
+                    "layer": spec.get("layer") if spec else "UNDECLARED",
+                    "physical": spec.get("physical") if spec else "UNDECLARED",
+                    "dependencies": list(sorted(set(graph[name]))),
+                }
+            )
+
+        source_bytes = source_path.read_bytes()
+        source_rows.append(
+            {
+                "path": repo_relative(source_path, root),
+                "sha256": sha256_bytes(source_bytes),
+                "modules": modules,
+                "edges": sorted(
+                    edges,
+                    key=lambda row: (row["from"], row["to"], row["classification"]),
+                ),
+                "graphSha256": graph_digest(graph),
+            }
+        )
+
+    bounded_failures = sorted(set(failures))
+    bounded_notices = sorted(set(notices))
+    for item in bounded_failures + bounded_notices:
+        if len(item) > SNAPSHOT_MAX_TEXT:
+            raise SnapshotError(
+                f"checker finding exceeds {SNAPSHOT_MAX_TEXT} characters"
+            )
+
+    graph_hashes = [row["graphSha256"] for row in source_rows]
+    graph_equal = len(graph_hashes) <= 1 or len(set(graph_hashes)) == 1
+
+    return {
+        "schemaVersion": 1,
+        "contract": {
+            "path": contract_rel,
+            "sha256": sha256_bytes(contract_bytes),
+            "schemaVersion": contract["schema_version"],
+            "milestone": contract["major_update"]["milestone"],
+            "phase": contract["major_update"]["phase"],
+        },
+        "sources": source_rows,
+        "parity": {
+            "graphEqual": graph_equal,
+            "allGraphSha256Equal": graph_equal,
+        },
+        "check": {
+            "result": "FAIL" if failures else "PASS",
+            "failureCount": len(bounded_failures),
+            "noticeCount": len(bounded_notices),
+            "failures": bounded_failures,
+            "notices": bounded_notices,
+        },
+    }
+
+
+def serialize_snapshot(snapshot: dict) -> bytes:
+    data = (json.dumps(snapshot, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
+    if len(data) > SNAPSHOT_MAX_BYTES:
+        raise SnapshotError(
+            f"snapshot size {len(data)} exceeds {SNAPSHOT_MAX_BYTES} bytes"
+        )
+    return data
+
+
+def write_snapshot(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        temp.write_bytes(data)
+        temp.replace(path)
+    finally:
+        if temp.exists():
+            temp.unlink()
 
 
 def main() -> None:
@@ -135,9 +313,16 @@ def main() -> None:
         default=[],
         help="plugin source to inspect; repeatable",
     )
+    parser.add_argument(
+        "--snapshot-out",
+        default=None,
+        help="optional deterministic JSON dependency snapshot output path",
+    )
     args = parser.parse_args()
 
-    contract = json.loads(Path(args.contract).read_text(encoding="utf-8"))
+    contract_path = Path(args.contract)
+    contract_bytes = contract_path.read_bytes()
+    contract = json.loads(contract_bytes.decode("utf-8"))
     if int(contract.get("schema_version", 0)) != 2:
         raise SystemExit("SimCore architecture contract: FAIL\n- schema_version must be 2")
 
@@ -150,14 +335,17 @@ def main() -> None:
     ]
 
     all_graphs: Dict[str, Dict[str, List[str]]] = {}
+    analyses: Dict[str, dict] = {}
     failures: List[str] = []
     notices: List[str] = []
 
     for source_path in source_paths:
-        graph, source_failures, source_notices = check_source(source_path, contract)
+        analysis = analyze_source(source_path, contract)
+        graph = analysis["graph"]
         all_graphs[str(source_path)] = graph
-        failures.extend(source_failures)
-        notices.extend(source_notices)
+        analyses[str(source_path)] = analysis
+        failures.extend(analysis["failures"])
+        notices.extend(analysis["notices"])
 
     if len(source_paths) >= 2:
         baseline = all_graphs[str(source_paths[0])]
@@ -167,6 +355,23 @@ def main() -> None:
                     f"module dependency graph differs: {source_paths[0]} vs {other}"
                 )
 
+    snapshot_error = None
+    if args.snapshot_out:
+        try:
+            snapshot = build_snapshot(
+                root=Path.cwd(),
+                contract_path=contract_path,
+                contract_bytes=contract_bytes,
+                contract=contract,
+                source_paths=source_paths,
+                analyses=analyses,
+                failures=failures,
+                notices=notices,
+            )
+            write_snapshot(Path(args.snapshot_out), serialize_snapshot(snapshot))
+        except (OSError, SnapshotError, KeyError, TypeError, ValueError) as error:
+            snapshot_error = error
+
     if failures:
         print("SimCore architecture contract: FAIL")
         for failure in failures:
@@ -175,6 +380,8 @@ def main() -> None:
             print("Transition notices:")
             for notice in sorted(set(notices)):
                 print(f"- {notice}")
+        if snapshot_error is not None:
+            print(f"Snapshot output: FAIL - {snapshot_error}")
         raise SystemExit(1)
 
     print("SimCore architecture contract: PASS")
@@ -188,6 +395,10 @@ def main() -> None:
     )
     for notice in sorted(set(notices)):
         print(f"- {notice}")
+
+    if snapshot_error is not None:
+        print(f"Snapshot output: FAIL - {snapshot_error}")
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

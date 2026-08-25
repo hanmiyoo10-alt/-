@@ -3,6 +3,8 @@ name: Usage Dashboard E7 Candidate-Ready Stage
 on:
   issue_comment:
     types: [created]
+  issues:
+    types: [opened]
 
 permissions:
   contents: read
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   resolve_stage:
-    if: ${{ github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard stage ') }}
+    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.number == 197 && github.actor == github.repository_owner && startsWith(github.event.comment.body, '/usage-dashboard stage ')) || (github.event_name == 'issues' && github.actor == github.repository_owner && github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, '[usage-dashboard-stage] ')) }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -42,15 +44,24 @@ jobs:
         id: resolve
         shell: bash
         env:
+          CONTROL_EVENT_NAME: ${{ github.event_name }}
           CONTROL_COMMAND: ${{ github.event.comment.body }}
           CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CONTROL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          CONTROL_ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           CONTROL_ACTOR: ${{ github.actor }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'failure_reason=E7_UNTRUSTED_WORKFLOW_REF' >> "$GITHUB_OUTPUT"; exit 1; }
-          node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
-          SOURCE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-branch "$CONTROL_COMMAND")"
+          if [[ "$CONTROL_EVENT_NAME" == 'issues' ]]; then
+            node plugins/usage-dashboard/tools/release_control_command.cjs --check-stage-issue-envelope "$CONTROL_ACTOR" "$CONTROL_ISSUE_AUTHOR" "$REPOSITORY_OWNER"
+            SOURCE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-issue-branch "$CONTROL_ISSUE_TITLE")"
+            echo "E8_STAGE_CONNECTED_ISSUE_REQUEST:$SOURCE_BRANCH"
+          else
+            node plugins/usage-dashboard/tools/release_control_command.cjs --check-envelope "$CONTROL_ISSUE_NUMBER" "$CONTROL_ACTOR" "$REPOSITORY_OWNER"
+            SOURCE_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --stage-branch "$CONTROL_COMMAND")"
+          fi
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$SOURCE_BRANCH"
           git fetch --no-tags origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/e7-source"
           SOURCE_SHA="$(git rev-parse refs/remotes/origin/e7-source)"

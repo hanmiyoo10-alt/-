@@ -49,15 +49,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Refresh canonical-main operator surface
+      # Phase J compatibility names only: ops-controller.cjs refresh / protected-main-surface.cjs refresh / bootstrap-surface.cjs refresh
+      - name: Refresh canonical-main modular operator snapshot
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node .github/plugin-control-plane/canonical-main/ops-controller.cjs refresh
-      - name: Refresh protected-main governance surface
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node .github/plugin-control-plane/canonical-main/protected-main-surface.cjs refresh
-      - name: Refresh bootstrap coverage surface
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node .github/plugin-control-plane/canonical-main/bootstrap-surface.cjs refresh
+        run: node .github/plugin-control-plane/canonical-main/orchestrator/refresh.cjs refresh

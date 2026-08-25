@@ -1,10 +1,12 @@
 # SimCore Small-Idea Starter Menu — 2026-08-26
 
-Status: `IDEA MENU · SMALL SCOPE ONLY · NO IMPLEMENTATION · NO RUNTIME CHANGE`
+Status: `IDEA MENU · SMALL SCOPE ONLY · DESIGN MUST FREEZE BEFORE STOP · NO IMPLEMENTATION · NO RUNTIME CHANGE`
 
 Purpose: provide a bounded set of genuinely small SimCore ideas that can be designed independently without reopening broad architecture research or mixing feature, release-system, and runtime ownership work.
 
-Broad architecture research remains closed. This menu is intentionally limited to narrow ideas that can be explained in one short design note and, if later implemented, should remain one bounded work item.
+Broad architecture research remains closed. This menu is intentionally limited to narrow ideas that can be completed as bounded designs and, if later implemented during the stabilization/implementation phase, should remain one bounded work item.
+
+Canonical idea-work policy: `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`.
 
 ## Selection rule
 
@@ -19,6 +21,17 @@ no background polling
 no provider/Host behavior guessing
 no M2 ownership rewrite hidden inside the feature
 ```
+
+Selecting an idea activates a stronger completion rule:
+
+```text
+SELECT
+→ COMPLETE THE DESIGN
+→ mark DESIGN FROZEN / PARKED FOR STABILIZATION
+→ STOP
+```
+
+Do not stop a selected idea at brainstorming or a loose concept note. Do not implement it immediately after design completion.
 
 ## Tier S — smallest / easiest to reason about
 
@@ -44,10 +57,11 @@ Rules:
 - no new validator;
 - no new diagnostic authority;
 - consume already-existing bounded observation facts;
-- hidden/compact by default if implemented.
+- hidden/compact by default if later implemented.
 
-Designability now: `YES`
-Implementation sequencing: `PRODUCT MINI / RUNTIME CHANGE IF PLUGIN BYTES CHANGE`
+Designability now: `YES · MAY BE SELECTED FOR FULL DESIGN`
+Implementation timing: `PARK AFTER DESIGN · IMPLEMENT LATER DURING STABILIZATION/IMPLEMENTATION PHASE`
+Runtime classification if later implemented: `PRODUCT MINI / RUNTIME CHANGE IF PLUGIN BYTES CHANGE`
 
 ### S2. Diagnostic Copy Profiles
 
@@ -69,8 +83,9 @@ Rules:
 - the same underlying diagnostic observation must remain authoritative;
 - `FULL` remains the lossless troubleshooting option.
 
-Designability now: `YES`
-Implementation sequencing: `NARROW PRODUCT MINI`
+Designability now: `YES · MAY BE SELECTED FOR FULL DESIGN`
+Implementation timing: `PARK AFTER DESIGN · IMPLEMENT LATER`
+Future implementation class: `NARROW PRODUCT MINI`
 
 ### S3. Authority Drift Check — documentation-only first version
 
@@ -86,13 +101,14 @@ R2.1 current operational status wording
 ```
 
 Rules:
-- first design may be specification-only;
+- first design may target a read-only specification/tool;
 - no automatic rewrite;
 - report contradiction, do not silently repair;
 - historical point-in-time evidence is excluded from drift findings.
 
-Designability now: `YES`
-Implementation sequencing: `NON_RUNTIME TOOLING / SEPARATE FROM PRODUCT RELEASE`
+Designability now: `YES · MAY BE SELECTED FOR FULL DESIGN`
+Implementation timing: `PARK AFTER DESIGN · IMPLEMENT LATER`
+Future implementation class: `NON_RUNTIME TOOLING / SEPARATE FROM PRODUCT RELEASE`
 
 ### S4. Evidence Index Entry Format
 
@@ -118,10 +134,11 @@ Rules:
 - existing dedicated evidence documents remain authoritative;
 - no second roadmap authority.
 
-Designability now: `YES`
-Implementation sequencing: `DOC/TOOLING ONLY`
+Designability now: `YES · MAY BE SELECTED FOR FULL DESIGN`
+Implementation timing: `PARK AFTER DESIGN · IMPLEMENT LATER`
+Future implementation class: `DOC/TOOLING ONLY`
 
-## Tier S+ — still small, but benefits from later ownership milestones
+## Tier S+ — small, but not selectable until ownership milestones expose enough truth
 
 ### S5. Reconcile Differential Receipt
 
@@ -139,8 +156,19 @@ REROLL_REPLACEMENT
 
 This should expose existing decision facts, not introduce new decision logic.
 
-Designability now: `PARTIAL`
-Preferred implementation point: `POST-M2-3`, when edit-reconcile is the physical owner.
+Current design status: `CANDIDATE ONLY`
+Selection gate: `POST-M2-3 PHYSICAL OWNER STABLE`
+Reason: the full design-freeze standard cannot be satisfied safely while physical edit-reconcile ownership is still planned rather than implemented.
+
+When the gate opens:
+
+```text
+select S5
+→ inspect actual post-M2-3 owner/API
+→ complete full receipt contract
+→ DESIGN FROZEN / PARKED
+→ STOP
+```
 
 ### S6. Turn Phase Receipt Lite
 
@@ -164,13 +192,13 @@ mirror
 Rules:
 - no raw body retention;
 - no second transaction engine;
-- phase names should follow actual production ownership;
-- therefore physical implementation should wait until M2-3 stabilizes.
+- phase names must follow actual production ownership.
 
-Designability now: `PARTIAL`
-Preferred implementation point: `POST-M2-3`
+Current design status: `CANDIDATE ONLY`
+Selection gate: `POST-M2-3 PHYSICAL FLOW STABLE`
+Reason: freezing the receipt schema against the imagined pre-M2-3 flow would violate the design-completion policy.
 
-## Recommended first exploration order
+## Recommended design-exploration order
 
 For idea-only work now:
 
@@ -181,13 +209,22 @@ For idea-only work now:
 4. S2 Diagnostic Copy Profiles
 ```
 
+For every selected item above:
+
+```text
+FULL DESIGN FIRST
+→ FROZEN
+→ PARKED FOR STABILIZATION
+→ NO IMPLEMENTATION
+```
+
 Why:
 - S1 is the smallest user-visible product thought experiment;
 - S4 is the smallest repository-memory improvement;
 - S3 directly improves SimCore's authority discipline;
 - S2 is useful but touches an existing troubleshooting workflow and deserves slightly more care.
 
-S5/S6 should remain parked until M2-3 exposes the final application-service boundary.
+S5/S6 remain candidates only until M2-3 exposes the actual application-service boundary.
 
 ## Anti-scope rules
 
@@ -203,23 +240,32 @@ new persistence layer
 new semantic validator
 ```
 
-If a small idea starts requiring one of those, stop and reclassify it as a different/larger work item.
+If a small idea starts requiring one of those, stop expanding the scope, reclassify it as a different/larger candidate, and do not call the current design complete.
 
 ## Verdict
 
 ```text
-BEST TINY PRODUCT IDEA
+SMALL IDEA RULE
+= SMALL SCOPE / FULL DESIGN RIGOR
+
+SELECTED IDEA
+= MUST REACH DESIGN FROZEN
+
+AFTER DESIGN FREEZE
+= PARK + STOP
+
+IMPLEMENTATION DURING CURRENT IDEA PHASE
+= NONE
+
+BEST TINY PRODUCT DESIGN CANDIDATE
 = S1 Diagnostic Quick Summary
 
-BEST TINY REPO/MEMORY IDEA
+BEST TINY REPO/MEMORY DESIGN CANDIDATE
 = S4 Evidence Index Entry Format
 
-BEST TINY SAFETY/AUTOMATION IDEA
+BEST TINY SAFETY/AUTOMATION DESIGN CANDIDATE
 = S3 Authority Drift Check
 
-POST-M2-3 TINY OBSERVABILITY IDEAS
+POST-M2-3 CANDIDATES
 = S5 / S6
-
-RUNTIME CHANGE NOW
-= NONE
 ```

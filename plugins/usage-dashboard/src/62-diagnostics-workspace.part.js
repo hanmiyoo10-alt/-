@@ -14,6 +14,30 @@
     return state?.diagnosticsMode === 'detailed' ? 'detailed' : 'basic';
   }
 
+  let diagnosticsModePersistTail = Promise.resolve();
+
+  function persistDiagnosticsModeSerialized(mode) {
+    const capturedMode = mode === 'detailed' ? 'detailed' : 'basic';
+    diagnosticsModePersistTail = diagnosticsModePersistTail
+      .then(async () => {
+        if (runtimeDisposed) return dropStaleAsync();
+        await store.setItem(STATE_KEY, {...state, diagnosticsMode:capturedMode});
+        powerRuntime.persistWrites += 1;
+      })
+      .catch(error => {
+        console.log(`[Local Usage Dashboard] diagnostics mode persist failed: ${error?.message || error}`);
+      });
+    return diagnosticsModePersistTail;
+  }
+
+  function setDiagnosticsModeInstant(mode) {
+    const next = mode === 'detailed' ? 'detailed' : 'basic';
+    if (diagnosticsWorkspaceMode() === next) return;
+    state.diagnosticsMode = next;
+    renderSettingsPartial();
+    void persistDiagnosticsModeSerialized(next);
+  }
+
   function diagnosticsWorkspaceCliRuntime() {
     const runtime = state.data?.bridge?.diagnostics?.cliRuntime;
     const manager = state.bridgeManagerRuntime || null;
@@ -177,4 +201,8 @@
       } catch (_) {}
       if (e?.currentTarget) e.currentTarget.textContent = copied ? '요약 복사됨 ✓' : '요약 복사 실패';
     };
+    const basic = q('#diagnostics-mode-basic');
+    const detailed = q('#diagnostics-mode-detailed');
+    if (basic) basic.onclick = () => setDiagnosticsModeInstant('basic');
+    if (detailed) detailed.onclick = () => setDiagnosticsModeInstant('detailed');
   };

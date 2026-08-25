@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.76
+//@version 3.0.0-alpha.5.77
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.76';
+  const VERSION = '3.0.0-alpha.5.77';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -3642,6 +3642,30 @@ function todayOverviewMetrics(d) {
     return state?.diagnosticsMode === 'detailed' ? 'detailed' : 'basic';
   }
 
+  let diagnosticsModePersistTail = Promise.resolve();
+
+  function persistDiagnosticsModeSerialized(mode) {
+    const capturedMode = mode === 'detailed' ? 'detailed' : 'basic';
+    diagnosticsModePersistTail = diagnosticsModePersistTail
+      .then(async () => {
+        if (runtimeDisposed) return dropStaleAsync();
+        await store.setItem(STATE_KEY, {...state, diagnosticsMode:capturedMode});
+        powerRuntime.persistWrites += 1;
+      })
+      .catch(error => {
+        console.log(`[Local Usage Dashboard] diagnostics mode persist failed: ${error?.message || error}`);
+      });
+    return diagnosticsModePersistTail;
+  }
+
+  function setDiagnosticsModeInstant(mode) {
+    const next = mode === 'detailed' ? 'detailed' : 'basic';
+    if (diagnosticsWorkspaceMode() === next) return;
+    state.diagnosticsMode = next;
+    renderSettingsPartial();
+    void persistDiagnosticsModeSerialized(next);
+  }
+
   function diagnosticsWorkspaceCliRuntime() {
     const runtime = state.data?.bridge?.diagnostics?.cliRuntime;
     const manager = state.bridgeManagerRuntime || null;
@@ -3805,37 +3829,8 @@ function todayOverviewMetrics(d) {
       } catch (_) {}
       if (e?.currentTarget) e.currentTarget.textContent = copied ? '요약 복사됨 ✓' : '요약 복사 실패';
     };
-  };
-
-  const diagnosticsInstantModeLegacyBindSettings = bindSettings;
-  let diagnosticsModePersistTail = Promise.resolve();
-
-  function persistDiagnosticsModeSerialized(mode) {
-    const capturedMode = mode === 'detailed' ? 'detailed' : 'basic';
-    diagnosticsModePersistTail = diagnosticsModePersistTail
-      .then(async () => {
-        if (runtimeDisposed) return dropStaleAsync();
-        await store.setItem(STATE_KEY, {...state, diagnosticsMode:capturedMode});
-        powerRuntime.persistWrites += 1;
-      })
-      .catch(error => {
-        console.log(`[Local Usage Dashboard] diagnostics mode persist failed: ${error?.message || error}`);
-      });
-    return diagnosticsModePersistTail;
-  }
-
-  function setDiagnosticsModeInstant(mode) {
-    const next = mode === 'detailed' ? 'detailed' : 'basic';
-    if (diagnosticsWorkspaceMode() === next) return;
-    state.diagnosticsMode = next;
-    renderSettingsPartial();
-    void persistDiagnosticsModeSerialized(next);
-  }
-
-  bindSettings = function diagnosticsInstantModeBindSettings() {
-    diagnosticsInstantModeLegacyBindSettings();
-    const basic = document.querySelector('#diagnostics-mode-basic');
-    const detailed = document.querySelector('#diagnostics-mode-detailed');
+    const basic = q('#diagnostics-mode-basic');
+    const detailed = q('#diagnostics-mode-detailed');
     if (basic) basic.onclick = () => setDiagnosticsModeInstant('basic');
     if (detailed) detailed.onclick = () => setDiagnosticsModeInstant('detailed');
   };

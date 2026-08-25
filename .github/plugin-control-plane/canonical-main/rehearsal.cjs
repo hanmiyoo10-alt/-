@@ -26,6 +26,10 @@ function markerForEvent(eventId) {
   return `<!-- canonical-main-event:${Buffer.from(String(eventId)).toString('base64url')} -->`;
 }
 
+function proofMarker(mainSha) {
+  return `<!-- canonical-main-rehearsal-proof:${mainSha} -->`;
+}
+
 function buildRehearsalEvent(transition, mainSha) {
   if (!['OPEN', 'RECOVERED'].includes(transition)) throw new Error(`unsupported rehearsal transition: ${transition}`);
   const open = transition === 'OPEN';
@@ -135,6 +139,24 @@ async function assertMainIdentity(apiClient, expectedMainSha) {
   }
 }
 
+function rehearsalState(allIssues, mainSha) {
+  const openEvent = buildRehearsalEvent('OPEN', mainSha);
+  const recoveredEvent = buildRehearsalEvent('RECOVERED', mainSha);
+  const key = correlationKey(openEvent);
+  const keyMarker = markerForKey(key);
+  const issue = allIssues.find((row) => (row.body || '').includes(keyMarker)) || null;
+  if (!issue) return {state: 'NONE', issue: null, key};
+  const previousState = previousIncidentState(issue);
+  const body = issue.body || '';
+  if (previousState === 'RECOVERED' && body.includes(proofMarker(mainSha)) && body.includes(markerForEvent(recoveredEvent.eventId))) {
+    return {state: 'PROVEN', issue, key};
+  }
+  if (previousState === 'OPEN' && body.includes(markerForEvent(openEvent.eventId))) {
+    return {state: 'OPEN', issue, key};
+  }
+  return {state: previousState, issue, key};
+}
+
 async function materialize(apiClient, transition, mainSha) {
   const event = buildRehearsalEvent(transition, mainSha);
   const key = correlationKey(event);
@@ -162,7 +184,8 @@ async function materialize(apiClient, transition, mainSha) {
     correlationKey: key,
     previousState,
   });
-  const body = renderIncidentBody(event, severity, transition, key, envelope);
+  let body = renderIncidentBody(event, severity, transition, key, envelope);
+  if (transition === 'RECOVERED') body += `\n${proofMarker(mainSha)}`;
   const labels = incidentLabels(severity, transition);
   const title = `[repo-incident:${severity}] ${REASON_CODE} — scope:repo`;
 
@@ -203,8 +226,19 @@ async function cycle({token, repo, expectedMainSha, fetchImpl = fetch}) {
   const apiClient = client({token, repo, fetchImpl});
   await assertMainIdentity(apiClient, expectedMainSha);
 
-  const opened = await materialize(apiClient, 'OPEN', expectedMainSha);
-  if (!opened.touched || !opened.envelope?.eligible) throw new Error('first rehearsal OPEN must materialize and enter the P1 outbox');
+  const initial = rehearsalState(await apiClient.listIssues('all'), expectedMainSha);
+  if (initial.state === 'PROVEN') {
+    console.log(`CANONICAL_MAIN_REHEARSAL:ALREADY_PROVEN:#${initial.issue.number}:${expectedMainSha}`);
+    return {issueNumber: initial.issue.number, mainSha: expectedMainSha, alreadyProven: true};
+  }
+
+  let opened;
+  if (initial.state === 'OPEN') {
+    opened = {touched: false, duplicate: true, issue: initial.issue};
+  } else {
+    opened = await materialize(apiClient, 'OPEN', expectedMainSha);
+    if (!opened.touched || !opened.envelope?.eligible) throw new Error('first rehearsal OPEN must materialize and enter the P1 outbox');
+  }
   runOpsRefresh();
   await assertOpsSurface(apiClient, 'INCIDENT', opened.issue.number, expectedMainSha);
 
@@ -220,7 +254,7 @@ async function cycle({token, repo, expectedMainSha, fetchImpl = fetch}) {
   await assertMainIdentity(apiClient, expectedMainSha);
 
   console.log(`CANONICAL_MAIN_REHEARSAL:PASS:#${opened.issue.number}:${expectedMainSha}`);
-  return {issueNumber: opened.issue.number, mainSha: expectedMainSha};
+  return {issueNumber: opened.issue.number, mainSha: expectedMainSha, alreadyProven: false};
 }
 
 async function main() {
@@ -242,10 +276,12 @@ module.exports = {
   REASON_CODE,
   markerForKey,
   markerForEvent,
+  proofMarker,
   buildRehearsalEvent,
   renderIncidentBody,
   incidentLabels,
   client,
+  rehearsalState,
   materialize,
   assertMainIdentity,
 };

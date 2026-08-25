@@ -12,14 +12,13 @@ permissions:
   issues: write
 
 concurrency:
-  group: canonical-main-incident-rehearsal
+  group: canonical-main-incident-rehearsal-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   rehearsal:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       contains(github.event.workflow_run.head_commit.message, '[phase-h-rehearsal]')
     runs-on: ubuntu-latest

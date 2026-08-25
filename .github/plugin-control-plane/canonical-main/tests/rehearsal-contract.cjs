@@ -15,9 +15,11 @@ const {
   REASON_CODE,
   markerForKey,
   markerForEvent,
+  proofMarker,
   buildRehearsalEvent,
   renderIncidentBody,
   client,
+  rehearsalState,
 } = require('../rehearsal.cjs');
 
 const root = path.resolve(__dirname, '../../../..');
@@ -62,14 +64,23 @@ const recoveryEnvelope = buildAlertEnvelope({event: recovered, severity: 'P1', t
 assert.equal(recoveryEnvelope.eligible, true, 'rehearsal recovery must enter the P1 notification outbox');
 assert.notEqual(openEnvelope.deliveryKey, recoveryEnvelope.deliveryKey);
 
-const body = renderIncidentBody(opened, 'P1', 'OPEN', key, openEnvelope);
-assert.match(body, /Synthetic rehearsal record/);
-assert.match(body, /does not assert a real outage/);
-assert.match(body, /Synthetic rehearsal: `true`/);
-assert.match(body, /Notification eligible: `true`/);
-assert(body.includes(markerForKey(key)));
-assert(body.includes(markerForEvent(opened.eventId)));
-assert.match(body, /canonical-main-alert-envelope:/);
+const openBody = renderIncidentBody(opened, 'P1', 'OPEN', key, openEnvelope);
+assert.match(openBody, /Synthetic rehearsal record/);
+assert.match(openBody, /does not assert a real outage/);
+assert.match(openBody, /Synthetic rehearsal: `true`/);
+assert.match(openBody, /Notification eligible: `true`/);
+assert(openBody.includes(markerForKey(key)));
+assert(openBody.includes(markerForEvent(opened.eventId)));
+assert.match(openBody, /canonical-main-alert-envelope:/);
+
+const openIssue = {number: 901, state: 'open', labels: ['incident:open', 'severity:P1', 'control-plane:incident'], body: openBody};
+assert.equal(rehearsalState([openIssue], sha).state, 'OPEN', 'same-main partial OPEN must be resumable');
+
+const recoveredBody = `${renderIncidentBody(recovered, 'P1', 'RECOVERED', key, recoveryEnvelope)}\n${proofMarker(sha)}`;
+const recoveredIssue = {number: 901, state: 'closed', labels: ['incident:recovered', 'severity:P1', 'control-plane:incident'], body: recoveredBody};
+assert.equal(rehearsalState([recoveredIssue], sha).state, 'PROVEN', 'exact-main recovery proof must make later triggers no-op');
+assert.notEqual(rehearsalState([recoveredIssue], 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa').state, 'PROVEN', 'proof marker must be exact-main scoped');
+assert.equal(rehearsalState([], sha).state, 'NONE');
 
 const workflowPath = path.join(root, '.github/workflows/canonical-main-rehearsal.yml');
 const workflow = fs.readFileSync(workflowPath, 'utf8');
@@ -77,9 +88,11 @@ assert.match(workflow, /^name: Canonical Main Incident Rehearsal/m);
 assert.match(workflow, /workflow_run:/);
 assert.match(workflow, /Canonical Main Operations/);
 assert.match(workflow, /conclusion == 'success'/);
-assert.match(workflow, /event == 'push'/);
 assert.match(workflow, /head_branch == 'main'/);
 assert.match(workflow, /\[phase-h-rehearsal\]/);
+assert.doesNotMatch(workflow, /event == 'push'/, 'activation must survive canonical-ops push-run cancellation/supersession');
+assert.match(workflow, /canonical-main-incident-rehearsal-\$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+assert.match(workflow, /cancel-in-progress:\s*false/);
 assert.match(workflow, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
 assert.match(workflow, /EXPECTED_MAIN_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
 assert.match(workflow, /contents:\s*read/);
@@ -97,6 +110,8 @@ assert.match(source, /repeated\.touched/);
 assert.match(source, /same correlation-key issue/);
 assert.match(source, /Production authority observation: MATCH/);
 assert.match(source, /CANONICAL_MAIN_REHEARSAL:PASS/);
+assert.match(source, /CANONICAL_MAIN_REHEARSAL:ALREADY_PROVEN/);
+assert.match(source, /proofMarker\(mainSha\)/);
 assert.doesNotMatch(source, /\/contents(?:\/|\?)/);
 assert.doesNotMatch(source, /\/git\/refs/);
 assert.doesNotMatch(source, /\/releases(?:\/|\?)/);

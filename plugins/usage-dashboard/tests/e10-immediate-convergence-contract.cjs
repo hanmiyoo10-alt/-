@@ -22,7 +22,9 @@ assert.equal(request.releaseGeneration,'E10');
 assert.match(request.attemptId,/^[0-9a-f]{24}$/);
 const e11Transition = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E11'));
 assert.equal(e11Transition.releaseGeneration,'E11');
-assert.throws(() => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E12')),/E9_REQUEST_GENERATION_DENIED/);
+const e12Transition = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E12'));
+assert.equal(e12Transition.releaseGeneration,'E12');
+assert.throws(() => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`,e10Body.replace('release_generation: E10','release_generation: E13')),/E9_REQUEST_GENERATION_DENIED/);
 
 readiness.assertPythonSyntax('def materialize():\n    return True\n','good.py');
 assert.throws(
@@ -34,7 +36,8 @@ const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release
 for (const token of [
   'name: Usage Dashboard Durable Release Reconciler',
   'workflow_run:',
-  'workflows: ["Usage Dashboard Exact-Byte Promotion"]',
+  'Usage Dashboard Exact-Byte Promotion',
+  'Usage Dashboard E9 Exact-SHA Validation',
   "github.event.workflow_run.conclusion == 'success'",
   "E10_GENERATION_ISSUE: '365'",
   "GENERATION_PROOF_MARKER='E10_REAL_RELEASE_PROOF'",
@@ -62,7 +65,7 @@ const e9Runbook = fs.readFileSync('docs/USAGE_DASHBOARD_PR_LIFECYCLE_E9_DURABLE_
 for (const token of [
   'E9-F: COMPLETE',
   '3.0.0-alpha.5.76',
-  '22da0cef846623d5d5d09150b87149238e198cac',
+  '22da0cef846623d5d09150b87149238e198cac',
   '8635e8265ad183b4355c6a1e727262e7dee1c099',
 ]) assert.ok(e9Runbook.includes(token),`E9 evidence closure missing ${token}`);
 

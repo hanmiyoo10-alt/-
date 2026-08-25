@@ -13,6 +13,8 @@ docs/features/<area>/<feature-id>/
 └─ FAILURES.md
 ```
 
+전체 PocketRisu PR의 빠른 결과 인덱스는 `PR-HISTORY.md`에 유지한다. 상세 근거는 각 Feature-ID dossier가 canonical이며, ledger와 dossier가 충돌하면 실제 GitHub 상태를 재확인해 둘 다 갱신한다.
+
 ## Lifecycle
 
 `IDEA → ACTIVE/INVESTIGATE → VERIFIED_LOCAL → PR_READY → PR_OPEN → VALIDATING → FAILED|CHANGES_REQUESTED|GREEN → MERGED → DEPLOY_READY → DEPLOYED → POST_DEPLOY_VERIFIED → UPSTREAM_CANDIDATE`
@@ -21,11 +23,20 @@ docs/features/<area>/<feature-id>/
 
 실패한 PR/check/deploy는 채팅에만 남기지 않는다. `FAILURES.md`에 stage, PR/commit, failed check/job, 로그 사실, 원인 확정/추정, 피드백/수정, 재검증, rollback을 기록한다.
 
-## 자동 PR feedback
+## 자동 PR feedback / history tracking
 
-대상은 개인 포크 `hanmiyoo10-alt/PocketRisu`의 feature PR. PR body에 `Feature-ID: <id>` 한 개가 있고 해당 기능 폴더가 존재해야 한다.
+대상은 공식 upstream `PocketRisu/PocketRisu`와 개인 포크 `hanmiyoo10-alt/PocketRisu`의 PocketRisu 관련 PR.
 
-실패 시 failed job/log 확인 → `FAILURES.md` 기록 → `UPSTREAM.md` 갱신 → PR comment 피드백 → 코드 실패 자동 merge 금지.
+새 PR 또는 의미 있는 상태 변화가 확인되면:
+1. `PR-HISTORY.md`의 해당 PR 결과를 추가/갱신한다.
+2. 해당 Feature-ID의 `UPSTREAM.md` 또는 `FAILURES.md`에 리뷰·CI·머지·보류·재구현·부분채택 결과를 기록한다.
+3. 코드 결함과 architecture/superseded 판단을 구분한다.
+4. 동일 사실을 중복 append하지 않는다.
+5. runtime code나 실제 서버 배포를 PR 기록 자동화가 임의로 변경하지 않는다.
+
+개인 포크의 새 feature PR은 PR body에 `Feature-ID: <id>` 한 개가 있고 해당 기능 폴더가 존재해야 한다.
+
+실패 시 failed job/log 확인 → `FAILURES.md` 기록 → `UPSTREAM.md` 갱신 → 필요 시 PR comment 피드백 → 코드 실패 자동 merge 금지.
 
 성공 시 required checks green + conflict 없음 + changes requested 없음 + 기능 경계 통과일 때만 개인 포크 auto-merge 후보.
 

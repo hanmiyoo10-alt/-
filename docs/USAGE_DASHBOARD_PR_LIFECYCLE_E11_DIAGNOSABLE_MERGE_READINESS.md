@@ -41,7 +41,14 @@ Examples include deleted-owner references, historical product literals, stale pa
 
 After authoritative exact-SHA validation is GREEN and before the assistant merges, the existing durable reducer calls `plugins/usage-dashboard/tools/merge_guard_e11.cjs`.
 
-The helper reads only Git history. It uses the deterministic candidate's single parent as the frozen candidate-main base and compares that parent with the latest `main` SHA.
+The helper reads only Git history. On the first deterministic materialization, the candidate's single parent is the frozen candidate-main base. If the same release is legitimately restaged before merge, the trusted stage writer fast-forwards the deterministic candidate branch with another `materialize: Usage Dashboard <same version> from source <sha>` commit. In that case the guard walks backward through the consecutive trusted materialization chain for that same product version and uses the first non-materialization parent as the frozen candidate-main base. It never treats prior candidate payload commits as main drift.
+
+The resolution remains fail-closed:
+- every traversed materialization commit must have exactly one parent;
+- only the trusted deterministic materialization message grammar is followed;
+- the walk is bounded;
+- the resolved frozen base must be an ancestor of current `main`;
+- the guard remains completely read-only and does not rewrite candidate history.
 
 Protected drift includes:
 
@@ -85,7 +92,7 @@ Generation qualification remains one-shot and separate from normal release closu
 - first successful real E11 release may emit the marker once and close #372;
 - later E11 releases are generation-proof no-ops.
 
-The focused `e11-diagnosable-merge-readiness-contract.cjs` is registered in the full Usage Dashboard test registry and locks structured readiness, merge-guard path classification, PR-lane observability, generation wiring, and the no-new-writer rule.
+The focused `e11-diagnosable-merge-readiness-contract.cjs` is registered in the full Usage Dashboard test registry and locks structured readiness, merge-guard path classification, repeated deterministic materialization base resolution, PR-lane observability, generation wiring, and the no-new-writer rule.
 
 ## E11-A..D implementation evidence
 
@@ -108,6 +115,14 @@ Main advanced from the implementation branch base only through unrelated SimCore
 `c37d5547340273b98a2d7839059b73f177914260`.
 
 Post-merge product manifest on main and `release-usage-dashboard` remains byte-identical at blob `ef1ae25970e9496a425b259e6d371eff364d1b1f`, still Product `3.0.0-alpha.5.77` / Engine `1.6.22` / Manager `1.3.0` / contracts `1/1`.
+
+## E11-E live feedback — repeated deterministic materialization
+
+The first real E11 release proof, 5.78 request `#376`, exposed one merge-readiness edge case before PR merge authority was used.
+
+The same semantic 5.78 source tree was re-submitted under a new exact source SHA after a bookkeeping-only source write was reverted. E11 readiness correctly re-qualified the new SHA and the trusted stage writer correctly fast-forwarded the same deterministic 5.78 candidate branch. The latest candidate therefore had the prior 5.78 candidate as its direct parent, while the original frozen main base remained farther back in the same first-parent chain.
+
+The original E11-B implementation assumed the latest candidate's direct parent was always the main base. The retained fix does not rewrite or reset candidate refs. It resolves the frozen base through consecutive same-version trusted materialization commits, adds a real temporary-Git regression fixture proving a repeated materialization does not become false main drift, and leaves all candidate/main/production write authorities unchanged.
 
 ## E11-E — first real release proof
 

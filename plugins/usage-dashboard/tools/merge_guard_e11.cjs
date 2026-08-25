@@ -12,6 +12,8 @@ const PROTECTED_PREFIXES = Object.freeze([
 const PROTECTED_EXACT = new Set([
   'scripts/bootstrap-usage-dashboard.sh',
 ]);
+const MATERIALIZATION_MESSAGE = /^materialize: Usage Dashboard (3\.0\.0-alpha\.5\.\d+) from source ([0-9a-f]{40})(?:\r?\n|$)/;
+const MAX_MATERIALIZATION_CHAIN = 64;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -31,17 +33,38 @@ function nulList(value) {
   return String(value || '').split('\0').filter(Boolean);
 }
 
-function candidateParent(candidateSha) {
+function candidateParent(candidateSha, options = {}) {
   const sha = normalizeSha(candidateSha,'E11_CANDIDATE_SHA_INVALID');
-  const row = git(['rev-list','--parents','-n','1',sha]).split(/\s+/).filter(Boolean);
+  const row = git(['rev-list','--parents','-n','1',sha],options).split(/\s+/).filter(Boolean);
   if (row.length !== 2) fail('E11_CANDIDATE_PARENT_COUNT',String(Math.max(0,row.length - 1)));
   return row[1];
 }
 
-function changedPaths(baseSha, headSha) {
+function materializationIdentity(commitSha, options = {}) {
+  const sha = normalizeSha(commitSha,'E11_CANDIDATE_SHA_INVALID');
+  const message = git(['show','-s','--format=%B',sha],options);
+  const match = message.match(MATERIALIZATION_MESSAGE);
+  return match ? {version:match[1],sourceSha:match[2]} : null;
+}
+
+function candidateBase(candidateSha, options = {}) {
+  const candidate = normalizeSha(candidateSha,'E11_CANDIDATE_SHA_INVALID');
+  const identity = materializationIdentity(candidate,options);
+  if (!identity) return candidateParent(candidate,options);
+  let cursor = candidate;
+  for (let depth = 0; depth < MAX_MATERIALIZATION_CHAIN; depth += 1) {
+    const parent = candidateParent(cursor,options);
+    const parentIdentity = materializationIdentity(parent,options);
+    if (!parentIdentity || parentIdentity.version !== identity.version) return parent;
+    cursor = parent;
+  }
+  fail('E11_CANDIDATE_MATERIALIZATION_CHAIN_TOO_DEEP',candidate);
+}
+
+function changedPaths(baseSha, headSha, options = {}) {
   const base = normalizeSha(baseSha,'E11_BASE_SHA_INVALID');
   const head = normalizeSha(headSha,'E11_MAIN_SHA_INVALID');
-  return [...new Set(nulList(execFileSync('git',['diff','--name-only','-z',base,head],{encoding:'utf8'})))].sort();
+  return [...new Set(nulList(execFileSync('git',['diff','--name-only','-z',base,head],{encoding:'utf8',...options})))].sort();
 }
 
 function isProtected(path) {
@@ -64,20 +87,22 @@ function classifyPaths(paths) {
   return {verdict,changedPaths:changed,protectedPaths};
 }
 
-function classify(candidateSha, currentMainSha) {
+function classify(candidateSha, currentMainSha, options = {}) {
   const candidate = normalizeSha(candidateSha,'E11_CANDIDATE_SHA_INVALID');
   const main = normalizeSha(currentMainSha,'E11_MAIN_SHA_INVALID');
-  try { git(['cat-file','-e',`${candidate}^{commit}`]); }
+  try { git(['cat-file','-e',`${candidate}^{commit}`],options); }
   catch { fail('E11_CANDIDATE_COMMIT_MISSING',candidate); }
-  try { git(['cat-file','-e',`${main}^{commit}`]); }
+  try { git(['cat-file','-e',`${main}^{commit}`],options); }
   catch { fail('E11_MAIN_COMMIT_MISSING',main); }
-  const parent = candidateParent(candidate);
-  try { execFileSync('git',['merge-base','--is-ancestor',parent,main],{stdio:'ignore'}); }
-  catch { fail('E11_MAIN_NOT_DESCENDANT_OF_CANDIDATE_BASE',`${parent}:${main}`); }
-  const result = classifyPaths(changedPaths(parent,main));
+  const parent = candidateParent(candidate,options);
+  const base = candidateBase(candidate,options);
+  try { execFileSync('git',['merge-base','--is-ancestor',base,main],{stdio:'ignore',...options}); }
+  catch { fail('E11_MAIN_NOT_DESCENDANT_OF_CANDIDATE_BASE',`${base}:${main}`); }
+  const result = classifyPaths(changedPaths(base,main,options));
   return {
     candidateSha:candidate,
     candidateParentSha:parent,
+    candidateBaseSha:base,
     currentMainSha:main,
     ...result,
   };
@@ -96,7 +121,11 @@ function main() {
 module.exports = {
   PROTECTED_PREFIXES,
   PROTECTED_EXACT,
+  MATERIALIZATION_MESSAGE,
+  MAX_MATERIALIZATION_CHAIN,
   candidateParent,
+  materializationIdentity,
+  candidateBase,
   changedPaths,
   isProtected,
   classifyPaths,

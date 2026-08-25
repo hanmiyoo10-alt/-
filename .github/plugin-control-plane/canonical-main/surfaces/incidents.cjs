@@ -4,9 +4,9 @@ const {envelopeMarker} = require('../notification.cjs');
 const {markerForKey, markerForEvent} = require('../domains/incidents.cjs');
 const {buildIncidentHistory, renderTransitionHistory, transitionMarker} = require('./incident-history.cjs');
 
-function renderIncidentBody(event, severity, state, key, alertEnvelope = null, previousBody = '') {
+function renderIncidentBody(event, severity, state, key, alertEnvelope = null, previousBody = '', historyLimit = 6) {
   const evidence = (event.evidence || []).slice(0, 12);
-  const history = buildIncidentHistory(previousBody, event, severity, state);
+  const history = buildIncidentHistory(previousBody, event, severity, state, historyLimit);
   return [
     `# Canonical Main Incident — ${event.observation.reasonCode}`,
     '',

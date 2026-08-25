@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.74",
+  "version": "3.0.0-alpha.5.75",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "ef6ea184f23c25535a4b6303216743e6d751228e8edc5041b7086cb89129d7aa",
+  "artifactSha256": "768b941b2b41c0085ce089e3131bb0477179a3e1636e5bd1a9ad79484a80aaa2",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "16f931c7c43d61c6269468dd82f79aeae1c7c82b84863ad370f99ee3a75ce863"
+      "sha256": "cb5d4c87c4016448ed3b7c5fe90b2165cafedcd937d38d964ba3d2b1c78021a9"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -64,14 +64,8 @@
     {
       "file": "16-usage-analytics.part.js",
       "label": "usage + analytics normalization",
-      "bytes": 17967,
-      "sha256": "97db0e8f5aaa8f6fc252fea10b55cd1d2dcd25f0edfecbb89fb84a1ade37cd39"
-    },
-    {
-      "file": "18-request-provenance-analytics.part.js",
-      "label": "request provenance analytics",
-      "bytes": 1175,
-      "sha256": "28096961b8f40e791c01d79afbb33294c49f7e4815bfb8221b3ea9db9f2ec430"
+      "bytes": 18827,
+      "sha256": "b6f601091ffac6d9bb215941ed230bcace0265c89a6e194f9c8374eb4b49e27e"
     },
     {
       "file": "20-bridge-io.part.js",

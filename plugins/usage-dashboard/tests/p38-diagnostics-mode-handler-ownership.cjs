@@ -16,6 +16,7 @@ const enginePath = `${root}/runtime/bridge-engine.mjs`;
 const latestPath = `${root}/latest.js`;
 
 const release = assertCurrentReleaseArtifacts();
+// UD_HISTORICAL_VERSION_LOCK — P38 intentionally locks the 5.74 release tuple as historical regression evidence.
 assert.equal(release.productVersion, '3.0.0-alpha.5.74');
 assert.equal(release.engineVersion, '1.6.22');
 assert.equal(release.managerVersion, '1.3.0');

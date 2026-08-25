@@ -13,7 +13,7 @@ Never infer the current production version from conversation memory. Read the ac
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.74`
+- Product: `3.0.0-alpha.5.75`
 - Bridge Engine: `1.6.22`
 - Bridge Manager: `1.3.0`
 - Release branch: `release-usage-dashboard`
@@ -32,7 +32,7 @@ Verified 5.64 foreground evidence:
 - All three foreground source operations followed direct `llmgateway` ENOENT into the existing `npx` fallback, so routine npx-launcher use on the device is VERIFIED.
 - The portion of each 7–8.6s interval attributable to npm metadata freshness checks remains UNKNOWN. Launcher attribution alone does not prove that npx is the dominant latency source.
 
-Current release implementation: `3.0.0-alpha.5.74 — Diagnostics Mode Handler Ownership Consolidation`.
+Current release implementation: `3.0.0-alpha.5.75 — Provenance Analytics Wrapper Consolidation`.
 
 5.66 release contract:
 

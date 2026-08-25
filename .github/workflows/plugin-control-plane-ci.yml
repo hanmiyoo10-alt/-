@@ -6,6 +6,7 @@ on:
       - '.github/plugin-control-plane/**'
       - '.github/workflows/plugin-control-plane-*.yml'
       - '.github/workflows/canonical-main-ops.yml'
+      - '.github/workflows/canonical-main-protection-guard.yml'
       - '.github/ISSUE_TEMPLATE/plugin-work.yml'
       - 'docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md'
       - 'README.md'

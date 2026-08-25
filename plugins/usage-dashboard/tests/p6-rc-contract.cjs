@@ -26,9 +26,12 @@ for (const marker of [
   '<b>Floating Widget</b><span>표시 정보</span>',
   '<b>Performance</b><span>복귀 · adaptive refresh</span>',
   '<b>Lifecycle & Recovery</b>',
-  '요약 · 전체 진단',
-  '<span>Manager</span>',
-  '<span>Lifecycle</span>',
-  '<span>Errors</span>',
+  'Basic · Detailed · Full Copy',
+  '<span>Status</span>',
+  '<span>Runtime</span>',
+  '<span>Last refresh</span>',
+  '<span>Data</span>',
+  '<span>Updater</span>',
+  "Manager ${esc(model.managerVersion || '—')}",
 ]) assert.ok(source.includes(marker), `missing RC productization marker: ${marker}`);
 console.log(`usage-dashboard P6 RC contract: OK · productization locked · ${productVersion} · engine ${requiredEngineVersion} · module registries authoritative`);

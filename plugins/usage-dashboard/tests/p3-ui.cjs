@@ -16,7 +16,7 @@ for (const marker of [
   'class="panel wide analytics-panel"',
   'class="panel wide advanced-panel"',
   '<summary><b>Local Bridge</b><span>연결 · 설정</span></summary>',
-  '<summary><b>Runtime Diagnostics</b><span>요약 · 전체 진단</span></summary>',
+  '<summary><b>Runtime Diagnostics</b><span>Basic · Detailed · Full Copy</span></summary>',
   'UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed',
   'Navigation: tabbed · overview/devpass/credits/analytics/settings',
   "['credits','Credits']",
@@ -79,4 +79,3 @@ assert.ok(source.includes('Resume route: requested'), 'resume diagnostics regres
 assert.ok(source.includes('Bridge module freshness:'), 'bridge diagnostics regression');
 
 console.log(`usage-dashboard P3 UI regression: OK · ${version}`);
-

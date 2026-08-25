@@ -66,7 +66,7 @@ const section = renderBootstrapSection(coverage);
 assert.match(section, /Coverage: `COMPLETE`/);
 assert.match(section, /Legacy\/unregistered scopes: none/);
 assert.doesNotMatch(section, /LEGACY\/UNREGISTERED_FOR_STANDARD/);
-for (const id of expectedIds) assert.match(section, new RegExp(`\\`${id}\\`: \\`BOOTSTRAP_READY\\``));
+for (const id of expectedIds) assert(section.includes(`\`${id}\`: \`BOOTSTRAP_READY\``), `${id} must render BOOTSTRAP_READY`);
 
 const fixture = '# Ops\n\n## Bootstrap & durable-memory health\n\n- old\n- Workstreams without descriptors remain `LEGACY/UNREGISTERED_FOR_STANDARD`.\n\n## Recent recoveries\n\n- none\n';
 const replaced = replaceBootstrapSection(fixture, section);

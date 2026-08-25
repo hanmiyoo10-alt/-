@@ -61,6 +61,12 @@ assert.deepEqual(protectedResult.protectedPaths,[
 assert.equal(mergeGuard.isProtected('.github/plugin-control-plane/canonical-main/ops-controller.cjs'),true);
 assert.equal(mergeGuard.isProtected('docs/USAGE_DASHBOARD_GUIDELINES.md'),true);
 assert.equal(mergeGuard.isProtected('docs/SIMCORE_GEMINI_CACHE_IDEA.md'),false);
+const mergeGuardSource = fs.readFileSync('plugins/usage-dashboard/tools/merge_guard_e11.cjs','utf8');
+for (const token of [
+  'MERGE_READY_NO_DRIFT',
+  'MERGE_READY_WITH_UNRELATED_MAIN_DRIFT',
+  'MERGE_BLOCKED_PROTECTED_MAIN_DRIFT',
+]) assert.ok(mergeGuardSource.includes(token),`E11 merge guard missing ${token}`);
 
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
 for (const token of [
@@ -69,8 +75,6 @@ for (const token of [
   'reason_code:',
   'plugins/usage-dashboard/tools/merge_guard_e11.cjs --classify',
   'UD_E11_MERGE_GUARD:',
-  'MERGE_READY_NO_DRIFT',
-  'MERGE_READY_WITH_UNRELATED_MAIN_DRIFT',
   'MERGE_BLOCKED_PROTECTED_MAIN_DRIFT',
   "GENERATION_PROOF_MARKER='E11_REAL_RELEASE_PROOF'",
 ]) assert.ok(reconciler.includes(token),`E11 reconciler missing ${token}`);

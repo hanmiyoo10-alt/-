@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.77
+//@version 3.0.0-alpha.5.78
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.77';
+  const VERSION = '3.0.0-alpha.5.78';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -3780,62 +3780,6 @@ function todayOverviewMetrics(d) {
     return 'runtime';
   }
 
-  function diagnosticsWorkspaceDetailedSections() {
-    const groups = new Map(DIAGNOSTICS_WORKSPACE_SECTIONS.map(section => [section.key, []]));
-    for (const line of diagText().split('\n')) groups.get(diagnosticsWorkspaceSectionKey(line)).push(line);
-    return DIAGNOSTICS_WORKSPACE_SECTIONS.map(section => ({...section,lines:groups.get(section.key)}));
-  }
-
-  function diagnosticsWorkspaceDetailedHtml() {
-    return diagnosticsWorkspaceDetailedSections().map((section, index) => `<details class="diag-workspace-section" ${index === 0 ? 'open' : ''}><summary><b>${esc(section.title)}</b><span>${section.lines.length} lines</span></summary><div class="diag-workspace-lines">${section.lines.map(line => `<p>${esc(line)}</p>`).join('')}</div></details>`).join('');
-  }
-
-  function diagnosticsWorkspaceBasicHtml() {
-    const model = diagnosticsWorkspaceBasicModel();
-    const lastRefresh = model.lastRefreshMs === null ? '—' : `${roundPerfMs(model.lastRefreshMs)}ms`;
-    const snapshot = model.snapshotMs === null ? '—' : `${roundPerfMs(model.snapshotMs)}ms`;
-    const critical = model.criticalPath
-      ? `${model.criticalPath}${model.criticalPathMs === null ? '' : ` · ${roundPerfMs(model.criticalPathMs)}ms`}`
-      : '—';
-    const issueHtml = model.issues.length
-      ? `<div class="diag-workspace-issues"><b>Current evidence</b>${model.issues.map(item => `<p>${esc(item)}</p>`).join('')}</div>`
-      : '';
-    return `<div class="diag-workspace-capture"><b>Captured #${model.capture.refreshCount}</b><span>${esc(diagnosticTimestamp(model.capture.capturedAt))} · ${esc(model.capture.reason)} · sync ${esc(model.capture.lastSyncAt === null ? 'UNKNOWN' : new Date(Number(model.capture.lastSyncAt)).toISOString())}</span></div><div class="minis diag-summary diag-workspace-basic"><div class="mini"><span>Status</span><b>${esc(model.readiness)}</b><small>Health ${esc(model.health)} · errors ${model.activeErrors} · failures ${model.failures}</small></div><div class="mini"><span>Runtime</span><b>Engine ${esc(model.engineVersion || '—')}</b><small>Manager ${esc(model.managerVersion || '—')} · CLI ${model.cli.version ? `v${esc(model.cli.version)}` : 'v—'} ${esc(model.cli.state)}</small></div><div class="mini"><span>Last refresh</span><b>${esc(lastRefresh)}</b><small>snapshot ${esc(snapshot)} · critical ${esc(critical)}</small></div><div class="mini"><span>Data</span><b>${esc(model.dataAge)}</b><small>stale ${model.staleModules === null ? '—' : model.staleModules} · exact ${model.exactRows}/${model.ledgerRows}</small></div><div class="mini"><span>Updater</span><b>${model.updaterCompatible ? 'compatible' : 'incompatible'}</b><small>sync ${esc(model.managerSync)}</small></div></div>${issueHtml}`;
-  }
-
-  function diagnosticsWorkspacePanelHtml() {
-    const mode = diagnosticsWorkspaceMode();
-    const body = mode === 'detailed' ? diagnosticsWorkspaceDetailedHtml() : diagnosticsWorkspaceBasicHtml();
-    return `<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>Basic · Detailed · Full Copy</span></summary><div class="advanced-body"><style>.diag-workspace-capture{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:0 0 8px;color:var(--m);font-size:9px}.diag-workspace-capture b{color:var(--t);font-size:10px}.diag-workspace-tabs{display:flex;gap:6px;margin:2px 0 10px}.diag-workspace-tabs button{flex:1}.diag-workspace-tabs button.active{background:var(--g);border-color:var(--g);color:#15170f}.diag-workspace-basic{grid-template-columns:repeat(5,minmax(0,1fr))}.diag-workspace-basic .mini small{display:block;color:var(--m);font-size:9px;margin-top:4px;white-space:normal}.diag-workspace-issues{border:1px solid var(--e);border-radius:9px;padding:9px;margin:8px 0}.diag-workspace-issues>b{color:var(--e);font-size:10px}.diag-workspace-issues p{margin:4px 0 0}.diag-workspace-section{border:1px solid var(--l);border-radius:9px;margin-top:7px;overflow:hidden}.diag-workspace-section>summary{display:flex;justify-content:space-between;gap:8px;padding:9px;cursor:pointer;list-style:none}.diag-workspace-section>summary::-webkit-details-marker{display:none}.diag-workspace-section>summary span{color:var(--m);font-size:9px}.diag-workspace-section[open]>summary{border-bottom:1px solid var(--l)}.diag-workspace-lines{padding:5px 9px}.diag-workspace-lines p{margin:5px 0;font-size:10px;overflow-wrap:anywhere}@media(max-width:680px){.diag-workspace-basic{grid-template-columns:1fr 1fr}.diag-workspace-basic .mini:last-child{grid-column:1/-1}}</style><div class="diag-workspace-tabs" role="group" aria-label="Diagnostics view"><button id="diagnostics-mode-basic" class="${mode === 'basic' ? 'active' : ''}" aria-pressed="${mode === 'basic' ? 'true' : 'false'}">Basic</button><button id="diagnostics-mode-detailed" class="${mode === 'detailed' ? 'active' : ''}" aria-pressed="${mode === 'detailed' ? 'true' : 'false'}">Detailed</button></div>${body}<div class="actions"><button id="copy-diag-summary">요약 복사</button><button id="copy-diag">전체 Diagnostics 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>`;
-  }
-
-  settingsHtml = function diagnosticsWorkspaceSettingsHtml() {
-    const legacyHtml = diagnosticsWorkspaceLegacySettingsHtml();
-    const diagnosticsPanel = /<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics<\/b><span>요약 · 전체 진단<\/span><\/summary><div class="advanced-body">[\s\S]*?<\/div><\/details>/;
-    if (!diagnosticsPanel.test(legacyHtml)) return legacyHtml;
-    return legacyHtml.replace(diagnosticsPanel, diagnosticsWorkspacePanelHtml());
-  };
-
-  bindSettings = function diagnosticsWorkspaceBindSettings() {
-    diagnosticsWorkspaceLegacyBindSettings();
-    const q = selector => document.querySelector(selector);
-    if (q('#copy-diag-summary')) q('#copy-diag-summary').onclick = async e => {
-      let copied = false;
-      try {
-        if (navigator?.clipboard?.writeText) {
-          await navigator.clipboard.writeText(diagnosticsWorkspaceBasicText());
-          copied = true;
-        }
-      } catch (_) {}
-      if (e?.currentTarget) e.currentTarget.textContent = copied ? '요약 복사됨 ✓' : '요약 복사 실패';
-    };
-    const basic = q('#diagnostics-mode-basic');
-    const detailed = q('#diagnostics-mode-detailed');
-    if (basic) basic.onclick = () => setDiagnosticsModeInstant('basic');
-    if (detailed) detailed.onclick = () => setDiagnosticsModeInstant('detailed');
-  };
-
-  const diagnosticsRuntimeWeightLegacyDetailedSections = diagnosticsWorkspaceDetailedSections;
   const RUNTIME_WEIGHT_REQUEST_LEDGER_LIMIT = 2000;
 
   function runtimeWeightAuditKnown(value) {
@@ -3934,9 +3878,60 @@ function todayOverviewMetrics(d) {
     ];
   }
 
-  diagnosticsWorkspaceDetailedSections = function runtimeWeightAuditDetailedSections() {
-    const sections = diagnosticsRuntimeWeightLegacyDetailedSections();
+  function diagnosticsWorkspaceDetailedSections() {
+    const groups = new Map(DIAGNOSTICS_WORKSPACE_SECTIONS.map(section => [section.key, []]));
+    for (const line of diagText().split('\n')) groups.get(diagnosticsWorkspaceSectionKey(line)).push(line);
+    const sections = DIAGNOSTICS_WORKSPACE_SECTIONS.map(section => ({...section,lines:groups.get(section.key)}));
     return [...sections, {key:'runtime-weight', title:'Runtime Weight Audit', lines:runtimeWeightAuditLines()}];
+  }
+
+  function diagnosticsWorkspaceDetailedHtml() {
+    return diagnosticsWorkspaceDetailedSections().map((section, index) => `<details class="diag-workspace-section" ${index === 0 ? 'open' : ''}><summary><b>${esc(section.title)}</b><span>${section.lines.length} lines</span></summary><div class="diag-workspace-lines">${section.lines.map(line => `<p>${esc(line)}</p>`).join('')}</div></details>`).join('');
+  }
+
+  function diagnosticsWorkspaceBasicHtml() {
+    const model = diagnosticsWorkspaceBasicModel();
+    const lastRefresh = model.lastRefreshMs === null ? '—' : `${roundPerfMs(model.lastRefreshMs)}ms`;
+    const snapshot = model.snapshotMs === null ? '—' : `${roundPerfMs(model.snapshotMs)}ms`;
+    const critical = model.criticalPath
+      ? `${model.criticalPath}${model.criticalPathMs === null ? '' : ` · ${roundPerfMs(model.criticalPathMs)}ms`}`
+      : '—';
+    const issueHtml = model.issues.length
+      ? `<div class="diag-workspace-issues"><b>Current evidence</b>${model.issues.map(item => `<p>${esc(item)}</p>`).join('')}</div>`
+      : '';
+    return `<div class="diag-workspace-capture"><b>Captured #${model.capture.refreshCount}</b><span>${esc(diagnosticTimestamp(model.capture.capturedAt))} · ${esc(model.capture.reason)} · sync ${esc(model.capture.lastSyncAt === null ? 'UNKNOWN' : new Date(Number(model.capture.lastSyncAt)).toISOString())}</span></div><div class="minis diag-summary diag-workspace-basic"><div class="mini"><span>Status</span><b>${esc(model.readiness)}</b><small>Health ${esc(model.health)} · errors ${model.activeErrors} · failures ${model.failures}</small></div><div class="mini"><span>Runtime</span><b>Engine ${esc(model.engineVersion || '—')}</b><small>Manager ${esc(model.managerVersion || '—')} · CLI ${model.cli.version ? `v${esc(model.cli.version)}` : 'v—'} ${esc(model.cli.state)}</small></div><div class="mini"><span>Last refresh</span><b>${esc(lastRefresh)}</b><small>snapshot ${esc(snapshot)} · critical ${esc(critical)}</small></div><div class="mini"><span>Data</span><b>${esc(model.dataAge)}</b><small>stale ${model.staleModules === null ? '—' : model.staleModules} · exact ${model.exactRows}/${model.ledgerRows}</small></div><div class="mini"><span>Updater</span><b>${model.updaterCompatible ? 'compatible' : 'incompatible'}</b><small>sync ${esc(model.managerSync)}</small></div></div>${issueHtml}`;
+  }
+
+  function diagnosticsWorkspacePanelHtml() {
+    const mode = diagnosticsWorkspaceMode();
+    const body = mode === 'detailed' ? diagnosticsWorkspaceDetailedHtml() : diagnosticsWorkspaceBasicHtml();
+    return `<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics</b><span>Basic · Detailed · Full Copy</span></summary><div class="advanced-body"><style>.diag-workspace-capture{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:0 0 8px;color:var(--m);font-size:9px}.diag-workspace-capture b{color:var(--t);font-size:10px}.diag-workspace-tabs{display:flex;gap:6px;margin:2px 0 10px}.diag-workspace-tabs button{flex:1}.diag-workspace-tabs button.active{background:var(--g);border-color:var(--g);color:#15170f}.diag-workspace-basic{grid-template-columns:repeat(5,minmax(0,1fr))}.diag-workspace-basic .mini small{display:block;color:var(--m);font-size:9px;margin-top:4px;white-space:normal}.diag-workspace-issues{border:1px solid var(--e);border-radius:9px;padding:9px;margin:8px 0}.diag-workspace-issues>b{color:var(--e);font-size:10px}.diag-workspace-issues p{margin:4px 0 0}.diag-workspace-section{border:1px solid var(--l);border-radius:9px;margin-top:7px;overflow:hidden}.diag-workspace-section>summary{display:flex;justify-content:space-between;gap:8px;padding:9px;cursor:pointer;list-style:none}.diag-workspace-section>summary::-webkit-details-marker{display:none}.diag-workspace-section>summary span{color:var(--m);font-size:9px}.diag-workspace-section[open]>summary{border-bottom:1px solid var(--l)}.diag-workspace-lines{padding:5px 9px}.diag-workspace-lines p{margin:5px 0;font-size:10px;overflow-wrap:anywhere}@media(max-width:680px){.diag-workspace-basic{grid-template-columns:1fr 1fr}.diag-workspace-basic .mini:last-child{grid-column:1/-1}}</style><div class="diag-workspace-tabs" role="group" aria-label="Diagnostics view"><button id="diagnostics-mode-basic" class="${mode === 'basic' ? 'active' : ''}" aria-pressed="${mode === 'basic' ? 'true' : 'false'}">Basic</button><button id="diagnostics-mode-detailed" class="${mode === 'detailed' ? 'active' : ''}" aria-pressed="${mode === 'detailed' ? 'true' : 'false'}">Detailed</button></div>${body}<div class="actions"><button id="copy-diag-summary">요약 복사</button><button id="copy-diag">전체 Diagnostics 복사</button><button id="export-json">JSON 내보내기</button></div></div></details>`;
+  }
+
+  settingsHtml = function diagnosticsWorkspaceSettingsHtml() {
+    const legacyHtml = diagnosticsWorkspaceLegacySettingsHtml();
+    const diagnosticsPanel = /<details class="panel wide advanced-panel"><summary><b>Runtime Diagnostics<\/b><span>요약 · 전체 진단<\/span><\/summary><div class="advanced-body">[\s\S]*?<\/div><\/details>/;
+    if (!diagnosticsPanel.test(legacyHtml)) return legacyHtml;
+    return legacyHtml.replace(diagnosticsPanel, diagnosticsWorkspacePanelHtml());
+  };
+
+  bindSettings = function diagnosticsWorkspaceBindSettings() {
+    diagnosticsWorkspaceLegacyBindSettings();
+    const q = selector => document.querySelector(selector);
+    if (q('#copy-diag-summary')) q('#copy-diag-summary').onclick = async e => {
+      let copied = false;
+      try {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(diagnosticsWorkspaceBasicText());
+          copied = true;
+        }
+      } catch (_) {}
+      if (e?.currentTarget) e.currentTarget.textContent = copied ? '요약 복사됨 ✓' : '요약 복사 실패';
+    };
+    const basic = q('#diagnostics-mode-basic');
+    const detailed = q('#diagnostics-mode-detailed');
+    if (basic) basic.onclick = () => setDiagnosticsModeInstant('basic');
+    if (detailed) detailed.onclick = () => setDiagnosticsModeInstant('detailed');
   };
 
   function widgetHtml() {

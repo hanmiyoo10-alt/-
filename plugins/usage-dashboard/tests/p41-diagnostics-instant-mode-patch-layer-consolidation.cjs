@@ -12,7 +12,7 @@ const root = 'plugins/usage-dashboard';
 const src = `${root}/src`;
 const workspacePath = `${src}/62-diagnostics-workspace.part.js`;
 const instantPath = `${src}/63-diagnostics-instant-mode.part.js`;
-const auditPath = `${src}/64-runtime-weight-audit.part.js`;
+const historicalAuditPath = [src, '64-runtime-weight-audit.part.js'].join('/');
 const release = assertCurrentReleaseArtifacts();
 
 if (release.productVersion !== '3.0.0-alpha.5.77') {
@@ -28,7 +28,7 @@ const engineSha = crypto.createHash('sha256').update(fs.readFileSync(`${root}/ru
 assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P41 Engine must remain byte-identical to 5.76');
 
 const workspace = fs.readFileSync(workspacePath, 'utf8');
-const audit = fs.readFileSync(auditPath, 'utf8');
+const audit = fs.readFileSync(historicalAuditPath, 'utf8');
 const latest = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const {PARTS} = require('../src/parts.cjs');
 const partFiles = PARTS.map(part => part.file);
@@ -65,7 +65,7 @@ assert.ok(basicFunction);
 assert.equal(basicFunction[1].includes('diagText('), false, 'P41 Basic must remain independent of diagText()');
 assert.match(workspace, /for \(const line of diagText\(\)\.split\('\\n'\)\)/, 'P41 Detailed must stay lazy over current diagText()');
 assert.match(workspace, /id="copy-diag"/, 'P41 Full Diagnostics copy must remain present');
-assert.match(audit, /Runtime Weight Audit/, 'P41 Runtime Weight Audit source must remain present');
+assert.match(audit, /Runtime Weight Audit/, 'P41 historical 5.77 Runtime Weight Audit source must remain present');
 assert.match(latest, /Runtime Weight Audit/, 'P41 Runtime Weight Audit must remain in built plugin');
 
 const p36 = execFileSync(process.execPath, [`${root}/tests/p36-diagnostics-instant-mode-switch.cjs`], {encoding:'utf8'});

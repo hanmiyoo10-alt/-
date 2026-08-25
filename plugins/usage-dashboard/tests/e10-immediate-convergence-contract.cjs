@@ -65,9 +65,10 @@ const e9Runbook = fs.readFileSync('docs/USAGE_DASHBOARD_PR_LIFECYCLE_E9_DURABLE_
 for (const token of [
   'E9-F: COMPLETE',
   '3.0.0-alpha.5.76',
-  '22da0cef846623d5d09150b87149238e198cac',
-  '8635e8265ad183b4355c6a1e727262e7dee1c099',
-]) assert.ok(e9Runbook.includes(token),`E9 evidence closure missing ${token}`);
+  'TEST_REGISTRY_GREEN:85',
+  'exact-byte parity: VERIFIED',
+  'E9_F_RELEASE_PROOF',
+]) assert.ok(e9Runbook.includes(token),`E9 semantic evidence closure missing ${token}`);
 
 const e10Runbook = fs.readFileSync('docs/USAGE_DASHBOARD_PR_LIFECYCLE_E10_IMMEDIATE_CONVERGENCE.md','utf8');
 for (const token of [

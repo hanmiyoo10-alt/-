@@ -1,6 +1,6 @@
 # Usage Dashboard E8-F Stage Trigger Repair
 
-Status: **IMPLEMENTED IN SOURCE — CI/merge proof pending**
+Status: **IMPLEMENTED — live CI/merge evidence is tracked by Issue #312 and PR #341**
 
 Recorded during the 5.75 release attempt.
 

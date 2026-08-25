@@ -1,7 +1,7 @@
 # SimCore Gemini Implicit Cache Scope
 
 Date: 2026-08-25
-Status: `OPERATING SCOPE RECORDED · IDEA/RESEARCH ONLY · NO RUNTIME CHANGE`
+Status: `OPERATING SCOPE FROZEN · IDEA/RESEARCH ONLY · NO RUNTIME CHANGE`
 Related: `docs/SIMCORE_IMPLICIT_PROMPT_CACHE_IDEA_LAB.md`
 
 ## 1. Operating assumption
@@ -10,11 +10,36 @@ The intended SimCore cache-research environment is Gemini-focused rather than mu
 
 ```text
 provider target: Gemini
-primary cache mechanism: implicit prompt/context caching
+primary provider mechanism: implicit prompt/context caching
+SimCore optimization concern: prompt-cache friendliness / prefix stability
 explicit cache management: OUT OF SCOPE by default
 ```
 
 This intentionally removes pressure to build a generic cross-provider cache abstraction inside SimCore.
+
+### 1A. Frozen two-axis scope
+
+For SimCore cache work, the active concern is deliberately limited to two coupled axes:
+
+```text
+AXIS A — GEMINI IMPLICIT CACHING
+= what Gemini / the gateway actually reuses
+= observed through authoritative cached-token/cache receipt evidence when available
+
+AXIS B — PROMPT CACHING FRIENDLINESS
+= how well SimCore preserves a large reusable prompt prefix
+= byte stability / first-break ownership / compiler cache ABI / prompt layout
+```
+
+The product goal is not to build a cache manager. It is:
+
+```text
+make the prompt naturally cache-friendly
++
+measure whether Gemini's implicit cache actually reused it
+```
+
+All future cache ideas should first be evaluated against these two axes. Work that does not materially improve or explain either axis is out of scope unless separately justified.
 
 ## 2. Why implicit-first
 
@@ -33,6 +58,7 @@ Therefore:
 
 ```text
 implicit cache cooperation = PRIMARY
+prompt cache friendliness = PRIMARY
 explicit cache orchestration = NON-GOAL / DEFERRED
 ```
 
@@ -129,7 +155,9 @@ claiming cache HIT without authoritative receipt evidence
 ## 8. Current decision
 
 ```text
-SIMCORE_CACHE_RESEARCH_PROVIDER_SCOPE = GEMINI_FIRST
+SIMCORE_CACHE_RESEARCH_PROVIDER_SCOPE = GEMINI_ONLY_FOR_CURRENT_OPERATION
+SIMCORE_CACHE_AXIS_A = GEMINI_IMPLICIT_CACHING
+SIMCORE_CACHE_AXIS_B = PROMPT_CACHING_FRIENDLINESS
 SIMCORE_CACHE_STRATEGY = IMPLICIT_FIRST
 EXPLICIT_CACHE = DEFERRED / NON-GOAL
 USAGE_DASHBOARD = EXISTING EVIDENCE SOURCE, NOT REQUIRED DEPENDENCY

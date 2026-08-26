@@ -235,12 +235,23 @@ jobs:
           [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]] || { git status --short plugins/usage-dashboard/tests; echo 'TEST_TREE_MUTATED'; exit 1; }
           git add -A
           TREE_SHA="$(git write-tree)"
-          PAYLOAD_SHA="$(printf 'materialize: Usage Dashboard %s from source %s\n\nUsage-Dashboard-Frozen-Main: %s\n' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA" | git commit-tree "$TREE_SHA" -p "$CANDIDATE_PARENT_SHA")"
+          NEEDS_FROZEN_MAIN_PARENT=false
+          PARENT_ARGS=(-p "$CANDIDATE_PARENT_SHA")
+          if [[ "$CANDIDATE_PARENT_SHA" != "$TRUSTED_BASE_SHA" ]] && ! git merge-base --is-ancestor "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA"; then
+            NEEDS_FROZEN_MAIN_PARENT=true
+            PARENT_ARGS+=(-p "$TRUSTED_BASE_SHA")
+            echo "E14_ANCESTRY_PARENT_ADDED:$CANDIDATE_PARENT_SHA:$TRUSTED_BASE_SHA"
+          else
+            echo "E14_ANCESTRY_ALREADY_CONVERGED:$CANDIDATE_PARENT_SHA:$TRUSTED_BASE_SHA"
+          fi
+          PAYLOAD_SHA="$(printf 'materialize: Usage Dashboard %s from source %s\n\nUsage-Dashboard-Frozen-Main: %s\n' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA" | git commit-tree "$TREE_SHA" "${PARENT_ARGS[@]}")"
           node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --verify-derived "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON"
           git branch -f candidate-payload "$PAYLOAD_SHA"
           BUNDLE="$RUNNER_TEMP/usage-dashboard-e7-candidate.bundle"
           META="$RUNNER_TEMP/usage-dashboard-e7-candidate.json"
-          git bundle create "$BUNDLE" refs/heads/candidate-payload ^"$CANDIDATE_PARENT_SHA"
+          BUNDLE_EXCLUDES=("^$CANDIDATE_PARENT_SHA")
+          if [[ "$NEEDS_FROZEN_MAIN_PARENT" == 'true' ]]; then BUNDLE_EXCLUDES+=("^$TRUSTED_BASE_SHA"); fi
+          git bundle create "$BUNDLE" refs/heads/candidate-payload "${BUNDLE_EXCLUDES[@]}"
           git bundle verify "$BUNDLE"
           BUNDLE_SHA256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
           node - "$META" "$TRUSTED_BASE_SHA" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$RELEASE_SPEC" "$SOURCE_FILES_JSON" "$BUNDLE_SHA256" <<'NODE'

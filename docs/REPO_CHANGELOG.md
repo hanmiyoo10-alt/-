@@ -140,3 +140,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/992a0ba7347b703009229ae2a380288f22a8c83b)
 - Event ID: `d440188b0bb89f5ade2a52a5a055bfecdf082e84316faae23c3f736fb6b204e9`
 <!-- canonical-main-doc-promoted:d440188b0bb89f5ade2a52a5a055bfecdf082e84316faae23c3f736fb6b204e9 -->
+
+### 2026-08-26 — feat: add dry-run Repository Work Harness dispatch planning (#482)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `12532f9ebd4a2546e4bd948b1dd74d697c5939dc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/12532f9ebd4a2546e4bd948b1dd74d697c5939dc)
+- Event ID: `f3bb79e4d90d2ba663813e6804e4af4b71dd154d21aeafcbdbb3044824cc1ee2`
+<!-- canonical-main-doc-promoted:f3bb79e4d90d2ba663813e6804e4af4b71dd154d21aeafcbdbb3044824cc1ee2 -->

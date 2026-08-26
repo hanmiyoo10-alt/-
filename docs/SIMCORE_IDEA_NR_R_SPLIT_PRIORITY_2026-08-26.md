@@ -1,6 +1,6 @@
 # SimCore Idea Priority — NON_RUNTIME / RUNTIME Split Queues — 2026-08-26
 
-Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
+Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03/S-07 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
 
 Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling harvest work and future runtime stabilization do not compete in one mixed priority queue.
 
@@ -14,6 +14,7 @@ Related authority:
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md` — NR implementation-form axis
 - `docs/SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md` — current design-first priority
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md` — completion/implementation history
+- `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md` — frozen S-07 runtime diagnostic design
 
 This document is the current NR/R selection queue authority.
 
@@ -140,25 +141,22 @@ The R lane remains runtime-design-first. Runtime core implementation is parked, 
 | GATED | M-01 | Turn Transaction / Phase Receipt | MEDIUM | 4 | 3 | POST_M2_3 |
 | GATED | M-06 | State Invariant Snapshot | MEDIUM | 4 | 4 | POST_M2_4 |
 | FROZEN | S-03 | Diagnostic Copy Profiles | SMALL | 3 | 2 | runtime PARKED · DOC_NOT_REQUIRED |
-| ACTIVE | S-07 | Host Capability Receipt | SMALL | 3 | 2 | NOW · design next |
+| FROZEN | S-07 | Host Capability Receipt | SMALL | 3 | 2 | runtime PARKED · DOC_NOT_REQUIRED |
 | GATED | M-02 | Ownership-aware Diagnostic Attribution | MEDIUM | 3 | 3 | POST_M2_3 |
 | GATED | M-05 | Phase Performance Budget | MEDIUM | 3 | 3 | POST_M2_3 |
 | GATED | M-04 | Store Write Cost / Commit Budget | MEDIUM | 3 | 4 | EVIDENCE |
 | GATED | M-09 | Provider Cache Receipt Integration | MEDIUM | 3 | 4 | EXTERNAL |
 | FUTURE | M-17 | Pure State Seam | MEDIUM | 3 | 4 | FUTURE / TD-09 |
 | FUTURE | L-02 | Performance-aware SnapshotStore Evolution | LARGE | 3 | 5 | EVIDENCE / FUTURE |
-| ACTIVE | S-08 | History Frontier Confidence Surface | SMALL | 2 | 2 | NOW · design after S-07 |
+| ACTIVE | S-08 | History Frontier Confidence Surface | SMALL | 2 | 2 | NOW · design next |
 | GATED | S-06 | Persistence Footprint Watch | SMALL | 2 | 2 | EVIDENCE |
 
 ### 3.1 Current active R design ordering
 
-Under `DESIGN SWEEP FIRST`, S-03 is now frozen and removed from the active queue.
+Under `DESIGN SWEEP FIRST`, S-03 and S-07 are frozen and removed from the active queue.
 
 ```text
-R-1  S-07 Host Capability Receipt
-     importance 3 / difficulty 2
-
-R-2  S-08 History Frontier Confidence Surface
+R-1  S-08 History Frontier Confidence Surface
      importance 2 / difficulty 2
 ```
 
@@ -166,8 +164,8 @@ Current sweep progress:
 
 ```text
 S-03 → DESIGN FROZEN / DOC_NOT_REQUIRED
-S-07 → NEXT
-S-08 → AFTER S-07
+S-07 → DESIGN FROZEN / DOC_NOT_REQUIRED
+S-08 → NEXT
 ```
 
 Active/undesigned R items cannot receive prep implementation before design freeze.
@@ -190,6 +188,11 @@ S-03 Diagnostic Copy Profiles
 → DOC_NOT_REQUIRED
 → design authority: docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md
 
+S-07 Host Capability Receipt
+→ runtime PARKED
+→ DOC_NOT_REQUIRED
+→ design authority: docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md
+
 S-04 Live Evidence Packet Builder
 → runtime PARKED
 → DOC_APPLICABLE
@@ -197,7 +200,7 @@ S-04 Live Evidence Packet Builder
 → HOLD until current design sweep closes
 ```
 
-S-03 does not need a second prep document because its frozen design already records the profile vocabulary, field budgets, pair identity, copy-transport compatibility, failure rules, and verification plan.
+S-03 and S-07 do not need second prep documents because their frozen designs already contain the profile/capability vocabularies, authority boundaries, failure rules, and verification plans. S-07 additionally forbids manufacturing a current Host-capability baseline before the runtime receipt exists.
 
 ### 3.3 R runtime completion rule
 
@@ -245,20 +248,19 @@ S-01
 S-02
 S-03
 S-04
+S-07
 
 R DOC APPLY QUEUE (held until sweep close)
 S-04
 
 R ACTIVE DESIGN
-S-07
 S-08
 ```
 
 Current next operation:
 
 ```text
-NEXT DESIGN = S-07 Host Capability Receipt
-THEN = S-08 History Frontier Confidence Surface
+NEXT DESIGN = S-08 History Frontier Confidence Surface
 ```
 
 Production boundary remains:

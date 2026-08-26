@@ -1,0 +1,160 @@
+name: Canonical Main Documentation Promotion
+
+on:
+  workflow_run:
+    workflows: [Canonical Main Documentation Stream]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: canonical-main-documentation-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      DOC_BRANCH: automation/canonical-main-docs
+      DOC_FILES: docs/REPO_DECISION_LOG.md docs/REPO_CHANGELOG.md docs/REPO_ARCHITECTURE_SNAPSHOT.md docs/REPO_PROJECT_CATALOG.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Render stable durable documentation
+        id: render
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="$(git rev-parse HEAD)"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          node .github/plugin-control-plane/canonical-main/documentation-stream/promote.cjs
+          if git diff --quiet -- $DOC_FILES; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "CANONICAL_MAIN_DOC_PROMOTION:NOOP"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          tar -czf /tmp/canonical-main-docs.tgz $DOC_FILES
+          git reset --hard HEAD
+      - name: Update one bounded documentation promotion PR
+        if: steps.render.outputs.changed == 'true'
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA='${{ steps.render.outputs.base_sha }}'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          if [[ "$(git rev-parse origin/main)" != "$BASE_SHA" ]]; then
+            echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_BEFORE_PUBLISH:$BASE_SHA:$(git rev-parse origin/main)"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --heads origin "$DOC_BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$DOC_BRANCH"
+            git checkout -B "$DOC_BRANCH" "origin/$DOC_BRANCH"
+            git merge --no-edit origin/main
+          else
+            git checkout -b "$DOC_BRANCH" origin/main
+          fi
+
+          tar -xzf /tmp/canonical-main-docs.tgz
+          git add $DOC_FILES
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs(repo): promote canonical documentation [repo-docs-generated]'
+          fi
+          git push origin "HEAD:$DOC_BRANCH"
+
+          HEAD_SHA="$(git rev-parse HEAD)"
+          PR="$(gh pr list --head "$DOC_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$PR" ]]; then
+            gh pr create --head "$DOC_BRANCH" --base main \
+              --title 'docs(repo): promote canonical documentation' \
+              --body 'Automated Phase L durable-document promotion from stable `[repo-docs:main]` events. Generated commits are loop-filtered; merge is exact-head after explicitly dispatched Plugin Control Plane and SimCore candidate CI.' >/tmp/doc-pr-url.txt
+            PR="$(gh pr list --head "$DOC_BRANCH" --base main --state open --json number --jq '.[0].number')"
+          fi
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+          echo "published=true" >> "$GITHUB_OUTPUT"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:PR:#$PR:$HEAD_SHA"
+      - name: Dispatch exact documentation candidate checks
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
+          gh workflow run plugin-control-plane-ci.yml --ref "$DOC_BRANCH"
+          gh workflow run simcore-ci.yml --ref "$DOC_BRANCH" \
+            -f profile=CANDIDATE_SHADOW \
+            -f candidate_commit="$HEAD_SHA" \
+            -f candidate_fetch_ref="refs/heads/$DOC_BRANCH"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_DISPATCHED:$HEAD_SHA"
+      - name: Wait for exact candidate checks
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
+          find_run() {
+            local workflow="$1"
+            gh run list --workflow "$workflow" --branch "$DOC_BRANCH" --event workflow_dispatch --limit 30 \
+              --json databaseId,headSha,status,conclusion \
+              --jq ".[] | select(.headSha == \"$HEAD_SHA\") | .databaseId" | head -n 1
+          }
+          wait_for_run() {
+            local workflow="$1"
+            local run_id=''
+            for _ in $(seq 1 60); do
+              run_id="$(find_run "$workflow")"
+              [[ -n "$run_id" ]] && break
+              sleep 2
+            done
+            [[ -n "$run_id" ]] || { echo "Missing workflow_dispatch run for $workflow / $HEAD_SHA" >&2; exit 1; }
+            gh run watch "$run_id" --exit-status
+          }
+          wait_for_run plugin-control-plane-ci.yml
+          wait_for_run simcore-ci.yml
+          echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_PASS:$HEAD_SHA"
+      - name: Exact-base / exact-head merge
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA='${{ steps.render.outputs.base_sha }}'
+          HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
+          PR='${{ steps.publish.outputs.pr }}'
+          git fetch origin main
+          CURRENT_MAIN="$(git rev-parse origin/main)"
+          if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
+            echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_MAIN_SKIP:$BASE_SHA:$CURRENT_MAIN"
+            exit 0
+          fi
+          PR_HEAD="$(gh pr view "$PR" --json headRefOid --jq .headRefOid)"
+          [[ "$PR_HEAD" == "$HEAD_SHA" ]] || { echo "PR head moved: $PR_HEAD != $HEAD_SHA" >&2; exit 1; }
+          gh pr merge "$PR" --squash --delete-branch --match-head-commit "$HEAD_SHA"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGED:#$PR:$HEAD_SHA"

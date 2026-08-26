@@ -93,6 +93,20 @@
 - Event ID: `823cac04d044da66a182824c6b25eed20bb6651a5bc1ffca7bdbb2e7cd0cb0bc`
 <!-- canonical-main-doc-promoted:823cac04d044da66a182824c6b25eed20bb6651a5bc1ffca7bdbb2e7cd0cb0bc -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `9a3c27c91018e0262292e63d841978f8ff36c27e2efd11954adfaf9c25bb25c4`
+<!-- canonical-main-doc-promoted:9a3c27c91018e0262292e63d841978f8ff36c27e2efd11954adfaf9c25bb25c4 -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `aed36a9fe93cb68ff313ef3123324fc7f8c6094ad28c3b512f98de0d78872d77`
+<!-- canonical-main-doc-promoted:aed36a9fe93cb68ff313ef3123324fc7f8c6094ad28c3b512f98de0d78872d77 -->
+
 ### 2026-08-26 — fix: stabilize canonical documentation live promotion proof
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -148,3 +162,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/12532f9ebd4a2546e4bd948b1dd74d697c5939dc)
 - Event ID: `f3bb79e4d90d2ba663813e6804e4af4b71dd154d21aeafcbdbb3044824cc1ee2`
 <!-- canonical-main-doc-promoted:f3bb79e4d90d2ba663813e6804e4af4b71dd154d21aeafcbdbb3044824cc1ee2 -->
+
+### 2026-08-26 — feat: add bounded Repository Work Harness executor handoff (#486)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `dc5d9ae01efb17031f584151a103316364db9da3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dc5d9ae01efb17031f584151a103316364db9da3)
+- Event ID: `2829562534c634379bccdee08d57ecae3cd9145e1144a047ebd33b230709adad`
+<!-- canonical-main-doc-promoted:2829562534c634379bccdee08d57ecae3cd9145e1144a047ebd33b230709adad -->

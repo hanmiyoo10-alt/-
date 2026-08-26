@@ -2,13 +2,13 @@
 
 const {envelopeMarker} = require('../notification.cjs');
 const {markerForKey, markerForEvent} = require('../domains/incidents.cjs');
-const {metricsFromTransitions, metricsMarker} = require('../domains/incident-metrics.cjs');
+const {advanceIncidentMetrics, metricsMarker} = require('../domains/incident-metrics.cjs');
 const {buildIncidentHistory, renderTransitionHistory, transitionMarker} = require('./incident-history.cjs');
 
 function renderIncidentBody(event, severity, state, key, alertEnvelope = null, previousBody = '', historyLimit = 6) {
   const evidence = (event.evidence || []).slice(0, 12);
   const history = buildIncidentHistory(previousBody, event, severity, state, historyLimit);
-  const metrics = metricsFromTransitions(history.transitions);
+  const metrics = advanceIncidentMetrics(previousBody, history.transitions, state, event.observedAt || null);
   return [
     `# Canonical Main Incident — ${event.observation.reasonCode}`,
     '',

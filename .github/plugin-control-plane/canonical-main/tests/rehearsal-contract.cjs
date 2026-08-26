@@ -11,6 +11,7 @@ const {
 } = require('../contract.cjs');
 const {buildAlertEnvelope} = require('../notification.cjs');
 const {
+  rehearsalConfig,
   REHEARSAL_ID,
   REASON_CODE,
   markerForKey,
@@ -26,17 +27,18 @@ const root = path.resolve(__dirname, '../../../..');
 const policy = loadPolicy();
 const sha = '1234567890abcdef1234567890abcdef12345678';
 
-assert.equal(policy.rehearsal.enabled, true);
-assert.equal(policy.rehearsal.id, 'phase-h-v1');
-assert.equal(policy.rehearsal.reasonCode, 'CANONICAL_MAIN_REHEARSAL');
-assert.equal(policy.rehearsal.severity, 'P1');
-assert.equal(policy.rehearsal.trackingIssue, 330);
-assert.equal(policy.rehearsal.autoTriggerMarker, '[phase-h-rehearsal]');
-assert.equal(policy.rehearsal.productionMutation, false);
-assert.equal(policy.rehearsal.releaseMutation, false);
+assert.equal(policy.rehearsal, undefined, 'completed rehearsal identity must stay outside active runtime policy');
+assert.equal(rehearsalConfig.enabled, true);
+assert.equal(rehearsalConfig.id, 'phase-h-v1');
+assert.equal(rehearsalConfig.reasonCode, 'CANONICAL_MAIN_REHEARSAL');
+assert.equal(rehearsalConfig.severity, 'P1');
+assert.equal(rehearsalConfig.trackingIssue, 330);
+assert.equal(rehearsalConfig.autoTriggerMarker, '[phase-h-rehearsal]');
+assert.equal(rehearsalConfig.productionMutation, false);
+assert.equal(rehearsalConfig.releaseMutation, false);
 assert.equal(policy.alerts.defaultSeverity.CANONICAL_MAIN_REHEARSAL, 'P1');
-assert.equal(REHEARSAL_ID, policy.rehearsal.id);
-assert.equal(REASON_CODE, policy.rehearsal.reasonCode);
+assert.equal(REHEARSAL_ID, rehearsalConfig.id);
+assert.equal(REASON_CODE, rehearsalConfig.reasonCode);
 
 const opened = buildRehearsalEvent('OPEN', sha);
 const recovered = buildRehearsalEvent('RECOVERED', sha);

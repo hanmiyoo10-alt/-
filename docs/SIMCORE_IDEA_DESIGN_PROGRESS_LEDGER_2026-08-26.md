@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 36 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 37 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -142,6 +142,9 @@ SYS-49 Safe Parallel Work Finder
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 
 SYS-16 Anomaly Recurrence Correlator
+= MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-25 Golden Fixture Mutation Receipt
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
@@ -362,23 +365,36 @@ reviewed anomaly/process family contract
 
 SYS-16 makes same-input reroll/regeneration, controlled live reproduction, deterministic reproduction, neighboring controls and duplicate references distinct from independent natural recurrence. `RECURRENCE_CONFIRMED` means only that at least two independent qualifying natural specimens satisfy one reviewed family contract; it does not establish root cause, severity, regression attribution, FIX/BLOCKER posture or reproducibility on demand. Cross-family context/correlation never merges family identities or proves causation. v1 is a curated document-only recurrence index; semantic family assignment, independence review and control adequacy are deliberately not delegated to similarity clustering, log scraping or automatic severity rules.
 
+SYS-25 contract:
+
+```text
+reviewed permanent golden-fixture mutation
++ exact before/after fixture identities
++ source-backed semantic mutation basis
++ bounded case/test-intent/negative-control impact
++ exact post-mutation verification refs
+→ immutable point-in-time golden-fixture mutation receipt
+```
+
+SYS-25 freezes the anti-greenwashing direction: an expected-value change is legitimate only when a reviewed semantic contract changed first or source-backed evidence establishes that the fixture itself was wrong. Implementation drift or a failing test is never sufficient reason to rewrite expected values. Case removal requires an explicit replacement/supersession/debt disposition. The receipt records semantic accountability but does not authorize fixture mutation, broaden SYS-22 intent, retire SYS-23 controls, alter registry/harness authority, prove LIVE_PASS, or become a fixture/repository writer. v1 is a prospective document-only receipt/template and does not require historical backfill of initial fixture creation.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 36
-OPEN NOW            = 4
+FROZEN              = 37
+OPEN NOW            = 3
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 24
+NR_DOC_ONLY         = 25
 NR_EXECUTABLE       = 7
 NR_PROTECTED        = 5
-NR_UNASSESSED       = 16
+NR_UNASSESSED       = 15
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18/SYS-14/SYS-07/SYS-36/SYS-49/SYS-16 on the I4/D3/NOW edge are frozen.
+All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and the complete I4/D3/NOW edge are frozen.
 
 The earlier selection-drift FIX remains preserved:
 
@@ -391,26 +407,27 @@ SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 The full remaining highest-priority open edge is now:
 
 ```text
-I4 / D3 / NOW
-SYS-25 Golden Fixture Mutation Receipt
+I3 / D2 / NOW
+SYS-15 WATCH Aging Review
+SYS-20 Natural Evidence Intake Checklist Generator
+SYS-37 Release-System Residual Cleanup Registry
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-25 Golden Fixture Mutation Receipt
+NEXT SYSTEM DESIGN = SYS-15 WATCH Aging Review
 ```
 
 Reason:
 
 ```text
-SYS-16 now freezes source-backed same-family recurrence, specimen-independence, healthy-control and cross-family correlation semantics without changing anomaly disposition.
-SYS-25 is the final remaining I4/D3/NOW peer and closes the regression-governance edge by defining point-in-time accountability for intentional golden fixture mutations.
-It can consume SYS-22 test-intent/non-claim authority, SYS-23 negative-control contracts, SYS-24 fixture-membership authority, SYS-35 repository transaction lineage and SYS-21 forensic classification boundaries without changing the permanent harness during this design transaction.
-After SYS-25, recompute the lower-importance NOW edge rather than assuming later ordering.
+SYS-16 now freezes recurrence/independence/correlation semantics, giving WATCH review a stable input that distinguishes a genuinely old one-off from a recurring family.
+SYS-15 is directly relevant to the active deferred/anomaly ledgers while the v0.64.7 real-long-chat gate remains pending and can prevent age alone from causing stale WATCHes to be forgotten or automatically escalated.
+SYS-20 and SYS-37 remain the other I3/D2/NOW peers and are listed explicitly so no peer candidate is silently skipped.
 ```
 
-After SYS-25, recompute the remaining NOW edge rather than assuming later ordering.
+After SYS-15, recompute the remaining NOW edge rather than assuming later ordering.
 
 ## 5. Apply/implementation hold
 
@@ -452,6 +469,7 @@ SYS-07 implementation  = HOLD
 SYS-36 implementation  = HOLD / PROTECTED
 SYS-49 implementation  = HOLD / PROTECTED
 SYS-16 application     = HOLD
+SYS-25 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -512,7 +530,9 @@ SYS-49 adds protected parallel-work coordination without scheduling or authoriza
 
 SYS-16 adds recurrence/correlation continuity without severity or causality promotion. `RECURRENCE_CONFIRMED` means only that independent qualifying natural specimens satisfy the same reviewed family contract. Same-input rerolls, controlled live tests, deterministic reproductions and duplicate references remain separate proof/independence classes and cannot inflate the natural recurrence count. Cross-family context/correlation does not merge families or establish root cause, and no SYS-16 posture mutates WATCH/DEFER/FIX/BLOCKER automatically.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, and SYS-16 are document-only by design.
+SYS-25 adds immutable fixture-mutation accountability without authorizing fixture changes. `MUTATION_RECEIPT_COMPLETE` means only that the exact before/after identity, semantic basis, case effects, test-intent/negative-control impacts and verification refs are sufficiently preserved. A failing implementation test cannot justify expected-value mutation; contract-change propagation or fixture-defect correction must be source-backed. Fixture PASS remains deterministic proof and does not establish natural live correctness, coverage completeness, release readiness or runtime semantic authorization.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, and SYS-25 are document-only by design.
 
 ## 7. Production boundary
 
@@ -532,10 +552,11 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 36 / 52
+SYSTEM DESIGNS FROZEN = 37 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 I4/D2/NOW EDGE = FROZEN
+I4/D3/NOW EDGE = FROZEN
 SYS-05 HISTORICAL-VS-LIVING REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-04 STATUS VOCABULARY LINTER = FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 SYS-02 DECISION / SUPERSESSION GRAPH = FROZEN / NR_DOC_ONLY / APPLY HOLD
@@ -552,8 +573,9 @@ SYS-07 CROSS-REFERENCE INTEGRITY AUDITOR = FROZEN / NR_EXECUTABLE / IMPLEMENTATI
 SYS-36 BRANCH/PR RELATIONSHIP AUDITOR = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 SYS-49 SAFE PARALLEL WORK FINDER = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 SYS-16 ANOMALY RECURRENCE CORRELATOR = FROZEN / NR_DOC_ONLY / APPLY HOLD
+SYS-25 GOLDEN FIXTURE MUTATION RECEIPT = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
-CURRENT NEXT = SYS-25 Golden Fixture Mutation Receipt
+CURRENT NEXT = SYS-15 WATCH Aging Review
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

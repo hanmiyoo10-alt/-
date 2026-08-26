@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 22 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 23 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -101,6 +101,9 @@ SYS-05 Historical-vs-Living Document Registry
 
 SYS-04 Status Vocabulary Linter
 = SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
+
+SYS-02 Decision / Supersession Graph
+= SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -146,29 +149,40 @@ registered status namespace
 
 It validates vocabulary membership and namespace placement only. `STATUS_VOCAB_CLEAN` does not mean the recorded status is semantically true, current, PASS-worthy, release-ready, or implementation-authorized. Historical/frozen content is excluded or linted only through explicit lifecycle-aware definition targets; arbitrary prose is never scraped for status words.
 
+SYS-02 contract:
+
+```text
+reviewed predecessor decision scope
++ reviewed successor/retirement decision scope
++ explicit relation and affected/preserved scope
++ source authority basis
+→ curated decision-supersession lineage
+```
+
+It uses decision/section scope rather than file age, so a replaced current-action section does not invalidate an entire historical design. The frozen relation vocabulary is `SUPERSEDES_FULL / SUPERSEDES_SCOPE / AMENDS_SCOPE / RETIRES_AS_CURRENT`. SYS-02 does not infer replacement from timestamps, version arithmetic, status words, references, or implementation chronology; it does not become current-state, gate-dependency, repository-transaction, or evidence-trace authority.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 22
-OPEN NOW            = 18
+FROZEN              = 23
+OPEN NOW            = 17
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 14
+NR_DOC_ONLY         = 15
 NR_EXECUTABLE       = 6
 NR_PROTECTED        = 2
-NR_UNASSESSED       = 30
+NR_UNASSESSED       = 29
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05 and SYS-04 close the first two I4/D2 selections.
+All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, and SYS-02 close the first three I4/D2 selections.
 
 Highest-priority open edge:
 
 ```text
 I4 / D2 / NOW
-SYS-02 Decision / Supersession Graph
 SYS-12 Current-State Snapshot Page
 SYS-23 Negative-Control Registry
 SYS-28 Verification Debt Index
@@ -179,7 +193,7 @@ SYS-52 Operator Error Specimen Ledger
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-02 Decision / Supersession Graph
+NEXT SYSTEM DESIGN = SYS-12 Current-State Snapshot Page
 ```
 
 Reason:
@@ -187,11 +201,11 @@ Reason:
 ```text
 SYS-05 now freezes lifecycle/section-role boundaries.
 SYS-04 now freezes deterministic status-namespace boundaries.
-SYS-02 can consume explicit reviewed predecessor/replacement relations without inferring supersession from filenames, age, or status words.
-That relation can then strengthen later current-state projection and cross-reference integrity work.
+SYS-02 now freezes reviewed predecessor/successor decision lineage.
+SYS-12 can consume those boundaries plus SYS-01 current-authority navigation to project a compact current-state page without treating preserved history or superseded instructions as current truth.
 ```
 
-After SYS-02, recompute the remaining edge rather than assuming later I4 ordering.
+After SYS-12, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -219,6 +233,7 @@ SYS-46 application     = HOLD
 SYS-47 application     = HOLD
 SYS-05 application     = HOLD
 SYS-04 implementation  = HOLD
+SYS-02 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -251,7 +266,9 @@ SYS-05 adds reviewed document-lifecycle metadata without deciding current truth.
 
 SYS-04 adds deterministic vocabulary hygiene without semantic judgment. `STATUS_VOCAB_CLEAN` means only that registered structured fields use their assigned canonical token sets and combination rules within resolved lifecycle scope; it does not establish semantic correctness, freshness, gate state, evidence sufficiency, or release readiness.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, and SYS-05 are document-only by design.
+SYS-02 adds reviewed decision lineage without manufacturing current truth. `EDGE_ACTIVE` means the source-backed replacement/revision effect applies for the recorded scope; it does not by itself establish a current value, current gate, implementation state, evidence sufficiency, or release readiness. Historical predecessor artifacts remain preserved in their valid point-in-time/design scope.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, and SYS-02 are document-only by design.
 
 ## 7. Production boundary
 
@@ -271,12 +288,13 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 22 / 52
+SYSTEM DESIGNS FROZEN = 23 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 SYS-05 HISTORICAL-VS-LIVING REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-04 STATUS VOCABULARY LINTER = FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
-CURRENT NEXT = SYS-02 Decision / Supersession Graph
+SYS-02 DECISION / SUPERSESSION GRAPH = FROZEN / NR_DOC_ONLY / APPLY HOLD
+CURRENT NEXT = SYS-12 Current-State Snapshot Page
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

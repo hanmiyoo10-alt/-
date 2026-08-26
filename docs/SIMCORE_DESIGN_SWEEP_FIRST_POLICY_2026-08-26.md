@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 9 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 10 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -66,14 +66,17 @@ SYS-09 Change-Impact Review Map
 
 SYS-50 Work Bundling Conflict Detector
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
+
+SYS-42 Implementation Slice Conformance Checker
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 9
-OPEN NOW            = 31
+FROZEN              = 10
+OPEN NOW            = 30
 GATED/DEPENDENCY    = 12
 ```
 
@@ -89,21 +92,22 @@ SYS-22 Test Intent Manifest
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
-SYS-42 Implementation Slice Conformance Checker
 ```
 
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-42 Implementation Slice Conformance Checker
+NEXT = SYS-11 Design-to-Implementation Drift Audit
 ```
 
 Reason:
-- SYS-09 identifies the semantic families materially affected by a proposed change;
-- SYS-50 now separates forbidden independent objectives before implementation;
-- SYS-42 can next freeze the complementary conformance contract that checks whether the actual implementation stayed inside the selected design's allowed/forbidden slice.
+- SYS-09 identifies semantic impact families;
+- SYS-50 prevents forbidden objective bundling before implementation;
+- SYS-42 freezes deterministic machine-verifiable implementation-slice conformance;
+- SYS-42 explicitly does not prove full frozen-design intent or catch requirements omitted from the reviewed machine slice;
+- SYS-11 can therefore define the broader audit layer for semantic/design-intent drift without weakening SYS-42's deterministic boundary.
 
-After SYS-42 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
+After SYS-11 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -117,13 +121,16 @@ SYS-48 application     = HOLD
 SYS-03 implementation  = HOLD
 SYS-09 application     = HOLD
 SYS-50 implementation  = HOLD
+SYS-42 implementation  = HOLD / PROTECTED
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
 
+SYS-42 is additionally `NR_PROTECTED`; its eventual implementation must be a dedicated protected transaction and must not be combined with the runtime/architecture work whose conformance it checks.
+
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate and bundling discipline
+## 5. Gate, bundling, and conformance discipline
 
 Closed gates still override scores:
 
@@ -139,13 +146,15 @@ next-genuine-release-proof dependency
 SYS-03 graph matches are re-review candidates only.
 SYS-09 impact-family matches are review obligations only.
 SYS-50 `BUNDLE_CLEAN` means only that no frozen bundling conflict was found; it does not authorize implementation or override a gate.
+SYS-42 `SLICE_CONFORMANT` means only that the reviewed machine-verifiable implementation slice passed; it does not prove semantic equivalence, live correctness, or release readiness.
 
 Standing split rules remain preserved, including:
 - runtime/feature change separate from CI/release/repository-system redesign;
 - fixture expansion separate from CI/harness topology redesign;
 - design freeze separate from its implementation/application;
 - newly attributed evidence separate from speculative repair;
-- genuine release publication separate from release-system redesign.
+- genuine release publication separate from release-system redesign;
+- protected SYS-42 implementation separate from the product/architecture implementation it later checks.
 
 ## 6. Production boundary
 
@@ -162,7 +171,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50
-CURRENT NEXT DESIGN = SYS-42 Implementation Slice Conformance Checker
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42
+CURRENT NEXT DESIGN = SYS-11 Design-to-Implementation Drift Audit
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

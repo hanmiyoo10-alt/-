@@ -313,3 +313,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/227a9cdb1221ddd75b72fee1698b46184af43be5)
 - Event ID: `e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973`
 <!-- canonical-main-doc-promoted:e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973 -->
+
+### 2026-08-27 — fix: preserve hidden Harness proof artifacts
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `81b2e4f384ee074fb2a9aa3652650e0696752262`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/81b2e4f384ee074fb2a9aa3652650e0696752262)
+- Event ID: `fe1b496c3caa43a2f9846b1cc195a10d7c146ed49b9d64a28b6e0b129445a66a`
+<!-- canonical-main-doc-promoted:fe1b496c3caa43a2f9846b1cc195a10d7c146ed49b9d64a28b6e0b129445a66a -->

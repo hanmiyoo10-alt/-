@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19 + SYS-01 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
 
 Purpose: reduce context switching by finishing every currently selected gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
 
@@ -13,6 +13,7 @@ Related authority:
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md`
+- `docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md`
 
 ---
 
@@ -137,7 +138,7 @@ Those closures remain valid.
 A new system/operations candidate pool was added under the unified SimCore idea classification.
 This legitimately opens a new design sweep without reopening gated runtime architecture work.
 
-First selected item:
+Frozen so far:
 
 ```text
 SYS-19 Live-Gate Handoff Packet
@@ -148,14 +149,23 @@ Runtime Class = NON_RUNTIME
 Design        = FROZEN
 Apply Class   = NR_DOC_ONLY
 Design doc    = docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md
+
+SYS-01 Living Authority Map
+Size          = SMALL
+Importance    = 5
+Difficulty    = 2
+Runtime Class = NON_RUNTIME
+Design        = FROZEN
+Apply Class   = NR_DOC_ONLY
+Design doc    = docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md
 ```
 
 Current system candidate state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 1
-OPEN NOW            = 39
+FROZEN              = 2
+OPEN NOW            = 38
 GATED/DEPENDENCY    = 12
 ```
 
@@ -163,7 +173,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D2 / NOW
-SYS-01 Living Authority Map
 SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
@@ -173,23 +182,25 @@ SYS-51 Close-Step Trigger Matrix
 Downstream-leverage selection:
 
 ```text
-NEXT = SYS-01 Living Authority Map
+NEXT = SYS-51 Close-Step Trigger Matrix
 ```
+
+Reason: SYS-01 freezes the state-family → authority lookup layer. SYS-51 can now freeze the complementary work-type → required close-step surface mapping; this gives later close receipts and stale-next-action review a stable trigger contract.
 
 ---
 
 ## 7. Apply/harvest hold during this sweep
 
-SYS-19 is `NR_DOC_ONLY`, so a later useful application can materialize the living current-gate handoff document.
+SYS-19 and SYS-01 are both `NR_DOC_ONLY`, so later applications can materialize their living documents.
 
 However:
 
 ```text
-SYS-19 APPLICATION
-= HOLD FOR CURRENT SYSTEM DESIGN SWEEP
+SYS-19 APPLICATION = HOLD
+SYS-01 APPLICATION = HOLD
 ```
 
-Do not materialize SYS-19 in the same transaction as its freeze.
+Do not materialize either in the same transaction as its freeze.
 Do not interrupt the current one-by-one design sweep merely because an early frozen NR item is easy to apply.
 
 The same rule applies to later frozen SYS items: classify at freeze, then hold application until the selected bounded system design sweep is explicitly closed or the user deliberately changes operating priority.
@@ -240,8 +251,11 @@ SYSTEM-IDEA INCREMENTAL SWEEP
 SYS-19
 = DESIGN FROZEN / NR_DOC_ONLY / APPLICATION HELD
 
+SYS-01
+= DESIGN FROZEN / NR_DOC_ONLY / APPLICATION HELD
+
 CURRENT NEXT DESIGN
-= SYS-01 Living Authority Map
+= SYS-51 Close-Step Trigger Matrix
 
 CURRENT SYSTEM APPLY/HARVEST
 = HOLD UNTIL SWEEP CLOSE OR EXPLICIT PRIORITY CHANGE

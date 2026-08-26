@@ -224,3 +224,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cd1a9b6b72924523e525504b45ab210a63bbcdf0)
 - Event ID: `d02da339b4ffcfbb16f967aba139e1bf74b4d1c65f349bf6b06231fc2f6bda58`
 <!-- canonical-main-doc-promoted:d02da339b4ffcfbb16f967aba139e1bf74b4d1c65f349bf6b06231fc2f6bda58 -->
+
+### 2026-08-27 — test(harness): add owner-only PR canary transport
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ba1d9b3c3ec8e0ea0a203b3a33309c3e40efe30c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ba1d9b3c3ec8e0ea0a203b3a33309c3e40efe30c)
+- Event ID: `ba7124d9bbd8b1bf8fd252df7c26c4278fa1acc82f6ebb3cbdd4b102a73c5f20`
+<!-- canonical-main-doc-promoted:ba7124d9bbd8b1bf8fd252df7c26c4278fa1acc82f6ebb3cbdd4b102a73c5f20 -->

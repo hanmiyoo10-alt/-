@@ -10,9 +10,9 @@ const { parseReceiptMarker } = require('./receipt.cjs');
 
 function blocked(reasonCodes, legalNextAction = 'FIX_COORDINATION_EVIDENCE_AND_RETRY', details = {}) {
   return {
+    ...details,
     schemaVersion: 1,
     mode: 'MUTATION_GATE',
-    ...details,
     status: 'MUTATION_GATE_BLOCKED',
     coordinationReady: false,
     mutationAuthorized: false,

@@ -178,3 +178,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/17a5aa636ac48033cf132fbaca4c240e086671bc)
 - Event ID: `386161ec8ab9692efbcfe459d3dc9cca44d63178e38623272b70c10248775a65`
 <!-- canonical-main-doc-promoted:386161ec8ab9692efbcfe459d3dc9cca44d63178e38623272b70c10248775a65 -->
+
+### 2026-08-26 — feat: revalidate Harness coordination receipts in shadow scans (#492)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3b2f59fee739c60861563a7c9a503d1e49257e28`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3b2f59fee739c60861563a7c9a503d1e49257e28)
+- Event ID: `32a698fb09ff29b09c53dcc9bec44278d3003e16fd222f454a0c0e65a0955d6d`
+<!-- canonical-main-doc-promoted:32a698fb09ff29b09c53dcc9bec44278d3003e16fd222f454a0c0e65a0955d6d -->

@@ -51,3 +51,5 @@ jobs:
           node .github/plugin-control-plane/canonical-main/work-harness/tests/report-contract.cjs
           node .github/plugin-control-plane/canonical-main/work-harness/tests/workflow-contract.cjs
           node .github/plugin-control-plane/canonical-main/work-harness/tests/dispatch-contract.cjs
+          node .github/plugin-control-plane/canonical-main/work-harness/tests/handoff-contract.cjs
+          node .github/plugin-control-plane/canonical-main/work-harness/tests/invoke-contract.cjs

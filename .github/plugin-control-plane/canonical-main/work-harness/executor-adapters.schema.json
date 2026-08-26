@@ -6,68 +6,40 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "adapters"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": {"const": 1},
     "adapters": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "adapterId",
-          "supportedScopeIds",
-          "scopeKinds",
-          "capabilities",
-          "entrypoints",
-          "workflows",
-          "possibleMutationClasses",
-          "receiptRequiredFor",
-          "verificationHooks"
-        ],
+        "required": ["adapterId", "supportedScopeIds", "scopeKinds", "capabilities", "entrypoints", "workflows", "possibleMutationClasses", "receiptRequiredFor", "verificationHooks", "routes"],
         "properties": {
-          "adapterId": { "type": "string", "minLength": 1, "maxLength": 160 },
-          "supportedScopeIds": {
+          "adapterId": {"type": "string", "minLength": 1, "maxLength": 160},
+          "supportedScopeIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}},
+          "scopeKinds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "enum": ["repo", "plugin", "product"]}},
+          "capabilities": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}},
+          "entrypoints": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+          "workflows": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+          "possibleMutationClasses": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}},
+          "receiptRequiredFor": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}},
+          "verificationHooks": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+          "routes": {
             "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
-          },
-          "scopeKinds": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": { "type": "string", "enum": ["repo", "plugin", "product"] }
-          },
-          "capabilities": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
-          },
-          "entrypoints": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
-          },
-          "workflows": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
-          },
-          "possibleMutationClasses": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
-          },
-          "receiptRequiredFor": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
-          },
-          "verificationHooks": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["capability", "targetKind", "target", "fixedArgs", "executionClass", "mutationClass", "invokePolicy"],
+              "properties": {
+                "capability": {"type": "string", "minLength": 1, "maxLength": 160},
+                "targetKind": {"type": "string", "enum": ["LOCAL_NODE", "GITHUB_WORKFLOW"]},
+                "target": {"type": "string", "minLength": 1, "maxLength": 500},
+                "fixedArgs": {"type": "array", "items": {"type": "string", "maxLength": 500}},
+                "executionClass": {"type": "string", "enum": ["READ_ONLY", "MUTATING"]},
+                "mutationClass": {"type": ["string", "null"], "maxLength": 160},
+                "invokePolicy": {"type": "string", "enum": ["READ_ONLY_LOCAL", "HANDOFF_ONLY"]}
+              }
+            }
           }
         }
       }

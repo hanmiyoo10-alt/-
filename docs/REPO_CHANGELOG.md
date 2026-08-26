@@ -30,6 +30,13 @@
 - Event ID: `94f54be8fc402b7c075ebea6a57ef6536a437f56ee394cc310667bdfb85362c8`
 <!-- canonical-main-doc-promoted:94f54be8fc402b7c075ebea6a57ef6536a437f56ee394cc310667bdfb85362c8 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `acdc1416845917754cd345f0067df62d6727b965282fa59fa213780156eae4f9`
+<!-- canonical-main-doc-promoted:acdc1416845917754cd345f0067df62d6727b965282fa59fa213780156eae4f9 -->
+
 ### 2026-08-26 — fix: stabilize canonical documentation live promotion proof
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

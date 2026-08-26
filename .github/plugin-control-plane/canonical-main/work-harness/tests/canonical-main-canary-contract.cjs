@@ -38,6 +38,7 @@ for (const required of [
 
 const jobGuard = "if: ${{ github.event_name != 'issue_comment' || (github.actor == github.repository_owner && github.event.issue.pull_request == null && github.event.comment.body == '/harness-canary') }}";
 assert.ok(workflow.includes(jobGuard), 'issue-comment canary must be owner-only, exact-command, issue-only, and unrelated comments must skip the writer job');
+assert.equal((workflow.match(/github\.event\.comment\.body == '\/harness-canary'/g) || []).length, 1, 'automated canary command must have one exact owner-gated entry condition');
 
 const gateIndex = workflow.indexOf('name: Harness coordination receipt canary gate');
 const refreshIndex = workflow.indexOf('name: Refresh canonical-main modular operator snapshot');

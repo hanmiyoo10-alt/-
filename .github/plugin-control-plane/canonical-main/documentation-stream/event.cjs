@@ -14,7 +14,9 @@ function eventId(event) {
 }
 function changedPathsFromPush(payload) {
   const paths = new Set();
-  for (const commit of payload.commits || []) for (const key of ['added', 'modified', 'removed']) for (const p of commit[key] || []) paths.add(p);
+  const commits = [...(payload.commits || [])];
+  if (payload.head_commit) commits.push(payload.head_commit);
+  for (const commit of commits) for (const key of ['added', 'modified', 'removed']) for (const p of commit[key] || []) paths.add(p);
   return [...paths].sort();
 }
 function isDocumentationGenerated(message = '') { return String(message).includes(GENERATED_MARKER); }

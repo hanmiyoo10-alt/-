@@ -16,6 +16,8 @@ B5 adds the first executable **Phase C insertion-point groundwork**: a read-only
 
 B6 adds the first bounded writer-side **opt-in canary**: a manual Canonical Main Operations dispatch may name an active coordination work issue and must pass the B5 gate before the existing issue-reconciliation writer runs. Automatic operations remain unchanged.
 
+B7 adds an explicit opt-in **repository-native receipt sync**: an open Work Record issue carrying `<!-- repository-coordination-receipt-request:v1 -->` may receive or refresh its B3 Coordination Receipt from fresh repository evidence on issue lifecycle events. This automates coordination evidence creation only; it does not run a writer.
+
 The Harness coordinates work transactions. It does **not** own Git, CI, main-write, release, production, product-runtime, or project authority.
 
 ## Authority boundary
@@ -141,6 +143,20 @@ B6 deliberately does **not** require a receipt for automatic operations or an em
 
 The canary work-issue value is passed into the shell through an environment variable, not direct expression interpolation into the command line.
 
+## Automatic requested receipt sync — HARNESS-B7
+
+`receipt-sync.cjs` adds a bounded coordination-evidence writer for one explicitly requested open Work Record issue:
+
+```text
+<!-- repository-coordination-receipt-request:v1 -->
+```
+
+`.github/workflows/repository-work-harness-receipt-sync.yml` reacts only to `opened`, `edited`, or `reopened` issue events whose body contains exactly this opt-in marker. It checks out trusted default-branch code, reconstructs the entire active Work Record set, observes current `main`, loads the audited adapter/project registries, and delegates issuance to the existing B3 receipt contract.
+
+The sync fails closed and does not edit the issue when discovery, request markers, existing receipt evidence, exact base, PREFLIGHT, adapter routing, or registry evidence is invalid/ambiguous/stale. A valid receipt is inserted or replaced deterministically; an already-current identical receipt is a no-op. Workflow-authored issue edits are excluded from resync to avoid recursive churn.
+
+B7 uses `issues: write` only to persist coordination evidence on the requested Work Record issue. It does not dispatch workflows, run authoritative writers, mutate refs, or infer mutation/execution authority from receipt readiness.
+
 ## Current non-goals
 
 The current Harness still does **not** add:
@@ -149,6 +165,7 @@ The current Harness still does **not** add:
 - receipt enforcement at `repo-main-write.py` or product writers;
 - mutating executor invocation;
 - GitHub workflow dispatch through the Harness;
+- automatic authoritative writer execution after receipt sync;
 - a top-level general-purpose repository CLI/default front door;
 - main-write/release/production authority changes;
 - product/runtime behavior changes;
@@ -171,4 +188,6 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-bou
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-shadow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-gate-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/canonical-main-canary-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
 ```

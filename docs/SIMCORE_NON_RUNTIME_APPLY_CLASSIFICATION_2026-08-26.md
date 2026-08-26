@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-38 design freeze:
+Current state after SYS-31 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 16
-UNFROZEN                = 36
+FROZEN                  = 17
+UNFROZEN                = 35
 
 NR_DOC_ONLY   = 10
 NR_EXECUTABLE = 5
-NR_PROTECTED  = 1
-NR_UNASSESSED = 36
+NR_PROTECTED  = 2
+NR_UNASSESSED = 35
 ```
 
 Frozen system apply classes:
@@ -199,15 +199,19 @@ SYS-38 Architecture Contract Diff Reporter
 
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
+SYS-31 Version-Bump Blast-Radius Check
 ```
 
-Why SYS-42 is protected:
+Why SYS-42 and SYS-31 are protected:
 
 ```text
-it is read-only/non-runtime
-BUT
-its purpose is to police frozen design / architecture-governance boundaries
-→ protected implementation transaction required
+SYS-42
+= read-only/non-runtime machine checker whose purpose is to police frozen design / architecture-governance boundaries
+
+SYS-31
+= read-only/non-runtime preflight whose purpose is to police release-mode, candidate-radius, live-gate and release/repository-system bundling boundaries
+
+→ both require dedicated protected implementation transactions
 ```
 
 Why SYS-11, SYS-13, SYS-22, and SYS-21 are document-only:
@@ -236,7 +240,7 @@ Both remain read-only/non-runtime.
 Neither changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, or Report.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, or Report.
 
 ---
 
@@ -249,8 +253,8 @@ CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 12
 NR_EXECUTABLE  = 10
-NR_PROTECTED   = 2
-NR_UNASSESSED  = 42
+NR_PROTECTED   = 3
+NR_UNASSESSED  = 41
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -263,7 +267,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 24 gate-open NOW designs remain after SYS-38 freeze
+= 23 gate-open NOW designs remain after SYS-31 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -390,7 +394,8 @@ Current phase summary:
 original gate-open NR harvest = EXHAUSTED / EMPTY
 system-idea NON_RUNTIME design sweep = ACTIVE
 system apply/implementation = HELD
-SYS-42 = frozen NR_PROTECTED governance checker
+SYS-42 = frozen NR_PROTECTED architecture-governance checker
+SYS-31 = frozen NR_PROTECTED release-governance blast-radius checker
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit

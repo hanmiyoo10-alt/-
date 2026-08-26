@@ -287,6 +287,15 @@ DOC APPLY CLASS: DOC_NOT_REQUIRED
 
 Reason: the frozen design already records the six-field contract, same-observation rule, stale/current presentation semantics, and verification obligations. Additional repository structure would duplicate the design rather than reduce future implementation risk.
 
+### S-03 Diagnostic Copy Profiles
+
+```text
+RUNTIME core: PARKED
+DOC APPLY CLASS: DOC_NOT_REQUIRED
+```
+
+Reason: the frozen S-03 design already records profile vocabulary, field budgets, pair identity, copy-transport compatibility, failure rules, and verification obligations. Another pre-runtime document would duplicate the same durable-memory contract.
+
 ### S-04 Live Evidence Packet Builder
 
 ```text
@@ -298,6 +307,15 @@ candidate: repository evidence-review / classification-handoff template
 Reason: S-04 already freezes the runtime packet as a transfer object and explicitly places final classification/preservation authority in the repository. A manual review template can be useful now without implementing the packet button, clipboard path, diagnostic projection, or any runtime behavior.
 
 The template must remain usable with manually transcribed evidence before S-04 runtime implementation and must not pretend a packet was generated when it was not.
+
+### S-07 Host Capability Receipt
+
+```text
+RUNTIME core: PARKED
+DOC APPLY CLASS: DOC_NOT_REQUIRED
+```
+
+Reason: the frozen S-07 design already records capability IDs, Surface/Use state vocabularies, evidence-source classes, side-effect-probe prohibitions, provider-overclaim boundaries and verification obligations. A separate pre-runtime capability baseline would risk recording current Host facts that have not actually been captured by the future receipt.
 
 ---
 
@@ -320,15 +338,13 @@ finish design first
 
 This prevents preparatory artifacts from freezing semantics before the parent idea is actually designed.
 
-Current active R queue remains:
+Current active R queue:
 
 ```text
-S-03 Diagnostic Copy Profiles
-S-07 Host Capability Receipt
 S-08 History Frontier Confidence Surface
 ```
 
-Each receives a document-applicability verdict in the same work item that freezes its design.
+S-08 receives its document-applicability verdict in the same work item that freezes its design.
 
 ---
 
@@ -387,15 +403,17 @@ CURRENT DOC APPLY QUEUE
 CURRENT DOC_NOT_REQUIRED
 S-01
 S-02
+S-03
+S-07
 
 CURRENT DOC_UNASSESSED
-all other R ideas until their design freezes
+S-08 + all gated/future R ideas until their designs freeze
 ```
 
-Current first document-only application after this policy transaction:
+Current first document-only application remains held until the design sweep closes:
 
 ```text
 S-04
 → repository evidence-review / classification-handoff template
-→ separate next work item
+→ separate later work item
 ```

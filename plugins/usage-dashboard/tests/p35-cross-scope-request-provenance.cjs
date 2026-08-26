@@ -14,6 +14,7 @@ const cliRuntime = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-e
 const engineSources = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs', 'utf8');
 const engineCore = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/00-core.part.mjs', 'utf8');
 const engine = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs', 'utf8');
+const pluginServiceTier = fs.readFileSync('plugins/usage-dashboard/src/12-service-tier.part.js', 'utf8');
 const pluginProvenance = fs.readFileSync('plugins/usage-dashboard/src/15-request-provenance.part.js', 'utf8');
 const legacyPluginAnalyticsPath = 'plugins/usage-dashboard/src/18-request-provenance-analytics.part.js';
 const pluginAnalyticsPath = fs.existsSync(legacyPluginAnalyticsPath)
@@ -77,14 +78,17 @@ assert.ok(provenance.includes('modelInference:0'));
 assert.ok(provenance.includes("capturedLogs?.rows) ? capturedLogs.rows.slice(0, 100) : []"), 'raw account-wide rows must stay bounded to 100 before request-id matching');
 assert.ok(provenance.includes("normalizedRows = normalizeCapturedRecentLogs(capturedLogs).slice(0, 100)"), 'normalized account-wide rows must stay bounded to 100');
 
-for (const publicPluginSource of [ledger, pluginProvenance, pluginAnalytics, pluginDiagnostics]) {
+for (const publicPluginSource of [ledger, pluginServiceTier, pluginProvenance, pluginAnalytics, pluginDiagnostics]) {
   assert.ok(!/requestProjectId|requestOrganizationId|project_id|organization_id/.test(publicPluginSource), 'raw project/org identity must never enter plugin code');
 }
 assert.ok(ledger.includes("return ['devpass','credits','unknown'].includes(text) ? text : 'unknown';"), 'module 14 must own normalized request account scope');
 assert.ok(ledger.includes("text === 'explicit-project'"));
 assert.ok(ledger.includes("text === 'explicit-org-billing'"));
 assert.ok(ledger.includes("requestAccountScopeValue(row?.requestAccountScope) === key"), 'DevPass/Credits ledger filters must use provenance, not stale scope membership');
-assert.ok(pluginProvenance.includes('requestServiceTierTextBeforeProvenance'), 'module 15 must retain the service-tier presentation wrapper for 5.80');
+assert.ok(pluginServiceTier.includes('function requestAccountScopeLabel(value)'), 'module 12 must directly own account-scope presentation');
+assert.ok(pluginServiceTier.includes('return `${scopeText} · ${tierText}`;'), 'module 12 must directly compose scope + service-tier presentation');
+assert.ok(!pluginProvenance.includes('requestServiceTierTextBeforeProvenance'), 'module 15 must not retain the retired service-tier wrapper');
+assert.ok(!pluginProvenance.includes('requestServiceTierTextWithProvenance'), 'module 15 must not retain service-tier reassignment');
 assert.ok(pluginAnalytics.includes('normalizeRequestProvenanceMetadata'));
 assert.ok(pluginDiagnostics.includes('Account request capture: ${diagRequestProvenanceMode} · rows ${diagRequestProvenanceRows} · fallback'));
 assert.ok(pluginDiagnostics.includes('Request account scope fidelity: DevPass'));
@@ -117,4 +121,4 @@ assert.ok(manager.includes(`const MANAGER_VERSION = '${release.managerVersion}';
 assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`));
 assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${release.engineVersion}';`));
 
-console.log(`usage-dashboard P35 Cross-Scope Request Provenance: OK · ${release.productVersion} keeps project authority first, Credits org+usedMode, UNKNOWN, bounded account capture, direct ledger provenance ownership, and raw-ID privacy`);
+console.log(`usage-dashboard P35 Cross-Scope Request Provenance: OK · ${release.productVersion} keeps project authority first, Credits org+usedMode, UNKNOWN, bounded account capture, direct ledger provenance ownership, native service-tier presentation ownership, and raw-ID privacy`);

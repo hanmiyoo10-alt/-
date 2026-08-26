@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03/S-07 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
 
 Purpose: track design-freeze completion, apply classifications, and SAFE_NON_RUNTIME harvest state after the canonical NON_RUNTIME / RUNTIME queue split.
 
@@ -320,6 +320,55 @@ DOC_NOT_REQUIRED
 
 because the frozen design itself already records the reusable profile field/pair/transport contract; a second pre-runtime document would duplicate it.
 
+### S-07 — Host Capability Receipt
+
+```text
+Importance: 3
+Difficulty: 2
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_NOT_REQUIRED
+Design doc: docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md
+Design commit: 7ae12d6f00434c5bad1a39763206f4cf24f2db83
+Open design questions: 0
+Runtime/release change: NONE
+```
+
+Frozen row model:
+
+```text
+Surface = PRESENT / ABSENT / UNKNOWN
+Use = SUCCEEDED / FAILED / NOT_EXERCISED / NOT_APPLICABLE / UNKNOWN
+```
+
+Critical S-07 boundaries:
+
+```text
+Surface ABSENT
+!= operation FAILED
+
+capability observation
+= bounded presence check or existing natural operation/registration/telemetry result
+
+synthetic setChat / pluginStorage / clipboard / sessionStorage / hook probes
+= FORBIDDEN
+
+provider/cache/backend internal inference
+= FORBIDDEN
+
+persistence / raw body retention / network / polling
+= NONE
+```
+
+Doc Apply verdict:
+
+```text
+DOC_NOT_REQUIRED
+```
+
+because the frozen design itself records the capability IDs, state/source vocabulary and anti-probe/provider-overclaim rules; a separate pre-runtime current-host baseline would risk manufacturing facts not yet observed by the receipt.
+
 ---
 
 ## 3. Current R design sweep
@@ -330,13 +379,16 @@ Completed in current sweep:
 S-03 Diagnostic Copy Profiles
 → DESIGN FROZEN
 → DOC_NOT_REQUIRED
+
+S-07 Host Capability Receipt
+→ DESIGN FROZEN
+→ DOC_NOT_REQUIRED
 ```
 
-Remaining gate-open R designs:
+Remaining gate-open R design:
 
 ```text
-1. S-07 Host Capability Receipt
-2. S-08 History Frontier Confidence Surface
+1. S-08 History Frontier Confidence Surface
 ```
 
 No runtime implementation is authorized by design completion.
@@ -411,7 +463,7 @@ M-13 focused standalone test / --check direct CI execution = NOT CLAIMED
 
 S-10/S-11 retain their earlier standalone tooling-test discovery WATCH for the same general repository limitation.
 
-No new anomaly was discovered during S-03 design.
+No new anomaly was discovered during S-03 or S-07 design.
 
 ---
 
@@ -425,8 +477,8 @@ next NR = wait for a legitimate gate to open
 
 R DESIGN SWEEP
 S-03 = FROZEN
-NEXT = S-07 Host Capability Receipt
-THEN = S-08 History Frontier Confidence Surface
+S-07 = FROZEN
+NEXT = S-08 History Frontier Confidence Surface
 
 R DOC APPLY
 S-04 = DOC_APPLICABLE / HOLD UNTIL SWEEP CLOSE
@@ -447,7 +499,7 @@ release blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
 live gate = PENDING_REAL_LONG_CHAT
 ```
 
-S-03 design result:
+S-03 / S-07 design result:
 
 ```text
 RUNTIME CHANGE       = NONE
@@ -467,10 +519,10 @@ NR Difficulty 2 = CLOSED / HARVEST COMPLETE
 NR Difficulty 3 = CLOSED / HARVEST COMPLETE
 
 S-03 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
+S-07 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
 
 CURRENT DESIGN SWEEP
-NEXT = S-07
-THEN = S-08
+NEXT = S-08
 
 CURRENT R DOC APPLY QUEUE
 S-04 (held until sweep close)

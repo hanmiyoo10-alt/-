@@ -10,9 +10,15 @@ function list(items) {
   return Array.isArray(items) && items.length ? items : [];
 }
 
+function count(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
 function renderShadowSummary(result, metadata = {}) {
   const safe = result && typeof result === 'object' ? result : {};
   const discovery = safe.discovery && typeof safe.discovery === 'object' ? safe.discovery : {};
+  const receipts = safe.receiptRevalidation && typeof safe.receiptRevalidation === 'object' ? safe.receiptRevalidation : {};
+  const receiptCounts = receipts.counts && typeof receipts.counts === 'object' ? receipts.counts : {};
   const lines = [
     '# Repository Work Harness — Shadow Scan',
     '',
@@ -24,6 +30,10 @@ function renderShadowSummary(result, metadata = {}) {
     `- Disposition: \`${text(safe.disposition)}\``,
     `- Profile hash: \`${text(safe.profileHash, 'N/A')}\``,
   ];
+
+  if (safe.receiptRevalidation) {
+    lines.push(`- Receipt revalidation: \`VALID=${count(receiptCounts.valid)} / STALE=${count(receiptCounts.stale)} / INVALID=${count(receiptCounts.invalid)} / ABSENT=${count(receiptCounts.absent)}\``);
+  }
 
   if (metadata.trigger) lines.push(`- Trigger: \`${metadata.trigger}\``);
   if (metadata.repository) lines.push(`- Repository: \`${metadata.repository}\``);
@@ -50,6 +60,21 @@ function renderShadowSummary(result, metadata = {}) {
     }
   } else {
     lines.push('- None');
+  }
+
+  if (safe.receiptRevalidation) {
+    lines.push('', '## Coordination Receipt Revalidation');
+    const receiptResults = list(receipts.results);
+    if (receiptResults.length) {
+      for (const entry of receiptResults) {
+        const issue = Number.isInteger(entry.issueNumber) ? `#${entry.issueNumber}` : 'issue:unknown';
+        lines.push(`- \`${text(entry.workId, 'UNKNOWN_WORK')}\` — ${issue} — \`${text(entry.status)}\``);
+        for (const reason of list(entry.reasonCodes)) lines.push(`  - \`${reason}\``);
+      }
+    } else {
+      lines.push('- None');
+    }
+    lines.push('', '> Receipt revalidation is read-only coordination evidence. It does not change the work concurrency disposition and never grants mutation or execution authority.');
   }
 
   const errors = list(discovery.errors);

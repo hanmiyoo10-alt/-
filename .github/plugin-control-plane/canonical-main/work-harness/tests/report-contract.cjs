@@ -21,6 +21,17 @@ const base = {
     ],
     errors: [],
   },
+  receiptRevalidation: {
+    schemaVersion: 1,
+    mode: 'RECEIPT_REVALIDATION_SHADOW',
+    counts: { total: 2, absent: 1, valid: 0, stale: 1, invalid: 0 },
+    results: [
+      { workId: 'A', issueNumber: 10, status: 'STALE', reasonCodes: ['RECEIPT_EXACT_BASE_STALE:main'], mutationAuthorized: false, executionAuthorized: false },
+      { workId: 'B', issueNumber: 11, status: 'ABSENT', reasonCodes: ['COORDINATION_RECEIPT_ABSENT'], mutationAuthorized: false, executionAuthorized: false },
+    ],
+    mutationAuthorized: false,
+    executionAuthorized: false,
+  },
 };
 
 const rendered = renderShadowSummary(base, { trigger: 'issues', repository: 'o/r', runUrl: 'https://example/run' });
@@ -33,6 +44,12 @@ for (const expected of [
   '`FRESH_REREAD_BEFORE_CLOSE`',
   '`A` — #10 — Alpha',
   '`B` — #11 — Beta',
+  'Receipt revalidation: `VALID=0 / STALE=1 / INVALID=0 / ABSENT=1`',
+  '## Coordination Receipt Revalidation',
+  '`A` — #10 — `STALE`',
+  '`RECEIPT_EXACT_BASE_STALE:main`',
+  '`B` — #11 — `ABSENT`',
+  'does not change the work concurrency disposition',
   'Advisory shadow evidence only',
 ]) assert.ok(rendered.includes(expected), `summary missing: ${expected}`);
 

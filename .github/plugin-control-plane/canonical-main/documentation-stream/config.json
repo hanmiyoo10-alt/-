@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "liveIssueTitle": "[repo-docs:main]",
+  "eventClasses": ["DECISION", "CHANGE", "INCIDENT", "RECOVERY", "AUTHORITY", "PROJECT"],
+  "durableOutputs": {
+    "decisionLog": "docs/REPO_DECISION_LOG.md",
+    "changeLog": "docs/REPO_CHANGELOG.md",
+    "architectureSnapshot": "docs/REPO_ARCHITECTURE_SNAPSHOT.md",
+    "projectCatalog": "docs/REPO_PROJECT_CATALOG.md"
+  },
+  "promotion": {
+    "requireStableEvidence": true,
+    "ignoreCommitMessageMarkers": ["[repo-docs-generated]"],
+    "directMainWrites": false
+  }
+}

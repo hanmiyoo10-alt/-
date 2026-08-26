@@ -39,6 +39,8 @@ const gateSection = workflow.slice(gateIndex, refreshIndex);
 assert.ok(gateSection.includes('COORDINATION_WORK_ISSUE: ${{ inputs.coordination_work_issue }}'), 'canary input must enter through env');
 assert.ok(gateSection.includes('--work-issue "$COORDINATION_WORK_ISSUE"'), 'gate command must consume env variable');
 assert.equal(gateSection.includes('--work-issue "${{ inputs.coordination_work_issue }}"'), false, 'untrusted workflow input must not be directly interpolated into shell command');
+assert.equal(gateSection.includes('continue-on-error: true'), false, 'receipt gate failure must stop before writer');
+assert.equal(gateSection.includes('|| true'), false, 'receipt gate command must not suppress failure');
 
 for (const automaticTriggerEvidence of [
   'schedule:',

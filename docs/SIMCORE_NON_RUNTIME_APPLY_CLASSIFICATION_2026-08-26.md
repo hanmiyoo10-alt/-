@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-52 design freeze:
+Current state after SYS-06 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 29
-UNFROZEN                = 23
+FROZEN                  = 30
+UNFROZEN                = 22
 
-NR_DOC_ONLY   = 20
+NR_DOC_ONLY   = 21
 NR_EXECUTABLE = 6
 NR_PROTECTED  = 3
-NR_UNASSESSED = 23
+NR_UNASSESSED = 22
 ```
 
 Frozen system apply classes:
@@ -199,6 +199,7 @@ SYS-28 Verification Debt Index
 SYS-23 Negative-Control Registry
 SYS-33 Rollback Readiness Checklist
 SYS-52 Operator Error Specimen Ledger
+SYS-06 Evidence-to-Decision Trace Map
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -229,7 +230,7 @@ SYS-24
 → all require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, and SYS-52 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, and SYS-06 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -246,6 +247,7 @@ SYS-28 = curated verification-debt index preserving exact claim/proof/due/blocki
 SYS-23 = curated negative-control semantic registry; v1 deliberately leaves executable enforcement to actual fixture/test/live authorities and prohibits automatic inverse generation, absence-as-proof, fixture mutation, fuzzing, or CI/release integration
 SYS-33 = curated pre-release rollback-readiness checklist; v1 deliberately does not execute rollback, auto-select historical sources, publish production, rewind refs, mutate state, replace permanent verification, or close LIVE/R2.1 proof
 SYS-52 = curated operator/tooling process-regression specimen ledger; v1 deliberately avoids actor scoring/blame, auto ingestion, log scraping, recurrence analysis, automatic severity, remediation, repository writes, or product/runtime classification takeover
+SYS-06 = curated semantic evidence→decision lineage map; v1 deliberately avoids evidence discovery, proof-strength inference, decision/gate/classification logic, automatic causality from citations/timestamps, repository writes, or current-state authority
 ```
 
 Why SYS-17, SYS-38, and SYS-04 are executable:
@@ -284,7 +286,7 @@ The algorithm is simple/read-only, but the policy being policed is fixture-autho
 The canonical NR model explicitly places fixture-authority policing in NR_PROTECTED.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, Detector, or Report.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, Detector, Receipt, or Report.
 
 ---
 
@@ -295,10 +297,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 22
+NR_DOC_ONLY    = 23
 NR_EXECUTABLE  = 11
 NR_PROTECTED   = 4
-NR_UNASSESSED  = 29
+NR_UNASSESSED  = 28
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -311,7 +313,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 11 gate-open NOW designs remain after SYS-52 freeze
+= 10 gate-open NOW designs remain after SYS-06 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -456,6 +458,7 @@ SYS-28 = frozen NR_DOC_ONLY verification-debt index design
 SYS-23 = frozen NR_DOC_ONLY negative-control registry design
 SYS-33 = frozen NR_DOC_ONLY rollback-readiness checklist design
 SYS-52 = frozen NR_DOC_ONLY operator/tooling process-regression specimen ledger design
+SYS-06 = frozen NR_DOC_ONLY evidence-to-decision lineage map design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 10 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 11 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -69,14 +69,17 @@ SYS-50 Work Bundling Conflict Detector
 
 SYS-42 Implementation Slice Conformance Checker
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED
+
+SYS-11 Design-to-Implementation Drift Audit
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 10
-OPEN NOW            = 30
+FROZEN              = 11
+OPEN NOW            = 29
 GATED/DEPENDENCY    = 12
 ```
 
@@ -84,7 +87,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D3 / NOW
-SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
 SYS-17 Missing Evidence Slot Analyzer
 SYS-21 Forensic Classification Consistency Check
@@ -97,17 +99,16 @@ SYS-38 Architecture Contract Diff Reporter
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-11 Design-to-Implementation Drift Audit
+NEXT = SYS-13 Verification Proof Matrix
 ```
 
 Reason:
-- SYS-09 identifies semantic impact families;
-- SYS-50 prevents forbidden objective bundling before implementation;
-- SYS-42 freezes deterministic machine-verifiable implementation-slice conformance;
-- SYS-42 explicitly does not prove full frozen-design intent or catch requirements omitted from the reviewed machine slice;
-- SYS-11 can therefore define the broader audit layer for semantic/design-intent drift without weakening SYS-42's deterministic boundary.
+- SYS-42 defines machine-verifiable implementation-slice conformance;
+- SYS-11 now defines broader human semantic design-fidelity review;
+- SYS-11 deliberately preserves `UNPROVEN` when evidence maturity is insufficient;
+- SYS-13 can therefore define the shared proof-class matrix that distinguishes syntax/static/focused-test/permanent-CI/conformance/live/release evidence and prevents proof substitution.
 
-After SYS-11 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
+After SYS-13 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -122,6 +123,7 @@ SYS-03 implementation  = HOLD
 SYS-09 application     = HOLD
 SYS-50 implementation  = HOLD
 SYS-42 implementation  = HOLD / PROTECTED
+SYS-11 application     = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
@@ -130,7 +132,7 @@ SYS-42 is additionally `NR_PROTECTED`; its eventual implementation must be a ded
 
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate, bundling, and conformance discipline
+## 5. Gate, bundling, conformance, and audit discipline
 
 Closed gates still override scores:
 
@@ -147,6 +149,7 @@ SYS-03 graph matches are re-review candidates only.
 SYS-09 impact-family matches are review obligations only.
 SYS-50 `BUNDLE_CLEAN` means only that no frozen bundling conflict was found; it does not authorize implementation or override a gate.
 SYS-42 `SLICE_CONFORMANT` means only that the reviewed machine-verifiable implementation slice passed; it does not prove semantic equivalence, live correctness, or release readiness.
+SYS-11 `DRIFT_AUDIT_CLEAN` means reviewed design-intent requirements are satisfied at the evidence maturity required by that audit; `UNPROVEN` requirements force `DRIFT_AUDIT_REVIEW_REQUIRED` rather than being silently promoted.
 
 Standing split rules remain preserved, including:
 - runtime/feature change separate from CI/release/repository-system redesign;
@@ -171,7 +174,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42
-CURRENT NEXT DESIGN = SYS-11 Design-to-Implementation Drift Audit
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11
+CURRENT NEXT DESIGN = SYS-13 Verification Proof Matrix
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

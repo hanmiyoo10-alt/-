@@ -329,3 +329,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4934acd4337e1a0a635bad0065c2896cdd87da78)
 - Event ID: `8d0b5d172b0ebc6775e356132a644d12e1f340bd9e5115dc0a85e4a4bca10718`
 <!-- canonical-main-doc-promoted:8d0b5d172b0ebc6775e356132a644d12e1f340bd9e5115dc0a85e4a4bca10718 -->
+
+### 2026-08-27 — fix: queue canonical main operations instead of cancelling
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9227e13dd88d58ffd110515636e6f83e1ac8ae83`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9227e13dd88d58ffd110515636e6f83e1ac8ae83)
+- Event ID: `824af29e505111d2e5e744494b207114919ce475d4d4035b5c698ff4f28564d7`
+<!-- canonical-main-doc-promoted:824af29e505111d2e5e744494b207114919ce475d4d4035b5c698ff4f28564d7 -->

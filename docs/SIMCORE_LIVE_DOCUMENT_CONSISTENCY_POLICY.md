@@ -4,6 +4,9 @@ Status: `ACTIVE OPERATING POLICY · MAIN DOCUMENT AUTHORITY · NON_RUNTIME`
 
 Purpose: keep SimCore living documentation synchronized with the repository state during normal work instead of accumulating a separate documentation-cleanup backlog.
 
+Related active routine:
+- `docs/SIMCORE_REALTIME_CLOSE_STEP_OPERATING_ROUTINE.md`
+
 ## 1. Default rule
 
 Every substantive SimCore task includes a document-consistency close step.
@@ -80,3 +83,19 @@ WATCH / DEFER / FIX / BLOCKER disposition where applicable
 ```
 
 This policy is operational and intentionally living.
+
+## 7. Relationship to the real-time close-step routine
+
+Document consistency is one mandatory surface inside the broader active close routine.
+
+```text
+SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY
+= document-state consistency rule
+
+SIMCORE_REALTIME_CLOSE_STEP_OPERATING_ROUTINE
+= complete task-close operating sequence
+```
+
+The broader routine additionally covers triggered production-boundary verification, authority drift, evidence/corpus/fixture projections, gate unlock propagation, verification-claim honesty, transaction hygiene, and canonical next-operation recomputation.
+
+Neither document authorizes background automation, runtime changes, release publication, CI-authority changes, or fabricated live evidence.

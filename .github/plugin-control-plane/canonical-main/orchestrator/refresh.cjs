@@ -11,6 +11,7 @@ const {safeObserve} = require('../observers/common.cjs');
 const {modulesForPhase, modulesWithCapability} = require('../modules/registry.cjs');
 const {deriveCoverage} = require('../domains/bootstrap.cjs');
 const {incidentFromIssue, planIncident} = require('../domains/incidents.cjs');
+const {deriveConvergence, convergenceAttention, unstableAttention} = require('../domains/stability.cjs');
 const {renderIncidentBody} = require('../surfaces/incidents.cjs');
 const {normalizeIncidentBodyState} = require('../surfaces/incident-history.cjs');
 const {renderOpsView} = require('../surfaces/ops-view.cjs');
@@ -75,17 +76,21 @@ async function refresh(options = {}) {
   const incidentRows = allIssues.map(incidentFromIssue).filter(Boolean);
   context.incidentRows = incidentRows;
   Object.assign(observations, await collectObservations(context, 'post-incidents'));
+
   const active = incidentRows.filter((row) => row.state === 'OPEN');
   const activeP2 = active.filter((row) => row.severity === 'P2');
+  const now = Date.now();
+  const convergence = deriveConvergence(observations, policy, now);
+  const attention = [...activeP2, ...unstableAttention(incidentRows, policy, now), ...convergenceAttention(convergence)];
   const projectRows = observations.projectStatus.data || [];
   const projectStatusFresh = observations.projectStatus.known === true && projectRows.length > 0 && projectRows.every((row) => row.fresh);
   const configuredCoverageComplete = policy.operations.eventAdaptersComplete === true;
   const observationCoverage = observationCoverageValid(observations);
   const freshnessValid = projectStatusFresh && configuredCoverageComplete && observationCoverage;
-  const operatorState = deriveOperatorState({incidents: active, attention: activeP2, freshnessValid});
+  const operatorState = deriveOperatorState({incidents: active, attention, freshnessValid});
   const recentRecoveries = incidentRows.filter((row) => row.state === 'RECOVERED').sort((a,b) => Date.parse(b.issue.updated_at) - Date.parse(a.issue.updated_at)).slice(0, policy.operations.recentRecoveryLimit);
   const bootstrapCoverage = deriveCoverage(registry, observations.bootstrap);
-  const snapshot = Object.freeze({schemaVersion: 1, repository: client.repo || process.env.GITHUB_REPOSITORY, observedMainSha: branch.commit.sha, observedAt: new Date().toISOString(), policy, observations, bootstrapCoverage, incidents: {all: incidentRows, active, activeP2, recentRecoveries}, freshness: {configuredCoverageComplete, observationCoverageValid: observationCoverage, projectStatusFresh, valid: freshnessValid}, operatorState});
+  const snapshot = Object.freeze({schemaVersion: 1, repository: client.repo || process.env.GITHUB_REPOSITORY, observedMainSha: branch.commit.sha, observedAt: new Date().toISOString(), policy, observations, convergence, bootstrapCoverage, incidents: {all: incidentRows, active, activeP2, attention, recentRecoveries}, freshness: {configuredCoverageComplete, observationCoverageValid: observationCoverage, projectStatusFresh, valid: freshnessValid}, operatorState});
   const body = renderOpsView(snapshot);
   let opsIssue = allIssues.find((row) => row.title === policy.operations.issueTitle);
   if (opsIssue) {
@@ -96,6 +101,7 @@ async function refresh(options = {}) {
     opsIssue = await issueStore.createIssue({title: policy.operations.issueTitle, body, labels: ['scope:repo','control-plane:operations']});
     console.log(`CANONICAL_MAIN_OPS_CREATED:#${opsIssue.number}:${operatorState}`);
   }
+  console.log(`CANONICAL_MAIN_CONVERGENCE:${convergence.state}:${convergence.stale ? 'STALE' : 'CURRENT'}:${convergence.waitingFor.join(',') || 'none'}`);
   console.log(`CANONICAL_MAIN_PROTECTION_SURFACE:#${opsIssue.number}:${observations.protection.data?.state || 'UNKNOWN'}`);
   console.log(`CANONICAL_MAIN_BOOTSTRAP_SURFACE:#${opsIssue.number}:${bootstrapCoverage.complete ? 'COMPLETE' : 'INCOMPLETE'}:${bootstrapCoverage.readyCount}/${bootstrapCoverage.expectedCount}`);
   for (const number of repaired) console.log(`CANONICAL_MAIN_INCIDENT_REPAIRED:#${number}`);

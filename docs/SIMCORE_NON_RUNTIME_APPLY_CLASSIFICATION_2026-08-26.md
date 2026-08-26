@@ -1,22 +1,23 @@
 # SimCore NON_RUNTIME Apply Classification — 2026-08-26
 
-Status: `CANONICAL NON_RUNTIME SUBCLASSIFICATION · IMPLEMENTATION-FORM AXIS · NO RUNTIME CHANGE`
+Status: `CANONICAL NON_RUNTIME SUBCLASSIFICATION · IMPLEMENTATION-FORM AXIS · ORIGINAL + SYSTEM-IDEA INVENTORIES RECONCILED · NO RUNTIME CHANGE`
 
-Purpose: classify NON_RUNTIME ideas by the form and authority-risk of their actual implementation so document-only repository memory, executable tooling, and protected repository/build/release surfaces are not treated as one undifferentiated class.
+Purpose: classify NON_RUNTIME ideas by the form and authority-risk of their actual implementation so document-only repository memory, executable tooling, and protected repository/build/release/architecture-governance surfaces are not treated as one undifferentiated class.
 
 Related authority:
 - `docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md`
 - `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md`
 - `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
+- `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-This document does not change an idea's core Runtime Class. Every item listed here remains `NON_RUNTIME` unless the main classification authority is separately changed for a substantive reason.
+This document does not change an idea's core Runtime Class. Every item listed or referenced here remains `NON_RUNTIME` unless the main classification authority is separately changed for a substantive reason.
 
 ---
 
 ## 1. Canonical two-axis model
 
-NON_RUNTIME ideas are now tracked on two independent axes:
+NON_RUNTIME ideas are tracked on two independent axes:
 
 ```text
 CORE CLASS
@@ -93,11 +94,13 @@ NR_UNASSESSED
 → no implementation authorization
 ```
 
-No apply class bypasses the design-freeze or gate rules.
+No apply class bypasses design-freeze, gate, work-bundling, or current Design Sweep First rules.
 
 ---
 
-## 4. Current NR inventory classification
+## 4. Original NR inventory classification
+
+This table is the **original 14-item NON_RUNTIME pool**, not the complete universe of current NON_RUNTIME system ideas.
 
 | ID | Idea | Importance | Difficulty | Current state | NR Apply Class | Reason / implementation form |
 |---|---|---:|---:|---|---|---|
@@ -116,12 +119,10 @@ No apply class bypasses the design-freeze or gate rules.
 | L-01 | Development-source Modular Build | 4 | 5 | FUTURE / POST_M2 | NR_PROTECTED | build/source topology is inherently protected even without runtime semantics |
 | S-11 | Stale PR Hygiene Classifier | 3 | 2 | IMPLEMENTED | NR_EXECUTABLE | offline local PR metadata classifier |
 
----
-
-## 5. Current counts
+Original-pool counts remain:
 
 ```text
-NON_RUNTIME total = 14
+ORIGINAL NON_RUNTIME total = 14
 
 NR_DOC_ONLY    = 2
 NR_EXECUTABLE  = 5
@@ -129,7 +130,7 @@ NR_PROTECTED   = 1
 NR_UNASSESSED  = 6
 ```
 
-Current implemented NR set:
+Original implemented NR set:
 
 ```text
 DOC_ONLY
@@ -144,7 +145,7 @@ M-11
 M-13
 ```
 
-Current protected/future known boundary:
+Original protected/future known boundary:
 
 ```text
 L-01
@@ -152,11 +153,95 @@ L-01
 → FUTURE / POST_M2
 ```
 
-Gated ideas remain `NR_UNASSESSED` until their own design freeze rather than being guessed into executable/protected categories from their names.
+---
+
+## 5. System-idea NON_RUNTIME inventory
+
+The separate 52-item system/operations idea inventory is also currently classified `NON_RUNTIME` at the core-class level.
+
+Current system-idea authority:
+- `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
+
+Current state after SYS-42 design freeze:
+
+```text
+SYSTEM NON_RUNTIME total = 52
+FROZEN                  = 10
+UNFROZEN                = 42
+
+NR_DOC_ONLY   = 6
+NR_EXECUTABLE = 3
+NR_PROTECTED  = 1
+NR_UNASSESSED = 42
+```
+
+Frozen system apply classes:
+
+```text
+NR_DOC_ONLY
+SYS-19 Live-Gate Handoff Packet
+SYS-01 Living Authority Map
+SYS-51 Close-Step Trigger Matrix
+SYS-08 Work-Item Close Receipt
+SYS-48 Gate-Blocked Reason Surface
+SYS-09 Change-Impact Review Map
+
+NR_EXECUTABLE
+SYS-10 Stale Next-Action Scanner
+SYS-03 Gate Dependency Graph
+SYS-50 Work Bundling Conflict Detector
+
+NR_PROTECTED
+SYS-42 Implementation Slice Conformance Checker
+```
+
+Why SYS-42 is protected:
+
+```text
+it is read-only/non-runtime
+BUT
+its purpose is to police frozen design / architecture-governance boundaries
+→ protected implementation transaction required
+```
+
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, or Report.
 
 ---
 
-## 6. Verification expectations by apply class
+## 6. Combined current NON_RUNTIME classification counts
+
+Across the original 14-item NR pool plus the separate 52-item system-idea pool:
+
+```text
+CURRENT INVENTORIED NON_RUNTIME total = 66
+
+NR_DOC_ONLY    = 8
+NR_EXECUTABLE  = 8
+NR_PROTECTED   = 2
+NR_UNASSESSED  = 48
+```
+
+This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
+
+Current queue distinction:
+
+```text
+ORIGINAL NR harvest queue
+= EMPTY
+
+SYSTEM-IDEA design sweep
+= ACTIVE
+= 30 gate-open NOW designs remain after SYS-42 freeze
+
+SYSTEM-IDEA apply/implementation
+= HOLD while Design Sweep First remains active
+```
+
+Therefore old wording such as `current open NR remains empty` is valid only for the **original NR harvest queue**, not as a global statement about all NON_RUNTIME idea design work.
+
+---
+
+## 7. Verification expectations by apply class
 
 ### NR_DOC_ONLY
 
@@ -188,19 +273,20 @@ CI coverage claim must distinguish actual focused-test execution from generic PR
 Minimum treatment:
 
 ```text
-separate design/gate explicitly authorizing protected authority change
-separate implementation transaction
-permanent CI / repository / release authority review as applicable
+separate design/gate explicitly authorizing protected authority or governance work
+separate protected implementation transaction
+permanent CI / repository / release / architecture-governance review as applicable
 no bundling with product/runtime feature work
+no assumption that read-only means ordinary harvest-safe
 ```
 
-`NR_PROTECTED` is not a negative label; it means the work has a higher repository-governance blast radius despite remaining non-runtime.
+`NR_PROTECTED` is not a negative label; it means the work has a higher repository/governance blast radius despite remaining non-runtime.
 
 ---
 
-## 7. Selection / freeze rule
+## 8. Selection / freeze rule
 
-For every newly frozen NON_RUNTIME idea, the same design-close transaction must now end with:
+For every newly frozen NON_RUNTIME idea, the same design-close transaction ends with:
 
 ```text
 DESIGN FROZEN
@@ -208,7 +294,7 @@ DESIGN FROZEN
    NR_DOC_ONLY
    NR_EXECUTABLE
    NR_PROTECTED
-→ record classification
+→ record classification in its living inventory/ledger
 → STOP DESIGN WORK
 ```
 
@@ -218,11 +304,11 @@ If the idea is not frozen:
 NR_UNASSESSED
 ```
 
-Actual implementation remains a later bounded transaction under the normal tier/gate policy.
+Actual implementation remains a later bounded transaction under normal tier/gate/current-phase policy.
 
 ---
 
-## 8. Relationship to R document classification
+## 9. Relationship to R document classification
 
 The R and NR axes deliberately solve different problems.
 
@@ -248,10 +334,10 @@ Do not collapse the two systems into one status vocabulary.
 
 ---
 
-## 9. Current operating verdict
+## 10. Current operating verdict
 
 ```text
-NR is no longer treated as one homogeneous implementation bucket.
+NR is not one homogeneous implementation bucket.
 
 NR_DOC_ONLY
 → lowest implementation-form blast radius
@@ -260,10 +346,19 @@ NR_EXECUTABLE
 → local executable tooling; stronger verification required
 
 NR_PROTECTED
-→ repository/build/release/CI authority boundary; separate protected work
+→ build/release/CI/repository/fixture/architecture-governance boundary; separate protected work
 
 NR_UNASSESSED
 → wait for design freeze
 ```
 
-Current open NR remains empty because all remaining unimplemented items are gated/future. This classification changes visibility and future handling, not their gates.
+Current phase summary:
+
+```text
+original gate-open NR harvest = EXHAUSTED / EMPTY
+system-idea NON_RUNTIME design sweep = ACTIVE
+system apply/implementation = HELD
+SYS-42 = first frozen system idea classified NR_PROTECTED
+```
+
+Classification visibility does not bypass gate or Design Sweep First ordering.

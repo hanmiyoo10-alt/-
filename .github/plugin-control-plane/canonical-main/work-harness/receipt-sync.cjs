@@ -16,14 +16,7 @@ const RECEIPT_REQUEST = '<!-- repository-coordination-receipt-request:v1 -->';
 
 function markerCount(body, marker) {
   const text = typeof body === 'string' ? body : '';
-  let count = 0;
-  let cursor = 0;
-  while (true) {
-    const next = text.indexOf(marker, cursor);
-    if (next < 0) return count;
-    count += 1;
-    cursor = next + marker.length;
-  }
+  return text.split(/\r?\n/).filter((line) => line.trim() === marker).length;
 }
 
 function upsertReceiptMarker(body, receipt) {

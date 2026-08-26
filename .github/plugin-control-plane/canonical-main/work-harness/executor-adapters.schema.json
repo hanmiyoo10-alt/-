@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://canonical-main.local/work-harness/executor-adapters-v1.schema.json",
+  "title": "Repository Work Harness Executor Adapter Registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "adapters"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "adapters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "adapterId",
+          "supportedScopeIds",
+          "scopeKinds",
+          "capabilities",
+          "entrypoints",
+          "workflows",
+          "possibleMutationClasses",
+          "receiptRequiredFor",
+          "verificationHooks"
+        ],
+        "properties": {
+          "adapterId": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "supportedScopeIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
+          },
+          "scopeKinds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "enum": ["repo", "plugin", "product"] }
+          },
+          "capabilities": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
+          },
+          "entrypoints": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          },
+          "workflows": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          },
+          "possibleMutationClasses": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
+          },
+          "receiptRequiredFor": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 160 }
+          },
+          "verificationHooks": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
+        }
+      }
+    }
+  }
+}

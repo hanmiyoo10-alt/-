@@ -305,3 +305,35 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/889bbb26fd0fd3f97e82648c34c8b6592e82fe18)
 - Event ID: `0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905`
 <!-- canonical-main-doc-promoted:0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905 -->
+
+### 2026-08-27 — infra: add opt-in authoritative Harness handoff
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `227a9cdb1221ddd75b72fee1698b46184af43be5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/227a9cdb1221ddd75b72fee1698b46184af43be5)
+- Event ID: `e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973`
+<!-- canonical-main-doc-promoted:e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973 -->
+
+### 2026-08-27 — fix: preserve hidden Harness proof artifacts
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `81b2e4f384ee074fb2a9aa3652650e0696752262`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/81b2e4f384ee074fb2a9aa3652650e0696752262)
+- Event ID: `fe1b496c3caa43a2f9846b1cc195a10d7c146ed49b9d64a28b6e0b129445a66a`
+<!-- canonical-main-doc-promoted:fe1b496c3caa43a2f9846b1cc195a10d7c146ed49b9d64a28b6e0b129445a66a -->
+
+### 2026-08-27 — fix: recognize reusable Harness work issue input
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `4934acd4337e1a0a635bad0065c2896cdd87da78`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4934acd4337e1a0a635bad0065c2896cdd87da78)
+- Event ID: `8d0b5d172b0ebc6775e356132a644d12e1f340bd9e5115dc0a85e4a4bca10718`
+<!-- canonical-main-doc-promoted:8d0b5d172b0ebc6775e356132a644d12e1f340bd9e5115dc0a85e4a4bca10718 -->
+
+### 2026-08-27 — fix: queue canonical main operations instead of cancelling
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9227e13dd88d58ffd110515636e6f83e1ac8ae83`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9227e13dd88d58ffd110515636e6f83e1ac8ae83)
+- Event ID: `824af29e505111d2e5e744494b207114919ce475d4d4035b5c698ff4f28564d7`
+<!-- canonical-main-doc-promoted:824af29e505111d2e5e744494b207114919ce475d4d4035b5c698ff4f28564d7 -->

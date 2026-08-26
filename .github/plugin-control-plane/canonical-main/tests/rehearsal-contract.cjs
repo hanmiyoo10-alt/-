@@ -7,7 +7,6 @@ const {
   loadPolicy,
   validateEvent,
   correlationKey,
-  severityFor,
 } = require('../contract.cjs');
 const {buildAlertEnvelope} = require('../notification.cjs');
 const {
@@ -28,6 +27,7 @@ const policy = loadPolicy();
 const sha = '1234567890abcdef1234567890abcdef12345678';
 
 assert.equal(policy.rehearsal, undefined, 'completed rehearsal identity must stay outside active runtime policy');
+assert.equal(policy.alerts.defaultSeverity.CANONICAL_MAIN_REHEARSAL, undefined, 'rehearsal-only severity must stay outside active runtime policy');
 assert.equal(rehearsalConfig.enabled, true);
 assert.equal(rehearsalConfig.id, 'phase-h-v1');
 assert.equal(rehearsalConfig.reasonCode, 'CANONICAL_MAIN_REHEARSAL');
@@ -36,7 +36,6 @@ assert.equal(rehearsalConfig.trackingIssue, 330);
 assert.equal(rehearsalConfig.autoTriggerMarker, '[phase-h-rehearsal]');
 assert.equal(rehearsalConfig.productionMutation, false);
 assert.equal(rehearsalConfig.releaseMutation, false);
-assert.equal(policy.alerts.defaultSeverity.CANONICAL_MAIN_REHEARSAL, 'P1');
 assert.equal(REHEARSAL_ID, rehearsalConfig.id);
 assert.equal(REASON_CODE, rehearsalConfig.reasonCode);
 
@@ -50,23 +49,21 @@ assert.equal(opened.observation.from, 'CLEAR');
 assert.equal(opened.observation.to, 'INCIDENT');
 assert.equal(recovered.observation.from, 'INCIDENT');
 assert.equal(recovered.observation.to, 'CLEAR');
-assert.equal(severityFor(opened), 'P1');
-assert.equal(severityFor(recovered), 'P1');
 assert.equal(correlationKey(opened), correlationKey(recovered), 'OPEN and RECOVERED must reuse one correlation key');
 assert.notEqual(opened.eventId, recovered.eventId, 'OPEN and RECOVERED need distinct event identities');
 assert.match(opened.summary, /Synthetic canonical-main rehearsal incident/);
 assert.match(recovered.summary, /rehearsal recovered/);
 
 const key = correlationKey(opened);
-const openEnvelope = buildAlertEnvelope({event: opened, severity: 'P1', transition: 'OPEN', correlationKey: key, previousState: 'NONE'});
+const openEnvelope = buildAlertEnvelope({event: opened, severity: rehearsalConfig.severity, transition: 'OPEN', correlationKey: key, previousState: 'NONE'});
 assert.equal(openEnvelope.eligible, true, 'first rehearsal OPEN must enter the P1 notification outbox');
-const duplicateOpenEnvelope = buildAlertEnvelope({event: opened, severity: 'P1', transition: 'OPEN', correlationKey: key, previousState: 'OPEN'});
+const duplicateOpenEnvelope = buildAlertEnvelope({event: opened, severity: rehearsalConfig.severity, transition: 'OPEN', correlationKey: key, previousState: 'OPEN'});
 assert.equal(duplicateOpenEnvelope.eligible, false, 'unchanged rehearsal OPEN must not create another notification candidate');
-const recoveryEnvelope = buildAlertEnvelope({event: recovered, severity: 'P1', transition: 'RECOVERED', correlationKey: key, previousState: 'OPEN'});
+const recoveryEnvelope = buildAlertEnvelope({event: recovered, severity: rehearsalConfig.severity, transition: 'RECOVERED', correlationKey: key, previousState: 'OPEN'});
 assert.equal(recoveryEnvelope.eligible, true, 'rehearsal recovery must enter the P1 notification outbox');
 assert.notEqual(openEnvelope.deliveryKey, recoveryEnvelope.deliveryKey);
 
-const openBody = renderIncidentBody(opened, 'P1', 'OPEN', key, openEnvelope);
+const openBody = renderIncidentBody(opened, rehearsalConfig.severity, 'OPEN', key, openEnvelope);
 assert.match(openBody, /Synthetic rehearsal record/);
 assert.match(openBody, /does not assert a real outage/);
 assert.match(openBody, /Synthetic rehearsal: `true`/);
@@ -78,7 +75,7 @@ assert.match(openBody, /canonical-main-alert-envelope:/);
 const openIssue = {number: 901, state: 'open', labels: ['incident:open', 'severity:P1', 'control-plane:incident'], body: openBody};
 assert.equal(rehearsalState([openIssue], sha).state, 'OPEN', 'same-main partial OPEN must be resumable');
 
-const recoveredBody = `${renderIncidentBody(recovered, 'P1', 'RECOVERED', key, recoveryEnvelope)}\n${proofMarker(sha)}`;
+const recoveredBody = `${renderIncidentBody(recovered, rehearsalConfig.severity, 'RECOVERED', key, recoveryEnvelope)}\n${proofMarker(sha)}`;
 const recoveredIssue = {number: 901, state: 'closed', labels: ['incident:recovered', 'severity:P1', 'control-plane:incident'], body: recoveredBody};
 assert.equal(rehearsalState([recoveredIssue], sha).state, 'PROVEN', 'exact-main recovery proof must make later triggers no-op');
 assert.notEqual(rehearsalState([recoveredIssue], 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa').state, 'PROVEN', 'proof marker must be exact-main scoped');

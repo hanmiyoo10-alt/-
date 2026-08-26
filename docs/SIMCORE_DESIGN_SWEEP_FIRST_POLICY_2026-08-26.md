@@ -1,16 +1,17 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 18 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · GATE-OPEN SYSTEM-IDEA DESIGN SWEEP CLOSED · 40 SYS DESIGNS FROZEN · 12 GATED · FROZEN APPLY/IMPLEMENTATION REQUIRES SEPARATE RESELECTION · NO RUNTIME CHANGE`
 
-Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
+Purpose: preserve the completed gate-open design-sweep rule and define what happens after the `NOW` queue reaches zero without crossing closed design gates.
 
 Related authority:
 - `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
+- `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 
-## 1. Canonical rule
+## 1. Canonical design-freeze rule
 
 ```text
 select legitimate gate-open idea
@@ -19,12 +20,14 @@ select legitimate gate-open idea
 → DESIGN FROZEN
 → assign freeze-time Apply Class
 → STOP that idea
-→ select next by unified priority
+→ recompute next legitimate gate-open idea
 ```
 
-Implementation/application is a separate transaction.
+Implementation/application is always a separate transaction.
 
-## 2. Previous closures remain valid
+## 2. Completed phase
+
+Previous closures remain valid:
 
 ```text
 Original 31-idea gate-open sweep = CLOSED
@@ -33,131 +36,112 @@ Original R DOC APPLY             = EMPTY / S-04 already applied
 Permanent fixture portfolio      = COMPLETE
 ```
 
-Gated original ideas are not reopened merely by the system-idea sweep.
-
-## 3. Current system-idea sweep
-
-Frozen:
-
-```text
-SYS-19 Live-Gate Handoff Packet
-= SMALL / I5 / D1 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-01 Living Authority Map
-= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-51 Close-Step Trigger Matrix
-= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-08 Work-Item Close Receipt
-= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-10 Stale Next-Action Scanner
-= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
-
-SYS-48 Gate-Blocked Reason Surface
-= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-03 Gate Dependency Graph
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
-
-SYS-09 Change-Impact Review Map
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-50 Work Bundling Conflict Detector
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
-
-SYS-42 Implementation Slice Conformance Checker
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED
-
-SYS-11 Design-to-Implementation Drift Audit
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-13 Verification Proof Matrix
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-17 Missing Evidence Slot Analyzer
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
-
-SYS-22 Test Intent Manifest
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-21 Forensic Classification Consistency Check
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-
-SYS-38 Architecture Contract Diff Reporter
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
-
-SYS-31 Version-Bump Blast-Radius Check
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED
-
-SYS-35 Repository Transaction Ledger
-= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
-```
-
-Current inventory state:
+The system/operations inventory now has:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 18
-OPEN NOW            = 22
+FROZEN              = 40
+OPEN NOW            = 0
 GATED/DEPENDENCY    = 12
 ```
 
-All gate-open Importance-5 designs are now frozen.
-
-Current highest-priority open edge:
+Therefore:
 
 ```text
-I4 / D1 / NOW
-SYS-46 Canonical Task Card
-SYS-47 User Handoff Card
+SYSTEM GATE-OPEN DESIGN SWEEP = CLOSED
 ```
 
-Downstream-leverage choice:
+This is a phase closure, not a claim that all 52 ideas are designed. The remaining 12 are intentionally gated.
+
+## 3. Remaining gated backlog
 
 ```text
-NEXT = SYS-46 Canonical Task Card
+POST_M2_3
+SYS-26 Coverage Promotion Readiness Scanner
+SYS-29 Contract-to-Fixture Gap View
+SYS-40 Dead Module / Export Scanner
+SYS-41 Public Test-Seam Inventory
+SYS-43 M2 Checkpoint Close Pack
+SYS-44 Ownership Migration Ledger
+SYS-45 State-Surface Change Receipt
+
+DEPENDENCY: next genuine release proof
+SYS-27 Cross-Version Regression Receipt
+SYS-30 Release-to-Docs Convergence Receipt
+SYS-32 Release Candidate Provenance Viewer
+SYS-34 Post-Release Convergence Checklist Generator
+
+EVIDENCE
+SYS-39 Import-Boundary Trend Report
 ```
 
-Reason:
-- SYS-35 closes the I5/D3 repository-transaction-lineage design edge;
-- SYS-46 and SYS-47 are now the highest-priority open pair;
-- SYS-46 should freeze the canonical internal work/task identity, scope, authority, gate and stop representation first;
-- SYS-47 can then derive a user-facing handoff from that stable task surface rather than inventing a second work-state vocabulary.
-
-After SYS-46 freezes, recompute the next open edge using unified priority rather than fixing a long static order.
-
-## 4. Apply / implementation hold
+Canonical current selection:
 
 ```text
-SYS-19 application     = HOLD
-SYS-01 application     = HOLD
-SYS-51 application     = HOLD
-SYS-08 application     = HOLD
-SYS-10 implementation  = HOLD
-SYS-48 application     = HOLD
-SYS-03 implementation  = HOLD
-SYS-09 application     = HOLD
-SYS-50 implementation  = HOLD
-SYS-42 implementation  = HOLD / PROTECTED
-SYS-11 application     = HOLD
-SYS-13 application     = HOLD
-SYS-17 implementation  = HOLD
-SYS-22 application     = HOLD
-SYS-21 application     = HOLD
-SYS-38 implementation  = HOLD
-SYS-31 implementation  = HOLD / PROTECTED
-SYS-35 application     = HOLD
+NEXT SYSTEM DESIGN = NONE / WAITING_FOR_GATE
 ```
 
-The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
+Closed gates override priority scores.
 
-SYS-42 and SYS-31 are `NR_PROTECTED`; their eventual implementations must be dedicated protected transactions and must not be combined with the runtime/architecture or genuine release work they later check.
+The empty `NOW` queue must never be interpreted as permission to design a `POST_M2_3`, dependency, or unsatisfied evidence item early.
 
-If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
+## 4. Gate reopening
 
-## 5. Gate, bundling, conformance, audit, proof, slot, test-intent, forensic-consistency, architecture-delta, release-radius, and transaction-lineage discipline
+A gated row becomes eligible only when its owning authority establishes the named transition.
+
+Current named re-review triggers:
+
+```text
+post-M2-3 stabilization
+→ re-review SYS-26 / 29 / 40 / 41 / 43 / 44 / 45
+
+next genuine runtime-release operational proof
+→ re-review SYS-27 / 30 / 32 / 34
+
+explicit sufficient import-boundary trend evidence
+→ re-review SYS-39
+```
+
+Do not infer a gate transition from elapsed time, a new chat, a higher priority score, or an empty queue.
+
+If evidence arrives or the user explicitly changes operational priority, handle the authoritative work first, run the normal close-step routine, then recompute design eligibility.
+
+## 5. Frozen application / implementation after sweep close
+
+The former blanket hold existed to prevent application/implementation from interleaving with the gate-open design sweep.
+
+With `OPEN NOW = 0`, that blanket phase hold is closed.
+
+Frozen items are now:
+
+```text
+SEPARATE RESELECTION REQUIRED
+NOT AUTO-AUTHORIZED
+```
+
+This means:
+- no SYS item is applied merely because its design is frozen;
+- no executable SYS item is implemented merely because the design sweep ended;
+- current product/live priorities still win;
+- Apply Class and protected-transaction rules still apply;
+- bundling/parallel-work rules still apply;
+- design/application/implementation remain separate work items.
+
+`NR_DOC_ONLY` does not mean automatic application.
+`NR_EXECUTABLE` does not mean ordinary harvest is always appropriate.
+`NR_PROTECTED` always requires a dedicated protected transaction.
+
+Current protected frozen system ideas include:
+
+```text
+SYS-42 Implementation Slice Conformance Checker
+SYS-31 Version-Bump Blast-Radius Check
+SYS-24 Fixture Orphan Detector
+SYS-36 Branch/PR Relationship Auditor
+SYS-49 Safe Parallel Work Finder
+```
+
+## 6. Standing proof / authority discipline
 
 Closed gates still override scores:
 
@@ -170,31 +154,44 @@ FUTURE
 next-genuine-release-proof dependency
 ```
 
-SYS-03 graph matches are re-review candidates only.
-SYS-09 impact-family matches are review obligations only.
-SYS-50 `BUNDLE_CLEAN` means only that no frozen bundling conflict was found; it does not authorize implementation or override a gate.
-SYS-42 `SLICE_CONFORMANT` means only that the reviewed machine-verifiable implementation slice passed; it does not prove semantic equivalence, live correctness, or release readiness.
-SYS-11 `DRIFT_AUDIT_CLEAN` means reviewed design-intent requirements are satisfied at the evidence maturity required by that audit; `UNPROVEN` requirements force `DRIFT_AUDIT_REVIEW_REQUIRED` rather than silent promotion.
-SYS-13 prohibits proof substitution: generic CI PASS does not establish focused-test execution, fixture PASS does not establish natural live validation, release publication does not establish live runtime PASS, and permanent-CI qualification does not establish genuine release-system E2E proof.
-SYS-17 analyzes only explicitly registered evidence slots for one selected bounded scope. Unregistered absence is not a gap, future-scope evidence is not a current blocker, and `EVIDENCE_SLOTS_CLEAR` never closes a gate by itself.
-SYS-22 owns reviewed semantic test intent only. `INTENT_DEFINED` does not prove execution/pass, satisfy an evidence slot, alter permanent registry/harness policy, or promote deterministic proof into live/release proof.
-SYS-21 reviews whether a current forensic classification remains inside cited evidence/proof/impact/attribution/recurrence boundaries. It reports over-promotion or under-classification but never auto-changes WATCH / DEFER / FIX / BLOCKER, discovers recurrence, closes gates, or mutates source authorities.
-SYS-38 reports exact bounded architecture differences only. `ARCH_DIFF_PRESENT` means only that compared machine architecture surfaces differ; it is not an architecture approval, SYS-42 conformance result, SYS-11 semantic-drift result, runtime regression, or release authorization.
-SYS-31 checks reviewed release/version blast radius only. `VERSION_RADIUS_CLEAR` does not construct or verify a candidate, authorize publication, write post-publish state, establish LIVE_PASS, or satisfy R2.1 genuine release proof.
-SYS-35 records curated historical repository transaction lineage/navigation only. A ledger row never substitutes for Git/GitHub transaction truth, a release record, SYS-08 work-close truth, release authorization, or current NEXT/queue authority.
+Existing frozen-system boundaries remain authoritative through their own design documents, including:
+- SYS-03 gate graph is review support, not a gate opener;
+- SYS-09 impact mapping creates review obligations, not authorization;
+- SYS-50 bundle CLEAN is not implementation authorization;
+- SYS-42 machine slice conformance is not semantic/live proof;
+- SYS-11 semantic drift review does not manufacture missing runtime proof;
+- SYS-13 prohibits proof substitution;
+- SYS-17 only analyzes explicitly registered evidence slots;
+- SYS-22 test intent does not prove execution;
+- SYS-21 forensic consistency does not auto-change disposition;
+- SYS-38 architecture diff reports difference, not approval;
+- SYS-31 release radius does not publish or establish LIVE_PASS;
+- SYS-35 transaction ledger never substitutes for Git/GitHub truth;
+- SYS-37 residual registry never authorizes cleanup.
 
-Standing split rules remain preserved, including:
+Standing split rules remain preserved:
 - runtime/feature change separate from CI/release/repository-system redesign;
 - fixture expansion separate from CI/harness topology redesign;
 - design freeze separate from its implementation/application;
 - newly attributed evidence separate from speculative repair;
 - genuine release publication separate from release-system redesign;
-- protected SYS-42 implementation separate from the product/architecture implementation it later checks;
-- SYS-38 implementation separate from any change to architecture checker policy or permanent CI wiring;
-- protected SYS-31 implementation separate from genuine product releases and release-system redesign;
-- SYS-35 ledger application separate from repository-writer/event-hook automation or full-history migration.
+- protected checker/auditor implementation separate from the work it later checks;
+- physical residual cleanup separate from SYS-37 registry application and separate from runtime product changes.
 
-## 6. Production boundary
+## 7. Current production priority
+
+```text
+SimCore production = v0.64.7 Cross-Reload Cache Observer Continuity
+live gate = 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+validation = PENDING_REAL_LONG_CHAT
+checkpoint = M2-2
+next physical architecture move = M2-3 only after the live gate closes
+R2.1 genuine release operational proof = PENDING on next genuine runtime release
+```
+
+The system-design phase closure changes none of those facts.
+
+## 8. Production boundary
 
 ```text
 PLUGIN BYTES         = UNCHANGED
@@ -205,12 +202,15 @@ RUNTIME SEMANTICS    = UNCHANGED
 v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 ```
 
-## 7. Current verdict
+## 9. Current verdict
 
 ```text
-SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22 + SYS-21 + SYS-38 + SYS-31 + SYS-35
-ALL GATE-OPEN I5 DESIGNS = FROZEN
-CURRENT NEXT DESIGN = SYS-46 Canonical Task Card
-SYSTEM APPLY/IMPLEMENTATION = HOLD
+SYSTEM GATE-OPEN DESIGN SWEEP = CLOSED
+SYSTEM DESIGNS FROZEN = 40 / 52
+OPEN NOW = 0
+GATED BACKLOG = 12 / WAITING_FOR_OWNING_GATES
+CURRENT SYSTEM DESIGN NEXT = NONE / WAITING_FOR_GATE
+FROZEN SYS APPLY/IMPLEMENTATION = SEPARATE RESELECTION / NOT AUTO-AUTHORIZED
+CURRENT PRODUCT PRIORITY = v0.64.7 LIVE GATE CLOSE
+NEXT PHYSICAL ARCHITECTURE = M2-3 AFTER LIVE GATE CLOSE
 ```

@@ -94,7 +94,7 @@ NR_UNASSESSED
 → no implementation authorization
 ```
 
-No apply class bypasses design-freeze, gate, work-bundling, or current Design Sweep First rules.
+No apply class bypasses design-freeze, gate, work-bundling, current operational priority, or protected-transaction rules.
 
 ---
 
@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-20 design freeze:
+Current state after SYS-37 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 39
-UNFROZEN                = 13
+FROZEN                  = 40
+UNFROZEN                = 12
 
-NR_DOC_ONLY   = 27
+NR_DOC_ONLY   = 28
 NR_EXECUTABLE = 7
 NR_PROTECTED  = 5
-NR_UNASSESSED = 13
+NR_UNASSESSED = 12
 ```
 
 Frozen system apply classes:
@@ -206,6 +206,7 @@ SYS-16 Anomaly Recurrence Correlator
 SYS-25 Golden Fixture Mutation Receipt
 SYS-15 WATCH Aging Review
 SYS-20 Natural Evidence Intake Checklist Generator
+SYS-37 Release-System Residual Cleanup Registry
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -259,6 +260,7 @@ SYS-16 = curated recurrence/correlation index
 SYS-25 = prospective golden-fixture mutation receipt/template
 SYS-15 = curated event-driven WATCH aging/relevance review
 SYS-20 = curated natural-evidence intake checklist; semantic intake decisions remain human-reviewed and no second S-04 packet or automatic S-12/recurrence/classification authority is created
+SYS-37 = curated release-system residual/cleanup-eligibility registry; source disposition, operational role, cleanup trigger and preservation constraints remain reviewed semantic facts and no cleanup primitive is created
 ```
 
 Why SYS-17, SYS-38, SYS-04, and SYS-07 are executable:
@@ -293,13 +295,13 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 29
+NR_DOC_ONLY    = 30
 NR_EXECUTABLE  = 12
 NR_PROTECTED   = 6
-NR_UNASSESSED  = 19
+NR_UNASSESSED  = 18
 ```
 
-This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
+This combined count is a classification view only. It does not merge the original NR queue with the system-idea design inventory or authorize implementation.
 
 Current queue distinction:
 
@@ -307,15 +309,20 @@ Current queue distinction:
 ORIGINAL NR harvest queue
 = EMPTY
 
-SYSTEM-IDEA design sweep
-= ACTIVE
-= 1 gate-open NOW design remains after SYS-20 freeze
+SYSTEM-IDEA gate-open design sweep
+= CLOSED
+= 40 FROZEN / 0 OPEN NOW
 
-SYSTEM-IDEA apply/implementation
-= HOLD while Design Sweep First remains active
+SYSTEM-IDEA gated design backlog
+= 12
+= WAITING_FOR_OWNING_GATES
+
+FROZEN SYSTEM apply/implementation
+= separate reselection required
+= NOT AUTO-AUTHORIZED
 ```
 
-Therefore wording such as `current open NR remains empty` is valid only for the **original NR harvest queue**, not as a global statement about all NON_RUNTIME idea design work.
+Therefore wording such as `current open NR remains empty` is valid only for the **original NR harvest queue**. It does not mean every frozen system item is automatically safe/authorized to apply.
 
 ---
 
@@ -384,6 +391,8 @@ NR_UNASSESSED
 
 Actual implementation remains a later bounded transaction under normal tier/gate/current-phase policy.
 
+Closed system-design gates remain closed after the gate-open sweep ends.
+
 ---
 
 ## 9. Relationship to R document classification
@@ -417,15 +426,16 @@ NR_PROTECTED
 → build/release/CI/repository/fixture/architecture-governance boundary; separate protected work
 
 NR_UNASSESSED
-→ wait for design freeze
+→ wait for design freeze / owning gate
 ```
 
 Current phase summary:
 
 ```text
 original gate-open NR harvest = EXHAUSTED / EMPTY
-system-idea NON_RUNTIME design sweep = ACTIVE
-system apply/implementation = HELD
+system gate-open design sweep = CLOSED
+system gated design backlog = 12 / WAITING_FOR_GATE
+frozen system application/implementation = separate reselection / not auto-authorized
 SYS-42 = frozen NR_PROTECTED architecture-governance checker
 SYS-31 = frozen NR_PROTECTED release-governance blast-radius checker
 SYS-24 = frozen NR_PROTECTED fixture-authority orphan detector
@@ -453,7 +463,8 @@ SYS-16 = frozen NR_DOC_ONLY anomaly recurrence/correlation index design
 SYS-25 = frozen NR_DOC_ONLY golden-fixture mutation receipt design
 SYS-15 = frozen NR_DOC_ONLY WATCH aging/relevance review design
 SYS-20 = frozen NR_DOC_ONLY natural-evidence intake checklist design
+SYS-37 = frozen NR_DOC_ONLY release-system residual cleanup registry design
 SYS-07 = frozen NR_EXECUTABLE cross-reference integrity auditor design
 ```
 
-Classification visibility does not bypass gate or Design Sweep First ordering.
+Classification visibility does not bypass a gate, current product/live priority, or protected-transaction rule.

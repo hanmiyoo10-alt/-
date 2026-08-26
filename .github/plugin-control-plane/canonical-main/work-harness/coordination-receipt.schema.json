@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://canonical.invalid/repository-work-harness/coordination-receipt.schema.json",
+  "title": "Repository Work Harness Coordination Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "mode", "receiptId", "workId", "objectiveId", "scopeId", "requiredCapability", "adapterId",
+    "workProfileHash", "activeWorkSetHash", "preflightProfileHash", "preflightStartability", "preflightDisposition",
+    "observedRefs", "expectedBases", "adapterContractHash", "projectRegistryHash", "authorityRefs", "guards",
+    "invalidationRules", "coordinationReady", "mutationAuthorized", "executionAuthorized"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "mode": { "const": "COORDINATION_RECEIPT" },
+    "receiptId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "workId": { "type": "string", "minLength": 1 },
+    "objectiveId": { "type": "string", "minLength": 1 },
+    "scopeId": { "type": "string", "minLength": 1 },
+    "requiredCapability": { "type": "string", "minLength": 1 },
+    "adapterId": { "type": "string", "minLength": 1 },
+    "workProfileHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "activeWorkSetHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "preflightProfileHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "preflightStartability": { "const": "STARTABLE" },
+    "preflightDisposition": { "const": "PARALLEL_SAFE" },
+    "observedRefs": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["ref", "sha"],
+        "properties": { "ref": { "type": "string", "minLength": 1 }, "sha": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "expectedBases": { "type": "array", "items": { "type": "object" } },
+    "adapterContractHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "projectRegistryHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "authorityRefs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "guards": { "type": "array", "maxItems": 0 },
+    "invalidationRules": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "coordinationReady": { "const": true },
+    "mutationAuthorized": { "const": false },
+    "executionAuthorized": { "const": false }
+  }
+}

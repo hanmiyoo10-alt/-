@@ -10,6 +10,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'current-release-contract.cjs',
   'legacy-release-workflow-archive.cjs',
   'behavior-harness-contract.cjs',
+  'runtime-audit-standard-contract.cjs',
   'test-registry-contract.cjs',
   'candidate-ready-contract.cjs',
   'release-candidate-classifier-contract.cjs',

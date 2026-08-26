@@ -1,8 +1,8 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 6 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 7 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
-Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing the frozen items.
+Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
 Related authority:
 - `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
@@ -33,7 +33,7 @@ Original R DOC APPLY             = EMPTY / S-04 already applied
 Permanent fixture portfolio      = COMPLETE
 ```
 
-Gated original ideas are not reopened by the system-idea sweep.
+Gated original ideas are not reopened merely by the system-idea sweep.
 
 ## 3. Current system-idea sweep
 
@@ -57,14 +57,17 @@ SYS-10 Stale Next-Action Scanner
 
 SYS-48 Gate-Blocked Reason Surface
 = SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-03 Gate Dependency Graph
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 6
-OPEN NOW            = 34
+FROZEN              = 7
+OPEN NOW            = 33
 GATED/DEPENDENCY    = 12
 ```
 
@@ -72,7 +75,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D3 / NOW
-SYS-03 Gate Dependency Graph
 SYS-09 Change-Impact Review Map
 SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
@@ -89,13 +91,14 @@ SYS-50 Work Bundling Conflict Detector
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-03 Gate Dependency Graph
+NEXT = SYS-09 Change-Impact Review Map
 ```
 
 Reason:
-- SYS-48 now gives the bounded human explanation of an authoritative gate;
-- SYS-03 can next model explicit gate-to-dependent-item relationships for RT-11 review;
-- it must not become a gate authority, priority engine, or automatic opener.
+- SYS-01 identifies authority location;
+- SYS-51 selects relevant close surfaces;
+- SYS-03 supplies explicit direct gate-review relationships;
+- SYS-09 can next define changed path/authority-family → required review obligations, which later SYS-11/SYS-42/SYS-50 and close receipts can consume without guessing.
 
 ## 4. Apply / implementation hold
 
@@ -106,11 +109,12 @@ SYS-51 application     = HOLD
 SYS-08 application     = HOLD
 SYS-10 implementation  = HOLD
 SYS-48 application     = HOLD
+SYS-03 implementation  = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
 
-If the user explicitly changes priority, or supplies live evidence requiring immediate classification, that operational priority may interrupt the design sweep; after handling it, recompute the sweep before resuming.
+If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
 ## 5. Gate discipline
 
@@ -125,7 +129,7 @@ FUTURE
 next-genuine-release-proof dependency
 ```
 
-Do not pull those items forward merely because the system sweep is active.
+SYS-03 does not change this rule. A graph match is only a re-review candidate, never proof that a gate is open.
 
 ## 6. Production boundary
 
@@ -142,7 +146,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48
-CURRENT NEXT DESIGN = SYS-03 Gate Dependency Graph
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03
+CURRENT NEXT DESIGN = SYS-09 Change-Impact Review Map
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

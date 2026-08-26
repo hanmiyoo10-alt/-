@@ -22,6 +22,8 @@ assert.match(workflow, /authoritative-handoff\.cjs --work-issue "\$TARGET_ISSUE"
 assert.match(workflow, /AUTHORITATIVE_HANDOFF_READY/);
 assert.match(workflow, /AUTHORITATIVE_HANDOFF_NOT_REQUESTED/);
 assert.match(workflow, /handoff_ready=true/);
+assert.match(workflow, /if: \$\{\{ fromJSON\(needs\.receipt-sync\.outputs\.handoff_ready \|\| 'false'\) \}\}/);
+assert.doesNotMatch(workflow, /needs\.receipt-sync\.outputs\.handoff_ready == 'true'/);
 assert.match(workflow, /uses: \.\/\.github\/workflows\/canonical-main-ops\.yml/);
 assert.match(workflow, /coordination_work_issue: \$\{\{ needs\.receipt-sync\.outputs\.handoff_issue \}\}/);
 assert.match(workflow, /Upload exact receipt-sync and handoff results/);

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · SYS-19 FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · SYS-19 + SYS-01 FROZEN · NO RUNTIME CHANGE`
 
 Purpose: track design-freeze completion, unified classifications, apply/harvest state, and the current legitimate next idea across all active SimCore idea families.
 
@@ -157,8 +157,6 @@ System idea inventory:
 
 Unified classification applies without a separate system taxonomy.
 
-Current first frozen system idea:
-
 ### SYS-19 — Live-Gate Handoff Packet
 
 ```text
@@ -186,12 +184,41 @@ AFTER evidence exists
 → existing repository/S-04 forensic review path owns classification
 ```
 
+### SYS-01 — Living Authority Map
+
+```text
+Size          = SMALL
+Importance    = 5
+Difficulty    = 2
+Runtime Class = NON_RUNTIME
+Design Gate   = FROZEN
+Apply Class   = NR_DOC_ONLY
+Design doc    = docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md
+Implementation/application = NOT STARTED
+Open design questions = 0
+```
+
+Design boundary:
+
+```text
+Living Authority Map
+= state-family / operator-question → authority relationship
+= where to ask
+!= copied current answer/value
+
+product-manifest / release-simcore / CURRENT_DEVELOPMENT / policy/evidence authorities
+= remain real authorities
+
+SYS-01
+= navigation only
+```
+
 Current system inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 1
-OPEN NOW            = 39
+FROZEN              = 2
+OPEN NOW            = 38
 GATED/DEPENDENCY    = 12
 ```
 
@@ -199,7 +226,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D2 / NOW
-SYS-01 Living Authority Map
 SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
@@ -209,8 +235,10 @@ SYS-51 Close-Step Trigger Matrix
 Downstream-leverage next:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-01 Living Authority Map
+NEXT SYSTEM DESIGN = SYS-51 Close-Step Trigger Matrix
 ```
+
+Reason: the authority lookup layer is now frozen; defining work-type → required close-surface triggers next provides a stable basis for close receipts and bounded stale-next-action review.
 
 ---
 
@@ -227,12 +255,14 @@ New system sweep:
 
 ```text
 SYS-19 = NR_DOC_ONLY / application eligible in principle
+SYS-01 = NR_DOC_ONLY / application eligible in principle
 BUT
 CURRENT SYSTEM DESIGN SWEEP = ACTIVE
 SYS-19 application = HOLD
+SYS-01 application = HOLD
 ```
 
-Do not mix SYS-19 materialization into the same design transaction.
+Do not mix materialization into the same design transaction.
 Continue one-by-one system design unless the user explicitly changes priority or live evidence requires immediate gate handling.
 
 ---
@@ -250,7 +280,7 @@ M-13 focused standalone test / --check direct CI execution = NOT CLAIMED
 
 S-10/S-11 retain earlier standalone tooling-test discovery WATCHes.
 
-SYS-19 is document-only design; no executable verification claim was created.
+SYS-19 and SYS-01 are document-only designs; no executable verification claim was created.
 
 ---
 
@@ -267,7 +297,7 @@ live gate = PENDING_REAL_LONG_CHAT
 major checkpoint = M2-2
 ```
 
-SYS-19 design effect:
+Current system-design effect:
 
 ```text
 RUNTIME CHANGE       = NONE
@@ -289,7 +319,8 @@ PERMANENT FIXTURE EXPANSION = COMPLETE
 
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
 SYS-19 = FROZEN / NR_DOC_ONLY / APPLICATION HELD
-CURRENT NEXT DESIGN = SYS-01 Living Authority Map
+SYS-01 = FROZEN / NR_DOC_ONLY / APPLICATION HELD
+CURRENT NEXT DESIGN = SYS-51 Close-Step Trigger Matrix
 
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

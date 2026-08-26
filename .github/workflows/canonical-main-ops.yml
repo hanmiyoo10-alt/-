@@ -8,12 +8,10 @@ on:
         description: 'Optional active Work Record issue for Harness receipt-gated canary'
         required: false
         type: string
-  # B6 live-proof bridges. Issue edits remain supported; owner-authored PR canaries provide
-  # a repository-native event transport that can be exercised without user manual dispatch.
+  # B6 live-proof issue edits remain available for bounded owner-only canaries.
+  # The temporary pull_request proof transport was retired after live evidence was captured.
   issues:
     types: [edited]
-  pull_request:
-    types: [opened, edited, reopened]
   schedule:
     - cron: '17 * * * *'
   workflow_run:
@@ -52,7 +50,7 @@ concurrency:
 
 jobs:
   refresh:
-    if: ${{ (github.event_name != 'issues' && github.event_name != 'pull_request') || (github.event_name == 'issues' && github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) || (github.event_name == 'pull_request' && github.actor == github.repository_owner && contains(github.event.pull_request.body, '<!-- repository-harness-canary-pr:v1 -->') && contains(github.event.pull_request.body, '<!-- repository-harness-canary-work-issue:')) }}
+    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted main automation
@@ -64,7 +62,7 @@ jobs:
         with:
           node-version: 22
       - name: Resolve Harness canary Work Record
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.coordination_work_issue != '') || github.event_name == 'issues' || github.event_name == 'pull_request' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
         env:
           CANARY_EVENT_NAME: ${{ github.event_name }}
           CANARY_DISPATCH_WORK_ISSUE: ${{ inputs.coordination_work_issue }}
@@ -77,14 +75,6 @@ jobs:
             workIssue = String(event.issue?.number ?? '');
           } else if (process.env.CANARY_EVENT_NAME === 'workflow_dispatch') {
             workIssue = String(process.env.CANARY_DISPATCH_WORK_ISSUE || '');
-          } else if (process.env.CANARY_EVENT_NAME === 'pull_request') {
-            const body = String(event.pull_request?.body || '');
-            const matches = [...body.matchAll(/<!-- repository-harness-canary-work-issue:(\d+) -->/g)];
-            if (matches.length !== 1) {
-              console.error('expected exactly one repository-harness-canary-work-issue marker');
-              process.exit(2);
-            }
-            workIssue = matches[0][1];
           }
           if (!/^[1-9]\d*$/.test(workIssue)) {
             console.error('invalid canary Work Record issue number');
@@ -93,7 +83,7 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, `COORDINATION_WORK_ISSUE=${workIssue}\n`);
           NODE
       - name: Harness coordination receipt canary gate
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.coordination_work_issue != '') || github.event_name == 'issues' || github.event_name == 'pull_request' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

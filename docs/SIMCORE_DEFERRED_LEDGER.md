@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 29/52 designs FROZEN; scoped next design = SYS-06 Evidence-to-Decision Trace Map
+System-idea sweep state: 30/52 designs FROZEN; scoped next design = SYS-18 Evidence Provenance Chain Receipt
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -135,6 +135,39 @@ SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 ```
 
 Current application remains HOLD while the system design sweep is active. The existing source evidence documents remain authoritative for those historical events until a later bounded SYS-52 application transaction materializes `docs/SIMCORE_OPERATOR_ERROR_SPECIMEN_LEDGER.md`.
+
+### Evidence-to-Decision Trace Map design
+
+Status: `SYS-06 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
+
+SYS-06 now freezes the reviewed semantic lineage from exact evidence identities to exact bounded decision identities.
+
+Frozen contract:
+
+```text
+exact evidence identity
++ bounded decision identity
++ reviewed trace role
++ exact affected decision scope
++ source-backed basis
+→ curated evidence→decision lineage
+```
+
+Frozen trace roles:
+
+```text
+PRIMARY_BASIS
+SUPPORTING_BASIS
+CONTRARY_INPUT
+TRIGGER_INPUT
+CLOSURE_INPUT
+```
+
+The map is deliberately distinct from the generated Evidence Index, SYS-13 proof fitness, SYS-21 forensic consistency review, SYS-28 verification debt, SYS-02 supersession lineage, and SYS-35 repository transaction lineage. It does not discover evidence, infer causality from citations/timestamps, promote proof strength, close gates, or calculate current truth.
+
+Historical evidence→decision edges remain preserved when later evidence produces a superseding decision. A later decision needs its own evidence trace; support does not silently transfer through SYS-02 supersession.
+
+Current application remains HOLD while the system design sweep is active. Future SYS-18 Evidence Provenance Chain Receipt is expected to consume this reviewed lineage rather than inventing evidence→decision causality independently.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -387,7 +420,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 29/52 system designs are currently FROZEN and the scoped next design is SYS-06 Evidence-to-Decision Trace Map. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 30/52 system designs are currently FROZEN and the scoped next design is SYS-18 Evidence Provenance Chain Receipt. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

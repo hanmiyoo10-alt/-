@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { EVENT_CLASSES, GENERATED_MARKER, normalizeEvent, incidentEventFromIssue, markerForEvent, parseEventMarker, renderLiveComment } = require('../documentation-stream/event.cjs');
+const { EVENT_CLASSES, GENERATED_MARKER, changedPathsFromPush, normalizeEvent, incidentEventFromIssue, markerForEvent, parseEventMarker, renderLiveComment } = require('../documentation-stream/event.cjs');
 const { renderDecisionLog, renderChangeLog, renderProjectCatalog, renderArchitectureSnapshot, eventsFromComments } = require('../documentation-stream/render.cjs');
 
 const root = path.resolve(__dirname, '../../../..');
@@ -16,6 +16,9 @@ assert.ok(config.promotion.ignoreCommitMessageMarkers.includes(GENERATED_MARKER)
 
 const push = normalizeEvent({ eventName: 'push', repository: 'hanmiyoo10-alt/-', payload: { ref: 'refs/heads/main', after: 'a'.repeat(40), head_commit: { id: 'a'.repeat(40), message: 'infra: change canonical main', timestamp: '2026-08-26T00:00:00Z' }, commits: [{ modified: ['.github/plugin-control-plane/canonical-main/policy.json'], added: [], removed: [] }] } });
 assert.equal(push.eventClass, 'CHANGE'); assert.equal(push.stable, true); assert.equal(push.eventId.length, 64);
+const headOnlyPayload = { ref: 'refs/heads/main', after: 'd'.repeat(40), head_commit: { id: 'd'.repeat(40), message: 'infra: head only change', timestamp: '2026-08-26T00:00:00Z', added: [], modified: ['.github/workflows/canonical-main-docs.yml'], removed: [] }, commits: [] };
+assert.deepEqual(changedPathsFromPush(headOnlyPayload), ['.github/workflows/canonical-main-docs.yml']);
+assert.equal(normalizeEvent({ eventName: 'push', repository: 'hanmiyoo10-alt/-', payload: headOnlyPayload }).eventClass, 'CHANGE');
 const projectPush = normalizeEvent({ eventName: 'push', repository: 'hanmiyoo10-alt/-', payload: { ref: 'refs/heads/main', after: 'c'.repeat(40), head_commit: { id: 'c'.repeat(40), message: 'docs: update project registry', timestamp: '2026-08-26T00:00:00Z' }, commits: [{ modified: ['.github/plugin-control-plane/registry.json'], added: [], removed: [] }] } });
 assert.equal(projectPush.eventClass, 'PROJECT');
 assert.equal(normalizeEvent({ eventName: 'push', repository: 'hanmiyoo10-alt/-', payload: { ref: 'refs/heads/main', after: 'b'.repeat(40), head_commit: { id: 'b'.repeat(40), message: `docs: generated ${GENERATED_MARKER}`, timestamp: '2026-08-26T00:00:00Z' }, commits: [{ modified: ['docs/REPO_CHANGELOG.md'], added: [], removed: [] }] } }), null);
@@ -37,8 +40,11 @@ assert.ok(renderProjectCatalog({ registry, root }).includes('plugin:simcore'));
 const architecture = renderArchitectureSnapshot({ policy, registry, config, branch: { protected: false, protection: { required_status_checks: { enforcement_level: 'off' } } } });
 assert.ok(architecture.includes('NOT_ENFORCED')); assert.ok(architecture.includes('#440')); assert.ok(architecture.includes('CLEAR / ATTENTION / INCIDENT / UNKNOWN'));
 
+const liveSource = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/documentation-stream/live.cjs'), 'utf8');
+assert.ok(liveSource.includes('PUSH_PATH_FALLBACK'));
+assert.ok(liveSource.includes('/commits/${sha}'));
 const liveWorkflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-docs.yml'), 'utf8');
 assert.ok(liveWorkflow.includes('issues: write')); assert.ok(liveWorkflow.includes('branch_protection_rule')); assert.ok(liveWorkflow.includes('workflows: [Canonical Main Operations]')); assert.ok(!liveWorkflow.includes('contents: write')); assert.ok(!liveWorkflow.includes('git push'));
 const promotionWorkflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-doc-promotion.yml'), 'utf8');
-assert.ok(promotionWorkflow.includes('pull-requests: write')); assert.ok(promotionWorkflow.includes('actions: write')); assert.ok(promotionWorkflow.includes('CANDIDATE_SHADOW')); assert.ok(promotionWorkflow.includes('--match-head-commit')); assert.ok(promotionWorkflow.includes('BASE_SHA')); assert.ok(promotionWorkflow.includes('[repo-docs-generated]')); assert.ok(!promotionWorkflow.includes('git push origin main'));
+assert.ok(promotionWorkflow.includes('pull-requests: write')); assert.ok(promotionWorkflow.includes('actions: write')); assert.ok(promotionWorkflow.includes('CANDIDATE_SHADOW')); assert.ok(promotionWorkflow.includes('--match-head-commit')); assert.ok(promotionWorkflow.includes('BASE_SHA')); assert.ok(promotionWorkflow.includes('[repo-docs-generated]')); assert.ok(promotionWorkflow.includes('git status --porcelain -- $DOC_FILES')); assert.ok(promotionWorkflow.includes('git clean -fd -- $DOC_FILES')); assert.ok(!promotionWorkflow.includes('git push origin main'));
 console.log('documentation-stream-contract: ok');

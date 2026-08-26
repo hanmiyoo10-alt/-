@@ -56,7 +56,7 @@ concurrency:
 
 jobs:
   refresh:
-    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}
+    if: ${{ inputs.coordination_work_issue != '' || github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted main automation
@@ -68,7 +68,7 @@ jobs:
         with:
           node-version: 22
       - name: Resolve Harness canary Work Record
-        if: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
+        if: ${{ inputs.coordination_work_issue != '' || github.event_name == 'issues' }}
         env:
           CANARY_EVENT_NAME: ${{ github.event_name }}
           CANARY_DISPATCH_WORK_ISSUE: ${{ inputs.coordination_work_issue }}
@@ -77,10 +77,10 @@ jobs:
           const fs = require('node:fs');
           const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
           let workIssue = '';
-          if (process.env.CANARY_EVENT_NAME === 'issues') {
+          if (process.env.CANARY_DISPATCH_WORK_ISSUE) {
+            workIssue = String(process.env.CANARY_DISPATCH_WORK_ISSUE);
+          } else if (process.env.CANARY_EVENT_NAME === 'issues') {
             workIssue = String(event.issue?.number ?? '');
-          } else if (process.env.CANARY_EVENT_NAME === 'workflow_dispatch' || process.env.CANARY_EVENT_NAME === 'workflow_call') {
-            workIssue = String(process.env.CANARY_DISPATCH_WORK_ISSUE || '');
           }
           if (!/^[1-9]\d*$/.test(workIssue)) {
             console.error('invalid canary Work Record issue number');
@@ -89,7 +89,7 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, `COORDINATION_WORK_ISSUE=${workIssue}\n`);
           NODE
       - name: Harness coordination receipt canary gate
-        if: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
+        if: ${{ inputs.coordination_work_issue != '' || github.event_name == 'issues' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

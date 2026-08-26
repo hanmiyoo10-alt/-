@@ -2,7 +2,7 @@
 
 This directory implements bounded slices of U-25 `Repository Work Harness`.
 
-Completed slices:
+Phase A is complete as **read-only shadow governance**. Completed slices:
 
 - A1: Work Record v1 + pure semantic PREFLIGHT;
 - A2: repository-visible active Work Record discovery;

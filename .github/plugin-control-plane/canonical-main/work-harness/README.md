@@ -2,41 +2,36 @@
 
 This directory implements bounded slices of U-25 `Repository Work Harness`.
 
-Phase A is complete as **read-only shadow governance**: Work Record normalization, active-record discovery, semantic PREFLIGHT, and automatic advisory surfacing are live. Phase B now has two bounded layers:
+Phase A is complete as **read-only shadow governance**. Completed slices:
 
-- B1: audited executor envelopes + pure dry-run DISPATCH planning;
-- B2: deterministic Executor Handoff v1 + one explicitly audited local read-only invocation path.
+- A1: Work Record v1 + pure semantic PREFLIGHT;
+- A2: repository-visible active Work Record discovery;
+- A3: automatic read-only Shadow Scan + Actions summary/artifact;
+- B1: audited executor adapters + dry-run DISPATCH;
+- B2: deterministic Executor Handoff v1 + one audited local read-only invocation;
+- B3: deterministic persistent Coordination Receipt v1 + pure mutation-boundary readiness validation;
+- B4: automatic read-only Coordination Receipt revalidation inside the existing Shadow Scan.
 
-The Harness still does not own release, production, main-write, product-runtime, or project authority.
+The Harness coordinates work transactions. It does **not** own Git, CI, main-write, release, production, product-runtime, or project authority.
 
 ## Authority boundary
 
-The Harness coordinates work transactions. Existing authorities remain authoritative:
+Existing authorities remain authoritative. Harness evidence cannot widen a Work Record, bypass a failed gate, upgrade release/production truth, or infer mutation permission from a route or receipt.
 
-- repository/Git/CI/main-write/release/project authorities;
-- canonical-main Work System for canonical-main packet identity/handoff;
-- project-owned task/backlog/release contracts;
-- `.github/plugin-control-plane/registry.json` for project/scope/authority location;
-- product-specific build, validation, release and runtime tooling.
+The existing project registry remains `.github/plugin-control-plane/registry.json`. Harness-specific executor facts live in `executor-adapters.json`; release branches, manifests and product authority must not be copied into a competing registry.
 
-Harness evidence cannot upgrade task legitimacy, widen a Work Record, bypass a failed gate, or infer mutation permission from the existence of an executor route.
+## Work Record v1 and PREFLIGHT
 
-## Work Record v1
+`work-record.schema.json` + `contract.cjs` define repository-reconstructible work identity, source authority, task/gate state, read/write authorities, protected/close-sync surfaces, dependencies, base assumptions and stop condition.
 
-`work-record.schema.json` and `contract.cjs` define the reviewed, repository-reconstructible work transaction contract.
-
-Important fields include stable work/objective/scope identity, source authority references, task/gate state, required capability, semantic read/write authorities, protected and close-sync surfaces, dependencies, base assumptions, and stop condition.
-
-Write roles reuse the SimCore SYS-49 semantics:
+Write roles retain the SYS-49 semantics:
 
 - `PRIMARY_WRITE`
 - `SUPPORTING_WRITE`
 - `CLOSE_SYNC_WRITE`
 - `EVIDENCE_WRITE`
 
-## Shadow PREFLIGHT — HARNESS-A1
-
-`preflight.cjs` is pure and side-effect free. It validates Work Records, evaluates startability, compares semantic authority overlap, and emits the SYS-49-compatible dispositions:
+`preflight.cjs` emits SYS-49-compatible dispositions:
 
 - `PARALLEL_SAFE`
 - `PARALLEL_GUARDED`
@@ -44,111 +39,77 @@ Write roles reuse the SimCore SYS-49 semantics:
 - `PARALLEL_NOT_STARTABLE`
 - `PARALLEL_BLOCKED`
 
-Precedence is:
+Precedence: `BLOCKED > NOT_STARTABLE > SERIALIZE_REQUIRED > GUARDED > SAFE`.
 
-`BLOCKED > NOT_STARTABLE > SERIALIZE_REQUIRED > GUARDED > SAFE`
+Different branches/files/scopes never independently prove concurrency safety.
 
-Different branches/files/scopes never independently prove concurrency safety. Invalid or unknown posture fails closed.
+## Active Work discovery + automatic Shadow Scan
 
-## Active Work discovery — HARNESS-A2
+`active-work.cjs` discovers exact `repository-work-record:v1` markers from open, non-PR GitHub issues. Closed/unmarked issues are ignored; malformed records and duplicate active `workId` values fail closed with issue provenance.
 
-`active-work.cjs` discovers repository-visible Work Records from open, non-PR GitHub issues using the exact marker pair:
+`scan.cjs` uses trusted canonical-main GitHub read infrastructure. `.github/workflows/repository-work-harness-shadow.yml` invokes it on issue lifecycle events with read-only `contents: read` + `issues: read` permissions. Exact JSON is retained as an artifact and `report.cjs` renders Actions summary evidence.
 
-~~~~text
-<!-- repository-work-record:v1 -->
-```json
-{ "schemaVersion": 1, "workId": "...", "...": "..." }
-```
-<!-- /repository-work-record:v1 -->
-~~~~
+## Audited executor routing and bounded invocation
 
-Closed/unmarked issues are ignored. Malformed marked records and duplicate active `workId` values fail closed with issue provenance.
+`dispatch.cjs` resolves validated `scopeId + requiredCapability` against `executor-adapters.json` after PREFLIGHT. Dispatch remains routing evidence.
 
-`scan.cjs` is a read-only scan entrypoint using existing canonical-main GitHub read infrastructure. It is not the future general-purpose repository CLI.
-
-## Automatic shadow surfacing — HARNESS-A3
-
-`.github/workflows/repository-work-harness-shadow.yml` runs trusted-default-branch advisory scans on issue open/edit/reopen/close events and manual dispatch.
-
-Its permissions remain read-only (`contents: read`, `issues: read`). Exact scan JSON is uploaded as an artifact and `report.cjs` renders the same evidence into the Actions summary. It does not mutate issues/refs or dispatch project/release executors.
-
-## Audited executor adapters + dry-run DISPATCH — HARNESS-B1
-
-`executor-adapters.json` is a Harness-owned static/audited registry of executor-specific capability envelopes. `.github/plugin-control-plane/registry.json` remains the project/scope ownership authority; the adapter registry must not duplicate release branches, manifests, artifacts, or project authority objects.
-
-`dispatch.cjs` resolves validated `scopeId + requiredCapability` against the audited adapter envelope after PREFLIGHT and emits:
-
-- `DISPATCH_READY`
-- `DISPATCH_READY_WITH_GUARDS`
-- `SERIALIZATION_REQUIRED`
-- `NOT_STARTABLE`
-- `DISPATCH_BLOCKED`
-
-Every B1 dispatch result retains `executionAuthorized: false`. Dispatch is routing evidence, not execution permission.
-
-## Deterministic Executor Handoff + bounded read-only invocation — HARNESS-B2
-
-B2 adds exact capability-to-target `routes` inside each audited adapter. A route declares:
-
-- exact `capability`;
-- `targetKind`: `LOCAL_NODE` or `GITHUB_WORKFLOW`;
-- exact repository `target`;
-- audited `fixedArgs`;
-- `executionClass`: `READ_ONLY` or `MUTATING`;
-- optional `mutationClass`;
-- `invokePolicy`: `READ_ONLY_LOCAL` or `HANDOFF_ONLY`.
-
-Registry validation fails closed when route capability/target metadata escapes its adapter envelope. Any mutating route must name a mutation class already covered by `possibleMutationClasses` and `receiptRequiredFor`, and must remain `HANDOFF_ONLY`.
-
-`handoff.cjs` converts validated Work Record + PREFLIGHT + B1 dispatch + exact route metadata into a deterministic Executor Handoff v1 with a stable SHA-256 `handoffHash`.
-
-Handoff statuses:
-
-- `HANDOFF_EXECUTABLE_READ_ONLY`
-- `HANDOFF_READY`
-- `HANDOFF_READY_WITH_GUARDS`
-- `HANDOFF_BLOCKED`
-
-B2 sets `executionAuthorized: true` only when all of these are true:
-
-1. B1 dispatch is unguarded `DISPATCH_READY`;
-2. exactly one audited route matches the requested capability;
-3. route policy is `READ_ONLY_LOCAL`;
-4. target kind is `LOCAL_NODE`;
-5. execution class is `READ_ONLY`;
-6. `mutationClass` is `null`.
-
-`invoke.cjs` re-plans the handoff from authoritative inputs immediately before execution. It never trusts an arbitrary caller-supplied command. The wrapper executes `process.execPath` against the audited repository target with only the route's audited `fixedArgs`, `shell: false`, a bounded timeout, and bounded output.
-
-The first audited executable route is intentionally narrow:
+`handoff.cjs` binds the validated work/dispatch/route into deterministic Executor Handoff v1. `invoke.cjs` can execute only an audited `READ_ONLY_LOCAL` Node route with fixed arguments. The intentionally narrow live proof is:
 
 ```text
 SIMCORE_HARNESS_SELF_TEST
 → products/simcore/tooling/test.mjs --self-test
 ```
 
-This proves a real existing specialized executor can be invoked through the common Harness without modifying SimCore executor code or granting mutation authority.
+Mutating and workflow routes remain `HANDOFF_ONLY`.
 
-Canonical-main mutation routes, SimCore candidate/state/release routes, and Usage Dashboard workflow routes remain `HANDOFF_ONLY`. Guarded PREFLIGHT also remains non-executable until guards are satisfied and the handoff is recomputed.
+## Coordination Receipt v1 — HARNESS-B3
+
+`receipt.cjs` issues and validates a repository-visible Coordination Receipt only from freshly recomputed, unguarded `STARTABLE + PARALLEL_SAFE` evidence with exact observed refs/bases and audited adapter/project registries.
+
+Receipt markers use:
+
+~~~~text
+<!-- repository-coordination-receipt:v1 -->
+```json
+{ "schemaVersion": 1, "mode": "COORDINATION_RECEIPT", "...": "..." }
+```
+<!-- /repository-coordination-receipt:v1 -->
+~~~~
+
+Receipts bind work/profile/active-set/PREFLIGHT/base/adapter/project/authority evidence. They are not leases and have no hidden time lifetime. Drift invalidates them.
+
+Invariant: every receipt has `mutationAuthorized: false` and `executionAuthorized: false`.
+
+`mutation-boundary.cjs` can prove that an exact mutating handoff has a currently valid required receipt, but a successful result is only coordination readiness. Existing mutation authority is still required and B3/B4 do not spawn or dispatch mutating executors.
+
+## Live receipt revalidation shadow — HARNESS-B4
+
+`receipt-shadow.cjs` pairs each active Work Record with its optional receipt marker and revalidates it from current repository evidence. It emits one of:
+
+- `ABSENT` — active work has no persistent receipt;
+- `VALID` — the receipt still matches fresh work/PREFLIGHT/ref/adapter/project evidence;
+- `STALE` — a previously valid receipt no longer matches current evidence;
+- `INVALID` — malformed, duplicate, unsupported, tampered or otherwise structurally invalid receipt evidence.
+
+`scan.cjs` attaches this as a separate `receiptRevalidation` projection. `report.cjs` shows counts and per-work reason codes.
+
+**B4 does not alter the work concurrency disposition.** A stale/invalid receipt is surfaced as read-only evidence only; it does not itself mutate, block, dispatch, or grant authority.
 
 ## Current non-goals
 
-The current Harness does **not** add:
+The current Harness still does **not** add:
 
-- workflow dispatch through the Harness;
+- mutation enforcement at authoritative writers;
 - mutating executor invocation;
-- persistent coordination receipts;
-- mutation-boundary enforcement;
+- GitHub workflow dispatch through the Harness;
 - a top-level general-purpose repository CLI/default front door;
 - main-write/release/production authority changes;
 - product/runtime behavior changes;
 - global locks or scheduler/prioritizer behavior.
 
-Those require later bounded packets and fresh repository evidence.
+Those require later explicitly activated bounded packets with fresh repository evidence.
 
 ## Tests
-
-Run:
 
 ```sh
 node .github/plugin-control-plane/canonical-main/work-harness/tests/preflight-contract.cjs
@@ -158,4 +119,7 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/workflow-con
 node .github/plugin-control-plane/canonical-main/work-harness/tests/dispatch-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/handoff-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/invoke-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-boundary-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-shadow-contract.cjs
 ```

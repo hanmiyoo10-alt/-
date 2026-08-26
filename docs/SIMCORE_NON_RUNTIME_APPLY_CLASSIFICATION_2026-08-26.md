@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-36 design freeze:
+Current state after SYS-49 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 34
-UNFROZEN                = 18
+FROZEN                  = 35
+UNFROZEN                = 17
 
 NR_DOC_ONLY   = 23
 NR_EXECUTABLE = 7
-NR_PROTECTED  = 4
-NR_UNASSESSED = 18
+NR_PROTECTED  = 5
+NR_UNASSESSED = 17
 ```
 
 Frozen system apply classes:
@@ -217,9 +217,10 @@ SYS-42 Implementation Slice Conformance Checker
 SYS-31 Version-Bump Blast-Radius Check
 SYS-24 Fixture Orphan Detector
 SYS-36 Branch/PR Relationship Auditor
+SYS-49 Safe Parallel Work Finder
 ```
 
-Why SYS-42, SYS-31, SYS-24, and SYS-36 are protected:
+Why SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected:
 
 ```text
 SYS-42
@@ -233,6 +234,9 @@ SYS-24
 
 SYS-36
 = read-only/non-runtime relationship auditor whose purpose is to police branch/PR/base/head/merge/ancestry governance facts that can feed protected repository/release decisions
+
+SYS-49
+= read-only/non-runtime parallel-safety evaluator whose purpose is to police concurrent work across shared repository refs, semantic authorities, exact-base transactions, production/live evidence windows, and protected governance surfaces
 
 → all require dedicated protected implementation transactions
 ```
@@ -289,7 +293,7 @@ None changes CI, release, repository-writer, runtime, or architecture-policy aut
 SYS-07 is local/no-network and explicitly does not verify GitHub-side branch/PR relationships or auto-repair references.
 ```
 
-Why SYS-24 and SYS-36 are protected rather than ordinary executable:
+Why SYS-24, SYS-36, and SYS-49 are protected rather than ordinary executable:
 
 ```text
 SYS-24
@@ -305,8 +309,15 @@ explicit relationship audit mode
 + fixed-SHA relationship facts
 → deterministic branch/PR relationship findings
 
-Both algorithms can remain read-only.
-But the policies they police are fixture-authority membership and branch/repository governance respectively.
+SYS-49
+2+ independently legitimate tasks
++ reviewed semantic read/write/dependency profiles
++ current SYS-36 relationship facts when material
++ frozen parallel conflict/guard rules
+→ deterministic pairwise/group parallel-safety findings
+
+All three algorithms can remain read-only.
+But the policies they police are fixture-authority membership, branch/repository relationships, and shared repository/work concurrency respectively.
 The canonical NR model explicitly places those governance surfaces in NR_PROTECTED.
 ```
 
@@ -323,8 +334,8 @@ CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 25
 NR_EXECUTABLE  = 12
-NR_PROTECTED   = 5
-NR_UNASSESSED  = 24
+NR_PROTECTED   = 6
+NR_UNASSESSED  = 23
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -337,7 +348,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 6 gate-open NOW designs remain after SYS-36 freeze
+= 5 gate-open NOW designs remain after SYS-49 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -468,6 +479,7 @@ SYS-42 = frozen NR_PROTECTED architecture-governance checker
 SYS-31 = frozen NR_PROTECTED release-governance blast-radius checker
 SYS-24 = frozen NR_PROTECTED fixture-authority orphan detector
 SYS-36 = frozen NR_PROTECTED branch/PR relationship auditor
+SYS-49 = frozen NR_PROTECTED safe-parallel-work evaluator
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit

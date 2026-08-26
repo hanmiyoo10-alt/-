@@ -1,8 +1,8 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
 
-Purpose: track design-freeze completion and SAFE_NON_RUNTIME harvest state after the canonical NON_RUNTIME / RUNTIME queue split.
+Purpose: track design-freeze completion, apply classifications, and SAFE_NON_RUNTIME harvest state after the canonical NON_RUNTIME / RUNTIME queue split.
 
 Authority split:
 
@@ -22,6 +22,15 @@ SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md
 SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md
 = NR-lane difficulty-tier harvest rule
 
+SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md
+= R document-only applicability authority
+
+SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md
+= NR implementation-form authority
+
+SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md
+= current design-first operating priority
+
 THIS LEDGER
 = current design + implementation completion history
 ```
@@ -32,19 +41,15 @@ Canonical rules:
 SELECT
 → COMPLETE FULL DESIGN
 → DESIGN FROZEN
+→ freeze-time apply classification
 → STOP DESIGN WORK
 
-all currently designable NR items in Difficulty N frozen
-→ NR Difficulty N CLOSED
-→ strict SAFE_NON_RUNTIME review
-→ separate bounded implementation per item
-→ static/CI verification appropriate to artifact
-→ main evidence sync
-→ no plugin version bump
-→ no release-simcore
-```
+RUNTIME core
+→ PARKED until stabilization
 
-RUNTIME ideas remain independent and parked until the later stabilization/implementation phase.
+NON_RUNTIME closed tier + SAFE_NON_RUNTIME PASS
+→ separate bounded implementation
+```
 
 ---
 
@@ -57,6 +62,7 @@ Importance: 5
 Difficulty: 1
 Design: FROZEN
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
+Apply class: NR_DOC_ONLY
 Materialized/generated view: docs/SIMCORE_EVIDENCE_INDEX.md
 Evidence: docs/SIMCORE_S09_EVIDENCE_INDEX_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 PR: #394
@@ -73,6 +79,7 @@ Importance: 5
 Difficulty: 2
 Design: FROZEN
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
+Apply class: NR_EXECUTABLE
 Tool: products/simcore/tooling/authority-drift-check.mjs
 Evidence: docs/SIMCORE_S10_AUTHORITY_DRIFT_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 PR: #396
@@ -88,6 +95,7 @@ Importance: 3
 Difficulty: 2
 Design: FROZEN
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
+Apply class: NR_EXECUTABLE
 Tool: products/simcore/tooling/stale-pr-hygiene.mjs
 Evidence: docs/SIMCORE_S11_STALE_PR_HYGIENE_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 PR: #398
@@ -103,6 +111,7 @@ Importance: 4
 Difficulty: 2
 Design: FROZEN
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
+Apply class: NR_DOC_ONLY
 Materialized: docs/SIMCORE_NATURAL_EVIDENCE_CORPUS_INDEX.md
 Evidence: docs/SIMCORE_S12_NATURAL_EVIDENCE_CORPUS_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 PR: #399
@@ -117,6 +126,7 @@ Runtime/release change: NONE
 Importance: 5
 Difficulty: 3
 Design: FROZEN
+Apply class: NR_EXECUTABLE
 Design doc: docs/SIMCORE_ARCHITECTURE_DEPENDENCY_SNAPSHOT_GENERATOR_DESIGN.md
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
 Tool: scripts/simcore-architecture-check.py --snapshot-out <path>
@@ -148,6 +158,7 @@ second parser / second validator / auto-repair / new CI gate
 Importance: 4
 Difficulty: 3
 Design: FROZEN
+Apply class: NR_EXECUTABLE
 Design doc: docs/SIMCORE_LIVE_DIAGNOSTIC_FIXTURE_SKELETON_GENERATOR_DESIGN.md
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
 Tool: products/simcore/tooling/fixture-skeleton.mjs
@@ -173,22 +184,13 @@ reviewed bounded live-fixture source descriptor
 → explicit suite-owner promotion remains separate
 ```
 
-Hard boundaries remain:
-
-```text
-direct fixture-v1 generation = FORBIDDEN
-goldenGate / required authority = FORBIDDEN
-registry mutation = FORBIDDEN
-raw live body retention = FORBIDDEN
-semantic inference = FORBIDDEN
-```
-
 ### M-13 — Evidence Index Generator
 
 ```text
 Importance: 4
 Difficulty: 3
 Design: FROZEN
+Apply class: NR_EXECUTABLE
 Design doc: docs/SIMCORE_EVIDENCE_INDEX_GENERATOR_DESIGN.md
 Implementation: SAFE_NON_RUNTIME_IMPLEMENTED
 Curation source: products/simcore/evidence/evidence-index-source-v1.json
@@ -217,31 +219,131 @@ docs/SIMCORE_EVIDENCE_INDEX.md
 = generated navigation view
 ```
 
-M-13 does not discover evidence, infer Owner/Status, select latest evidence, reconcile semantic contradictions, or modify fixture/release authority.
-
 ---
 
 ## 2. Runtime frozen / parked designs
 
-```text
-S-02 Diagnostic Quick Summary       FROZEN / PARKED_FOR_STABILIZATION
-S-04 Live Evidence Packet Builder   FROZEN / PARKED_FOR_STABILIZATION
-S-01 MINI_WARNING_WIDGET_V1         FROZEN / PARKED_FOR_STABILIZATION
-```
-
-Current open R design queue remains:
+### S-02 — Diagnostic Quick Summary
 
 ```text
-1. S-03 Diagnostic Copy Profiles
-2. S-07 Host Capability Receipt
-3. S-08 History Frontier Confidence Surface
+Importance: 5
+Difficulty: 1
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_NOT_REQUIRED
+Design doc: docs/SIMCORE_DIAGNOSTIC_QUICK_SUMMARY_DESIGN.md
 ```
 
-No runtime implementation is authorized by NR harvest completion.
+### S-04 — Live Evidence Packet Builder
+
+```text
+Importance: 5
+Difficulty: 2
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_APPLICABLE
+Future prep: repository evidence-review / classification-handoff template
+Design doc: docs/SIMCORE_LIVE_EVIDENCE_PACKET_BUILDER_DESIGN.md
+```
+
+The S-04 prep queue remains held until the current design sweep closes.
+
+### S-01 — MINI_WARNING_WIDGET_V1
+
+```text
+Importance: 4
+Difficulty: 2
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_NOT_REQUIRED
+Design doc: docs/SIMCORE_MINI_WARNING_WIDGET_V1_DESIGN.md
+```
+
+### S-03 — Diagnostic Copy Profiles
+
+```text
+Importance: 3
+Difficulty: 2
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_NOT_REQUIRED
+Design doc: docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md
+Design commit: d3928cf6d5797bf1010bf36fa7842b9edd9ad8b8
+Open design questions: 0
+Runtime/release change: NONE
+```
+
+Frozen v1 profile set:
+
+```text
+FULL_CURRENT
+COMPACT_CURRENT
+COMPACT_PAIR
+```
+
+Critical S-03 boundaries:
+
+```text
+FULL_CURRENT
+= existing full-report bytes / compatibility default
+
+COMPACT_CURRENT
+= one coherent observation
+= eight bounded semantic groups
+
+COMPACT_PAIR
+= immediately previous finalized observation + current finalized observation
+= independent observation identity/revision per half
+= no cross-turn field merge
+= at most two bounded in-memory diagnostic projections
+= no SnapshotStore/pluginStorage persistence
+= no history rescan solely to reconstruct previous
+
+EVIDENCE profile
+= FORBIDDEN
+= S-04 remains a separate evidence-transfer product
+
+copy transport
+= build selected payload once
+→ primary/fallback reuse exact same immutable bytes
+```
+
+Doc Apply verdict:
+
+```text
+DOC_NOT_REQUIRED
+```
+
+because the frozen design itself already records the reusable profile field/pair/transport contract; a second pre-runtime document would duplicate it.
 
 ---
 
-## 3. NR difficulty-tier harvest state
+## 3. Current R design sweep
+
+Completed in current sweep:
+
+```text
+S-03 Diagnostic Copy Profiles
+→ DESIGN FROZEN
+→ DOC_NOT_REQUIRED
+```
+
+Remaining gate-open R designs:
+
+```text
+1. S-07 Host Capability Receipt
+2. S-08 History Frontier Confidence Surface
+```
+
+No runtime implementation is authorized by design completion.
+
+---
+
+## 4. NR difficulty-tier harvest state
 
 ### NR Difficulty 1 — CLOSED / HARVEST COMPLETE
 
@@ -259,8 +361,6 @@ S-12 → FROZEN → IMPLEMENTED
 
 ### NR Difficulty 3 — CLOSED / HARVEST COMPLETE
 
-Currently designable bounded pool:
-
 ```text
 M-11 → FROZEN → SAFE_NON_RUNTIME_IMPLEMENTED
 M-10 → FROZEN → SAFE_NON_RUNTIME_IMPLEMENTED
@@ -275,25 +375,6 @@ NR_DIFFICULTY_3_SAFE_NON_RUNTIME_HARVEST = COMPLETE
 NR_DIFFICULTY_3_HARVEST_QUEUE = EMPTY
 ```
 
-Implementation transactions:
-
-```text
-M-11
-work/m11-architecture-snapshot-harvest
-→ PR #406
-→ main 7203b1c7f3292e1a636c01db6833b5fb0c2816bb
-
-M-10
-work/m10-fixture-skeleton-harvest
-→ PR #407
-→ main 873b3df323789d447d0973ce4051cfdbf0eb4d38
-
-M-13
-work/m13-evidence-index-generator-harvest
-→ PR #408
-→ main 534cfbea9142988913fae5dbcabb322a892192e0
-```
-
 Gated Difficulty-3 items remain outside this bounded harvest:
 
 ```text
@@ -302,11 +383,11 @@ M-14 R2.1 genuine-release-proof dependency
 M-15 POST_M2_3
 ```
 
-When one of those gates later opens it begins a new incremental Difficulty-3 design/harvest cycle; it does not invalidate this completed bounded cycle.
+When one gate later opens it begins a new incremental design/harvest cycle.
 
 ---
 
-## 4. Verification WATCH preservation
+## 5. Verification WATCH preservation
 
 Central current WATCH:
 
@@ -328,31 +409,34 @@ M-10 focused standalone test direct CI execution = NOT CLAIMED
 M-13 focused standalone test / --check direct CI execution = NOT CLAIMED
 ```
 
-This WATCH does not authorize CI/release-system changes inside the completed harvest items.
-
 S-10/S-11 retain their earlier standalone tooling-test discovery WATCH for the same general repository limitation.
+
+No new anomaly was discovered during S-03 design.
 
 ---
 
-## 5. Current NR/R queue
+## 6. Current NR/R queue
 
 ```text
 NR
-current open design in bounded Difficulty-1/2/3 pool = NONE
+current open design = NONE
 current harvest queue = EMPTY
-next NR = wait for an explicit gate to open or select a future/protected NR item under its own gate
+next NR = wait for a legitimate gate to open
 
-R
-next design = S-03 Diagnostic Copy Profiles
-then S-07 Host Capability Receipt
-then S-08 History Frontier Confidence Surface
+R DESIGN SWEEP
+S-03 = FROZEN
+NEXT = S-07 Host Capability Receipt
+THEN = S-08 History Frontier Confidence Surface
+
+R DOC APPLY
+S-04 = DOC_APPLICABLE / HOLD UNTIL SWEEP CLOSE
 ```
 
 High-value gated designs remain gated regardless of importance.
 
 ---
 
-## 6. Production boundary
+## 7. Production boundary
 
 Current production authority remains:
 
@@ -363,30 +447,31 @@ release blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
 live gate = PENDING_REAL_LONG_CHAT
 ```
 
-Difficulty-3 harvest result:
+S-03 design result:
 
 ```text
 RUNTIME CHANGE       = NONE
 PLUGIN VERSION       = NONE
 latest.js/install.js = UNCHANGED
 release-simcore      = UNCHANGED
-REAL LONG-CHAT       = NOT REQUIRED FOR THESE NR IMPLEMENTATIONS
+REAL LONG-CHAT       = NOT RUN / NOT REQUIRED FOR DESIGN
 ```
 
 ---
 
-## 7. Current verdict
+## 8. Current verdict
 
 ```text
 NR Difficulty 1 = CLOSED / HARVEST COMPLETE
 NR Difficulty 2 = CLOSED / HARVEST COMPLETE
 NR Difficulty 3 = CLOSED / HARVEST COMPLETE
 
-M-11 = SAFE_NON_RUNTIME_IMPLEMENTED
-M-10 = SAFE_NON_RUNTIME_IMPLEMENTED
-M-13 = SAFE_NON_RUNTIME_IMPLEMENTED
+S-03 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
 
-NR ACTIVE DESIGN = NONE in current bounded Difficulty-1/2/3 pool
-NR HARVEST QUEUE = EMPTY
-R NEXT DESIGN = S-03
+CURRENT DESIGN SWEEP
+NEXT = S-07
+THEN = S-08
+
+CURRENT R DOC APPLY QUEUE
+S-04 (held until sweep close)
 ```

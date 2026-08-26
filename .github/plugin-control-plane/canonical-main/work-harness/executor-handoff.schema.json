@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://canonical-main.local/work-harness/executor-handoff-v1.schema.json",
+  "title": "Repository Work Harness Executor Handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mode", "workId", "scopeId", "requiredCapability", "dispatchStatus", "preflightDisposition", "status", "adapterId", "route", "guards", "reasonCodes", "executionAuthorized", "legalNextAction", "handoffHash"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "mode": {"const": "EXECUTOR_HANDOFF"},
+    "workId": {"type": ["string", "null"]},
+    "scopeId": {"type": ["string", "null"]},
+    "requiredCapability": {"type": ["string", "null"]},
+    "dispatchStatus": {"type": ["string", "null"]},
+    "preflightDisposition": {"type": ["string", "null"]},
+    "status": {"type": "string", "enum": ["HANDOFF_EXECUTABLE_READ_ONLY", "HANDOFF_READY", "HANDOFF_READY_WITH_GUARDS", "HANDOFF_BLOCKED"]},
+    "adapterId": {"type": ["string", "null"]},
+    "route": {"type": ["object", "null"]},
+    "guards": {"type": "array", "items": {"type": "string"}},
+    "reasonCodes": {"type": "array", "items": {"type": "string"}},
+    "executionAuthorized": {"type": "boolean"},
+    "legalNextAction": {"type": "string"},
+    "handoffHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

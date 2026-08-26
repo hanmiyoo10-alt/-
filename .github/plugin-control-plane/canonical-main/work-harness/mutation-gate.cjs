@@ -12,14 +12,18 @@ function blocked(reasonCodes, legalNextAction = 'FIX_COORDINATION_EVIDENCE_AND_R
   return {
     schemaVersion: 1,
     mode: 'MUTATION_GATE',
+    ...details,
     status: 'MUTATION_GATE_BLOCKED',
     coordinationReady: false,
     mutationAuthorized: false,
     executionAuthorized: false,
     reasonCodes: [...new Set(reasonCodes)].sort(),
     legalNextAction,
-    ...details,
   };
+}
+
+function exitCodeFor(result) {
+  return result && result.status === 'MUTATION_GATE_READY' ? 0 : 3;
 }
 
 function targetWork(discovery, issueNumber) {
@@ -140,7 +144,7 @@ async function main() {
     const args = parseArgs();
     const result = await run(args);
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    process.exitCode = result.status === 'MUTATION_GATE_READY' ? 0 : 3;
+    process.exitCode = exitCodeFor(result);
   } catch (error) {
     process.stdout.write(`${JSON.stringify(blocked(['MUTATION_GATE_RUNTIME_ERROR'], 'FIX_GATE_RUNTIME_INPUT', {
       error: error && error.message ? error.message : String(error),
@@ -151,4 +155,4 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { blocked, evaluateMutationGate, main, parseArgs, run, targetWork };
+module.exports = { blocked, evaluateMutationGate, exitCodeFor, main, parseArgs, run, targetWork };

@@ -22,3 +22,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/463)
 - Event ID: `1efe4b80113b1224147877eb8b3314341057a0206ae1ff4d38b4e287a001444f`
 <!-- canonical-main-doc-promoted:1efe4b80113b1224147877eb8b3314341057a0206ae1ff4d38b4e287a001444f -->
+
+### 2026-08-26 — Canonical Main Work Decomposition System
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/467)
+- Event ID: `cd00586f76eddaae1e9e1e9ad1a02f4b3d729e5cb369f9656f303c771c6b38ca`
+<!-- canonical-main-doc-promoted:cd00586f76eddaae1e9e1e9ad1a02f4b3d729e5cb369f9656f303c771c6b38ca -->

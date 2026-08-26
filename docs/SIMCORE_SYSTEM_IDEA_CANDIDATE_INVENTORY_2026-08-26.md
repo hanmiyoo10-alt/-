@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 8 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 9 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -73,7 +73,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-47 | User Handoff Card | Workflow | SMALL | 4 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-48 | Gate-Blocked Reason Surface | Workflow | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-49 | Safe Parallel Work Finder | Workflow | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-50 | Work Bundling Conflict Detector | Workflow | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-50 | Work Bundling Conflict Detector | Workflow | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-51 | Close-Step Trigger Matrix | Workflow | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-52 | Operator Error Specimen Ledger | Workflow | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 
@@ -88,20 +88,21 @@ SYS-10 → docs/SIMCORE_SYS10_STALE_NEXT_ACTION_SCANNER_DESIGN.md
 SYS-48 → docs/SIMCORE_SYS48_GATE_BLOCKED_REASON_SURFACE_DESIGN.md
 SYS-03 → docs/SIMCORE_SYS03_GATE_DEPENDENCY_GRAPH_DESIGN.md
 SYS-09 → docs/SIMCORE_SYS09_CHANGE_IMPACT_REVIEW_MAP_DESIGN.md
+SYS-50 → docs/SIMCORE_SYS50_WORK_BUNDLING_CONFLICT_DETECTOR_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 8
-UNFROZEN             = 44
-OPEN NOW             = 32
+FROZEN               = 9
+UNFROZEN             = 43
+OPEN NOW             = 31
 GATED / DEPENDENCY   = 12
 
 NR_DOC_ONLY   = 6
-NR_EXECUTABLE = 2
-NR_UNASSESSED = 44
+NR_EXECUTABLE = 3
+NR_UNASSESSED = 43
 ```
 
 ## Canonical selection
@@ -124,6 +125,7 @@ SYS-10 = I5 D2 / FROZEN / NR_EXECUTABLE
 SYS-48 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-03 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-09 = I5 D3 / FROZEN / NR_DOC_ONLY
+SYS-50 = I5 D3 / FROZEN / NR_EXECUTABLE
 ```
 
 Remaining I5 / D3 / NOW:
@@ -138,16 +140,15 @@ SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
 SYS-42 Implementation Slice Conformance Checker
-SYS-50 Work Bundling Conflict Detector
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-50 Work Bundling Conflict Detector
+NEXT = SYS-42 Implementation Slice Conformance Checker
 ```
 
-Reason: SYS-09 now defines additive semantic change families and explicitly exposes risky combinations such as runtime+release-system or fixture+CI-authority. SYS-50 can next freeze the preflight rule that turns those combinations into split-work requirements before later implementation-conformance and blast-radius checks consume them.
+Reason: SYS-09 now identifies semantic impact families and SYS-50 prevents forbidden objective bundling before implementation. SYS-42 is the strongest next downstream control: verify that an actual implementation stays inside the frozen allowed/forbidden slice of the selected design without re-deciding design semantics.
 
 ## Non-duplication boundaries
 
@@ -158,14 +159,15 @@ natural specimen registry → S-12
 PR stale classification → S-11
 architecture parsing/contracts → existing architecture checker
 release publication → existing permanent release authority
-permanent CI path routing → RS2-3B classifier; SYS-09 does not replace it
+permanent CI path routing → RS2-3B classifier
 RT semantics → Real-Time Close-Step parent design
 close trigger selection → SYS-51
 one-work closure summary → SYS-08
 stale NEXT detection → SYS-10
 gate-blocked explanation → SYS-48
 direct gate review dependency lookup → SYS-03
-change-family → review obligations → SYS-09; no automatic classifier/result/writer
+change-family → review obligations → SYS-09
+work-family/role bundling preflight → SYS-50; no path classification, auto split, PR creation, or gate authorization
 ```
 
 Application/implementation remains a separate transaction and is held while the current system design sweep is active.

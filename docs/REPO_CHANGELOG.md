@@ -123,6 +123,13 @@
 - Event ID: `05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0`
 <!-- canonical-main-doc-promoted:05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `6781ce38120d06e20b1dcbfaf2ddb334d0e7a0f22e22111c66f09697da3e2313`
+<!-- canonical-main-doc-promoted:6781ce38120d06e20b1dcbfaf2ddb334d0e7a0f22e22111c66f09697da3e2313 -->
+
 ### 2026-08-26 — infra: add canonical-main work decomposition system
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -202,3 +209,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6dce326d48942ccfe03ce6e10f46e233b128321d)
 - Event ID: `e8e7e72caeb8248093de6c1c814e5eaf8e5e2f3b8e3f5071dd19cbb214dce236`
 <!-- canonical-main-doc-promoted:e8e7e72caeb8248093de6c1c814e5eaf8e5e2f3b8e3f5071dd19cbb214dce236 -->
+
+### 2026-08-27 — test(harness): drive B6 canary from issue edits
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `cd1a9b6b72924523e525504b45ab210a63bbcdf0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cd1a9b6b72924523e525504b45ab210a63bbcdf0)
+- Event ID: `d02da339b4ffcfbb16f967aba139e1bf74b4d1c65f349bf6b06231fc2f6bda58`
+<!-- canonical-main-doc-promoted:d02da339b4ffcfbb16f967aba139e1bf74b4d1c65f349bf6b06231fc2f6bda58 -->

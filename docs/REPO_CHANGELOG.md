@@ -108,3 +108,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7cbbe97dfccda7efa4f8bee02b8ff9e917e0a013)
 - Event ID: `05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0`
 <!-- canonical-main-doc-promoted:05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0 -->
+
+### 2026-08-26 — infra: add canonical-main work decomposition system
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2453a6e91e6966b8960efe6a619c8886c234b309`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2453a6e91e6966b8960efe6a619c8886c234b309)
+- Event ID: `3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52`
+<!-- canonical-main-doc-promoted:3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52 -->

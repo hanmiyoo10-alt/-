@@ -3,13 +3,14 @@
 const {correlationKey} = require('../core/event.cjs');
 const {severityFor} = require('../core/severity.cjs');
 const {previousIncidentState, buildAlertEnvelope} = require('../notification.cjs');
+const {parseIncidentMetrics} = require('./incident-metrics.cjs');
 
 function incidentFromIssue(issue) {
   const labels = (issue.labels || []).map((label) => typeof label === 'string' ? label : label.name);
   if (!labels.includes('control-plane:incident')) return null;
   const severityLabel = labels.find((label) => /^severity:P[0-3]$/.test(label));
   const state = labels.includes('incident:recovered') ? 'RECOVERED' : labels.includes('incident:open') ? 'OPEN' : 'UNKNOWN';
-  return {issue, severity: severityLabel ? severityLabel.split(':')[1] : 'P2', state};
+  return {issue, severity: severityLabel ? severityLabel.split(':')[1] : 'P2', state, metrics: parseIncidentMetrics(issue.body || '')};
 }
 function eventTransition(event) {
   if (event.disposition === 'RECOVERY_FEEDBACK_CANDIDATE') return 'RECOVERED';

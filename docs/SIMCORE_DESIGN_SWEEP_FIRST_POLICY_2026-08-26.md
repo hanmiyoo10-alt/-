@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 15 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 16 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -84,14 +84,17 @@ SYS-22 Test Intent Manifest
 
 SYS-21 Forensic Classification Consistency Check
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-38 Architecture Contract Diff Reporter
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 15
-OPEN NOW            = 25
+FROZEN              = 16
+OPEN NOW            = 24
 GATED/DEPENDENCY    = 12
 ```
 
@@ -101,24 +104,21 @@ Current highest-priority open edge:
 I5 / D3 / NOW
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
-SYS-38 Architecture Contract Diff Reporter
 ```
 
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-38 Architecture Contract Diff Reporter
+NEXT = SYS-31 Version-Bump Blast-Radius Check
 ```
 
 Reason:
-- SYS-13 defines proof-kind × claim-kind scope and prevents proof substitution;
-- SYS-17 defines explicit bounded evidence-slot completeness;
-- SYS-22 defines semantic test intent/non-claims;
-- SYS-21 now verifies human forensic classification consistency without auto severity mutation;
-- the next physical architecture work after the v0.64.7 live gate is M2-3 Edit Reconcile extraction;
-- SYS-38 is therefore the strongest immediate next layer: make architecture contract deltas reviewable before/after ownership extraction while preserving the existing Contracts v2 checker as authority.
+- SYS-38 now freezes deterministic before/after architecture delta reporting over M-11 snapshots and machine Contracts v2 without becoming another checker;
+- the next physical runtime architecture work after the v0.64.7 live gate is M2-3, which necessarily creates a new version/release boundary;
+- SYS-31 can therefore freeze the required version-bump blast-radius review before the next genuine runtime release;
+- SYS-35 remains broader transaction-history infrastructure and can follow the already frozen close/receipt/release-boundary controls.
 
-After SYS-38 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
+After SYS-31 freezes, recompute the remaining edge rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -138,6 +138,7 @@ SYS-13 application     = HOLD
 SYS-17 implementation  = HOLD
 SYS-22 application     = HOLD
 SYS-21 application     = HOLD
+SYS-38 implementation  = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
@@ -146,7 +147,7 @@ SYS-42 is additionally `NR_PROTECTED`; its eventual implementation must be a ded
 
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate, bundling, conformance, audit, proof, slot, test-intent, and forensic-consistency discipline
+## 5. Gate, bundling, conformance, audit, proof, slot, test-intent, forensic-consistency, and architecture-delta discipline
 
 Closed gates still override scores:
 
@@ -168,6 +169,7 @@ SYS-13 prohibits proof substitution: generic CI PASS does not establish focused-
 SYS-17 analyzes only explicitly registered evidence slots for one selected bounded scope. Unregistered absence is not a gap, future-scope evidence is not a current blocker, and `EVIDENCE_SLOTS_CLEAR` never closes a gate by itself.
 SYS-22 owns reviewed semantic test intent only. `INTENT_DEFINED` does not prove execution/pass, satisfy an evidence slot, alter permanent registry/harness policy, or promote deterministic proof into live/release proof.
 SYS-21 reviews whether a current forensic classification remains inside cited evidence/proof/impact/attribution/recurrence boundaries. It reports over-promotion or under-classification but never auto-changes WATCH / DEFER / FIX / BLOCKER, discovers recurrence, closes gates, or mutates source authorities.
+SYS-38 reports exact bounded architecture differences only. `ARCH_DIFF_PRESENT` means only that compared machine architecture surfaces differ; it is not an architecture approval, SYS-42 conformance result, SYS-11 semantic-drift result, runtime regression, or release authorization.
 
 Standing split rules remain preserved, including:
 - runtime/feature change separate from CI/release/repository-system redesign;
@@ -175,7 +177,8 @@ Standing split rules remain preserved, including:
 - design freeze separate from its implementation/application;
 - newly attributed evidence separate from speculative repair;
 - genuine release publication separate from release-system redesign;
-- protected SYS-42 implementation separate from the product/architecture implementation it later checks.
+- protected SYS-42 implementation separate from the product/architecture implementation it later checks;
+- SYS-38 implementation separate from any change to architecture checker policy or permanent CI wiring.
 
 ## 6. Production boundary
 
@@ -192,7 +195,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22 + SYS-21
-CURRENT NEXT DESIGN = SYS-38 Architecture Contract Diff Reporter
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22 + SYS-21 + SYS-38
+CURRENT NEXT DESIGN = SYS-31 Version-Bump Blast-Radius Check
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

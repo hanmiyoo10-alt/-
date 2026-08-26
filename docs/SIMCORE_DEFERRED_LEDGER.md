@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 36/52 designs FROZEN; scoped next design = SYS-25 Golden Fixture Mutation Receipt
+System-idea sweep state: 37/52 designs FROZEN; scoped next design = SYS-15 WATCH Aging Review
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -431,7 +431,51 @@ Cross-family recurrence/correlation remains separate from family identity. Share
 
 SYS-16 does not change the immediate-capture rule: preserve the first suspicious specimen before recurrence exists. It also does not mutate WATCH/DEFER/FIX/BLOCKER automatically; owning anomaly/gate authorities may re-review disposition when recurrence materially changes the evidence.
 
-Current application remains HOLD while the system design sweep is active. A later document-only application may materialize `docs/SIMCORE_ANOMALY_RECURRENCE_INDEX.md`. The scoped next system design is SYS-25 Golden Fixture Mutation Receipt.
+Current application remains HOLD while the system design sweep is active. A later document-only application may materialize `docs/SIMCORE_ANOMALY_RECURRENCE_INDEX.md`.
+
+### Golden Fixture Mutation Receipt design
+
+Status: `SYS-25 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
+
+SYS-25 now freezes point-in-time accountability for intentional mutations of established permanent golden fixtures.
+
+Frozen contract:
+
+```text
+reviewed permanent golden-fixture mutation
++ exact before/after fixture identities
++ source-backed semantic mutation basis
++ bounded case/test-intent/negative-control impact
++ exact post-mutation verification refs
+→ immutable golden-fixture mutation receipt
+```
+
+Primary anti-greenwashing rule:
+
+```text
+implementation changed / test failed
+→ expected fixture changed to restore green
+!= legitimate mutation basis
+```
+
+An expected-value change must resolve one of two source-backed directions:
+
+```text
+A. owning semantic contract changed first
+→ fixture follows the new reviewed authority
+
+B. owning semantic contract stayed the same
++ evidence proves the fixture expectation was wrong
+→ fixture defect correction
+```
+
+If neither direction is established, the receipt state is `MUTATION_RECEIPT_BLOCKED` rather than a fabricated clean record.
+
+Case removal also requires explicit replacement/supersession/move/debt disposition, and every affected SYS-22 test-intent / SYS-23 negative-control boundary must be reviewed. A post-mutation permanent-harness PASS remains deterministic proof only; it does not establish natural LIVE_PASS, coverage completeness, release readiness or runtime semantic authorization.
+
+SYS-25 v1 is prospective `NR_DOC_ONLY`: later application may materialize `docs/SIMCORE_GOLDEN_FIXTURE_MUTATION_RECEIPT_TEMPLATE.md`, while the actual fixture mutation remains a separate fixture-authority transaction. Historical initial fixture creation does not need fake retrospective mutation receipts.
+
+Current application remains HOLD while the system design sweep is active. SYS-25 closes the I4/D3/NOW edge. The scoped next system design is SYS-15 WATCH Aging Review.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -686,7 +730,7 @@ SYS-16 recurrence posture is supporting evidence for such review, not an automat
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 36/52 system designs are currently FROZEN and the scoped next design is SYS-25 Golden Fixture Mutation Receipt. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 37/52 system designs are currently FROZEN and the scoped next design is SYS-15 WATCH Aging Review. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

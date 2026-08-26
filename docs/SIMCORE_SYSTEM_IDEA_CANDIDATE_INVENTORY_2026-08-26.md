@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 28 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 29 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -75,7 +75,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-49 | Safe Parallel Work Finder | Workflow | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-50 | Work Bundling Conflict Detector | Workflow | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-51 | Close-Step Trigger Matrix | Workflow | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
-| SYS-52 | Operator Error Specimen Ledger | Workflow | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-52 | Operator Error Specimen Ledger | Workflow | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 
 Frozen design authorities:
 
@@ -108,21 +108,22 @@ SYS-28 → docs/SIMCORE_SYS28_VERIFICATION_DEBT_INDEX_DESIGN.md
 SYS-23 → docs/SIMCORE_SYS23_NEGATIVE_CONTROL_REGISTRY_DESIGN.md
 SYS-33 → docs/SIMCORE_SYS33_ROLLBACK_READINESS_CHECKLIST_DESIGN.md
 SYS-24 → docs/SIMCORE_SYS24_FIXTURE_ORPHAN_DETECTOR_DESIGN.md
+SYS-52 → docs/SIMCORE_SYS52_OPERATOR_ERROR_SPECIMEN_LEDGER_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 28
-UNFROZEN             = 24
-OPEN NOW             = 12
+FROZEN               = 29
+UNFROZEN             = 23
+OPEN NOW             = 11
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 19
+NR_DOC_ONLY   = 20
 NR_EXECUTABLE = 6
 NR_PROTECTED  = 3
-NR_UNASSESSED = 24
+NR_UNASSESSED = 23
 ```
 
 ## Canonical selection
@@ -165,6 +166,7 @@ SYS-28 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-23 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-33 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-24 = I4 D2 / FROZEN / NR_PROTECTED
+SYS-52 = I4 D2 / FROZEN / NR_DOC_ONLY
 ```
 
 Selection drift note:
@@ -179,17 +181,24 @@ SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 Highest-priority open edge now:
 
 ```text
-I4 / D2 / NOW
-SYS-52 Operator Error Specimen Ledger
+I4 / D3 / NOW
+SYS-06 Evidence-to-Decision Trace Map
+SYS-07 Cross-Reference Integrity Auditor
+SYS-14 Evidence Freshness Ledger
+SYS-16 Anomaly Recurrence Correlator
+SYS-18 Evidence Provenance Chain Receipt
+SYS-25 Golden Fixture Mutation Receipt
+SYS-36 Branch/PR Relationship Auditor
+SYS-49 Safe Parallel Work Finder
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-52 Operator Error Specimen Ledger
+NEXT = SYS-06 Evidence-to-Decision Trace Map
 ```
 
-Reason: SYS-24 closes the previously omitted I4/D2 fixture-authority integrity design and restores the selection ledger to the actual classification table. SYS-52 is now genuinely the final remaining gate-open I4/D2 design. After SYS-52, recompute the I4/D3 edge rather than assuming ordering.
+Reason: SYS-52 closes the final I4/D2/NOW design and freezes process-error specimen memory. The remaining highest-importance open edge is I4/D3. SYS-06 has the strongest cross-family downstream leverage because an explicit evidence→decision trace layer can support later provenance/freshness work (SYS-18/SYS-14), reduce ambiguity for cross-reference integrity review (SYS-07), and connect already-frozen proof/debt/decision authorities without inventing new proof or current-state authority. The full I4/D3/NOW edge is enumerated above to prevent silent candidate omission.
 
 ## Non-duplication boundaries
 
@@ -228,9 +237,10 @@ explicit verification obligation/WATCH + current proof state + due posture + sou
 reviewed bounded precondition + forbidden semantic outcome + owner authority + enforcement/evidence refs → curated negative-control registry → SYS-23; no test runner, Boolean inverse generation, absence-as-proof, automatic fixture creation, fuzzing, gate/severity authority, repo writer, release authority, or runtime behavior
 current production identity + reviewed release intent + exact eligible rollback source/authority + evidence/admin-recovery plan → rollback-readiness disposition → SYS-33; no rollback execution, source auto-selection, ref rewind/force, release authorization, candidate verification replacement, publication, state writer, LIVE_PASS promotion, or R2.1 proof closure
 registry-owned permanent-suite graph + bounded suite/fixture namespaces → exact missing/unregistered/duplicate/out-of-scope membership findings → SYS-24; no repo-wide test discovery, fixture/schema execution, semantic coverage judgment, fixture/registry mutation, auto-cleanup, CI authority, release authority, or runtime behavior
+reviewed operator/tooling deviation + actual mutation facts + containment + WATCH/DEFER/FIX/BLOCKER + evidence refs → curated process-regression specimen → SYS-52; no blame/actor scoring, auto ingestion, recurrence engine, repo mutation, gate authority, product-defect replacement, release authority, or runtime behavior
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, and SYS-24 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, and SYS-24 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, and SYS-52 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

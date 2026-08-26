@@ -14,9 +14,11 @@ for (const token of [
   'Error-handling robustness',
   'Event-loop starvation / freeze risk',
   'UNKNOWN stays UNKNOWN.',
+  'Never turn missing runtime/data evidence into zero',
   'One release, one primary goal.',
   'Lifecycle ownership must be explicit.',
   'Regression follows incidents.',
+  'No style-only churn.',
   'Critical/High findings before release',
   'Severity:',
   'Estimated Frequency:',
@@ -34,13 +36,6 @@ for (const token of [
   'runtime audit → implementation → focused regression → full regression → PR/CI',
 ]) {
   assert.ok(audit.includes(token), `runtime audit standard missing durable token: ${token}`);
-}
-
-for (const forbidden of [
-  'convert unknown values into zero',
-  'style-only churn',
-]) {
-  assert.ok(audit.includes(forbidden) || audit.toLowerCase().includes(forbidden), `runtime audit standard must preserve ${forbidden}`);
 }
 
 assert.match(audit, /setInterval/);

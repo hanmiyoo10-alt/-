@@ -1,4 +1,4 @@
-# Repository Work Harness — Phase A complete / Phase B WRAP / Phase C groundwork
+# Repository Work Harness — Phase A complete / Phase B WRAP / Phase C canary
 
 This directory implements bounded slices of U-25 `Repository Work Harness`.
 
@@ -12,7 +12,9 @@ Phase A is complete as **read-only shadow governance**. Completed/proven slices:
 - B3: deterministic persistent Coordination Receipt v1 + pure mutation-boundary readiness validation;
 - B4: automatic read-only Coordination Receipt revalidation inside the existing Shadow Scan.
 
-B5 adds the first executable **Phase C insertion-point groundwork**: a read-only/fail-closed receipt gate process. It does not install mandatory enforcement at an authoritative writer.
+B5 adds the first executable **Phase C insertion-point groundwork**: a read-only/fail-closed receipt gate process.
+
+B6 adds the first bounded writer-side **opt-in canary**: a manual Canonical Main Operations dispatch may name an active coordination work issue and must pass the B5 gate before the existing issue-reconciliation writer runs. Automatic operations remain unchanged.
 
 The Harness coordinates work transactions. It does **not** own Git, CI, main-write, release, production, product-runtime, or project authority.
 
@@ -123,13 +125,28 @@ Even on success:
 - `executionAuthorized=false`;
 - `legalNextAction=HANDOFF_TO_EXISTING_MUTATION_AUTHORITY_WITH_VALID_RECEIPT`.
 
-B5 itself performs only GitHub reads. It does not mutate issues/refs, dispatch workflows, spawn executors, call main-write/release tooling, or become an authority. It is a reusable Phase C insertion point for a later, separately reviewed writer/canary integration.
+B5 itself performs only GitHub reads. It does not mutate issues/refs, dispatch workflows, spawn executors, call main-write/release tooling, or become an authority.
+
+## Canonical Main Operations manual canary — HARNESS-B6
+
+`.github/workflows/canonical-main-ops.yml` retains its existing authoritative `orchestrator/refresh.cjs` writer and automatic schedule/workflow-run/push paths. B6 adds one optional manual input:
+
+```text
+coordination_work_issue=<open issue containing active Work Record + fresh receipt>
+```
+
+When a manual `workflow_dispatch` supplies a non-empty value, the workflow runs `mutation-gate.cjs` before the existing refresh. A blocked gate stops the job before issue reconciliation. A READY gate only permits handoff; the existing orchestrator still owns the mutation.
+
+B6 deliberately does **not** require a receipt for automatic operations or an empty manual break-glass dispatch. This is a canary rollout, not the default enforcement policy.
+
+The canary work-issue value is passed into the shell through an environment variable, not direct expression interpolation into the command line.
 
 ## Current non-goals
 
 The current Harness still does **not** add:
 
-- mandatory receipt enforcement at any authoritative writer;
+- mandatory/default receipt enforcement across Canonical Main Operations;
+- receipt enforcement at `repo-main-write.py` or product writers;
 - mutating executor invocation;
 - GitHub workflow dispatch through the Harness;
 - a top-level general-purpose repository CLI/default front door;
@@ -153,4 +170,5 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-cont
 node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-boundary-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-shadow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-gate-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/canonical-main-canary-contract.cjs
 ```

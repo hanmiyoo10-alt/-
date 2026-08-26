@@ -123,6 +123,55 @@
 - Event ID: `05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0`
 <!-- canonical-main-doc-promoted:05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `6781ce38120d06e20b1dcbfaf2ddb334d0e7a0f22e22111c66f09697da3e2313`
+<!-- canonical-main-doc-promoted:6781ce38120d06e20b1dcbfaf2ddb334d0e7a0f22e22111c66f09697da3e2313 -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `21a9c6d0b2830ca607c72d8ef0c3e877748bb332d8193bf80568bd285940fb3b`
+<!-- canonical-main-doc-promoted:21a9c6d0b2830ca607c72d8ef0c3e877748bb332d8193bf80568bd285940fb3b -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `204b319dfc41dd6ee4504fe28f17e076c493b0e37d8c4b613acaa38e837a1e5f`
+<!-- canonical-main-doc-promoted:204b319dfc41dd6ee4504fe28f17e076c493b0e37d8c4b613acaa38e837a1e5f -->
+
+### 2026-08-26 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `5ed66044f68c00f3d962050c223873681c91a43cc57db079646cbb99e667d818`
+<!-- canonical-main-doc-promoted:5ed66044f68c00f3d962050c223873681c91a43cc57db079646cbb99e667d818 -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `40334cdf7a2faee5a8a8fce265bd88990d22860a991d1689e79ba8fbeb1693b5`
+<!-- canonical-main-doc-promoted:40334cdf7a2faee5a8a8fce265bd88990d22860a991d1689e79ba8fbeb1693b5 -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `986471b1c9201361bb4befc63226c0298696392af4f5857cbf68f84595cded59`
+<!-- canonical-main-doc-promoted:986471b1c9201361bb4befc63226c0298696392af4f5857cbf68f84595cded59 -->
+
+### 2026-08-26 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `81ff57379640f945b2feed91c8b780b0844fd9753234360560889daef37dbf06`
+<!-- canonical-main-doc-promoted:81ff57379640f945b2feed91c8b780b0844fd9753234360560889daef37dbf06 -->
+
 ### 2026-08-26 — infra: add canonical-main work decomposition system
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -178,3 +227,51 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/17a5aa636ac48033cf132fbaca4c240e086671bc)
 - Event ID: `386161ec8ab9692efbcfe459d3dc9cca44d63178e38623272b70c10248775a65`
 <!-- canonical-main-doc-promoted:386161ec8ab9692efbcfe459d3dc9cca44d63178e38623272b70c10248775a65 -->
+
+### 2026-08-26 — feat: revalidate Harness coordination receipts in shadow scans (#492)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3b2f59fee739c60861563a7c9a503d1e49257e28`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3b2f59fee739c60861563a7c9a503d1e49257e28)
+- Event ID: `32a698fb09ff29b09c53dcc9bec44278d3003e16fd222f454a0c0e65a0955d6d`
+<!-- canonical-main-doc-promoted:32a698fb09ff29b09c53dcc9bec44278d3003e16fd222f454a0c0e65a0955d6d -->
+
+### 2026-08-26 — feat: add executable Harness coordination receipt gate (#494)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `913e25cfc1d1f30c19e81c419a81f75a0b2795a6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/913e25cfc1d1f30c19e81c419a81f75a0b2795a6)
+- Event ID: `0f793e164d96266ab74c2771a7fa8d8c29af20fa37bef28c7134b90115aa3f70`
+<!-- canonical-main-doc-promoted:0f793e164d96266ab74c2771a7fa8d8c29af20fa37bef28c7134b90115aa3f70 -->
+
+### 2026-08-27 — feat: add receipt-gated canonical main ops canary (#496)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `6dce326d48942ccfe03ce6e10f46e233b128321d`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6dce326d48942ccfe03ce6e10f46e233b128321d)
+- Event ID: `e8e7e72caeb8248093de6c1c814e5eaf8e5e2f3b8e3f5071dd19cbb214dce236`
+<!-- canonical-main-doc-promoted:e8e7e72caeb8248093de6c1c814e5eaf8e5e2f3b8e3f5071dd19cbb214dce236 -->
+
+### 2026-08-27 — test(harness): drive B6 canary from issue edits
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `cd1a9b6b72924523e525504b45ab210a63bbcdf0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cd1a9b6b72924523e525504b45ab210a63bbcdf0)
+- Event ID: `d02da339b4ffcfbb16f967aba139e1bf74b4d1c65f349bf6b06231fc2f6bda58`
+<!-- canonical-main-doc-promoted:d02da339b4ffcfbb16f967aba139e1bf74b4d1c65f349bf6b06231fc2f6bda58 -->
+
+### 2026-08-27 — test(harness): add owner-only PR canary transport
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ba1d9b3c3ec8e0ea0a203b3a33309c3e40efe30c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ba1d9b3c3ec8e0ea0a203b3a33309c3e40efe30c)
+- Event ID: `ba7124d9bbd8b1bf8fd252df7c26c4278fa1acc82f6ebb3cbdd4b102a73c5f20`
+<!-- canonical-main-doc-promoted:ba7124d9bbd8b1bf8fd252df7c26c4278fa1acc82f6ebb3cbdd4b102a73c5f20 -->
+
+### 2026-08-27 — fix(harness): retire temporary B6 PR canary transport
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `648b4173f37c163a9df8ccad802c2be37ff44732`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/648b4173f37c163a9df8ccad802c2be37ff44732)
+- Event ID: `1181cc56ac04868763bc7a11fdd2dbe8e5550797244e511fc46fe425508bd8a2`
+<!-- canonical-main-doc-promoted:1181cc56ac04868763bc7a11fdd2dbe8e5550797244e511fc46fe425508bd8a2 -->

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 8 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 9 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -59,34 +59,38 @@ SYS-03 Gate Dependency Graph
 
 SYS-09 Change-Impact Review Map
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-50 Work Bundling Conflict Detector
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 ```
 
-SYS-09 contract:
+SYS-50 contract:
 
 ```text
-reviewed semantic change family
-→ required authority / contract / RT review obligations
+reviewed SYS-09 change-family assignments
++ transaction roles
++ objective identity
+→ deterministic bundling preflight
 
-IMPACT FAMILY MATCH
-!= CI path classification
-!= review PASS
-!= gate result
-!= automatic mutation
+BUNDLE_CLEAN
+BUNDLE_REVIEW_REQUIRED
+BUNDLE_SPLIT_REQUIRED
+BUNDLE_BLOCKED
 ```
 
-Permanent CI path routing remains owned by the existing RS2-3B classifier. SYS-09 is a procedural semantic review map only.
+It distinguishes legitimate support/sync/evidence work from independent primary objectives, so runtime+regression tests remain valid while runtime+CI/release-system redesign, fixture+CI/harness redesign, release publication+release-system redesign, design-freeze+implementation, and similar forbidden mixes are split.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 8
-OPEN NOW            = 32
+FROZEN              = 9
+OPEN NOW            = 31
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 6
-NR_EXECUTABLE       = 2
-NR_UNASSESSED       = 44
+NR_EXECUTABLE       = 3
+NR_UNASSESSED       = 43
 ```
 
 ## 4. Current next design
@@ -104,26 +108,24 @@ SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
 SYS-42 Implementation Slice Conformance Checker
-SYS-50 Work Bundling Conflict Detector
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-50 Work Bundling Conflict Detector
+NEXT SYSTEM DESIGN = SYS-42 Implementation Slice Conformance Checker
 ```
 
 Reason:
 
 ```text
-SYS-09 now exposes additive semantic change families.
-That gives SYS-50 a stable input for identifying forbidden combinations before implementation begins:
-runtime + release/repo-system authority,
-fixture work + CI/harness authority restructuring,
-and similar mixed transactions.
+SYS-09 identifies semantic change families.
+SYS-50 prevents forbidden objective bundling before implementation.
+SYS-42 can now define the post/pre-merge conformance question:
+"Did the actual implementation stay inside the frozen allowed/forbidden slice of the selected design?"
 ```
 
-After SYS-50, recompute the remaining I5/D3 edge rather than precommitting the full order.
+After SYS-42, recompute the remaining I5/D3 edge rather than precommitting a static order.
 
 ## 5. Apply/implementation hold
 
@@ -137,6 +139,7 @@ SYS-10 implementation  = HOLD
 SYS-48 application     = HOLD
 SYS-03 implementation  = HOLD
 SYS-09 application     = HOLD
+SYS-50 implementation  = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -145,7 +148,7 @@ Do not materialize/implement these frozen items until the current bounded system
 
 Existing non-blocking focused/direct-execution WATCHes for S-10/S-11/M-10/M-11/M-13 remain unchanged.
 
-SYS-10 and SYS-03 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-09 is document-only by design and creates no new executable verification claim.
+SYS-10, SYS-03, and SYS-50 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-09 remains document-only by design.
 
 ## 7. Production boundary
 
@@ -165,8 +168,8 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 8 / 52
-CURRENT NEXT = SYS-50 Work Bundling Conflict Detector
+SYSTEM DESIGNS FROZEN = 9 / 52
+CURRENT NEXT = SYS-42 Implementation Slice Conformance Checker
 SYSTEM APPLY / IMPLEMENTATION = HELD
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

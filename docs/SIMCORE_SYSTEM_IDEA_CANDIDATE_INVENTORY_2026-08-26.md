@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 24 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 31 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -29,7 +29,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-03 | Gate Dependency Graph | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-04 | Status Vocabulary Linter | Authority | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-05 | Historical-vs-Living Document Registry | Authority | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
-| SYS-06 | Evidence-to-Decision Trace Map | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-06 | Evidence-to-Decision Trace Map | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-07 | Cross-Reference Integrity Auditor | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-08 | Work-Item Close Receipt | Authority | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-09 | Change-Impact Review Map | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
@@ -41,22 +41,22 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-15 | WATCH Aging Review | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-16 | Anomaly Recurrence Correlator | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-17 | Missing Evidence Slot Analyzer | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
-| SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-19 | Live-Gate Handoff Packet | Evidence | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-21 | Forensic Classification Consistency Check | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-22 | Test Intent Manifest | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
-| SYS-23 | Negative-Control Registry | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-24 | Fixture Orphan Detector | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-23 | Negative-Control Registry | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
+| SYS-24 | Fixture Orphan Detector | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_PROTECTED |
 | SYS-25 | Golden Fixture Mutation Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-26 | Coverage Promotion Readiness Scanner | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-27 | Cross-Version Regression Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
-| SYS-28 | Verification Debt Index | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-28 | Verification Debt Index | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-29 | Contract-to-Fixture Gap View | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-30 | Release-to-Docs Convergence Receipt | Release | MEDIUM | 5 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
 | SYS-31 | Version-Bump Blast-Radius Check | Release | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_PROTECTED |
 | SYS-32 | Release Candidate Provenance Viewer | Release | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
-| SYS-33 | Rollback Readiness Checklist | Release | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-33 | Rollback Readiness Checklist | Release | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-34 | Post-Release Convergence Checklist Generator | Release | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
 | SYS-35 | Repository Transaction Ledger | Release | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-36 | Branch/PR Relationship Auditor | Release | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -75,7 +75,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-49 | Safe Parallel Work Finder | Workflow | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-50 | Work Bundling Conflict Detector | Workflow | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-51 | Close-Step Trigger Matrix | Workflow | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
-| SYS-52 | Operator Error Specimen Ledger | Workflow | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-52 | Operator Error Specimen Ledger | Workflow | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 
 Frozen design authorities:
 
@@ -104,21 +104,28 @@ SYS-05 → docs/SIMCORE_SYS05_HISTORICAL_VS_LIVING_DOCUMENT_REGISTRY_DESIGN.md
 SYS-04 → docs/SIMCORE_SYS04_STATUS_VOCABULARY_LINTER_DESIGN.md
 SYS-02 → docs/SIMCORE_SYS02_DECISION_SUPERSESSION_GRAPH_DESIGN.md
 SYS-12 → docs/SIMCORE_SYS12_CURRENT_STATE_SNAPSHOT_PAGE_DESIGN.md
+SYS-28 → docs/SIMCORE_SYS28_VERIFICATION_DEBT_INDEX_DESIGN.md
+SYS-23 → docs/SIMCORE_SYS23_NEGATIVE_CONTROL_REGISTRY_DESIGN.md
+SYS-33 → docs/SIMCORE_SYS33_ROLLBACK_READINESS_CHECKLIST_DESIGN.md
+SYS-24 → docs/SIMCORE_SYS24_FIXTURE_ORPHAN_DETECTOR_DESIGN.md
+SYS-52 → docs/SIMCORE_SYS52_OPERATOR_ERROR_SPECIMEN_LEDGER_DESIGN.md
+SYS-06 → docs/SIMCORE_SYS06_EVIDENCE_TO_DECISION_TRACE_MAP_DESIGN.md
+SYS-18 → docs/SIMCORE_SYS18_EVIDENCE_PROVENANCE_CHAIN_RECEIPT_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 24
-UNFROZEN             = 28
-OPEN NOW             = 16
+FROZEN               = 31
+UNFROZEN             = 21
+OPEN NOW             = 9
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 16
+NR_DOC_ONLY   = 22
 NR_EXECUTABLE = 6
-NR_PROTECTED  = 2
-NR_UNASSESSED = 28
+NR_PROTECTED  = 3
+NR_UNASSESSED = 21
 ```
 
 ## Canonical selection
@@ -157,25 +164,43 @@ SYS-05 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-04 = I4 D2 / FROZEN / NR_EXECUTABLE
 SYS-02 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-12 = I4 D2 / FROZEN / NR_DOC_ONLY
+SYS-28 = I4 D2 / FROZEN / NR_DOC_ONLY
+SYS-23 = I4 D2 / FROZEN / NR_DOC_ONLY
+SYS-33 = I4 D2 / FROZEN / NR_DOC_ONLY
+SYS-24 = I4 D2 / FROZEN / NR_PROTECTED
+SYS-52 = I4 D2 / FROZEN / NR_DOC_ONLY
+SYS-06 = I4 D3 / FROZEN / NR_DOC_ONLY
+SYS-18 = I4 D3 / FROZEN / NR_DOC_ONLY
+```
+
+Selection drift note:
+
+```text
+SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
+= FIX / DOC_DRIFT / NON_RUNTIME / NON_BLOCKING
+= preserved in docs/SIMCORE_SYSTEM_IDEA_SELECTION_DRIFT_FIX_SYS24_2026-08-26.md
+= closed by freezing SYS-24 before SYS-52 and resynchronizing the living edge
 ```
 
 Highest-priority open edge now:
 
 ```text
-I4 / D2 / NOW
-SYS-23 Negative-Control Registry
-SYS-28 Verification Debt Index
-SYS-33 Rollback Readiness Checklist
-SYS-52 Operator Error Specimen Ledger
+I4 / D3 / NOW
+SYS-07 Cross-Reference Integrity Auditor
+SYS-14 Evidence Freshness Ledger
+SYS-16 Anomaly Recurrence Correlator
+SYS-25 Golden Fixture Mutation Receipt
+SYS-36 Branch/PR Relationship Auditor
+SYS-49 Safe Parallel Work Finder
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-28 Verification Debt Index
+NEXT = SYS-14 Evidence Freshness Ledger
 ```
 
-Reason: SYS-12 now closes the compact current-state projection layer on top of SYS-01/SYS-05/SYS-04/SYS-02. Among the remaining I4/D2 candidates, SYS-28 has the broadest immediate downstream leverage because it can compose the already-frozen verification proof matrix, missing-evidence-slot semantics, test-intent/non-claim boundaries, and current verification WATCHes into a bounded debt view before M2-3 and the next genuine runtime release, without promoting non-claims into blockers.
+Reason: SYS-18 now freezes the point-in-time provenance chain for a bounded decision while preserving exact source, proof, trace and decision identities. SYS-14 is the strongest next downstream consumer because it can review whether a historically valid evidence basis is still reusable for a current claim without rewriting the historical receipt. That freshness layer will also make later SYS-07 cross-reference integrity review safer by distinguishing a reference that merely resolves from evidence that is still semantically current. The complete remaining I4/D3/NOW edge is enumerated above to prevent silent candidate omission.
 
 ## Non-duplication boundaries
 
@@ -210,9 +235,16 @@ reviewed document/family lifecycle + explicit section exceptions → curated liv
 registered status namespace + registered structured target + SYS-05 lifecycle scope → deterministic vocabulary/namespace/cardinality lint → SYS-04; no semantic status classification, stale-state judgment, global enum, repo-wide prose grep, writer, CI authority, release authority, or runtime behavior
 reviewed predecessor decision scope + reviewed successor/retirement decision scope + explicit affected/preserved scope → curated supersession lineage → SYS-02; no newest-file inference, current-state authority, gate dependency, repository transaction graph, evidence trace, generic reference graph, automatic semantic diff, repo writer, release authority, or runtime behavior
 reviewed current authorities + lifecycle boundaries + supersession lineage → compact current-only source-referenced projection → SYS-12; no source-of-truth ownership, historical ledger, roadmap authority, gate engine, evidence classifier, stale scanner, repo writer, release authority, or runtime behavior
+explicit verification obligation/WATCH + current proof state + due posture + source-owned blocking posture → curated verification-debt index → SYS-28; no requirement invention, proof-fit redefinition, evidence discovery, gate/severity promotion, global quality score, CI scanner, repo writer, release authority, or runtime behavior
+reviewed bounded precondition + forbidden semantic outcome + owner authority + enforcement/evidence refs → curated negative-control registry → SYS-23; no test runner, Boolean inverse generation, absence-as-proof, automatic fixture creation, fuzzing, gate/severity authority, repo writer, release authority, or runtime behavior
+current production identity + reviewed release intent + exact eligible rollback source/authority + evidence/admin-recovery plan → rollback-readiness disposition → SYS-33; no rollback execution, source auto-selection, ref rewind/force, release authorization, candidate verification replacement, publication, state writer, LIVE_PASS promotion, or R2.1 proof closure
+registry-owned permanent-suite graph + bounded suite/fixture namespaces → exact missing/unregistered/duplicate/out-of-scope membership findings → SYS-24; no repo-wide test discovery, fixture/schema execution, semantic coverage judgment, fixture/registry mutation, auto-cleanup, CI authority, release authority, or runtime behavior
+reviewed operator/tooling deviation + actual mutation facts + containment + WATCH/DEFER/FIX/BLOCKER + evidence refs → curated process-regression specimen → SYS-52; no blame/actor scoring, auto ingestion, recurrence engine, repo mutation, gate authority, product-defect replacement, release authority, or runtime behavior
+exact evidence identity + bounded decision identity + reviewed role/scope + source-backed basis → curated evidence→decision lineage → SYS-06; no evidence discovery, proof-strength inference, decision/gate engine, severity classification, slot/debt calculation, supersession, generic backlink graph, repo writer, release authority, or runtime behavior
+bounded decision-time source/derivative/proof identities + SYS-06 trace edges + explicit non-basis/unresolved links → immutable provenance receipt → SYS-18; no evidence discovery, causality invention, proof/freshness judgment, gate/decision authority, historical backfill with later evidence, repo writer, release authority, or runtime behavior
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, and SYS-12 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, and SYS-24 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, and SYS-18 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

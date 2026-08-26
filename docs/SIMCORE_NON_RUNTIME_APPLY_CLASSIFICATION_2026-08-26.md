@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-12 design freeze:
+Current state after SYS-18 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 24
-UNFROZEN                = 28
+FROZEN                  = 31
+UNFROZEN                = 21
 
-NR_DOC_ONLY   = 16
+NR_DOC_ONLY   = 22
 NR_EXECUTABLE = 6
-NR_PROTECTED  = 2
-NR_UNASSESSED = 28
+NR_PROTECTED  = 3
+NR_UNASSESSED = 21
 ```
 
 Frozen system apply classes:
@@ -195,6 +195,12 @@ SYS-47 User Handoff Card
 SYS-05 Historical-vs-Living Document Registry
 SYS-02 Decision / Supersession Graph
 SYS-12 Current-State Snapshot Page
+SYS-28 Verification Debt Index
+SYS-23 Negative-Control Registry
+SYS-33 Rollback Readiness Checklist
+SYS-52 Operator Error Specimen Ledger
+SYS-06 Evidence-to-Decision Trace Map
+SYS-18 Evidence Provenance Chain Receipt
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -207,9 +213,10 @@ SYS-04 Status Vocabulary Linter
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
 SYS-31 Version-Bump Blast-Radius Check
+SYS-24 Fixture Orphan Detector
 ```
 
-Why SYS-42 and SYS-31 are protected:
+Why SYS-42, SYS-31, and SYS-24 are protected:
 
 ```text
 SYS-42
@@ -218,10 +225,13 @@ SYS-42
 SYS-31
 = read-only/non-runtime preflight whose purpose is to police release-mode, candidate-radius, live-gate and release/repository-system bundling boundaries
 
-→ both require dedicated protected implementation transactions
+SYS-24
+= read-only/non-runtime detector whose purpose is to police permanent fixture-authority membership across registry, permanent suite modules, and permanent fixture directories
+
+→ all require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, and SYS-12 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, and SYS-18 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -234,6 +244,12 @@ SYS-47 = bounded user-facing projection of reviewed task/gate facts; v1 is a tem
 SYS-05 = curated document lifecycle/role registry with explicit mixed-section exceptions; v1 deliberately avoids automatic semantic classification, crawling, linting, rewriting, or current-state value storage
 SYS-02 = curated semantic predecessor/successor decision lineage with explicit affected/preserved scope; v1 deliberately prohibits automatic supersession inference from timestamps, versions, status words, references, commits, or semantic similarity
 SYS-12 = compact current-only source-referenced projection page; v1 deliberately avoids parsing/generation, authority promotion, current-state selection, stale scanning, gate decisions, or repository writes
+SYS-28 = curated verification-debt index preserving exact claim/proof/due/blocking semantics; v1 deliberately avoids evidence-requirement invention, CI/log scanning, automatic severity/blocker promotion, proof inference, and scalar quality scoring
+SYS-23 = curated negative-control semantic registry; v1 deliberately leaves executable enforcement to actual fixture/test/live authorities and prohibits automatic inverse generation, absence-as-proof, fixture mutation, fuzzing, or CI/release integration
+SYS-33 = curated pre-release rollback-readiness checklist; v1 deliberately does not execute rollback, auto-select historical sources, publish production, rewind refs, mutate state, replace permanent verification, or close LIVE/R2.1 proof
+SYS-52 = curated operator/tooling process-regression specimen ledger; v1 deliberately avoids actor scoring/blame, auto ingestion, log scraping, recurrence analysis, automatic severity, remediation, repository writes, or product/runtime classification takeover
+SYS-06 = curated semantic evidence→decision lineage map; v1 deliberately avoids evidence discovery, proof-strength inference, decision/gate/classification logic, automatic causality from citations/timestamps, repository writes, or current-state authority
+SYS-18 = point-in-time evidence-provenance receipt; v1 deliberately preserves reviewed source/derivative/proof/trace identities and explicit non-basis without auto discovery, causality inference, freshness judgment, proof promotion, gate/decision logic, historical backfill, or repository writes
 ```
 
 Why SYS-17, SYS-38, and SYS-04 are executable:
@@ -259,7 +275,20 @@ All three remain read-only/non-runtime.
 None changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, or Report.
+Why SYS-24 is protected rather than ordinary executable:
+
+```text
+SYS-24
+canonical permanent registry rows
++ permanent suite-module namespace
++ permanent fixture-directory namespace
+→ deterministic ownership/orphan integrity findings
+
+The algorithm is simple/read-only, but the policy being policed is fixture-authority membership.
+The canonical NR model explicitly places fixture-authority policing in NR_PROTECTED.
+```
+
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, Detector, Receipt, or Report.
 
 ---
 
@@ -270,10 +299,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 18
+NR_DOC_ONLY    = 24
 NR_EXECUTABLE  = 11
-NR_PROTECTED   = 3
-NR_UNASSESSED  = 34
+NR_PROTECTED   = 4
+NR_UNASSESSED  = 27
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -286,7 +315,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 16 gate-open NOW designs remain after SYS-12 freeze
+= 9 gate-open NOW designs remain after SYS-18 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -330,7 +359,7 @@ Minimum treatment:
 ```text
 separate design/gate explicitly authorizing protected authority or governance work
 separate protected implementation transaction
-permanent CI / repository / release / architecture-governance review as applicable
+permanent CI / repository / release / fixture / architecture-governance review as applicable
 no bundling with product/runtime feature work
 no assumption that read-only means ordinary harvest-safe
 ```
@@ -415,6 +444,7 @@ system-idea NON_RUNTIME design sweep = ACTIVE
 system apply/implementation = HELD
 SYS-42 = frozen NR_PROTECTED architecture-governance checker
 SYS-31 = frozen NR_PROTECTED release-governance blast-radius checker
+SYS-24 = frozen NR_PROTECTED fixture-authority orphan detector
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit
@@ -426,6 +456,12 @@ SYS-05 = frozen NR_DOC_ONLY document lifecycle-role registry design
 SYS-04 = frozen NR_EXECUTABLE registered-field status vocabulary linter design
 SYS-02 = frozen NR_DOC_ONLY decision/supersession lineage graph design
 SYS-12 = frozen NR_DOC_ONLY current-state snapshot projection design
+SYS-28 = frozen NR_DOC_ONLY verification-debt index design
+SYS-23 = frozen NR_DOC_ONLY negative-control registry design
+SYS-33 = frozen NR_DOC_ONLY rollback-readiness checklist design
+SYS-52 = frozen NR_DOC_ONLY operator/tooling process-regression specimen ledger design
+SYS-06 = frozen NR_DOC_ONLY evidence-to-decision lineage map design
+SYS-18 = frozen NR_DOC_ONLY evidence provenance chain receipt design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

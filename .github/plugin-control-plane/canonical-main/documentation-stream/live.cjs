@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeEvent, incidentEventFromIssue, renderLiveComment } = require('./event.cjs');
+const { changedPathsFromPush, normalizeEvent, incidentEventFromIssue, renderLiveComment } = require('./event.cjs');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 async function api(route, options = {}) {
@@ -32,10 +32,24 @@ async function scanIncidents(repo, existing) {
   for (const issue of issues) if (await recordEvent(repo, existing, incidentEventFromIssue(issue))) recorded += 1;
   console.log(`CANONICAL_MAIN_DOC_STREAM:INCIDENT_SCAN:${recorded}`);
 }
+async function enrichPushPaths(repo, payload) {
+  if (changedPathsFromPush(payload).length > 0) return payload;
+  const sha = payload.after || payload.head_commit?.id;
+  if (!sha) return payload;
+  const commit = await api(`/repos/${repo}/commits/${sha}`);
+  const synthetic = { added: [], modified: [], removed: [] };
+  for (const file of commit.files || []) {
+    if (file.status === 'added') synthetic.added.push(file.filename);
+    else if (file.status === 'removed') synthetic.removed.push(file.filename);
+    else synthetic.modified.push(file.filename);
+  }
+  console.log(`CANONICAL_MAIN_DOC_STREAM:PUSH_PATH_FALLBACK:${sha}:${synthetic.added.length + synthetic.modified.length + synthetic.removed.length}`);
+  return { ...payload, commits: [...(payload.commits || []), synthetic] };
+}
 async function main() {
   const eventName = process.env.GITHUB_EVENT_NAME; const eventPath = process.env.GITHUB_EVENT_PATH; const repo = process.env.GITHUB_REPOSITORY;
   if (!eventName || !eventPath || !repo) throw new Error('GitHub event environment is incomplete');
-  const payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+  let payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
   const issue = await api(`/repos/${repo}/issues/${config.liveIssueNumber}`);
   if (issue.title !== config.liveIssueTitle) throw new Error(`Documentation stream issue mismatch: #${config.liveIssueNumber}`);
   const existing = await existingEventIds(repo, config.liveIssueNumber);
@@ -47,6 +61,7 @@ async function main() {
     await scanIncidents(repo, existing); return;
   }
 
+  if (eventName === 'push') payload = await enrichPushPaths(repo, payload);
   const event = normalizeEvent({ eventName, payload, repository: repo });
   if (!event) { console.log('CANONICAL_MAIN_DOC_STREAM:IGNORED'); return; }
   if (existing.has(event.eventId)) { console.log(`CANONICAL_MAIN_DOC_STREAM:DUPLICATE:${event.eventId}`); return; }

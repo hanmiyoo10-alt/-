@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 16 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 17 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -54,7 +54,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-28 | Verification Debt Index | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-29 | Contract-to-Fixture Gap View | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-30 | Release-to-Docs Convergence Receipt | Release | MEDIUM | 5 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
-| SYS-31 | Version-Bump Blast-Radius Check | Release | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-31 | Version-Bump Blast-Radius Check | Release | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_PROTECTED |
 | SYS-32 | Release Candidate Provenance Viewer | Release | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
 | SYS-33 | Rollback Readiness Checklist | Release | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-34 | Post-Release Convergence Checklist Generator | Release | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
@@ -96,21 +96,22 @@ SYS-17 → docs/SIMCORE_SYS17_MISSING_EVIDENCE_SLOT_ANALYZER_DESIGN.md
 SYS-22 → docs/SIMCORE_SYS22_TEST_INTENT_MANIFEST_DESIGN.md
 SYS-21 → docs/SIMCORE_SYS21_FORENSIC_CLASSIFICATION_CONSISTENCY_CHECK_DESIGN.md
 SYS-38 → docs/SIMCORE_SYS38_ARCHITECTURE_CONTRACT_DIFF_REPORTER_DESIGN.md
+SYS-31 → docs/SIMCORE_SYS31_VERSION_BUMP_BLAST_RADIUS_CHECK_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 16
-UNFROZEN             = 36
-OPEN NOW             = 24
+FROZEN               = 17
+UNFROZEN             = 35
+OPEN NOW             = 23
 GATED / DEPENDENCY   = 12
 
 NR_DOC_ONLY   = 10
 NR_EXECUTABLE = 5
-NR_PROTECTED  = 1
-NR_UNASSESSED = 36
+NR_PROTECTED  = 2
+NR_UNASSESSED = 35
 ```
 
 ## Canonical selection
@@ -141,22 +142,22 @@ SYS-17 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-22 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-21 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-38 = I5 D3 / FROZEN / NR_EXECUTABLE
+SYS-31 = I5 D3 / FROZEN / NR_PROTECTED
 ```
 
 Remaining I5 / D3 / NOW:
 
 ```text
-SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-31 Version-Bump Blast-Radius Check
+NEXT = SYS-35 Repository Transaction Ledger
 ```
 
-Reason: SYS-38 now freezes the before/after architecture-delta observation layer needed around the upcoming M2-3 ownership extraction without replacing Contracts v2 enforcement. Of the remaining I5/D3/NOW pair, SYS-31 has stronger immediate downstream leverage because the next genuine runtime architecture checkpoint necessarily creates a version/release boundary; freezing version-bump blast-radius review before that release is more immediately actionable than adding the broader historical transaction ledger. SYS-35 remains valuable but follows the already frozen close/receipt and release-boundary controls.
+Reason: SYS-31 now freezes the protected pre-release version/release blast-radius boundary for the next genuine runtime checkpoint. SYS-35 is the sole remaining I5/D3/NOW design and has direct leverage over durable work/release transaction history after SYS-08 close receipts and the release-boundary controls are already defined.
 
 ## Non-duplication boundaries
 
@@ -183,9 +184,10 @@ explicit bounded required-evidence-slot completeness → SYS-17
 test surface → intended claims + explicit non-claims → SYS-22
 forensic classification ↔ cited evidence/proof/impact consistency → SYS-21; human-reviewed only, no auto severity promotion/demotion, recurrence discovery, gate close, or repo mutation
 immutable M-11 snapshots + machine contracts → exact before/after architecture delta → SYS-38; no second parser/checker, no expectedness/conformance judgment, no contract/CI mutation
+reviewed release intent + observed production identity + reviewed transaction radius → version/release blast-radius disposition → SYS-31; no version bump, candidate creation, publication, state write, CI/release policy mutation, or LIVE_PASS promotion
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE` and remains implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE` and remains implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

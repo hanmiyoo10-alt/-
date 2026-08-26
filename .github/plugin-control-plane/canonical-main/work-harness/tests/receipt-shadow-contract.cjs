@@ -77,6 +77,7 @@ assert.ok(staleMain.results[0].reasonCodes.includes('RECEIPT_EXACT_BASE_STALE:ma
 const other = workRecord({
   workId: 'TEST-B4-OTHER', objectiveId: 'TEST:B4:OTHER', scopeId: 'simcore', workType: 'PLUGIN_VALIDATION',
   requiredCapability: 'SIMCORE_HARNESS_SELF_TEST', writeAuthorities: [], protectedSurfaces: [],
+  expectedBases: [{ ref: 'main', mode: 'EXACT', sha: 'abc123', mayAdvance: false }],
   sourceAuthorityRefs: ['issue:#491', 'commit:abc123'],
 });
 const activeSetDrift = revalidateActiveWorkReceipts({

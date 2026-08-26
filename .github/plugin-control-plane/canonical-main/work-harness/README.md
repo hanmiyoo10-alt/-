@@ -24,6 +24,13 @@ The existing project registry remains `.github/plugin-control-plane/registry.jso
 
 `work-record.schema.json` + `contract.cjs` define repository-reconstructible work identity, source authority, task/gate state, read/write authorities, protected/close-sync surfaces, dependencies, base assumptions and stop condition.
 
+Write roles retain the SYS-49 semantics:
+
+- `PRIMARY_WRITE`
+- `SUPPORTING_WRITE`
+- `CLOSE_SYNC_WRITE`
+- `EVIDENCE_WRITE`
+
 `preflight.cjs` emits SYS-49-compatible dispositions:
 
 - `PARALLEL_SAFE`

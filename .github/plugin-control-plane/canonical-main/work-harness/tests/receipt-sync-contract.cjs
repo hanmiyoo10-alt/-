@@ -124,7 +124,7 @@ const other = workRecord({
   sourceAuthorityRefs: ['issue:#999', `commit:${MAIN}`],
 });
 const conflictPlan = planReceiptSyncForIssue({
-  issues: [target, issue(703, other).toString ? issue(703, other) : null],
+  issues: [target, issue(703, other)],
   targetIssueNumber: 700,
   observedRefs: { main: MAIN },
   adapterRegistry,

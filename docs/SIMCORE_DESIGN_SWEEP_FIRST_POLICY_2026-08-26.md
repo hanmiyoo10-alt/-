@@ -1,232 +1,112 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19 + SYS-01 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19/SYS-01/SYS-51 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
 
-Purpose: reduce context switching by finishing every currently selected gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
+Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing the frozen items.
 
 Related authority:
 - `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
-- `docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md`
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
-- `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
-- `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
-- `docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md`
-- `docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md`
 
----
-
-## 1. Core operating decision
-
-Canonical priority:
+## 1. Canonical rule
 
 ```text
-currently gate-open selected idea pool
-→ finish full design one item at a time
-→ DESIGN FROZEN
-→ perform required apply-class verdict at freeze time
-→ continue to next gate-open design
-→ close that bounded design sweep
-→ only then process eligible apply/harvest queues
-```
-
-This is an operating-priority rule, not a change to Runtime Class, difficulty, importance, or gate semantics.
-
----
-
-## 2. What counts as a design sweep
-
-Included:
-
-```text
-Gate = NOW
-or an equivalent dependency/evidence gate already satisfied
-```
-
-Excluded from blocking sweep completion:
-
-```text
-POST_M2_3
-POST_M2_4
-EVIDENCE not yet satisfied
-EXTERNAL not yet satisfied
-FUTURE
-implementation-bound dependency not yet satisfied
-R2.1 genuine-proof dependency not yet satisfied
-```
-
-A gated idea is not falsely marked designed or frozen merely to make the sweep look complete.
-When a gate later opens, that item enters a new incremental design sweep.
-
----
-
-## 3. Per-idea rule
-
-```text
-inspect source/contracts/evidence
-→ settle full bounded design
+select legitimate gate-open idea
+→ complete full bounded design
 → OPEN DESIGN QUESTIONS = 0
 → DESIGN FROZEN
-→ record classification/applicability verdicts
+→ assign freeze-time Apply Class
 → STOP that idea
-→ move to next gate-open idea
+→ select next by unified priority
 ```
 
-Do not leave several selected ideas half-designed.
-Do not implement an idea in the same transaction as its design freeze.
+Implementation/application is a separate transaction.
 
----
-
-## 4. Freeze-time classification
-
-For RUNTIME ideas:
+## 2. Previous closures remain valid
 
 ```text
-DOC_APPLICABLE
-or
-DOC_NOT_REQUIRED
+Original 31-idea gate-open sweep = CLOSED
+Original NR D1/D2/D3 harvests   = COMPLETE
+Original R DOC APPLY             = EMPTY / S-04 already applied
+Permanent fixture portfolio      = COMPLETE
 ```
 
-For NON_RUNTIME ideas:
+Gated original ideas are not reopened by the system-idea sweep.
 
-```text
-NR_DOC_ONLY
-NR_EXECUTABLE
-NR_PROTECTED
-```
+## 3. Current system-idea sweep
 
-Actual application/implementation remains a separate transaction.
-
----
-
-## 5. Previously completed bounded sweep
-
-The earlier original 31-idea gate-open sweep remains closed:
-
-```text
-S-03 Diagnostic Copy Profiles
-→ DESIGN FROZEN / DOC_NOT_REQUIRED
-
-S-07 Host Capability Receipt
-→ DESIGN FROZEN / DOC_NOT_REQUIRED
-
-S-08 History Frontier Confidence Surface
-→ DESIGN FROZEN / DOC_NOT_REQUIRED
-```
-
-Previously eligible apply work was also consumed:
-
-```text
-S-04 Live Evidence Packet Builder
-→ DOC_APPLIED
-→ R_PREP_NON_RUNTIME COMPLETE
-
-original NR Difficulty 1/2/3 bounded harvest queues
-→ COMPLETE / EMPTY
-
-four-item permanent fixture expansion
-→ COMPLETE
-```
-
-Those closures remain valid.
-
----
-
-## 6. Current system-idea incremental sweep
-
-A new system/operations candidate pool was added under the unified SimCore idea classification.
-This legitimately opens a new design sweep without reopening gated runtime architecture work.
-
-Frozen so far:
+Frozen:
 
 ```text
 SYS-19 Live-Gate Handoff Packet
-Size          = SMALL
-Importance    = 5
-Difficulty    = 1
-Runtime Class = NON_RUNTIME
-Design        = FROZEN
-Apply Class   = NR_DOC_ONLY
-Design doc    = docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md
+= SMALL / I5 / D1 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 
 SYS-01 Living Authority Map
-Size          = SMALL
-Importance    = 5
-Difficulty    = 2
-Runtime Class = NON_RUNTIME
-Design        = FROZEN
-Apply Class   = NR_DOC_ONLY
-Design doc    = docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md
+= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-51 Close-Step Trigger Matrix
+= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 ```
 
-Current system candidate state:
+Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 2
-OPEN NOW            = 38
+FROZEN              = 3
+OPEN NOW            = 37
 GATED/DEPENDENCY    = 12
 ```
 
-Current highest-priority open edge:
+Remaining highest-priority open edge:
 
 ```text
 I5 / D2 / NOW
 SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
-SYS-51 Close-Step Trigger Matrix
 ```
 
-Downstream-leverage selection:
+Downstream-leverage choice:
 
 ```text
-NEXT = SYS-51 Close-Step Trigger Matrix
+NEXT = SYS-08 Work-Item Close Receipt
 ```
 
-Reason: SYS-01 freezes the state-family → authority lookup layer. SYS-51 can now freeze the complementary work-type → required close-step surface mapping; this gives later close receipts and stale-next-action review a stable trigger contract.
+Reason:
+- SYS-01 defines authority lookup;
+- SYS-51 defines which close surfaces are evaluated;
+- SYS-08 can now define the bounded receipt of actual close results.
 
----
-
-## 7. Apply/harvest hold during this sweep
-
-SYS-19 and SYS-01 are both `NR_DOC_ONLY`, so later applications can materialize their living documents.
-
-However:
+## 4. Apply hold
 
 ```text
-SYS-19 APPLICATION = HOLD
-SYS-01 APPLICATION = HOLD
+SYS-19 application = HOLD
+SYS-01 application = HOLD
+SYS-51 application = HOLD
 ```
 
-Do not materialize either in the same transaction as its freeze.
-Do not interrupt the current one-by-one design sweep merely because an early frozen NR item is easy to apply.
+The current system design sweep remains active. Do not materialize these `NR_DOC_ONLY` artifacts in the same transaction as design freeze.
 
-The same rule applies to later frozen SYS items: classify at freeze, then hold application until the selected bounded system design sweep is explicitly closed or the user deliberately changes operating priority.
+If the user explicitly changes priority, or supplies live evidence requiring immediate classification, that new operational priority may interrupt the design sweep; after handling it, recompute the sweep before resuming.
 
----
+## 5. Gate discipline
 
-## 8. Gate interaction
-
-The system-idea sweep does not alter production/runtime gates.
-
-Current production gate remains:
+Closed gates still override scores:
 
 ```text
-v0.64.7
-06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
-PENDING_REAL_LONG_CHAT
-M2-2
+POST_M2_3
+POST_M2_4
+EVIDENCE unsatisfied
+EXTERNAL unsatisfied
+FUTURE
+next-genuine-release-proof dependency
 ```
 
-If the user supplies live evidence while the system-idea sweep is active, live evidence classification takes operational precedence, and the close-step routine must update all resulting gates/queues before design work resumes.
+Do not pull those items forward merely because the system sweep is active.
 
-POST_M2_3/POST_M2_4/EVIDENCE/EXTERNAL system ideas remain gated regardless of score.
-
----
-
-## 9. Production boundary
+## 6. Production boundary
 
 ```text
 PLUGIN BYTES         = UNCHANGED
@@ -234,29 +114,14 @@ PLUGIN VERSION       = UNCHANGED
 latest.js/install.js = UNCHANGED
 release-simcore      = UNCHANGED
 RUNTIME SEMANTICS    = UNCHANGED
-v0.64.7 LIVE GATE    = STILL PENDING
+v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 ```
 
----
-
-## 10. Current verdict
+## 7. Current verdict
 
 ```text
-ORIGINAL GATE-OPEN IDEA SWEEP
-= CLOSED
-
-SYSTEM-IDEA INCREMENTAL SWEEP
-= ACTIVE
-
-SYS-19
-= DESIGN FROZEN / NR_DOC_ONLY / APPLICATION HELD
-
-SYS-01
-= DESIGN FROZEN / NR_DOC_ONLY / APPLICATION HELD
-
-CURRENT NEXT DESIGN
-= SYS-51 Close-Step Trigger Matrix
-
-CURRENT SYSTEM APPLY/HARVEST
-= HOLD UNTIL SWEEP CLOSE OR EXPLICIT PRIORITY CHANGE
+SYSTEM-IDEA DESIGN SWEEP = ACTIVE
+FROZEN = SYS-19 + SYS-01 + SYS-51
+CURRENT NEXT DESIGN = SYS-08 Work-Item Close Receipt
+SYSTEM APPLY/HARVEST = HOLD
 ```

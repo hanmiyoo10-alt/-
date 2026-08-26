@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 11 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 12 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -36,7 +36,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-10 | Stale Next-Action Scanner | Authority | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-11 | Design-to-Implementation Drift Audit | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-12 | Current-State Snapshot Page | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-13 | Verification Proof Matrix | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-13 | Verification Proof Matrix | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-14 | Evidence Freshness Ledger | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-15 | WATCH Aging Review | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-16 | Anomaly Recurrence Correlator | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -91,21 +91,22 @@ SYS-09 → docs/SIMCORE_SYS09_CHANGE_IMPACT_REVIEW_MAP_DESIGN.md
 SYS-50 → docs/SIMCORE_SYS50_WORK_BUNDLING_CONFLICT_DETECTOR_DESIGN.md
 SYS-42 → docs/SIMCORE_SYS42_IMPLEMENTATION_SLICE_CONFORMANCE_CHECKER_DESIGN.md
 SYS-11 → docs/SIMCORE_SYS11_DESIGN_TO_IMPLEMENTATION_DRIFT_AUDIT_DESIGN.md
+SYS-13 → docs/SIMCORE_SYS13_VERIFICATION_PROOF_MATRIX_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 11
-UNFROZEN             = 41
-OPEN NOW             = 29
+FROZEN               = 12
+UNFROZEN             = 40
+OPEN NOW             = 28
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 7
+NR_DOC_ONLY   = 8
 NR_EXECUTABLE = 3
 NR_PROTECTED  = 1
-NR_UNASSESSED = 41
+NR_UNASSESSED = 40
 ```
 
 ## Canonical selection
@@ -131,12 +132,12 @@ SYS-09 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-50 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-42 = I5 D3 / FROZEN / NR_PROTECTED
 SYS-11 = I5 D3 / FROZEN / NR_DOC_ONLY
+SYS-13 = I5 D3 / FROZEN / NR_DOC_ONLY
 ```
 
 Remaining I5 / D3 / NOW:
 
 ```text
-SYS-13 Verification Proof Matrix
 SYS-17 Missing Evidence Slot Analyzer
 SYS-21 Forensic Classification Consistency Check
 SYS-22 Test Intent Manifest
@@ -148,10 +149,10 @@ SYS-38 Architecture Contract Diff Reporter
 Canonical next:
 
 ```text
-NEXT = SYS-13 Verification Proof Matrix
+NEXT = SYS-17 Missing Evidence Slot Analyzer
 ```
 
-Reason: SYS-11 now separates definite design drift from `UNPROVEN` requirements and explicitly requires proof appropriate to each preservation/verification claim. SYS-13 is the strongest next shared evidence layer: define the proof kinds and non-equivalence boundaries among syntax/static checks, focused tests, permanent CI, machine conformance, human drift audit, live validation, and genuine release proof.
+Reason: SYS-13 now freezes the proof-kind × claim-kind vocabulary, direct/conditional/supporting/none relationships, immutable proof identity discipline, and explicit `NOT_CLAIMED` handling. SYS-17 can next consume that vocabulary to identify required evidence claims whose acceptable proof slots remain absent without inventing proof or upgrading evidence maturity.
 
 ## Non-duplication boundaries
 
@@ -172,7 +173,8 @@ direct gate review dependency lookup → SYS-03
 change-family → review obligations → SYS-09
 work-family/role bundling preflight → SYS-50
 machine-verifiable frozen implementation-slice conformance → SYS-42
-human semantic design-to-implementation drift review → SYS-11; no automatic semantic judge, no CI/release authorization, no anomaly severity auto-classification
+human semantic design-to-implementation drift review → SYS-11
+proof-kind × claim-kind scope/non-equivalence matrix → SYS-13; no global confidence score, no proof substitution, no CI/log scanner, no automatic evidence promotion
 ```
 
 Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest.

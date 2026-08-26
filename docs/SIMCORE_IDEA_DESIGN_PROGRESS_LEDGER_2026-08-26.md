@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 16 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 17 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -83,31 +83,34 @@ SYS-21 Forensic Classification Consistency Check
 
 SYS-38 Architecture Contract Diff Reporter
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
+
+SYS-31 Version-Bump Blast-Radius Check
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 ```
 
-SYS-38 contract:
+SYS-31 contract:
 
 ```text
-M-11 immutable snapshot(BASE) + machine contract(BASE)
-+
-M-11 immutable snapshot(HEAD) + machine contract(HEAD)
-→ deterministic exact architecture delta report
+observed exact production identity
++ reviewed release intent / candidate request
++ reviewed transaction-radius declaration
+→ release/version blast-radius disposition
 ```
 
-It reuses the existing checker/M-11 extraction path and compares only bounded machine-readable architecture facts such as physical modules/edges, edge classifications, layers, physical declarations, allowed dependencies, transition exceptions, exact owns/excludes values, layer policy, global rules and bounded M2 state metadata. It never decides whether a delta is intended/valid, never replaces Contracts v2 enforcement, never parses human Contracts prose semantically, and never mutates architecture/CI/release authority.
+It separates product/work surfaces, canonical production candidate surfaces, and post-publish administrative convergence. It checks NEW_VERSION / SAME_VERSION_CORRECTION / ROLLBACK mode relationships, exact latest/install candidate radius, live-gate presence, production-state synchronization, and forbidden bundling of product runtime work with CI/release/repository/state-sync system redesign. It is read-only and never bumps version, creates a candidate, publishes production, mutates main state, or declares LIVE_PASS/R2.1 proof.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 16
-OPEN NOW            = 24
+FROZEN              = 17
+OPEN NOW            = 23
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 10
 NR_EXECUTABLE       = 5
-NR_PROTECTED        = 1
-NR_UNASSESSED       = 36
+NR_PROTECTED        = 2
+NR_UNASSESSED       = 35
 ```
 
 ## 4. Current next design
@@ -116,27 +119,24 @@ Remaining highest-priority edge:
 
 ```text
 I5 / D3 / NOW
-SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-31 Version-Bump Blast-Radius Check
+NEXT SYSTEM DESIGN = SYS-35 Repository Transaction Ledger
 ```
 
 Reason:
 
 ```text
-SYS-38 now freezes the architecture-before/after observation layer needed around M2-3.
-The next genuine runtime architecture checkpoint after the pending v0.64.7 live gate necessarily creates a new version/release boundary.
-SYS-31 therefore has the stronger immediate downstream leverage of the remaining I5/D3/NOW pair:
-freeze what a version bump must review across runtime bytes, manifests, release identity, docs, fixtures, evidence and release-system boundaries before that next genuine release.
-SYS-35 remains valuable as broader repository transaction history after the current close/receipt/release-boundary controls are frozen.
+SYS-31 now freezes the protected pre-release blast-radius boundary for the next genuine runtime release.
+SYS-35 is the sole remaining I5/D3/NOW idea.
+It can now build on SYS-08 close receipts plus the frozen release identity/radius controls without being forced to invent transaction semantics first.
 ```
 
-After SYS-31, recompute the remaining edge rather than assuming later I4 ordering.
+After SYS-35, recompute the next open edge using unified priority rather than assuming a static I4 order.
 
 ## 5. Apply/implementation hold
 
@@ -158,11 +158,12 @@ SYS-17 implementation  = HOLD
 SYS-22 application     = HOLD
 SYS-21 application     = HOLD
 SYS-38 implementation  = HOLD
+SYS-31 implementation  = HOLD / PROTECTED
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
 
-SYS-42 additionally requires a dedicated protected implementation transaction; it is not ordinary SAFE_NON_RUNTIME harvestable merely because it remains non-runtime.
+SYS-42 and SYS-31 require dedicated protected implementation transactions; neither is ordinary SAFE_NON_RUNTIME harvestable merely because it is read-only/non-runtime.
 
 ## 6. Verification WATCH preservation
 
@@ -178,7 +179,9 @@ SYS-21 adds a human forensic consistency layer: one direct symptom does not manu
 
 SYS-38 adds exact architecture delta visibility without adding another architecture validator. `ARCH_DIFF_PRESENT` is an observation only and does not imply SYS-42 slice violation, SYS-11 semantic drift, runtime regression, or release readiness.
 
-SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, and SYS-21 are document-only by design.
+SYS-31 adds protected release-radius preflight without adding another publisher or state writer. `VERSION_RADIUS_CLEAR` means only that no frozen blast-radius contradiction was found; it does not establish candidate PASS, release authorization, publication success, live correctness, or R2.1 genuine release proof.
+
+SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, and SYS-21 are document-only by design.
 
 ## 7. Production boundary
 
@@ -198,9 +201,10 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 16 / 52
-CURRENT NEXT = SYS-31 Version-Bump Blast-Radius Check
+SYSTEM DESIGNS FROZEN = 17 / 52
+CURRENT NEXT = SYS-35 Repository Transaction Ledger
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
+SYS-31 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

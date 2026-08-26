@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 14 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 15 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -81,14 +81,17 @@ SYS-17 Missing Evidence Slot Analyzer
 
 SYS-22 Test Intent Manifest
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-21 Forensic Classification Consistency Check
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 14
-OPEN NOW            = 26
+FROZEN              = 15
+OPEN NOW            = 25
 GATED/DEPENDENCY    = 12
 ```
 
@@ -96,7 +99,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D3 / NOW
-SYS-21 Forensic Classification Consistency Check
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
@@ -105,16 +107,18 @@ SYS-38 Architecture Contract Diff Reporter
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-21 Forensic Classification Consistency Check
+NEXT = SYS-38 Architecture Contract Diff Reporter
 ```
 
 Reason:
 - SYS-13 defines proof-kind × claim-kind scope and prevents proof substitution;
 - SYS-17 defines explicit bounded evidence-slot completeness;
-- SYS-22 now defines the semantic intent and mandatory non-claims of named test surfaces without changing harness/registry authority;
-- SYS-21 is therefore the strongest next evidence-integrity layer, checking whether forensic classification/disposition language remains consistent with the cited proof maturity and test/evidence boundaries.
+- SYS-22 defines semantic test intent/non-claims;
+- SYS-21 now verifies human forensic classification consistency without auto severity mutation;
+- the next physical architecture work after the v0.64.7 live gate is M2-3 Edit Reconcile extraction;
+- SYS-38 is therefore the strongest immediate next layer: make architecture contract deltas reviewable before/after ownership extraction while preserving the existing Contracts v2 checker as authority.
 
-After SYS-21 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
+After SYS-38 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -133,6 +137,7 @@ SYS-11 application     = HOLD
 SYS-13 application     = HOLD
 SYS-17 implementation  = HOLD
 SYS-22 application     = HOLD
+SYS-21 application     = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
@@ -141,7 +146,7 @@ SYS-42 is additionally `NR_PROTECTED`; its eventual implementation must be a ded
 
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate, bundling, conformance, audit, proof, slot, and test-intent discipline
+## 5. Gate, bundling, conformance, audit, proof, slot, test-intent, and forensic-consistency discipline
 
 Closed gates still override scores:
 
@@ -162,6 +167,7 @@ SYS-11 `DRIFT_AUDIT_CLEAN` means reviewed design-intent requirements are satisfi
 SYS-13 prohibits proof substitution: generic CI PASS does not establish focused-test execution, fixture PASS does not establish natural live validation, release publication does not establish live runtime PASS, and permanent-CI qualification does not establish genuine release-system E2E proof.
 SYS-17 analyzes only explicitly registered evidence slots for one selected bounded scope. Unregistered absence is not a gap, future-scope evidence is not a current blocker, and `EVIDENCE_SLOTS_CLEAR` never closes a gate by itself.
 SYS-22 owns reviewed semantic test intent only. `INTENT_DEFINED` does not prove execution/pass, satisfy an evidence slot, alter permanent registry/harness policy, or promote deterministic proof into live/release proof.
+SYS-21 reviews whether a current forensic classification remains inside cited evidence/proof/impact/attribution/recurrence boundaries. It reports over-promotion or under-classification but never auto-changes WATCH / DEFER / FIX / BLOCKER, discovers recurrence, closes gates, or mutates source authorities.
 
 Standing split rules remain preserved, including:
 - runtime/feature change separate from CI/release/repository-system redesign;
@@ -186,7 +192,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22
-CURRENT NEXT DESIGN = SYS-21 Forensic Classification Consistency Check
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22 + SYS-21
+CURRENT NEXT DESIGN = SYS-38 Architecture Contract Diff Reporter
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

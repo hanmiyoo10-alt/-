@@ -87,7 +87,7 @@ jobs:
 
   authoritative-handoff:
     needs: receipt-sync
-    if: needs.receipt-sync.outputs.handoff_ready == 'true'
+    if: ${{ fromJSON(needs.receipt-sync.outputs.handoff_ready || 'false') }}
     uses: ./.github/workflows/canonical-main-ops.yml
     with:
       coordination_work_issue: ${{ needs.receipt-sync.outputs.handoff_issue }}

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 23 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 24 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -104,6 +104,9 @@ SYS-04 Status Vocabulary Linter
 
 SYS-02 Decision / Supersession Graph
 = SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-12 Current-State Snapshot Page
+= SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -161,29 +164,40 @@ reviewed predecessor decision scope
 
 It uses decision/section scope rather than file age, so a replaced current-action section does not invalidate an entire historical design. The frozen relation vocabulary is `SUPERSEDES_FULL / SUPERSEDES_SCOPE / AMENDS_SCOPE / RETIRES_AS_CURRENT`. SYS-02 does not infer replacement from timestamps, version arithmetic, status words, references, or implementation chronology; it does not become current-state, gate-dependency, repository-transaction, or evidence-trace authority.
 
+SYS-12 contract:
+
+```text
+reviewed current authority map
++ reviewed lifecycle boundaries
++ reviewed supersession lineage
++ current values from owning authorities
+→ compact current-only source-referenced projection
+```
+
+It is intentionally thinner than `CURRENT_DEVELOPMENT.md`: no historical ledger, no independent roadmap reasoning, and no new authority. Every projected semantic field names its owning source. `SNAPSHOT_READY` means the projection is synchronized and resolvable; it does not establish runtime/live PASS, release authorization, implementation authorization, or gate state beyond the source value it projects.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 23
-OPEN NOW            = 17
+FROZEN              = 24
+OPEN NOW            = 16
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 15
+NR_DOC_ONLY         = 16
 NR_EXECUTABLE       = 6
 NR_PROTECTED        = 2
-NR_UNASSESSED       = 29
+NR_UNASSESSED       = 28
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, and SYS-02 close the first three I4/D2 selections.
+All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, SYS-02, and SYS-12 close the first four I4/D2 selections.
 
 Highest-priority open edge:
 
 ```text
 I4 / D2 / NOW
-SYS-12 Current-State Snapshot Page
 SYS-23 Negative-Control Registry
 SYS-28 Verification Debt Index
 SYS-33 Rollback Readiness Checklist
@@ -193,19 +207,19 @@ SYS-52 Operator Error Specimen Ledger
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-12 Current-State Snapshot Page
+NEXT SYSTEM DESIGN = SYS-28 Verification Debt Index
 ```
 
 Reason:
 
 ```text
-SYS-05 now freezes lifecycle/section-role boundaries.
-SYS-04 now freezes deterministic status-namespace boundaries.
-SYS-02 now freezes reviewed predecessor/successor decision lineage.
-SYS-12 can consume those boundaries plus SYS-01 current-authority navigation to project a compact current-state page without treating preserved history or superseded instructions as current truth.
+SYS-12 now closes the compact current-state projection layer.
+SYS-13 / SYS-17 / SYS-22 already freeze proof-scope, missing-evidence-slot, and test-intent/non-claim boundaries.
+Existing verification WATCHes provide real bounded debt examples.
+SYS-28 can compose those surfaces into a current verification-debt view without treating every WATCH or NOT_CLAIMED slot as a blocker.
 ```
 
-After SYS-12, recompute the remaining edge rather than assuming later I4 ordering.
+After SYS-28, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -234,6 +248,7 @@ SYS-47 application     = HOLD
 SYS-05 application     = HOLD
 SYS-04 implementation  = HOLD
 SYS-02 application     = HOLD
+SYS-12 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -268,7 +283,9 @@ SYS-04 adds deterministic vocabulary hygiene without semantic judgment. `STATUS_
 
 SYS-02 adds reviewed decision lineage without manufacturing current truth. `EDGE_ACTIVE` means the source-backed replacement/revision effect applies for the recorded scope; it does not by itself establish a current value, current gate, implementation state, evidence sufficiency, or release readiness. Historical predecessor artifacts remain preserved in their valid point-in-time/design scope.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, and SYS-02 are document-only by design.
+SYS-12 adds a fast current-only orientation surface without authority promotion. `SNAPSHOT_READY` means only that required fields resolve to current owning authorities and the projection is synchronized. If upstream authorities conflict it must become `SNAPSHOT_BLOCKED`; if an authority changes before refresh it becomes `SNAPSHOT_STALE`. The owning source always wins.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, and SYS-12 are document-only by design.
 
 ## 7. Production boundary
 
@@ -288,13 +305,14 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 23 / 52
+SYSTEM DESIGNS FROZEN = 24 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 SYS-05 HISTORICAL-VS-LIVING REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-04 STATUS VOCABULARY LINTER = FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 SYS-02 DECISION / SUPERSESSION GRAPH = FROZEN / NR_DOC_ONLY / APPLY HOLD
-CURRENT NEXT = SYS-12 Current-State Snapshot Page
+SYS-12 CURRENT-STATE SNAPSHOT PAGE = FROZEN / NR_DOC_ONLY / APPLY HOLD
+CURRENT NEXT = SYS-28 Verification Debt Index
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

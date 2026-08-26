@@ -107,6 +107,38 @@ NONE
 
 Do not delete this specimen merely because the living pointer is now corrected; it is a process-regression control for future selection-ledger maintenance.
 
+### Parallel main activity during SYS-07 design
+
+Status: `WATCH / PARALLEL_MAIN_ACTIVITY / NON_SIMCORE_CHANGE / NON_BLOCKING`
+
+Preserved evidence:
+
+```text
+docs/SIMCORE_SYS07_PARALLEL_MAIN_ACTIVITY_WATCH_2026-08-26.md
+```
+
+Observed while closing SYS-07:
+
+```text
+SYS-07 base main = 14e692f17e722cb70969096e2c9f4ea4354faa9d
+parallel commit  = 2453a6e91e6966b8960efe6a619c8886c234b309
+message          = infra: add canonical-main work decomposition system
+```
+
+The parallel commit changed `.github/plugin-control-plane/canonical-main/...` and one plugin-control-plane workflow line, but did not overlap any of the five bounded SYS-07 SimCore paths. `release-simcore` remained unchanged and no SYS-07 semantic conflict was observed.
+
+Operational control:
+
+```text
+base→head compare containing unrelated paths
+!= current SimCore transaction authored those paths
+
+use bounded commit identities + per-path inspection
+→ separate current work from parallel main activity
+```
+
+This WATCH is not permission to mix canonical-main repository-system redesign into SimCore work. The unrelated repo-system topic stays separate.
+
 ### Operator Error Specimen Ledger design
 
 Status: `SYS-52 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`

@@ -123,8 +123,10 @@ assert.ok(conflictBlocked.reasonCodes.includes('MUTATION_GATE_BOUNDARY_BLOCKED')
 assert.ok(conflictBlocked.reasonCodes.some((reason) => reason.includes('WRITE_WRITE_CONFLICT:issue:#485')));
 
 const invariant = blocked(['TEST_BLOCK'], 'TEST_NEXT', {
-  status: 'MUTATION_GATE_READY', coordinationReady: true, mutationAuthorized: true, executionAuthorized: true,
+  schemaVersion: 99, mode: 'EVIL', status: 'MUTATION_GATE_READY', coordinationReady: true, mutationAuthorized: true, executionAuthorized: true,
 });
+assert.equal(invariant.schemaVersion, 1);
+assert.equal(invariant.mode, 'MUTATION_GATE');
 assert.equal(invariant.status, 'MUTATION_GATE_BLOCKED');
 assert.equal(invariant.coordinationReady, false);
 assert.equal(invariant.mutationAuthorized, false);
@@ -143,28 +145,35 @@ function response(data, status = 200) {
   };
 }
 
-const seen = [];
-const fetched = await run({
-  token: 'test-token',
-  repo: 'owner/repo',
-  root,
-  workIssueNumber: 700,
-  fetchImpl: async (url, options = {}) => {
-    seen.push({ url, method: options.method || 'GET' });
-    if (url.endsWith('/issues?state=open&per_page=100&page=1')) return response([readyIssue]);
-    if (url.endsWith('/branches/main')) return response({ commit: { sha: 'abc123' } });
-    return response({ message: 'not found' }, 404);
-  },
-});
-assert.equal(fetched.status, 'MUTATION_GATE_READY');
-assert.deepEqual(seen.map((entry) => entry.method), ['GET', 'GET']);
-assert.ok(seen[0].url.endsWith('/issues?state=open&per_page=100&page=1'));
-assert.ok(seen[1].url.endsWith('/branches/main'));
-
 for (const forbidden of [
   'child_process', 'repo-main-write.py', 'release-publish', 'workflow_dispatch', 'git push', "method: 'POST'", "method: 'PATCH'",
 ]) assert.equal(gateSource.includes(forbidden), false, `mutation gate unexpectedly contains mutation primitive ${forbidden}`);
 
 assert.equal(path.resolve(path.join(__dirname, '..'), '../../../..'), root);
 
-console.log('work-harness mutation-gate-contract: ok');
+async function testReadOnlyRun() {
+  const seen = [];
+  const fetched = await run({
+    token: 'test-token',
+    repo: 'owner/repo',
+    root,
+    workIssueNumber: 700,
+    fetchImpl: async (url, options = {}) => {
+      seen.push({ url, method: options.method || 'GET' });
+      if (url.endsWith('/issues?state=open&per_page=100&page=1')) return response([readyIssue]);
+      if (url.endsWith('/branches/main')) return response({ commit: { sha: 'abc123' } });
+      return response({ message: 'not found' }, 404);
+    },
+  });
+  assert.equal(fetched.status, 'MUTATION_GATE_READY');
+  assert.deepEqual(seen.map((entry) => entry.method), ['GET', 'GET']);
+  assert.ok(seen[0].url.endsWith('/issues?state=open&per_page=100&page=1'));
+  assert.ok(seen[1].url.endsWith('/branches/main'));
+}
+
+testReadOnlyRun()
+  .then(() => console.log('work-harness mutation-gate-contract: ok'))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

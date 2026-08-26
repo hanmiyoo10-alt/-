@@ -186,3 +186,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3b2f59fee739c60861563a7c9a503d1e49257e28)
 - Event ID: `32a698fb09ff29b09c53dcc9bec44278d3003e16fd222f454a0c0e65a0955d6d`
 <!-- canonical-main-doc-promoted:32a698fb09ff29b09c53dcc9bec44278d3003e16fd222f454a0c0e65a0955d6d -->
+
+### 2026-08-26 — feat: add executable Harness coordination receipt gate (#494)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `913e25cfc1d1f30c19e81c419a81f75a0b2795a6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/913e25cfc1d1f30c19e81c419a81f75a0b2795a6)
+- Event ID: `0f793e164d96266ab74c2771a7fa8d8c29af20fa37bef28c7134b90115aa3f70`
+<!-- canonical-main-doc-promoted:0f793e164d96266ab74c2771a7fa8d8c29af20fa37bef28c7134b90115aa3f70 -->

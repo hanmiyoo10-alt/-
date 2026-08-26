@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 9 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 10 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -65,7 +65,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-39 | Import-Boundary Trend Report | Architecture | MEDIUM | 3 | 3 | NON_RUNTIME | EVIDENCE | NR_UNASSESSED |
 | SYS-40 | Dead Module / Export Scanner | Architecture | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-41 | Public Test-Seam Inventory | Architecture | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
-| SYS-42 | Implementation Slice Conformance Checker | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-42 | Implementation Slice Conformance Checker | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_PROTECTED |
 | SYS-43 | M2 Checkpoint Close Pack | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-44 | Ownership Migration Ledger | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-45 | State-Surface Change Receipt | Architecture | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
@@ -89,20 +89,22 @@ SYS-48 → docs/SIMCORE_SYS48_GATE_BLOCKED_REASON_SURFACE_DESIGN.md
 SYS-03 → docs/SIMCORE_SYS03_GATE_DEPENDENCY_GRAPH_DESIGN.md
 SYS-09 → docs/SIMCORE_SYS09_CHANGE_IMPACT_REVIEW_MAP_DESIGN.md
 SYS-50 → docs/SIMCORE_SYS50_WORK_BUNDLING_CONFLICT_DETECTOR_DESIGN.md
+SYS-42 → docs/SIMCORE_SYS42_IMPLEMENTATION_SLICE_CONFORMANCE_CHECKER_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 9
-UNFROZEN             = 43
-OPEN NOW             = 31
+FROZEN               = 10
+UNFROZEN             = 42
+OPEN NOW             = 30
 GATED / DEPENDENCY   = 12
 
 NR_DOC_ONLY   = 6
 NR_EXECUTABLE = 3
-NR_UNASSESSED = 43
+NR_PROTECTED  = 1
+NR_UNASSESSED = 42
 ```
 
 ## Canonical selection
@@ -126,6 +128,7 @@ SYS-48 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-03 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-09 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-50 = I5 D3 / FROZEN / NR_EXECUTABLE
+SYS-42 = I5 D3 / FROZEN / NR_PROTECTED
 ```
 
 Remaining I5 / D3 / NOW:
@@ -139,16 +142,15 @@ SYS-22 Test Intent Manifest
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
-SYS-42 Implementation Slice Conformance Checker
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-42 Implementation Slice Conformance Checker
+NEXT = SYS-11 Design-to-Implementation Drift Audit
 ```
 
-Reason: SYS-09 now identifies semantic impact families and SYS-50 prevents forbidden objective bundling before implementation. SYS-42 is the strongest next downstream control: verify that an actual implementation stays inside the frozen allowed/forbidden slice of the selected design without re-deciding design semantics.
+Reason: SYS-42 now covers deterministic machine-verifiable slice conformance but explicitly cannot prove complete design intent. SYS-11 is the strongest next complementary control: define the broader design-to-implementation drift audit, including semantic requirements or omissions that cannot safely be encoded as SYS-42 rules.
 
 ## Non-duplication boundaries
 
@@ -167,10 +169,11 @@ stale NEXT detection → SYS-10
 gate-blocked explanation → SYS-48
 direct gate review dependency lookup → SYS-03
 change-family → review obligations → SYS-09
-work-family/role bundling preflight → SYS-50; no path classification, auto split, PR creation, or gate authorization
+work-family/role bundling preflight → SYS-50
+machine-verifiable frozen implementation-slice conformance → SYS-42; reviewed slice only, no prose inference, no CI/repo mutation, no semantic-equivalence claim
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest.
 
 ## Production boundary
 

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "id": "phase-h-v1",
+  "reasonCode": "CANONICAL_MAIN_REHEARSAL",
+  "severity": "P1",
+  "trackingIssue": 330,
+  "autoTriggerMarker": "[phase-h-rehearsal]",
+  "productionMutation": false,
+  "releaseMutation": false
+}

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 3 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 4 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -78,30 +78,38 @@ Design: docs/SIMCORE_SYS51_CLOSE_STEP_TRIGGER_MATRIX_DESIGN.md
 Application: HOLD
 ```
 
-SYS-51 contract:
+### SYS-08 — Work-Item Close Receipt
 
 ```text
-primary work type
-+ observed event overlays
-→ select existing RT-01..RT-12 surfaces to evaluate
-
-R = required by work type
-C = event-overlay controlled
-— = not selected by type alone
+SMALL / I5 / D2
+NON_RUNTIME
+FROZEN
+NR_DOC_ONLY
+Design: docs/SIMCORE_SYS08_WORK_ITEM_CLOSE_RECEIPT_DESIGN.md
+Application: HOLD
 ```
 
-It is a procedural matrix only, not an executor, CI dispatcher, writer, release authority, or semantic classifier.
+SYS-08 contract:
+
+```text
+SYS-51 selected RT set
+→ actual RT evaluations
+→ bounded close receipt
+→ detailed proof stays in existing design/evidence/CI/live/release authorities
+```
+
+Receipt is point-in-time closure evidence, not a living NEXT/production authority and not a central transaction ledger.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 3
-OPEN NOW            = 37
+FROZEN              = 4
+OPEN NOW            = 36
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 3
-NR_UNASSESSED       = 49
+NR_DOC_ONLY         = 4
+NR_UNASSESSED       = 48
 ```
 
 ## 4. Current next design
@@ -110,7 +118,6 @@ Remaining highest-priority edge:
 
 ```text
 I5 / D2 / NOW
-SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
 ```
@@ -118,7 +125,7 @@ SYS-48 Gate-Blocked Reason Surface
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-08 Work-Item Close Receipt
+NEXT SYSTEM DESIGN = SYS-10 Stale Next-Action Scanner
 ```
 
 Reason:
@@ -126,8 +133,11 @@ Reason:
 ```text
 SYS-01 = where authority lives
 SYS-51 = which close surfaces must be evaluated
-SYS-08 = bounded receipt of what was actually evaluated/resulted
+SYS-08 = what close result was actually recorded
+SYS-10 = detect the recurring case where a completed action is still advertised as NEXT
 ```
+
+SYS-48 remains open but benefits from a later explicit gate-dependency model.
 
 ## 5. Apply/implementation hold
 
@@ -136,13 +146,16 @@ CURRENT SYSTEM DESIGN SWEEP = ACTIVE
 SYS-19 application = HOLD
 SYS-01 application = HOLD
 SYS-51 application = HOLD
+SYS-08 application = HOLD
 ```
 
-Do not materialize their living NR_DOC_ONLY artifacts until the current bounded design sweep closes or the user explicitly changes priority.
+Do not materialize their `NR_DOC_ONLY` artifacts until the current bounded design sweep closes or the user explicitly changes priority.
 
 ## 6. Verification WATCH preservation
 
-Existing non-blocking verification WATCHes remain unchanged, including focused/direct-execution coverage limits for S-10/S-11/M-10/M-11/M-13. SYS-19/SYS-01/SYS-51 are document-only designs and create no executable verification claim.
+Existing non-blocking verification WATCHes remain unchanged, including focused/direct-execution coverage limits for S-10/S-11/M-10/M-11/M-13.
+
+SYS-19/SYS-01/SYS-51/SYS-08 are document-only designs and create no executable verification claim.
 
 ## 7. Production boundary
 
@@ -162,8 +175,8 @@ System-design transactions change none of those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED/UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 3 / 52
-CURRENT NEXT = SYS-08 Work-Item Close Receipt
+SYSTEM DESIGNS FROZEN = 4 / 52
+CURRENT NEXT = SYS-10 Stale Next-Action Scanner
 SYSTEM APPLY = HELD
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

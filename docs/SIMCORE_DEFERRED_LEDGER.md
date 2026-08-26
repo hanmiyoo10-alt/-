@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 28/52 designs FROZEN; scoped next design = SYS-52 Operator Error Specimen Ledger
+System-idea sweep state: 29/52 designs FROZEN; scoped next design = SYS-06 Evidence-to-Decision Trace Map
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -106,6 +106,35 @@ NONE
 ```
 
 Do not delete this specimen merely because the living pointer is now corrected; it is a process-regression control for future selection-ledger maintenance.
+
+### Operator Error Specimen Ledger design
+
+Status: `SYS-52 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
+
+SYS-52 now freezes a dedicated future repository-memory surface for operator/tooling process deviations.
+
+Frozen contract:
+
+```text
+reviewed operator/tooling deviation
++ exact context / actual mutation facts
++ immediate containment
++ WATCH / DEFER / FIX / BLOCKER disposition
++ durable evidence refs
+→ curated process-regression specimen
+```
+
+The future ledger will distinguish historical disposition from current resolution and will preserve corrected errors rather than deleting them. It explicitly prohibits blame/actor scoring, automatic severity, recurrence auto-escalation, auto ingestion, and remediation/repository-write authority.
+
+Existing preserved real seeds include:
+
+```text
+R2_1_OPERATOR_POLICY_PREWRITE_BRANCH_MISSING
+R2_1_OPERATOR_POLICY_ACCIDENTAL_MAIN_NOOP_MARKER
+SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
+```
+
+Current application remains HOLD while the system design sweep is active. The existing source evidence documents remain authoritative for those historical events until a later bounded SYS-52 application transaction materializes `docs/SIMCORE_OPERATOR_ERROR_SPECIMEN_LEDGER.md`.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -358,7 +387,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 28/52 system designs are currently FROZEN and the scoped next design is SYS-52 Operator Error Specimen Ledger. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 29/52 system designs are currently FROZEN and the scoped next design is SYS-06 Evidence-to-Decision Trace Map. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

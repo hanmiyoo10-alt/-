@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 37/52 designs FROZEN; scoped next design = SYS-15 WATCH Aging Review
+System-idea sweep state: 38/52 designs FROZEN; scoped next design = SYS-20 Natural Evidence Intake Checklist Generator
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -475,7 +475,56 @@ Case removal also requires explicit replacement/supersession/move/debt dispositi
 
 SYS-25 v1 is prospective `NR_DOC_ONLY`: later application may materialize `docs/SIMCORE_GOLDEN_FIXTURE_MUTATION_RECEIPT_TEMPLATE.md`, while the actual fixture mutation remains a separate fixture-authority transaction. Historical initial fixture creation does not need fake retrospective mutation receipts.
 
-Current application remains HOLD while the system design sweep is active. SYS-25 closes the I4/D3/NOW edge. The scoped next system design is SYS-15 WATCH Aging Review.
+Current application remains HOLD while the system design sweep is active. SYS-25 closes the I4/D3/NOW edge.
+
+### WATCH Aging Review design
+
+Status: `SYS-15 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
+
+SYS-15 now freezes event-driven aging/relevance review for preserved WATCH and deferred-WATCH items.
+
+Frozen contract:
+
+```text
+one source-owned WATCH / deferred-WATCH item
++ reviewed current relevance
++ SYS-16 recurrence posture when material
++ mitigation / supersession / verification facts
++ explicit next-review trigger
++ optional elapsed-time context
+→ reviewed WATCH aging posture
+```
+
+Frozen top-level aging postures:
+
+```text
+WATCH_AGING_ACTIVE
+WATCH_AGING_QUIESCENT
+WATCH_AGING_REVIEW_REQUIRED
+WATCH_AGING_HISTORICALIZE_CANDIDATE
+WATCH_AGING_BLOCKED
+```
+
+Critical boundaries:
+
+```text
+old != severe
+old != harmless
+no recent recurrence != no defect
+quiescent != dismissed
+historicalize candidate != delete
+recurrence confirmed != blocker
+mitigation deployed != revalidation complete
+calendar review due != operational overdue defect
+```
+
+Elapsed time is orientation metadata only. SYS-15 does not compute severity, recurrence, dismissal, staleness, blocker posture, or gate status from age. A calendar date may reopen review but never auto-promote or auto-dismiss an item.
+
+`WATCH_AGING_QUIESCENT` is the normal posture for valid evidence with no useful immediate action and one named future trigger, such as a rare natural revalidation or a one-off semantic anomaly waiting for natural recurrence. `WATCH_AGING_HISTORICALIZE_CANDIDATE` means only that active living attention may end while the source evidence remains historically preserved; it never means `DISMISSED_NO_DEFECT` without resolving evidence.
+
+New SYS-16 recurrence, mitigation validation, owner/supersession changes, or other named triggers yield `WATCH_AGING_REVIEW_REQUIRED`; the owning anomaly/gate authority decides any WATCH/DEFER/FIX/BLOCKER change. Current application remains HOLD while the design sweep is active. A later document-only application may materialize `docs/SIMCORE_WATCH_AGING_REVIEW.md`.
+
+The scoped next system design is SYS-20 Natural Evidence Intake Checklist Generator.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -724,13 +773,15 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 
 SYS-16 recurrence posture is supporting evidence for such review, not an automatic escalation rule. `RECURRENCE_CONFIRMED` does not itself mean FIX/BLOCKER, and `RECURRENCE_FIRST_ONLY` does not make a directly proven hard defect harmless.
 
+SYS-15 aging posture is likewise an attention/lifecycle signal, not a severity engine. `WATCH_AGING_QUIESCENT` does not dismiss evidence, and `WATCH_AGING_REVIEW_REQUIRED` does not preselect the source owner's next classification.
+
 ## Next action
 
 ```text
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 37/52 system designs are currently FROZEN and the scoped next design is SYS-15 WATCH Aging Review. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 38/52 system designs are currently FROZEN and the scoped next design is SYS-20 Natural Evidence Intake Checklist Generator. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 36 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 37 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -48,7 +48,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-22 | Test Intent Manifest | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-23 | Negative-Control Registry | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-24 | Fixture Orphan Detector | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_PROTECTED |
-| SYS-25 | Golden Fixture Mutation Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-25 | Golden Fixture Mutation Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-26 | Coverage Promotion Readiness Scanner | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-27 | Cross-Version Regression Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
 | SYS-28 | Verification Debt Index | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
@@ -116,21 +116,22 @@ SYS-07 → docs/SIMCORE_SYS07_CROSS_REFERENCE_INTEGRITY_AUDITOR_DESIGN.md
 SYS-36 → docs/SIMCORE_SYS36_BRANCH_PR_RELATIONSHIP_AUDITOR_DESIGN.md
 SYS-49 → docs/SIMCORE_SYS49_SAFE_PARALLEL_WORK_FINDER_DESIGN.md
 SYS-16 → docs/SIMCORE_SYS16_ANOMALY_RECURRENCE_CORRELATOR_DESIGN.md
+SYS-25 → docs/SIMCORE_SYS25_GOLDEN_FIXTURE_MUTATION_RECEIPT_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 36
-UNFROZEN             = 16
-OPEN NOW             = 4
+FROZEN               = 37
+UNFROZEN             = 15
+OPEN NOW             = 3
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 24
+NR_DOC_ONLY   = 25
 NR_EXECUTABLE = 7
 NR_PROTECTED  = 5
-NR_UNASSESSED = 16
+NR_UNASSESSED = 15
 ```
 
 ## Canonical selection
@@ -181,6 +182,7 @@ SYS-07 = I4 D3 / FROZEN / NR_EXECUTABLE
 SYS-36 = I4 D3 / FROZEN / NR_PROTECTED
 SYS-49 = I4 D3 / FROZEN / NR_PROTECTED
 SYS-16 = I4 D3 / FROZEN / NR_DOC_ONLY
+SYS-25 = I4 D3 / FROZEN / NR_DOC_ONLY
 ```
 
 Selection drift note:
@@ -192,20 +194,24 @@ SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 = closed by freezing SYS-24 before SYS-52 and resynchronizing the living edge
 ```
 
+The I4/D3/NOW edge is now fully frozen.
+
 Highest-priority open edge now:
 
 ```text
-I4 / D3 / NOW
-SYS-25 Golden Fixture Mutation Receipt
+I3 / D2 / NOW
+SYS-15 WATCH Aging Review
+SYS-20 Natural Evidence Intake Checklist Generator
+SYS-37 Release-System Residual Cleanup Registry
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-25 Golden Fixture Mutation Receipt
+NEXT = SYS-15 WATCH Aging Review
 ```
 
-Reason: SYS-16 now freezes source-backed same-family recurrence, specimen-independence, healthy-control and cross-family correlation semantics without changing anomaly disposition. SYS-25 is the final remaining I4/D3/NOW peer and closes the regression-governance edge by defining point-in-time accountability for intentional golden fixture mutations. Its design can consume the already-frozen SYS-22 test-intent/non-claim boundary, SYS-23 negative-control registry, SYS-24 fixture membership authority, SYS-35 repository transaction lineage and SYS-21 forensic classification rules without changing the permanent harness during the design transaction. After SYS-25, recompute the lower-importance NOW edge rather than assuming a fixed order.
+Reason: SYS-16 has just frozen family-scoped recurrence, specimen independence, healthy-control and cross-family correlation semantics. SYS-15 is the strongest direct consumer because WATCH aging must distinguish a genuinely old one-off from a repeatedly recurring family and must not promote severity merely because time passed. It is also immediately relevant while the v0.64.7 real-long-chat gate remains pending and the deferred/anomaly ledgers remain active operational memory. SYS-20 and SYS-37 remain peers on the same I3/D2/NOW edge and are listed explicitly so no candidate is silently skipped. After SYS-15, recompute the complete remaining NOW edge rather than assuming fixed order.
 
 ## Non-duplication boundaries
 
@@ -252,9 +258,10 @@ registered structured reference field + explicit reference class + exact target 
 explicit audit mode + exact PR/ref/SHA observations + explicit expected-base/head contract when required + fixed-SHA relationship facts + capture-coherence check → deterministic branch/PR relationship findings → SYS-36; no stale/hygiene decision, merge/close/delete/rebase/write authority, release authorization, safe-parallel judgment, every-PR crawler, or runtime behavior
 2+ independently legitimate tasks + reviewed semantic read/write/dependency profiles + current SYS-36 facts when material + frozen guards → pairwise/group parallel-safety disposition → SYS-49; no task selection, priority/gate change, scheduler, lock, branch/PR mutation, merge/replay, repo writer, release authorization, anomaly classification, or CI authority
 reviewed anomaly/process family contract + exact source-backed specimens + independence classes + required discriminators + healthy/contrary controls → curated same-family recurrence / cross-family correlation posture → SYS-16; no auto family clustering, root-cause inference, severity promotion, WATCH/FIX/BLOCKER mutation, runtime telemetry collection, background monitoring, repo writer, release authority, or runtime behavior
+reviewed permanent golden-fixture mutation + exact before/after identities + semantic mutation basis + case/test-intent/negative-control impact + exact verification refs → immutable mutation receipt → SYS-25; no fixture writer, expected-value auto-acceptance, test-intent broadening, registry/harness authority, coverage-completeness claim, LIVE_PASS promotion, repo writer, release authority, or runtime behavior
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, and SYS-16 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, and SYS-25 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

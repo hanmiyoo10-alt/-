@@ -180,6 +180,13 @@
 - Event ID: `3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52`
 <!-- canonical-main-doc-promoted:3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `f6b7f299bf17cf686c12fa0e2ee7ee1ced3f99e2003fefe8ca57e7bf9bcb1828`
+<!-- canonical-main-doc-promoted:f6b7f299bf17cf686c12fa0e2ee7ee1ced3f99e2003fefe8ca57e7bf9bcb1828 -->
+
 ### 2026-08-26 — feat: add Repository Work Harness shadow preflight foundation
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

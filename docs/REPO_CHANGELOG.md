@@ -130,6 +130,13 @@
 - Event ID: `6781ce38120d06e20b1dcbfaf2ddb334d0e7a0f22e22111c66f09697da3e2313`
 <!-- canonical-main-doc-promoted:6781ce38120d06e20b1dcbfaf2ddb334d0e7a0f22e22111c66f09697da3e2313 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `21a9c6d0b2830ca607c72d8ef0c3e877748bb332d8193bf80568bd285940fb3b`
+<!-- canonical-main-doc-promoted:21a9c6d0b2830ca607c72d8ef0c3e877748bb332d8193bf80568bd285940fb3b -->
+
 ### 2026-08-26 — infra: add canonical-main work decomposition system
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

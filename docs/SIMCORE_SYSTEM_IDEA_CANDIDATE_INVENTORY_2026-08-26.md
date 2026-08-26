@@ -1,18 +1,15 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 6 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 7 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
-Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as product/runtime ideas.
+Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
 Classification authority:
 - `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
-- `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md`
-- `docs/SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md`
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
+- `docs/SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md`
 
-Existing systems intentionally not duplicated: S-10, S-11, S-12, M-10, M-11, M-13, Real-Time Close-Step, Release System v2/v2.1.
-
-## 1. Unified axes
+Unified axes:
 
 ```text
 SIZE          = SMALL / MEDIUM / LARGE
@@ -23,15 +20,13 @@ DESIGN GATE   = NOW / DEPENDENCY / POST_M2_3 / POST_M2_4 / EVIDENCE / EXTERNAL /
 APPLY CLASS   = freeze-time DOC_* or NR_* classification
 ```
 
-All system ideas remain `NON_RUNTIME` unless a frozen design proves otherwise. Unfrozen rows are `NR_UNASSESSED`.
-
-## 2. Current inventory
+## Current inventory
 
 | ID | Candidate | Family | Size | I | D | Class | Gate | Apply |
 |---|---|---|---|---:|---:|---|---|---|
 | SYS-01 | Living Authority Map | Authority | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-02 | Decision / Supersession Graph | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-03 | Gate Dependency Graph | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-03 | Gate Dependency Graph | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-04 | Status Vocabulary Linter | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-05 | Historical-vs-Living Document Registry | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-06 | Evidence-to-Decision Trace Map | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -83,45 +78,32 @@ All system ideas remain `NON_RUNTIME` unless a frozen design proves otherwise. U
 | SYS-52 | Operator Error Specimen Ledger | Workflow | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 
 Frozen design authorities:
-- SYS-19 → `docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md`
-- SYS-01 → `docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md`
-- SYS-51 → `docs/SIMCORE_SYS51_CLOSE_STEP_TRIGGER_MATRIX_DESIGN.md`
-- SYS-08 → `docs/SIMCORE_SYS08_WORK_ITEM_CLOSE_RECEIPT_DESIGN.md`
-- SYS-10 → `docs/SIMCORE_SYS10_STALE_NEXT_ACTION_SCANNER_DESIGN.md`
-- SYS-48 → `docs/SIMCORE_SYS48_GATE_BLOCKED_REASON_SURFACE_DESIGN.md`
 
-## 3. Counts
+```text
+SYS-19 → docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md
+SYS-01 → docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md
+SYS-51 → docs/SIMCORE_SYS51_CLOSE_STEP_TRIGGER_MATRIX_DESIGN.md
+SYS-08 → docs/SIMCORE_SYS08_WORK_ITEM_CLOSE_RECEIPT_DESIGN.md
+SYS-10 → docs/SIMCORE_SYS10_STALE_NEXT_ACTION_SCANNER_DESIGN.md
+SYS-48 → docs/SIMCORE_SYS48_GATE_BLOCKED_REASON_SURFACE_DESIGN.md
+SYS-03 → docs/SIMCORE_SYS03_GATE_DEPENDENCY_GRAPH_DESIGN.md
+```
+
+## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 6
-UNFROZEN             = 46
-OPEN NOW             = 34
+FROZEN               = 7
+UNFROZEN             = 45
+OPEN NOW             = 33
 GATED / DEPENDENCY   = 12
 
-SIZE
-SMALL  = 20
-MEDIUM = 32
-LARGE  = 0
-
-RUNTIME CLASS
-NON_RUNTIME = 52
-RUNTIME     = 0
-
-APPLY CLASS
 NR_DOC_ONLY   = 5
-NR_EXECUTABLE = 1
-NR_UNASSESSED = 46
+NR_EXECUTABLE = 2
+NR_UNASSESSED = 45
 ```
 
-Importance/difficulty baseline remains unchanged:
-
-```text
-I5 = 23 / I4 = 25 / I3 = 4
-D1 = 3 / D2 = 17 / D3 = 32
-```
-
-## 4. Canonical selection
+## Canonical selection
 
 ```text
 1. DESIGN GATE open
@@ -130,7 +112,7 @@ D1 = 3 / D2 = 17 / D3 = 32
 4. downstream leverage higher
 ```
 
-Completed:
+Completed current sweep edge:
 
 ```text
 SYS-19 = I5 D1 / FROZEN / NR_DOC_ONLY
@@ -139,13 +121,12 @@ SYS-51 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-08 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-10 = I5 D2 / FROZEN / NR_EXECUTABLE
 SYS-48 = I5 D2 / FROZEN / NR_DOC_ONLY
+SYS-03 = I5 D3 / FROZEN / NR_EXECUTABLE
 ```
 
-Current highest-priority open edge:
+Remaining I5 / D3 / NOW:
 
 ```text
-I5 / D3 / NOW
-SYS-03 Gate Dependency Graph
 SYS-09 Change-Impact Review Map
 SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
@@ -159,15 +140,15 @@ SYS-42 Implementation Slice Conformance Checker
 SYS-50 Work Bundling Conflict Detector
 ```
 
-Downstream-leverage next:
+Canonical next:
 
 ```text
-NEXT = SYS-03 Gate Dependency Graph
+NEXT = SYS-09 Change-Impact Review Map
 ```
 
-Reason: SYS-48 now defines the bounded human explanation of one gate. SYS-03 is the complementary system-wide dependency model needed to make future RT-11 gate-unlock propagation, blocked-reason review, and incremental sweep reopening structurally explicit without changing gate authority.
+Reason: SYS-01 says where authority lives, SYS-51 says which close surfaces to evaluate, SYS-03 now maps explicit gate-review dependencies, and SYS-09 can next map changed path/authority families to the review obligations that should feed those close surfaces and later conformance checks.
 
-## 5. Non-duplication boundaries
+## Non-duplication boundaries
 
 ```text
 production identity check → S-10 + sync-state
@@ -179,27 +160,14 @@ release publication → existing permanent release authority
 RT semantics → Real-Time Close-Step parent design
 close trigger selection → SYS-51
 one-work closure summary → SYS-08
-stale NEXT detection → SYS-10 only; no priority calculation or auto-repair
-gate-blocked explanation → SYS-48; no dependency calculation or automatic unlock
+stale NEXT detection → SYS-10
+gate-blocked explanation → SYS-48
+direct gate review dependency lookup → SYS-03; no gate-state inference/automatic unlock/priority selection
 ```
 
-A system idea that duplicates one of these authorities must be redesigned before freeze.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active.
 
-## 6. Candidate-to-design rule
-
-```text
-candidate
-→ bounded design
-→ OPEN DESIGN QUESTIONS = 0
-→ DESIGN FROZEN
-→ confirm unified classification
-→ assign freeze-time apply class
-→ STOP
-```
-
-Application/implementation is a separate transaction and remains held while the current system design sweep is active.
-
-## 7. Production boundary
+## Production boundary
 
 ```text
 plugin bytes = unchanged

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "summary-scope.contract-matrix",
+  "suite": "summary-scope",
+  "input": {
+    "cases": [
+      {"id":"annual-only-single-year","mode":"C","text":"2030년 연말 결산을 해줘"},
+      {"id":"annual-only-full-year-window","mode":"C","text":"2030.1.1.~12.31. 활동 성과 총정리"},
+      {"id":"cumulative-yoy-explicit-baseline","mode":"C","text":"2029년 말 수치를 기준으로 2030년 연말 누적 수치와 증가율을 비교해줘"},
+      {"id":"ambiguous-multiyear-range-none","mode":"C","text":"2028~2030 연말 결산을 총정리해줘"},
+      {"id":"previous-year-mention-without-yoy-signal","mode":"C","text":"2029년과 2030년 연말 결산을 정리해줘"},
+      {"id":"adjacent-year-range-with-compare","mode":"C","text":"2029~2030 연말 수치를 비교해줘"},
+      {"id":"nonadjacent-comparison-none","mode":"C","text":"2028년과 2030년 수치를 비교해줘"},
+      {"id":"non-c-mode-none","mode":"A","text":"2030년 연말 결산을 해줘"},
+      {"id":"missing-year-none","mode":"C","text":"이번 연말 결산을 해줘"}
+    ]
+  },
+  "expected": {
+    "annual-only-single-year":{"scope":"ANNUAL_ONLY","targetYear":2030,"comparisonYear":null,"authority":"TARGET_YEAR","reason":"SINGLE_YEAR_SUMMARY"},
+    "annual-only-full-year-window":{"scope":"ANNUAL_ONLY","targetYear":2030,"comparisonYear":null,"authority":"TARGET_YEAR","reason":"BOUNDED_SINGLE_YEAR"},
+    "cumulative-yoy-explicit-baseline":{"scope":"CUMULATIVE_YOY","targetYear":2030,"comparisonYear":2029,"authority":"YEAR_END_BASELINE_COMPARE","reason":"EXPLICIT_PREVIOUS_YEAR_BASELINE"},
+    "ambiguous-multiyear-range-none":{"scope":"NONE","targetYear":null,"comparisonYear":null,"authority":"NONE","reason":"INELIGIBLE"},
+    "previous-year-mention-without-yoy-signal":{"scope":"ANNUAL_ONLY","targetYear":2030,"comparisonYear":null,"authority":"TARGET_YEAR","reason":"SINGLE_YEAR_SUMMARY"},
+    "adjacent-year-range-with-compare":{"scope":"CUMULATIVE_YOY","targetYear":2030,"comparisonYear":2029,"authority":"YEAR_END_BASELINE_COMPARE","reason":"EXPLICIT_PREVIOUS_YEAR_BASELINE"},
+    "nonadjacent-comparison-none":{"scope":"NONE","targetYear":null,"comparisonYear":null,"authority":"NONE","reason":"INELIGIBLE"},
+    "non-c-mode-none":{"scope":"NONE","targetYear":null,"comparisonYear":null,"authority":"NONE","reason":"INELIGIBLE"},
+    "missing-year-none":{"scope":"NONE","targetYear":null,"comparisonYear":null,"authority":"NONE","reason":"INELIGIBLE"}
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "migrationFrom": "v0.64.0 natural failure family -> v0.64.1 deterministic Summary Scope Authority",
+    "evidenceMaturity": "CONTRACT_ESTABLISHED",
+    "naturalSemanticClose": "VALIDATION_ONLY"
+  }
+}

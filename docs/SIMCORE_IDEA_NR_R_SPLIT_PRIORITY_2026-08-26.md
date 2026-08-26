@@ -1,22 +1,20 @@
 # SimCore Idea Priority — NON_RUNTIME / RUNTIME Split Queues — 2026-08-26
 
-Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN R DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
+Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN R DESIGN SWEEP CLOSED · S-04 DOC_APPLIED · NO RUNTIME CHANGE`
 
 Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling harvest work and future runtime stabilization do not compete in one mixed priority queue.
 
 Related authority:
-- `docs/SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md` — complete 31-item scoring/classification baseline
-- `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md` — S/M/L classification
-- `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md` — design completion/freeze rule
-- `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md` — NR-lane harvest rule
-- `docs/SIMCORE_RUNTIME_IDEA_PREP_NON_RUNTIME_POLICY.md` — frozen-R repo-memory prep rule
-- `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md` — R document applicability axis
-- `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md` — NR implementation-form axis
-- `docs/SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md` — current design-first priority
-- `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md` — completion/implementation history
-- `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
-- `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
-- `docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md`
+- `docs/SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md`
+- `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md`
+- `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
+- `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md`
+- `docs/SIMCORE_RUNTIME_IDEA_PREP_NON_RUNTIME_POLICY.md`
+- `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
+- `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
+- `docs/SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md`
+- `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
+- `docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md`
 
 This document is the current NR/R selection queue authority.
 
@@ -134,7 +132,7 @@ RUNTIME = 17
 | State | ID | Idea | Size | Importance | Difficulty | Gate / disposition |
 |---|---|---|---|---:|---:|---|
 | FROZEN | S-02 | Diagnostic Quick Summary | SMALL | 5 | 1 | runtime PARKED · DOC_NOT_REQUIRED |
-| FROZEN | S-04 | Live Evidence Packet Builder | SMALL | 5 | 2 | runtime PARKED · DOC_APPLICABLE |
+| FROZEN | S-04 | Live Evidence Packet Builder | SMALL | 5 | 2 | runtime PARKED · DOC_APPLIED · R_PREP complete |
 | GATED | S-05 | Reconcile Differential Receipt | SMALL | 5 | 2 | POST_M2_3 |
 | GATED | M-03 | Genuine Edit Rebuild Performance Study | MEDIUM | 5 | 4 | POST_M2_3 |
 | FROZEN | S-01 | MINI_WARNING_WIDGET_V1 | SMALL | 4 | 2 | runtime PARKED · DOC_NOT_REQUIRED |
@@ -152,8 +150,6 @@ RUNTIME = 17
 | GATED | S-06 | Persistence Footprint Watch | SMALL | 2 | 2 | EVIDENCE |
 
 ### 3.1 Current gate-open R design state
-
-The current `DESIGN SWEEP FIRST` pool is now closed.
 
 ```text
 S-03 Diagnostic Copy Profiles
@@ -200,12 +196,11 @@ S-08 History Frontier Confidence Surface
 
 S-04 Live Evidence Packet Builder
 → runtime PARKED
-→ DOC_APPLICABLE
-→ repository evidence-review / classification-handoff template
-→ design-sweep hold is now RELEASED
+→ DOC_APPLIED
+→ R_PREP_NON_RUNTIME COMPLETE
+→ artifact: docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
+→ evidence: docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 ```
-
-S-03/S-07/S-08 frozen designs already contain their durable-memory contracts, so no second prep document is required. S-07/S-08 also forbid manufacturing current Host/history baselines before runtime observations exist.
 
 ### 3.3 R runtime completion rule
 
@@ -217,16 +212,7 @@ DESIGN COMPLETE
 → STOP
 ```
 
-After sweep closure:
-
-```text
-DOC_APPLICABLE
-+ strict R_PREP_NON_RUNTIME PASS
-→ separate bounded document-only work item
-→ parent runtime core still PARKED
-```
-
-No R item becomes runtime-harvestable because the design sweep or NR tiers closed.
+A completed R_PREP artifact never promotes the runtime core to implemented.
 
 ---
 
@@ -260,16 +246,21 @@ R ACTIVE GATE-OPEN DESIGN
 NONE
 
 R DOC APPLY QUEUE
-S-04 repository evidence-review / classification-handoff template
+EMPTY
+
+R DOC APPLIED
+S-04
 ```
 
-Current legitimate next non-runtime application:
+Current legitimate next operation:
 
 ```text
-S-04 R_PREP_NON_RUNTIME
+wait for a legitimate NR/R design gate to open
+OR
+perform separately selected non-runtime permanent-fixture work under its own authority
+OR
+close the pending v0.64.7 real-long-chat gate before physical M2-3
 ```
-
-or wait for a future NR/R design gate to open.
 
 Production boundary remains:
 

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 17 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 18 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -86,57 +86,63 @@ SYS-38 Architecture Contract Diff Reporter
 
 SYS-31 Version-Bump Blast-Radius Check
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
+
+SYS-35 Repository Transaction Ledger
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
-SYS-31 contract:
+SYS-35 contract:
 
 ```text
-observed exact production identity
-+ reviewed release intent / candidate request
-+ reviewed transaction-radius declaration
-→ release/version blast-radius disposition
+reviewed meaningful repository transaction
++ immutable Git/GitHub/release identity refs
++ bounded authority/mutation classification
+→ append-only cross-work transaction-lineage row
 ```
 
-It separates product/work surfaces, canonical production candidate surfaces, and post-publish administrative convergence. It checks NEW_VERSION / SAME_VERSION_CORRECTION / ROLLBACK mode relationships, exact latest/install candidate radius, live-gate presence, production-state synchronization, and forbidden bundling of product runtime work with CI/release/repository/state-sync system redesign. It is read-only and never bumps version, creates a candidate, publishes production, mutates main state, or declares LIVE_PASS/R2.1 proof.
+It is curated repository memory/navigation, not an every-commit scraper. Git/GitHub remain exact commit/PR/merge authority, release records remain per-release lifecycle/identity authority, SYS-08 remains one-work close authority, and current NEXT/queue remain in living current-state documents. SYS-35 rows preserve transaction class, authority domain, mutation boundary, stable repository refs, and predecessor/successor lineage without copying diffs, logs, plugin bytes, or release records.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 17
-OPEN NOW            = 23
+FROZEN              = 18
+OPEN NOW            = 22
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 10
+NR_DOC_ONLY         = 11
 NR_EXECUTABLE       = 5
 NR_PROTECTED        = 2
-NR_UNASSESSED       = 35
+NR_UNASSESSED       = 34
 ```
 
 ## 4. Current next design
 
-Remaining highest-priority edge:
+All gate-open Importance-5 designs are now frozen.
+
+Highest-priority open edge:
 
 ```text
-I5 / D3 / NOW
-SYS-35 Repository Transaction Ledger
+I4 / D1 / NOW
+SYS-46 Canonical Task Card
+SYS-47 User Handoff Card
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-35 Repository Transaction Ledger
+NEXT SYSTEM DESIGN = SYS-46 Canonical Task Card
 ```
 
 Reason:
 
 ```text
-SYS-31 now freezes the protected pre-release blast-radius boundary for the next genuine runtime release.
-SYS-35 is the sole remaining I5/D3/NOW idea.
-It can now build on SYS-08 close receipts plus the frozen release identity/radius controls without being forced to invent transaction semantics first.
+SYS-46 can freeze one canonical internal task identity/scope/authority/gate/stop surface.
+SYS-47 should consume that stable internal work card rather than invent a parallel user-facing work-state model.
+Therefore task-card design has higher downstream leverage and goes first.
 ```
 
-After SYS-35, recompute the next open edge using unified priority rather than assuming a static I4 order.
+After SYS-46, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -159,6 +165,7 @@ SYS-22 application     = HOLD
 SYS-21 application     = HOLD
 SYS-38 implementation  = HOLD
 SYS-31 implementation  = HOLD / PROTECTED
+SYS-35 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -181,7 +188,9 @@ SYS-38 adds exact architecture delta visibility without adding another architect
 
 SYS-31 adds protected release-radius preflight without adding another publisher or state writer. `VERSION_RADIUS_CLEAR` means only that no frozen blast-radius contradiction was found; it does not establish candidate PASS, release authorization, publication success, live correctness, or R2.1 genuine release proof.
 
-SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, and SYS-21 are document-only by design.
+SYS-35 adds historical repository-transaction navigation without adding proof. A ledger row does not prove a commit/PR/release identity beyond its natural Git/GitHub/release authority and does not make old approvals or PASS results reusable.
+
+SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, and SYS-35 are document-only by design.
 
 ## 7. Production boundary
 
@@ -201,8 +210,9 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 17 / 52
-CURRENT NEXT = SYS-35 Repository Transaction Ledger
+SYSTEM DESIGNS FROZEN = 18 / 52
+ALL GATE-OPEN I5 DESIGNS = FROZEN
+CURRENT NEXT = SYS-46 Canonical Task Card
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

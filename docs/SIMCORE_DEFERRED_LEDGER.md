@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 32/52 designs FROZEN; scoped next design = SYS-07 Cross-Reference Integrity Auditor
+System-idea sweep state: 33/52 designs FROZEN; scoped next design = SYS-36 Branch/PR Relationship Auditor
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -230,7 +230,38 @@ Freshness is not a global property of an evidence artifact and is never decided 
 
 The v0.64.5 genuine-edit positive control is the canonical boundary example: it remains valid/fresh for the claim that a pre-M2-3 direct baseline exists, while post-M2-3 extracted behavior requires the already-owned direct revalidation before M2-4. SYS-14 represents that distinction; it does not invent the requirement.
 
-SYS-14 cannot broaden SYS-13 proof fitness, create required evidence slots, determine verification-debt/blocker posture, close a live gate, authorize release, or auto-scan repository history. Current application remains HOLD while the system design sweep is active. The scoped next system design is SYS-07 Cross-Reference Integrity Auditor.
+SYS-14 cannot broaden SYS-13 proof fitness, create required evidence slots, determine verification-debt/blocker posture, close a live gate, authorize release, or auto-scan repository history. Current application remains HOLD while the system design sweep is active. Frozen SYS-07 consumes reviewed freshness only for registered current-evidence-reuse reference fields and never calculates freshness itself.
+
+### Cross-Reference Integrity Auditor design
+
+Status: `SYS-07 DESIGN FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD / NON_RUNTIME`
+
+SYS-07 now freezes the bounded deterministic audit contract for registered structured repository-memory references.
+
+Frozen contract:
+
+```text
+registered structured reference field
++ explicit reference class
++ exact target identity
++ reviewed lifecycle / supersession / provenance / freshness metadata when required
+→ deterministic cross-reference-integrity findings
+```
+
+Frozen top-level audit states:
+
+```text
+XREF_AUDIT_CLEAN
+XREF_AUDIT_FINDINGS
+XREF_AUDIT_PARTIAL
+XREF_AUDIT_BLOCKED
+```
+
+SYS-07 explicitly separates mechanical resolution from semantic eligibility. A path can resolve while still being ineligible for a current-authority field, and a superseded historical target can remain correct for a historical evidence/lineage field. Current evidence reuse requires the exact reviewed SYS-14 freshness row; the auditor cannot infer freshness from age/version or promote `REVALIDATION_REQUIRED` into a blocker.
+
+v1 is local/read-only/no-network and scans only explicitly registered structured reference surfaces. It does not crawl arbitrary prose, infer lifecycle/supersession/provenance, verify GitHub-side branch/PR/commit relationships, repair references, mutate repository state, become required CI, or affect runtime/release authority.
+
+Current implementation remains HOLD while the system design sweep is active. The scoped next system design is SYS-36 Branch/PR Relationship Auditor, which is expected to own the GitHub-side relationship truth deliberately excluded from SYS-07.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -483,7 +514,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 32/52 system designs are currently FROZEN and the scoped next design is SYS-07 Cross-Reference Integrity Auditor. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 33/52 system designs are currently FROZEN and the scoped next design is SYS-36 Branch/PR Relationship Auditor. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

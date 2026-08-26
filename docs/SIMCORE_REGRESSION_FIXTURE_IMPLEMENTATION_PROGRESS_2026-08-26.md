@@ -1,6 +1,6 @@
 # SimCore Permanent Regression Fixture — Implementation Progress — 2026-08-26
 
-Status: `CURRENT IMPLEMENTATION PROGRESS AUTHORITY · SUMMARY-SCOPE COMPLETE · NO RUNTIME CHANGE`
+Status: `CURRENT IMPLEMENTATION PROGRESS AUTHORITY · SUMMARY-SCOPE + NARRATIVE-CLOCK COMPLETE · NO RUNTIME CHANGE`
 
 Research/design authority:
 - `docs/SIMCORE_REGRESSION_FIXTURE_EXPANSION_COMPLETENESS_AUDIT_2026-08-26.md`
@@ -8,6 +8,7 @@ Research/design authority:
 
 Implementation evidence:
 - `docs/SIMCORE_SUMMARY_SCOPE_PERMANENT_FIXTURE_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
+- `docs/SIMCORE_NARRATIVE_CLOCK_PERMANENT_FIXTURE_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
 
 Purpose: track implementation progress for the already-frozen permanent regression expansion portfolio without rewriting the point-in-time research/design documents.
 
@@ -38,14 +39,19 @@ summary-scope
 = SimCore CI 32919448279 Verify PASS / Required PASS
 
 narrative-clock
-= DESIGN FROZEN
-= IMPLEMENTATION READY
-= NEXT
+= IMPLEMENTED
+= EXECUTABLE
+= required true
+= goldenGate true
+= 13 frozen cases
+= PR #427
+= main merge c7aaa8f72c1920a2d2abf0b81a05bc8607ffed5c
+= SimCore CI 32919972593 Verify PASS / Required PASS
 
 frame
 = DESIGN FROZEN
 = IMPLEMENTATION READY
-= PENDING
+= NEXT
 
 broadcast-closure expansion
 = FROZEN EXTEND_EXISTING decision
@@ -54,25 +60,34 @@ broadcast-closure expansion
 
 ## 3. Current permanent registry consequence
 
-Before this expansion the permanent registry contained nine required golden-gate suites.
+Before this expansion portfolio the permanent registry contained nine required golden-gate suites.
 
-After `summary-scope` implementation:
+After the first two implementations:
 
 ```text
-required permanent suites = 10
-new stable suite id        = summary-scope
-coverage                   = EXECUTABLE
+required permanent suites = 11
+new stable suite ids       = summary-scope, narrative-clock
+coverage                   = EXECUTABLE for both
 ```
 
 No second harness was created.
 
 ## 4. Evidence maturity reminder
 
-`summary-scope` deterministic regression maturity is now permanent/executable, while its dedicated natural semantic close remains separately classified:
+`summary-scope` deterministic regression maturity is permanent/executable, while its dedicated natural semantic close remains separately classified:
 
 ```text
 CONTRACT_ESTABLISHED
 NATURAL_SEMANTIC_CLOSE = VALIDATION_ONLY
+```
+
+`narrative-clock` preserves mixed evidence maturity:
+
+```text
+Current Timeline deterministic contract = ESTABLISHED
+Narrative Tail deterministic contract    = ESTABLISHED
+explicit flashback natural close         = VALIDATION_ONLY
+post-B_END first-C natural close          = DIRECT_LIVE_CONTROL
 ```
 
 Do not promote live-evidence maturity from CI success alone.
@@ -117,7 +132,7 @@ RUNTIME SEMANTICS    = UNCHANGED
 
 ```text
 NEXT PERMANENT FIXTURE WORK
-= narrative-clock
+= frame
 ```
 
 Use its frozen design as authority and perform it as a separate work branch / PR / permanent-CI / main-evidence transaction.

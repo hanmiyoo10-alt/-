@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · S-03 FROZEN · DESIGN FIRST · APPLY LATER · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · S-03/S-07 FROZEN · DESIGN FIRST · APPLY LATER · NO RUNTIME CHANGE`
 
 Purpose: reduce context switching by finishing every currently gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
 
@@ -11,6 +11,7 @@ Related authority:
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
+- `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
 
 ---
 
@@ -126,24 +127,24 @@ S-03 Diagnostic Copy Profiles
 → design authority: docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md
 
 S-07 Host Capability Receipt
-→ NEXT
+→ DESIGN FROZEN
+→ DOC_NOT_REQUIRED
+→ design authority: docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md
 
 S-08 History Frontier Confidence Surface
-→ AFTER S-07
+→ NEXT
 ```
 
 Remaining gate-open RUNTIME design:
 
 ```text
-S-07 Host Capability Receipt
 S-08 History Frontier Confidence Surface
 ```
 
 Canonical remaining order:
 
 ```text
-1. S-07  importance 3 / difficulty 2
-2. S-08  importance 2 / difficulty 2
+1. S-08  importance 2 / difficulty 2
 ```
 
 Existing frozen R items do not need redesign:
@@ -153,6 +154,7 @@ S-01 FROZEN
 S-02 FROZEN
 S-03 FROZEN
 S-04 FROZEN
+S-07 FROZEN
 ```
 
 Existing completed NR items do not need redesign or rollback:
@@ -182,9 +184,9 @@ S-04
 → HOLD UNTIL CURRENT DESIGN SWEEP CLOSES
 ```
 
-S-03 is `DOC_NOT_REQUIRED` and adds no apply-queue item.
+S-03 and S-07 are `DOC_NOT_REQUIRED` and add no apply-queue item.
 
-If S-07 or S-08 freezes as `DOC_APPLICABLE`, append it to the same later apply queue; do not implement the document slice inside its design work item.
+If S-08 freezes as `DOC_APPLICABLE`, append it to the same later apply queue; do not implement the document slice inside its design work item.
 
 Current NR harvest queue is empty.
 
@@ -192,7 +194,7 @@ Current NR harvest queue is empty.
 
 ## 7. Sweep-close transition
 
-When S-07 and S-08 are both frozen:
+When S-08 freezes:
 
 ```text
 CURRENT DESIGN SWEEP = CLOSED
@@ -254,10 +256,10 @@ CURRENT PHASE PRIORITY
 S-03
 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
 
-NEXT DESIGN
-= S-07 Host Capability Receipt
+S-07
+= DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
 
-THEN
+NEXT DESIGN
 = S-08 History Frontier Confidence Surface
 
 AFTER CURRENT SWEEP CLOSES

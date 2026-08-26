@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19/SYS-01/SYS-51/SYS-08 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 5 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing the frozen items.
 
@@ -51,14 +51,17 @@ SYS-51 Close-Step Trigger Matrix
 
 SYS-08 Work-Item Close Receipt
 = SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-10 Stale Next-Action Scanner
+= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 4
-OPEN NOW            = 36
+FROZEN              = 5
+OPEN NOW            = 35
 GATED/DEPENDENCY    = 12
 ```
 
@@ -66,36 +69,35 @@ Remaining highest-priority open edge:
 
 ```text
 I5 / D2 / NOW
-SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
 ```
 
-Downstream-leverage choice:
+Current selection:
 
 ```text
-NEXT = SYS-10 Stale Next-Action Scanner
+NEXT = SYS-48 Gate-Blocked Reason Surface
 ```
 
-Reason:
-- SYS-01 defines authority lookup;
-- SYS-51 defines which close surfaces are evaluated;
-- SYS-08 defines the bounded receipt of actual close results;
-- SYS-10 next attacks the recurring living-memory drift where completed work remains advertised as `NEXT`.
+Design constraint already established for SYS-48:
+- it may expose an already-authoritative blocking reason and unlock condition;
+- it may not invent dependency edges or become the gate-dependency engine;
+- explicit dependency graph semantics remain the separate SYS-03 idea.
 
-SYS-48 remains open but benefits from the later explicit gate dependency design before its fullest form.
+After SYS-48 freezes, selection moves to the open I5/D3 group according to downstream leverage.
 
-## 4. Apply hold
+## 4. Apply / implementation hold
 
 ```text
-SYS-19 application = HOLD
-SYS-01 application = HOLD
-SYS-51 application = HOLD
-SYS-08 application = HOLD
+SYS-19 application     = HOLD
+SYS-01 application     = HOLD
+SYS-51 application     = HOLD
+SYS-08 application     = HOLD
+SYS-10 implementation  = HOLD
 ```
 
-The current system design sweep remains active. Do not materialize these `NR_DOC_ONLY` artifacts in the same transaction as design freeze.
+The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
 
-If the user explicitly changes priority, or supplies live evidence requiring immediate classification, that new operational priority may interrupt the design sweep; after handling it, recompute the sweep before resuming.
+If the user explicitly changes priority, or supplies live evidence requiring immediate classification, that operational priority may interrupt the design sweep; after handling it, recompute the sweep before resuming.
 
 ## 5. Gate discipline
 
@@ -127,7 +129,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08
-CURRENT NEXT DESIGN = SYS-10 Stale Next-Action Scanner
-SYSTEM APPLY/HARVEST = HOLD
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10
+CURRENT NEXT DESIGN = SYS-48 Gate-Blocked Reason Surface
+SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

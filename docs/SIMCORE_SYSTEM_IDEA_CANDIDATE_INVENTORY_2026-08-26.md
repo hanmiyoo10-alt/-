@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 20 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 21 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -28,7 +28,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-02 | Decision / Supersession Graph | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-03 | Gate Dependency Graph | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-04 | Status Vocabulary Linter | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-05 | Historical-vs-Living Document Registry | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-05 | Historical-vs-Living Document Registry | Authority | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-06 | Evidence-to-Decision Trace Map | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-07 | Cross-Reference Integrity Auditor | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-08 | Work-Item Close Receipt | Authority | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
@@ -100,21 +100,22 @@ SYS-31 → docs/SIMCORE_SYS31_VERSION_BUMP_BLAST_RADIUS_CHECK_DESIGN.md
 SYS-35 → docs/SIMCORE_SYS35_REPOSITORY_TRANSACTION_LEDGER_DESIGN.md
 SYS-46 → docs/SIMCORE_SYS46_CANONICAL_TASK_CARD_DESIGN.md
 SYS-47 → docs/SIMCORE_SYS47_USER_HANDOFF_CARD_DESIGN.md
+SYS-05 → docs/SIMCORE_SYS05_HISTORICAL_VS_LIVING_DOCUMENT_REGISTRY_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 20
-UNFROZEN             = 32
-OPEN NOW             = 20
+FROZEN               = 21
+UNFROZEN             = 31
+OPEN NOW             = 19
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 13
+NR_DOC_ONLY   = 14
 NR_EXECUTABLE = 5
 NR_PROTECTED  = 2
-NR_UNASSESSED = 32
+NR_UNASSESSED = 31
 ```
 
 ## Canonical selection
@@ -149,6 +150,7 @@ SYS-31 = I5 D3 / FROZEN / NR_PROTECTED
 SYS-35 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-46 = I4 D1 / FROZEN / NR_DOC_ONLY
 SYS-47 = I4 D1 / FROZEN / NR_DOC_ONLY
+SYS-05 = I4 D2 / FROZEN / NR_DOC_ONLY
 ```
 
 Highest-priority open edge now:
@@ -157,7 +159,6 @@ Highest-priority open edge now:
 I4 / D2 / NOW
 SYS-02 Decision / Supersession Graph
 SYS-04 Status Vocabulary Linter
-SYS-05 Historical-vs-Living Document Registry
 SYS-12 Current-State Snapshot Page
 SYS-23 Negative-Control Registry
 SYS-28 Verification Debt Index
@@ -168,10 +169,10 @@ SYS-52 Operator Error Specimen Ledger
 Canonical next:
 
 ```text
-NEXT = SYS-05 Historical-vs-Living Document Registry
+NEXT = SYS-04 Status Vocabulary Linter
 ```
 
-Reason: the remaining I4/D2 candidates tie on formal score. SYS-05 has the broadest immediate downstream leverage because a reviewed living-vs-historical document-role registry can become a bounded input/boundary for later status linting, current-state projection, supersession navigation, and stale-current-language review without forcing each downstream idea to rediscover whether old point-in-time evidence is current authority.
+Reason: SYS-05 now provides the reviewed lifecycle/section-role boundary needed to distinguish living current text from preserved point-in-time history. Among the remaining I4/D2 candidates, SYS-04 can consume that boundary immediately to prevent status-token drift without false-positive linting of historical evidence, and its frozen vocabulary can in turn strengthen later current-state projection and supersession/navigation work.
 
 ## Non-duplication boundaries
 
@@ -202,9 +203,10 @@ reviewed release intent + observed production identity + reviewed transaction ra
 curated meaningful repository transaction identities + authority/mutation classes + lineage links → SYS-35; Git/GitHub/release records remain exact natural authorities, no every-commit scrape, current-state authority, repo writer, or release authorization
 selected bounded work + reviewed authorities → canonical internal task identity/objective/WT/scope/gate/mutation/stop contract → SYS-46; no scheduler, global NEXT, gate engine, close receipt, proof authority, user handoff, repo writer, or implementation authorization
 canonical task/gate facts + user-relevant authoritative facts → compact user-facing action/decision/wait/scope/stop projection → SYS-47; no second task identity, gate engine, live-experiment semantic authority, proof/classifier, close receipt, scheduler, or repo writer
+reviewed document/family lifecycle + explicit section exceptions → curated living/historical/frozen/evidence/template role metadata → SYS-05; no current-state value cache, authority map, stale-content scanner, status linter, supersession graph, crawler, doc writer, or runtime/release authority
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE`; SYS-35, SYS-46, and SYS-47 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, and SYS-05 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

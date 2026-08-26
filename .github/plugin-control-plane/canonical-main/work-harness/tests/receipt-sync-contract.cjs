@@ -51,12 +51,15 @@ function issue(number, record, suffix = '') {
 const adapterRegistry = loadAdapterRegistry(process.cwd());
 const projectRegistry = loadProjectRegistry(process.cwd());
 
-assert.equal(markerCount(`x${RECEIPT_REQUEST}y${RECEIPT_REQUEST}`, RECEIPT_REQUEST), 2);
+assert.equal(markerCount(`${RECEIPT_REQUEST}\n`, RECEIPT_REQUEST), 1);
+assert.equal(markerCount(`Mention in code: \`${RECEIPT_REQUEST}\`\n${RECEIPT_REQUEST}\n`, RECEIPT_REQUEST), 1);
+assert.equal(markerCount(`${RECEIPT_REQUEST}\n  ${RECEIPT_REQUEST}  \n`, RECEIPT_REQUEST), 2);
+assert.equal(markerCount(`x${RECEIPT_REQUEST}y`, RECEIPT_REQUEST), 0);
 assert.equal(parseArgs(['--work-issue', '123']), 123);
 assert.equal(parseArgs(['--work-issue', 'x']), null);
 
 const record = workRecord();
-const target = issue(700, record);
+const target = issue(700, record, `\n\nDesign note: \`${RECEIPT_REQUEST}\``);
 const first = planReceiptSyncForIssue({
   issues: [target],
   targetIssueNumber: 700,

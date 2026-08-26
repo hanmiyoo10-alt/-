@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-18 design freeze:
+Current state after SYS-14 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 31
-UNFROZEN                = 21
+FROZEN                  = 32
+UNFROZEN                = 20
 
-NR_DOC_ONLY   = 22
+NR_DOC_ONLY   = 23
 NR_EXECUTABLE = 6
 NR_PROTECTED  = 3
-NR_UNASSESSED = 21
+NR_UNASSESSED = 20
 ```
 
 Frozen system apply classes:
@@ -201,6 +201,7 @@ SYS-33 Rollback Readiness Checklist
 SYS-52 Operator Error Specimen Ledger
 SYS-06 Evidence-to-Decision Trace Map
 SYS-18 Evidence Provenance Chain Receipt
+SYS-14 Evidence Freshness Ledger
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -231,7 +232,7 @@ SYS-24
 → all require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, and SYS-18 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -250,6 +251,7 @@ SYS-33 = curated pre-release rollback-readiness checklist; v1 deliberately does 
 SYS-52 = curated operator/tooling process-regression specimen ledger; v1 deliberately avoids actor scoring/blame, auto ingestion, log scraping, recurrence analysis, automatic severity, remediation, repository writes, or product/runtime classification takeover
 SYS-06 = curated semantic evidence→decision lineage map; v1 deliberately avoids evidence discovery, proof-strength inference, decision/gate/classification logic, automatic causality from citations/timestamps, repository writes, or current-state authority
 SYS-18 = point-in-time evidence-provenance receipt; v1 deliberately preserves reviewed source/derivative/proof/trace identities and explicit non-basis without auto discovery, causality inference, freshness judgment, proof promotion, gate/decision logic, historical backfill, or repository writes
+SYS-14 = curated claim-scoped evidence-reuse/freshness ledger; v1 deliberately avoids age-only expiry, automatic semantic diff/crawling, evidence invalidation, proof-scope promotion, slot/debt/blocker creation, gate decisions, repository writes, or runtime/release authority
 ```
 
 Why SYS-17, SYS-38, and SYS-04 are executable:
@@ -299,10 +301,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 24
+NR_DOC_ONLY    = 25
 NR_EXECUTABLE  = 11
 NR_PROTECTED   = 4
-NR_UNASSESSED  = 27
+NR_UNASSESSED  = 26
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -315,7 +317,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 9 gate-open NOW designs remain after SYS-18 freeze
+= 8 gate-open NOW designs remain after SYS-14 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -462,6 +464,7 @@ SYS-33 = frozen NR_DOC_ONLY rollback-readiness checklist design
 SYS-52 = frozen NR_DOC_ONLY operator/tooling process-regression specimen ledger design
 SYS-06 = frozen NR_DOC_ONLY evidence-to-decision lineage map design
 SYS-18 = frozen NR_DOC_ONLY evidence provenance chain receipt design
+SYS-14 = frozen NR_DOC_ONLY claim-scoped evidence freshness ledger design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

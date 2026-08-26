@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-15 design freeze:
+Current state after SYS-20 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 38
-UNFROZEN                = 14
+FROZEN                  = 39
+UNFROZEN                = 13
 
-NR_DOC_ONLY   = 26
+NR_DOC_ONLY   = 27
 NR_EXECUTABLE = 7
 NR_PROTECTED  = 5
-NR_UNASSESSED = 14
+NR_UNASSESSED = 13
 ```
 
 Frozen system apply classes:
@@ -205,6 +205,7 @@ SYS-14 Evidence Freshness Ledger
 SYS-16 Anomaly Recurrence Correlator
 SYS-25 Golden Fixture Mutation Receipt
 SYS-15 WATCH Aging Review
+SYS-20 Natural Evidence Intake Checklist Generator
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -226,106 +227,60 @@ SYS-49 Safe Parallel Work Finder
 Why SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected:
 
 ```text
-SYS-42
-= read-only/non-runtime machine checker whose purpose is to police frozen design / architecture-governance boundaries
-
-SYS-31
-= read-only/non-runtime preflight whose purpose is to police release-mode, candidate-radius, live-gate and release/repository-system bundling boundaries
-
-SYS-24
-= read-only/non-runtime detector whose purpose is to police permanent fixture-authority membership across registry, permanent suite modules, and permanent fixture directories
-
-SYS-36
-= read-only/non-runtime relationship auditor whose purpose is to police branch/PR/base/head/merge/ancestry governance facts that can feed protected repository/release decisions
-
-SYS-49
-= read-only/non-runtime parallel-safety evaluator whose purpose is to police concurrent work across shared repository refs, semantic authorities, exact-base transactions, production/live evidence windows, and protected governance surfaces
-
+SYS-42 = read-only machine checker policing frozen design / architecture-governance boundaries
+SYS-31 = release-governance blast-radius preflight
+SYS-24 = permanent fixture-authority membership policing
+SYS-36 = branch/PR/base/head/merge/ancestry governance policing
+SYS-49 = shared repository/work concurrency governance policing
 → all require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, SYS-25, and SYS-15 are document-only:
+Why the frozen document-only systems are document-only:
 
 ```text
-SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
-SYS-13 = durable proof-scope policy/matrix; no CI/log scanner required for v1
-SYS-22 = reviewed semantic test-intent/non-claim authority; no harness/registry enforcement required for v1
-SYS-21 = human forensic classification-consistency audit; automatic severity promotion/demotion intentionally prohibited
-SYS-35 = curated cross-work repository transaction lineage; Git/GitHub already provide mechanical facts and automatic semantic inclusion would create noise/false authority
-SYS-46 = bounded internal task identity/objective/work-type/scope/gate/mutation/stop contract; v1 is a template/procedural repository artifact and deliberately does not schedule, authorize, execute, or enforce work
-SYS-47 = bounded user-facing projection of reviewed task/gate facts; v1 is a template/procedural communication contract and deliberately does not create task identity, live-experiment semantics, proof, classification, scheduling, or repository writes
-SYS-05 = curated document lifecycle/role registry with explicit mixed-section exceptions; v1 deliberately avoids automatic semantic classification, crawling, linting, rewriting, or current-state value storage
-SYS-02 = curated semantic predecessor/successor decision lineage with explicit affected/preserved scope; v1 deliberately prohibits automatic supersession inference from timestamps, versions, status words, references, commits, or semantic similarity
-SYS-12 = compact current-only source-referenced projection page; v1 deliberately avoids parsing/generation, authority promotion, current-state selection, stale scanning, gate decisions, or repository writes
-SYS-28 = curated verification-debt index preserving exact claim/proof/due/blocking semantics; v1 deliberately avoids evidence-requirement invention, CI/log scanning, automatic severity/blocker promotion, proof inference, and scalar quality scoring
-SYS-23 = curated negative-control semantic registry; v1 deliberately leaves executable enforcement to actual fixture/test/live authorities and prohibits automatic inverse generation, absence-as-proof, fixture mutation, fuzzing, or CI/release integration
-SYS-33 = curated pre-release rollback-readiness checklist; v1 deliberately does not execute rollback, auto-select historical sources, publish production, rewind refs, mutate state, replace permanent verification, or close LIVE/R2.1 proof
-SYS-52 = curated operator/tooling process-regression specimen ledger; v1 deliberately avoids actor scoring/blame, auto ingestion, log scraping, recurrence analysis, automatic severity, remediation, repository writes, or product/runtime classification takeover
-SYS-06 = curated semantic evidence→decision lineage map; v1 deliberately avoids evidence discovery, proof-strength inference, decision/gate/classification logic, automatic causality from citations/timestamps, repository writes, or current-state authority
-SYS-18 = point-in-time evidence-provenance receipt; v1 deliberately preserves reviewed source/derivative/proof/trace identities and explicit non-basis without auto discovery, causality inference, freshness judgment, proof promotion, gate/decision logic, historical backfill, or repository writes
-SYS-14 = curated claim-scoped evidence-reuse/freshness ledger; v1 deliberately avoids age-only expiry, automatic semantic diff/crawling, evidence invalidation, proof-scope promotion, slot/debt/blocker creation, gate decisions, repository writes, or runtime/release authority
-SYS-16 = curated family-scoped recurrence/correlation index; v1 deliberately requires reviewed family membership, specimen independence and healthy/contrary controls rather than similarity clustering, log scraping, automatic family merge/split, causality inference or severity promotion
-SYS-25 = prospective point-in-time golden-fixture mutation accountability receipt/template; Git already owns exact byte diffs and v1 deliberately avoids fixture writes, expected-value auto-acceptance, semantic inference, registry/harness mutation, automatic coverage judgment, CI integration or proof promotion
-SYS-15 = curated event-driven WATCH aging/relevance review; v1 deliberately treats elapsed time only as orientation metadata and prohibits age-based severity, dismissal, recurrence inference, classification mutation, automatic archive/delete, gate decisions or repository writes
+SYS-11 = human semantic design-fidelity review
+SYS-13 = durable proof-scope matrix
+SYS-22 = reviewed semantic test-intent/non-claim authority
+SYS-21 = human forensic classification-consistency audit
+SYS-35 = curated repository transaction lineage
+SYS-46 = bounded internal task contract
+SYS-47 = user-facing task/gate projection
+SYS-05 = curated document lifecycle/role registry
+SYS-02 = curated decision supersession lineage
+SYS-12 = compact current-only projection
+SYS-28 = curated verification-debt index
+SYS-23 = curated negative-control registry
+SYS-33 = curated rollback-readiness checklist
+SYS-52 = curated operator/tooling process-regression ledger
+SYS-06 = curated evidence→decision lineage map
+SYS-18 = point-in-time provenance receipt
+SYS-14 = curated claim-scoped evidence freshness ledger
+SYS-16 = curated recurrence/correlation index
+SYS-25 = prospective golden-fixture mutation receipt/template
+SYS-15 = curated event-driven WATCH aging/relevance review
+SYS-20 = curated natural-evidence intake checklist; semantic intake decisions remain human-reviewed and no second S-04 packet or automatic S-12/recurrence/classification authority is created
 ```
 
 Why SYS-17, SYS-38, SYS-04, and SYS-07 are executable:
 
 ```text
-SYS-17
-explicit reviewed evidence slots
-+ reviewed proof state
-→ deterministic missing/not-claimed/conflicted/blocked analysis
-
-SYS-38
-immutable M-11 snapshots
-+ immutable machine Contracts v2 inputs
-→ deterministic exact architecture delta report
-
-SYS-04
-registered status namespace
-+ registered structured target
-+ reviewed SYS-05 lifecycle scope
-→ deterministic vocabulary/namespace/cardinality lint
-
-SYS-07
-registered structured reference field
-+ explicit reference class / target identity
-+ reviewed lifecycle/supersession/provenance/freshness metadata when required
-→ deterministic cross-reference resolution/eligibility findings
-
-All four remain read-only/non-runtime.
-None changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
-SYS-07 is local/no-network and explicitly does not verify GitHub-side branch/PR relationships or auto-repair references.
+SYS-17 explicit reviewed slots + proof state → deterministic slot analysis
+SYS-38 immutable architecture snapshots/contracts → exact architecture delta report
+SYS-04 registered status namespace/target/lifecycle → deterministic vocabulary lint
+SYS-07 registered structured references + reviewed metadata → deterministic reference findings
 ```
+
+All remain read-only/non-runtime and do not become CI/release/runtime authority in v1.
 
 Why SYS-24, SYS-36, and SYS-49 are protected rather than ordinary executable:
 
 ```text
-SYS-24
-canonical permanent registry rows
-+ permanent suite-module namespace
-+ permanent fixture-directory namespace
-→ deterministic ownership/orphan integrity findings
-
-SYS-36
-explicit relationship audit mode
-+ exact PR/ref/SHA observations
-+ exact-base/head contract when required
-+ fixed-SHA relationship facts
-→ deterministic branch/PR relationship findings
-
-SYS-49
-2+ independently legitimate tasks
-+ reviewed semantic read/write/dependency profiles
-+ current SYS-36 relationship facts when material
-+ frozen parallel conflict/guard rules
-→ deterministic pairwise/group parallel-safety findings
-
-All three algorithms can remain read-only.
-But the policies they police are fixture-authority membership, branch/repository relationships, and shared repository/work concurrency respectively.
-The canonical NR model explicitly places those governance surfaces in NR_PROTECTED.
+SYS-24 → fixture-authority membership
+SYS-36 → branch/repository relationship governance
+SYS-49 → shared work/repository concurrency governance
 ```
+
+The algorithms may be read-only, but the policies they police are protected surfaces.
 
 System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, Detector, Receipt, or Report.
 
@@ -338,10 +293,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 28
+NR_DOC_ONLY    = 29
 NR_EXECUTABLE  = 12
 NR_PROTECTED   = 6
-NR_UNASSESSED  = 20
+NR_UNASSESSED  = 19
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -354,7 +309,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 2 gate-open NOW designs remain after SYS-15 freeze
+= 1 gate-open NOW design remains after SYS-20 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -443,16 +398,6 @@ NR APPLY CLASS
 = what form does the NON_RUNTIME implementation itself take?
 ```
 
-Therefore:
-
-```text
-RUNTIME + DOC_APPLICABLE
-→ runtime core parked; document slice may apply
-
-NON_RUNTIME + NR_DOC_ONLY
-→ the non-runtime idea itself is primarily a document/durable-memory implementation
-```
-
 Do not collapse the two systems into one status vocabulary.
 
 ---
@@ -507,6 +452,7 @@ SYS-14 = frozen NR_DOC_ONLY claim-scoped evidence freshness ledger design
 SYS-16 = frozen NR_DOC_ONLY anomaly recurrence/correlation index design
 SYS-25 = frozen NR_DOC_ONLY golden-fixture mutation receipt design
 SYS-15 = frozen NR_DOC_ONLY WATCH aging/relevance review design
+SYS-20 = frozen NR_DOC_ONLY natural-evidence intake checklist design
 SYS-07 = frozen NR_EXECUTABLE cross-reference integrity auditor design
 ```
 

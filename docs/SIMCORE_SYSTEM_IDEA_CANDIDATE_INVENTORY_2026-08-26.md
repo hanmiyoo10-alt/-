@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 38 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 39 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -43,7 +43,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-17 | Missing Evidence Slot Analyzer | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-19 | Live-Gate Handoff Packet | Evidence | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
-| SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-21 | Forensic Classification Consistency Check | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-22 | Test Intent Manifest | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-23 | Negative-Control Registry | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
@@ -118,21 +118,22 @@ SYS-49 → docs/SIMCORE_SYS49_SAFE_PARALLEL_WORK_FINDER_DESIGN.md
 SYS-16 → docs/SIMCORE_SYS16_ANOMALY_RECURRENCE_CORRELATOR_DESIGN.md
 SYS-25 → docs/SIMCORE_SYS25_GOLDEN_FIXTURE_MUTATION_RECEIPT_DESIGN.md
 SYS-15 → docs/SIMCORE_SYS15_WATCH_AGING_REVIEW_DESIGN.md
+SYS-20 → docs/SIMCORE_SYS20_NATURAL_EVIDENCE_INTAKE_CHECKLIST_GENERATOR_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 38
-UNFROZEN             = 14
-OPEN NOW             = 2
+FROZEN               = 39
+UNFROZEN             = 13
+OPEN NOW             = 1
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 26
+NR_DOC_ONLY   = 27
 NR_EXECUTABLE = 7
 NR_PROTECTED  = 5
-NR_UNASSESSED = 14
+NR_UNASSESSED = 13
 ```
 
 ## Canonical selection
@@ -185,6 +186,7 @@ SYS-49 = I4 D3 / FROZEN / NR_PROTECTED
 SYS-16 = I4 D3 / FROZEN / NR_DOC_ONLY
 SYS-25 = I4 D3 / FROZEN / NR_DOC_ONLY
 SYS-15 = I3 D2 / FROZEN / NR_DOC_ONLY
+SYS-20 = I3 D2 / FROZEN / NR_DOC_ONLY
 ```
 
 Selection drift note:
@@ -196,23 +198,22 @@ SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 = closed by freezing SYS-24 before SYS-52 and resynchronizing the living edge
 ```
 
-The I4/D3/NOW edge is fully frozen. SYS-15 is now the first frozen member of the I3/D2/NOW edge.
+The I4/D3/NOW edge is fully frozen. SYS-15 and SYS-20 are frozen on the I3/D2/NOW edge.
 
 Highest-priority open edge now:
 
 ```text
 I3 / D2 / NOW
-SYS-20 Natural Evidence Intake Checklist Generator
 SYS-37 Release-System Residual Cleanup Registry
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-20 Natural Evidence Intake Checklist Generator
+NEXT = SYS-37 Release-System Residual Cleanup Registry
 ```
 
-Reason: SYS-15 now freezes event-driven WATCH aging without age-based severity or dismissal. SYS-20 is the strongest remaining direct evidence-lifecycle consumer because current v0.64.7 real-long-chat validation is still pending and every new natural specimen should arrive with enough identity, reroll/control, recurrence-discriminator, proof-scope and follow-up metadata to feed S-12, SYS-16, SYS-15, SYS-21 and SYS-28 without later reconstruction from chat memory. SYS-37 remains explicitly listed as the peer I3/D2/NOW item so it cannot be silently skipped. After SYS-20, recompute the remaining NOW edge rather than assuming fixed ordering.
+Reason: SYS-20 now freezes generic natural-specimen intake completeness while preserving the existing S-04 packet, S-12 corpus, SYS-16 recurrence, SYS-15 aging, SYS-19 live-gate and M-10 fixture-planning boundaries. SYS-37 is now the only remaining gate-open NOW design in the 52-item system inventory. After SYS-37, recompute the gated/dependency/evidence/post-M2 edge rather than assuming that design may proceed through closed gates.
 
 ## Non-duplication boundaries
 
@@ -245,7 +246,7 @@ selected bounded work + reviewed authorities → canonical internal task identit
 canonical task/gate facts + user-relevant authoritative facts → compact user-facing action/decision/wait/scope/stop projection → SYS-47; no second task identity, gate engine, live-experiment semantic authority, proof/classifier, close receipt, scheduler, or repo writer
 reviewed document/family lifecycle + explicit section exceptions → curated living/historical/frozen/evidence/template role metadata → SYS-05; no current-state value cache, authority map, stale-content scanner, status linter, supersession graph, crawler, doc writer, or runtime/release authority
 registered status namespace + registered structured target + SYS-05 lifecycle scope → deterministic vocabulary/namespace/cardinality lint → SYS-04; no semantic status classification, stale-state judgment, global enum, repo-wide prose grep, writer, CI authority, release authority, or runtime behavior
-reviewed predecessor decision scope + reviewed successor/retirement decision scope + explicit affected/preserved scope → curated supersession lineage → SYS-02; no newest-file inference, current-state authority, gate dependency, repository transaction graph, evidence trace, generic reference graph, automatic semantic diff, repo writer, release authority, or runtime behavior
+reviewed predecessor decision scope + reviewed successor/retirement decision scope + explicit affected/preserved scope → curated supersession lineage → SYS-02; no newest-file inference, current-state authority, gate dependency, repository transaction graph, evidence trace, generic backlink graph, automatic semantic diff, repo writer, release authority, or runtime behavior
 reviewed current authorities + lifecycle boundaries + supersession lineage → compact current-only source-referenced projection → SYS-12; no source-of-truth ownership, historical ledger, roadmap authority, gate engine, evidence classifier, stale scanner, repo writer, release authority, or runtime behavior
 explicit verification obligation/WATCH + current proof state + due posture + source-owned blocking posture → curated verification-debt index → SYS-28; no requirement invention, proof-fit redefinition, evidence discovery, gate/severity promotion, global quality score, CI scanner, repo writer, release authority, or runtime behavior
 reviewed bounded precondition + forbidden semantic outcome + owner authority + enforcement/evidence refs → curated negative-control registry → SYS-23; no test runner, Boolean inverse generation, absence-as-proof, automatic fixture creation, fuzzing, gate/severity authority, repo writer, release authority, or runtime behavior
@@ -261,9 +262,10 @@ explicit audit mode + exact PR/ref/SHA observations + explicit expected-base/hea
 reviewed anomaly/process family contract + exact source-backed specimens + independence classes + required discriminators + healthy/contrary controls → curated same-family recurrence / cross-family correlation posture → SYS-16; no auto family clustering, root-cause inference, severity promotion, WATCH/FIX/BLOCKER mutation, runtime telemetry collection, background monitoring, repo writer, release authority, or runtime behavior
 reviewed permanent golden-fixture mutation + exact before/after identities + semantic mutation basis + case/test-intent/negative-control impact + exact verification refs → immutable mutation receipt → SYS-25; no fixture writer, expected-value auto-acceptance, test-intent broadening, registry/harness authority, coverage-completeness claim, LIVE_PASS promotion, repo writer, release authority, or runtime behavior
 source-owned WATCH + reviewed recurrence/mitigation/supersession/current-relevance facts + explicit next-review trigger + optional elapsed-time context → WATCH aging posture → SYS-15; no age-based severity/dismissal, recurrence recomputation, source classification mutation, automatic historicalization/delete, gate decision, repo writer, release authority, or runtime behavior
+candidate natural production specimen + exact source/provenance/context/control facts + naturalness/proof-scope/preservation routing → reviewed intake record → SYS-20; no second S-04 packet, S-12 ID allocation, recurrence/severity/root-cause inference, live-gate instruction, fixture generation, repository writer, release authority, or runtime behavior
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, SYS-25, and SYS-15 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, SYS-25, SYS-15, and SYS-20 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

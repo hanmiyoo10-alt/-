@@ -67,6 +67,54 @@ assert.equal(ready.legalNextAction, 'HANDOFF_TO_EXISTING_MUTATION_AUTHORITY_WITH
 assert.ok(ready.reasonCodes.includes('MUTATION_GATE_COORDINATION_READY'));
 assert.equal(exitCodeFor(ready), 0);
 
+function assertCrossScopeGateReady({ number, workId, objectiveId, scopeId, capability, writeSurface }) {
+  const scopedRecord = workRecord({
+    workId,
+    objectiveId,
+    scopeId,
+    requiredCapability: capability,
+    writeAuthorities: [{ surface: writeSurface, role: 'PRIMARY_WRITE' }],
+    sourceAuthorityRefs: [`issue:#${number}`, 'commit:abc123'],
+  });
+  const scopedIssued = issueCoordinationReceipt(scopedRecord, [scopedRecord], { main: 'abc123' }, adapters, projects);
+  assert.equal(scopedIssued.status, 'RECEIPT_ISSUED');
+  assert.equal(scopedIssued.receipt.adapterId, scopeId);
+  assert.equal(scopedIssued.receipt.requiredCapability, capability);
+  assert.equal(scopedIssued.receipt.mutationAuthorized, false);
+  assert.equal(scopedIssued.receipt.executionAuthorized, false);
+
+  const scopedIssue = issue(number, scopedRecord, renderReceiptMarker(scopedIssued.receipt));
+  const scopedReady = evaluateMutationGate({
+    issues: [scopedIssue], workIssueNumber: number, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  });
+  assert.equal(scopedReady.status, 'MUTATION_GATE_READY');
+  assert.equal(scopedReady.coordinationReady, true);
+  assert.equal(scopedReady.boundary.status, 'MUTATION_BOUNDARY_READY');
+  assert.equal(scopedReady.mutationAuthorized, false);
+  assert.equal(scopedReady.executionAuthorized, false);
+  assert.equal(scopedReady.legalNextAction, 'HANDOFF_TO_EXISTING_MUTATION_AUTHORITY_WITH_VALID_RECEIPT');
+  assert.ok(scopedReady.reasonCodes.includes('MUTATION_GATE_COORDINATION_READY'));
+  assert.equal(exitCodeFor(scopedReady), 0);
+}
+
+assertCrossScopeGateReady({
+  number: 710,
+  workId: 'TEST-C1-USAGE-DASHBOARD',
+  objectiveId: 'TEST:C1:USAGE_DASHBOARD_CANDIDATE',
+  scopeId: 'usage-dashboard',
+  capability: 'USAGE_DASHBOARD_CANDIDATE',
+  writeSurface: 'ref:release/usage-dashboard-test',
+});
+
+assertCrossScopeGateReady({
+  number: 711,
+  workId: 'TEST-C1-SIMCORE',
+  objectiveId: 'TEST:C1:SIMCORE_CANDIDATE',
+  scopeId: 'simcore',
+  capability: 'SIMCORE_CANDIDATE',
+  writeSurface: 'ref:candidate/simcore/test-c1',
+});
+
 const absent = evaluateMutationGate({
   issues: [issue(700, record)], workIssueNumber: 700, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
 });

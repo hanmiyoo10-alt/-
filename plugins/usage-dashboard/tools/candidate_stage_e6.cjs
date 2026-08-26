@@ -1,7 +1,6 @@
-#!/usr/bin/env node
 'use strict';
 
-const {execFileSync} = require('node:child_process');
+const {execFileSync, spawnSync} = require('node:child_process');
 const stagePolicy = require('./candidate_stage_policy.cjs');
 
 const DERIVED_BRANCH_RE = /^stage\/usage-dashboard-3\.0\.0-alpha\.5\.\d+$/;
@@ -14,6 +13,8 @@ const GENERATED_PREFIXES = Object.freeze([
   'plugins/usage-dashboard/src/',
   'plugins/usage-dashboard/runtime/',
 ]);
+const FROZEN_MAIN_TRAILER_PREFIX = 'Usage-Dashboard-Frozen-Main:';
+const FROZEN_MAIN_TRAILER = /^Usage-Dashboard-Frozen-Main: ([0-9a-f]{40})$/;
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -25,8 +26,18 @@ function normalizeSha(value, code = 'E6_INVALID_SHA') {
   return text;
 }
 
-function git(args) {
-  return execFileSync('git', args, {encoding:'utf8'}).trim();
+function git(args, options = {}) {
+  return execFileSync('git', args, {encoding:'utf8', ...options}).trim();
+}
+
+function gitIsAncestor(ancestorSha, descendantSha, options = {}) {
+  const ancestor = normalizeSha(ancestorSha, 'E14_ANCESTOR_SHA_INVALID');
+  const descendant = normalizeSha(descendantSha, 'E14_DESCENDANT_SHA_INVALID');
+  const result = spawnSync('git', ['merge-base','--is-ancestor',ancestor,descendant], {stdio:'ignore', ...options});
+  if (result.error) throw result.error;
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  fail('E14_ANCESTRY_CHECK_FAILED', `${ancestor}:${descendant}:exit=${result.status}`);
 }
 
 function nulList(value) {
@@ -68,11 +79,39 @@ function inspectTransaction(trustedBaseSha, sourceSha) {
   };
 }
 
-function payloadParents(payloadSha) {
+function payloadParentList(payloadSha, options = {}) {
   const payload = normalizeSha(payloadSha, 'E6_PAYLOAD_SHA_INVALID');
-  const row = git(['rev-list','--parents','-n','1',payload]).split(/\s+/).filter(Boolean);
-  if (row.length !== 2) fail('E6_PAYLOAD_PARENT_COUNT', String(Math.max(0,row.length - 1)));
-  return row[1];
+  const row = git(['rev-list','--parents','-n','1',payload],options).split(/\s+/).filter(Boolean);
+  const parents = row.slice(1);
+  if (parents.length < 1 || parents.length > 2) fail('E14_PAYLOAD_PARENT_COUNT', String(parents.length));
+  return parents;
+}
+
+function payloadParents(payloadSha, options = {}) {
+  const parents = payloadParentList(payloadSha, options);
+  if (parents.length !== 1) fail('E6_PAYLOAD_PARENT_COUNT', String(parents.length));
+  return parents[0];
+}
+
+function expectedParentList(trustedBaseSha, expectedParentSha, options = {}) {
+  const base = normalizeSha(trustedBaseSha, 'E6_TRUSTED_BASE_SHA_INVALID');
+  const expectedParent = normalizeSha(expectedParentSha, 'E6_EXPECTED_PARENT_SHA_INVALID');
+  try { git(['cat-file','-e',`${base}^{commit}`],options); }
+  catch { fail('E14_FROZEN_MAIN_COMMIT_MISSING', base); }
+  try { git(['cat-file','-e',`${expectedParent}^{commit}`],options); }
+  catch { fail('E14_PREVIOUS_CANDIDATE_COMMIT_MISSING', expectedParent); }
+  if (expectedParent === base || gitIsAncestor(base, expectedParent, options)) return [expectedParent];
+  return [expectedParent, base];
+}
+
+function payloadFrozenMain(payloadSha, options = {}) {
+  const payload = normalizeSha(payloadSha, 'E6_PAYLOAD_SHA_INVALID');
+  const message = git(['show','-s','--format=%B',payload],options);
+  const lines = String(message).split(/\r?\n/).filter((line) => line.startsWith(FROZEN_MAIN_TRAILER_PREFIX));
+  if (lines.length !== 1) fail('E14_FROZEN_MAIN_TRAILER_COUNT', String(lines.length));
+  const match = lines[0].match(FROZEN_MAIN_TRAILER);
+  if (!match) fail('E14_FROZEN_MAIN_TRAILER_INVALID', lines[0]);
+  return normalizeSha(match[1], 'E14_FROZEN_MAIN_SHA_INVALID');
 }
 
 function treeEntryAt(payloadSha, path) {
@@ -108,14 +147,42 @@ function parseSourceFiles(value) {
   return files;
 }
 
-function verifyDerivedPayload(trustedBaseSha, expectedParentSha, payloadSha, sourceFilesJson) {
+function verifyDerivedPayload(trustedBaseSha, expectedParentSha, payloadSha, sourceFilesJson, options = {}) {
   const base = normalizeSha(trustedBaseSha, 'E6_TRUSTED_BASE_SHA_INVALID');
   const expectedParent = normalizeSha(expectedParentSha, 'E6_EXPECTED_PARENT_SHA_INVALID');
   const payload = normalizeSha(payloadSha, 'E6_PAYLOAD_SHA_INVALID');
-  try { git(['cat-file','-e',`${payload}^{commit}`]); }
+  try { git(['cat-file','-e',`${payload}^{commit}`],options); }
   catch { fail('E6_PAYLOAD_COMMIT_MISSING', payload); }
-  const parent = payloadParents(payload);
-  if (parent !== expectedParent) fail('E6_PAYLOAD_PARENT_MISMATCH', `${parent}:expected=${expectedParent}`);
+
+  const actualParents = payloadParentList(payload, options);
+  const expectedParents = expectedParentList(base, expectedParent, options);
+  if (actualParents[0] !== expectedParent) {
+    fail('E14_FIRST_PARENT_MISMATCH', `${actualParents[0] || 'missing'}:expected=${expectedParent}`);
+  }
+  if (actualParents.length !== expectedParents.length) {
+    if (expectedParents.length === 2 && actualParents.length === 1) {
+      fail('E14_FROZEN_MAIN_PARENT_MISSING', base);
+    }
+    if (expectedParents.length === 1 && actualParents.length === 2) {
+      fail('E14_REDUNDANT_FROZEN_MAIN_PARENT', `${actualParents[1]}:base=${base}`);
+    }
+    fail('E14_PAYLOAD_PARENT_COUNT', `${actualParents.length}:expected=${expectedParents.length}`);
+  }
+  if (actualParents.length === 2 && actualParents[1] !== base) {
+    fail('E14_FROZEN_MAIN_PARENT_MISMATCH', `${actualParents[1]}:expected=${base}`);
+  }
+
+  const recordedFrozenMain = payloadFrozenMain(payload, options);
+  if (recordedFrozenMain !== base) {
+    fail('E14_FROZEN_MAIN_TRAILER_MISMATCH', `${recordedFrozenMain}:expected=${base}`);
+  }
+  if (!gitIsAncestor(expectedParent, payload, options)) {
+    fail('E14_PREVIOUS_CANDIDATE_NOT_ANCESTOR', `${expectedParent}:${payload}`);
+  }
+  if (!gitIsAncestor(base, payload, options)) {
+    fail('E14_FROZEN_MAIN_NOT_ANCESTOR', `${base}:${payload}`);
+  }
+
   const sourceFiles = new Set(parseSourceFiles(sourceFilesJson));
   const paths = changedPaths(base,payload);
   if (!paths.length) fail('E6_PAYLOAD_EMPTY');
@@ -127,7 +194,16 @@ function verifyDerivedPayload(trustedBaseSha, expectedParentSha, payloadSha, sou
       fail('E6_PAYLOAD_MODE_DENIED', `${path}:${entry.mode}:${entry.type}`);
     }
   }
-  return {base,expectedParent,payload,paths,sourceFiles:[...sourceFiles]};
+  return {
+    base,
+    expectedParent,
+    payload,
+    parents:actualParents,
+    expectedParents,
+    frozenMainSha:recordedFrozenMain,
+    paths,
+    sourceFiles:[...sourceFiles],
+  };
 }
 
 function main() {
@@ -147,7 +223,7 @@ function main() {
   }
   if (command === '--verify-derived') {
     const result = verifyDerivedPayload(args[0],args[1],args[2],args[3]);
-    console.log(`E6_DERIVED_PAYLOAD_VERIFIED:${result.payload}:paths=${result.paths.length}`);
+    console.log(`E14_DERIVED_PAYLOAD_VERIFIED:${result.payload}:parents=${result.parents.length}:paths=${result.paths.length}`);
     return;
   }
   fail('E6_STAGE_USAGE');
@@ -157,11 +233,17 @@ module.exports = {
   DERIVED_BRANCH_RE,
   GENERATED_EXACT,
   GENERATED_PREFIXES,
+  FROZEN_MAIN_TRAILER_PREFIX,
+  FROZEN_MAIN_TRAILER,
   normalizeSha,
+  gitIsAncestor,
   deriveCandidateBranch,
   assertDerivedBranch,
   inspectTransaction,
+  payloadParentList,
   payloadParents,
+  expectedParentList,
+  payloadFrozenMain,
   treeEntryAt,
   changedPaths,
   generatedPath,

@@ -1,8 +1,14 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `CANDIDATE INVENTORY · NOT DESIGN FROZEN · SYSTEM/OPERATIONS SCOPE · NO RUNTIME CHANGE`
+Status: `CANDIDATE INVENTORY · UNIFIED IDEA CLASSIFICATION APPLIED · NOT DESIGN FROZEN · SYSTEM/OPERATIONS SCOPE · NO RUNTIME CHANGE`
 
 Purpose: collect non-duplicative candidate ideas for improving SimCore repository memory, verification, evidence handling, release operations, development ergonomics, and task-close discipline. These are candidate items only. A candidate becomes an accepted SimCore idea only after it is selected for a bounded design transaction and reaches `DESIGN FROZEN` under the normal design policy.
+
+Classification authority:
+- `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
+- `docs/SIMCORE_IDEA_SIZE_CLASSIFICATION_MASTER_2026-08-26.md`
+- `docs/SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md`
+- `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 
 Existing systems intentionally not duplicated here:
 - S-10 Authority Drift Check / Scan
@@ -15,145 +21,187 @@ Existing systems intentionally not duplicated here:
 - `SIMCORE_REALTIME_CLOSE_STEP_OPERATING_ROUTINE.md`
 - Release System v2 / v2.1 existing publication authority
 
-Candidate vocabulary:
+## 0. Unified classification rule
+
+System ideas do **not** use a separate `Type / Timing` taxonomy.
+
+Every candidate uses the same SimCore idea axes:
 
 ```text
-TYPE
-DOC        = repository-memory/document artifact can be the useful implementation
-TOOL       = local executable analysis/generation/checking tool
-PROTECTED  = CI/release/repo-writer/build/harness authority may be affected
-
-TIMING
-NOW_DESIGNABLE
-POST_M2_3
-POST_M2_4
-POST_RELEASE_PROOF
-EVIDENCE
-EXTERNAL
-FUTURE
+SIZE          = SMALL / MEDIUM / LARGE
+IMPORTANCE    = 1..5
+DIFFICULTY    = 1..5 (design-completion difficulty)
+RUNTIME CLASS = RUNTIME / NON_RUNTIME
+DESIGN GATE   = NOW / DEPENDENCY / POST_M2_3 / POST_M2_4 / EVIDENCE / EXTERNAL / FUTURE / ...
+APPLY CLASS   = freeze-time R DOC_* or NR_* classification
 ```
+
+All 52 candidates in this inventory are provisionally `NON_RUNTIME` because their intended useful surfaces are repository memory, tooling, verification, release/repo operations, architecture analysis, or operator workflow rather than plugin execution. This provisional Runtime Class must be confirmed at design freeze.
+
+Because none of these candidates is frozen yet:
+
+```text
+APPLY CLASS = NR_UNASSESSED
+```
+
+Descriptive words such as document, tool, checker, ledger, or protected authority concern may appear in the candidate description, but they are not substitute classification systems.
 
 ## A. Repository memory / authority-system candidates
 
-| ID | Candidate | Type | Timing | Core value |
-|---|---|---|---|---|
-| SYS-01 | Living Authority Map | DOC/TOOL | NOW_DESIGNABLE | machine-readable map of which living document owns each current-state family; reduce ambiguous authority lookups |
-| SYS-02 | Decision / Supersession Graph | DOC | NOW_DESIGNABLE | record which policy/design/decision supersedes which older current instruction without rewriting history |
-| SYS-03 | Gate Dependency Graph | DOC/TOOL | NOW_DESIGNABLE | explicit dependency graph from M2/release/evidence/external gates to ideas unlocked by each event |
-| SYS-04 | Status Vocabulary Linter | TOOL | NOW_DESIGNABLE | detect unsupported or contradictory status tokens across living docs without inferring semantic truth |
-| SYS-05 | Historical-vs-Living Document Registry | DOC | NOW_DESIGNABLE | classify docs as frozen historical, generated navigation, living authority, evidence, policy, or implementation progress |
-| SYS-06 | Evidence-to-Decision Trace Map | DOC/TOOL | NOW_DESIGNABLE | show which evidence justified each FIX/WATCH/release/design closure and which decision document consumed it |
-| SYS-07 | Cross-Reference Integrity Auditor | TOOL | NOW_DESIGNABLE | verify repo-relative document/section/fixture/ID references resolve and identify broken navigation links |
-| SYS-08 | Work-Item Close Receipt | DOC/TOOL | NOW_DESIGNABLE | bounded receipt of result, verification, authority sync, anomaly disposition, production boundary, and canonical next step |
-| SYS-09 | Change-Impact Review Map | DOC/TOOL | NOW_DESIGNABLE | given changed path families, identify which living authorities/evidence/fixtures require review before task close |
-| SYS-10 | Stale Next-Action Scanner | TOOL | NOW_DESIGNABLE | detect living docs that advertise already-completed queues/tasks as current NEXT; bounded to explicit next-action sections |
-| SYS-11 | Design-to-Implementation Drift Audit | TOOL | NOW_DESIGNABLE | compare frozen design invariants/allowed surface against an implementation transaction and flag unaccounted scope |
-| SYS-12 | Current-State Snapshot Page | DOC | NOW_DESIGNABLE | one compact generated-or-reviewed navigation page for production identity, live gate, design queue, NR/R state, WATCHes, and canonical NEXT |
+| ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
+|---|---|---|---:|---:|---|---|---|---|
+| SYS-01 | Living Authority Map | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | machine-readable map of living authority ownership |
+| SYS-02 | Decision / Supersession Graph | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | record supersession without rewriting history |
+| SYS-03 | Gate Dependency Graph | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | explicit gate-to-unlock dependency graph |
+| SYS-04 | Status Vocabulary Linter | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | detect unsupported/contradictory status tokens |
+| SYS-05 | Historical-vs-Living Document Registry | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | classify document authority/lifecycle role |
+| SYS-06 | Evidence-to-Decision Trace Map | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | trace evidence into decisions and closures |
+| SYS-07 | Cross-Reference Integrity Auditor | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | verify document/section/fixture/ID references |
+| SYS-08 | Work-Item Close Receipt | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | bounded result/verification/sync/next receipt |
+| SYS-09 | Change-Impact Review Map | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | map changed path families to required reviews |
+| SYS-10 | Stale Next-Action Scanner | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | detect completed work still advertised as NEXT |
+| SYS-11 | Design-to-Implementation Drift Audit | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | compare frozen design boundaries with implementation diff |
+| SYS-12 | Current-State Snapshot Page | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | compact current-state navigation surface |
 
 ## B. Evidence / forensic-system candidates
 
-| ID | Candidate | Type | Timing | Core value |
-|---|---|---|---|---|
-| SYS-13 | Verification Proof Matrix | DOC/TOOL | NOW_DESIGNABLE | distinguish workflow PASS, gate PASS, focused-test execution, live evidence, and unclaimed coverage per system/tool |
-| SYS-14 | Evidence Freshness Ledger | DOC/TOOL | NOW_DESIGNABLE | classify evidence as current, historical-but-valid, superseded-for-current-state, or awaiting revalidation without invalidating history |
-| SYS-15 | WATCH Aging Review | DOC/TOOL | NOW_DESIGNABLE | periodically surface old WATCH items for REVIEW/KEEP/DEFER without auto-promoting severity |
-| SYS-16 | Anomaly Recurrence Correlator | TOOL | NOW_DESIGNABLE | correlate reviewed corpus/anomaly metadata by scenario/contract/runtime family without reading raw chat bodies or inferring root cause |
-| SYS-17 | Missing Evidence Slot Analyzer | DOC/TOOL | NOW_DESIGNABLE | compare frozen validation contracts with recorded evidence classes and show which required evidence slots remain genuinely open |
-| SYS-18 | Evidence Provenance Chain Receipt | DOC/TOOL | NOW_DESIGNABLE | bounded path from specimen → evidence doc → classification → release/design decision |
-| SYS-19 | Live-Gate Handoff Packet | DOC | NOW_DESIGNABLE | exact user-facing checklist for the current real-long-chat gate: target scenario, what to paste back, pass/fail/WATCH fields, no speculative extras |
-| SYS-20 | Natural Evidence Intake Checklist Generator | TOOL | NOW_DESIGNABLE | derive a blank bounded intake checklist from S-12 schema and current live-gate needs; no automatic evidence judgment |
-| SYS-21 | Forensic Classification Consistency Check | TOOL | NOW_DESIGNABLE | detect same anomaly/evidence ID carrying contradictory WATCH/DEFER/FIX/BLOCKER dispositions across living authorities |
+| ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
+|---|---|---|---:|---:|---|---|---|---|
+| SYS-13 | Verification Proof Matrix | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | separate workflow/gate/focused/live proof classes |
+| SYS-14 | Evidence Freshness Ledger | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | classify current/historical/superseded/revalidation evidence |
+| SYS-15 | WATCH Aging Review | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | surface old WATCH items for review without severity promotion |
+| SYS-16 | Anomaly Recurrence Correlator | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | correlate reviewed anomaly/corpus metadata |
+| SYS-17 | Missing Evidence Slot Analyzer | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | identify genuinely open required evidence slots |
+| SYS-18 | Evidence Provenance Chain Receipt | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | specimen-to-decision provenance chain |
+| SYS-19 | Live-Gate Handoff Packet | SMALL | 5 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED | exact user handoff checklist for current live gate |
+| SYS-20 | Natural Evidence Intake Checklist Generator | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | generate blank bounded S-12 intake checklist |
+| SYS-21 | Forensic Classification Consistency Check | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | detect contradictory WATCH/DEFER/FIX/BLOCKER dispositions |
 
 ## C. Regression / verification-system candidates
 
-| ID | Candidate | Type | Timing | Core value |
-|---|---|---|---|---|
-| SYS-22 | Test Intent Manifest | DOC/TOOL | NOW_DESIGNABLE | record what each permanent suite proves, what it deliberately does not prove, owner, maturity, and live-evidence dependency |
-| SYS-23 | Negative-Control Registry | DOC | NOW_DESIGNABLE | catalog critical fail-closed/negative controls separately from positive golden paths so defensive behavior is visible |
-| SYS-24 | Fixture Orphan Detector | TOOL | NOW_DESIGNABLE | find fixture files/suites not reachable from the permanent registry or registry IDs lacking implementation paths |
-| SYS-25 | Golden Fixture Mutation Receipt | TOOL | NOW_DESIGNABLE | summarize semantic fixture changes between commits and require explicit reason for expected-output/control changes |
-| SYS-26 | Coverage Promotion Readiness Scanner | TOOL | POST_M2_3 | determine whether HYBRID_TRANSITIONAL suites now have a directly executable real owner after ownership extraction; never auto-promote |
-| SYS-27 | Cross-Version Regression Receipt | TOOL | POST_RELEASE_PROOF | compare required permanent-suite outcomes across two production releases and preserve deltas without treating identical PASS as live proof |
-| SYS-28 | Verification Debt Index | DOC/TOOL | NOW_DESIGNABLE | unify non-blocking test-discovery/direct-execution WATCHes into one navigable debt surface without changing CI |
-| SYS-29 | Contract-to-Fixture Gap View | DOC/TOOL | POST_M2_3 | ownership-aware view of contracts with direct executable, hybrid, or no fixture coverage; adjacent to but not a replacement for M-15 |
+| ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
+|---|---|---|---:|---:|---|---|---|---|
+| SYS-22 | Test Intent Manifest | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | record what each permanent suite proves and does not prove |
+| SYS-23 | Negative-Control Registry | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | catalog critical fail-closed/negative controls |
+| SYS-24 | Fixture Orphan Detector | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | find orphan fixtures and unresolved registry rows |
+| SYS-25 | Golden Fixture Mutation Receipt | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | summarize semantic fixture changes and reason |
+| SYS-26 | Coverage Promotion Readiness Scanner | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | check hybrid-to-executable readiness after ownership extraction |
+| SYS-27 | Cross-Version Regression Receipt | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED | compare permanent-suite outcomes across production releases |
+| SYS-28 | Verification Debt Index | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | unify verification-coverage WATCH navigation |
+| SYS-29 | Contract-to-Fixture Gap View | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | ownership-aware contract coverage view |
 
 ## D. Release / repository-transaction candidates
 
-| ID | Candidate | Type | Timing | Core value |
-|---|---|---|---|---|
-| SYS-30 | Release-to-Docs Convergence Receipt | TOOL | POST_RELEASE_PROOF | verify publication identity, manifest/current docs, LIVE_PENDING state, and evidence pointers converged after a genuine release |
-| SYS-31 | Version-Bump Blast-Radius Check | TOOL | NOW_DESIGNABLE | verify a version change touched only expected release/runtime/docs surfaces and no unrelated system restructuring was bundled |
-| SYS-32 | Release Candidate Provenance Viewer | DOC/TOOL | POST_RELEASE_PROOF | compact human navigation from work commit → candidate receipt → approval → release publication → live handoff |
-| SYS-33 | Rollback Readiness Checklist | DOC | NOW_DESIGNABLE | predefine evidence/identity checks needed before using rollback mode; no rollback execution authority |
-| SYS-34 | Post-Release Convergence Checklist Generator | TOOL | POST_RELEASE_PROOF | generate bounded close checklist from actual release receipt and current living authorities; no publication primitive |
-| SYS-35 | Repository Transaction Ledger | DOC/TOOL | NOW_DESIGNABLE | compact record of bounded work branch, PR, CI, merge, evidence sync, and superseded objects for each substantive work item |
-| SYS-36 | Branch/PR Relationship Auditor | TOOL | NOW_DESIGNABLE | identify duplicate active heads, merged work with lingering command-only PRs, or ambiguous transaction lineage; no auto-close/delete |
-| SYS-37 | Release-System Residual Cleanup Registry | DOC | NOW_DESIGNABLE | explicitly track compatibility sentinels/deferred cleanup so release-system debt is visible but not mixed into product updates |
+| ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
+|---|---|---|---:|---:|---|---|---|---|
+| SYS-30 | Release-to-Docs Convergence Receipt | MEDIUM | 5 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED | verify publication and living-doc convergence |
+| SYS-31 | Version-Bump Blast-Radius Check | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | detect unrelated system changes bundled with version bump |
+| SYS-32 | Release Candidate Provenance Viewer | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED | navigate work-to-candidate-to-approval-to-release lineage |
+| SYS-33 | Rollback Readiness Checklist | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | predefine rollback evidence and identity checks |
+| SYS-34 | Post-Release Convergence Checklist Generator | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED | generate release-close checklist from actual receipt |
+| SYS-35 | Repository Transaction Ledger | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | record branch/PR/CI/merge/evidence lineage |
+| SYS-36 | Branch/PR Relationship Auditor | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | identify ambiguous/duplicate transaction lineage |
+| SYS-37 | Release-System Residual Cleanup Registry | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | track non-blocking release-system cleanup debt |
 
 ## E. Architecture / development-system candidates
 
-| ID | Candidate | Type | Timing | Core value |
-|---|---|---|---|---|
-| SYS-38 | Architecture Contract Diff Reporter | TOOL | NOW_DESIGNABLE | compare module/dependency graph snapshots between commits and explain added/removed edges/classifications |
-| SYS-39 | Import-Boundary Trend Report | TOOL | EVIDENCE | show whether dependency direction is getting cleaner or more entangled over M2 checkpoints; descriptive only |
-| SYS-40 | Dead Module / Export Scanner | TOOL | POST_M2_3 | identify registered modules/exports with no reachable use after extraction; never auto-delete |
-| SYS-41 | Public Test-Seam Inventory | DOC/TOOL | POST_M2_3 | list exported direct execution seams and which hybrid fixtures can potentially migrate because of them |
-| SYS-42 | Implementation Slice Conformance Checker | TOOL | NOW_DESIGNABLE | compare a bounded work diff to frozen design allowed/forbidden surface declarations |
-| SYS-43 | M2 Checkpoint Close Pack | DOC/TOOL | POST_M2_3 | one checkpoint artifact bundling architecture graph, fixture maturity, debts, live-control requirements, and next gate |
-| SYS-44 | Ownership Migration Ledger | DOC | POST_M2_3 | track ownership moved from Session/legacy orchestration to application services with before/after authority and remaining transitional calls |
-| SYS-45 | State-Surface Change Receipt | DOC/TOOL | POST_M2_3 | bounded summary of state/schema/read/write surfaces changed by an architecture slice; does not replace future M-08/M-12 audits |
+| ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
+|---|---|---|---:|---:|---|---|---|---|
+| SYS-38 | Architecture Contract Diff Reporter | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | compare module/dependency graph snapshots |
+| SYS-39 | Import-Boundary Trend Report | MEDIUM | 3 | 3 | NON_RUNTIME | EVIDENCE | NR_UNASSESSED | describe architecture dependency trend over checkpoints |
+| SYS-40 | Dead Module / Export Scanner | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | find unused modules/exports after extraction |
+| SYS-41 | Public Test-Seam Inventory | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | list direct execution seams and migration candidates |
+| SYS-42 | Implementation Slice Conformance Checker | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | compare diff to frozen allowed/forbidden surfaces |
+| SYS-43 | M2 Checkpoint Close Pack | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | bundle architecture/fixtures/debt/live controls/next gate |
+| SYS-44 | Ownership Migration Ledger | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | track before/after ownership and transitional calls |
+| SYS-45 | State-Surface Change Receipt | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED | summarize state/schema/read/write changes |
 
 ## F. Operator / workflow ergonomics candidates
 
-| ID | Candidate | Type | Timing | Core value |
-|---|---|---|---|---|
-| SYS-46 | Canonical Task Card | DOC | NOW_DESIGNABLE | compact per-work-item template: goal, forbidden scope, branch, verification, close-step triggers, next operation |
-| SYS-47 | User Handoff Card | DOC | NOW_DESIGNABLE | when human action is actually required, show exactly one physical action and the exact evidence to return; avoid generic instructions |
-| SYS-48 | Gate-Blocked Reason Surface | DOC/TOOL | NOW_DESIGNABLE | for every currently gated idea, show the single blocking dependency/evidence and what event will legitimately unlock it |
-| SYS-49 | Safe Parallel Work Finder | DOC/TOOL | NOW_DESIGNABLE | while a live gate is pending, identify only independent non-runtime/document/test work that cannot alter the pending production semantics |
-| SYS-50 | Work Bundling Conflict Detector | TOOL | NOW_DESIGNABLE | flag attempts to combine runtime feature change with release/CI/repo-system restructuring or multiple unrelated authority changes |
-| SYS-51 | Close-Step Trigger Matrix | DOC | NOW_DESIGNABLE | map changed work types to which RT-01…RT-12 close surfaces must run; avoid evaluating every surface mechanically |
-| SYS-52 | Operator Error Specimen Ledger | DOC | NOW_DESIGNABLE | preserve tooling/operator mistakes separately from runtime defects so process regressions can be recognized without contaminating product anomaly history |
+| ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
+|---|---|---|---:|---:|---|---|---|---|
+| SYS-46 | Canonical Task Card | SMALL | 4 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED | per-work goal/forbidden scope/branch/verification/close triggers |
+| SYS-47 | User Handoff Card | SMALL | 4 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED | one physical user action plus exact evidence to return |
+| SYS-48 | Gate-Blocked Reason Surface | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | show one blocking reason and unlock event per gated idea |
+| SYS-49 | Safe Parallel Work Finder | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | identify independent safe work while a live gate is pending |
+| SYS-50 | Work Bundling Conflict Detector | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | flag forbidden mixes of feature/system/authority work |
+| SYS-51 | Close-Step Trigger Matrix | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | map work types to required RT close surfaces |
+| SYS-52 | Operator Error Specimen Ledger | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | separate operator/tooling errors from runtime anomalies |
 
-## 1. Candidate count
+## 1. Candidate counts under the unified axes
 
 ```text
 TOTAL SYSTEM CANDIDATES = 52
 
-NOW_DESIGNABLE      = 40
-POST_M2_3           = 7
-POST_M2_4           = 0 explicit candidates in this first pass
-POST_RELEASE_PROOF  = 4
-EVIDENCE             = 1
-EXTERNAL             = 0 explicit candidates in this first pass
-FUTURE               = 0 explicit candidates in this first pass
+SIZE
+SMALL  = 20
+MEDIUM = 32
+LARGE  = 0
+
+RUNTIME CLASS
+NON_RUNTIME = 52
+RUNTIME     = 0
+
+DESIGN GATE
+NOW                                      = 40
+POST_M2_3                                = 7
+DEPENDENCY: next genuine release proof  = 4
+EVIDENCE                                 = 1
 ```
 
-Some candidates carry multiple plausible implementation forms. Final `NR APPLY CLASS` is not assigned until the candidate is selected and its design is frozen.
-
-## 2. High-leverage shortlist for the next design sweep
-
-Recommended first design candidates, ordered by leverage and low overlap risk:
+Importance:
 
 ```text
-SYS-09  Change-Impact Review Map
-SYS-03  Gate Dependency Graph
-SYS-08  Work-Item Close Receipt
-SYS-13  Verification Proof Matrix
-SYS-10  Stale Next-Action Scanner
-SYS-21  Forensic Classification Consistency Check
-SYS-48  Gate-Blocked Reason Surface
-SYS-50  Work Bundling Conflict Detector
-SYS-01  Living Authority Map
-SYS-51  Close-Step Trigger Matrix
+I5 = 23
+I4 = 25
+I3 = 4
+I2 = 0
+I1 = 0
 ```
 
-Why this group first:
-- strengthens the operating system around work already being performed;
-- mostly repository/non-runtime scope;
-- minimizes dependency on M2-3 runtime ownership;
-- does not require changing release publication or permanent CI authority;
-- converts repeated manual reasoning into explicit contracts before executable automation is considered.
+Difficulty:
+
+```text
+D1 = 3
+D2 = 17
+D3 = 32
+D4 = 0
+D5 = 0
+```
+
+These are candidate classifications, not frozen-design verdicts. A selected candidate may be reclassified at freeze only when design/source inspection proves a materially different boundary.
+
+## 2. Canonical selection rule
+
+Use the same selection order as every other SimCore idea pool:
+
+```text
+1. DESIGN GATE open
+2. IMPORTANCE higher
+3. DIFFICULTY lower
+4. downstream leverage higher
+```
+
+Therefore the current `NOW` candidate pool is selected by score first, not by the fact that it is a “system” idea.
+
+Current highest-priority edge:
+
+```text
+I5 / D1 / NOW
+SYS-19 Live-Gate Handoff Packet
+```
+
+Then the `I5 / D2 / NOW` candidates compete by downstream leverage:
+
+```text
+SYS-01 Living Authority Map
+SYS-08 Work-Item Close Receipt
+SYS-10 Stale Next-Action Scanner
+SYS-48 Gate-Blocked Reason Surface
+SYS-51 Close-Step Trigger Matrix
+```
+
+The previous hand-picked shortlist is superseded by this unified scoring rule.
 
 ## 3. Non-duplication / authority boundaries
 
@@ -185,7 +233,8 @@ If a selected candidate would duplicate one of these authorities rather than com
 
 ```text
 candidate inventory
-!= accepted idea
+= classified/scored
+!= accepted frozen idea
 != implementation authorization
 
 select one candidate
@@ -193,15 +242,24 @@ select one candidate
 → complete bounded design
 → OPEN DESIGN QUESTIONS = 0
 → DESIGN FROZEN
-→ assign R/NR + apply class
+→ confirm/revise Size / Importance / Difficulty / Runtime Class / Gate
+→ assign freeze-time Apply Class
 → stop design transaction
 ```
 
-After a selected candidate freezes, current Design Sweep First policy may be applied to continue one-by-one through the chosen system-idea pool.
+For these provisionally NON_RUNTIME system candidates, the freeze-time Apply Class will be one of:
+
+```text
+NR_DOC_ONLY
+NR_EXECUTABLE
+NR_PROTECTED
+```
+
+until freeze, `NR_UNASSESSED` remains authoritative.
 
 ## 5. Production boundary
 
-This inventory changes no SimCore production behavior.
+This inventory/classification migration changes no SimCore production behavior.
 
 ```text
 plugin bytes = unchanged

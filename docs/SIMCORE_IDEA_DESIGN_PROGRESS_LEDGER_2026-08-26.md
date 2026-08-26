@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 12 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 13 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -71,52 +71,47 @@ SYS-11 Design-to-Implementation Drift Audit
 
 SYS-13 Verification Proof Matrix
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-17 Missing Evidence Slot Analyzer
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 ```
 
-SYS-13 contract:
+SYS-17 contract:
 
 ```text
-proof kind
-+ immutable proof identity
-+ claim kind
-→ DIRECT / CONDITIONAL / SUPPORTING / NONE
+reviewed bounded evidence-slot registry
++ reviewed proof records / references
++ SYS-13 claim/proof vocabulary
+→ deterministic slot-status report
 ```
 
-It freezes proof-scope boundaries among static checks, focused deterministic tests, permanent regression/CI, architecture contracts, SYS-42 slice conformance, SYS-11 human drift audit, release publication identity, natural live validation, genuine release-system E2E proof, and living-state convergence.
+It analyzes only explicitly registered slots inside a caller-selected bounded scope. `Evidence Index row absent`, arbitrary Markdown absence, or generic CI PASS never creates or satisfies a slot by inference.
 
-Important preserved non-equivalences:
+Frozen slot results:
 
 ```text
-permanent CI PASS
-!= focused standalone test executed
-
-deterministic fixture PASS
-!= natural live validation
-
-SLICE_CONFORMANT
-!= full design-intent proof
-
-release publication
-!= live runtime PASS
-
-R2.1 permanent-CI qualification
-!= genuine release E2E proof
+SLOT_SATISFIED
+SLOT_MISSING
+SLOT_NOT_CLAIMED
+SLOT_CONFLICTED
+SLOT_BLOCKED
+SLOT_NOT_APPLICABLE
 ```
 
-`NOT_CLAIMED` is a first-class proof result and must remain available when evidence is positive in one scope but insufficient in another.
+Required, WATCH-only, and optional slots remain separate. Future checkpoint evidence is not treated as a current blocker merely because it does not exist yet.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 12
-OPEN NOW            = 28
+FROZEN              = 13
+OPEN NOW            = 27
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 8
-NR_EXECUTABLE       = 3
+NR_EXECUTABLE       = 4
 NR_PROTECTED        = 1
-NR_UNASSESSED       = 40
+NR_UNASSESSED       = 39
 ```
 
 ## 4. Current next design
@@ -125,7 +120,6 @@ Remaining highest-priority edge:
 
 ```text
 I5 / D3 / NOW
-SYS-17 Missing Evidence Slot Analyzer
 SYS-21 Forensic Classification Consistency Check
 SYS-22 Test Intent Manifest
 SYS-31 Version-Bump Blast-Radius Check
@@ -136,20 +130,19 @@ SYS-38 Architecture Contract Diff Reporter
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-17 Missing Evidence Slot Analyzer
+NEXT SYSTEM DESIGN = SYS-22 Test Intent Manifest
 ```
 
 Reason:
 
 ```text
-SYS-13 now defines exactly what each proof kind can and cannot prove.
-SYS-17 can therefore identify required claim slots whose acceptable proof is absent,
-without equating CI PASS with focused execution,
-fixture PASS with live evidence,
-or publication with runtime validation.
+SYS-13 defines which proof kinds can establish which claims.
+SYS-17 exposes which explicitly required claim slots remain unresolved.
+SYS-22 can now freeze what each permanent/focused test is intended to prove and explicitly not prove,
+providing stable named test-intent claims for later evidence-slot, coverage, and verification review.
 ```
 
-After SYS-17, recompute the remaining I5/D3 edge rather than precommitting a static order.
+After SYS-22, recompute the remaining I5/D3 edge rather than precommitting a static order.
 
 ## 5. Apply/implementation hold
 
@@ -167,6 +160,7 @@ SYS-50 implementation  = HOLD
 SYS-42 implementation  = HOLD / PROTECTED
 SYS-11 application     = HOLD
 SYS-13 application     = HOLD
+SYS-17 implementation  = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -179,7 +173,9 @@ Existing non-blocking focused/direct-execution WATCHes for S-10/S-11/M-10/M-11/M
 
 SYS-13 explicitly preserves them: a generic permanent-CI PASS does not establish that a named focused mode/test directly executed unless an exact step/log proves it.
 
-SYS-10, SYS-03, and SYS-50 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, and SYS-13 are document-only by design.
+SYS-17 preserves the same distinction at slot level: a WATCH-only `NOT_CLAIMED` slot remains visible but does not become a current blocker or justify unrelated CI restructuring.
+
+SYS-10, SYS-03, SYS-50, and SYS-17 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, and SYS-13 are document-only by design.
 
 ## 7. Production boundary
 
@@ -199,8 +195,8 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 12 / 52
-CURRENT NEXT = SYS-17 Missing Evidence Slot Analyzer
+SYSTEM DESIGNS FROZEN = 13 / 52
+CURRENT NEXT = SYS-22 Test Intent Manifest
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT

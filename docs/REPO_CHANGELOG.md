@@ -170,3 +170,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dc5d9ae01efb17031f584151a103316364db9da3)
 - Event ID: `2829562534c634379bccdee08d57ecae3cd9145e1144a047ebd33b230709adad`
 <!-- canonical-main-doc-promoted:2829562534c634379bccdee08d57ecae3cd9145e1144a047ebd33b230709adad -->
+
+### 2026-08-26 — feat: add persistent Repository Work Harness coordination receipts (#489)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `17a5aa636ac48033cf132fbaca4c240e086671bc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/17a5aa636ac48033cf132fbaca4c240e086671bc)
+- Event ID: `386161ec8ab9692efbcfe459d3dc9cca44d63178e38623272b70c10248775a65`
+<!-- canonical-main-doc-promoted:386161ec8ab9692efbcfe459d3dc9cca44d63178e38623272b70c10248775a65 -->

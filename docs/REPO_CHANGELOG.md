@@ -151,6 +151,13 @@
 - Event ID: `5ed66044f68c00f3d962050c223873681c91a43cc57db079646cbb99e667d818`
 <!-- canonical-main-doc-promoted:5ed66044f68c00f3d962050c223873681c91a43cc57db079646cbb99e667d818 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `40334cdf7a2faee5a8a8fce265bd88990d22860a991d1689e79ba8fbeb1693b5`
+<!-- canonical-main-doc-promoted:40334cdf7a2faee5a8a8fce265bd88990d22860a991d1689e79ba8fbeb1693b5 -->
+
 ### 2026-08-26 — infra: add canonical-main work decomposition system
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -246,3 +253,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ba1d9b3c3ec8e0ea0a203b3a33309c3e40efe30c)
 - Event ID: `ba7124d9bbd8b1bf8fd252df7c26c4278fa1acc82f6ebb3cbdd4b102a73c5f20`
 <!-- canonical-main-doc-promoted:ba7124d9bbd8b1bf8fd252df7c26c4278fa1acc82f6ebb3cbdd4b102a73c5f20 -->
+
+### 2026-08-27 — fix(harness): retire temporary B6 PR canary transport
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `648b4173f37c163a9df8ccad802c2be37ff44732`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/648b4173f37c163a9df8ccad802c2be37ff44732)
+- Event ID: `1181cc56ac04868763bc7a11fdd2dbe8e5550797244e511fc46fe425508bd8a2`
+<!-- canonical-main-doc-promoted:1181cc56ac04868763bc7a11fdd2dbe8e5550797244e511fc46fe425508bd8a2 -->

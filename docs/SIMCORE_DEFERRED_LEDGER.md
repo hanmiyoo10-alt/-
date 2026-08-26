@@ -64,7 +64,7 @@ Production: v0.64.7 — Cross-Reload Cache Observer Continuity
 Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
-Safe parallel non-runtime work: frozen fixture work plus NR idea design / closed-tier SAFE_NON_RUNTIME harvest under the dedicated queue policy
+Safe parallel non-runtime state: current gate-open NR design/harvest, R doc-apply, and four-item permanent-fixture expansion queues are exhausted; preserve evidence and keep living docs synchronized while the live gate is pending
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -127,7 +127,7 @@ warnings: 8
 state quarantine: response=1, COMMUNITY=1/2
 ```
 
-v0.63.59 addresses the exact B_END closure boundary. Natural revalidation remains desirable but does not block the current v0.64.7 live close, M2-3 after that gate, or fixture-only work.
+v0.63.59 addresses the exact B_END closure boundary. Natural revalidation remains desirable but does not block the current v0.64.7 live close or M2-3 after that gate. The separate permanent `broadcast-closure` expansion is now complete and does not substitute for a future natural sample.
 
 ### Legacy/bootstrap migration path
 
@@ -145,7 +145,7 @@ v0.63.57 current-era containment has positive evidence. A natural explicit flash
 
 Status: `DEFERRED_NATURAL_SAMPLE / VALIDATION_ONLY`
 
-v0.64.1 established the deterministic request-scoped `ANNUAL_ONLY` versus `CUMULATIVE_YOY` temporal authority contract. Broad fixture research is now closed and `summary-scope` has a separate implementation-ready permanent fixture design for the deterministic classifier/authority facts.
+v0.64.1 established the deterministic request-scoped `ANNUAL_ONLY` versus `CUMULATIVE_YOY` temporal authority contract. Broad fixture research is closed and the `summary-scope` deterministic permanent fixture is now implemented as an `EXECUTABLE / required / goldenGate` suite. Its permanent-CI success establishes deterministic classifier/authority regression protection but does not promote rendered natural semantics to LIVE PASS.
 
 Natural annual-only and cumulative-YoY outputs remain useful for renderer-semantic validation, but they are no longer the active production mini gate. Keep the repeated standalone-C lineage over-chain on WATCH and do not patch Lineage/Recurrence without new attributable evidence.
 
@@ -199,6 +199,27 @@ current NR easy-tier close blocker: NO
 ```
 
 Do not silently widen the permanent CI classifier, harness registry, or release-gate policy inside S-10/S-11 just to erase this WATCH. If generalized standalone tooling-test discovery becomes desirable, design it as a separate repository/CI item so CI authority changes are not mixed with product/tool harvest work.
+
+### NR Difficulty-3 focused verification coverage
+
+Status: `WATCH_ONLY / VERIFICATION_COVERAGE / NON_RUNTIME / NON_BLOCKING`
+
+The completed Difficulty-3 harvest also preserves focused-execution coverage limits under:
+
+```text
+docs/SIMCORE_NR_DIFFICULTY3_HARVEST_VERIFICATION_WATCH_2026-08-26.md
+```
+
+Current non-claims:
+
+```text
+M-11 architecture snapshot mode direct permanent-CI execution = NOT CLAIMED
+M-10 focused fixture-skeleton standalone test direct CI execution = NOT CLAIMED
+M-13 focused evidence-index standalone test direct CI execution = NOT CLAIMED
+M-13 evidence-index --check direct CI execution = NOT CLAIMED
+```
+
+These do not affect runtime correctness, `release-simcore`, the completed current NR harvest, M2-3 readiness after the live gate, or v0.64.7 live validation. Do not widen CI/harness authority inside unrelated work merely to erase this WATCH.
 
 ### GENERATION_SEMANTIC_EXCURSION
 
@@ -298,11 +319,12 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 
 ```text
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
-2. Preserve any live anomaly immediately before moving on.
-3. NR Difficulty 1 and 2 SAFE_NON_RUNTIME harvests are complete; NR Difficulty 3 design may continue independently (M-10 → M-13, with M-11 already frozen).
-4. Non-runtime permanent fixture work may proceed independently when selected: summary-scope → narrative-clock → frame → broadcast-closure expansion.
-5. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.
-6. After M2-3 lands, run the direct genuine-edit post-extraction close control before M2-4.
-7. R2.1 end-to-end delegated release proof belongs to the next genuine runtime release and remains non-blocking for the current live gate.
-8. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
+2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
+3. Current gate-open NR design = NONE and current NR harvest queue = EMPTY. Seven gated/future NR items remain and must wait for their legitimate gates.
+4. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
+5. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
+6. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.
+7. After M2-3 lands, run the direct genuine-edit post-extraction close control before M2-4.
+8. R2.1 end-to-end delegated release proof belongs to the next genuine runtime release and remains non-blocking for the current live gate.
+9. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
 ```

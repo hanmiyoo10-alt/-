@@ -25,6 +25,8 @@ assert.match(workflow, /handoff_ready=true/);
 assert.match(workflow, /uses: \.\/\.github\/workflows\/canonical-main-ops\.yml/);
 assert.match(workflow, /coordination_work_issue: \$\{\{ needs\.receipt-sync\.outputs\.handoff_issue \}\}/);
 assert.match(workflow, /Upload exact receipt-sync and handoff results/);
+assert.match(workflow, /path: \.harness-output\/\*\.json/);
+assert.match(workflow, /include-hidden-files: true/);
 assert.doesNotMatch(workflow, /repo-main-write/);
 assert.doesNotMatch(workflow, /orchestrator\/refresh\.cjs refresh/);
 assert.doesNotMatch(workflow, /workflow_dispatch:/);

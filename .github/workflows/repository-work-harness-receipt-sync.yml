@@ -82,6 +82,7 @@ jobs:
           name: repository-work-harness-receipt-sync-${{ github.run_id }}
           path: .harness-output/*.json
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
 
   authoritative-handoff:

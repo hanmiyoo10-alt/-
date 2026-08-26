@@ -30,6 +30,27 @@ function parseIncidentMetrics(body = '') {
   }
 }
 
+function stateFromBody(body = '') {
+  const match = body.match(/- State:\s*\*\*(OPEN|RECOVERED|UNKNOWN)\*\*/);
+  return match ? match[1] : null;
+}
+
+function advanceIncidentMetrics(previousBody, transitions, nextState, observedAt = null) {
+  const previous = parseIncidentMetrics(previousBody);
+  if (!previous) return metricsFromTransitions(transitions);
+  const previousState = stateFromBody(previousBody);
+  if (!previousState || previousState === nextState) return {...previous};
+  const openCount = previous.openCount + (nextState === 'OPEN' ? 1 : 0);
+  const recoveryCount = previous.recoveryCount + (nextState === 'RECOVERED' ? 1 : 0);
+  return {
+    schemaVersion: 1,
+    openCount,
+    recoveryCount,
+    flapCount: Math.max(0, openCount - 1),
+    lastTransitionAt: observedAt || previous.lastTransitionAt || null,
+  };
+}
+
 function unstableAttention(incidentRows, policy, now = Date.now()) {
   const threshold = Math.max(1, Number(policy?.stability?.flapThreshold || 3));
   const windowSeconds = Math.max(1, Number(policy?.stability?.flapWindowSeconds || 300));
@@ -49,4 +70,4 @@ function unstableAttention(incidentRows, policy, now = Date.now()) {
   });
 }
 
-module.exports = {metricsFromTransitions, metricsMarker, parseIncidentMetrics, unstableAttention};
+module.exports = {metricsFromTransitions, metricsMarker, parseIncidentMetrics, stateFromBody, advanceIncidentMetrics, unstableAttention};

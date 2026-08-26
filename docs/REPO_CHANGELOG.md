@@ -137,6 +137,20 @@
 - Event ID: `21a9c6d0b2830ca607c72d8ef0c3e877748bb332d8193bf80568bd285940fb3b`
 <!-- canonical-main-doc-promoted:21a9c6d0b2830ca607c72d8ef0c3e877748bb332d8193bf80568bd285940fb3b -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `204b319dfc41dd6ee4504fe28f17e076c493b0e37d8c4b613acaa38e837a1e5f`
+<!-- canonical-main-doc-promoted:204b319dfc41dd6ee4504fe28f17e076c493b0e37d8c4b613acaa38e837a1e5f -->
+
+### 2026-08-26 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `5ed66044f68c00f3d962050c223873681c91a43cc57db079646cbb99e667d818`
+<!-- canonical-main-doc-promoted:5ed66044f68c00f3d962050c223873681c91a43cc57db079646cbb99e667d818 -->
+
 ### 2026-08-26 — infra: add canonical-main work decomposition system
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

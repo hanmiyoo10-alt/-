@@ -39,6 +39,7 @@ for (const required of [
 const jobGuard = "if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}";
 assert.ok(workflow.includes(jobGuard), 'issue-edit canary must be owner-only and require exact canary + Work Record markers; unrelated issue edits must skip the writer job');
 assert.equal((workflow.match(/repository-harness-canary:v1/g) || []).length, 1, 'automated canary marker must have one exact owner-gated entry condition');
+assert.equal((workflow.match(/types: \[edited\]/g) || []).length, 1, 'B6 live proof must expose exactly one issue-edited trigger declaration');
 assert.equal(workflow.includes('issue_comment:'), false, 'B6 live proof must use the repository-proven issues edited transport rather than the unobserved issue-comment transport');
 
 const gateIndex = workflow.indexOf('name: Harness coordination receipt canary gate');

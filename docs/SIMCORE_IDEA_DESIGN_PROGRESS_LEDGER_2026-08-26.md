@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 29 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 30 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -122,6 +122,9 @@ SYS-24 Fixture Orphan Detector
 
 SYS-52 Operator Error Specimen Ledger
 = SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-06 Evidence-to-Decision Trace Map
+= MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -253,23 +256,36 @@ reviewed operator/tooling process deviation
 
 It preserves process-regression evidence without turning the ledger into actor scoring or blame. Disposition and resolution state are separate, corrected specimens remain historically visible, recurrence is not auto-correlated or auto-escalated, and product/runtime defects keep their owning live/runtime authorities. v1 is a curated document-only ledger with no auto ingestion, repo writer, CI authority, or remediation primitive.
 
+SYS-06 contract:
+
+```text
+exact evidence identity
++ bounded decision identity
++ reviewed trace role
++ exact affected decision scope
++ source-backed basis
+→ curated evidence→decision lineage
+```
+
+It records which evidence was actually used as `PRIMARY_BASIS / SUPPORTING_BASIS / CONTRARY_INPUT / TRIGGER_INPUT / CLOSURE_INPUT` for a bounded decision. It does not discover evidence, infer proof strength, decide gate/classification state, copy evidence support through supersession, calculate verification debt, or become a generic backlink graph. Historical traces remain preserved even when later evidence produces a superseding decision.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 29
-OPEN NOW            = 11
+FROZEN              = 30
+OPEN NOW            = 10
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 20
+NR_DOC_ONLY         = 21
 NR_EXECUTABLE       = 6
 NR_PROTECTED        = 3
-NR_UNASSESSED       = 23
+NR_UNASSESSED       = 22
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs, the I4/D1 edge, and all I4/D2/NOW designs are frozen.
+All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06 on the I4/D3/NOW edge are frozen.
 
 The earlier selection-drift FIX remains preserved:
 
@@ -279,11 +295,10 @@ SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 = docs/SIMCORE_SYSTEM_IDEA_SELECTION_DRIFT_FIX_SYS24_2026-08-26.md
 ```
 
-The full highest-priority open edge is now:
+The full remaining highest-priority open edge is now:
 
 ```text
 I4 / D3 / NOW
-SYS-06 Evidence-to-Decision Trace Map
 SYS-07 Cross-Reference Integrity Auditor
 SYS-14 Evidence Freshness Ledger
 SYS-16 Anomaly Recurrence Correlator
@@ -296,19 +311,19 @@ SYS-49 Safe Parallel Work Finder
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-06 Evidence-to-Decision Trace Map
+NEXT SYSTEM DESIGN = SYS-18 Evidence Provenance Chain Receipt
 ```
 
 Reason:
 
 ```text
-SYS-52 closes the final I4/D2/NOW design and freezes durable operator/tooling process-regression memory.
-The next open tier is I4/D3/NOW.
-SYS-06 is the strongest foundational selection because explicit evidence→decision lineage can support later evidence provenance/freshness work, cross-reference integrity review, and already-frozen proof/debt/decision authorities without becoming a proof engine or current-state authority.
-The complete I4/D3/NOW edge is listed explicitly so no peer candidate is silently skipped.
+SYS-06 now freezes the reviewed semantic evidence→decision edge.
+SYS-18 is the most direct downstream consumer and can package source evidence → proof identity → SYS-06 trace → bounded decision without independently inventing causality.
+That provenance-chain contract will also give SYS-14 a cleaner freshness basis and SYS-07 a clearer reference set to audit.
+The complete remaining I4/D3/NOW edge is listed explicitly so no peer candidate is silently skipped.
 ```
 
-After SYS-06, recompute the remaining I4/D3 edge rather than assuming later ordering.
+After SYS-18, recompute the remaining I4/D3 edge rather than assuming later ordering.
 
 ## 5. Apply/implementation hold
 
@@ -343,6 +358,7 @@ SYS-23 application     = HOLD
 SYS-33 application     = HOLD
 SYS-24 implementation  = HOLD / PROTECTED
 SYS-52 application     = HOLD
+SYS-06 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -389,7 +405,9 @@ SYS-24 adds permanent-fixture membership integrity without claiming fixture corr
 
 SYS-52 adds process-regression memory without assigning blame or proof. A specimen records the reviewed deviation, actual mutation, containment, disposition and evidence; it does not convert a near-miss into a product defect, turn a corrected FIX into a current blocker, auto-escalate recurrence, or score an operator. Existing product/live/release authorities still own their respective impact claims.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, and SYS-52 are document-only by design.
+SYS-06 adds reviewed evidence→decision lineage without adding proof or decision authority. `TRACE_ACTIVE` means only that the exact evidence-to-decision relationship is currently relevant and source-backed. It does not mean the evidence is fresh, the decision is correct, the proof is stronger than SYS-13 permits, or the decision is current merely because an edge exists. Historical trace edges remain preserved when later decisions supersede their targets.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, and SYS-06 are document-only by design.
 
 ## 7. Production boundary
 
@@ -409,7 +427,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 29 / 52
+SYSTEM DESIGNS FROZEN = 30 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 I4/D2/NOW EDGE = FROZEN
@@ -422,8 +440,9 @@ SYS-23 NEGATIVE-CONTROL REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-33 ROLLBACK READINESS CHECKLIST = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-24 FIXTURE ORPHAN DETECTOR = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 SYS-52 OPERATOR ERROR SPECIMEN LEDGER = FROZEN / NR_DOC_ONLY / APPLY HOLD
+SYS-06 EVIDENCE-TO-DECISION TRACE MAP = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
-CURRENT NEXT = SYS-06 Evidence-to-Decision Trace Map
+CURRENT NEXT = SYS-18 Evidence Provenance Chain Receipt
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

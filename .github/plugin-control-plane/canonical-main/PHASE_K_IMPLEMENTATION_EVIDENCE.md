@@ -40,4 +40,25 @@ For merge SHA `cc0c5e73f87832a4e0864ef1f5c53387490e9e50`:
 
 ## Live incident-cycle proof
 
-This evidence commit is intentionally merged with the existing `[phase-h-rehearsal]` trigger marker. The trusted rehearsal must prove the exact resulting main SHA through bounded `INCIDENT → CLEAR`, same-correlation reuse, repeated-OPEN suppression, positive recovery, and unchanged production/bootstrap authority. Final run/incident identifiers are recorded in issue #433 and audit issue #293 after completion.
+The first K5 proof exposed a rehearsal-only race rather than a canonical-main failure: the synthetic rehearsal began after `Canonical Main Operations` while exact-main Required was still legitimately converging, then a concurrent documentation commit advanced `main`. The interrupted synthetic #333 was explicitly cleaned up as recovered and retained as audit evidence.
+
+Phase K finalization hotfix:
+
+- Hotfix PR: #436
+- Verified hotfix head: `56dc902112538d81b3dce6665756ca522b9d5dbb`
+- Squash merge on canonical `main`: `8106eddf7b8400d39b31b06fb584cbf974f55e02`
+- Pre-merge Plugin Control Plane CI: run `32924065551` — SUCCESS
+- Pre-merge SimCore CI: run `32924065575`
+  - Verify `98043257888` — SUCCESS
+  - Required `98043301545` — SUCCESS
+- Post-merge exact-main SimCore CI: run `32924158659`
+  - Verify `98043518776` — SUCCESS
+  - Required `98043559306` — SUCCESS
+- Protection Guard follow-up run `32924179762`
+  - Attempt Native Protection `98043579797` — SUCCESS as bounded controller
+  - Recover Failed Exact Main `98043579983` — SUCCESS
+- An earlier guard attempt `32924159537` failed only its exact-main confirmation after the target moved; the later exact-tip guard above succeeded and is the current proof.
+
+The hotfix moves the synthetic rehearsal trigger behind successful `Canonical Main Protection Guard` convergence and adds bounded stale-main handling. If the exact proof SHA remains current, the rehearsal must complete the same-correlation `OPEN → RECOVERED` cycle. If `main` advances during the proof, it must instead recover any old-SHA synthetic OPEN and exit successfully as `CANONICAL_MAIN_REHEARSAL:STALE_MAIN_SKIP`, never leaving a synthetic P1 behind.
+
+This final evidence-only transaction is intentionally merged with the `[phase-h-rehearsal]` marker. Final workflow outcome, #333 state, #305 state, and exact identifiers are recorded in issue #433 and audit issue #293 after completion. Native GitHub branch protection remains a separately read-back fact and must not be inferred from a passing guard or Required run.

@@ -30,7 +30,10 @@ assert.match(e7Workflow,/startsWith\(github\.event\.comment\.body, '\/usage-dash
 assert.match(e7Workflow,/candidate_stage_e6\.cjs --inspect/);
 assert.match(e7Workflow,/git diff --binary "\$INTENT_BASE_SHA" "\$SOURCE_SHA"/);
 assert.match(e7Workflow,/git apply --index --3way/);
-assert.match(e7Workflow,/git commit-tree "\$TREE_SHA" -p "\$CANDIDATE_PARENT_SHA"/);
+assert.match(e7Workflow,/PARENT_ARGS=\(-p "\$CANDIDATE_PARENT_SHA"\)/);
+assert.match(e7Workflow,/PARENT_ARGS\+=\(-p "\$TRUSTED_BASE_SHA"\)/);
+assert.match(e7Workflow,/git commit-tree "\$TREE_SHA" "\$\{PARENT_ARGS\[@\]\}"/);
+assert.match(e7Workflow,/E14_ANCESTRY_PARENT_ADDED/);
 assert.match(e7Workflow,/candidate_stage_e6\.cjs --verify-derived/);
 assert.match(e7Workflow,/E7_CANDIDATE_CAS_FAILED/);
 assert.match(e7Workflow,/git push origin "\$PAYLOAD_SHA:refs\/heads\/\$CANDIDATE_BRANCH"/);
@@ -105,27 +108,30 @@ try {
   write(temp,'plugins/usage-dashboard/tests/p38.cjs','test source\n');
   git(temp,['add','.']);
   const tree = git(temp,['write-tree']);
-  const payload = git(temp,['commit-tree',tree,'-p',base], 'payload\n');
+  const payload = git(temp,['commit-tree',tree,'-p',base], `payload\n\nUsage-Dashboard-Frozen-Main: ${base}\n`);
+  const wrongParent = git(temp,['commit-tree',tree,'-p',base], 'wrong parent fixture\n');
   process.chdir(temp);
   const sourceFiles = JSON.stringify(['.github/usage-dashboard/releases/5.74.json','plugins/usage-dashboard/tests/p38.cjs']);
   const verified = e6.verifyDerivedPayload(base,base,payload,sourceFiles);
+  assert.deepEqual(verified.parents,[base]);
+  assert.equal(verified.frozenMainSha,base);
   assert.deepEqual(new Set(verified.paths),new Set([
     '.github/usage-dashboard/releases/5.74.json',
     'plugins/usage-dashboard/latest.js',
     'plugins/usage-dashboard/src/00-runtime-core.part.js',
     'plugins/usage-dashboard/tests/p38.cjs',
   ]));
-  assert.throws(() => e6.verifyDerivedPayload(base,'0'.repeat(40),payload,sourceFiles),/E6_PAYLOAD_PARENT_MISMATCH/);
+  assert.throws(() => e6.verifyDerivedPayload(base,wrongParent,payload,sourceFiles),/E14_FIRST_PARENT_MISMATCH/);
 
   git(temp,['checkout','-q',base]);
   write(temp,'unrelated.txt','denied\n');
   git(temp,['add','.']);
   const deniedTree = git(temp,['write-tree']);
-  const deniedPayload = git(temp,['commit-tree',deniedTree,'-p',base], 'denied\n');
+  const deniedPayload = git(temp,['commit-tree',deniedTree,'-p',base], `denied\n\nUsage-Dashboard-Frozen-Main: ${base}\n`);
   assert.throws(() => e6.verifyDerivedPayload(base,base,deniedPayload,'[]'),/E6_PAYLOAD_PATH_DENIED/);
 } finally {
   process.chdir(originalCwd);
   fs.rmSync(temp,{recursive:true,force:true});
 }
 
-console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, fast-forward writer, config-free orchestration split, fallback prepare preserved');
+console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved');

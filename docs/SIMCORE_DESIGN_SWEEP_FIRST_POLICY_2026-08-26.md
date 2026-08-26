@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · CURRENT GATE-OPEN DESIGN SWEEP CLOSED · APPLY QUEUES MAY RESUME · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · CURRENT GATE-OPEN DESIGN SWEEP CLOSED · APPLY QUEUES EXHAUSTED · NO RUNTIME CHANGE`
 
 Purpose: reduce context switching by finishing every currently gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
 
@@ -13,6 +13,7 @@ Related authority:
 - `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
 - `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
 - `docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md`
+- `docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
 
 ---
 
@@ -139,18 +140,21 @@ Gated/future ideas remain correctly gated and do not invalidate this closure.
 
 ## 6. Apply queues after sweep closure
 
-The design-sweep hold is now released.
+The design-sweep hold was released and all currently eligible apply work has since been consumed.
 
-Current R document-only queue:
+R document-only state:
 
 ```text
 S-04 Live Evidence Packet Builder
-→ DOC_APPLICABLE
-→ repository evidence-review / classification-handoff template
-→ eligible for separate R_PREP_NON_RUNTIME work
+→ DOC_APPLIED
+→ R_PREP_NON_RUNTIME COMPLETE
+→ docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
+
+CURRENT R DOC APPLY QUEUE
+= EMPTY
 ```
 
-S-03/S-07/S-08 are `DOC_NOT_REQUIRED` and add no prep items.
+S-01/S-02/S-03/S-07/S-08 are `DOC_NOT_REQUIRED` and add no prep items.
 
 Current NR harvest queue:
 
@@ -158,6 +162,7 @@ Current NR harvest queue:
 EMPTY
 ```
 
+The separately selected four-item permanent fixture expansion portfolio is also complete under its own authority and is not an open apply queue.
 Runtime core implementation remains parked until stabilization regardless of sweep closure.
 
 ---
@@ -168,7 +173,7 @@ A new design sweep starts only when a legitimate gate opens, e.g.:
 
 ```text
 v0.64.7 live gate close + M2 progression
-→ POST_M2_3 ideas may become designable
+→ POST_M2_3 ideas may become designable after the required architecture checkpoint/dependency actually opens them
 
 R2.1 genuine release proof
 → dependent NR design may become designable
@@ -206,10 +211,13 @@ DESIGN SWEEP FIRST
 S-03 = FROZEN / DOC_NOT_REQUIRED
 S-07 = FROZEN / DOC_NOT_REQUIRED
 S-08 = FROZEN / DOC_NOT_REQUIRED
+S-04 = DOC_APPLIED / R_PREP COMPLETE
 
 CURRENT GATE-OPEN DESIGN = NONE
 CURRENT DESIGN SWEEP = CLOSED
+CURRENT R DOC APPLY QUEUE = EMPTY
+CURRENT NR HARVEST QUEUE = EMPTY
 
-NEXT ELIGIBLE NON-RUNTIME APPLICATION
-= S-04 R_PREP_NON_RUNTIME
+NEXT DESIGN/APPLY ACTION
+= wait for a legitimate gate to open
 ```

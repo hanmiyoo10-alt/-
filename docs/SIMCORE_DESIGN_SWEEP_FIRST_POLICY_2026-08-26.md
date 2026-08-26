@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 7 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 8 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -60,14 +60,17 @@ SYS-48 Gate-Blocked Reason Surface
 
 SYS-03 Gate Dependency Graph
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
+
+SYS-09 Change-Impact Review Map
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 7
-OPEN NOW            = 33
+FROZEN              = 8
+OPEN NOW            = 32
 GATED/DEPENDENCY    = 12
 ```
 
@@ -75,7 +78,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D3 / NOW
-SYS-09 Change-Impact Review Map
 SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
 SYS-17 Missing Evidence Slot Analyzer
@@ -91,14 +93,15 @@ SYS-50 Work Bundling Conflict Detector
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-09 Change-Impact Review Map
+NEXT = SYS-50 Work Bundling Conflict Detector
 ```
 
 Reason:
-- SYS-01 identifies authority location;
-- SYS-51 selects relevant close surfaces;
-- SYS-03 supplies explicit direct gate-review relationships;
-- SYS-09 can next define changed path/authority-family → required review obligations, which later SYS-11/SYS-42/SYS-50 and close receipts can consume without guessing.
+- SYS-09 now defines additive semantic change families and their review obligations;
+- SYS-50 can turn known risky multi-family combinations into a preflight `SPLIT_REQUIRED` decision before implementation starts;
+- this protects the standing rule that feature/runtime work is not mixed with CI/release/repository-system restructuring.
+
+After SYS-50 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order in advance.
 
 ## 4. Apply / implementation hold
 
@@ -110,6 +113,7 @@ SYS-08 application     = HOLD
 SYS-10 implementation  = HOLD
 SYS-48 application     = HOLD
 SYS-03 implementation  = HOLD
+SYS-09 application     = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
@@ -131,6 +135,8 @@ next-genuine-release-proof dependency
 
 SYS-03 does not change this rule. A graph match is only a re-review candidate, never proof that a gate is open.
 
+SYS-09 also does not authorize work. A change-family match means review obligations exist; it is not a gate-open result.
+
 ## 6. Production boundary
 
 ```text
@@ -146,7 +152,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03
-CURRENT NEXT DESIGN = SYS-09 Change-Impact Review Map
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09
+CURRENT NEXT DESIGN = SYS-50 Work Bundling Conflict Detector
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

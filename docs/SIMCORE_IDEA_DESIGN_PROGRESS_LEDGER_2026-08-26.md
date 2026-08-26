@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 31 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 32 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -127,6 +127,9 @@ SYS-06 Evidence-to-Decision Trace Map
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 
 SYS-18 Evidence Provenance Chain Receipt
+= MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-14 Evidence Freshness Ledger
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
@@ -281,25 +284,38 @@ bounded decision-time source / derivative / proof identities
 → one immutable evidence-provenance receipt
 ```
 
-It freezes what evidence chain was actually relied on at one meaningful decision/close point. It distinguishes source evidence from reviewed derivatives, preserves SYS-13 proof/non-claim boundaries, and never rewrites an old receipt with evidence that arrived later. `PROVENANCE_RECEIPT_COMPLETE` means only that the decision-time lineage is sufficiently exact and coherent; it does not mean the decision, runtime, live gate, release, or proof is globally PASS. Current-reuse freshness remains a future SYS-14 concern.
+It freezes what evidence chain was actually relied on at one meaningful decision/close point. It distinguishes source evidence from reviewed derivatives, preserves SYS-13 proof/non-claim boundaries, and never rewrites an old receipt with evidence that arrived later. `PROVENANCE_RECEIPT_COMPLETE` means only that the decision-time lineage is sufficiently exact and coherent; it does not mean the decision, runtime, live gate, release, or proof is globally PASS.
+
+SYS-14 contract:
+
+```text
+exact historical evidence identity
++ exact current reuse claim / decision scope
++ reviewed current-context anchor
++ reviewed relevant change events
++ explicit reuse / revalidation basis
+→ claim-scoped evidence-freshness disposition
+```
+
+Freshness is never a global property of an evidence artifact and never an age timer. The same evidence may remain `FRESH_FOR_SCOPE` for an immutable historical/identity claim while being `REVALIDATION_REQUIRED` for a later implementation claim. `STALE_FOR_SCOPE` does not invalidate historical evidence or SYS-18 provenance. SYS-14 cannot broaden SYS-13 proof fitness, create required evidence slots, assign verification-debt/blocker posture, close gates, authorize releases, infer freshness from version arithmetic, or mutate evidence/runtime/release state.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 31
-OPEN NOW            = 9
+FROZEN              = 32
+OPEN NOW            = 8
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 22
+NR_DOC_ONLY         = 23
 NR_EXECUTABLE       = 6
 NR_PROTECTED        = 3
-NR_UNASSESSED       = 21
+NR_UNASSESSED       = 20
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18 on the I4/D3/NOW edge are frozen.
+All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18/SYS-14 on the I4/D3/NOW edge are frozen.
 
 The earlier selection-drift FIX remains preserved:
 
@@ -314,7 +330,6 @@ The full remaining highest-priority open edge is now:
 ```text
 I4 / D3 / NOW
 SYS-07 Cross-Reference Integrity Auditor
-SYS-14 Evidence Freshness Ledger
 SYS-16 Anomaly Recurrence Correlator
 SYS-25 Golden Fixture Mutation Receipt
 SYS-36 Branch/PR Relationship Auditor
@@ -324,19 +339,19 @@ SYS-49 Safe Parallel Work Finder
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-14 Evidence Freshness Ledger
+NEXT SYSTEM DESIGN = SYS-07 Cross-Reference Integrity Auditor
 ```
 
 Reason:
 
 ```text
-SYS-18 now freezes the exact point-in-time evidence provenance chain used by a bounded decision.
-SYS-14 is the strongest direct downstream consumer because it can judge current reuse freshness against those exact historical identities without mutating the historical receipt.
-That freshness layer also helps later SYS-07 distinguish mechanically valid references from semantically stale current-use references.
+SYS-14 now freezes claim-scoped current-reuse semantics on top of SYS-18 point-in-time provenance and SYS-06 evidence→decision lineage.
+SYS-07 is the strongest foundational next consumer because it can now audit reference resolution while preserving lifecycle, supersession, provenance, and freshness boundaries rather than treating every resolvable reference as semantically current.
+That structural/reference layer reduces ambiguity before recurrence, fixture-mutation, branch/PR, or workflow-parallelism designs.
 The complete remaining I4/D3/NOW edge is listed explicitly so no peer candidate is silently skipped.
 ```
 
-After SYS-14, recompute the remaining I4/D3 edge rather than assuming later ordering.
+After SYS-07, recompute the remaining I4/D3 edge rather than assuming later ordering.
 
 ## 5. Apply/implementation hold
 
@@ -373,6 +388,7 @@ SYS-24 implementation  = HOLD / PROTECTED
 SYS-52 application     = HOLD
 SYS-06 application     = HOLD
 SYS-18 application     = HOLD
+SYS-14 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -421,9 +437,11 @@ SYS-52 adds process-regression memory without assigning blame or proof. A specim
 
 SYS-06 adds reviewed evidence→decision lineage without adding proof or decision authority. `TRACE_ACTIVE` means only that the exact evidence-to-decision relationship is currently relevant and source-backed. It does not mean the evidence is fresh, the decision is correct, the proof is stronger than SYS-13 permits, or the decision is current merely because an edge exists. Historical trace edges remain preserved when later decisions supersede their targets.
 
-SYS-18 adds point-in-time evidence provenance without retroactive basis inflation. `PROVENANCE_RECEIPT_COMPLETE` means only that the source/derivative/proof/trace chain actually relied on at the bounded decision time is exact enough to preserve. Later evidence must create a new decision/receipt rather than improving an old receipt retroactively; current-reuse freshness remains unclaimed until a future SYS-14 review.
+SYS-18 adds point-in-time evidence provenance without retroactive basis inflation. `PROVENANCE_RECEIPT_COMPLETE` means only that the source/derivative/proof/trace chain actually relied on at the bounded decision time is exact enough to preserve. Later evidence must create a new decision/receipt rather than improving an old receipt retroactively.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, and SYS-18 are document-only by design.
+SYS-14 adds claim-scoped current-reuse review without invalidating history. `FRESH_FOR_SCOPE` means only that the exact historical evidence remains reusable for the exact named current claim/context under reviewed change boundaries; it does not establish PASS, broaden proof scope, or imply every related claim is fresh. `REVALIDATION_REQUIRED` does not itself create blocker posture, while `STALE_FOR_SCOPE` never erases the historical evidence or SYS-18 receipt.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only by design.
 
 ## 7. Production boundary
 
@@ -443,7 +461,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 31 / 52
+SYSTEM DESIGNS FROZEN = 32 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 I4/D2/NOW EDGE = FROZEN
@@ -458,8 +476,9 @@ SYS-24 FIXTURE ORPHAN DETECTOR = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 SYS-52 OPERATOR ERROR SPECIMEN LEDGER = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-06 EVIDENCE-TO-DECISION TRACE MAP = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-18 EVIDENCE PROVENANCE CHAIN RECEIPT = FROZEN / NR_DOC_ONLY / APPLY HOLD
+SYS-14 EVIDENCE FRESHNESS LEDGER = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
-CURRENT NEXT = SYS-14 Evidence Freshness Ledger
+CURRENT NEXT = SYS-07 Cross-Reference Integrity Auditor
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

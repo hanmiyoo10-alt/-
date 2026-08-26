@@ -24,7 +24,7 @@ for (const required of [
   'workflow_run:',
   'push:',
   'group: canonical-main-operations',
-  'cancel-in-progress: true',
+  'cancel-in-progress: false',
   'ref: main',
   'persist-credentials: false',
   'name: Resolve Harness canary Work Record',
@@ -48,6 +48,7 @@ assert.equal((workflow.match(/^  pull_request(?:_target)?:/gm) || []).length, 0,
 assert.equal(workflow.includes('repository-harness-canary-pr:v1'), false, 'temporary PR canary marker must not return');
 assert.equal(workflow.includes('repository-harness-canary-work-issue:'), false, 'temporary PR work-issue marker must not return');
 assert.equal(workflow.includes('issue_comment:'), false, 'B8 must not regress to issue-comment transport');
+assert.equal(workflow.includes('cancel-in-progress: true'), false, 'global canonical-main writer serialization must queue overlap instead of cancelling authoritative work');
 
 const resolveIndex = workflow.indexOf('name: Resolve Harness canary Work Record');
 const gateIndex = workflow.indexOf('name: Harness coordination receipt canary gate');

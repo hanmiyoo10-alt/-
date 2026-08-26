@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 17 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 18 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -58,7 +58,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-32 | Release Candidate Provenance Viewer | Release | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
 | SYS-33 | Rollback Readiness Checklist | Release | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-34 | Post-Release Convergence Checklist Generator | Release | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
-| SYS-35 | Repository Transaction Ledger | Release | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-35 | Repository Transaction Ledger | Release | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-36 | Branch/PR Relationship Auditor | Release | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-37 | Release-System Residual Cleanup Registry | Release | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-38 | Architecture Contract Diff Reporter | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
@@ -97,21 +97,22 @@ SYS-22 → docs/SIMCORE_SYS22_TEST_INTENT_MANIFEST_DESIGN.md
 SYS-21 → docs/SIMCORE_SYS21_FORENSIC_CLASSIFICATION_CONSISTENCY_CHECK_DESIGN.md
 SYS-38 → docs/SIMCORE_SYS38_ARCHITECTURE_CONTRACT_DIFF_REPORTER_DESIGN.md
 SYS-31 → docs/SIMCORE_SYS31_VERSION_BUMP_BLAST_RADIUS_CHECK_DESIGN.md
+SYS-35 → docs/SIMCORE_SYS35_REPOSITORY_TRANSACTION_LEDGER_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 17
-UNFROZEN             = 35
-OPEN NOW             = 23
+FROZEN               = 18
+UNFROZEN             = 34
+OPEN NOW             = 22
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 10
+NR_DOC_ONLY   = 11
 NR_EXECUTABLE = 5
 NR_PROTECTED  = 2
-NR_UNASSESSED = 35
+NR_UNASSESSED = 34
 ```
 
 ## Canonical selection
@@ -143,21 +144,24 @@ SYS-22 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-21 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-38 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-31 = I5 D3 / FROZEN / NR_PROTECTED
+SYS-35 = I5 D3 / FROZEN / NR_DOC_ONLY
 ```
 
-Remaining I5 / D3 / NOW:
+Highest-priority open edge now:
 
 ```text
-SYS-35 Repository Transaction Ledger
+I4 / D1 / NOW
+SYS-46 Canonical Task Card
+SYS-47 User Handoff Card
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-35 Repository Transaction Ledger
+NEXT = SYS-46 Canonical Task Card
 ```
 
-Reason: SYS-31 now freezes the protected pre-release version/release blast-radius boundary for the next genuine runtime checkpoint. SYS-35 is the sole remaining I5/D3/NOW design and has direct leverage over durable work/release transaction history after SYS-08 close receipts and the release-boundary controls are already defined.
+Reason: all gate-open I5 designs are now frozen. SYS-46 and SYS-47 are the highest remaining score pair. SYS-46 has higher downstream leverage because a canonical internal task identity/scope/gate/stop card can feed the later user-facing handoff card; freezing the task card first avoids SYS-47 inventing a parallel work-state vocabulary.
 
 ## Non-duplication boundaries
 
@@ -185,9 +189,10 @@ test surface → intended claims + explicit non-claims → SYS-22
 forensic classification ↔ cited evidence/proof/impact consistency → SYS-21; human-reviewed only, no auto severity promotion/demotion, recurrence discovery, gate close, or repo mutation
 immutable M-11 snapshots + machine contracts → exact before/after architecture delta → SYS-38; no second parser/checker, no expectedness/conformance judgment, no contract/CI mutation
 reviewed release intent + observed production identity + reviewed transaction radius → version/release blast-radius disposition → SYS-31; no version bump, candidate creation, publication, state write, CI/release policy mutation, or LIVE_PASS promotion
+curated meaningful repository transaction identities + authority/mutation classes + lineage links → SYS-35; Git/GitHub/release records remain exact natural authorities, no every-commit scrape, current-state authority, repo writer, or release authorization
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE` and remains implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE`; SYS-35 is `NR_DOC_ONLY`; both remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · DESIGN FIRST · APPLY LATER · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · S-03 FROZEN · DESIGN FIRST · APPLY LATER · NO RUNTIME CHANGE`
 
 Purpose: reduce context switching by finishing every currently gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
 
@@ -10,6 +10,7 @@ Related authority:
 - `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
+- `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
 
 ---
 
@@ -65,8 +66,6 @@ When a gate later opens, that item enters a new incremental design sweep.
 
 ## 3. Per-idea rule during the sweep
 
-The existing full-design requirement remains unchanged.
-
 For each selected idea:
 
 ```text
@@ -80,7 +79,6 @@ inspect source/contracts/evidence
 ```
 
 Do not leave several selected ideas half-designed.
-
 Do not begin runtime implementation from a frozen R idea.
 
 ---
@@ -89,7 +87,7 @@ Do not begin runtime implementation from a frozen R idea.
 
 The sweep delays application, not classification.
 
-For RUNTIME ideas, freeze-time review must still assign:
+For RUNTIME ideas, freeze-time review must assign:
 
 ```text
 DOC_APPLICABLE
@@ -97,9 +95,7 @@ or
 DOC_NOT_REQUIRED
 ```
 
-under `SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`.
-
-For NON_RUNTIME ideas, freeze-time review must still assign:
+For NON_RUNTIME ideas, freeze-time review must assign:
 
 ```text
 NR_DOC_ONLY
@@ -121,20 +117,33 @@ Current gate-open NON_RUNTIME design:
 NONE
 ```
 
-Current gate-open RUNTIME design:
+Runtime sweep progress:
 
 ```text
 S-03 Diagnostic Copy Profiles
+→ DESIGN FROZEN
+→ DOC_NOT_REQUIRED
+→ design authority: docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md
+
+S-07 Host Capability Receipt
+→ NEXT
+
+S-08 History Frontier Confidence Surface
+→ AFTER S-07
+```
+
+Remaining gate-open RUNTIME design:
+
+```text
 S-07 Host Capability Receipt
 S-08 History Frontier Confidence Surface
 ```
 
-Canonical current design order remains the R-lane selection order:
+Canonical remaining order:
 
 ```text
-1. S-03  importance 3 / difficulty 2
-2. S-07  importance 3 / difficulty 2
-3. S-08  importance 2 / difficulty 2
+1. S-07  importance 3 / difficulty 2
+2. S-08  importance 2 / difficulty 2
 ```
 
 Existing frozen R items do not need redesign:
@@ -142,6 +151,7 @@ Existing frozen R items do not need redesign:
 ```text
 S-01 FROZEN
 S-02 FROZEN
+S-03 FROZEN
 S-04 FROZEN
 ```
 
@@ -161,7 +171,7 @@ M-13
 
 ## 6. Deferred apply queues during this sweep
 
-The existing R document-only queue remains valid but is temporarily secondary to the design sweep.
+The R document-only queue remains valid but secondary to the design sweep.
 
 Current known item:
 
@@ -172,7 +182,9 @@ S-04
 → HOLD UNTIL CURRENT DESIGN SWEEP CLOSES
 ```
 
-If S-03, S-07, or S-08 freeze as `DOC_APPLICABLE`, append them to the same later apply queue; do not implement the document slice inside their design work item.
+S-03 is `DOC_NOT_REQUIRED` and adds no apply-queue item.
+
+If S-07 or S-08 freezes as `DOC_APPLICABLE`, append it to the same later apply queue; do not implement the document slice inside its design work item.
 
 Current NR harvest queue is empty.
 
@@ -180,7 +192,7 @@ Current NR harvest queue is empty.
 
 ## 7. Sweep-close transition
 
-When all currently gate-open ideas are frozen:
+When S-07 and S-08 are both frozen:
 
 ```text
 CURRENT DESIGN SWEEP = CLOSED
@@ -220,7 +232,7 @@ remains the current priority.
 
 ## 9. Production boundary
 
-This policy changes repository planning only.
+This policy/status update changes repository planning only.
 
 ```text
 PLUGIN BYTES         = UNCHANGED
@@ -239,12 +251,14 @@ v0.64.7 LIVE GATE    = STILL PENDING
 CURRENT PHASE PRIORITY
 = FINISH ALL CURRENTLY GATE-OPEN DESIGNS FIRST
 
+S-03
+= DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
+
 NEXT DESIGN
-= S-03 Diagnostic Copy Profiles
+= S-07 Host Capability Receipt
 
 THEN
-= S-07 Host Capability Receipt
-→ S-08 History Frontier Confidence Surface
+= S-08 History Frontier Confidence Surface
 
 AFTER CURRENT SWEEP CLOSES
 = process DOC_APPLICABLE / other eligible non-runtime application queues

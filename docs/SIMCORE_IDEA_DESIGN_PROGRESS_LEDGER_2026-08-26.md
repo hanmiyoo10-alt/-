@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 7 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 8 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -56,34 +56,37 @@ SYS-48 Gate-Blocked Reason Surface
 
 SYS-03 Gate Dependency Graph
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
+
+SYS-09 Change-Impact Review Map
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
-SYS-03 contract:
+SYS-09 contract:
 
 ```text
-reviewed authoritative gate declarations
-→ curated direct REVIEW_EVENT --REVIEW_AFTER--> WORK_ITEM edges
-→ deterministic reverse/forward lookup
+reviewed semantic change family
+→ required authority / contract / RT review obligations
 
-GRAPH MATCH
-!= GATE OPEN
-!= NEXT
-!= implementation authorization
+IMPACT FAMILY MATCH
+!= CI path classification
+!= review PASS
+!= gate result
+!= automatic mutation
 ```
 
-RT-11 remains the procedural owner of dependency-close review; SYS-03 only supplies the candidate dependent set and never evaluates event satisfaction.
+Permanent CI path routing remains owned by the existing RS2-3B classifier. SYS-09 is a procedural semantic review map only.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 7
-OPEN NOW            = 33
+FROZEN              = 8
+OPEN NOW            = 32
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 5
+NR_DOC_ONLY         = 6
 NR_EXECUTABLE       = 2
-NR_UNASSESSED       = 45
+NR_UNASSESSED       = 44
 ```
 
 ## 4. Current next design
@@ -92,7 +95,6 @@ Remaining highest-priority edge:
 
 ```text
 I5 / D3 / NOW
-SYS-09 Change-Impact Review Map
 SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
 SYS-17 Missing Evidence Slot Analyzer
@@ -108,19 +110,20 @@ SYS-50 Work Bundling Conflict Detector
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-09 Change-Impact Review Map
+NEXT SYSTEM DESIGN = SYS-50 Work Bundling Conflict Detector
 ```
 
 Reason:
 
 ```text
-SYS-01 = where authority lives
-SYS-51 = which close surfaces apply
-SYS-03 = which direct gate-review dependents exist
-SYS-09 = which changed path/authority families require which review obligations
+SYS-09 now exposes additive semantic change families.
+That gives SYS-50 a stable input for identifying forbidden combinations before implementation begins:
+runtime + release/repo-system authority,
+fixture work + CI/harness authority restructuring,
+and similar mixed transactions.
 ```
 
-That makes SYS-09 the strongest next input for later implementation-conformance, bundling-conflict, verification, and close-receipt systems.
+After SYS-50, recompute the remaining I5/D3 edge rather than precommitting the full order.
 
 ## 5. Apply/implementation hold
 
@@ -133,6 +136,7 @@ SYS-08 application     = HOLD
 SYS-10 implementation  = HOLD
 SYS-48 application     = HOLD
 SYS-03 implementation  = HOLD
+SYS-09 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -141,7 +145,7 @@ Do not materialize/implement these frozen items until the current bounded system
 
 Existing non-blocking focused/direct-execution WATCHes for S-10/S-11/M-10/M-11/M-13 remain unchanged.
 
-SYS-10 and SYS-03 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet.
+SYS-10 and SYS-03 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-09 is document-only by design and creates no new executable verification claim.
 
 ## 7. Production boundary
 
@@ -161,8 +165,8 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 7 / 52
-CURRENT NEXT = SYS-09 Change-Impact Review Map
+SYSTEM DESIGNS FROZEN = 8 / 52
+CURRENT NEXT = SYS-50 Work Bundling Conflict Detector
 SYSTEM APPLY / IMPLEMENTATION = HELD
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

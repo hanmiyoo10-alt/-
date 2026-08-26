@@ -1,6 +1,6 @@
 # SimCore Runtime Idea — Document-Only Applicability Classification — 2026-08-26
 
-Status: `CANONICAL RUNTIME SUBCLASSIFICATION · DOC-ONLY APPLY AXIS · NO RUNTIME CHANGE`
+Status: `CANONICAL RUNTIME SUBCLASSIFICATION · DOC-ONLY APPLY AXIS · S-03 FROZEN · NO RUNTIME CHANGE`
 
 Purpose: classify RUNTIME ideas by whether a useful repository-document / durable-memory slice can be applied before plugin/runtime implementation.
 
@@ -9,6 +9,7 @@ Related authority:
 - `docs/SIMCORE_RUNTIME_IDEA_PREP_NON_RUNTIME_POLICY.md`
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
+- `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
 
 This document does not change an idea's core Runtime Class. Every item listed here remains `RUNTIME` unless the main classification authority is separately changed for a substantive reason.
 
@@ -16,7 +17,7 @@ This document does not change an idea's core Runtime Class. Every item listed he
 
 ## 1. Canonical two-axis model
 
-Runtime ideas are now tracked on two independent axes:
+Runtime ideas are tracked on two independent axes:
 
 ```text
 CORE CLASS
@@ -34,7 +35,7 @@ RUNTIME idea
 != NON_RUNTIME idea
 ```
 
-The runtime core still remains parked until stabilization.
+The runtime core remains parked until stabilization.
 
 ---
 
@@ -62,7 +63,7 @@ DOC_UNASSESSED
 ```
 
 Do not use `DOC_APPLICABLE` merely because an idea happens to have a design document.
-The question is whether **another independently useful repository artifact can be applied before runtime implementation**.
+The question is whether another independently useful repository artifact can be applied before runtime implementation.
 
 ---
 
@@ -114,8 +115,8 @@ If executable or reusable tooling is needed, stop and treat it as runtime implem
 | S-01 | MINI_WARNING_WIDGET_V1 | 4 | 2 | FROZEN / runtime PARKED | DOC_NOT_REQUIRED | frozen design already contains sufficient durable-memory contract |
 | M-01 | Turn Transaction / Phase Receipt | 4 | 3 | GATED POST_M2_3 | DOC_UNASSESSED | assess after design freeze |
 | M-06 | State Invariant Snapshot | 4 | 4 | GATED POST_M2_4 | DOC_UNASSESSED | assess after design freeze |
-| S-03 | Diagnostic Copy Profiles | 3 | 2 | ACTIVE / design next | DOC_UNASSESSED | finish design first |
-| S-07 | Host Capability Receipt | 3 | 2 | ACTIVE | DOC_UNASSESSED | finish design first |
+| S-03 | Diagnostic Copy Profiles | 3 | 2 | FROZEN / runtime PARKED | DOC_NOT_REQUIRED | frozen profile/field/pair/transport design already supplies the needed durable-memory contract |
+| S-07 | Host Capability Receipt | 3 | 2 | ACTIVE / design next | DOC_UNASSESSED | finish design first |
 | M-02 | Ownership-aware Diagnostic Attribution | 3 | 3 | GATED POST_M2_3 | DOC_UNASSESSED | assess after design freeze |
 | M-05 | Phase Performance Budget | 3 | 3 | GATED POST_M2_3 | DOC_UNASSESSED | assess after design freeze |
 | M-04 | Store Write Cost / Commit Budget | 3 | 4 | GATED EVIDENCE | DOC_UNASSESSED | assess after design freeze |
@@ -131,8 +132,8 @@ Current counts:
 RUNTIME total       = 17
 DOC_APPLICABLE      = 1
 DOC_APPLIED         = 0
-DOC_NOT_REQUIRED    = 2
-DOC_UNASSESSED      = 14
+DOC_NOT_REQUIRED    = 3
+DOC_UNASSESSED      = 13
 ```
 
 ---
@@ -145,7 +146,7 @@ DOC APPLY QUEUE
    → repository evidence-review / classification-handoff template
 ```
 
-No other frozen R item currently needs a separate document-only artifact.
+S-03 does not add a new document-only queue item. Its dedicated frozen design already contains the independently useful durable-memory contract; another matrix/checklist would be duplication rather than preparation.
 
 Do not pull `DOC_UNASSESSED` items forward merely to create documentation work. Their core design must finish first.
 
@@ -153,7 +154,7 @@ Do not pull `DOC_UNASSESSED` items forward merely to create documentation work. 
 
 ## 6. Mandatory freeze-time review
 
-From now on every R idea that reaches `DESIGN FROZEN` must receive a same-work-item document-applicability verdict before stopping:
+Every R idea that reaches `DESIGN FROZEN` must receive a same-work-item document-applicability verdict before stopping:
 
 ```text
 R design complete
@@ -196,7 +197,7 @@ If later design/evidence proves an applied document obsolete, preserve its histo
 
 ## 8. Selection rule
 
-The R lane now has two parallel non-competing operations:
+The R lane has two parallel non-competing operations:
 
 ```text
 R DESIGN QUEUE
@@ -208,13 +209,16 @@ R DOC APPLY QUEUE
 → runtime core remains parked
 ```
 
-Current state:
+Current state under DESIGN SWEEP FIRST:
 
 ```text
 NEXT R DESIGN
-= S-03 Diagnostic Copy Profiles
+= S-07 Host Capability Receipt
 
-NEXT R DOC APPLY
+THEN
+= S-08 History Frontier Confidence Surface
+
+NEXT R DOC APPLY AFTER SWEEP
 = S-04 repository evidence-review / classification-handoff template
 ```
 
@@ -225,10 +229,10 @@ NEXT R DOC APPLY
 This classification changes repository administration only.
 
 ```text
-PLUGIN BYTES       = UNCHANGED
-PLUGIN VERSION     = UNCHANGED
+PLUGIN BYTES         = UNCHANGED
+PLUGIN VERSION       = UNCHANGED
 latest.js/install.js = UNCHANGED
-release-simcore    = UNCHANGED
-RUNTIME SEMANTICS  = UNCHANGED
-v0.64.7 LIVE GATE  = STILL PENDING
+release-simcore      = UNCHANGED
+RUNTIME SEMANTICS    = UNCHANGED
+v0.64.7 LIVE GATE    = STILL PENDING
 ```

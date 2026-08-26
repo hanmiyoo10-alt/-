@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 17 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 18 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -90,36 +90,43 @@ SYS-38 Architecture Contract Diff Reporter
 
 SYS-31 Version-Bump Blast-Radius Check
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED
+
+SYS-35 Repository Transaction Ledger
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 17
-OPEN NOW            = 23
+FROZEN              = 18
+OPEN NOW            = 22
 GATED/DEPENDENCY    = 12
 ```
+
+All gate-open Importance-5 designs are now frozen.
 
 Current highest-priority open edge:
 
 ```text
-I5 / D3 / NOW
-SYS-35 Repository Transaction Ledger
+I4 / D1 / NOW
+SYS-46 Canonical Task Card
+SYS-47 User Handoff Card
 ```
 
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-35 Repository Transaction Ledger
+NEXT = SYS-46 Canonical Task Card
 ```
 
 Reason:
-- SYS-31 now freezes the pre-release version/release blast-radius boundary and preserves existing RS2 authority;
-- SYS-35 is the sole remaining I5/D3/NOW design;
-- it can build on SYS-08 close receipts plus already-frozen work/release transaction boundaries without inventing those semantics from scratch.
+- SYS-35 closes the I5/D3 repository-transaction-lineage design edge;
+- SYS-46 and SYS-47 are now the highest-priority open pair;
+- SYS-46 should freeze the canonical internal work/task identity, scope, authority, gate and stop representation first;
+- SYS-47 can then derive a user-facing handoff from that stable task surface rather than inventing a second work-state vocabulary.
 
-After SYS-35 freezes, recompute the next open edge using unified priority rather than fixing a long static order.
+After SYS-46 freezes, recompute the next open edge using unified priority rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -141,6 +148,7 @@ SYS-22 application     = HOLD
 SYS-21 application     = HOLD
 SYS-38 implementation  = HOLD
 SYS-31 implementation  = HOLD / PROTECTED
+SYS-35 application     = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
@@ -149,7 +157,7 @@ SYS-42 and SYS-31 are `NR_PROTECTED`; their eventual implementations must be ded
 
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate, bundling, conformance, audit, proof, slot, test-intent, forensic-consistency, architecture-delta, and release-radius discipline
+## 5. Gate, bundling, conformance, audit, proof, slot, test-intent, forensic-consistency, architecture-delta, release-radius, and transaction-lineage discipline
 
 Closed gates still override scores:
 
@@ -173,6 +181,7 @@ SYS-22 owns reviewed semantic test intent only. `INTENT_DEFINED` does not prove 
 SYS-21 reviews whether a current forensic classification remains inside cited evidence/proof/impact/attribution/recurrence boundaries. It reports over-promotion or under-classification but never auto-changes WATCH / DEFER / FIX / BLOCKER, discovers recurrence, closes gates, or mutates source authorities.
 SYS-38 reports exact bounded architecture differences only. `ARCH_DIFF_PRESENT` means only that compared machine architecture surfaces differ; it is not an architecture approval, SYS-42 conformance result, SYS-11 semantic-drift result, runtime regression, or release authorization.
 SYS-31 checks reviewed release/version blast radius only. `VERSION_RADIUS_CLEAR` does not construct or verify a candidate, authorize publication, write post-publish state, establish LIVE_PASS, or satisfy R2.1 genuine release proof.
+SYS-35 records curated historical repository transaction lineage/navigation only. A ledger row never substitutes for Git/GitHub transaction truth, a release record, SYS-08 work-close truth, release authorization, or current NEXT/queue authority.
 
 Standing split rules remain preserved, including:
 - runtime/feature change separate from CI/release/repository-system redesign;
@@ -182,7 +191,8 @@ Standing split rules remain preserved, including:
 - genuine release publication separate from release-system redesign;
 - protected SYS-42 implementation separate from the product/architecture implementation it later checks;
 - SYS-38 implementation separate from any change to architecture checker policy or permanent CI wiring;
-- protected SYS-31 implementation separate from genuine product releases and release-system redesign.
+- protected SYS-31 implementation separate from genuine product releases and release-system redesign;
+- SYS-35 ledger application separate from repository-writer/event-hook automation or full-history migration.
 
 ## 6. Production boundary
 
@@ -199,7 +209,8 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22 + SYS-21 + SYS-38 + SYS-31
-CURRENT NEXT DESIGN = SYS-35 Repository Transaction Ledger
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17 + SYS-22 + SYS-21 + SYS-38 + SYS-31 + SYS-35
+ALL GATE-OPEN I5 DESIGNS = FROZEN
+CURRENT NEXT DESIGN = SYS-46 Canonical Task Card
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 27 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 28 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -116,6 +116,9 @@ SYS-23 Negative-Control Registry
 
 SYS-33 Rollback Readiness Checklist
 = SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-24 Fixture Orphan Detector
+= SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 ```
 
 SYS-46 contract:
@@ -222,25 +225,47 @@ current production identity
 
 Rollback remains a forward-history direct-child release transaction, never a force/ref rewind. `ROLLBACK_READY` means only that a bounded recovery path is prepared if later authorized; it does not authorize rollback, select rollback over correction, prove the historical source universally safe, publish anything, establish LIVE_PASS, or close R2.1 genuine-release proof. `release-simcore` remains runtime authority even if main administrative state temporarily lags after a recovery publication.
 
+SYS-24 contract:
+
+```text
+canonical permanent registry rows
++ bounded permanent suite-module namespace
++ bounded permanent fixture-directory namespace
+→ exact permanent membership/ownership graph
+→ orphan-integrity disposition
+```
+
+It detects missing declared assets, unregistered assets inside permanent namespaces, duplicate ownership, and bounded path escape. It explicitly ignores unregistered root-level/standalone tests outside the frozen permanent namespace, does not execute fixtures or judge semantic coverage, and never mutates registry/suite/fixture files. Because it polices fixture-authority membership, it is `NR_PROTECTED` despite being read-only.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 27
-OPEN NOW            = 13
+FROZEN              = 28
+OPEN NOW            = 12
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 19
 NR_EXECUTABLE       = 6
-NR_PROTECTED        = 2
-NR_UNASSESSED       = 25
+NR_PROTECTED        = 3
+NR_UNASSESSED       = 24
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 close seven I4/D2 selections.
+All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, and SYS-24 close eight I4/D2 selections.
 
-Highest-priority open edge:
+A selection-drift FIX was preserved during the SYS-24 entry review:
+
+```text
+SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
+= FIX / DOC_DRIFT / NON_RUNTIME / NON_BLOCKING
+= docs/SIMCORE_SYSTEM_IDEA_SELECTION_DRIFT_FIX_SYS24_2026-08-26.md
+```
+
+The drift came from omitting SYS-24 from the I4/D2/NOW selection block even though its inventory row remained I4/D2/NOW. The correction selected and froze SYS-24 before proceeding to SYS-52.
+
+Highest-priority open edge now:
 
 ```text
 I4 / D2 / NOW
@@ -256,9 +281,9 @@ NEXT SYSTEM DESIGN = SYS-52 Operator Error Specimen Ledger
 Reason:
 
 ```text
-SYS-33 now freezes rollback readiness without adding a rollback executor or publisher.
-SYS-52 is the final remaining gate-open I4/D2 design.
-Current repository history already contains bounded operator/tooling mistakes that are preserved in dedicated evidence, so a specimen-ledger contract has immediate continuity value.
+SYS-24 now closes the previously omitted fixture-authority membership-integrity design.
+The living selection edge is again consistent with the classification table.
+SYS-52 is now genuinely the final gate-open I4/D2 design.
 After SYS-52, recompute the I4/D3 edge rather than assuming its order in advance.
 ```
 
@@ -293,11 +318,12 @@ SYS-12 application     = HOLD
 SYS-28 application     = HOLD
 SYS-23 application     = HOLD
 SYS-33 application     = HOLD
+SYS-24 implementation  = HOLD / PROTECTED
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
 
-SYS-42 and SYS-31 require dedicated protected implementation transactions; neither is ordinary SAFE_NON_RUNTIME harvestable merely because it is read-only/non-runtime.
+SYS-42, SYS-31, and SYS-24 require dedicated protected implementation transactions; none is ordinary SAFE_NON_RUNTIME harvestable merely because it is read-only/non-runtime.
 
 ## 6. Verification WATCH preservation
 
@@ -335,7 +361,9 @@ SYS-23 adds explicit negative-regression semantics without inventing stronger pr
 
 SYS-33 adds rollback-readiness continuity without adding rollback authority. `ROLLBACK_READY` means the exact forward-history recovery path and its current authorities are prepared; it does not choose rollback over correction, authorize a new release work item, prove source safety for every possible failure, or turn historical LIVE_PASS into automatic LIVE_PASS for the recovery deployment. Main-side admin lag remains an admin-recovery concern unless runtime/release evidence independently justifies rollback.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 are document-only by design.
+SYS-24 adds permanent-fixture membership integrity without claiming fixture correctness. `FIXTURE_GRAPH_CLEAN` would mean only that the bounded registry↔suite↔fixture ownership graph is structurally complete/unique; it would not establish fixture assertion PASS, semantic coverage, negative-control completeness, live evidence, or release readiness. The checker is not implemented, so no machine CLEAN claim exists yet.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 are document-only by design.
 
 ## 7. Production boundary
 
@@ -355,7 +383,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 27 / 52
+SYSTEM DESIGNS FROZEN = 28 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 SYS-05 HISTORICAL-VS-LIVING REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
@@ -365,9 +393,12 @@ SYS-12 CURRENT-STATE SNAPSHOT PAGE = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-28 VERIFICATION DEBT INDEX = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-23 NEGATIVE-CONTROL REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-33 ROLLBACK READINESS CHECKLIST = FROZEN / NR_DOC_ONLY / APPLY HOLD
+SYS-24 FIXTURE ORPHAN DETECTOR = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
+SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
 CURRENT NEXT = SYS-52 Operator Error Specimen Ledger
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED
+SYS-24 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

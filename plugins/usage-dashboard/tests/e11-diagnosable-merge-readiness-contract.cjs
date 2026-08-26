@@ -187,6 +187,7 @@ for (const token of [
   'Usage-Dashboard-Frozen-Main',
   'compatibility fallback',
   'E11-C',
+  'NON-AUTHORITATIVE PR LANE',
   'E11-D',
   'E11-E',
   'Issue `#372`',

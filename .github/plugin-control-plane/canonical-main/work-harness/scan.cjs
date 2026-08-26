@@ -1,10 +1,13 @@
 'use strict';
 
+const path = require('node:path');
 const { createGitHubClient } = require('../infra/github-client.cjs');
 const { createIssueStore } = require('../infra/issue-store.cjs');
-const { scanRepositoryActiveWork } = require('./active-work.cjs');
+const { discoverActiveWorkRecords, evaluateDiscoveredWork } = require('./active-work.cjs');
+const { loadAdapterRegistry, loadProjectRegistry } = require('./dispatch.cjs');
+const { revalidateActiveWorkReceipts } = require('./receipt-shadow.cjs');
 
-async function run({ token, repo, fetchImpl } = {}) {
+async function run({ token, repo, fetchImpl, observedMainSha, rootDir, adapterRegistry, projectRegistry } = {}) {
   const client = createGitHubClient({
     token: token || process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
     repo: repo || process.env.GITHUB_REPOSITORY,
@@ -12,7 +15,21 @@ async function run({ token, repo, fetchImpl } = {}) {
     userAgent: 'repository-work-harness-shadow-scan',
   });
   const issueStore = createIssueStore(client);
-  return scanRepositoryActiveWork({ issueStore });
+  const issues = await issueStore.listIssues('open');
+  const discovery = discoverActiveWorkRecords(issues);
+  const result = evaluateDiscoveredWork(discovery);
+  const root = rootDir || path.resolve(__dirname, '../../../..');
+  const adapters = adapterRegistry || loadAdapterRegistry(root);
+  const projects = projectRegistry || loadProjectRegistry(root);
+  const mainSha = observedMainSha || process.env.GITHUB_SHA || '';
+  const receiptRevalidation = revalidateActiveWorkReceipts({
+    issues,
+    discovery,
+    observedRefs: mainSha ? { main: mainSha } : {},
+    adapterRegistry: adapters,
+    projectRegistry: projects,
+  });
+  return { ...result, receiptRevalidation };
 }
 
 async function main() {

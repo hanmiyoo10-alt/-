@@ -1,8 +1,8 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `CANDIDATE INVENTORY · UNIFIED IDEA CLASSIFICATION APPLIED · NOT DESIGN FROZEN · SYSTEM/OPERATIONS SCOPE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED IDEA CLASSIFICATION · SYS-19 DESIGN FROZEN · REMAINING CANDIDATES ACTIVE · NO RUNTIME CHANGE`
 
-Purpose: collect non-duplicative candidate ideas for improving SimCore repository memory, verification, evidence handling, release operations, development ergonomics, and task-close discipline. These are candidate items only. A candidate becomes an accepted SimCore idea only after it is selected for a bounded design transaction and reaches `DESIGN FROZEN` under the normal design policy.
+Purpose: collect non-duplicative system/operations ideas under the same SimCore idea classification used by product/runtime ideas. Candidate rows remain selectable until frozen; a selected row becomes an accepted idea when its bounded design reaches `DESIGN FROZEN`.
 
 Classification authority:
 - `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
@@ -25,26 +25,27 @@ Existing systems intentionally not duplicated here:
 
 System ideas do **not** use a separate `Type / Timing` taxonomy.
 
-Every candidate uses the same SimCore idea axes:
+Every row uses the same SimCore idea axes:
 
 ```text
 SIZE          = SMALL / MEDIUM / LARGE
 IMPORTANCE    = 1..5
 DIFFICULTY    = 1..5 (design-completion difficulty)
 RUNTIME CLASS = RUNTIME / NON_RUNTIME
-DESIGN GATE   = NOW / DEPENDENCY / POST_M2_3 / POST_M2_4 / EVIDENCE / EXTERNAL / FUTURE / ...
+DESIGN GATE   = NOW / DEPENDENCY / POST_M2_3 / POST_M2_4 / EVIDENCE / EXTERNAL / FUTURE / FROZEN / ...
 APPLY CLASS   = freeze-time R DOC_* or NR_* classification
 ```
 
-All 52 candidates in this inventory are provisionally `NON_RUNTIME` because their intended useful surfaces are repository memory, tooling, verification, release/repo operations, architecture analysis, or operator workflow rather than plugin execution. This provisional Runtime Class must be confirmed at design freeze.
+All 52 system ideas were provisionally `NON_RUNTIME` at intake because their intended useful surfaces are repository memory, tooling, verification, release/repo operations, architecture analysis, or operator workflow rather than plugin execution.
 
-Because none of these candidates is frozen yet:
+Frozen rows replace provisional classifications with their design-confirmed verdict.
+Unfrozen NON_RUNTIME candidates remain:
 
 ```text
 APPLY CLASS = NR_UNASSESSED
 ```
 
-Descriptive words such as document, tool, checker, ledger, or protected authority concern may appear in the candidate description, but they are not substitute classification systems.
+Descriptive words such as document, tool, checker, ledger, or protected authority concern may appear in descriptions, but they are not substitute classification systems.
 
 ## A. Repository memory / authority-system candidates
 
@@ -73,7 +74,7 @@ Descriptive words such as document, tool, checker, ledger, or protected authorit
 | SYS-16 | Anomaly Recurrence Correlator | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | correlate reviewed anomaly/corpus metadata |
 | SYS-17 | Missing Evidence Slot Analyzer | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | identify genuinely open required evidence slots |
 | SYS-18 | Evidence Provenance Chain Receipt | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | specimen-to-decision provenance chain |
-| SYS-19 | Live-Gate Handoff Packet | SMALL | 5 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED | exact user handoff checklist for current live gate |
+| SYS-19 | Live-Gate Handoff Packet | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY | exact user handoff checklist for current live gate; design: `docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md` |
 | SYS-20 | Natural Evidence Intake Checklist Generator | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | generate blank bounded S-12 intake checklist |
 | SYS-21 | Forensic Classification Consistency Check | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | detect contradictory WATCH/DEFER/FIX/BLOCKER dispositions |
 
@@ -128,10 +129,12 @@ Descriptive words such as document, tool, checker, ledger, or protected authorit
 | SYS-51 | Close-Step Trigger Matrix | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | map work types to required RT close surfaces |
 | SYS-52 | Operator Error Specimen Ledger | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | separate operator/tooling errors from runtime anomalies |
 
-## 1. Candidate counts under the unified axes
+## 1. Inventory counts under the unified axes
 
 ```text
-TOTAL SYSTEM CANDIDATES = 52
+TOTAL SYSTEM IDEAS = 52
+FROZEN             = 1
+UNFROZEN CANDIDATE = 51
 
 SIZE
 SMALL  = 20
@@ -143,33 +146,30 @@ NON_RUNTIME = 52
 RUNTIME     = 0
 
 DESIGN GATE
-NOW                                      = 40
+FROZEN                                   = 1
+NOW                                      = 39
 POST_M2_3                                = 7
 DEPENDENCY: next genuine release proof  = 4
 EVIDENCE                                 = 1
+
+APPLY CLASS
+NR_DOC_ONLY   = 1
+NR_UNASSESSED = 51
 ```
 
-Importance:
+Importance and Difficulty distributions are unchanged by freeze:
 
 ```text
+IMPORTANCE
 I5 = 23
 I4 = 25
 I3 = 4
-I2 = 0
-I1 = 0
-```
 
-Difficulty:
-
-```text
+DIFFICULTY
 D1 = 3
 D2 = 17
 D3 = 32
-D4 = 0
-D5 = 0
 ```
-
-These are candidate classifications, not frozen-design verdicts. A selected candidate may be reclassified at freeze only when design/source inspection proves a materially different boundary.
 
 ## 2. Canonical selection rule
 
@@ -182,18 +182,17 @@ Use the same selection order as every other SimCore idea pool:
 4. downstream leverage higher
 ```
 
-Therefore the current `NOW` candidate pool is selected by score first, not by the fact that it is a “system” idea.
-
-Current highest-priority edge:
+Completed first selection:
 
 ```text
-I5 / D1 / NOW
 SYS-19 Live-Gate Handoff Packet
+= I5 / D1 / FROZEN / NR_DOC_ONLY
 ```
 
-Then the `I5 / D2 / NOW` candidates compete by downstream leverage:
+Current highest-priority open edge:
 
 ```text
+I5 / D2 / NOW
 SYS-01 Living Authority Map
 SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
@@ -201,11 +200,17 @@ SYS-48 Gate-Blocked Reason Surface
 SYS-51 Close-Step Trigger Matrix
 ```
 
-The previous hand-picked shortlist is superseded by this unified scoring rule.
+Downstream-leverage next recommendation:
+
+```text
+NEXT = SYS-01 Living Authority Map
+```
+
+Reason: it establishes the explicit living-authority ownership map used by later impact review, stale-next-action detection, close receipts, and trigger selection without duplicating S-10 production identity checking.
 
 ## 3. Non-duplication / authority boundaries
 
-These candidates must not silently become second versions of existing authorities.
+These ideas must not silently become second versions of existing authorities.
 
 ```text
 Authority state checking
@@ -227,12 +232,12 @@ Release publication
 → existing permanent release caller remains publication authority
 ```
 
-If a selected candidate would duplicate one of these authorities rather than compose with it, reject or redesign it before freeze.
+If a selected idea would duplicate one of these authorities rather than compose with it, reject or redesign it before freeze.
 
 ## 4. Candidate-to-design rule
 
 ```text
-candidate inventory
+candidate
 = classified/scored
 != accepted frozen idea
 != implementation authorization
@@ -247,7 +252,7 @@ select one candidate
 → stop design transaction
 ```
 
-For these provisionally NON_RUNTIME system candidates, the freeze-time Apply Class will be one of:
+For provisionally NON_RUNTIME system candidates, the freeze-time Apply Class is one of:
 
 ```text
 NR_DOC_ONLY
@@ -259,7 +264,7 @@ until freeze, `NR_UNASSESSED` remains authoritative.
 
 ## 5. Production boundary
 
-This inventory/classification migration changes no SimCore production behavior.
+SYS-19 design freeze changes no SimCore production behavior.
 
 ```text
 plugin bytes = unchanged

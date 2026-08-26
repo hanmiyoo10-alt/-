@@ -1,6 +1,6 @@
 # SimCore Runtime Idea — Document-Only Applicability Classification — 2026-08-26
 
-Status: `CANONICAL RUNTIME SUBCLASSIFICATION · DOC-ONLY APPLY AXIS · S-03/S-07 FROZEN · NO RUNTIME CHANGE`
+Status: `CANONICAL RUNTIME SUBCLASSIFICATION · DOC-ONLY APPLY AXIS · CURRENT DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
 
 Purpose: classify RUNTIME ideas by whether a useful repository-document / durable-memory slice can be applied before plugin/runtime implementation.
 
@@ -11,14 +11,13 @@ Related authority:
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
 - `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
+- `docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md`
 
 This document does not change an idea's core Runtime Class. Every item listed here remains `RUNTIME` unless the main classification authority is separately changed for a substantive reason.
 
 ---
 
 ## 1. Canonical two-axis model
-
-Runtime ideas are tracked on two independent axes:
 
 ```text
 CORE CLASS
@@ -63,8 +62,7 @@ DOC_UNASSESSED
 = do not guess whether a prep artifact will be useful
 ```
 
-Do not use `DOC_APPLICABLE` merely because an idea happens to have a design document.
-The question is whether another independently useful repository artifact can be applied before runtime implementation.
+Do not use `DOC_APPLICABLE` merely because an idea happens to have a design document. The question is whether another independently useful repository artifact can be applied before runtime implementation.
 
 ---
 
@@ -124,7 +122,7 @@ If executable or reusable tooling is needed, stop and treat it as runtime implem
 | M-09 | Provider Cache Receipt Integration | 3 | 4 | GATED EXTERNAL | DOC_UNASSESSED | assess after design freeze |
 | M-17 | Pure State Seam | 3 | 4 | FUTURE / TD-09 | DOC_UNASSESSED | assess after future design freeze |
 | L-02 | Performance-aware SnapshotStore Evolution | 3 | 5 | FUTURE / EVIDENCE | DOC_UNASSESSED | assess after future design freeze |
-| S-08 | History Frontier Confidence Surface | 2 | 2 | ACTIVE / design next | DOC_UNASSESSED | finish design first |
+| S-08 | History Frontier Confidence Surface | 2 | 2 | FROZEN / runtime PARKED | DOC_NOT_REQUIRED | frontier claim contract + frozen S-08 design already contain claim-layer/evidence-strength/provenance ceilings; a current baseline would fabricate runtime facts |
 | S-06 | Persistence Footprint Watch | 2 | 2 | GATED EVIDENCE | DOC_UNASSESSED | assess after design freeze |
 
 Current counts:
@@ -133,13 +131,15 @@ Current counts:
 RUNTIME total       = 17
 DOC_APPLICABLE      = 1
 DOC_APPLIED         = 0
-DOC_NOT_REQUIRED    = 4
-DOC_UNASSESSED      = 12
+DOC_NOT_REQUIRED    = 5
+DOC_UNASSESSED      = 11
 ```
 
 ---
 
 ## 5. Current document-only queue
+
+The current design sweep is closed, so the held document-only queue may now be processed under `R_PREP_NON_RUNTIME` as separate bounded work.
 
 ```text
 DOC APPLY QUEUE
@@ -147,9 +147,9 @@ DOC APPLY QUEUE
    → repository evidence-review / classification-handoff template
 ```
 
-S-03 and S-07 add no new document-only queue item. Their dedicated frozen designs already contain the independently useful durable-memory contracts; additional matrices/checklists would duplicate frozen semantics rather than prepare independent non-runtime work.
+S-03, S-07, and S-08 add no new document-only queue item. Their frozen designs already contain the independently useful durable-memory contracts; additional matrices/checklists would duplicate frozen semantics rather than prepare independent non-runtime work.
 
-Do not pull `DOC_UNASSESSED` items forward merely to create documentation work. Their core design must finish first.
+S-08 specifically must not create a pre-runtime per-host confidence baseline because that would manufacture current Host/history facts from design.
 
 ---
 
@@ -176,8 +176,6 @@ The actual doc-only application remains a later separate bounded transaction. Do
 
 ## 7. Status transition rules
 
-Allowed transitions:
-
 ```text
 DOC_UNASSESSED
 → DESIGN FROZEN
@@ -202,7 +200,8 @@ The R lane has two parallel non-competing operations:
 
 ```text
 R DESIGN QUEUE
-→ select next gate-open R idea by importance / difficulty / leverage
+→ currently empty for gate-open ideas
+→ wait for a legitimate gate/dependency/evidence trigger
 
 R DOC APPLY QUEUE
 → select only already-frozen DOC_APPLICABLE items
@@ -210,13 +209,13 @@ R DOC APPLY QUEUE
 → runtime core remains parked
 ```
 
-Current state under DESIGN SWEEP FIRST:
+Current state:
 
 ```text
-NEXT R DESIGN
-= S-08 History Frontier Confidence Surface
+CURRENT GATE-OPEN R DESIGN
+= NONE
 
-NEXT R DOC APPLY AFTER SWEEP
+NEXT R DOC APPLY
 = S-04 repository evidence-review / classification-handoff template
 ```
 

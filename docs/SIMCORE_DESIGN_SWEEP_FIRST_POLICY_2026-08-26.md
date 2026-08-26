@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 8 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 9 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -63,14 +63,17 @@ SYS-03 Gate Dependency Graph
 
 SYS-09 Change-Impact Review Map
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-50 Work Bundling Conflict Detector
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 8
-OPEN NOW            = 32
+FROZEN              = 9
+OPEN NOW            = 31
 GATED/DEPENDENCY    = 12
 ```
 
@@ -87,21 +90,20 @@ SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
 SYS-42 Implementation Slice Conformance Checker
-SYS-50 Work Bundling Conflict Detector
 ```
 
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-50 Work Bundling Conflict Detector
+NEXT = SYS-42 Implementation Slice Conformance Checker
 ```
 
 Reason:
-- SYS-09 now defines additive semantic change families and their review obligations;
-- SYS-50 can turn known risky multi-family combinations into a preflight `SPLIT_REQUIRED` decision before implementation starts;
-- this protects the standing rule that feature/runtime work is not mixed with CI/release/repository-system restructuring.
+- SYS-09 identifies the semantic families materially affected by a proposed change;
+- SYS-50 now separates forbidden independent objectives before implementation;
+- SYS-42 can next freeze the complementary conformance contract that checks whether the actual implementation stayed inside the selected design's allowed/forbidden slice.
 
-After SYS-50 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order in advance.
+After SYS-42 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -114,13 +116,14 @@ SYS-10 implementation  = HOLD
 SYS-48 application     = HOLD
 SYS-03 implementation  = HOLD
 SYS-09 application     = HOLD
+SYS-50 implementation  = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
 
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate discipline
+## 5. Gate and bundling discipline
 
 Closed gates still override scores:
 
@@ -133,9 +136,16 @@ FUTURE
 next-genuine-release-proof dependency
 ```
 
-SYS-03 does not change this rule. A graph match is only a re-review candidate, never proof that a gate is open.
+SYS-03 graph matches are re-review candidates only.
+SYS-09 impact-family matches are review obligations only.
+SYS-50 `BUNDLE_CLEAN` means only that no frozen bundling conflict was found; it does not authorize implementation or override a gate.
 
-SYS-09 also does not authorize work. A change-family match means review obligations exist; it is not a gate-open result.
+Standing split rules remain preserved, including:
+- runtime/feature change separate from CI/release/repository-system redesign;
+- fixture expansion separate from CI/harness topology redesign;
+- design freeze separate from its implementation/application;
+- newly attributed evidence separate from speculative repair;
+- genuine release publication separate from release-system redesign.
 
 ## 6. Production boundary
 
@@ -152,7 +162,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09
-CURRENT NEXT DESIGN = SYS-50 Work Bundling Conflict Detector
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50
+CURRENT NEXT DESIGN = SYS-42 Implementation Slice Conformance Checker
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

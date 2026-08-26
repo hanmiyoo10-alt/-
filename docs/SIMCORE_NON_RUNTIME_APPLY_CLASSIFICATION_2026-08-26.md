@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-49 design freeze:
+Current state after SYS-16 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 35
-UNFROZEN                = 17
+FROZEN                  = 36
+UNFROZEN                = 16
 
-NR_DOC_ONLY   = 23
+NR_DOC_ONLY   = 24
 NR_EXECUTABLE = 7
 NR_PROTECTED  = 5
-NR_UNASSESSED = 17
+NR_UNASSESSED = 16
 ```
 
 Frozen system apply classes:
@@ -202,6 +202,7 @@ SYS-52 Operator Error Specimen Ledger
 SYS-06 Evidence-to-Decision Trace Map
 SYS-18 Evidence Provenance Chain Receipt
 SYS-14 Evidence Freshness Ledger
+SYS-16 Anomaly Recurrence Correlator
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -241,7 +242,7 @@ SYS-49
 → all require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, and SYS-16 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -261,6 +262,7 @@ SYS-52 = curated operator/tooling process-regression specimen ledger; v1 deliber
 SYS-06 = curated semantic evidence→decision lineage map; v1 deliberately avoids evidence discovery, proof-strength inference, decision/gate/classification logic, automatic causality from citations/timestamps, repository writes, or current-state authority
 SYS-18 = point-in-time evidence-provenance receipt; v1 deliberately preserves reviewed source/derivative/proof/trace identities and explicit non-basis without auto discovery, causality inference, freshness judgment, proof promotion, gate/decision logic, historical backfill, or repository writes
 SYS-14 = curated claim-scoped evidence-reuse/freshness ledger; v1 deliberately avoids age-only expiry, automatic semantic diff/crawling, evidence invalidation, proof-scope promotion, slot/debt/blocker creation, gate decisions, repository writes, or runtime/release authority
+SYS-16 = curated family-scoped recurrence/correlation index; v1 deliberately requires reviewed family membership, specimen independence and healthy/contrary controls rather than similarity clustering, log scraping, automatic family merge/split, causality inference or severity promotion
 ```
 
 Why SYS-17, SYS-38, SYS-04, and SYS-07 are executable:
@@ -332,10 +334,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 25
+NR_DOC_ONLY    = 26
 NR_EXECUTABLE  = 12
 NR_PROTECTED   = 6
-NR_UNASSESSED  = 23
+NR_UNASSESSED  = 22
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -348,7 +350,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 5 gate-open NOW designs remain after SYS-49 freeze
+= 4 gate-open NOW designs remain after SYS-16 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -498,6 +500,7 @@ SYS-52 = frozen NR_DOC_ONLY operator/tooling process-regression specimen ledger 
 SYS-06 = frozen NR_DOC_ONLY evidence-to-decision lineage map design
 SYS-18 = frozen NR_DOC_ONLY evidence provenance chain receipt design
 SYS-14 = frozen NR_DOC_ONLY claim-scoped evidence freshness ledger design
+SYS-16 = frozen NR_DOC_ONLY anomaly recurrence/correlation index design
 SYS-07 = frozen NR_EXECUTABLE cross-reference integrity auditor design
 ```
 

@@ -85,7 +85,7 @@ try {
   assert.throws(() => policy.inspectCandidate(base, badVersion), /CANDIDATE_STAGE_NON_MONOTONIC_TARGET/);
 } finally {
   process.chdir(original);
-  fs.rmSync(temp, {recursive:true, force:true});
+  fs.rmSync(temp, {recursive:true, force:true, maxRetries:5, retryDelay:50});
 }
 
 console.log('usage-dashboard candidate stage policy contract: OK · one spec, semantic diff budget including deletions, generated-output denial, monotonic target');

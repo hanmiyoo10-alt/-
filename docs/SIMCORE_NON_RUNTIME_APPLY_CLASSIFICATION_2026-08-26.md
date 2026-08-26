@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-17 design freeze:
+Current state after SYS-22 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 13
-UNFROZEN                = 39
+FROZEN                  = 14
+UNFROZEN                = 38
 
-NR_DOC_ONLY   = 8
+NR_DOC_ONLY   = 9
 NR_EXECUTABLE = 4
 NR_PROTECTED  = 1
-NR_UNASSESSED = 39
+NR_UNASSESSED = 38
 ```
 
 Frozen system apply classes:
@@ -187,6 +187,7 @@ SYS-48 Gate-Blocked Reason Surface
 SYS-09 Change-Impact Review Map
 SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
+SYS-22 Test Intent Manifest
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -207,11 +208,12 @@ its purpose is to police frozen design / architecture-governance boundaries
 → protected implementation transaction required
 ```
 
-Why SYS-11 and SYS-13 are document-only:
+Why SYS-11, SYS-13, and SYS-22 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
 SYS-13 = durable proof-scope policy/matrix; no CI/log scanner required for v1
+SYS-22 = reviewed semantic test-intent/non-claim authority; no harness/registry enforcement required for v1
 ```
 
 Why SYS-17 is executable:
@@ -227,7 +229,7 @@ no gate mutation
 no CI wiring
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, or Report.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, or Report.
 
 ---
 
@@ -238,10 +240,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 10
+NR_DOC_ONLY    = 11
 NR_EXECUTABLE  = 9
 NR_PROTECTED   = 2
-NR_UNASSESSED  = 45
+NR_UNASSESSED  = 44
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -254,7 +256,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 27 gate-open NOW designs remain after SYS-17 freeze
+= 26 gate-open NOW designs remain after SYS-22 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -383,6 +385,7 @@ system-idea NON_RUNTIME design sweep = ACTIVE
 system apply/implementation = HELD
 SYS-42 = frozen NR_PROTECTED governance checker
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
+SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "surfaces": {
+    "auditIssue": 293,
+    "memoryIssue": 462,
+    "ideaInventoryIssue": 464,
+    "workQueueIssue": 465,
+    "documentationIssue": 440
+  },
+  "markers": {
+    "ideaInventory": "canonical-main-idea-inventory:v1",
+    "workQueue": "canonical-main-work-queue:v1",
+    "workPacket": "canonical-main-work-packet:v1"
+  },
+  "classification": {
+    "systemImpact": ["NO_SYSTEM_UPDATE", "SYSTEM_UPDATE_REQUIRED"],
+    "importance": ["최상", "높음", "중간", "낮음"],
+    "difficulty": ["낮음", "중간", "높음", "매우 높음"],
+    "size": ["작음", "중간", "큼", "매우 큼"],
+    "uncertainSystemImpact": "SYSTEM_UPDATE_REQUIRED",
+    "ordering": ["importance-desc", "difficulty-asc", "size-asc"]
+  },
+  "ideaStates": ["CAPTURED", "DESIGNING", "DESIGN_READY", "PACKETIZED", "IMPLEMENTED", "HOLD", "SUPERSEDED"],
+  "packetStates": ["READY", "CLAIMED", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED", "CANCELLED", "SUPERSEDED"],
+  "packetRequiredFields": [
+    "packetId",
+    "primaryGoal",
+    "source",
+    "classification",
+    "readFirst",
+    "writeScope",
+    "dependencies",
+    "expectedOutputs",
+    "acceptance",
+    "stopCondition",
+    "handoff"
+  ],
+  "parallelism": {
+    "requireDisjointWriteScopes": true,
+    "oneActiveOwnerPerPacket": true,
+    "splitOnScopeExpansion": true,
+    "blockedPacketsDoNotBlockIndependentPackets": true
+  },
+  "authority": {
+    "conversationMemoryIsAuthority": false,
+    "queueAuthorizesProduction": false,
+    "queueAuthorizesRelease": false,
+    "repositoryEvidenceWins": true
+  }
+}

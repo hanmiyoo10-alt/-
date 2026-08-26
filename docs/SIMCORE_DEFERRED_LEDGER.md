@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 38/52 designs FROZEN; scoped next design = SYS-20 Natural Evidence Intake Checklist Generator
+System-idea sweep state: 39/52 designs FROZEN; scoped next design = SYS-37 Release-System Residual Cleanup Registry
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -524,7 +524,50 @@ Elapsed time is orientation metadata only. SYS-15 does not compute severity, rec
 
 New SYS-16 recurrence, mitigation validation, owner/supersession changes, or other named triggers yield `WATCH_AGING_REVIEW_REQUIRED`; the owning anomaly/gate authority decides any WATCH/DEFER/FIX/BLOCKER change. Current application remains HOLD while the design sweep is active. A later document-only application may materialize `docs/SIMCORE_WATCH_AGING_REVIEW.md`.
 
-The scoped next system design is SYS-20 Natural Evidence Intake Checklist Generator.
+### Natural Evidence Intake Checklist Generator design
+
+Status: `SYS-20 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
+
+SYS-20 now freezes the generic intake/preservation contract for a newly observed candidate natural production specimen.
+
+Frozen contract:
+
+```text
+new candidate natural production specimen
++ exact source / production / runtime / observation identity
++ bounded semantic user-intent and visible-observation facts
++ diagnostic / RAW / reroll / neighbor / next-turn controls as required
++ naturalness review
++ proof-scope / explicit non-claims
++ preservation sinks / next-review trigger
+→ reviewed natural-evidence intake record
+```
+
+Frozen top-level intake states:
+
+```text
+NATURAL_INTAKE_COMPLETE
+NATURAL_INTAKE_REVIEW_REQUIRED
+NATURAL_INTAKE_BLOCKED
+NATURAL_INTAKE_NOT_APPLICABLE
+```
+
+Critical boundaries:
+
+```text
+LIVE != NATURAL
+same-input reroll/regeneration != second natural recurrence
+intake complete != S-12 eligibility
+intake complete != PASS/WATCH/FIX/BLOCKER
+intake complete != fixture readiness
+intake blocked != runtime defect
+```
+
+SYS-20 does not create a second S-04 packet. S-04 remains the bounded machine-fact projection from one coherent diagnostic observation; SYS-20 records whether that packet/full diagnostic/RAW/neighbor/next-turn evidence is required for the specific natural specimen. S-12 remains post-review corpus navigation and assigns `NE-*` only after eligibility is established. SYS-16 owns recurrence; SYS-15 owns later WATCH aging; SYS-19 owns live-gate experiment instructions; M-10 owns reviewed evidence → fixture-skeleton planning.
+
+Controlled live validation remains explicitly outside natural corpus eligibility unless a source authority establishes ordinary natural use. The checklist uses bounded semantic user-intent summaries rather than copying full prompts by default, and it preserves observable symptom separately from attribution/root cause.
+
+Current application remains HOLD while the system design sweep is active. A later doc-only application may materialize `docs/SIMCORE_NATURAL_EVIDENCE_INTAKE_CHECKLIST.md`. The scoped next system design is SYS-37 Release-System Residual Cleanup Registry.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -775,13 +818,15 @@ SYS-16 recurrence posture is supporting evidence for such review, not an automat
 
 SYS-15 aging posture is likewise an attention/lifecycle signal, not a severity engine. `WATCH_AGING_QUIESCENT` does not dismiss evidence, and `WATCH_AGING_REVIEW_REQUIRED` does not preselect the source owner's next classification.
 
+SYS-20 intake state is preservation completeness only. `NATURAL_INTAKE_COMPLETE` does not establish recurrence, root cause, PASS/WATCH/FIX/BLOCKER, S-12 eligibility, fixture readiness or live-gate close.
+
 ## Next action
 
 ```text
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 38/52 system designs are currently FROZEN and the scoped next design is SYS-20 Natural Evidence Intake Checklist Generator. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 39/52 system designs are currently FROZEN and the scoped next design is SYS-37 Release-System Residual Cleanup Registry. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

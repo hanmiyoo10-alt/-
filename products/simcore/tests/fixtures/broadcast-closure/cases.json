@@ -3,13 +3,49 @@
   "id": "broadcast-closure.batch-a",
   "suite": "broadcast-closure",
   "input": {
-    "previous":"⏱️[2031-03-28 (Fri) 09:45 PM]",
-    "terminal":"⏱️[2031-03-28 (Fri) 10:15 PM]",
-    "validBody":"⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 진행\n⏱️[2031-03-28 (Fri) 10:15 PM]",
-    "nonMonotonic":"⏱️[2031-03-28 (Fri) 09:45 PM]\n⏱️[2031-03-28 (Fri) 09:30 PM]",
-    "validEnvelope":"# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 마무리\n⏱️[2031-03-28 (Fri) 10:15 PM]\n<COMMUNITY>\n[X(EN)]\n제목: test 1\nbody 1\n[베댓]\n- @a1: top [RT 101]\nㄴ @b1: reply [RT 102]\n- @c1: top [RT 103]\n- @d1: top [RT 104]\n- @e1: top [RT 105]\n---\n[네이버 카페]\n제목: test 2\nbody 2\n[베댓]\n- @a2: top [RT 201]\nㄴ @b2: reply [RT 202]\n- @c2: top [RT 203]\n- @d2: top [RT 204]\n- @e2: top [RT 205]\n---\n[에브리타임]\n제목: test 3\nbody 3\n[베댓]\n- @a3: top [RT 301]\nㄴ @b3: reply [RT 302]\n- @c3: top [RT 303]\n- @d3: top [RT 304]\n- @e3: top [RT 305]\n</COMMUNITY>\n<COMMUNITY>\n[블라인드]\n제목: test 4\nbody 4\n[베댓]\n- @a4: top [RT 401]\nㄴ @b4: reply [RT 402]\n- @c4: top [RT 403]\n- @d4: top [RT 404]\n- @e4: top [RT 405]\n---\n[유튜브]\n제목: test 5\nbody 5\n[베댓]\n- @a5: top [RT 501]\nㄴ @b5: reply [RT 502]\n- @c5: top [RT 503]\n- @d5: top [RT 504]\n- @e5: top [RT 505]\n---\n[더쿠]\n제목: test 6\nbody 6\n[베댓]\n- @a6: top [RT 601]\nㄴ @b6: reply [RT 602]\n- @c6: top [RT 603]\n- @d6: top [RT 604]\n- @e6: top [RT 605]\n</COMMUNITY>\n<Knowledge>test</Knowledge>",
-    "quarantinedEnvelope":"# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 마무리\n⏱️[2031-03-28 (Fri) 10:15 PM]\n<COMMUNITY>\n[X(EN)]\n제목: test 1\nbody 1\n[베댓]\n- @a1: top [RT 101]\nㄴ @b1: reply [RT 102]\n- @c1: top [RT 103]\n- @d1: top [RT 104]\n- @e1: top [RT 105]\n---\n[네이버 카페]\n제목: test 2\nbody 2\n[베댓]\n- @a2: top [RT 201]\nㄴ @b2: reply [RT 202]\n- @c2: top [RT 203]\n- @d2: top [RT 204]\n- @e2: top [RT 205]\n---\n[에브리타임]\n제목: test 3\nbody 3\n[베댓]\n- @a3: top [RT 301]\nㄴ @b3: reply [RT 302]\n- @c3: top [RT 303]\n- @d3: top [RT 304]\n- @e3: top [RT 305]\n</COMMUNITY>\n<COMMUNITY>\n[블라인드]\n제목: test 4\nbody 4\n[베댓]\n- @a4: top [RT 401]\nㄴ @b4: reply [RT 402]\n- @c4: top [RT 403]\n- @d4: top [RT 404]\n- @e4: top [RT 405]\n---\n[유튜브]\n제목: test 5\nbody 5\n[베댓]\n- @a5: top [RT 501]\nㄴ @b5: reply [RT 502]\n- @c5: top [RT 503]\n- @d5: top [RT 504]\n- @e5: top [RT 505]\n---\n[더쿠]\n제목: test 6\nbody 6\n[베댓]\n- @a6: top [RT 601]\nㄴ @b6: reply [RT 602]\n- @c6: top [RT 603]\n- @d6: top [RT 604]\n- @e6: missing reaction\n</COMMUNITY>\n<Knowledge>test</Knowledge>"
+    "previous": "⏱️[2031-03-28 (Fri) 09:45 PM]",
+    "terminal": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+    "validBody": "⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 진행\n⏱️[2031-03-28 (Fri) 10:15 PM]",
+    "nonMonotonic": "⏱️[2031-03-28 (Fri) 09:45 PM]\n⏱️[2031-03-28 (Fri) 09:30 PM]",
+    "validEnvelope": "# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 마무리\n⏱️[2031-03-28 (Fri) 10:15 PM]\n<COMMUNITY>\n[X(EN)]\n제목: test 1\nbody 1\n[베댓]\n- @a1: top [RT 101]\nㄴ @b1: reply [RT 102]\n- @c1: top [RT 103]\n- @d1: top [RT 104]\n- @e1: top [RT 105]\n---\n[네이버 카페]\n제목: test 2\nbody 2\n[베댓]\n- @a2: top [RT 201]\nㄴ @b2: reply [RT 202]\n- @c2: top [RT 203]\n- @d2: top [RT 204]\n- @e2: top [RT 205]\n---\n[에브리타임]\n제목: test 3\nbody 3\n[베댓]\n- @a3: top [RT 301]\nㄴ @b3: reply [RT 302]\n- @c3: top [RT 303]\n- @d3: top [RT 304]\n- @e3: top [RT 305]\n</COMMUNITY>\n<COMMUNITY>\n[블라인드]\n제목: test 4\nbody 4\n[베댓]\n- @a4: top [RT 401]\nㄴ @b4: reply [RT 402]\n- @c4: top [RT 403]\n- @d4: top [RT 404]\n- @e4: top [RT 405]\n---\n[유튜브]\n제목: test 5\nbody 5\n[베댓]\n- @a5: top [RT 501]\nㄴ @b5: reply [RT 502]\n- @c5: top [RT 503]\n- @d5: top [RT 504]\n- @e5: top [RT 505]\n---\n[더쿠]\n제목: test 6\nbody 6\n[베댓]\n- @a6: top [RT 601]\nㄴ @b6: reply [RT 602]\n- @c6: top [RT 603]\n- @d6: top [RT 604]\n- @e6: top [RT 605]\n</COMMUNITY>\n<Knowledge>test</Knowledge>",
+    "quarantinedEnvelope": "# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 마무리\n⏱️[2031-03-28 (Fri) 10:15 PM]\n<COMMUNITY>\n[X(EN)]\n제목: test 1\nbody 1\n[베댓]\n- @a1: top [RT 101]\nㄴ @b1: reply [RT 102]\n- @c1: top [RT 103]\n- @d1: top [RT 104]\n- @e1: top [RT 105]\n---\n[네이버 카페]\n제목: test 2\nbody 2\n[베댓]\n- @a2: top [RT 201]\nㄴ @b2: reply [RT 202]\n- @c2: top [RT 203]\n- @d2: top [RT 204]\n- @e2: top [RT 205]\n---\n[에브리타임]\n제목: test 3\nbody 3\n[베댓]\n- @a3: top [RT 301]\nㄴ @b3: reply [RT 302]\n- @c3: top [RT 303]\n- @d3: top [RT 304]\n- @e3: top [RT 305]\n</COMMUNITY>\n<COMMUNITY>\n[블라인드]\n제목: test 4\nbody 4\n[베댓]\n- @a4: top [RT 401]\nㄴ @b4: reply [RT 402]\n- @c4: top [RT 403]\n- @d4: top [RT 404]\n- @e4: top [RT 405]\n---\n[유튜브]\n제목: test 5\nbody 5\n[베댓]\n- @a5: top [RT 501]\nㄴ @b5: reply [RT 502]\n- @c5: top [RT 503]\n- @d5: top [RT 504]\n- @e5: top [RT 505]\n---\n[더쿠]\n제목: test 6\nbody 6\n[베댓]\n- @a6: top [RT 601]\nㄴ @b6: reply [RT 602]\n- @c6: top [RT 603]\n- @d6: top [RT 604]\n- @e6: missing reaction\n</COMMUNITY>\n<Knowledge>test</Knowledge>",
+    "lifecycleCases": [
+      { "id": "broadcast-start-acquires-lock", "state": { "broadcastLocked": false, "episodeNo": 4 }, "text": "[방송 시작]", "expected": { "mode": "B_START", "wasLocked": false, "broadcastLocked": true, "episodeNo": 5 } },
+      { "id": "locked-explicit-continue", "state": { "broadcastLocked": true, "episodeNo": 4 }, "text": "[방송 중]", "expected": { "mode": "B_CONTINUE", "wasLocked": true, "broadcastLocked": true, "episodeNo": 4 } },
+      { "id": "locked-implicit-continue", "state": { "broadcastLocked": true, "episodeNo": 4 }, "text": "그대로 방송을 이어간다", "expected": { "mode": "B_CONTINUE", "wasLocked": true, "broadcastLocked": true, "episodeNo": 4 } },
+      { "id": "locked-explicit-end", "state": { "broadcastLocked": true, "episodeNo": 4 }, "text": "[방송 종료]", "expected": { "mode": "B_END", "wasLocked": true, "broadcastLocked": true, "episodeNo": 4 } },
+      { "id": "unlocked-end-alone-not-b-end", "state": { "broadcastLocked": false, "episodeNo": 4 }, "text": "[방송 종료]", "expected": { "mode": "A", "wasLocked": false, "broadcastLocked": false, "episodeNo": 4 } },
+      { "id": "single-request-start-and-end", "state": { "broadcastLocked": false, "episodeNo": 4 }, "text": "[방송 시작]\n[방송 종료]", "expected": { "mode": "B_END", "wasLocked": false, "broadcastLocked": true, "episodeNo": 5 } },
+      { "id": "locked-continue-precedes-end", "state": { "broadcastLocked": true, "episodeNo": 4 }, "text": "[방송 중]\n[방송 종료]", "expected": { "mode": "B_CONTINUE", "wasLocked": true, "broadcastLocked": true, "episodeNo": 4 } }
+    ],
+    "airtimeCases": [
+      { "id": "b-start-first-airtime-commit", "state": { "broadcastAirtime": null, "broadcastAirtimeStart": null }, "pending": { "mode": "B_START", "broadcastAirtimePrevious": null, "broadcastAirtimeIsNew": true }, "content": "⏱️[2031-03-28 (Fri) 09:00 PM]\n방송 시작", "expected": { "changed": true, "reason": "committed", "timestamp": "⏱️[2031-03-28 (Fri) 09:00 PM]", "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:00 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" } },
+      { "id": "b-continue-forward-airtime", "state": { "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" }, "pending": { "mode": "B_CONTINUE", "broadcastAirtimePrevious": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeIsNew": false }, "content": "⏱️[2031-03-28 (Fri) 10:00 PM]\n방송 진행", "expected": { "changed": true, "reason": "committed", "timestamp": "⏱️[2031-03-28 (Fri) 10:00 PM]", "broadcastAirtime": "⏱️[2031-03-28 (Fri) 10:00 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" } },
+      { "id": "b-continue-same-airtime", "state": { "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" }, "pending": { "mode": "B_CONTINUE", "broadcastAirtimePrevious": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeIsNew": false }, "content": "⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 진행", "expected": { "changed": false, "reason": "committed", "timestamp": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" } },
+      { "id": "b-continue-backward-fail-closed", "state": { "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" }, "pending": { "mode": "B_CONTINUE", "broadcastAirtimePrevious": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeIsNew": false }, "content": "⏱️[2031-03-28 (Fri) 09:30 PM]\n방송 진행", "expected": { "changed": false, "reason": "backward", "timestamp": "⏱️[2031-03-28 (Fri) 09:30 PM]", "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" } },
+      { "id": "non-broadcast-does-not-commit-broadcast-airtime", "state": { "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" }, "pending": { "mode": "C" }, "content": "⏱️[2031-03-28 (Fri) 10:00 PM]\n커뮤니티", "expected": { "changed": false, "reason": "not-broadcast", "timestamp": null, "broadcastAirtime": "⏱️[2031-03-28 (Fri) 09:45 PM]", "broadcastAirtimeStart": "⏱️[2031-03-28 (Fri) 09:00 PM]" } }
+    ],
+    "openBroadcastEnvelope": "# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-03-28 (Fri) 09:45 PM]\n방송 진행\n<COMMUNITY>\n[X(EN)]\n제목: test 1\nbody 1\n[베댓]\n- @a1: top [RT 101]\nㄴ @b1: reply [RT 102]\n- @c1: top [RT 103]\n- @d1: top [RT 104]\n- @e1: top [RT 105]\n---\n[네이버 카페]\n제목: test 2\nbody 2\n[베댓]\n- @a2: top [RT 201]\nㄴ @b2: reply [RT 202]\n- @c2: top [RT 203]\n- @d2: top [RT 204]\n- @e2: top [RT 205]\n---\n[에브리타임]\n제목: test 3\nbody 3\n[베댓]\n- @a3: top [RT 301]\nㄴ @b3: reply [RT 302]\n- @c3: top [RT 303]\n- @d3: top [RT 304]\n- @e3: top [RT 305]\n</COMMUNITY>\n<Knowledge>test</Knowledge>",
+    "terminalExpression": "방송은 종료"
   },
-  "expected":{"terminalCommit":"⏱️[2031-03-28 (Fri) 10:15 PM]","validStructureIssues":0,"quarantineMinimumIssues":1,"missingExecutableSurface":"B_END_STATE_COMMIT_AND_UNLOCK"},
-  "meta":{"goldenGate":true,"coverageExpectation":"HYBRID_TRANSITIONAL","migrationFrom":"v0.63.59 / v0.64.4 quarantine / v0.64.5 COMPLETE / v0.64.6 fixture12+19"}
+  "expected": {
+    "terminalCommit": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+    "validStructureIssues": 0,
+    "quarantineMinimumIssues": 1,
+    "openBroadcastStructureIssues": 0,
+    "missingExecutableSurface": "B_END_STATE_COMMIT_AND_UNLOCK",
+    "subcoverage": {
+      "lifecycle": "EXECUTABLE",
+      "airtime": "EXECUTABLE",
+      "structure": "EXECUTABLE",
+      "finalUnlock": "HYBRID_TRANSITIONAL"
+    }
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "HYBRID_TRANSITIONAL",
+    "evidenceMaturity": "MIXED_DIRECT_LIVE_AND_GOLDEN_CONTRACT",
+    "migrationFrom": "v0.63.59 / v0.64.3 lifecycle sequence / v0.64.4 quarantine / v0.64.5 COMPLETE / v0.64.6 fixture12+19",
+    "extension": "BROADCAST_MODE_LIFECYCLE + BROADCAST_AIRTIME + BROADCAST_END_CLOSURE"
+  }
 }

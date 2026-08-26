@@ -1,6 +1,6 @@
 # SimCore Runtime-Idea PREP_NON_RUNTIME Policy
 
-Status: `CANONICAL OPERATIONAL POLICY · RUNTIME CORE REMAINS PARKED · REPO-MEMORY PREPARATION ALLOWED · DOC-APPLY SUBCLASSIFICATION ACTIVE · NO RUNTIME CHANGE`
+Status: `CANONICAL OPERATIONAL POLICY · RUNTIME CORE REMAINS PARKED · REPO-MEMORY PREPARATION ALLOWED · CURRENT DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
 
 Purpose: allow bounded repository-memory preparation for frozen RUNTIME ideas without starting runtime/plugin implementation or weakening the existing stabilization gate.
 
@@ -9,15 +9,11 @@ Related authority:
 - `docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md`
-- `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md` — canonical R document-only applicability/status queue
+- `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
 
 ---
 
 ## 1. Core rule
-
-A SimCore idea remains classified by its **core implementation effect**.
-
-Therefore:
 
 ```text
 RUNTIME idea
@@ -26,8 +22,6 @@ RUNTIME idea
 ```
 
 The core item remains `RUNTIME` and its plugin/runtime implementation remains parked until stabilization.
-
-However, after the runtime idea's design is fully frozen, an ancillary repository-memory slice may be implemented now when it passes the strict `R_PREP_NON_RUNTIME` boundary.
 
 Canonical flow:
 
@@ -51,25 +45,13 @@ DOC_NOT_REQUIRED
 → runtime item remains PARKED
 ```
 
-This is an additive preparation rule, not an authorization to start product/runtime work.
-
 ---
 
 ## 2. What R_PREP_NON_RUNTIME means
 
-`R_PREP_NON_RUNTIME` is a **slice classification**, not a new idea-lane classification.
+`R_PREP_NON_RUNTIME` is a slice classification, not a new idea lane.
 
-It means:
-
-```text
-this artifact can be useful before runtime implementation
-AND
-it carries no executable/runtime behavior
-AND
-it does not become a second semantic/runtime authority
-```
-
-Typical eligible artifacts:
+Eligible artifacts are non-executable repository memory such as:
 
 ```text
 repository evidence-review template
@@ -82,18 +64,9 @@ static conformance checklist
 explicit cross-reference map
 ```
 
-The artifact may organize already-frozen semantics.
-It may not invent new runtime semantics.
+The artifact may organize already-frozen semantics. It may not invent runtime semantics or current runtime facts.
 
-### 2A. DOC APPLY classification
-
-Every R idea now also carries a document-only applicability state under:
-
-```text
-docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md
-```
-
-Frozen vocabulary:
+Frozen DOC APPLY vocabulary:
 
 ```text
 DOC_APPLICABLE
@@ -101,31 +74,12 @@ DOC_APPLIED
 DOC_NOT_REQUIRED
 DOC_UNASSESSED
 ```
-
-Interpretation:
-
-```text
-DOC_APPLICABLE
-= useful separable document-only artifact exists
-
-DOC_APPLIED
-= that artifact was applied under a separate R_PREP transaction
-
-DOC_NOT_REQUIRED
-= frozen design already contains sufficient durable memory
-
-DOC_UNASSESSED
-= design not frozen enough to judge safely
-```
-
-A design being documented does not automatically make it `DOC_APPLICABLE`.
-The test is whether an additional independently useful repository artifact can be applied before runtime work.
 
 ---
 
 ## 3. Hard eligibility gate
 
-A preparatory slice is eligible only when **all** are true:
+A preparatory slice is eligible only when all are true:
 
 ```text
 parent R idea = DESIGN FROZEN
@@ -146,22 +100,11 @@ no network/GitHub writer is added
 no generated current-production truth is invented
 ```
 
-If any condition fails:
-
-```text
-R_PREP_NON_RUNTIME = NOT ELIGIBLE
-→ keep the slice parked with the parent runtime implementation
-OR
-→ classify it as a separate NR idea if it is genuinely independent tooling/infrastructure
-```
+If any condition fails, the slice is not R_PREP_NON_RUNTIME.
 
 ---
 
 ## 4. Forbidden scope
-
-R_PREP_NON_RUNTIME must never be used to smuggle implementation forward.
-
-Forbidden:
 
 ```text
 plugin source edits
@@ -181,13 +124,13 @@ release candidate
 release-simcore publication
 ```
 
-A file being under `docs/` is not sufficient by itself. The artifact must also be non-executable and non-authoritative for runtime behavior.
+A file being under `docs/` is not enough by itself.
 
 ---
 
 ## 5. Long-term-memory boundary
 
-Eligible durable-memory artifacts may record:
+Allowed:
 
 ```text
 frozen field names / meanings
@@ -200,27 +143,21 @@ future implementation verification checklist
 placeholder/example structures clearly marked as examples
 ```
 
-They must not record guessed current runtime facts as if observed.
-
-Canonical rule:
+Forbidden:
 
 ```text
-TEMPLATE / CHECKLIST / REGISTRY STRUCTURE
-= allowed
-
 CURRENT RUNTIME FACT manufactured from design
-= forbidden
 ```
 
-If a future runtime observation is required, leave the field explicitly pending/unknown until real evidence exists.
+Future observation fields remain pending/unknown until real evidence exists.
 
 ---
 
 ## 6. Parent-item status
 
-Completing a prep slice does not change the parent R idea to implemented.
+Completing prep never means runtime implementation completed.
 
-Allowed parent status notation:
+Allowed:
 
 ```text
 DESIGN FROZEN
@@ -229,112 +166,78 @@ R_PREP_NON_RUNTIME = COMPLETE
 RUNTIME IMPLEMENTATION = PARKED FOR STABILIZATION
 ```
 
-Never write:
+Forbidden:
 
 ```text
 RUNTIME IMPLEMENTED
 ```
 
-merely because its repo-memory preparation exists.
+merely because repo-memory prep exists.
 
 ---
 
 ## 7. Transaction rule
 
-Process/policy changes and prep implementation must not be mixed in one implementation transaction.
-
-Canonical sequence:
-
 ```text
 policy/design authority established on main
-→ stop policy transaction
+→ stop policy/design transaction
 → later separate prep work item
 → static/path verification
 → main evidence sync
 ```
 
-For each prep work item:
-
-```text
-one parent R idea
-→ one bounded prep purpose
-→ no runtime implementation
-```
-
-Do not bundle multiple unrelated runtime ideas into one prep artifact solely for convenience.
+One prep work item = one parent R idea + one bounded prep purpose.
 
 ---
 
 ## 8. Current frozen-R applicability review
 
-As of 2026-08-26:
-
-### S-01 MINI_WARNING_WIDGET_V1
+### DOC_NOT_REQUIRED
 
 ```text
-RUNTIME core: PARKED
-DOC APPLY CLASS: DOC_NOT_REQUIRED
-```
-
-Reason: the frozen design already contains the necessary durable-memory contracts; the remaining meaningful work is UI/runtime implementation and verification.
-
-### S-02 Diagnostic Quick Summary
-
-```text
-RUNTIME core: PARKED
-DOC APPLY CLASS: DOC_NOT_REQUIRED
-```
-
-Reason: the frozen design already records the six-field contract, same-observation rule, stale/current presentation semantics, and verification obligations. Additional repository structure would duplicate the design rather than reduce future implementation risk.
-
-### S-04 Live Evidence Packet Builder
-
-```text
-RUNTIME core: PARKED
-DOC APPLY CLASS: DOC_APPLICABLE
-candidate: repository evidence-review / classification-handoff template
-```
-
-Reason: S-04 already freezes the runtime packet as a transfer object and explicitly places final classification/preservation authority in the repository. A manual review template can be useful now without implementing the packet button, clipboard path, diagnostic projection, or any runtime behavior.
-
-The template must remain usable with manually transcribed evidence before S-04 runtime implementation and must not pretend a packet was generated when it was not.
-
----
-
-## 9. Active / undesigned R ideas
-
-An R idea still in `ACTIVE / DESIGN IN PROGRESS`, gated, or future-only remains:
-
-```text
-DOC_UNASSESSED
-```
-
-Canonical rule:
-
-```text
-finish design first
-→ DESIGN FROZEN
-→ assign DOC_APPLICABLE or DOC_NOT_REQUIRED
-→ runtime core PARKED
-```
-
-This prevents preparatory artifacts from freezing semantics before the parent idea is actually designed.
-
-Current active R queue remains:
-
-```text
+S-01 MINI_WARNING_WIDGET_V1
+S-02 Diagnostic Quick Summary
 S-03 Diagnostic Copy Profiles
 S-07 Host Capability Receipt
 S-08 History Frontier Confidence Surface
 ```
 
-Each receives a document-applicability verdict in the same work item that freezes its design.
+Reasons:
+- their frozen design documents already contain the durable-memory contracts needed before runtime implementation;
+- S-07 must not create a pre-runtime current Host capability baseline;
+- S-08 must not create a pre-runtime current Host/history confidence baseline;
+- extra prep documents would duplicate semantics or fabricate current observations.
+
+### DOC_APPLICABLE
+
+```text
+S-04 Live Evidence Packet Builder
+→ repository evidence-review / classification-handoff template
+```
+
+Reason: the runtime packet is only a transfer object while final classification/preservation remains repository authority. A manual repo-side handoff template is independently useful before runtime implementation.
+
+---
+
+## 9. Current design state
+
+The current gate-open design sweep is closed:
+
+```text
+S-03 → FROZEN / DOC_NOT_REQUIRED
+S-07 → FROZEN / DOC_NOT_REQUIRED
+S-08 → FROZEN / DOC_NOT_REQUIRED
+
+CURRENT GATE-OPEN R DESIGN = NONE
+```
+
+All gated/future R ideas remain `DOC_UNASSESSED` until their design gates legitimately open and their designs freeze.
 
 ---
 
 ## 10. Verification
 
-R_PREP_NON_RUNTIME work requires bounded static verification appropriate to the artifact:
+R_PREP_NON_RUNTIME work requires:
 
 ```text
 referenced repo paths resolve
@@ -348,15 +251,11 @@ no parent runtime implementation status accidentally promoted
 DOC APPLY state moves only DOC_APPLICABLE → DOC_APPLIED after successful prep
 ```
 
-Real long-chat validation is not required for prep-only repository memory.
-
-Future runtime implementation still carries its normal release/live obligations.
+Real long-chat validation is not required for prep-only repository memory. Future runtime implementation still carries its normal release/live obligations.
 
 ---
 
 ## 11. Relationship to NR harvest
-
-Keep these systems separate.
 
 ```text
 NR SAFE_NON_RUNTIME HARVEST
@@ -366,9 +265,7 @@ R_PREP_NON_RUNTIME / DOC APPLY
 = ancillary repository-memory preparation for a frozen RUNTIME idea
 ```
 
-R_PREP does not wait for an NR difficulty-tier close because the parent remains in the R lane and the prep artifact is deliberately non-executable repository memory only.
-
-If the proposed slice grows into reusable executable tooling, stop and classify/design it as a separate NR item instead of continuing under R_PREP.
+Keep them separate. If a prep slice grows into executable tooling, stop and classify/design it as a separate NR item.
 
 ---
 
@@ -378,24 +275,19 @@ If the proposed slice grows into reusable executable tooling, stop and classify/
 RUNTIME CORE
 = STILL PARKED
 
-DOC APPLY QUEUE
-= frozen R ideas whose DOC APPLY CLASS = DOC_APPLICABLE
-
 CURRENT DOC APPLY QUEUE
 1. S-04 repository evidence-review / classification-handoff template
 
 CURRENT DOC_NOT_REQUIRED
 S-01
 S-02
+S-03
+S-07
+S-08
 
 CURRENT DOC_UNASSESSED
-all other R ideas until their design freezes
-```
+all gated/future R ideas until design freeze
 
-Current first document-only application after this policy transaction:
-
-```text
-S-04
-→ repository evidence-review / classification-handoff template
-→ separate next work item
+DESIGN-SWEEP HOLD ON S-04
+= RELEASED
 ```

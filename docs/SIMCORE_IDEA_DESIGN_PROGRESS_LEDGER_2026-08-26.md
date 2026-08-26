@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
 
 Purpose: track design-freeze completion, apply classifications, and SAFE_NON_RUNTIME harvest state after the canonical NON_RUNTIME / RUNTIME queue split.
 
@@ -70,7 +70,7 @@ Main merge: 31d46cfeded5171c49503fe4cd4a11fe4cc8a573
 Runtime/release change: NONE
 ```
 
-S-09 remains the eight-field semantic contract for Evidence Index rows. M-13 now maintains its generated view mechanically.
+S-09 remains the eight-field semantic contract for Evidence Index rows. M-13 maintains its generated view mechanically.
 
 ### S-10 — Authority Drift Check / Scan
 
@@ -139,19 +139,6 @@ Verification coverage: WATCH / NON_BLOCKING
 Runtime/release change: NONE
 ```
 
-Frozen/implemented boundary:
-
-```text
-existing simcore-architecture-check.py
-= parser + Contracts v2 enforcement authority
-
-M-11
-= optional deterministic snapshot projection of that same checker result
-
-second parser / second validator / auto-repair / new CI gate
-= FORBIDDEN / NOT IMPLEMENTED
-```
-
 ### M-10 — Live Diagnostic → Fixture Skeleton Generator
 
 ```text
@@ -174,16 +161,6 @@ Verification coverage: WATCH / NON_BLOCKING
 Runtime/release change: NONE
 ```
 
-Implemented architecture:
-
-```text
-reviewed bounded live-fixture source descriptor
-→ fixture-skeleton-v1
-→ REVIEW_REQUIRED
-→ fixtureV1Ready = false
-→ explicit suite-owner promotion remains separate
-```
-
 ### M-13 — Evidence Index Generator
 
 ```text
@@ -204,19 +181,6 @@ Main merge: 534cfbea9142988913fae5dbcabb322a892192e0
 SimCore CI: 32895316264 Verify PASS / Required PASS
 Verification coverage: WATCH / NON_BLOCKING
 Runtime/release change: NONE
-```
-
-Implemented authority split:
-
-```text
-contract/evidence/gate/debt docs
-= meaning + evidence posture authority
-
-evidence-index-source-v1.json
-= reviewed index-curation source only
-
-docs/SIMCORE_EVIDENCE_INDEX.md
-= generated navigation view
 ```
 
 ---
@@ -248,7 +212,7 @@ Future prep: repository evidence-review / classification-handoff template
 Design doc: docs/SIMCORE_LIVE_EVIDENCE_PACKET_BUILDER_DESIGN.md
 ```
 
-The S-04 prep queue remains held until the current design sweep closes.
+The prior design-sweep hold is now released; S-04 prep may proceed as a separate R_PREP_NON_RUNTIME work item.
 
 ### S-01 — MINI_WARNING_WIDGET_V1
 
@@ -277,7 +241,7 @@ Open design questions: 0
 Runtime/release change: NONE
 ```
 
-Frozen v1 profile set:
+Frozen v1:
 
 ```text
 FULL_CURRENT
@@ -285,31 +249,84 @@ COMPACT_CURRENT
 COMPACT_PAIR
 ```
 
-Critical S-03 boundaries:
+Key boundary: profile = presentation/serialization only; no evidence-profile merge, no cross-turn field mixing, no persistent diagnostic history.
+
+### S-07 — Host Capability Receipt
 
 ```text
-FULL_CURRENT
-= existing full-report bytes / compatibility default
+Importance: 3
+Difficulty: 2
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_NOT_REQUIRED
+Design doc: docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md
+Design commit: 7ae12d6f00434c5bad1a39763206f4cf24f2db83
+Open design questions: 0
+Runtime/release change: NONE
+```
 
-COMPACT_CURRENT
-= one coherent observation
-= eight bounded semantic groups
+Frozen row model:
 
-COMPACT_PAIR
-= immediately previous finalized observation + current finalized observation
-= independent observation identity/revision per half
-= no cross-turn field merge
-= at most two bounded in-memory diagnostic projections
-= no SnapshotStore/pluginStorage persistence
-= no history rescan solely to reconstruct previous
+```text
+Surface = PRESENT / ABSENT / UNKNOWN
+Use = SUCCEEDED / FAILED / NOT_EXERCISED / NOT_APPLICABLE / UNKNOWN
+```
 
-EVIDENCE profile
+Key boundary: no synthetic Host writes/probes; existing natural operation results only; provider/backend inference forbidden.
+
+### S-08 — History Frontier Confidence Surface
+
+```text
+Importance: 2
+Difficulty: 2
+Runtime class: RUNTIME
+Design: FROZEN
+Runtime implementation: PARKED_FOR_STABILIZATION
+Doc Apply Class: DOC_NOT_REQUIRED
+Design doc: docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md
+Design commit: 090fcb4ec43a40df21cb8323955a3a37d5bd962e
+Open design questions: 0
+Runtime/release change: NONE
+```
+
+Frozen claim layers:
+
+```text
+FRONTIER
+REGIME
+SIMCORE_CONTRIBUTION
+EXTERNAL_PROVENANCE
+PROVIDER_CACHE
+```
+
+Frozen evidence-strength vocabulary:
+
+```text
+DIRECT
+SUPPORTED
+WEAK
+UNVERIFIED
+UNAVAILABLE
+```
+
+Critical boundary:
+
+```text
+confidence = claim-scoped evidence strength
+!= probability
+!= generic health
+!= root-cause confidence
+
+PRE_SIMCORE / CHAT_HISTORY
+= mechanical request-position claims
+!= host causal proof
+
+provider cache
+= UNVERIFIED unless authoritative provider/gateway receipt exists
+
+new history scan / mutation / repair / provider query
 = FORBIDDEN
-= S-04 remains a separate evidence-transfer product
-
-copy transport
-= build selected payload once
-→ primary/fallback reuse exact same immutable bytes
 ```
 
 Doc Apply verdict:
@@ -318,72 +335,64 @@ Doc Apply verdict:
 DOC_NOT_REQUIRED
 ```
 
-because the frozen design itself already records the reusable profile field/pair/transport contract; a second pre-runtime document would duplicate it.
+because the existing frontier claim contract plus frozen S-08 design already provide the complete durable-memory vocabulary/ceiling, while a pre-runtime current confidence baseline would fabricate runtime facts.
 
 ---
 
 ## 3. Current R design sweep
 
-Completed in current sweep:
+Completed bounded sweep:
 
 ```text
 S-03 Diagnostic Copy Profiles
-→ DESIGN FROZEN
-→ DOC_NOT_REQUIRED
-```
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 
-Remaining gate-open R designs:
+S-07 Host Capability Receipt
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 
-```text
-1. S-07 Host Capability Receipt
-2. S-08 History Frontier Confidence Surface
-```
-
-No runtime implementation is authorized by design completion.
-
----
-
-## 4. NR difficulty-tier harvest state
-
-### NR Difficulty 1 — CLOSED / HARVEST COMPLETE
-
-```text
-S-09 → FROZEN → IMPLEMENTED
-```
-
-### NR Difficulty 2 — CLOSED / HARVEST COMPLETE
-
-```text
-S-10 → FROZEN → IMPLEMENTED
-S-11 → FROZEN → IMPLEMENTED
-S-12 → FROZEN → IMPLEMENTED
-```
-
-### NR Difficulty 3 — CLOSED / HARVEST COMPLETE
-
-```text
-M-11 → FROZEN → SAFE_NON_RUNTIME_IMPLEMENTED
-M-10 → FROZEN → SAFE_NON_RUNTIME_IMPLEMENTED
-M-13 → FROZEN → SAFE_NON_RUNTIME_IMPLEMENTED
+S-08 History Frontier Confidence Surface
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 ```
 
 Result:
 
 ```text
-NR_DIFFICULTY_3_DESIGN_TIER = CLOSED
-NR_DIFFICULTY_3_SAFE_NON_RUNTIME_HARVEST = COMPLETE
-NR_DIFFICULTY_3_HARVEST_QUEUE = EMPTY
+CURRENT GATE-OPEN R DESIGN = NONE
+CURRENT DESIGN SWEEP = CLOSED
 ```
 
-Gated Difficulty-3 items remain outside this bounded harvest:
+Gated/future R items remain gated. No runtime implementation is authorized by sweep closure.
+
+---
+
+## 4. NR difficulty-tier harvest state
+
+```text
+NR Difficulty 1 = CLOSED / HARVEST COMPLETE
+S-09 → IMPLEMENTED
+
+NR Difficulty 2 = CLOSED / HARVEST COMPLETE
+S-10 → IMPLEMENTED
+S-11 → IMPLEMENTED
+S-12 → IMPLEMENTED
+
+NR Difficulty 3 = CLOSED / HARVEST COMPLETE
+M-11 → IMPLEMENTED
+M-10 → IMPLEMENTED
+M-13 → IMPLEMENTED
+```
+
+Gated NR remains outside completed bounded harvests:
 
 ```text
 M-08 POST_M2_3
 M-14 R2.1 genuine-release-proof dependency
 M-15 POST_M2_3
+M-07 POST_M2_4
+M-12 POST_M2_3
+M-16 M2 implementation slice
+L-01 FUTURE / POST_M2
 ```
-
-When one gate later opens it begins a new incremental design/harvest cycle.
 
 ---
 
@@ -401,7 +410,7 @@ Classification:
 WATCH_ONLY / VERIFICATION_COVERAGE / NON_RUNTIME / NON_BLOCKING
 ```
 
-Current known scope:
+Known scope:
 
 ```text
 M-11 --snapshot-out direct CI execution = NOT CLAIMED
@@ -409,9 +418,9 @@ M-10 focused standalone test direct CI execution = NOT CLAIMED
 M-13 focused standalone test / --check direct CI execution = NOT CLAIMED
 ```
 
-S-10/S-11 retain their earlier standalone tooling-test discovery WATCH for the same general repository limitation.
+S-10/S-11 retain their earlier standalone tooling-test discovery WATCH.
 
-No new anomaly was discovered during S-03 design.
+No new anomaly was discovered during S-03/S-07/S-08 design.
 
 ---
 
@@ -423,13 +432,15 @@ current open design = NONE
 current harvest queue = EMPTY
 next NR = wait for a legitimate gate to open
 
-R DESIGN SWEEP
-S-03 = FROZEN
-NEXT = S-07 Host Capability Receipt
-THEN = S-08 History Frontier Confidence Surface
+R
+current gate-open design = NONE
+current design sweep = CLOSED
+runtime core remains PARKED
 
 R DOC APPLY
-S-04 = DOC_APPLICABLE / HOLD UNTIL SWEEP CLOSE
+S-04 = DOC_APPLICABLE
+→ design-sweep hold RELEASED
+→ next eligible non-runtime application
 ```
 
 High-value gated designs remain gated regardless of importance.
@@ -447,7 +458,7 @@ release blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
 live gate = PENDING_REAL_LONG_CHAT
 ```
 
-S-03 design result:
+Current design-sweep result:
 
 ```text
 RUNTIME CHANGE       = NONE
@@ -462,16 +473,15 @@ REAL LONG-CHAT       = NOT RUN / NOT REQUIRED FOR DESIGN
 ## 8. Current verdict
 
 ```text
-NR Difficulty 1 = CLOSED / HARVEST COMPLETE
-NR Difficulty 2 = CLOSED / HARVEST COMPLETE
-NR Difficulty 3 = CLOSED / HARVEST COMPLETE
+NR Difficulty 1/2/3 bounded harvests = COMPLETE
 
 S-03 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
+S-07 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
+S-08 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
 
-CURRENT DESIGN SWEEP
-NEXT = S-07
-THEN = S-08
+CURRENT GATE-OPEN DESIGN = NONE
+CURRENT DESIGN SWEEP = CLOSED
 
 CURRENT R DOC APPLY QUEUE
-S-04 (held until sweep close)
+S-04 repository evidence-review / classification-handoff template
 ```

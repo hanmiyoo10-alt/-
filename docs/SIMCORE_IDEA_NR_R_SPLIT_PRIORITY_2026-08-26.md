@@ -1,6 +1,6 @@
 # SimCore Idea Priority — NON_RUNTIME / RUNTIME Split Queues — 2026-08-26
 
-Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · S-03 FROZEN · DESIGN SWEEP CONTINUES · NO RUNTIME CHANGE`
+Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN R DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
 
 Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling harvest work and future runtime stabilization do not compete in one mixed priority queue.
 
@@ -14,6 +14,9 @@ Related authority:
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md` — NR implementation-form axis
 - `docs/SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md` — current design-first priority
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md` — completion/implementation history
+- `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
+- `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
+- `docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md`
 
 This document is the current NR/R selection queue authority.
 
@@ -128,8 +131,6 @@ Current total inventory:
 RUNTIME = 17
 ```
 
-The R lane remains runtime-design-first. Runtime core implementation is parked, but frozen R items may have separable repo-memory preparation under `R_PREP_NON_RUNTIME`.
-
 | State | ID | Idea | Size | Importance | Difficulty | Gate / disposition |
 |---|---|---|---|---:|---:|---|
 | FROZEN | S-02 | Diagnostic Quick Summary | SMALL | 5 | 1 | runtime PARKED · DOC_NOT_REQUIRED |
@@ -140,41 +141,41 @@ The R lane remains runtime-design-first. Runtime core implementation is parked, 
 | GATED | M-01 | Turn Transaction / Phase Receipt | MEDIUM | 4 | 3 | POST_M2_3 |
 | GATED | M-06 | State Invariant Snapshot | MEDIUM | 4 | 4 | POST_M2_4 |
 | FROZEN | S-03 | Diagnostic Copy Profiles | SMALL | 3 | 2 | runtime PARKED · DOC_NOT_REQUIRED |
-| ACTIVE | S-07 | Host Capability Receipt | SMALL | 3 | 2 | NOW · design next |
+| FROZEN | S-07 | Host Capability Receipt | SMALL | 3 | 2 | runtime PARKED · DOC_NOT_REQUIRED |
 | GATED | M-02 | Ownership-aware Diagnostic Attribution | MEDIUM | 3 | 3 | POST_M2_3 |
 | GATED | M-05 | Phase Performance Budget | MEDIUM | 3 | 3 | POST_M2_3 |
 | GATED | M-04 | Store Write Cost / Commit Budget | MEDIUM | 3 | 4 | EVIDENCE |
 | GATED | M-09 | Provider Cache Receipt Integration | MEDIUM | 3 | 4 | EXTERNAL |
 | FUTURE | M-17 | Pure State Seam | MEDIUM | 3 | 4 | FUTURE / TD-09 |
 | FUTURE | L-02 | Performance-aware SnapshotStore Evolution | LARGE | 3 | 5 | EVIDENCE / FUTURE |
-| ACTIVE | S-08 | History Frontier Confidence Surface | SMALL | 2 | 2 | NOW · design after S-07 |
+| FROZEN | S-08 | History Frontier Confidence Surface | SMALL | 2 | 2 | runtime PARKED · DOC_NOT_REQUIRED |
 | GATED | S-06 | Persistence Footprint Watch | SMALL | 2 | 2 | EVIDENCE |
 
-### 3.1 Current active R design ordering
+### 3.1 Current gate-open R design state
 
-Under `DESIGN SWEEP FIRST`, S-03 is now frozen and removed from the active queue.
-
-```text
-R-1  S-07 Host Capability Receipt
-     importance 3 / difficulty 2
-
-R-2  S-08 History Frontier Confidence Surface
-     importance 2 / difficulty 2
-```
-
-Current sweep progress:
+The current `DESIGN SWEEP FIRST` pool is now closed.
 
 ```text
-S-03 → DESIGN FROZEN / DOC_NOT_REQUIRED
-S-07 → NEXT
-S-08 → AFTER S-07
+S-03 Diagnostic Copy Profiles
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
+
+S-07 Host Capability Receipt
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
+
+S-08 History Frontier Confidence Surface
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 ```
 
-Active/undesigned R items cannot receive prep implementation before design freeze.
+Result:
+
+```text
+CURRENT GATE-OPEN R DESIGN = NONE
+CURRENT DESIGN SWEEP = CLOSED
+```
+
+Gated/future R items do not block this bounded sweep. When a legitimate gate opens, that item begins a new incremental design sweep.
 
 ### 3.2 Frozen-R prep review
-
-Current review:
 
 ```text
 S-01 MINI_WARNING_WIDGET_V1
@@ -188,16 +189,23 @@ S-02 Diagnostic Quick Summary
 S-03 Diagnostic Copy Profiles
 → runtime PARKED
 → DOC_NOT_REQUIRED
-→ design authority: docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md
+
+S-07 Host Capability Receipt
+→ runtime PARKED
+→ DOC_NOT_REQUIRED
+
+S-08 History Frontier Confidence Surface
+→ runtime PARKED
+→ DOC_NOT_REQUIRED
 
 S-04 Live Evidence Packet Builder
 → runtime PARKED
 → DOC_APPLICABLE
 → repository evidence-review / classification-handoff template
-→ HOLD until current design sweep closes
+→ design-sweep hold is now RELEASED
 ```
 
-S-03 does not need a second prep document because its frozen design already records the profile vocabulary, field budgets, pair identity, copy-transport compatibility, failure rules, and verification plan.
+S-03/S-07/S-08 frozen designs already contain their durable-memory contracts, so no second prep document is required. S-07/S-08 also forbid manufacturing current Host/history baselines before runtime observations exist.
 
 ### 3.3 R runtime completion rule
 
@@ -209,7 +217,7 @@ DESIGN COMPLETE
 → STOP
 ```
 
-Optional after the current design sweep closes:
+After sweep closure:
 
 ```text
 DOC_APPLICABLE
@@ -218,7 +226,7 @@ DOC_APPLICABLE
 → parent runtime core still PARKED
 ```
 
-No R item becomes runtime-harvestable because NR tiers closed or because an R_PREP artifact completed.
+No R item becomes runtime-harvestable because the design sweep or NR tiers closed.
 
 ---
 
@@ -245,21 +253,23 @@ S-01
 S-02
 S-03
 S-04
-
-R DOC APPLY QUEUE (held until sweep close)
-S-04
-
-R ACTIVE DESIGN
 S-07
 S-08
+
+R ACTIVE GATE-OPEN DESIGN
+NONE
+
+R DOC APPLY QUEUE
+S-04 repository evidence-review / classification-handoff template
 ```
 
-Current next operation:
+Current legitimate next non-runtime application:
 
 ```text
-NEXT DESIGN = S-07 Host Capability Receipt
-THEN = S-08 History Frontier Confidence Surface
+S-04 R_PREP_NON_RUNTIME
 ```
+
+or wait for a future NR/R design gate to open.
 
 Production boundary remains:
 

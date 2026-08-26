@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "id": "frame.contract-matrix",
+  "suite": "frame",
+  "input": {
+    "parseCases": [
+      {
+        "id": "parse-basic-frame",
+        "content": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1028 ∮"
+      }
+    ],
+    "captureCases": [
+      {
+        "id": "capture-nearest-assistant-frame",
+        "sendIndex": 3,
+        "messages": [
+          { "role": "assistant", "content": "## 볼륨 1: Old\n### 챕터 1: Old\n#### Chatindex: 100 ∮" },
+          { "role": "user", "content": "next" },
+          { "role": "assistant", "content": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮" },
+          { "role": "user", "content": "current" }
+        ]
+      },
+      {
+        "id": "capture-nearest-assistant-unframed-none",
+        "sendIndex": 3,
+        "messages": [
+          { "role": "assistant", "content": "## 볼륨 2: Older\n### 챕터 5: Older\n#### Chatindex: 900 ∮" },
+          { "role": "user", "content": "next" },
+          { "role": "assistant", "content": "unframed assistant output" },
+          { "role": "user", "content": "current" }
+        ]
+      }
+    ],
+    "continuityCases": [
+      {
+        "id": "continuity-clean-pass",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "chapter-same-title-hold-repair",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 8: Same   Title\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "chapter-title-change-advance-repair",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 7: New Title\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "unresolved-title-no-invented-advance",
+        "previous": "## 볼륨 3: Test\n### 챕터 7:\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 7: Visible Title\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "volume-advance-chapter-reset",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 4: Next\n### 챕터 9: New Volume Chapter\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "volume-jump-repair",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 6: Jumped\n### 챕터 1: New Volume\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "volume-backward-restore",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 2: Regressed\n### 챕터 3: Wrong Chapter\n#### Chatindex: 1028 ∮"
+      },
+      {
+        "id": "chatindex-same-repair",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮"
+      },
+      {
+        "id": "chatindex-backward-repair",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1025 ∮"
+      },
+      {
+        "id": "chatindex-jump-repair",
+        "previous": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1027 ∮",
+        "content": "## 볼륨 3: Test\n### 챕터 7: Same Title\n#### Chatindex: 1035 ∮"
+      }
+    ],
+    "envelopeCases": [
+      {
+        "id": "envelope-valid",
+        "content": "# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-04-04 (Fri) 10:20 PM]\n본문"
+      },
+      {
+        "id": "envelope-duplicate-header-invalid",
+        "content": "# 응답\n## 볼륨 1: Test\n## 볼륨 1: Duplicate\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-04-04 (Fri) 10:20 PM]"
+      },
+      {
+        "id": "envelope-malformed-header-invalid",
+        "content": "# 응답\n## 볼륨 X: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-04-04 (Fri) 10:20 PM]"
+      },
+      {
+        "id": "envelope-wrong-order-invalid",
+        "content": "# 응답\n### 챕터 1: Test\n## 볼륨 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-04-04 (Fri) 10:20 PM]"
+      },
+      {
+        "id": "envelope-interstitial-text-invalid",
+        "content": "# 응답\n## 볼륨 1: Test\nvisible gap text\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[2031-04-04 (Fri) 10:20 PM]"
+      },
+      {
+        "id": "envelope-missing-timestamp-invalid",
+        "content": "# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n본문"
+      },
+      {
+        "id": "envelope-invalid-timestamp-invalid",
+        "content": "# 응답\n## 볼륨 1: Test\n### 챕터 1: Test\n#### Chatindex: 100 ∮\n⏱️[not-a-canonical-time]"
+      }
+    ]
+  },
+  "expected": {
+    "parse-basic-frame": {
+      "volume": 3,
+      "chapter": 7,
+      "chapterTitle": "Same Title",
+      "chatindex": 1028
+    },
+    "capture-nearest-assistant-frame": {
+      "null": false,
+      "sourceAssistantIndex": 2,
+      "volume": 3,
+      "chapter": 7,
+      "chapterTitle": "Same Title",
+      "chatindex": 1027
+    },
+    "capture-nearest-assistant-unframed-none": { "null": true },
+
+    "continuity-clean-pass": {
+      "applied": false,
+      "sequenceStatus": "PASS",
+      "volumeSignal": "SAME",
+      "chapterSignal": "SAME_TITLE_HOLD",
+      "repairs": [],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 }
+    },
+    "chapter-same-title-hold-repair": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "SAME",
+      "chapterSignal": "SAME_TITLE_HOLD",
+      "repairs": ["CHAPTER_TITLE_HOLD"],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 }
+    },
+    "chapter-title-change-advance-repair": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "SAME",
+      "chapterSignal": "TITLE_CHANGED_ADVANCE",
+      "repairs": ["CHAPTER_TITLE_ADVANCE"],
+      "output": { "volume": 3, "chapter": 8, "chatindex": 1028 }
+    },
+    "unresolved-title-no-invented-advance": {
+      "applied": false,
+      "sequenceStatus": "PASS",
+      "volumeSignal": "SAME",
+      "chapterSignal": "UNRESOLVED_TITLE",
+      "repairs": [],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 }
+    },
+    "volume-advance-chapter-reset": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "ADVANCED",
+      "chapterSignal": "RESET_AFTER_VOLUME_ADVANCE",
+      "repairs": ["CHAPTER_RESET"],
+      "output": { "volume": 4, "chapter": 1, "chatindex": 1028 }
+    },
+    "volume-jump-repair": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "ADVANCED",
+      "chapterSignal": "RESET_AFTER_VOLUME_ADVANCE",
+      "repairs": ["VOLUME_JUMP"],
+      "output": { "volume": 4, "chapter": 1, "chatindex": 1028 }
+    },
+    "volume-backward-restore": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "BACKWARD",
+      "chapterSignal": "HELD_WITH_VOLUME",
+      "repairs": ["VOLUME_BACKWARD", "CHAPTER_WITH_VOLUME_BACKWARD"],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 },
+      "chapterTitle": "Same Title"
+    },
+    "chatindex-same-repair": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "SAME",
+      "chapterSignal": "SAME_TITLE_HOLD",
+      "repairs": ["CHATINDEX_SAME"],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 }
+    },
+    "chatindex-backward-repair": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "SAME",
+      "chapterSignal": "SAME_TITLE_HOLD",
+      "repairs": ["CHATINDEX_BACKWARD"],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 }
+    },
+    "chatindex-jump-repair": {
+      "applied": true,
+      "sequenceStatus": "REPAIRED",
+      "volumeSignal": "SAME",
+      "chapterSignal": "SAME_TITLE_HOLD",
+      "repairs": ["CHATINDEX_JUMP"],
+      "output": { "volume": 3, "chapter": 7, "chatindex": 1028 }
+    },
+
+    "envelope-valid": {
+      "frameOk": true,
+      "orderOk": true,
+      "timestampMarkerFound": true,
+      "timestampValid": true,
+      "timestamp": "⏱️[2031-04-04 (Fri) 10:20 PM]"
+    },
+    "envelope-duplicate-header-invalid": { "frameOk": false },
+    "envelope-malformed-header-invalid": { "frameOk": false },
+    "envelope-wrong-order-invalid": { "frameOk": false, "orderOk": false },
+    "envelope-interstitial-text-invalid": { "frameOk": false, "orderOk": false },
+    "envelope-missing-timestamp-invalid": { "frameOk": false, "timestampMarkerFound": false },
+    "envelope-invalid-timestamp-invalid": {
+      "frameOk": false,
+      "timestampMarkerFound": true,
+      "timestampValid": false
+    }
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "evidenceMaturity": "MIXED_DIRECT_LIVE_AND_GOLDEN_CONTRACT",
+    "liveControl": "v0.64.5 CHATINDEX_SAME safe repair",
+    "caseCount": 20,
+    "ownerSplit": "Frame continuity/repair + Structure frame-envelope shape"
+  }
+}

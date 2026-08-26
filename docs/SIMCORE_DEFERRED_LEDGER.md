@@ -64,8 +64,8 @@ Production: v0.64.7 — Cross-Reload Cache Observer Continuity
 Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
-Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 39/52 designs FROZEN; scoped next design = SYS-37 Release-System Residual Cleanup Registry
+Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; the gate-open system-idea design sweep is CLOSED at 40/52 FROZEN with 12 gated rows waiting on their owning transitions; frozen SYS application/implementation requires separate reselection and is not auto-authorized
+System-idea sweep state: 40/52 designs FROZEN; OPEN NOW = 0; current system-design next = NONE / WAITING_FOR_GATE
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -143,7 +143,7 @@ This WATCH is not permission to mix canonical-main repository-system redesign in
 
 Status: `SYS-52 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
 
-SYS-52 now freezes a dedicated future repository-memory surface for operator/tooling process deviations.
+SYS-52 freezes a dedicated future repository-memory surface for operator/tooling process deviations.
 
 Frozen contract:
 
@@ -156,7 +156,7 @@ reviewed operator/tooling deviation
 → curated process-regression specimen
 ```
 
-The future ledger will distinguish historical disposition from current resolution and will preserve corrected errors rather than deleting them. It explicitly prohibits blame/actor scoring, automatic severity, recurrence auto-escalation, auto ingestion, and remediation/repository-write authority.
+The future ledger distinguishes historical disposition from current resolution and preserves corrected errors rather than deleting them. It explicitly prohibits blame/actor scoring, automatic severity, recurrence auto-escalation, auto ingestion, and remediation/repository-write authority.
 
 Existing preserved real seeds include:
 
@@ -166,13 +166,11 @@ R2_1_OPERATOR_POLICY_ACCIDENTAL_MAIN_NOOP_MARKER
 SYSTEM_IDEA_SELECTION_EDGE_OMISSION_SYS24
 ```
 
-Current application remains HOLD while the system design sweep is active. The existing source evidence documents remain authoritative for those historical events until a later bounded SYS-52 application transaction materializes `docs/SIMCORE_OPERATOR_ERROR_SPECIMEN_LEDGER.md`.
+The existing source evidence documents remain authoritative for those historical events until a later bounded SYS-52 application transaction materializes `docs/SIMCORE_OPERATOR_ERROR_SPECIMEN_LEDGER.md`.
 
 ### Evidence-to-Decision Trace Map design
 
-Status: `SYS-06 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-06 now freezes the reviewed semantic lineage from exact evidence identities to exact bounded decision identities.
+Status: `SYS-06 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -199,13 +197,11 @@ The map is deliberately distinct from the generated Evidence Index, SYS-13 proof
 
 Historical evidence→decision edges remain preserved when later evidence produces a superseding decision. A later decision needs its own evidence trace; support does not silently transfer through SYS-02 supersession.
 
-Current application remains HOLD while the system design sweep is active. Frozen SYS-18 consumes this reviewed lineage for point-in-time provenance receipts rather than inventing evidence→decision causality independently.
+Frozen SYS-18 consumes this reviewed lineage for point-in-time provenance receipts rather than inventing evidence→decision causality independently.
 
 ### Evidence Provenance Chain Receipt design
 
-Status: `SYS-18 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-18 now freezes the point-in-time receipt contract for one meaningful bounded decision/close.
+Status: `SYS-18 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -229,13 +225,11 @@ The receipt is historical decision-time provenance, not a living evidence map. L
 
 `PROVENANCE_RECEIPT_COMPLETE` means only that the exact source/derivative/proof/trace chain used at that decision time is sufficiently resolvable and coherent. It does not establish runtime/live PASS, gate close, release authorization, universal proof fitness, or current evidence freshness.
 
-Current application remains HOLD while the system design sweep is active. Frozen SYS-14 consumes historical provenance only as context for current claim-scoped reuse review; it never mutates SYS-18 receipts.
+Frozen SYS-14 consumes historical provenance only as context for current claim-scoped reuse review; it never mutates SYS-18 receipts.
 
 ### Evidence Freshness Ledger design
 
-Status: `SYS-14 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-14 now freezes the current-reuse review contract for historically valid evidence.
+Status: `SYS-14 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -262,13 +256,11 @@ Freshness is not a global property of an evidence artifact and is never decided 
 
 The v0.64.5 genuine-edit positive control is the canonical boundary example: it remains valid/fresh for the claim that a pre-M2-3 direct baseline exists, while post-M2-3 extracted behavior requires the already-owned direct revalidation before M2-4. SYS-14 represents that distinction; it does not invent the requirement.
 
-SYS-14 cannot broaden SYS-13 proof fitness, create required evidence slots, determine verification-debt/blocker posture, close a live gate, authorize release, or auto-scan repository history. Current application remains HOLD while the system design sweep is active. Frozen SYS-07 consumes reviewed freshness only for registered current-evidence-reuse reference fields and never calculates freshness itself.
+SYS-14 cannot broaden SYS-13 proof fitness, create required evidence slots, determine verification-debt/blocker posture, close a live gate, authorize release, or auto-scan repository history. Frozen SYS-07 consumes reviewed freshness only for registered current-evidence-reuse reference fields and never calculates freshness itself.
 
 ### Cross-Reference Integrity Auditor design
 
-Status: `SYS-07 DESIGN FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD / NON_RUNTIME`
-
-SYS-07 now freezes the bounded deterministic audit contract for registered structured repository-memory references.
+Status: `SYS-07 DESIGN FROZEN / NR_EXECUTABLE / IMPLEMENTATION NOT STARTED / NON_RUNTIME`
 
 Frozen contract:
 
@@ -293,13 +285,11 @@ SYS-07 explicitly separates mechanical resolution from semantic eligibility. A p
 
 v1 is local/read-only/no-network and scans only explicitly registered structured reference surfaces. It does not crawl arbitrary prose, infer lifecycle/supersession/provenance, verify GitHub-side branch/PR/commit relationships, repair references, mutate repository state, become required CI, or affect runtime/release authority.
 
-Current implementation remains HOLD while the system design sweep is active. Frozen SYS-36 now owns the GitHub-side branch/PR relationship contract deliberately excluded from SYS-07.
+Frozen SYS-36 owns the GitHub-side branch/PR relationship contract deliberately excluded from SYS-07.
 
 ### Branch/PR Relationship Auditor design
 
-Status: `SYS-36 DESIGN FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD / NON_RUNTIME`
-
-SYS-36 now freezes the protected read-only relationship audit contract for GitHub branch/PR/commit facts.
+Status: `SYS-36 DESIGN FROZEN / NR_PROTECTED / IMPLEMENTATION NOT STARTED / NON_RUNTIME`
 
 Frozen contract:
 
@@ -334,13 +324,11 @@ Generic base movement is not an error without an explicit exact-base contract. A
 
 SYS-36 is `NR_PROTECTED` despite being read-only because it polices branch/PR governance relationships. It may later feed SYS-49 safe-parallel-work reasoning, SYS-31 release review, or SYS-35 lineage evidence, but it does not decide stale-PR hygiene, safe parallelism, merge/close/delete/rebase action, release authorization, or repository writes.
 
-Current implementation remains HOLD while the system design sweep is active. Frozen SYS-49 now owns the safe-parallel-work judgment deliberately excluded from SYS-36.
+Frozen SYS-49 owns the safe-parallel-work judgment deliberately excluded from SYS-36.
 
 ### Safe Parallel Work Finder design
 
-Status: `SYS-49 DESIGN FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD / NON_RUNTIME`
-
-SYS-49 now freezes the protected read-only concurrency judgment for already-legitimate bounded work.
+Status: `SYS-49 DESIGN FROZEN / NR_PROTECTED / IMPLEMENTATION NOT STARTED / NON_RUNTIME`
 
 Frozen contract:
 
@@ -380,13 +368,11 @@ SimCore's immediate anomaly preservation rule is a first-class guard: if real li
 
 SYS-49 is `NR_PROTECTED` despite being read-only because false SAFE output can affect shared main writers, branch/PR transactions, exact-base work, production evidence windows, and protected repository/release governance. It does not select tasks, change priority/gates, schedule workers, create locks, mutate branches/PRs, write main/release-simcore, or become CI authority.
 
-Current implementation remains HOLD while the system design sweep is active. Frozen SYS-16 now owns anomaly recurrence/correlation semantics while preserving the immediate-capture priority that SYS-49 consumes as a concurrency guard.
+Frozen SYS-16 owns anomaly recurrence/correlation semantics while preserving the immediate-capture priority that SYS-49 consumes as a concurrency guard.
 
 ### Anomaly Recurrence Correlator design
 
-Status: `SYS-16 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-16 now freezes the reviewed family-scoped recurrence/correlation contract for preserved natural, controlled, deterministic, and process specimens.
+Status: `SYS-16 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -431,13 +417,9 @@ Cross-family recurrence/correlation remains separate from family identity. Share
 
 SYS-16 does not change the immediate-capture rule: preserve the first suspicious specimen before recurrence exists. It also does not mutate WATCH/DEFER/FIX/BLOCKER automatically; owning anomaly/gate authorities may re-review disposition when recurrence materially changes the evidence.
 
-Current application remains HOLD while the system design sweep is active. A later document-only application may materialize `docs/SIMCORE_ANOMALY_RECURRENCE_INDEX.md`.
-
 ### Golden Fixture Mutation Receipt design
 
-Status: `SYS-25 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-25 now freezes point-in-time accountability for intentional mutations of established permanent golden fixtures.
+Status: `SYS-25 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -475,13 +457,11 @@ Case removal also requires explicit replacement/supersession/move/debt dispositi
 
 SYS-25 v1 is prospective `NR_DOC_ONLY`: later application may materialize `docs/SIMCORE_GOLDEN_FIXTURE_MUTATION_RECEIPT_TEMPLATE.md`, while the actual fixture mutation remains a separate fixture-authority transaction. Historical initial fixture creation does not need fake retrospective mutation receipts.
 
-Current application remains HOLD while the system design sweep is active. SYS-25 closes the I4/D3/NOW edge.
+SYS-25 closed the I4/D3/NOW edge.
 
 ### WATCH Aging Review design
 
-Status: `SYS-15 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-15 now freezes event-driven aging/relevance review for preserved WATCH and deferred-WATCH items.
+Status: `SYS-15 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -522,13 +502,11 @@ Elapsed time is orientation metadata only. SYS-15 does not compute severity, rec
 
 `WATCH_AGING_QUIESCENT` is the normal posture for valid evidence with no useful immediate action and one named future trigger, such as a rare natural revalidation or a one-off semantic anomaly waiting for natural recurrence. `WATCH_AGING_HISTORICALIZE_CANDIDATE` means only that active living attention may end while the source evidence remains historically preserved; it never means `DISMISSED_NO_DEFECT` without resolving evidence.
 
-New SYS-16 recurrence, mitigation validation, owner/supersession changes, or other named triggers yield `WATCH_AGING_REVIEW_REQUIRED`; the owning anomaly/gate authority decides any WATCH/DEFER/FIX/BLOCKER change. Current application remains HOLD while the design sweep is active. A later document-only application may materialize `docs/SIMCORE_WATCH_AGING_REVIEW.md`.
+New SYS-16 recurrence, mitigation validation, owner/supersession changes, or other named triggers yield `WATCH_AGING_REVIEW_REQUIRED`; the owning anomaly/gate authority decides any WATCH/DEFER/FIX/BLOCKER change.
 
 ### Natural Evidence Intake Checklist Generator design
 
-Status: `SYS-20 DESIGN FROZEN / NR_DOC_ONLY / APPLY HOLD / NON_RUNTIME`
-
-SYS-20 now freezes the generic intake/preservation contract for a newly observed candidate natural production specimen.
+Status: `SYS-20 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME`
 
 Frozen contract:
 
@@ -567,7 +545,74 @@ SYS-20 does not create a second S-04 packet. S-04 remains the bounded machine-fa
 
 Controlled live validation remains explicitly outside natural corpus eligibility unless a source authority establishes ordinary natural use. The checklist uses bounded semantic user-intent summaries rather than copying full prompts by default, and it preserves observable symptom separately from attribution/root cause.
 
-Current application remains HOLD while the system design sweep is active. A later doc-only application may materialize `docs/SIMCORE_NATURAL_EVIDENCE_INTAKE_CHECKLIST.md`. The scoped next system design is SYS-37 Release-System Residual Cleanup Registry.
+A later doc-only application may materialize `docs/SIMCORE_NATURAL_EVIDENCE_INTAKE_CHECKLIST.md`.
+
+### Release-System Residual Cleanup Registry design
+
+Status: `SYS-37 DESIGN FROZEN / NR_DOC_ONLY / NON_RUNTIME / GATE-OPEN SYSTEM DESIGN SWEEP CLOSE`
+
+Frozen contract:
+
+```text
+source-owned release-system residual
++ exact residual identity / location
++ source-owned disposition
++ reviewed current operational role
++ reviewed cleanup eligibility / trigger
++ preservation constraints
++ bounded later mutation surface / verification requirement
+→ curated release-system residual cleanup registry row
+```
+
+Frozen residual kinds:
+
+```text
+RR-01 LEGACY_COMPATIBILITY_ARTIFACT
+RR-02 PHYSICAL_NONAUTHORITATIVE_LEFTOVER
+RR-03 TOOL_SURFACE_RETIREMENT_DEFER
+RR-04 OBSERVABILITY_WATCH
+RR-05 ADMIN_GOVERNANCE_RESIDUAL
+RR-06 ENVIRONMENT_COMPATIBILITY_WATCH
+```
+
+Frozen cleanup postures:
+
+```text
+RESIDUAL_KEEP
+RESIDUAL_CLEANUP_ELIGIBLE
+RESIDUAL_CLEANUP_TRIGGERED
+RESIDUAL_CLEANUP_BLOCKED
+RESIDUAL_EXTERNAL_WAIT
+RESIDUAL_CLOSED_PRESERVED
+```
+
+Critical boundaries:
+
+```text
+RESIDUAL != BUG
+NONAUTHORITATIVE != SAFE_TO_DELETE
+WATCH != CLEANUP_NEEDED
+DEFER != OVERDUE
+RELATION_CLEAN != BRANCH_DELETE_AUTHORITY
+pending live/release proof != cleanup residual
+cleanup eligibility != cleanup execution authority
+```
+
+Current source-backed seed families include:
+
+```text
+LEGACY_ACTIVATION_SELF_TEST_SENTINELS
+CANDIDATE_TRANSPORT_REF_RETIREMENT
+PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING
+REQUIRED_CI_ENFORCEMENT_ADMIN_CAPABILITY_GAP
+GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24
+```
+
+SYS-37 explicitly does not classify the v0.64.7 pending real-long-chat gate, R2.1 next genuine release proof, post-M2-3 genuine-edit revalidation, or other proof/development obligations as cleanup residue.
+
+The v1 artifact is a later curated document-only registry. Any actual branch/ref, workflow/tooling, CI/governance or platform cleanup is a separate work item with its own mutation authority and verification. Historical release evidence, amended-closure evidence and rollback/recovery requirements must survive cleanup where applicable.
+
+SYS-37 closes the final gate-open `NOW` system-design row. The remaining 12 system ideas stay gated under POST_M2_3, next-genuine-release-proof, or EVIDENCE conditions. Current system-design next is therefore `NONE / WAITING_FOR_GATE`.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -820,17 +865,20 @@ SYS-15 aging posture is likewise an attention/lifecycle signal, not a severity e
 
 SYS-20 intake state is preservation completeness only. `NATURAL_INTAKE_COMPLETE` does not establish recurrence, root cause, PASS/WATCH/FIX/BLOCKER, S-12 eligibility, fixture readiness or live-gate close.
 
+SYS-37 residual posture is cleanup-accountability only. `RESIDUAL_CLEANUP_ELIGIBLE` does not authorize deletion/retirement, and `RESIDUAL_KEEP` does not make a WATCH or DEFER disappear.
+
 ## Next action
 
 ```text
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 39/52 system designs are currently FROZEN and the scoped next design is SYS-37 Release-System Residual Cleanup Registry. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. System gate-open design sweep = CLOSED at 40/52 FROZEN. OPEN NOW = 0. The remaining 12 system ideas are gated; current system-design next = NONE / WAITING_FOR_GATE. Frozen SYS application/implementation is a separate reselection problem and is not auto-authorized by sweep closure.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.
 8. After M2-3 lands, run the direct genuine-edit post-extraction close control before M2-4.
 9. R2.1 end-to-end delegated release proof belongs to the next genuine runtime release and remains non-blocking for the current live gate.
-10. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
+10. Re-review system-design gates only when their owning triggers occur: post-M2-3 for SYS-26/29/40/41/43/44/45; next genuine release proof for SYS-27/30/32/34; explicit sufficient evidence for SYS-39.
+11. Capture natural B_END, explicit flashback, Summary Scope rendered-semantics, Reaction/Community and other WATCH samples when informative without stalling M2.
 ```

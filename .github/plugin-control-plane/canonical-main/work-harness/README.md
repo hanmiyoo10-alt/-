@@ -1,8 +1,8 @@
-# Repository Work Harness — Phase A Shadow Governance
+# Repository Work Harness — Phase A complete / Phase B WRAP
 
-This directory implements the bounded Phase A slices of U-25 `Repository Work Harness`.
+This directory implements bounded slices of U-25 `Repository Work Harness`.
 
-Phase A is **read-only shadow governance**. It normalizes repository-visible Work Records, discovers active records from GitHub issues, evaluates whether already-legitimate bounded work may overlap, and automatically surfaces advisory scan results when issue state changes. It does not dispatch executors, mutate Git/GitHub state, authorize release/production work, or replace project-specific authorities.
+Phase A is complete as **read-only shadow governance**: Work Record normalization, active-record discovery, semantic PREFLIGHT, and automatic advisory surfacing are live. Phase B starts conservatively with **WRAP / DISPATCH-boundary planning**. The Harness can now describe which audited executor adapter would receive already-profiled work, but B1 still does not invoke executors or authorize mutations.
 
 ## Authority boundary
 
@@ -14,7 +14,7 @@ The Harness coordinates work transactions. Existing authorities remain authorita
 - `.github/plugin-control-plane/registry.json` for project/scope/authority location;
 - product-specific build, validation, release and runtime tooling.
 
-A shadow result is advisory evidence only. It cannot upgrade task legitimacy or turn a failed project/release gate into success.
+A shadow PREFLIGHT or dry-run DISPATCH result is evidence only. It cannot upgrade task legitimacy, widen a Work Record, turn a failed project/release gate into success, or authorize executor invocation.
 
 ## Work Record v1
 
@@ -130,22 +130,55 @@ Safety contract:
 - `report.cjs` renders the same scan into `$GITHUB_STEP_SUMMARY` with active count, startability, disposition, reason/guard evidence, and issue provenance;
 - a `GUARDED`, `SERIALIZE_REQUIRED`, `NOT_STARTABLE`, or `BLOCKED` disposition remains advisory shadow evidence and is not itself mutation enforcement.
 
-The Plugin Control Plane CI owns the Harness contract regression lane and runs A1/A2/A3 tests on relevant PRs.
+## Audited executor adapters + dry-run DISPATCH — HARNESS-B1
+
+B1 introduces the first Phase B WRAP boundary without invoking anything.
+
+`executor-adapters.json` is a Harness-owned static/audited registry of **executor-specific capability envelopes**. Its schema is `executor-adapters.schema.json`.
+
+This registry is intentionally not a second project registry:
+
+- `.github/plugin-control-plane/registry.json` remains authoritative for project/scope identity and ownership;
+- adapter entries reference existing scope IDs and scope kinds;
+- adapter entries do **not** duplicate release branches, manifests, artifacts, release spec ownership, or project authority objects;
+- adapter capability is a maximum envelope, never permission to widen a Work Record.
+
+B1 initially describes three existing executor families:
+
+- `canonical-main` — canonical-main control-plane/operations surfaces;
+- `simcore` — SimCore repository tooling/workflows;
+- `usage-dashboard` — Usage Dashboard repository validation/candidate/release workflows.
+
+Usage Dashboard local bootstrap/runtime tooling is deliberately not registered as an ordinary repository-work executor.
+
+`dispatch.cjs` exports a pure planner. Given a valid Work Record, an A1 PREFLIGHT result, the adapter registry, and the existing project registry, it resolves exact `scopeId + requiredCapability` and emits one of:
+
+- `DISPATCH_READY`
+- `DISPATCH_READY_WITH_GUARDS`
+- `SERIALIZATION_REQUIRED`
+- `NOT_STARTABLE`
+- `DISPATCH_BLOCKED`
+
+Fail-closed cases include unknown scope, missing adapter, unsupported capability, ambiguous adapter, invalid adapter registry, invalid Work Record, and inconsistent PREFLIGHT input.
+
+A safe or guarded route includes the audited adapter ID plus its referenced entrypoints/workflows and verification hooks. **Every B1 result includes `executionAuthorized: false`.** B1 never spawns a process, dispatches a workflow, writes an issue/ref, issues a coordination receipt, or invokes release/main-write authority.
+
+The Plugin Control Plane CI owns the Harness regression lane and runs A1/A2/A3/B1 contract tests on relevant PRs.
 
 ## Current non-goals
 
-Phase A does not add:
+The current Harness does not add:
 
-- executor dispatch;
+- actual executor invocation;
 - a top-level general-purpose repository CLI;
 - persistent coordination receipts;
 - mutation-boundary enforcement;
 - issue/status mutation or notifications from shadow scan results;
-- main-write/release changes;
+- main-write/release authority changes;
 - product/runtime behavior changes;
 - global locks or scheduler/prioritizer behavior.
 
-Those require later bounded packets after shadow evidence is reviewed.
+Those require later bounded packets after adapter/route evidence is reviewed.
 
 ## Tests
 
@@ -156,4 +189,5 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/preflight-co
 node .github/plugin-control-plane/canonical-main/work-harness/tests/active-work-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/report-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/workflow-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/dispatch-contract.cjs
 ```

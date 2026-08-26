@@ -1,6 +1,6 @@
 # SimCore Runtime Idea — Document-Only Applicability Classification — 2026-08-26
 
-Status: `CANONICAL RUNTIME SUBCLASSIFICATION · DOC-ONLY APPLY AXIS · CURRENT DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
+Status: `CANONICAL RUNTIME SUBCLASSIFICATION · DOC-ONLY APPLY AXIS · S-04 DOC_APPLIED · CURRENT DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
 
 Purpose: classify RUNTIME ideas by whether a useful repository-document / durable-memory slice can be applied before plugin/runtime implementation.
 
@@ -12,6 +12,8 @@ Related authority:
 - `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
 - `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
 - `docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md`
+- `docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md`
+- `docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
 
 This document does not change an idea's core Runtime Class. Every item listed here remains `RUNTIME` unless the main classification authority is separately changed for a substantive reason.
 
@@ -31,7 +33,7 @@ Canonical rule:
 
 ```text
 RUNTIME idea
-+ DOC_APPLICABLE
++ DOC_APPLICABLE / DOC_APPLIED
 != NON_RUNTIME idea
 ```
 
@@ -108,7 +110,7 @@ If executable or reusable tooling is needed, stop and treat it as runtime implem
 | ID | Idea | Importance | Difficulty | Core state | Doc Apply Class | Current doc-only disposition |
 |---|---|---:|---:|---|---|---|
 | S-02 | Diagnostic Quick Summary | 5 | 1 | FROZEN / runtime PARKED | DOC_NOT_REQUIRED | frozen design already contains sufficient field/binding/verification memory |
-| S-04 | Live Evidence Packet Builder | 5 | 2 | FROZEN / runtime PARKED | DOC_APPLICABLE | repository evidence-review / classification-handoff template |
+| S-04 | Live Evidence Packet Builder | 5 | 2 | FROZEN / runtime PARKED | DOC_APPLIED | `SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md` applied under R_PREP_NON_RUNTIME; runtime builder still parked |
 | S-05 | Reconcile Differential Receipt | 5 | 2 | GATED POST_M2_3 | DOC_UNASSESSED | assess after design freeze |
 | M-03 | Genuine Edit Rebuild Performance Study | 5 | 4 | GATED POST_M2_3 | DOC_UNASSESSED | assess after design freeze |
 | S-01 | MINI_WARNING_WIDGET_V1 | 4 | 2 | FROZEN / runtime PARKED | DOC_NOT_REQUIRED | frozen design already contains sufficient durable-memory contract |
@@ -129,8 +131,8 @@ Current counts:
 
 ```text
 RUNTIME total       = 17
-DOC_APPLICABLE      = 1
-DOC_APPLIED         = 0
+DOC_APPLICABLE      = 0
+DOC_APPLIED         = 1
 DOC_NOT_REQUIRED    = 5
 DOC_UNASSESSED      = 11
 ```
@@ -139,15 +141,19 @@ DOC_UNASSESSED      = 11
 
 ## 5. Current document-only queue
 
-The current design sweep is closed, so the held document-only queue may now be processed under `R_PREP_NON_RUNTIME` as separate bounded work.
+The previously held S-04 document-only slice has been applied and verified.
 
 ```text
 DOC APPLY QUEUE
-1. S-04 Live Evidence Packet Builder
-   → repository evidence-review / classification-handoff template
+= EMPTY
+
+DOC_APPLIED
+S-04 Live Evidence Packet Builder
+→ docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
+→ evidence: docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 ```
 
-S-03, S-07, and S-08 add no new document-only queue item. Their frozen designs already contain the independently useful durable-memory contracts; additional matrices/checklists would duplicate frozen semantics rather than prepare independent non-runtime work.
+S-03, S-07, and S-08 add no document-only queue items. Their frozen designs already contain the independently useful durable-memory contracts; additional matrices/checklists would duplicate frozen semantics rather than prepare independent non-runtime work.
 
 S-08 specifically must not create a pre-runtime per-host confidence baseline because that would manufacture current Host/history facts from design.
 
@@ -204,9 +210,8 @@ R DESIGN QUEUE
 → wait for a legitimate gate/dependency/evidence trigger
 
 R DOC APPLY QUEUE
-→ select only already-frozen DOC_APPLICABLE items
-→ document-only prep
-→ runtime core remains parked
+→ currently empty
+→ future entries require DESIGN FROZEN + DOC_APPLICABLE
 ```
 
 Current state:
@@ -215,8 +220,11 @@ Current state:
 CURRENT GATE-OPEN R DESIGN
 = NONE
 
-NEXT R DOC APPLY
-= S-04 repository evidence-review / classification-handoff template
+CURRENT R DOC APPLY
+= NONE
+
+S-04 R_PREP_NON_RUNTIME
+= COMPLETE / DOC_APPLIED
 ```
 
 ---

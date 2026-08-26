@@ -1,6 +1,6 @@
 # SimCore Runtime-Idea PREP_NON_RUNTIME Policy
 
-Status: `CANONICAL OPERATIONAL POLICY · RUNTIME CORE REMAINS PARKED · REPO-MEMORY PREPARATION ALLOWED · CURRENT DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
+Status: `CANONICAL OPERATIONAL POLICY · RUNTIME CORE REMAINS PARKED · S-04 R_PREP COMPLETE · CURRENT DOC APPLY QUEUE EMPTY · NO RUNTIME CHANGE`
 
 Purpose: allow bounded repository-memory preparation for frozen RUNTIME ideas without starting runtime/plugin implementation or weakening the existing stabilization gate.
 
@@ -10,6 +10,8 @@ Related authority:
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_IDEA_TIER_NON_RUNTIME_HARVEST_POLICY.md`
 - `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
+- `docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md`
+- `docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
 
 ---
 
@@ -208,14 +210,27 @@ Reasons:
 - S-08 must not create a pre-runtime current Host/history confidence baseline;
 - extra prep documents would duplicate semantics or fabricate current observations.
 
-### DOC_APPLICABLE
+### DOC_APPLIED
 
 ```text
 S-04 Live Evidence Packet Builder
-→ repository evidence-review / classification-handoff template
+→ docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
+→ application evidence: docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md
 ```
 
-Reason: the runtime packet is only a transfer object while final classification/preservation remains repository authority. A manual repo-side handoff template is independently useful before runtime implementation.
+Applied behavior:
+- manual `MANUAL_EQUIVALENT` intake is allowed before runtime S-04 exists;
+- future actual `PACKET_V1` remains distinguishable from manual transcription;
+- packet handoff starts as `CLASSIFICATION_PENDING / REVIEW_REQUIRED / NOT_ASSESSED`;
+- final `WATCH / DEFER / FIX / BLOCKER` is assigned only after repository forensic review;
+- dedicated evidence/watch documents remain the final preserved interpretation/classification authority;
+- runtime S-04 remains unimplemented and parked.
+
+### DOC_APPLICABLE
+
+```text
+NONE
+```
 
 ---
 
@@ -251,6 +266,12 @@ no parent runtime implementation status accidentally promoted
 DOC APPLY state moves only DOC_APPLICABLE → DOC_APPLIED after successful prep
 ```
 
+For the completed S-04 prep, these checks are recorded in:
+
+```text
+docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md
+```
+
 Real long-chat validation is not required for prep-only repository memory. Future runtime implementation still carries its normal release/live obligations.
 
 ---
@@ -276,7 +297,10 @@ RUNTIME CORE
 = STILL PARKED
 
 CURRENT DOC APPLY QUEUE
-1. S-04 repository evidence-review / classification-handoff template
+= EMPTY
+
+DOC_APPLIED
+S-04
 
 CURRENT DOC_NOT_REQUIRED
 S-01
@@ -287,7 +311,4 @@ S-08
 
 CURRENT DOC_UNASSESSED
 all gated/future R ideas until design freeze
-
-DESIGN-SWEEP HOLD ON S-04
-= RELEASED
 ```

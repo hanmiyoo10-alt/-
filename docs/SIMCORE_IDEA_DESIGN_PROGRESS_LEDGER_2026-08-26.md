@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN DESIGN SWEEP CLOSED · NO RUNTIME CHANGE`
+Status: `CURRENT IDEA-DESIGN + NR HARVEST LEDGER · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN DESIGN SWEEP CLOSED · S-04 DOC_APPLIED · NO RUNTIME CHANGE`
 
 Purpose: track design-freeze completion, apply classifications, and SAFE_NON_RUNTIME harvest state after the canonical NON_RUNTIME / RUNTIME queue split.
 
@@ -32,7 +32,7 @@ SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md
 = current design-first operating priority
 
 THIS LEDGER
-= current design + implementation completion history
+= current design + implementation/preparation completion history
 ```
 
 Canonical rules:
@@ -46,6 +46,11 @@ SELECT
 
 RUNTIME core
 → PARKED until stabilization
+
+DOC_APPLICABLE RUNTIME slice
+→ separate R_PREP_NON_RUNTIME application
+→ DOC_APPLIED
+→ runtime core still PARKED
 
 NON_RUNTIME closed tier + SAFE_NON_RUNTIME PASS
 → separate bounded implementation
@@ -207,12 +212,16 @@ Difficulty: 2
 Runtime class: RUNTIME
 Design: FROZEN
 Runtime implementation: PARKED_FOR_STABILIZATION
-Doc Apply Class: DOC_APPLICABLE
-Future prep: repository evidence-review / classification-handoff template
+Doc Apply Class: DOC_APPLIED
+R_PREP_NON_RUNTIME: COMPLETE
 Design doc: docs/SIMCORE_LIVE_EVIDENCE_PACKET_BUILDER_DESIGN.md
+Applied artifact: docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
+Application commit: 1537e2ec0fd31920b4fd387d1b16739fdcc561ba
+Application evidence: docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md
+Runtime/release change: NONE
 ```
 
-The prior design-sweep hold is now released; S-04 prep may proceed as a separate R_PREP_NON_RUNTIME work item.
+The applied template is repository memory only. It accepts future `PACKET_V1` or a clearly labelled `MANUAL_EQUIVALENT`, preserves the packet's pending handoff state, and permits final WATCH / DEFER / FIX / BLOCKER classification only after repository forensic review. It does not implement the runtime packet builder.
 
 ### S-01 — MINI_WARNING_WIDGET_V1
 
@@ -310,32 +319,7 @@ UNVERIFIED
 UNAVAILABLE
 ```
 
-Critical boundary:
-
-```text
-confidence = claim-scoped evidence strength
-!= probability
-!= generic health
-!= root-cause confidence
-
-PRE_SIMCORE / CHAT_HISTORY
-= mechanical request-position claims
-!= host causal proof
-
-provider cache
-= UNVERIFIED unless authoritative provider/gateway receipt exists
-
-new history scan / mutation / repair / provider query
-= FORBIDDEN
-```
-
-Doc Apply verdict:
-
-```text
-DOC_NOT_REQUIRED
-```
-
-because the existing frontier claim contract plus frozen S-08 design already provide the complete durable-memory vocabulary/ceiling, while a pre-runtime current confidence baseline would fabricate runtime facts.
+Key boundary: confidence = claim-scoped evidence strength, not probability/health/root-cause certainty; no new history scan/mutation/repair/provider query.
 
 ---
 
@@ -365,7 +349,30 @@ Gated/future R items remain gated. No runtime implementation is authorized by sw
 
 ---
 
-## 4. NR difficulty-tier harvest state
+## 4. R document-only preparation state
+
+```text
+DOC_APPLIED
+S-04 Live Evidence Packet Builder
+→ R_PREP_NON_RUNTIME COMPLETE
+→ docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
+
+DOC_NOT_REQUIRED
+S-01
+S-02
+S-03
+S-07
+S-08
+
+DOC_APPLICABLE QUEUE
+EMPTY
+```
+
+The S-04 runtime core remains parked.
+
+---
+
+## 5. NR difficulty-tier harvest state
 
 ```text
 NR Difficulty 1 = CLOSED / HARVEST COMPLETE
@@ -396,7 +403,7 @@ L-01 FUTURE / POST_M2
 
 ---
 
-## 5. Verification WATCH preservation
+## 6. Verification WATCH preservation
 
 Central current WATCH:
 
@@ -420,11 +427,11 @@ M-13 focused standalone test / --check direct CI execution = NOT CLAIMED
 
 S-10/S-11 retain their earlier standalone tooling-test discovery WATCH.
 
-No new anomaly was discovered during S-03/S-07/S-08 design.
+No new runtime anomaly was discovered by the S-04 document-only prep transaction.
 
 ---
 
-## 6. Current NR/R queue
+## 7. Current NR/R queue
 
 ```text
 NR
@@ -438,16 +445,15 @@ current design sweep = CLOSED
 runtime core remains PARKED
 
 R DOC APPLY
-S-04 = DOC_APPLICABLE
-→ design-sweep hold RELEASED
-→ next eligible non-runtime application
+current queue = EMPTY
+S-04 = DOC_APPLIED / R_PREP COMPLETE
 ```
 
 High-value gated designs remain gated regardless of importance.
 
 ---
 
-## 7. Production boundary
+## 8. Production boundary
 
 Current production authority remains:
 
@@ -458,30 +464,29 @@ release blob = 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
 live gate = PENDING_REAL_LONG_CHAT
 ```
 
-Current design-sweep result:
+S-04 R_PREP result:
 
 ```text
 RUNTIME CHANGE       = NONE
 PLUGIN VERSION       = NONE
 latest.js/install.js = UNCHANGED
 release-simcore      = UNCHANGED
-REAL LONG-CHAT       = NOT RUN / NOT REQUIRED FOR DESIGN
+REAL LONG-CHAT       = NOT RUN / NOT REQUIRED FOR DOC-ONLY PREP
 ```
 
 ---
 
-## 8. Current verdict
+## 9. Current verdict
 
 ```text
 NR Difficulty 1/2/3 bounded harvests = COMPLETE
-
-S-03 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
-S-07 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
-S-08 = DESIGN FROZEN / DOC_NOT_REQUIRED / RUNTIME PARKED
-
 CURRENT GATE-OPEN DESIGN = NONE
 CURRENT DESIGN SWEEP = CLOSED
+CURRENT R DOC APPLY QUEUE = EMPTY
 
-CURRENT R DOC APPLY QUEUE
-S-04 repository evidence-review / classification-handoff template
+S-04
+= DESIGN FROZEN
+= DOC_APPLIED
+= R_PREP_NON_RUNTIME COMPLETE
+= RUNTIME IMPLEMENTATION PARKED
 ```

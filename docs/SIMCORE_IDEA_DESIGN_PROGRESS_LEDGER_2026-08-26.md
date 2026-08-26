@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 15 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 16 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -80,32 +80,34 @@ SYS-22 Test Intent Manifest
 
 SYS-21 Forensic Classification Consistency Check
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-38 Architecture Contract Diff Reporter
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 ```
 
-SYS-21 contract:
+SYS-38 contract:
 
 ```text
-one bounded forensic item
-+ current classification/disposition
-+ cited proof/evidence maturity
-+ cited impact/recurrence/attribution/mitigation facts
-→ human semantic consistency audit
+M-11 immutable snapshot(BASE) + machine contract(BASE)
++
+M-11 immutable snapshot(HEAD) + machine contract(HEAD)
+→ deterministic exact architecture delta report
 ```
 
-It detects evidence over-promotion, active-blocker under-classification, attribution/recurrence overclaim, proof substitution, missing-evidence-as-failure mistakes, test-intent overreach, mitigation/revalidation confusion, and stale current dispositions. It never auto-promotes/demotes WATCH / DEFER / FIX / BLOCKER, discovers recurrence, closes a gate, or mutates source authorities.
+It reuses the existing checker/M-11 extraction path and compares only bounded machine-readable architecture facts such as physical modules/edges, edge classifications, layers, physical declarations, allowed dependencies, transition exceptions, exact owns/excludes values, layer policy, global rules and bounded M2 state metadata. It never decides whether a delta is intended/valid, never replaces Contracts v2 enforcement, never parses human Contracts prose semantically, and never mutates architecture/CI/release authority.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 15
-OPEN NOW            = 25
+FROZEN              = 16
+OPEN NOW            = 24
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 10
-NR_EXECUTABLE       = 4
+NR_EXECUTABLE       = 5
 NR_PROTECTED        = 1
-NR_UNASSESSED       = 37
+NR_UNASSESSED       = 36
 ```
 
 ## 4. Current next design
@@ -116,26 +118,25 @@ Remaining highest-priority edge:
 I5 / D3 / NOW
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
-SYS-38 Architecture Contract Diff Reporter
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-38 Architecture Contract Diff Reporter
+NEXT SYSTEM DESIGN = SYS-31 Version-Bump Blast-Radius Check
 ```
 
 Reason:
 
 ```text
-SYS-13 / SYS-17 / SYS-22 / SYS-21 now form a bounded evidence-integrity chain.
-The next physical architecture step after v0.64.7 live close is M2-3 Edit Reconcile extraction.
-SYS-38 therefore has the strongest immediate downstream leverage:
-make reviewed architecture contract deltas visible without replacing Contracts v2 or its checker.
-SYS-31 becomes material at the next version bump; SYS-35 is a broader transaction-history layer that can follow the current close/receipt controls.
+SYS-38 now freezes the architecture-before/after observation layer needed around M2-3.
+The next genuine runtime architecture checkpoint after the pending v0.64.7 live gate necessarily creates a new version/release boundary.
+SYS-31 therefore has the stronger immediate downstream leverage of the remaining I5/D3/NOW pair:
+freeze what a version bump must review across runtime bytes, manifests, release identity, docs, fixtures, evidence and release-system boundaries before that next genuine release.
+SYS-35 remains valuable as broader repository transaction history after the current close/receipt/release-boundary controls are frozen.
 ```
 
-After SYS-38, recompute the remaining I5/D3 edge rather than precommitting a static order.
+After SYS-31, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -156,6 +157,7 @@ SYS-13 application     = HOLD
 SYS-17 implementation  = HOLD
 SYS-22 application     = HOLD
 SYS-21 application     = HOLD
+SYS-38 implementation  = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -174,7 +176,9 @@ SYS-22 adds intent clarity without changing execution evidence: a focused test i
 
 SYS-21 adds a human forensic consistency layer: one direct symptom does not manufacture root-cause attribution/FIX/BLOCKER, while an actual authoritative stop condition must not remain hidden behind a harmless WATCH label. Its review findings do not mutate the owning classification automatically.
 
-SYS-10, SYS-03, SYS-50, and SYS-17 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, and SYS-21 are document-only by design.
+SYS-38 adds exact architecture delta visibility without adding another architecture validator. `ARCH_DIFF_PRESENT` is an observation only and does not imply SYS-42 slice violation, SYS-11 semantic drift, runtime regression, or release readiness.
+
+SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, and SYS-21 are document-only by design.
 
 ## 7. Production boundary
 
@@ -194,8 +198,8 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 15 / 52
-CURRENT NEXT = SYS-38 Architecture Contract Diff Reporter
+SYSTEM DESIGNS FROZEN = 16 / 52
+CURRENT NEXT = SYS-31 Version-Bump Blast-Radius Check
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT

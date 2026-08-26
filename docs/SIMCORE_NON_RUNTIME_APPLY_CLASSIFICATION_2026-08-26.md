@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-14 design freeze:
+Current state after SYS-07 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 32
-UNFROZEN                = 20
+FROZEN                  = 33
+UNFROZEN                = 19
 
 NR_DOC_ONLY   = 23
-NR_EXECUTABLE = 6
+NR_EXECUTABLE = 7
 NR_PROTECTED  = 3
-NR_UNASSESSED = 20
+NR_UNASSESSED = 19
 ```
 
 Frozen system apply classes:
@@ -210,6 +210,7 @@ SYS-50 Work Bundling Conflict Detector
 SYS-17 Missing Evidence Slot Analyzer
 SYS-38 Architecture Contract Diff Reporter
 SYS-04 Status Vocabulary Linter
+SYS-07 Cross-Reference Integrity Auditor
 
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
@@ -254,7 +255,7 @@ SYS-18 = point-in-time evidence-provenance receipt; v1 deliberately preserves re
 SYS-14 = curated claim-scoped evidence-reuse/freshness ledger; v1 deliberately avoids age-only expiry, automatic semantic diff/crawling, evidence invalidation, proof-scope promotion, slot/debt/blocker creation, gate decisions, repository writes, or runtime/release authority
 ```
 
-Why SYS-17, SYS-38, and SYS-04 are executable:
+Why SYS-17, SYS-38, SYS-04, and SYS-07 are executable:
 
 ```text
 SYS-17
@@ -273,8 +274,15 @@ registered status namespace
 + reviewed SYS-05 lifecycle scope
 → deterministic vocabulary/namespace/cardinality lint
 
-All three remain read-only/non-runtime.
+SYS-07
+registered structured reference field
++ explicit reference class / target identity
++ reviewed lifecycle/supersession/provenance/freshness metadata when required
+→ deterministic cross-reference resolution/eligibility findings
+
+All four remain read-only/non-runtime.
 None changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
+SYS-07 is local/no-network and explicitly does not verify GitHub-side branch/PR relationships or auto-repair references.
 ```
 
 Why SYS-24 is protected rather than ordinary executable:
@@ -302,9 +310,9 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 25
-NR_EXECUTABLE  = 11
+NR_EXECUTABLE  = 12
 NR_PROTECTED   = 4
-NR_UNASSESSED  = 26
+NR_UNASSESSED  = 25
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -317,7 +325,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 8 gate-open NOW designs remain after SYS-14 freeze
+= 7 gate-open NOW designs remain after SYS-07 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -465,6 +473,7 @@ SYS-52 = frozen NR_DOC_ONLY operator/tooling process-regression specimen ledger 
 SYS-06 = frozen NR_DOC_ONLY evidence-to-decision lineage map design
 SYS-18 = frozen NR_DOC_ONLY evidence provenance chain receipt design
 SYS-14 = frozen NR_DOC_ONLY claim-scoped evidence freshness ledger design
+SYS-07 = frozen NR_EXECUTABLE cross-reference integrity auditor design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

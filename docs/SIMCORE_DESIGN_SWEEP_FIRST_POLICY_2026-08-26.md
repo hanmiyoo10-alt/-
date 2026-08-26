@@ -1,19 +1,18 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · CURRENT GATE-OPEN DESIGN SWEEP CLOSED · APPLY QUEUES EXHAUSTED · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
 
-Purpose: reduce context switching by finishing every currently gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
+Purpose: reduce context switching by finishing every currently selected gate-open SimCore idea design before starting additional document-only preparation, SAFE_NON_RUNTIME harvest, or other implementation/application work.
 
 Related authority:
+- `docs/SIMCORE_UNIFIED_IDEA_CLASSIFICATION_POLICY.md`
 - `docs/SIMCORE_IDEA_DESIGN_FREEZE_POLICY.md`
 - `docs/SIMCORE_IDEA_NR_R_SPLIT_PRIORITY_2026-08-26.md`
+- `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 - `docs/SIMCORE_RUNTIME_DOC_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_NON_RUNTIME_APPLY_CLASSIFICATION_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
-- `docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md`
-- `docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md`
-- `docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md`
-- `docs/SIMCORE_S04_R_PREP_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
+- `docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md`
 
 ---
 
@@ -22,12 +21,12 @@ Related authority:
 Canonical priority:
 
 ```text
-currently gate-open ideas
+currently gate-open selected idea pool
 → finish full design one item at a time
 → DESIGN FROZEN
 → perform required apply-class verdict at freeze time
 → continue to next gate-open design
-→ close the current design sweep
+→ close that bounded design sweep
 → only then process eligible apply/harvest queues
 ```
 
@@ -74,7 +73,7 @@ inspect source/contracts/evidence
 ```
 
 Do not leave several selected ideas half-designed.
-Do not begin runtime implementation from a frozen R idea.
+Do not implement an idea in the same transaction as its design freeze.
 
 ---
 
@@ -100,96 +99,123 @@ Actual application/implementation remains a separate transaction.
 
 ---
 
-## 5. Current sweep result — 2026-08-26
+## 5. Previously completed bounded sweep
 
-Current gate-open NON_RUNTIME design:
-
-```text
-NONE
-```
-
-The bounded gate-open RUNTIME sweep completed:
+The earlier original 31-idea gate-open sweep remains closed:
 
 ```text
 S-03 Diagnostic Copy Profiles
-→ DESIGN FROZEN
-→ DOC_NOT_REQUIRED
-→ docs/SIMCORE_DIAGNOSTIC_COPY_PROFILES_DESIGN.md
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 
 S-07 Host Capability Receipt
-→ DESIGN FROZEN
-→ DOC_NOT_REQUIRED
-→ docs/SIMCORE_HOST_CAPABILITY_RECEIPT_DESIGN.md
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 
 S-08 History Frontier Confidence Surface
-→ DESIGN FROZEN
-→ DOC_NOT_REQUIRED
-→ docs/SIMCORE_HISTORY_FRONTIER_CONFIDENCE_SURFACE_DESIGN.md
+→ DESIGN FROZEN / DOC_NOT_REQUIRED
 ```
 
-Result:
-
-```text
-CURRENT GATE-OPEN DESIGN = NONE
-CURRENT DESIGN SWEEP = CLOSED
-```
-
-Gated/future ideas remain correctly gated and do not invalidate this closure.
-
----
-
-## 6. Apply queues after sweep closure
-
-The design-sweep hold was released and all currently eligible apply work has since been consumed.
-
-R document-only state:
+Previously eligible apply work was also consumed:
 
 ```text
 S-04 Live Evidence Packet Builder
 → DOC_APPLIED
 → R_PREP_NON_RUNTIME COMPLETE
-→ docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md
 
-CURRENT R DOC APPLY QUEUE
-= EMPTY
+original NR Difficulty 1/2/3 bounded harvest queues
+→ COMPLETE / EMPTY
+
+four-item permanent fixture expansion
+→ COMPLETE
 ```
 
-S-01/S-02/S-03/S-07/S-08 are `DOC_NOT_REQUIRED` and add no prep items.
-
-Current NR harvest queue:
-
-```text
-EMPTY
-```
-
-The separately selected four-item permanent fixture expansion portfolio is also complete under its own authority and is not an open apply queue.
-Runtime core implementation remains parked until stabilization regardless of sweep closure.
+Those closures remain valid.
 
 ---
 
-## 7. Next incremental sweep trigger
+## 6. Current system-idea incremental sweep
 
-A new design sweep starts only when a legitimate gate opens, e.g.:
+A new system/operations candidate pool was added under the unified SimCore idea classification.
+This legitimately opens a new design sweep without reopening gated runtime architecture work.
+
+First selected item:
 
 ```text
-v0.64.7 live gate close + M2 progression
-→ POST_M2_3 ideas may become designable after the required architecture checkpoint/dependency actually opens them
-
-R2.1 genuine release proof
-→ dependent NR design may become designable
-
-new direct evidence
-→ EVIDENCE-gated idea may become designable
-
-external authoritative receipt
-→ EXTERNAL-gated idea may become designable
+SYS-19 Live-Gate Handoff Packet
+Size          = SMALL
+Importance    = 5
+Difficulty    = 1
+Runtime Class = NON_RUNTIME
+Design        = FROZEN
+Apply Class   = NR_DOC_ONLY
+Design doc    = docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md
 ```
 
-Do not pull gated/future items forward solely because the current sweep is closed.
+Current system candidate state:
+
+```text
+TOTAL SYSTEM IDEAS = 52
+FROZEN              = 1
+OPEN NOW            = 39
+GATED/DEPENDENCY    = 12
+```
+
+Current highest-priority open edge:
+
+```text
+I5 / D2 / NOW
+SYS-01 Living Authority Map
+SYS-08 Work-Item Close Receipt
+SYS-10 Stale Next-Action Scanner
+SYS-48 Gate-Blocked Reason Surface
+SYS-51 Close-Step Trigger Matrix
+```
+
+Downstream-leverage selection:
+
+```text
+NEXT = SYS-01 Living Authority Map
+```
 
 ---
 
-## 8. Production boundary
+## 7. Apply/harvest hold during this sweep
+
+SYS-19 is `NR_DOC_ONLY`, so a later useful application can materialize the living current-gate handoff document.
+
+However:
+
+```text
+SYS-19 APPLICATION
+= HOLD FOR CURRENT SYSTEM DESIGN SWEEP
+```
+
+Do not materialize SYS-19 in the same transaction as its freeze.
+Do not interrupt the current one-by-one design sweep merely because an early frozen NR item is easy to apply.
+
+The same rule applies to later frozen SYS items: classify at freeze, then hold application until the selected bounded system design sweep is explicitly closed or the user deliberately changes operating priority.
+
+---
+
+## 8. Gate interaction
+
+The system-idea sweep does not alter production/runtime gates.
+
+Current production gate remains:
+
+```text
+v0.64.7
+06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
+PENDING_REAL_LONG_CHAT
+M2-2
+```
+
+If the user supplies live evidence while the system-idea sweep is active, live evidence classification takes operational precedence, and the close-step routine must update all resulting gates/queues before design work resumes.
+
+POST_M2_3/POST_M2_4/EVIDENCE/EXTERNAL system ideas remain gated regardless of score.
+
+---
+
+## 9. Production boundary
 
 ```text
 PLUGIN BYTES         = UNCHANGED
@@ -202,22 +228,21 @@ v0.64.7 LIVE GATE    = STILL PENDING
 
 ---
 
-## 9. Current verdict
+## 10. Current verdict
 
 ```text
-DESIGN SWEEP FIRST
-= SATISFIED FOR CURRENT GATE-OPEN POOL
+ORIGINAL GATE-OPEN IDEA SWEEP
+= CLOSED
 
-S-03 = FROZEN / DOC_NOT_REQUIRED
-S-07 = FROZEN / DOC_NOT_REQUIRED
-S-08 = FROZEN / DOC_NOT_REQUIRED
-S-04 = DOC_APPLIED / R_PREP COMPLETE
+SYSTEM-IDEA INCREMENTAL SWEEP
+= ACTIVE
 
-CURRENT GATE-OPEN DESIGN = NONE
-CURRENT DESIGN SWEEP = CLOSED
-CURRENT R DOC APPLY QUEUE = EMPTY
-CURRENT NR HARVEST QUEUE = EMPTY
+SYS-19
+= DESIGN FROZEN / NR_DOC_ONLY / APPLICATION HELD
 
-NEXT DESIGN/APPLY ACTION
-= wait for a legitimate gate to open
+CURRENT NEXT DESIGN
+= SYS-01 Living Authority Map
+
+CURRENT SYSTEM APPLY/HARVEST
+= HOLD UNTIL SWEEP CLOSE OR EXPLICIT PRIORITY CHANGE
 ```

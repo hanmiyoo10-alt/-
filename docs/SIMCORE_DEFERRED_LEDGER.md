@@ -65,11 +65,47 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 27/52 designs FROZEN; scoped next design = SYS-52 Operator Error Specimen Ledger
+System-idea sweep state: 28/52 designs FROZEN; scoped next design = SYS-52 Operator Error Specimen Ledger
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
 ```
+
+### System-idea selection edge omission — SYS-24
+
+Status: `FIXED / DOC_DRIFT / NON_RUNTIME / NON_BLOCKING`
+
+Observed during the 2026-08-26 system-design sweep:
+
+```text
+SYS-24 inventory row = I4 / D2 / NOW
+SYS-52 inventory row = I4 / D2 / NOW
+selection block incorrectly listed only SYS-52
+```
+
+The omission was preserved immediately as:
+
+```text
+docs/SIMCORE_SYSTEM_IDEA_SELECTION_DRIFT_FIX_SYS24_2026-08-26.md
+```
+
+Correction:
+
+```text
+re-evaluate the actual I4/D2 edge
+→ select SYS-24 first on downstream fixture-governance leverage
+→ freeze SYS-24 as NR_PROTECTED
+→ resynchronize inventory/progress/classification/deferred pointers
+→ SYS-52 becomes the actual final remaining I4/D2/NOW design
+```
+
+Runtime/release impact:
+
+```text
+NONE
+```
+
+Do not delete this specimen merely because the living pointer is now corrected; it is a process-regression control for future selection-ledger maintenance.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -322,7 +358,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 27/52 system designs are currently FROZEN and the scoped next design is SYS-52 Operator Error Specimen Ledger. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 28/52 system designs are currently FROZEN and the scoped next design is SYS-52 Operator Error Specimen Ledger. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

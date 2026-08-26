@@ -48,6 +48,7 @@ const jobGuard = "if: ${{ (github.event_name != 'issues' && github.event_name !=
 assert.ok(workflow.includes(jobGuard), 'canary events must be owner-only and explicitly marked; unrelated issue/PR events must skip the writer job');
 assert.equal((workflow.match(/repository-harness-canary:v1/g) || []).length, 1, 'issue canary marker must have one exact owner-gated entry condition');
 assert.equal((workflow.match(/repository-harness-canary-pr:v1/g) || []).length, 1, 'PR canary marker must have one exact owner-gated entry condition');
+assert.equal((workflow.match(/^  pull_request:/gm) || []).length, 1, 'B6 must expose exactly one pull_request canary trigger');
 assert.equal((workflow.match(/types: \[opened, edited, reopened\]/g) || []).length, 1, 'B6 PR live proof must expose one bounded pull_request trigger declaration');
 assert.equal(workflow.includes('issue_comment:'), false, 'B6 must not regress to the unobserved issue-comment transport');
 

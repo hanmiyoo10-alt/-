@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-35 design freeze:
+Current state after SYS-46 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 18
-UNFROZEN                = 34
+FROZEN                  = 19
+UNFROZEN                = 33
 
-NR_DOC_ONLY   = 11
+NR_DOC_ONLY   = 12
 NR_EXECUTABLE = 5
 NR_PROTECTED  = 2
-NR_UNASSESSED = 34
+NR_UNASSESSED = 33
 ```
 
 Frozen system apply classes:
@@ -190,6 +190,7 @@ SYS-13 Verification Proof Matrix
 SYS-22 Test Intent Manifest
 SYS-21 Forensic Classification Consistency Check
 SYS-35 Repository Transaction Ledger
+SYS-46 Canonical Task Card
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -215,7 +216,7 @@ SYS-31
 → both require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, and SYS-35 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, and SYS-46 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -223,6 +224,7 @@ SYS-13 = durable proof-scope policy/matrix; no CI/log scanner required for v1
 SYS-22 = reviewed semantic test-intent/non-claim authority; no harness/registry enforcement required for v1
 SYS-21 = human forensic classification-consistency audit; automatic severity promotion/demotion intentionally prohibited
 SYS-35 = curated cross-work repository transaction lineage; Git/GitHub already provide mechanical facts and automatic semantic inclusion would create noise/false authority
+SYS-46 = bounded internal task identity/objective/work-type/scope/gate/mutation/stop contract; v1 is a template/procedural repository artifact and deliberately does not schedule, authorize, execute, or enforce work
 ```
 
 Why SYS-17 and SYS-38 are executable:
@@ -253,10 +255,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 13
+NR_DOC_ONLY    = 14
 NR_EXECUTABLE  = 10
 NR_PROTECTED   = 3
-NR_UNASSESSED  = 40
+NR_UNASSESSED  = 39
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -269,7 +271,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 22 gate-open NOW designs remain after SYS-35 freeze
+= 21 gate-open NOW designs remain after SYS-46 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -403,6 +405,7 @@ SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit
 SYS-38 = frozen NR_EXECUTABLE architecture delta reporter
 SYS-35 = frozen NR_DOC_ONLY repository transaction-lineage ledger
+SYS-46 = frozen NR_DOC_ONLY canonical internal task-card contract
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

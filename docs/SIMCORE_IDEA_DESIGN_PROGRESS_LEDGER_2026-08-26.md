@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 37 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 38 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -146,6 +146,9 @@ SYS-16 Anomaly Recurrence Correlator
 
 SYS-25 Golden Fixture Mutation Receipt
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-15 WATCH Aging Review
+= SMALL / I3 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -378,23 +381,37 @@ reviewed permanent golden-fixture mutation
 
 SYS-25 freezes the anti-greenwashing direction: an expected-value change is legitimate only when a reviewed semantic contract changed first or source-backed evidence establishes that the fixture itself was wrong. Implementation drift or a failing test is never sufficient reason to rewrite expected values. Case removal requires an explicit replacement/supersession/debt disposition. The receipt records semantic accountability but does not authorize fixture mutation, broaden SYS-22 intent, retire SYS-23 controls, alter registry/harness authority, prove LIVE_PASS, or become a fixture/repository writer. v1 is a prospective document-only receipt/template and does not require historical backfill of initial fixture creation.
 
+SYS-15 contract:
+
+```text
+one source-owned WATCH / deferred-WATCH item
++ reviewed current relevance
++ SYS-16 recurrence posture when material
++ mitigation / supersession / verification facts
++ explicit next-review trigger
++ optional elapsed-time context
+→ reviewed WATCH aging posture
+```
+
+SYS-15 is event-driven first and time-aware second. Elapsed time never computes severity, recurrence, dismissal, staleness, or blocker posture. `WATCH_AGING_QUIESCENT` preserves a valid item with no useful immediate action and one bounded future trigger; `WATCH_AGING_HISTORICALIZE_CANDIDATE` means only that active living attention may end while the evidence remains historically preserved. It does not mean `DISMISSED_NO_DEFECT`, and actual classification/historicalization remains source-owned. New recurrence or a named trigger yields review-required rather than automatic FIX/BLOCKER escalation.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 37
-OPEN NOW            = 3
+FROZEN              = 38
+OPEN NOW            = 2
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 25
+NR_DOC_ONLY         = 26
 NR_EXECUTABLE       = 7
 NR_PROTECTED        = 5
-NR_UNASSESSED       = 15
+NR_UNASSESSED       = 14
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and the complete I4/D3/NOW edge are frozen.
+All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, the complete I4/D3/NOW edge, and SYS-15 on the I3/D2/NOW edge are frozen.
 
 The earlier selection-drift FIX remains preserved:
 
@@ -408,7 +425,6 @@ The full remaining highest-priority open edge is now:
 
 ```text
 I3 / D2 / NOW
-SYS-15 WATCH Aging Review
 SYS-20 Natural Evidence Intake Checklist Generator
 SYS-37 Release-System Residual Cleanup Registry
 ```
@@ -416,18 +432,18 @@ SYS-37 Release-System Residual Cleanup Registry
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-15 WATCH Aging Review
+NEXT SYSTEM DESIGN = SYS-20 Natural Evidence Intake Checklist Generator
 ```
 
 Reason:
 
 ```text
-SYS-16 now freezes recurrence/independence/correlation semantics, giving WATCH review a stable input that distinguishes a genuinely old one-off from a recurring family.
-SYS-15 is directly relevant to the active deferred/anomaly ledgers while the v0.64.7 real-long-chat gate remains pending and can prevent age alone from causing stale WATCHes to be forgotten or automatically escalated.
-SYS-20 and SYS-37 remain the other I3/D2/NOW peers and are listed explicitly so no peer candidate is silently skipped.
+SYS-15 now freezes event-driven WATCH aging and gives preserved anomalies a precise active/quiescent/review/historicalization lifecycle without age-based severity or dismissal.
+SYS-20 is the strongest remaining direct evidence-lifecycle consumer because v0.64.7 natural long-chat validation is still pending and new natural specimens should be captured with enough identity/control/recurrence/proof metadata to feed S-12, SYS-16, SYS-15, SYS-21 and SYS-28 without later reconstruction.
+SYS-37 remains the other I3/D2/NOW peer and is listed explicitly so it cannot be silently skipped.
 ```
 
-After SYS-15, recompute the remaining NOW edge rather than assuming later ordering.
+After SYS-20, recompute the remaining NOW edge rather than assuming later ordering.
 
 ## 5. Apply/implementation hold
 
@@ -470,6 +486,7 @@ SYS-36 implementation  = HOLD / PROTECTED
 SYS-49 implementation  = HOLD / PROTECTED
 SYS-16 application     = HOLD
 SYS-25 application     = HOLD
+SYS-15 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -532,7 +549,9 @@ SYS-16 adds recurrence/correlation continuity without severity or causality prom
 
 SYS-25 adds immutable fixture-mutation accountability without authorizing fixture changes. `MUTATION_RECEIPT_COMPLETE` means only that the exact before/after identity, semantic basis, case effects, test-intent/negative-control impacts and verification refs are sufficiently preserved. A failing implementation test cannot justify expected-value mutation; contract-change propagation or fixture-defect correction must be source-backed. Fixture PASS remains deterministic proof and does not establish natural live correctness, coverage completeness, release readiness or runtime semantic authorization.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, and SYS-25 are document-only by design.
+SYS-15 adds event-driven WATCH lifecycle review without age-based severity or dismissal. `WATCH_AGING_ACTIVE` and `WATCH_AGING_QUIESCENT` describe attention posture only; `WATCH_AGING_REVIEW_REQUIRED` requests source-owner re-review when recurrence/mitigation/supersession/phase facts change; `WATCH_AGING_HISTORICALIZE_CANDIDATE` never means the original anomaly was false or that its evidence may be deleted. No SYS-15 posture mutates WATCH/DEFER/FIX/BLOCKER or gate status automatically.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, SYS-25, and SYS-15 are document-only by design.
 
 ## 7. Production boundary
 
@@ -552,7 +571,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 37 / 52
+SYSTEM DESIGNS FROZEN = 38 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 I4/D2/NOW EDGE = FROZEN
@@ -574,8 +593,9 @@ SYS-36 BRANCH/PR RELATIONSHIP AUDITOR = FROZEN / NR_PROTECTED / IMPLEMENTATION H
 SYS-49 SAFE PARALLEL WORK FINDER = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 SYS-16 ANOMALY RECURRENCE CORRELATOR = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-25 GOLDEN FIXTURE MUTATION RECEIPT = FROZEN / NR_DOC_ONLY / APPLY HOLD
+SYS-15 WATCH AGING REVIEW = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
-CURRENT NEXT = SYS-15 WATCH Aging Review
+CURRENT NEXT = SYS-20 Natural Evidence Intake Checklist Generator
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

@@ -15,6 +15,12 @@ Its purpose is to let multiple chats or workers make progress independently with
 
 Repository, Git, CI, release, and project authorities remain above all of these coordination surfaces.
 
+## Live issue markers
+
+- Idea inventory: `<!-- canonical-main-idea-inventory:v1 -->`
+- Work queue: `<!-- canonical-main-work-queue:v1 -->`
+- Work packet: `<!-- canonical-main-work-packet:v1 -->`
+
 ## Flow
 
 ```text

@@ -89,11 +89,14 @@ try {
   const repeatedCandidate = fixtureGit(restageDir,['rev-parse','HEAD']);
 
   assert.equal(mergeGuard.candidateParent(repeatedCandidate,{cwd:restageDir}),firstCandidate,'E11 direct parent records the prior deterministic candidate after restage');
+  assert.deepEqual(mergeGuard.candidateParents(repeatedCandidate,{cwd:restageDir}),[firstCandidate]);
   assert.equal(mergeGuard.materializationIdentity(repeatedCandidate,{cwd:restageDir}).version,release.productVersion);
   assert.equal(mergeGuard.materializationIdentity(repeatedCandidate,{cwd:restageDir}).frozenMainSha,null,'legacy deterministic candidates have no explicit frozen-main trailer');
   assert.equal(mergeGuard.candidateBase(repeatedCandidate,{cwd:restageDir}),frozenMainBase,'E11 legacy repeated materialization must resolve the original frozen main base');
   const repeatedResult = mergeGuard.classify(repeatedCandidate,frozenMainBase,{cwd:restageDir});
   assert.equal(repeatedResult.candidateParentSha,firstCandidate);
+  assert.equal(repeatedResult.candidateParentCount,1);
+  assert.equal(repeatedResult.candidateDagMode,'legacy-ancestry-fallback');
   assert.equal(repeatedResult.candidateBaseSha,frozenMainBase);
   assert.equal(repeatedResult.candidateBaseSource,'ancestry-compatibility-fallback');
   assert.equal(repeatedResult.verdict,'MERGE_READY_NO_DRIFT','E11 legacy repeated materialization must not classify candidate payload as main drift');
@@ -108,16 +111,25 @@ try {
 
   const repeatedTree = fixtureGit(restageDir,['rev-parse',`${repeatedCandidate}^{tree}`]);
   const refreshedMessage = `materialize: Usage Dashboard ${release.productVersion} from source ${'3'.repeat(40)}\n\nUsage-Dashboard-Frozen-Main: ${refreshedMain}\n`;
-  const refreshedCandidate = fixtureGit(restageDir,['commit-tree',repeatedTree,'-p',repeatedCandidate],refreshedMessage);
+  const refreshedCandidate = fixtureGit(restageDir,['commit-tree',repeatedTree,'-p',repeatedCandidate,'-p',refreshedMain],refreshedMessage);
   const refreshedIdentity = mergeGuard.materializationIdentity(refreshedCandidate,{cwd:restageDir});
   assert.equal(refreshedIdentity.version,release.productVersion);
   assert.equal(refreshedIdentity.frozenMainSha,refreshedMain,'new deterministic candidates authenticate the exact trusted main used for reconstruction');
-  assert.equal(mergeGuard.candidateParent(refreshedCandidate,{cwd:restageDir}),repeatedCandidate,'refreshed candidate still fast-forwards the deterministic candidate chain');
-  assert.equal(mergeGuard.candidateBase(refreshedCandidate,{cwd:restageDir}),refreshedMain,'explicit frozen-main trailer must override the older ancestry fallback base');
+  assert.equal(mergeGuard.candidateParent(refreshedCandidate,{cwd:restageDir}),repeatedCandidate,'E14 first parent still fast-forwards the deterministic candidate chain');
+  assert.deepEqual(mergeGuard.candidateParents(refreshedCandidate,{cwd:restageDir}),[repeatedCandidate,refreshedMain]);
+  assert.equal(mergeGuard.candidateBase(refreshedCandidate,{cwd:restageDir}),refreshedMain,'explicit frozen-main trailer must remain E11 base authority');
+  const dag = mergeGuard.candidateDagAgreement(refreshedCandidate,{cwd:restageDir});
+  assert.equal(dag.mode,'e14-two-parent-converged');
+  assert.equal(dag.frozenMainSha,refreshedMain);
   const refreshedResult = mergeGuard.classify(refreshedCandidate,refreshedMain,{cwd:restageDir});
   assert.equal(refreshedResult.candidateBaseSha,refreshedMain);
   assert.equal(refreshedResult.candidateBaseSource,'explicit-frozen-main-trailer');
+  assert.equal(refreshedResult.candidateParentCount,2);
+  assert.equal(refreshedResult.candidateDagMode,'e14-two-parent-converged');
   assert.equal(refreshedResult.verdict,'MERGE_READY_NO_DRIFT','already-absorbed protected drift must not block a refreshed candidate forever');
+
+  const staleOneParent = fixtureGit(restageDir,['commit-tree',repeatedTree,'-p',repeatedCandidate],refreshedMessage);
+  assert.throws(() => mergeGuard.candidateDagAgreement(staleOneParent,{cwd:restageDir}),/E14_FROZEN_MAIN_PARENT_MISSING/,'E14 must fail closed when trailer main is not represented in the DAG');
 
   const malformedMessage = `materialize: Usage Dashboard ${release.productVersion} from source ${'4'.repeat(40)}\n\nUsage-Dashboard-Frozen-Main: not-a-sha\n`;
   const malformedCandidate = fixtureGit(restageDir,['commit-tree',repeatedTree,'-p',repeatedCandidate],malformedMessage);
@@ -132,14 +144,17 @@ for (const token of [
   'MERGE_READY_WITH_UNRELATED_MAIN_DRIFT',
   'MERGE_BLOCKED_PROTECTED_MAIN_DRIFT',
   'candidateBase',
+  'candidateDagAgreement',
+  'e14-two-parent-converged',
   'MATERIALIZATION_MESSAGE',
   'FROZEN_MAIN_TRAILER',
   'explicit-frozen-main-trailer',
-]) assert.ok(mergeGuardSource.includes(token),`E11 merge guard missing ${token}`);
+]) assert.ok(mergeGuardSource.includes(token),`E11/E14 merge guard missing ${token}`);
 
 const stageWorkflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
 assert.ok(stageWorkflow.includes('Usage-Dashboard-Frozen-Main: %s'),'E11 trusted stage must own the frozen-main trailer format');
 assert.ok(stageWorkflow.includes('"$TRUSTED_BASE_SHA"'),'E11 trusted stage must bind the trailer to exact TRUSTED_BASE_SHA');
+assert.ok(stageWorkflow.includes('E14_ANCESTRY_PARENT_ADDED'),'E14 trusted stage must add missing frozen-main ancestry only when needed');
 assert.ok(stageWorkflow.includes('E7_FROZEN_MAIN_TRAILER_MISMATCH'),'E11 trusted stage must reverify the imported frozen-main identity');
 
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
@@ -178,4 +193,4 @@ for (const token of [
   'Issue `#372`',
 ]) assert.ok(runbook.includes(token),`E11 runbook missing ${token}`);
 
-console.log(`usage-dashboard E11 diagnosable merge-readiness contract: OK · ${release.productVersion} · structured readiness + explicit frozen-main identity with legacy ancestry fallback + read-only merge guard + explicit PR authority`);
+console.log(`usage-dashboard E11 diagnosable merge-readiness contract: OK · ${release.productVersion} · structured readiness + explicit frozen-main identity with E14 DAG agreement + legacy ancestry fallback + read-only merge guard + explicit PR authority`);

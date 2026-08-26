@@ -44,7 +44,13 @@ assert.match(materialize,/SOURCE_INTENT_CONFLICT/);
 assert.match(materialize,/reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
 assert.match(materialize,/run_behavior_smoke\.cjs --repeat 3/);
 assert.match(materialize,/run_behavior_smoke\.cjs --repeat 1/);
-assert.match(materialize,/git commit-tree "\$TREE_SHA" -p "\$CANDIDATE_PARENT_SHA"/);
+assert.match(materialize,/NEEDS_FROZEN_MAIN_PARENT=false/);
+assert.match(materialize,/git merge-base --is-ancestor "\$TRUSTED_BASE_SHA" "\$CANDIDATE_PARENT_SHA"/);
+assert.match(materialize,/PARENT_ARGS=\(-p "\$CANDIDATE_PARENT_SHA"\)/);
+assert.match(materialize,/PARENT_ARGS\+=\(-p "\$TRUSTED_BASE_SHA"\)/);
+assert.match(materialize,/git commit-tree "\$TREE_SHA" "\$\{PARENT_ARGS\[@\]\}"/);
+assert.match(materialize,/BUNDLE_EXCLUDES=\("\^\$CANDIDATE_PARENT_SHA"\)/);
+assert.match(materialize,/BUNDLE_EXCLUDES\+=\("\^\$TRUSTED_BASE_SHA"\)/);
 assert.match(materialize,/candidate_stage_e6\.cjs --verify-derived/);
 assert.doesNotMatch(materialize,/contents: write/);
 
@@ -102,4 +108,4 @@ const fallbackIf=fallback.match(/^    if:.*$/m)?.[0]||'';
 assert.match(fallbackIf,/\/usage-dashboard prepare /);
 assert.doesNotMatch(fallbackIf,/\/usage-dashboard stage /,'fallback preparation must not own the normal E7 stage command');
 
-console.log('usage-dashboard E7 stage transaction contract: OK · candidate-ready boundary, config-free PR authority split, exact-SHA full validation, preflight, exact-byte promotion preserved');
+console.log('usage-dashboard E7/E14 stage transaction contract: OK · candidate-ready boundary, conditional ancestry convergence, config-free PR authority split, exact-SHA full validation, preflight, exact-byte promotion preserved');

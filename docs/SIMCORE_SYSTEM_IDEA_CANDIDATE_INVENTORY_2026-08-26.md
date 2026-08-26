@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 14 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 15 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -44,7 +44,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-19 | Live-Gate Handoff Packet | Evidence | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-21 | Forensic Classification Consistency Check | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-21 | Forensic Classification Consistency Check | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-22 | Test Intent Manifest | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-23 | Negative-Control Registry | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-24 | Fixture Orphan Detector | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -94,21 +94,22 @@ SYS-11 → docs/SIMCORE_SYS11_DESIGN_TO_IMPLEMENTATION_DRIFT_AUDIT_DESIGN.md
 SYS-13 → docs/SIMCORE_SYS13_VERIFICATION_PROOF_MATRIX_DESIGN.md
 SYS-17 → docs/SIMCORE_SYS17_MISSING_EVIDENCE_SLOT_ANALYZER_DESIGN.md
 SYS-22 → docs/SIMCORE_SYS22_TEST_INTENT_MANIFEST_DESIGN.md
+SYS-21 → docs/SIMCORE_SYS21_FORENSIC_CLASSIFICATION_CONSISTENCY_CHECK_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 14
-UNFROZEN             = 38
-OPEN NOW             = 26
+FROZEN               = 15
+UNFROZEN             = 37
+OPEN NOW             = 25
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 9
+NR_DOC_ONLY   = 10
 NR_EXECUTABLE = 4
 NR_PROTECTED  = 1
-NR_UNASSESSED = 38
+NR_UNASSESSED = 37
 ```
 
 ## Canonical selection
@@ -137,12 +138,12 @@ SYS-11 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-13 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-17 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-22 = I5 D3 / FROZEN / NR_DOC_ONLY
+SYS-21 = I5 D3 / FROZEN / NR_DOC_ONLY
 ```
 
 Remaining I5 / D3 / NOW:
 
 ```text
-SYS-21 Forensic Classification Consistency Check
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
@@ -151,10 +152,10 @@ SYS-38 Architecture Contract Diff Reporter
 Canonical next:
 
 ```text
-NEXT = SYS-21 Forensic Classification Consistency Check
+NEXT = SYS-38 Architecture Contract Diff Reporter
 ```
 
-Reason: SYS-13 defines proof fitness, SYS-17 identifies explicit missing evidence slots, and SYS-22 now freezes what a named test is intended to prove and explicitly not prove. SYS-21 is the strongest next evidence-integrity layer: verify that forensic dispositions/classifications remain consistent with the proof maturity and non-claims already recorded rather than silently escalating or downgrading evidence semantics.
+Reason: the evidence-integrity chain is now bounded through SYS-13 / SYS-17 / SYS-22 / SYS-21. The next physical SimCore architecture work after the v0.64.7 live gate is M2-3, so SYS-38 has the strongest immediate downstream leverage: make human/machine architecture contract deltas reviewable before and after ownership extraction without replacing the existing Contracts v2 checker. SYS-31 becomes more material at the next version bump/release, while SYS-35 is a broader transaction-history layer that can follow the current close/receipt controls.
 
 ## Non-duplication boundaries
 
@@ -178,7 +179,8 @@ machine-verifiable frozen implementation-slice conformance → SYS-42
 human semantic design-to-implementation drift review → SYS-11
 proof-kind × claim-kind scope/non-equivalence matrix → SYS-13
 explicit bounded required-evidence-slot completeness → SYS-17
-test surface → intended claims + explicit non-claims → SYS-22; no harness/registry mutation, no execution claim, no live/release proof promotion
+test surface → intended claims + explicit non-claims → SYS-22
+forensic classification ↔ cited evidence/proof/impact consistency → SYS-21; human-reviewed only, no auto severity promotion/demotion, recurrence discovery, gate close, or repo mutation
 ```
 
 Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest.

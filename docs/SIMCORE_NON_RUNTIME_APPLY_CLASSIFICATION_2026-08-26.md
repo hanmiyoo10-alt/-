@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-07 design freeze:
+Current state after SYS-36 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 33
-UNFROZEN                = 19
+FROZEN                  = 34
+UNFROZEN                = 18
 
 NR_DOC_ONLY   = 23
 NR_EXECUTABLE = 7
-NR_PROTECTED  = 3
-NR_UNASSESSED = 19
+NR_PROTECTED  = 4
+NR_UNASSESSED = 18
 ```
 
 Frozen system apply classes:
@@ -216,9 +216,10 @@ NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
 SYS-31 Version-Bump Blast-Radius Check
 SYS-24 Fixture Orphan Detector
+SYS-36 Branch/PR Relationship Auditor
 ```
 
-Why SYS-42, SYS-31, and SYS-24 are protected:
+Why SYS-42, SYS-31, SYS-24, and SYS-36 are protected:
 
 ```text
 SYS-42
@@ -229,6 +230,9 @@ SYS-31
 
 SYS-24
 = read-only/non-runtime detector whose purpose is to police permanent fixture-authority membership across registry, permanent suite modules, and permanent fixture directories
+
+SYS-36
+= read-only/non-runtime relationship auditor whose purpose is to police branch/PR/base/head/merge/ancestry governance facts that can feed protected repository/release decisions
 
 → all require dedicated protected implementation transactions
 ```
@@ -285,7 +289,7 @@ None changes CI, release, repository-writer, runtime, or architecture-policy aut
 SYS-07 is local/no-network and explicitly does not verify GitHub-side branch/PR relationships or auto-repair references.
 ```
 
-Why SYS-24 is protected rather than ordinary executable:
+Why SYS-24 and SYS-36 are protected rather than ordinary executable:
 
 ```text
 SYS-24
@@ -294,8 +298,16 @@ canonical permanent registry rows
 + permanent fixture-directory namespace
 → deterministic ownership/orphan integrity findings
 
-The algorithm is simple/read-only, but the policy being policed is fixture-authority membership.
-The canonical NR model explicitly places fixture-authority policing in NR_PROTECTED.
+SYS-36
+explicit relationship audit mode
++ exact PR/ref/SHA observations
++ exact-base/head contract when required
++ fixed-SHA relationship facts
+→ deterministic branch/PR relationship findings
+
+Both algorithms can remain read-only.
+But the policies they police are fixture-authority membership and branch/repository governance respectively.
+The canonical NR model explicitly places those governance surfaces in NR_PROTECTED.
 ```
 
 System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, Detector, Receipt, or Report.
@@ -311,8 +323,8 @@ CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 25
 NR_EXECUTABLE  = 12
-NR_PROTECTED   = 4
-NR_UNASSESSED  = 25
+NR_PROTECTED   = 5
+NR_UNASSESSED  = 24
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -325,7 +337,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 7 gate-open NOW designs remain after SYS-07 freeze
+= 6 gate-open NOW designs remain after SYS-36 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -455,6 +467,7 @@ system apply/implementation = HELD
 SYS-42 = frozen NR_PROTECTED architecture-governance checker
 SYS-31 = frozen NR_PROTECTED release-governance blast-radius checker
 SYS-24 = frozen NR_PROTECTED fixture-authority orphan detector
+SYS-36 = frozen NR_PROTECTED branch/PR relationship auditor
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit

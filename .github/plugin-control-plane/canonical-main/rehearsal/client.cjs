@@ -23,8 +23,13 @@ function client({token, repo, fetchImpl = fetch}) {
   }
   return {request, listIssues};
 }
-async function assertMainIdentity(apiClient, expectedMainSha) {
+async function readMainIdentity(apiClient) {
   const branch = await apiClient.request('/branches/main');
-  if (branch.commit.sha !== expectedMainSha) throw new Error(`rehearsal main moved: expected ${expectedMainSha}, observed ${branch.commit.sha}`);
+  return branch.commit.sha;
 }
-module.exports = {client, assertMainIdentity};
+async function assertMainIdentity(apiClient, expectedMainSha) {
+  const observedMainSha = await readMainIdentity(apiClient);
+  if (observedMainSha !== expectedMainSha) throw new Error(`rehearsal main moved: expected ${expectedMainSha}, observed ${observedMainSha}`);
+  return observedMainSha;
+}
+module.exports = {client, readMainIdentity, assertMainIdentity};

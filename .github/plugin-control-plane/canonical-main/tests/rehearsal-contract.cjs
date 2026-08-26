@@ -20,6 +20,7 @@ const {
   renderIncidentBody,
   client,
   rehearsalState,
+  cycle,
 } = require('../rehearsal.cjs');
 
 const root = path.resolve(__dirname, '../../../..');
@@ -85,7 +86,8 @@ const workflowPath = path.join(root, '.github/workflows/canonical-main-rehearsal
 const workflow = fs.readFileSync(workflowPath, 'utf8');
 assert.match(workflow, /^name: Canonical Main Incident Rehearsal/m);
 assert.match(workflow, /workflow_run:/);
-assert.match(workflow, /Canonical Main Operations/);
+assert.match(workflow, /Canonical Main Protection Guard/);
+assert.doesNotMatch(workflow, /workflows:\s*\n\s*- Canonical Main Operations/, 'rehearsal must wait until Required-driven protection convergence completes');
 assert.match(workflow, /conclusion == 'success'/);
 assert.match(workflow, /head_branch == 'main'/);
 assert.match(workflow, /\[phase-h-rehearsal\]/);
@@ -104,6 +106,7 @@ assert.doesNotMatch(workflow, /pull_request_target|pull_request:/);
 assert.doesNotMatch(workflow, /git\s+push/);
 
 const source = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/rehearsal.cjs'), 'utf8');
+const cycleSource = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/rehearsal/cycle.cjs'), 'utf8');
 assert.match(source, /rehearsal endpoint denied/);
 assert.match(source, /repeated\.touched/);
 assert.match(source, /same correlation-key issue/);
@@ -116,6 +119,9 @@ assert.match(source, /runSurface\('bootstrap-surface\.cjs'/);
 assert.match(source, /CANONICAL_MAIN_REHEARSAL:PASS/);
 assert.match(source, /CANONICAL_MAIN_REHEARSAL:ALREADY_PROVEN/);
 assert.match(source, /proofMarker\(mainSha\)/);
+assert.match(cycleSource, /CANONICAL_MAIN_REHEARSAL:STALE_MAIN_SKIP/);
+assert.match(cycleSource, /recoverStaleRehearsal/);
+assert.match(cycleSource, /skipIfMainMoved/);
 assert.doesNotMatch(source, /\/contents(?:\/|\?)/);
 assert.doesNotMatch(source, /\/git\/refs/);
 assert.doesNotMatch(source, /\/releases(?:\/|\?)/);
@@ -135,6 +141,26 @@ assert.doesNotMatch(source, /git\s+push/);
     () => apiClient.request('/git/refs/heads/main', {method: 'PATCH'}),
     /rehearsal endpoint denied/,
   );
+
+  const staleSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const staleResult = await cycle({
+    token: 'test-token',
+    repo: 'hanmiyoo10-alt/-',
+    expectedMainSha: sha,
+    fetchImpl: async (url, options = {}) => {
+      if (url.endsWith('/branches/main')) {
+        return {ok: true, status: 200, text: async () => '', json: async () => ({commit: {sha: staleSha}})};
+      }
+      if (url.includes('/issues?state=all&per_page=100&page=1')) {
+        return {ok: true, status: 200, text: async () => '', json: async () => []};
+      }
+      throw new Error(`unexpected stale-main test request: ${options.method || 'GET'} ${url}`);
+    },
+  });
+  assert.equal(staleResult.skippedStale, true, 'stale exact-main rehearsal must terminate successfully instead of creating a synthetic failure');
+  assert.equal(staleResult.observedMainSha, staleSha);
+  assert.equal(staleResult.issueNumber, null);
+
   console.log('CANONICAL_MAIN_REHEARSAL_CONTRACT:OK');
 })().catch((error) => {
   console.error(error.stack || String(error));

@@ -3,7 +3,7 @@ name: Canonical Main Incident Rehearsal
 on:
   workflow_run:
     workflows:
-      - Canonical Main Operations
+      - Canonical Main Protection Guard
     types: [completed]
 
 permissions:

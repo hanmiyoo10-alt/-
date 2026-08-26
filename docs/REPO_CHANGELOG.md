@@ -337,3 +337,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9227e13dd88d58ffd110515636e6f83e1ac8ae83)
 - Event ID: `824af29e505111d2e5e744494b207114919ce475d4d4035b5c698ff4f28564d7`
 <!-- canonical-main-doc-promoted:824af29e505111d2e5e744494b207114919ce475d4d4035b5c698ff4f28564d7 -->
+
+### 2026-08-27 — test: prove cross-scope mutation gate receipts (#519)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d407f172960f365db95269a06632af4451a30016`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d407f172960f365db95269a06632af4451a30016)
+- Event ID: `896821c08025d44db02dd22421f5b8718e8d13d3a30105d1da50c2842bd01b59`
+<!-- canonical-main-doc-promoted:896821c08025d44db02dd22421f5b8718e8d13d3a30105d1da50c2842bd01b59 -->

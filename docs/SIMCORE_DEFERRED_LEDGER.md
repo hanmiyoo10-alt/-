@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 16/52 designs FROZEN; scoped next design = SYS-31 Version-Bump Blast-Radius Check
+System-idea sweep state: 17/52 designs FROZEN; scoped next design = SYS-35 Repository Transaction Ledger
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -322,7 +322,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 16/52 system designs are currently FROZEN and the scoped next design is SYS-31 Version-Bump Blast-Radius Check. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 17/52 system designs are currently FROZEN and the scoped next design is SYS-35 Repository Transaction Ledger. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

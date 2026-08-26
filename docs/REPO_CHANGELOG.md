@@ -37,6 +37,20 @@
 - Event ID: `acdc1416845917754cd345f0067df62d6727b965282fa59fa213780156eae4f9`
 <!-- canonical-main-doc-promoted:acdc1416845917754cd345f0067df62d6727b965282fa59fa213780156eae4f9 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `c2f1c50b92c5e194f775c658bea283471cbdae07388974a3465931222051446e`
+<!-- canonical-main-doc-promoted:c2f1c50b92c5e194f775c658bea283471cbdae07388974a3465931222051446e -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `686ea75802f60f2316b5a46dad5e64fa3b263a150d5219a49462a08998b4e12d`
+<!-- canonical-main-doc-promoted:686ea75802f60f2316b5a46dad5e64fa3b263a150d5219a49462a08998b4e12d -->
+
 ### 2026-08-26 — fix: stabilize canonical documentation live promotion proof
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

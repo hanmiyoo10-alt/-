@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 12 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · 13 SYS DESIGNS FROZEN · APPLY/IMPLEMENTATION HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing frozen items.
 
@@ -75,14 +75,17 @@ SYS-11 Design-to-Implementation Drift Audit
 
 SYS-13 Verification Proof Matrix
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-17 Missing Evidence Slot Analyzer
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 12
-OPEN NOW            = 28
+FROZEN              = 13
+OPEN NOW            = 27
 GATED/DEPENDENCY    = 12
 ```
 
@@ -90,7 +93,6 @@ Current highest-priority open edge:
 
 ```text
 I5 / D3 / NOW
-SYS-17 Missing Evidence Slot Analyzer
 SYS-21 Forensic Classification Consistency Check
 SYS-22 Test Intent Manifest
 SYS-31 Version-Bump Blast-Radius Check
@@ -101,16 +103,15 @@ SYS-38 Architecture Contract Diff Reporter
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-17 Missing Evidence Slot Analyzer
+NEXT = SYS-22 Test Intent Manifest
 ```
 
 Reason:
-- SYS-42 defines machine-verifiable implementation-slice conformance;
-- SYS-11 defines broader human semantic design-fidelity review;
-- SYS-13 now defines proof-kind × claim-kind scope, `DIRECT / CONDITIONAL / SUPPORTING / NONE`, immutable proof identity, and `NOT_CLAIMED` discipline;
-- SYS-17 can next detect required proof slots that remain absent without inventing evidence or promoting one proof class into another.
+- SYS-13 defines proof-kind × claim-kind scope and prevents proof substitution;
+- SYS-17 now defines explicit bounded evidence-slot completeness without treating unregistered absence as a gap;
+- SYS-22 is the strongest next shared regression/evidence authority because stable named test intent is needed before later claims about what a suite, focused test, or fixture does and does not prove.
 
-After SYS-17 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
+After SYS-22 freezes, recompute the remaining I5/D3 edge rather than fixing a long static order.
 
 ## 4. Apply / implementation hold
 
@@ -127,6 +128,7 @@ SYS-50 implementation  = HOLD
 SYS-42 implementation  = HOLD / PROTECTED
 SYS-11 application     = HOLD
 SYS-13 application     = HOLD
+SYS-17 implementation  = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize or implement these items in the same transaction as design freeze.
@@ -135,7 +137,7 @@ SYS-42 is additionally `NR_PROTECTED`; its eventual implementation must be a ded
 
 If live evidence arrives or the user explicitly changes priority, handle that operational priority, run the close-step routine, then recompute the design sweep.
 
-## 5. Gate, bundling, conformance, audit, and proof discipline
+## 5. Gate, bundling, conformance, audit, proof, and slot discipline
 
 Closed gates still override scores:
 
@@ -154,6 +156,7 @@ SYS-50 `BUNDLE_CLEAN` means only that no frozen bundling conflict was found; it 
 SYS-42 `SLICE_CONFORMANT` means only that the reviewed machine-verifiable implementation slice passed; it does not prove semantic equivalence, live correctness, or release readiness.
 SYS-11 `DRIFT_AUDIT_CLEAN` means reviewed design-intent requirements are satisfied at the evidence maturity required by that audit; `UNPROVEN` requirements force `DRIFT_AUDIT_REVIEW_REQUIRED` rather than silent promotion.
 SYS-13 prohibits proof substitution: generic CI PASS does not establish focused-test execution, fixture PASS does not establish natural live validation, release publication does not establish live runtime PASS, and permanent-CI qualification does not establish genuine release-system E2E proof.
+SYS-17 analyzes only explicitly registered evidence slots for one selected bounded scope. Unregistered absence is not a gap, future-scope evidence is not a current blocker, and `EVIDENCE_SLOTS_CLEAR` never closes a gate by itself.
 
 Standing split rules remain preserved, including:
 - runtime/feature change separate from CI/release/repository-system redesign;
@@ -178,7 +181,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13
-CURRENT NEXT DESIGN = SYS-17 Missing Evidence Slot Analyzer
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08 + SYS-10 + SYS-48 + SYS-03 + SYS-09 + SYS-50 + SYS-42 + SYS-11 + SYS-13 + SYS-17
+CURRENT NEXT DESIGN = SYS-22 Test Intent Manifest
 SYSTEM APPLY/IMPLEMENTATION = HOLD
 ```

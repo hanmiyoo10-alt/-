@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 5 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 6 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -100,63 +100,85 @@ Design: docs/SIMCORE_SYS10_STALE_NEXT_ACTION_SCANNER_DESIGN.md
 Implementation: HOLD
 ```
 
-SYS-10 contract:
+### SYS-48 — Gate-Blocked Reason Surface
 
 ```text
-registered living NEXT scopes
-+ canonical claim/status sources
-→ NEXT_ACTION_CLEAN / NEXT_ACTION_STALE / NEXT_ACTION_BLOCKED
+SMALL / I5 / D2
+NON_RUNTIME
+FROZEN
+NR_DOC_ONLY
+Design: docs/SIMCORE_SYS48_GATE_BLOCKED_REASON_SURFACE_DESIGN.md
+Application: HOLD
 ```
 
-It is a read-only detector only. It does not compute replacement priority, open gates, scan historical receipts/designs, rewrite docs, or duplicate S-10/sync-state production authority checks.
+SYS-48 contract:
+
+```text
+authoritative gated item
+→ one current blocking reason
+→ one authoritative unlock/re-review event when known
+→ one premature-action guard
+```
+
+It is an explanatory projection only. It does not calculate dependency graphs, open gates, select priority, or manufacture evidence/release proof.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 5
-OPEN NOW            = 35
+FROZEN              = 6
+OPEN NOW            = 34
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 4
+NR_DOC_ONLY         = 5
 NR_EXECUTABLE       = 1
-NR_UNASSESSED       = 47
+NR_UNASSESSED       = 46
 ```
 
 ## 4. Current next design
 
-Remaining highest-priority edge:
+Current highest-priority open edge:
 
 ```text
-I5 / D2 / NOW
-SYS-48 Gate-Blocked Reason Surface
+I5 / D3 / NOW
+SYS-03 Gate Dependency Graph
+SYS-09 Change-Impact Review Map
+SYS-11 Design-to-Implementation Drift Audit
+SYS-13 Verification Proof Matrix
+SYS-17 Missing Evidence Slot Analyzer
+SYS-21 Forensic Classification Consistency Check
+SYS-22 Test Intent Manifest
+SYS-31 Version-Bump Blast-Radius Check
+SYS-35 Repository Transaction Ledger
+SYS-38 Architecture Contract Diff Reporter
+SYS-42 Implementation Slice Conformance Checker
+SYS-50 Work Bundling Conflict Detector
 ```
 
-Current selection:
+Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-48 Gate-Blocked Reason Surface
+NEXT SYSTEM DESIGN = SYS-03 Gate Dependency Graph
 ```
 
 Reason:
 
 ```text
-SYS-48 is the final open I5/D2 item.
-It should expose an already-authoritative blocking reason/unlock condition,
-not invent or calculate gate dependencies; explicit dependency graph logic remains SYS-03.
+SYS-48 now explains one authoritative blocked gate.
+SYS-03 can next model the explicit gate → dependent-item relationships needed by RT-11 incremental unlock review.
+It must not become gate authority or an automatic opener.
 ```
-
-After SYS-48 freezes, selection moves into the open I5/D3 group by downstream leverage.
 
 ## 5. Apply/implementation hold
 
 ```text
 CURRENT SYSTEM DESIGN SWEEP = ACTIVE
-SYS-19 application    = HOLD
-SYS-01 application    = HOLD
-SYS-51 application    = HOLD
-SYS-08 application    = HOLD
-SYS-10 implementation = HOLD
+SYS-19 application     = HOLD
+SYS-01 application     = HOLD
+SYS-51 application     = HOLD
+SYS-08 application     = HOLD
+SYS-10 implementation  = HOLD
+SYS-48 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded design sweep closes or the user explicitly changes priority.
@@ -165,7 +187,7 @@ Do not materialize/implement these frozen items until the current bounded design
 
 Existing non-blocking verification WATCHes remain unchanged, including focused/direct-execution coverage limits for S-10/S-11/M-10/M-11/M-13.
 
-SYS-19/SYS-01/SYS-51/SYS-08 are document-only designs and create no executable verification claim.
+SYS-19/SYS-01/SYS-51/SYS-08/SYS-48 are document-only designs and create no executable verification claim.
 SYS-10 is executable by design but **not implemented**, so no new tool-execution/CI claim exists yet.
 
 ## 7. Production boundary
@@ -186,8 +208,8 @@ System-design transactions change none of those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED/UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 5 / 52
-CURRENT NEXT = SYS-48 Gate-Blocked Reason Surface
+SYSTEM DESIGNS FROZEN = 6 / 52
+CURRENT NEXT = SYS-03 Gate Dependency Graph
 SYSTEM APPLY/IMPLEMENTATION = HELD
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 26 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 27 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -113,6 +113,9 @@ SYS-28 Verification Debt Index
 
 SYS-23 Negative-Control Registry
 = SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-33 Rollback Readiness Checklist
+= SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -206,48 +209,58 @@ reviewed bounded precondition / input class
 
 It records deliberate anti-overreach regression contracts such as classifier false-positive/false-negative guards, premature lifecycle-transition guards, authority-takeover guards, and proof-overclaim guards. It does not generate Boolean inverses, infer controls from absence, execute tests, mint fixtures, or promote deterministic proof into natural-live proof.
 
+SYS-33 contract:
+
+```text
+current production identity
++ reviewed release intent
++ exact eligible rollback source / rollback authority
++ failed-release evidence preservation
++ post-rollback administrative convergence plan
+→ rollback-readiness disposition
+```
+
+Rollback remains a forward-history direct-child release transaction, never a force/ref rewind. `ROLLBACK_READY` means only that a bounded recovery path is prepared if later authorized; it does not authorize rollback, select rollback over correction, prove the historical source universally safe, publish anything, establish LIVE_PASS, or close R2.1 genuine-release proof. `release-simcore` remains runtime authority even if main administrative state temporarily lags after a recovery publication.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 26
-OPEN NOW            = 14
+FROZEN              = 27
+OPEN NOW            = 13
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 18
+NR_DOC_ONLY         = 19
 NR_EXECUTABLE       = 6
 NR_PROTECTED        = 2
-NR_UNASSESSED       = 26
+NR_UNASSESSED       = 25
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, SYS-02, SYS-12, SYS-28, and SYS-23 close the first six I4/D2 selections.
+All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05, SYS-04, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 close seven I4/D2 selections.
 
 Highest-priority open edge:
 
 ```text
 I4 / D2 / NOW
-SYS-33 Rollback Readiness Checklist
 SYS-52 Operator Error Specimen Ledger
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-33 Rollback Readiness Checklist
+NEXT SYSTEM DESIGN = SYS-52 Operator Error Specimen Ledger
 ```
 
 Reason:
 
 ```text
-SYS-23 now freezes negative-control semantics for regression boundaries.
-SYS-31 already freezes version/release blast-radius review.
-The next genuine runtime release must exercise R2.1 delegated release operation while preserving release-simcore as runtime authority and main as documentation/admin authority.
-SYS-33 can freeze what must be known and recoverable before that release without itself performing rollback or becoming a publisher.
+SYS-33 now freezes rollback readiness without adding a rollback executor or publisher.
+SYS-52 is the final remaining gate-open I4/D2 design.
+Current repository history already contains bounded operator/tooling mistakes that are preserved in dedicated evidence, so a specimen-ledger contract has immediate continuity value.
+After SYS-52, recompute the I4/D3 edge rather than assuming its order in advance.
 ```
-
-After SYS-33, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -279,6 +292,7 @@ SYS-02 application     = HOLD
 SYS-12 application     = HOLD
 SYS-28 application     = HOLD
 SYS-23 application     = HOLD
+SYS-33 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -319,7 +333,9 @@ SYS-28 adds verification-debt continuity without turning every unresolved proof 
 
 SYS-23 adds explicit negative-regression semantics without inventing stronger proof. A registered control means only that the bounded forbidden outcome is a reviewed contract; deterministic fixture evidence remains deterministic, HYBRID_TRANSITIONAL coverage remains bounded, and natural-live negative proof is not claimed unless actual live evidence establishes it.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, and SYS-23 are document-only by design.
+SYS-33 adds rollback-readiness continuity without adding rollback authority. `ROLLBACK_READY` means the exact forward-history recovery path and its current authorities are prepared; it does not choose rollback over correction, authorize a new release work item, prove source safety for every possible failure, or turn historical LIVE_PASS into automatic LIVE_PASS for the recovery deployment. Main-side admin lag remains an admin-recovery concern unless runtime/release evidence independently justifies rollback.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 are document-only by design.
 
 ## 7. Production boundary
 
@@ -339,7 +355,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 26 / 52
+SYSTEM DESIGNS FROZEN = 27 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 SYS-05 HISTORICAL-VS-LIVING REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
@@ -348,7 +364,8 @@ SYS-02 DECISION / SUPERSESSION GRAPH = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-12 CURRENT-STATE SNAPSHOT PAGE = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-28 VERIFICATION DEBT INDEX = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-23 NEGATIVE-CONTROL REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
-CURRENT NEXT = SYS-33 Rollback Readiness Checklist
+SYS-33 ROLLBACK READINESS CHECKLIST = FROZEN / NR_DOC_ONLY / APPLY HOLD
+CURRENT NEXT = SYS-52 Operator Error Specimen Ledger
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-33 design freeze:
+Current state after SYS-24 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 27
-UNFROZEN                = 25
+FROZEN                  = 28
+UNFROZEN                = 24
 
 NR_DOC_ONLY   = 19
 NR_EXECUTABLE = 6
-NR_PROTECTED  = 2
-NR_UNASSESSED = 25
+NR_PROTECTED  = 3
+NR_UNASSESSED = 24
 ```
 
 Frozen system apply classes:
@@ -210,9 +210,10 @@ SYS-04 Status Vocabulary Linter
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
 SYS-31 Version-Bump Blast-Radius Check
+SYS-24 Fixture Orphan Detector
 ```
 
-Why SYS-42 and SYS-31 are protected:
+Why SYS-42, SYS-31, and SYS-24 are protected:
 
 ```text
 SYS-42
@@ -221,7 +222,10 @@ SYS-42
 SYS-31
 = read-only/non-runtime preflight whose purpose is to police release-mode, candidate-radius, live-gate and release/repository-system bundling boundaries
 
-→ both require dedicated protected implementation transactions
+SYS-24
+= read-only/non-runtime detector whose purpose is to police permanent fixture-authority membership across registry, permanent suite modules, and permanent fixture directories
+
+→ all require dedicated protected implementation transactions
 ```
 
 Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, and SYS-33 are document-only:
@@ -265,7 +269,20 @@ All three remain read-only/non-runtime.
 None changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, or Report.
+Why SYS-24 is protected rather than ordinary executable:
+
+```text
+SYS-24
+canonical permanent registry rows
++ permanent suite-module namespace
++ permanent fixture-directory namespace
+→ deterministic ownership/orphan integrity findings
+
+The algorithm is simple/read-only, but the policy being policed is fixture-authority membership.
+The canonical NR model explicitly places fixture-authority policing in NR_PROTECTED.
+```
+
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, Checklist, Detector, or Report.
 
 ---
 
@@ -278,8 +295,8 @@ CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 21
 NR_EXECUTABLE  = 11
-NR_PROTECTED   = 3
-NR_UNASSESSED  = 31
+NR_PROTECTED   = 4
+NR_UNASSESSED  = 30
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -292,7 +309,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 13 gate-open NOW designs remain after SYS-33 freeze
+= 12 gate-open NOW designs remain after SYS-24 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -336,7 +353,7 @@ Minimum treatment:
 ```text
 separate design/gate explicitly authorizing protected authority or governance work
 separate protected implementation transaction
-permanent CI / repository / release / architecture-governance review as applicable
+permanent CI / repository / release / fixture / architecture-governance review as applicable
 no bundling with product/runtime feature work
 no assumption that read-only means ordinary harvest-safe
 ```
@@ -421,6 +438,7 @@ system-idea NON_RUNTIME design sweep = ACTIVE
 system apply/implementation = HELD
 SYS-42 = frozen NR_PROTECTED architecture-governance checker
 SYS-31 = frozen NR_PROTECTED release-governance blast-radius checker
+SYS-24 = frozen NR_PROTECTED fixture-authority orphan detector
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
 SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit

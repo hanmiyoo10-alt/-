@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "liveIssueTitle": "[repo-docs:main]",
+  "liveIssueNumber": 440,
   "eventClasses": ["DECISION", "CHANGE", "INCIDENT", "RECOVERY", "AUTHORITY", "PROJECT"],
   "durableOutputs": {
     "decisionLog": "docs/REPO_DECISION_LOG.md",

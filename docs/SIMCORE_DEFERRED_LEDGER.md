@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 34/52 designs FROZEN; scoped next design = SYS-49 Safe Parallel Work Finder
+System-idea sweep state: 35/52 designs FROZEN; scoped next design = SYS-16 Anomaly Recurrence Correlator
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -334,7 +334,53 @@ Generic base movement is not an error without an explicit exact-base contract. A
 
 SYS-36 is `NR_PROTECTED` despite being read-only because it polices branch/PR governance relationships. It may later feed SYS-49 safe-parallel-work reasoning, SYS-31 release review, or SYS-35 lineage evidence, but it does not decide stale-PR hygiene, safe parallelism, merge/close/delete/rebase action, release authorization, or repository writes.
 
-Current implementation remains HOLD while the system design sweep is active. The scoped next system design is SYS-49 Safe Parallel Work Finder.
+Current implementation remains HOLD while the system design sweep is active. Frozen SYS-49 now owns the safe-parallel-work judgment deliberately excluded from SYS-36.
+
+### Safe Parallel Work Finder design
+
+Status: `SYS-49 DESIGN FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD / NON_RUNTIME`
+
+SYS-49 now freezes the protected read-only concurrency judgment for already-legitimate bounded work.
+
+Frozen contract:
+
+```text
+2+ independently legitimate bounded tasks
++ reviewed semantic read/write/dependency profiles
++ current SYS-36 relationship facts when repository relations matter
++ current gate/dependency facts
++ frozen parallel conflict/guard rules
+→ deterministic pairwise/group parallel-safety disposition
+```
+
+Frozen top-level dispositions:
+
+```text
+PARALLEL_SAFE
+PARALLEL_GUARDED
+PARALLEL_SERIALIZE_REQUIRED
+PARALLEL_NOT_STARTABLE
+PARALLEL_BLOCKED
+```
+
+Critical non-equivalences:
+
+```text
+different branches != PARALLEL_SAFE
+no shared filenames != PARALLEL_SAFE
+BUNDLE_CLEAN != PARALLEL_SAFE
+RELATION_CLEAN != PARALLEL_SAFE
+```
+
+SYS-49 distinguishes substantive mutation from shared close-sync. Two tasks with disjoint primary work but shared living inventory/progress/classification/deferred close writes may be `PARALLEL_GUARDED`: substantive work may overlap, but shared close writes serialize, each closer rereads current authority, and counts/NEXT are recomputed from the new head.
+
+Shared primary mutation, direct predecessor dependencies, a task changing another task's defining authority, protected-governance interference, or production identity movement during a live-evidence window require serialization. Exact-base sibling transactions may overlap only under explicit serialized promotion/re-audit/replay guards when replay is allowed. A raced/stale SYS-36 relationship capture blocks a current safe-parallel claim.
+
+SimCore's immediate anomaly preservation rule is a first-class guard: if real live evidence produces a new suspicious specimen while another task is about to write shared close state, the anomaly/evidence record takes priority, the other close must reread current authority, and any changed scope/gate/NEXT invalidates the old parallel assessment.
+
+SYS-49 is `NR_PROTECTED` despite being read-only because false SAFE output can affect shared main writers, branch/PR transactions, exact-base work, production evidence windows, and protected repository/release governance. It does not select tasks, change priority/gates, schedule workers, create locks, mutate branches/PRs, write main/release-simcore, or become CI authority.
+
+Current implementation remains HOLD while the system design sweep is active. The scoped next system design is SYS-16 Anomaly Recurrence Correlator.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -587,7 +633,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 34/52 system designs are currently FROZEN and the scoped next design is SYS-49 Safe Parallel Work Finder. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 35/52 system designs are currently FROZEN and the scoped next design is SYS-16 Anomaly Recurrence Correlator. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

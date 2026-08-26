@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · SYS-19/SYS-01/SYS-51/SYS-08/SYS-10 FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 6 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as product/runtime ideas.
 
@@ -76,7 +76,7 @@ All system ideas remain `NON_RUNTIME` unless a frozen design proves otherwise. U
 | SYS-45 | State-Surface Change Receipt | Architecture | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-46 | Canonical Task Card | Workflow | SMALL | 4 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-47 | User Handoff Card | Workflow | SMALL | 4 | 1 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-48 | Gate-Blocked Reason Surface | Workflow | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-48 | Gate-Blocked Reason Surface | Workflow | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-49 | Safe Parallel Work Finder | Workflow | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-50 | Work Bundling Conflict Detector | Workflow | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-51 | Close-Step Trigger Matrix | Workflow | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
@@ -88,14 +88,15 @@ Frozen design authorities:
 - SYS-51 → `docs/SIMCORE_SYS51_CLOSE_STEP_TRIGGER_MATRIX_DESIGN.md`
 - SYS-08 → `docs/SIMCORE_SYS08_WORK_ITEM_CLOSE_RECEIPT_DESIGN.md`
 - SYS-10 → `docs/SIMCORE_SYS10_STALE_NEXT_ACTION_SCANNER_DESIGN.md`
+- SYS-48 → `docs/SIMCORE_SYS48_GATE_BLOCKED_REASON_SURFACE_DESIGN.md`
 
 ## 3. Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 5
-UNFROZEN             = 47
-OPEN NOW             = 35
+FROZEN               = 6
+UNFROZEN             = 46
+OPEN NOW             = 34
 GATED / DEPENDENCY   = 12
 
 SIZE
@@ -108,9 +109,9 @@ NON_RUNTIME = 52
 RUNTIME     = 0
 
 APPLY CLASS
-NR_DOC_ONLY   = 4
+NR_DOC_ONLY   = 5
 NR_EXECUTABLE = 1
-NR_UNASSESSED = 47
+NR_UNASSESSED = 46
 ```
 
 Importance/difficulty baseline remains unchanged:
@@ -137,22 +138,34 @@ SYS-01 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-51 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-08 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-10 = I5 D2 / FROZEN / NR_EXECUTABLE
+SYS-48 = I5 D2 / FROZEN / NR_DOC_ONLY
 ```
 
-Remaining highest-priority open edge:
+Current highest-priority open edge:
 
 ```text
-I5 / D2 / NOW
-SYS-48 Gate-Blocked Reason Surface
+I5 / D3 / NOW
+SYS-03 Gate Dependency Graph
+SYS-09 Change-Impact Review Map
+SYS-11 Design-to-Implementation Drift Audit
+SYS-13 Verification Proof Matrix
+SYS-17 Missing Evidence Slot Analyzer
+SYS-21 Forensic Classification Consistency Check
+SYS-22 Test Intent Manifest
+SYS-31 Version-Bump Blast-Radius Check
+SYS-35 Repository Transaction Ledger
+SYS-38 Architecture Contract Diff Reporter
+SYS-42 Implementation Slice Conformance Checker
+SYS-50 Work Bundling Conflict Detector
 ```
 
-Canonical next:
+Downstream-leverage next:
 
 ```text
-NEXT = SYS-48 Gate-Blocked Reason Surface
+NEXT = SYS-03 Gate Dependency Graph
 ```
 
-Reason: it is the last gate-open I5/D2 candidate. Its design must remain a bounded explanatory surface and must not invent gate dependencies; explicit dependency graph automation remains SYS-03.
+Reason: SYS-48 now defines the bounded human explanation of one gate. SYS-03 is the complementary system-wide dependency model needed to make future RT-11 gate-unlock propagation, blocked-reason review, and incremental sweep reopening structurally explicit without changing gate authority.
 
 ## 5. Non-duplication boundaries
 
@@ -167,6 +180,7 @@ RT semantics → Real-Time Close-Step parent design
 close trigger selection → SYS-51
 one-work closure summary → SYS-08
 stale NEXT detection → SYS-10 only; no priority calculation or auto-repair
+gate-blocked explanation → SYS-48; no dependency calculation or automatic unlock
 ```
 
 A system idea that duplicates one of these authorities must be redesigned before freeze.

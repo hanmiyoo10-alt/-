@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  issues: read
+  issues: write
   pull-requests: write
   actions: write
 
@@ -23,6 +23,7 @@ jobs:
     env:
       DOC_BRANCH: automation/canonical-main-docs
       DOC_FILES: docs/REPO_DECISION_LOG.md docs/REPO_CHANGELOG.md docs/REPO_ARCHITECTURE_SNAPSHOT.md docs/REPO_PROJECT_CATALOG.md
+      HANDOFF_ISSUE: '457'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +52,7 @@ jobs:
           tar -czf /tmp/canonical-main-docs.tgz $DOC_FILES
           git reset --hard HEAD
           git clean -fd -- $DOC_FILES
-      - name: Update one bounded documentation promotion PR
+      - name: Publish generated branch or hand off PR creation
         if: steps.render.outputs.changed == 'true'
         id: publish
         env:
@@ -64,9 +65,31 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin main
-          if [[ "$(git rev-parse origin/main)" != "$BASE_SHA" ]]; then
-            echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_BEFORE_PUBLISH:$BASE_SHA:$(git rev-parse origin/main)"
+          CURRENT_MAIN="$(git rev-parse origin/main)"
+          if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
+            cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: STALE_BEFORE_PUBLISH**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: $BASE_SHA
+          - Current main SHA: $CURRENT_MAIN
+          - Head SHA: none
+          - PR: none
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Direct generated-doc writes to main: forbidden
+          EOF
+            gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
+            echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_BEFORE_PUBLISH:$BASE_SHA:$CURRENT_MAIN"
             echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "handoff=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -88,14 +111,57 @@ jobs:
           HEAD_SHA="$(git rev-parse HEAD)"
           PR="$(gh pr list --head "$DOC_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
           if [[ -z "$PR" ]]; then
-            gh pr create --head "$DOC_BRANCH" --base main \
-              --title 'docs(repo): promote canonical documentation' \
-              --body 'Automated Phase L durable-document promotion from stable `[repo-docs:main]` events. Generated commits are loop-filtered; merge is exact-head after explicitly dispatched Plugin Control Plane and SimCore candidate CI.' >/tmp/doc-pr-url.txt
-            PR="$(gh pr list --head "$DOC_BRANCH" --base main --state open --json number --jq '.[0].number')"
+            cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: PENDING**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: $BASE_SHA
+          - Head SHA: $HEAD_SHA
+          - PR: none
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Bridge authority: connected ChatGPT GitHub connector
+          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Direct generated-doc writes to main: forbidden
+          EOF
+            gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
+            echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "pr=" >> "$GITHUB_OUTPUT"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "handoff=true" >> "$GITHUB_OUTPUT"
+            echo "CANONICAL_MAIN_DOC_PROMOTION:HANDOFF:#$HANDOFF_ISSUE:$BASE_SHA:$HEAD_SHA"
+            exit 0
           fi
+
+          cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: PR_OPEN**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: $BASE_SHA
+          - Head SHA: $HEAD_SHA
+          - PR: #$PR
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Direct generated-doc writes to main: forbidden
+          EOF
+          gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
           echo "published=true" >> "$GITHUB_OUTPUT"
+          echo "handoff=false" >> "$GITHUB_OUTPUT"
           echo "CANONICAL_MAIN_DOC_PROMOTION:PR:#$PR:$HEAD_SHA"
       - name: Dispatch exact documentation candidate checks
         if: steps.publish.outputs.published == 'true'
@@ -152,10 +218,52 @@ jobs:
           git fetch origin main
           CURRENT_MAIN="$(git rev-parse origin/main)"
           if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
+            cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: STALE_MAIN**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: $BASE_SHA
+          - Current main SHA: $CURRENT_MAIN
+          - Head SHA: $HEAD_SHA
+          - PR: #$PR
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Direct generated-doc writes to main: forbidden
+          EOF
+            gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
             echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_MAIN_SKIP:$BASE_SHA:$CURRENT_MAIN"
             exit 0
           fi
           PR_HEAD="$(gh pr view "$PR" --json headRefOid --jq .headRefOid)"
           [[ "$PR_HEAD" == "$HEAD_SHA" ]] || { echo "PR head moved: $PR_HEAD != $HEAD_SHA" >&2; exit 1; }
           gh pr merge "$PR" --squash --delete-branch --match-head-commit "$HEAD_SHA"
-          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGED:#$PR:$HEAD_SHA"
+          git fetch origin main
+          RESULT_SHA="$(git rev-parse origin/main)"
+          cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: MERGED**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: $BASE_SHA
+          - Head SHA: $HEAD_SHA
+          - PR: #$PR
+          - Result main SHA: $RESULT_SHA
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Direct generated-doc writes to main: forbidden
+          EOF
+          gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
+          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGED:#$PR:$HEAD_SHA:$RESULT_SHA"

@@ -35,6 +35,25 @@ A live event may be promoted only when its evidence is stable: merged PR/main co
 
 Promotion runs on a documentation branch/PR. It never writes generated Markdown directly to `main` and never bypasses Required CI.
 
+## ChatGPT PR-creation bridge
+
+Repository policy may allow the Actions token to update branches while still forbidding it from creating pull requests. The promotion workflow must not weaken that repository setting or introduce a broader token to bypass it.
+
+When the generated documentation branch has durable changes and no open promotion PR exists, Actions updates the single operational mailbox issue `#457` (`[repo-docs:promotion-bridge]`) with a machine-readable `PENDING` handoff containing the exact base SHA, generated head SHA, source branch, and source workflow run. Actions then exits successfully without attempting `gh pr create`.
+
+A connected ChatGPT GitHub bridge may consume that mailbox and create the PR using its separately authorized GitHub connector. The bridge is constrained by the same Phase L transaction rules:
+
+- the source branch/head must still match the handoff;
+- the candidate PR must target `main`;
+- Plugin Control Plane CI and SimCore Verify / Required must pass on the exact candidate head;
+- `main` must still equal the recorded base immediately before merge;
+- a moved base or moved PR head is stale and must not be merged;
+- no bridge path may push generated Markdown directly to `main`.
+
+If an open promotion PR already exists, the repository-native workflow may continue its existing explicit-check and exact-head merge path. The mailbox records `PR_OPEN`, `STALE_*`, or `MERGED` so the external bridge can converge without duplicate PRs.
+
+This split keeps repository policy authoritative: GitHub Actions renders and publishes the bounded generated branch; the connected bridge supplies only the PR-creation capability that the Actions token intentionally lacks.
+
 ## Loop prevention
 
 Documentation-only generated commits are marked `[repo-docs-generated]` and ignored as new `CHANGE` promotion inputs. This prevents documentation updates from recursively documenting themselves.

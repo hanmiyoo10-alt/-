@@ -1,8 +1,8 @@
-# Repository Work Harness — Phase A Shadow Preflight
+# Repository Work Harness — Phase A Shadow Governance
 
-This directory implements the first bounded slice of U-25 `Repository Work Harness`.
+This directory implements the bounded Phase A slices of U-25 `Repository Work Harness`.
 
-Phase A is **read-only shadow governance**. It normalizes repository-visible Work Records and evaluates whether already-legitimate bounded work may overlap. It does not dispatch executors, mutate Git/GitHub state, authorize release/production work, or replace project-specific authorities.
+Phase A is **read-only shadow governance**. It normalizes repository-visible Work Records, discovers active records from GitHub issues, and evaluates whether already-legitimate bounded work may overlap. It does not dispatch executors, mutate Git/GitHub state, authorize release/production work, or replace project-specific authorities.
 
 ## Authority boundary
 
@@ -42,7 +42,7 @@ Write roles reuse the SimCore SYS-49 semantics:
 - `CLOSE_SYNC_WRITE`
 - `EVIDENCE_WRITE`
 
-## Shadow PREFLIGHT
+## Shadow PREFLIGHT — HARNESS-A1
 
 `preflight.cjs` exports pure functions. It does not read the network or repository by itself and performs no side effects.
 
@@ -60,9 +60,7 @@ Precedence:
 
 `BLOCKED > NOT_STARTABLE > SERIALIZE_REQUIRED > GUARDED > SAFE`
 
-## Frozen v1 rules
-
-The Phase A evaluator deliberately implements a small deterministic subset of the larger repository Harness design:
+### Frozen A1 rules
 
 1. Invalid, incomplete, contradictory, or UNKNOWN startability input fails closed as `PARALLEL_BLOCKED`.
 2. Explicitly non-startable work yields `PARALLEL_NOT_STARTABLE`.
@@ -77,25 +75,68 @@ The Phase A evaluator deliberately implements a small deterministic subset of th
 
 The evaluator reports stable reason codes and named guards. It never silently invents task intent.
 
-## Non-goals for HARNESS-A1
+## Active Work discovery — HARNESS-A2
 
-This slice does not add:
+`active-work.cjs` defines the repository-visible publication/discovery contract.
+
+An **open, non-PR GitHub issue** is an active Work Record source only when its body contains exactly one bounded marker pair with one JSON fenced block:
+
+~~~~text
+<!-- repository-work-record:v1 -->
+```json
+{ "schemaVersion": 1, "workId": "...", "...": "..." }
+```
+<!-- /repository-work-record:v1 -->
+~~~~
+
+The full copyable format is in `work-record-issue-template.md`.
+
+Discovery rules:
+
+1. only open issues are active in A2;
+2. unmarked issues are ignored;
+3. marked payloads must use the exact marker pair and one `json` fenced block;
+4. parsed payloads must pass the existing Work Record v1 validator;
+5. malformed marked records fail closed with stable discovery reason codes and issue provenance;
+6. duplicate active `workId` values fail closed;
+7. a valid discovered record set is passed unchanged to A1 `evaluateWorkSet`;
+8. no active Work Records is a clean shadow state (`PARALLEL_SAFE / NO_ACTIVE_WORK_RECORDS`), not an authorization to mutate anything.
+
+`scan.cjs` is a **read-only scan entrypoint**, not the future general-purpose repository CLI. It reuses the existing canonical-main GitHub client and issue store, performs `GET` issue reads, and prints a single JSON result.
+
+Run in an environment that already supplies repository read credentials:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/scan.cjs
+```
+
+Expected environment:
+
+- `GH_TOKEN` or `GITHUB_TOKEN`
+- `GITHUB_REPOSITORY`
+
+A successful scan process exits normally even when the shadow disposition is `PARALLEL_GUARDED` or `PARALLEL_SERIALIZE_REQUIRED`; Phase A findings are advisory. Transport/auth/parser execution failures may still produce a process error.
+
+## Current non-goals
+
+Phase A does not add:
 
 - executor dispatch;
-- a top-level repository CLI;
-- active-work discovery from GitHub;
-- coordination receipts enforced at mutation boundaries;
-- workflow integration;
+- a top-level general-purpose repository CLI;
+- persistent coordination receipts;
+- mutation-boundary enforcement;
+- workflow scheduling/automatic periodic scans;
 - main-write/release changes;
 - product/runtime behavior changes;
 - global locks or scheduler/prioritizer behavior.
 
-Those require later packets after shadow evidence is reviewed.
+Those require later bounded packets after shadow evidence is reviewed.
 
-## Test
+## Tests
 
 Run:
 
 ```sh
 node .github/plugin-control-plane/canonical-main/work-harness/tests/preflight-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/active-work-contract.cjs
 ```

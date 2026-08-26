@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-21 design freeze:
+Current state after SYS-38 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 15
-UNFROZEN                = 37
+FROZEN                  = 16
+UNFROZEN                = 36
 
 NR_DOC_ONLY   = 10
-NR_EXECUTABLE = 4
+NR_EXECUTABLE = 5
 NR_PROTECTED  = 1
-NR_UNASSESSED = 37
+NR_UNASSESSED = 36
 ```
 
 Frozen system apply classes:
@@ -195,6 +195,7 @@ SYS-10 Stale Next-Action Scanner
 SYS-03 Gate Dependency Graph
 SYS-50 Work Bundling Conflict Detector
 SYS-17 Missing Evidence Slot Analyzer
+SYS-38 Architecture Contract Diff Reporter
 
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
@@ -215,23 +216,27 @@ Why SYS-11, SYS-13, SYS-22, and SYS-21 are document-only:
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
 SYS-13 = durable proof-scope policy/matrix; no CI/log scanner required for v1
 SYS-22 = reviewed semantic test-intent/non-claim authority; no harness/registry enforcement required for v1
-SYS-21 = human semantic consistency review of existing forensic classifications; automatic severity promotion/demotion intentionally prohibited
+SYS-21 = human forensic classification-consistency audit; automatic severity promotion/demotion intentionally prohibited
 ```
 
-Why SYS-17 is executable:
+Why SYS-17 and SYS-38 are executable:
 
 ```text
+SYS-17
 explicit reviewed evidence slots
 + reviewed proof state
 → deterministic missing/not-claimed/conflicted/blocked analysis
 
-no evidence discovery
-no repository-wide crawl
-no gate mutation
-no CI wiring
+SYS-38
+immutable M-11 snapshots
++ immutable machine Contracts v2 inputs
+→ deterministic exact architecture delta report
+
+Both remain read-only/non-runtime.
+Neither changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Check, or Report.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, or Report.
 
 ---
 
@@ -243,9 +248,9 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 12
-NR_EXECUTABLE  = 9
+NR_EXECUTABLE  = 10
 NR_PROTECTED   = 2
-NR_UNASSESSED  = 43
+NR_UNASSESSED  = 42
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -258,7 +263,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 25 gate-open NOW designs remain after SYS-21 freeze
+= 24 gate-open NOW designs remain after SYS-38 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -388,7 +393,8 @@ system apply/implementation = HELD
 SYS-42 = frozen NR_PROTECTED governance checker
 SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 SYS-22 = frozen NR_DOC_ONLY test-intent/non-claim authority
-SYS-21 = frozen NR_DOC_ONLY human forensic consistency audit
+SYS-21 = frozen NR_DOC_ONLY human forensic-consistency audit
+SYS-38 = frozen NR_EXECUTABLE architecture delta reporter
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

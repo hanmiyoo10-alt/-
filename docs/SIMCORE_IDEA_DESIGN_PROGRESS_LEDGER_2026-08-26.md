@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 14 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 15 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -77,32 +77,35 @@ SYS-17 Missing Evidence Slot Analyzer
 
 SYS-22 Test Intent Manifest
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-21 Forensic Classification Consistency Check
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
-SYS-22 contract:
+SYS-21 contract:
 
 ```text
-test surface identity
-+ semantic owner / frozen contract authority
-+ intended SYS-13 claim kinds
-+ explicit non-claims
-→ reviewed test intent
+one bounded forensic item
++ current classification/disposition
++ cited proof/evidence maturity
++ cited impact/recurrence/attribution/mitigation facts
+→ human semantic consistency audit
 ```
 
-It is separate from permanent registry/harness execution authority. A manifest row does not prove the test ran, passed, was discovered by CI, satisfied an evidence slot, or established live/release proof. Every row must preserve explicit non-claims so green deterministic tests cannot silently expand their semantic meaning.
+It detects evidence over-promotion, active-blocker under-classification, attribution/recurrence overclaim, proof substitution, missing-evidence-as-failure mistakes, test-intent overreach, mitigation/revalidation confusion, and stale current dispositions. It never auto-promotes/demotes WATCH / DEFER / FIX / BLOCKER, discovers recurrence, closes a gate, or mutates source authorities.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 14
-OPEN NOW            = 26
+FROZEN              = 15
+OPEN NOW            = 25
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 9
+NR_DOC_ONLY         = 10
 NR_EXECUTABLE       = 4
 NR_PROTECTED        = 1
-NR_UNASSESSED       = 38
+NR_UNASSESSED       = 37
 ```
 
 ## 4. Current next design
@@ -111,7 +114,6 @@ Remaining highest-priority edge:
 
 ```text
 I5 / D3 / NOW
-SYS-21 Forensic Classification Consistency Check
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
@@ -120,19 +122,20 @@ SYS-38 Architecture Contract Diff Reporter
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-21 Forensic Classification Consistency Check
+NEXT SYSTEM DESIGN = SYS-38 Architecture Contract Diff Reporter
 ```
 
 Reason:
 
 ```text
-SYS-13 defines proof fitness and non-equivalence.
-SYS-17 identifies explicitly registered required evidence slots that remain unresolved.
-SYS-22 defines the intended and forbidden claim scope of named tests.
-SYS-21 can now review forensic WATCH / DEFER / FIX / BLOCKER-style classifications against those proof/evidence boundaries and detect semantic promotion or demotion that is not supported by the cited evidence.
+SYS-13 / SYS-17 / SYS-22 / SYS-21 now form a bounded evidence-integrity chain.
+The next physical architecture step after v0.64.7 live close is M2-3 Edit Reconcile extraction.
+SYS-38 therefore has the strongest immediate downstream leverage:
+make reviewed architecture contract deltas visible without replacing Contracts v2 or its checker.
+SYS-31 becomes material at the next version bump; SYS-35 is a broader transaction-history layer that can follow the current close/receipt controls.
 ```
 
-After SYS-21, recompute the remaining I5/D3 edge rather than precommitting a static order.
+After SYS-38, recompute the remaining I5/D3 edge rather than precommitting a static order.
 
 ## 5. Apply/implementation hold
 
@@ -152,6 +155,7 @@ SYS-11 application     = HOLD
 SYS-13 application     = HOLD
 SYS-17 implementation  = HOLD
 SYS-22 application     = HOLD
+SYS-21 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -168,7 +172,9 @@ SYS-17 preserves the same distinction at slot level: a WATCH-only `NOT_CLAIMED` 
 
 SYS-22 adds intent clarity without changing execution evidence: a focused test intent row never implies permanent-CI discovery, and a permanent deterministic suite never implies natural live validation or genuine release E2E proof.
 
-SYS-10, SYS-03, SYS-50, and SYS-17 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, and SYS-22 are document-only by design.
+SYS-21 adds a human forensic consistency layer: one direct symptom does not manufacture root-cause attribution/FIX/BLOCKER, while an actual authoritative stop condition must not remain hidden behind a harmless WATCH label. Its review findings do not mutate the owning classification automatically.
+
+SYS-10, SYS-03, SYS-50, and SYS-17 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, and SYS-21 are document-only by design.
 
 ## 7. Production boundary
 
@@ -188,8 +194,8 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 14 / 52
-CURRENT NEXT = SYS-21 Forensic Classification Consistency Check
+SYSTEM DESIGNS FROZEN = 15 / 52
+CURRENT NEXT = SYS-38 Architecture Contract Diff Reporter
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT

@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 24 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 25 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -51,7 +51,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-25 | Golden Fixture Mutation Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-26 | Coverage Promotion Readiness Scanner | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-27 | Cross-Version Regression Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
-| SYS-28 | Verification Debt Index | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-28 | Verification Debt Index | Regression | SMALL | 4 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-29 | Contract-to-Fixture Gap View | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-30 | Release-to-Docs Convergence Receipt | Release | MEDIUM | 5 | 3 | NON_RUNTIME | DEPENDENCY: next genuine release proof | NR_UNASSESSED |
 | SYS-31 | Version-Bump Blast-Radius Check | Release | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_PROTECTED |
@@ -104,21 +104,22 @@ SYS-05 → docs/SIMCORE_SYS05_HISTORICAL_VS_LIVING_DOCUMENT_REGISTRY_DESIGN.md
 SYS-04 → docs/SIMCORE_SYS04_STATUS_VOCABULARY_LINTER_DESIGN.md
 SYS-02 → docs/SIMCORE_SYS02_DECISION_SUPERSESSION_GRAPH_DESIGN.md
 SYS-12 → docs/SIMCORE_SYS12_CURRENT_STATE_SNAPSHOT_PAGE_DESIGN.md
+SYS-28 → docs/SIMCORE_SYS28_VERIFICATION_DEBT_INDEX_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 24
-UNFROZEN             = 28
-OPEN NOW             = 16
+FROZEN               = 25
+UNFROZEN             = 27
+OPEN NOW             = 15
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 16
+NR_DOC_ONLY   = 17
 NR_EXECUTABLE = 6
 NR_PROTECTED  = 2
-NR_UNASSESSED = 28
+NR_UNASSESSED = 27
 ```
 
 ## Canonical selection
@@ -157,6 +158,7 @@ SYS-05 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-04 = I4 D2 / FROZEN / NR_EXECUTABLE
 SYS-02 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-12 = I4 D2 / FROZEN / NR_DOC_ONLY
+SYS-28 = I4 D2 / FROZEN / NR_DOC_ONLY
 ```
 
 Highest-priority open edge now:
@@ -164,7 +166,6 @@ Highest-priority open edge now:
 ```text
 I4 / D2 / NOW
 SYS-23 Negative-Control Registry
-SYS-28 Verification Debt Index
 SYS-33 Rollback Readiness Checklist
 SYS-52 Operator Error Specimen Ledger
 ```
@@ -172,10 +173,10 @@ SYS-52 Operator Error Specimen Ledger
 Canonical next:
 
 ```text
-NEXT = SYS-28 Verification Debt Index
+NEXT = SYS-23 Negative-Control Registry
 ```
 
-Reason: SYS-12 now closes the compact current-state projection layer on top of SYS-01/SYS-05/SYS-04/SYS-02. Among the remaining I4/D2 candidates, SYS-28 has the broadest immediate downstream leverage because it can compose the already-frozen verification proof matrix, missing-evidence-slot semantics, test-intent/non-claim boundaries, and current verification WATCHes into a bounded debt view before M2-3 and the next genuine runtime release, without promoting non-claims into blockers.
+Reason: SYS-28 now closes the verification-debt visibility layer on top of SYS-13/SYS-17/SYS-22 and the current verification WATCHes. Among the remaining I4/D2 candidates, SYS-23 has the broadest downstream leverage because explicit negative controls can protect the regression portfolio from positive-only fixtures and false broadening of classifier/authority behavior before later fixture orphan, mutation, coverage-promotion, and contract-to-fixture work.
 
 ## Non-duplication boundaries
 
@@ -210,9 +211,10 @@ reviewed document/family lifecycle + explicit section exceptions → curated liv
 registered status namespace + registered structured target + SYS-05 lifecycle scope → deterministic vocabulary/namespace/cardinality lint → SYS-04; no semantic status classification, stale-state judgment, global enum, repo-wide prose grep, writer, CI authority, release authority, or runtime behavior
 reviewed predecessor decision scope + reviewed successor/retirement decision scope + explicit affected/preserved scope → curated supersession lineage → SYS-02; no newest-file inference, current-state authority, gate dependency, repository transaction graph, evidence trace, generic reference graph, automatic semantic diff, repo writer, release authority, or runtime behavior
 reviewed current authorities + lifecycle boundaries + supersession lineage → compact current-only source-referenced projection → SYS-12; no source-of-truth ownership, historical ledger, roadmap authority, gate engine, evidence classifier, stale scanner, repo writer, release authority, or runtime behavior
+explicit verification obligation/WATCH + current proof state + due posture + source-owned blocking posture → curated verification-debt index → SYS-28; no requirement invention, proof-fit redefinition, evidence discovery, gate/severity promotion, global quality score, CI scanner, repo writer, release authority, or runtime behavior
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, and SYS-12 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 and SYS-31 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, and SYS-28 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

@@ -124,3 +124,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/68b416dc1379c73f40d2ec1c4f6c9efa983ff1d8)
 - Event ID: `89c55e0977e32bfc5d61f3d95c52edad91b228488375129cd1c504ae456c2204`
 <!-- canonical-main-doc-promoted:89c55e0977e32bfc5d61f3d95c52edad91b228488375129cd1c504ae456c2204 -->
+
+### 2026-08-26 — feat: add active Work Record discovery for Harness shadow scans
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a0f69e68db7a74b1ef445d2953055e3949585a92`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a0f69e68db7a74b1ef445d2953055e3949585a92)
+- Event ID: `9da118b046f887644eab0610243d382b0def2c12bab4fa290b9dfe30479911ae`
+<!-- canonical-main-doc-promoted:9da118b046f887644eab0610243d382b0def2c12bab4fa290b9dfe30479911ae -->

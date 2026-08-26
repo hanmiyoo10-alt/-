@@ -65,7 +65,7 @@ Production validation: PENDING_REAL_LONG_CHAT
 Primary current phase: close 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT before any later runtime release or physical M2-3 implementation
 Next physical architecture move: M2-3 Edit Reconcile extraction only after the v0.64.7 live gate is classified and closed
 Safe parallel non-runtime state: original NR design/harvest, R doc-apply, and four-item permanent-fixture queues are exhausted; a separate system-idea NON_RUNTIME design sweep is ACTIVE and may proceed while the live gate is pending, with apply/implementation held until that sweep closes or priority changes
-System-idea sweep state: 33/52 designs FROZEN; scoped next design = SYS-36 Branch/PR Relationship Auditor
+System-idea sweep state: 34/52 designs FROZEN; scoped next design = SYS-49 Safe Parallel Work Finder
 Genuine-edit baseline: v0.64.5 DIRECT LIVE PASS established before M2-3; post-M2-3 direct recheck remains required before M2-4
 Natural B_END revalidation: DEFERRED / NON-BLOCKING
 R2.1 delegated release operation: ACTIVE / PERMANENT-CI PASS / genuine release end-to-end proof PENDING on the next genuine runtime release
@@ -293,7 +293,48 @@ SYS-07 explicitly separates mechanical resolution from semantic eligibility. A p
 
 v1 is local/read-only/no-network and scans only explicitly registered structured reference surfaces. It does not crawl arbitrary prose, infer lifecycle/supersession/provenance, verify GitHub-side branch/PR/commit relationships, repair references, mutate repository state, become required CI, or affect runtime/release authority.
 
-Current implementation remains HOLD while the system design sweep is active. The scoped next system design is SYS-36 Branch/PR Relationship Auditor, which is expected to own the GitHub-side relationship truth deliberately excluded from SYS-07.
+Current implementation remains HOLD while the system design sweep is active. Frozen SYS-36 now owns the GitHub-side branch/PR relationship contract deliberately excluded from SYS-07.
+
+### Branch/PR Relationship Auditor design
+
+Status: `SYS-36 DESIGN FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD / NON_RUNTIME`
+
+SYS-36 now freezes the protected read-only relationship audit contract for GitHub branch/PR/commit facts.
+
+Frozen contract:
+
+```text
+explicit relationship audit mode
++ exact PR/ref/SHA observations
++ explicit expected-base/head contract when required
++ fixed-SHA relationship facts
++ bounded capture-coherence check
+→ deterministic branch/PR relationship findings
+```
+
+Frozen modes:
+
+```text
+BR-01 GENERIC_RELATION_AUDIT
+BR-02 EXACT_BASE_TRANSACTION_AUDIT
+BR-03 HISTORICAL_RELATION_AUDIT
+```
+
+Critical regression rule:
+
+```text
+merge_commit_sha != null
++ merged_at == null
+→ NOT MERGED
+```
+
+This is backed by a real repository specimen: PR #109 is open with `merged_at = null` while exposing a non-null `merge_commit_sha`. SYS-36 therefore keeps PR state, `merged_at`, merge identity, mutable branch refs, exact expected base/head identities, and fixed-SHA ancestry facts separate rather than promoting one convenience field into stronger truth.
+
+Generic base movement is not an error without an explicit exact-base contract. A closed/merged historical PR may remain valid even after its head branch is deleted. Live relationship captures must re-read required mutable refs and fail closed on mixed-time/raced snapshots rather than returning a false CLEAN result.
+
+SYS-36 is `NR_PROTECTED` despite being read-only because it polices branch/PR governance relationships. It may later feed SYS-49 safe-parallel-work reasoning, SYS-31 release review, or SYS-35 lineage evidence, but it does not decide stale-PR hygiene, safe parallelism, merge/close/delete/rebase action, release authorization, or repository writes.
+
+Current implementation remains HOLD while the system design sweep is active. The scoped next system design is SYS-49 Safe Parallel Work Finder.
 
 The v0.63.59 natural B_END gate is intentionally no longer a blocker. B_END is rare enough that waiting for another natural occurrence would stall M2. When a natural B_END appears later, capture it as bonus production confirmation.
 
@@ -546,7 +587,7 @@ One-off semantic generation anomalies, cache/provider uncertainty, diagnostic-cl
 1. Close v0.64.7 with 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT and classify PASS / WATCH / FIX / BLOCKER.
 2. Preserve any live anomaly immediately before moving on and keep living current-state documents synchronized under SIMCORE_LIVE_DOCUMENT_CONSISTENCY_POLICY.md.
 3. Original current gate-open NR design = NONE and original NR harvest queue = EMPTY. Seven gated/future original NR items remain and must wait for their legitimate gates.
-4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 33/52 system designs are currently FROZEN and the scoped next design is SYS-36 Branch/PR Relationship Auditor. Frozen SYS application/implementation remains HOLD while that sweep is active.
+4. Separate system-idea NON_RUNTIME design sweep = ACTIVE; 34/52 system designs are currently FROZEN and the scoped next design is SYS-49 Safe Parallel Work Finder. Frozen SYS application/implementation remains HOLD while that sweep is active.
 5. The four-item non-runtime permanent-fixture expansion portfolio is COMPLETE: summary-scope, narrative-clock, frame, broadcast-closure expansion. There is no next item in that bounded portfolio.
 6. Current gate-open R design = NONE and R DOC APPLY queue = EMPTY; S-04 document prep is already APPLIED.
 7. After the v0.64.7 gate closes, M2-3 Edit Reconcile becomes the next physical architecture checkpoint.

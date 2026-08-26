@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-25 design freeze:
+Current state after SYS-15 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 37
-UNFROZEN                = 15
+FROZEN                  = 38
+UNFROZEN                = 14
 
-NR_DOC_ONLY   = 25
+NR_DOC_ONLY   = 26
 NR_EXECUTABLE = 7
 NR_PROTECTED  = 5
-NR_UNASSESSED = 15
+NR_UNASSESSED = 14
 ```
 
 Frozen system apply classes:
@@ -204,6 +204,7 @@ SYS-18 Evidence Provenance Chain Receipt
 SYS-14 Evidence Freshness Ledger
 SYS-16 Anomaly Recurrence Correlator
 SYS-25 Golden Fixture Mutation Receipt
+SYS-15 WATCH Aging Review
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -243,7 +244,7 @@ SYS-49
 → all require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, and SYS-25 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, SYS-14, SYS-16, SYS-25, and SYS-15 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -265,6 +266,7 @@ SYS-18 = point-in-time evidence-provenance receipt; v1 deliberately preserves re
 SYS-14 = curated claim-scoped evidence-reuse/freshness ledger; v1 deliberately avoids age-only expiry, automatic semantic diff/crawling, evidence invalidation, proof-scope promotion, slot/debt/blocker creation, gate decisions, repository writes, or runtime/release authority
 SYS-16 = curated family-scoped recurrence/correlation index; v1 deliberately requires reviewed family membership, specimen independence and healthy/contrary controls rather than similarity clustering, log scraping, automatic family merge/split, causality inference or severity promotion
 SYS-25 = prospective point-in-time golden-fixture mutation accountability receipt/template; Git already owns exact byte diffs and v1 deliberately avoids fixture writes, expected-value auto-acceptance, semantic inference, registry/harness mutation, automatic coverage judgment, CI integration or proof promotion
+SYS-15 = curated event-driven WATCH aging/relevance review; v1 deliberately treats elapsed time only as orientation metadata and prohibits age-based severity, dismissal, recurrence inference, classification mutation, automatic archive/delete, gate decisions or repository writes
 ```
 
 Why SYS-17, SYS-38, SYS-04, and SYS-07 are executable:
@@ -336,10 +338,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 27
+NR_DOC_ONLY    = 28
 NR_EXECUTABLE  = 12
 NR_PROTECTED   = 6
-NR_UNASSESSED  = 21
+NR_UNASSESSED  = 20
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -352,7 +354,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 3 gate-open NOW designs remain after SYS-25 freeze
+= 2 gate-open NOW designs remain after SYS-15 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -504,6 +506,7 @@ SYS-18 = frozen NR_DOC_ONLY evidence provenance chain receipt design
 SYS-14 = frozen NR_DOC_ONLY claim-scoped evidence freshness ledger design
 SYS-16 = frozen NR_DOC_ONLY anomaly recurrence/correlation index design
 SYS-25 = frozen NR_DOC_ONLY golden-fixture mutation receipt design
+SYS-15 = frozen NR_DOC_ONLY WATCH aging/relevance review design
 SYS-07 = frozen NR_EXECUTABLE cross-reference integrity auditor design
 ```
 

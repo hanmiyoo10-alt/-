@@ -321,3 +321,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/81b2e4f384ee074fb2a9aa3652650e0696752262)
 - Event ID: `fe1b496c3caa43a2f9846b1cc195a10d7c146ed49b9d64a28b6e0b129445a66a`
 <!-- canonical-main-doc-promoted:fe1b496c3caa43a2f9846b1cc195a10d7c146ed49b9d64a28b6e0b129445a66a -->
+
+### 2026-08-27 — fix: recognize reusable Harness work issue input
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `4934acd4337e1a0a635bad0065c2896cdd87da78`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4934acd4337e1a0a635bad0065c2896cdd87da78)
+- Event ID: `8d0b5d172b0ebc6775e356132a644d12e1f340bd9e5115dc0a85e4a4bca10718`
+<!-- canonical-main-doc-promoted:8d0b5d172b0ebc6775e356132a644d12e1f340bd9e5115dc0a85e4a4bca10718 -->

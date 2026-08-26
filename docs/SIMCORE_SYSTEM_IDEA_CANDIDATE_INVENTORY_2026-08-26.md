@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED IDEA CLASSIFICATION · SYS-19 DESIGN FROZEN · REMAINING CANDIDATES ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED IDEA CLASSIFICATION · SYS-19 + SYS-01 DESIGN FROZEN · REMAINING CANDIDATES ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: collect non-duplicative system/operations ideas under the same SimCore idea classification used by product/runtime ideas. Candidate rows remain selectable until frozen; a selected row becomes an accepted idea when its bounded design reaches `DESIGN FROZEN`.
 
@@ -51,7 +51,7 @@ Descriptive words such as document, tool, checker, ledger, or protected authorit
 
 | ID | Candidate | Size | Importance | Difficulty | Runtime Class | Design Gate | Apply Class | Core value |
 |---|---|---|---:|---:|---|---|---|---|
-| SYS-01 | Living Authority Map | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | machine-readable map of living authority ownership |
+| SYS-01 | Living Authority Map | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY | state-family → authority navigation map; design: `docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md` |
 | SYS-02 | Decision / Supersession Graph | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | record supersession without rewriting history |
 | SYS-03 | Gate Dependency Graph | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED | explicit gate-to-unlock dependency graph |
 | SYS-04 | Status Vocabulary Linter | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED | detect unsupported/contradictory status tokens |
@@ -133,8 +133,8 @@ Descriptive words such as document, tool, checker, ledger, or protected authorit
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN             = 1
-UNFROZEN CANDIDATE = 51
+FROZEN             = 2
+UNFROZEN CANDIDATE = 50
 
 SIZE
 SMALL  = 20
@@ -146,15 +146,15 @@ NON_RUNTIME = 52
 RUNTIME     = 0
 
 DESIGN GATE
-FROZEN                                   = 1
-NOW                                      = 39
+FROZEN                                   = 2
+NOW                                      = 38
 POST_M2_3                                = 7
 DEPENDENCY: next genuine release proof  = 4
 EVIDENCE                                 = 1
 
 APPLY CLASS
-NR_DOC_ONLY   = 1
-NR_UNASSESSED = 51
+NR_DOC_ONLY   = 2
+NR_UNASSESSED = 50
 ```
 
 Importance and Difficulty distributions are unchanged by freeze:
@@ -182,18 +182,20 @@ Use the same selection order as every other SimCore idea pool:
 4. downstream leverage higher
 ```
 
-Completed first selection:
+Completed selections:
 
 ```text
 SYS-19 Live-Gate Handoff Packet
 = I5 / D1 / FROZEN / NR_DOC_ONLY
+
+SYS-01 Living Authority Map
+= I5 / D2 / FROZEN / NR_DOC_ONLY
 ```
 
 Current highest-priority open edge:
 
 ```text
 I5 / D2 / NOW
-SYS-01 Living Authority Map
 SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
@@ -203,10 +205,10 @@ SYS-51 Close-Step Trigger Matrix
 Downstream-leverage next recommendation:
 
 ```text
-NEXT = SYS-01 Living Authority Map
+NEXT = SYS-51 Close-Step Trigger Matrix
 ```
 
-Reason: it establishes the explicit living-authority ownership map used by later impact review, stale-next-action detection, close receipts, and trigger selection without duplicating S-10 production identity checking.
+Reason: SYS-01 now defines where affected living authority relationships live; SYS-51 can next define which RT close-step surfaces must run for each work type, which then gives SYS-08 a stable basis for a close receipt and gives SYS-10 a bounded context for stale-next-action review.
 
 ## 3. Non-duplication / authority boundaries
 
@@ -264,7 +266,7 @@ until freeze, `NR_UNASSESSED` remains authoritative.
 
 ## 5. Production boundary
 
-SYS-19 design freeze changes no SimCore production behavior.
+SYS-19 and SYS-01 design freezes change no SimCore production behavior.
 
 ```text
 plugin bytes = unchanged

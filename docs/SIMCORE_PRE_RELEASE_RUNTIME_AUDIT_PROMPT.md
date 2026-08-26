@@ -9,6 +9,8 @@ Source: user-supplied `버전-변경전-마무리-단계.txt`
 
 This document preserves the project prompt used for an AI-assisted static runtime audit before a SimCore version-change close or when runtime-stability concerns need a dedicated review.
 
+The assistant may also apply any relevant criterion from this document proactively and at its own discretion throughout ordinary SimCore work, including design review, implementation review, static verification, pre-release close, and anomaly triage. A separate user request to invoke the audit is not required. Audit findings remain evidence inputs rather than automatic change authority: preserve and classify them before deciding whether runtime code should change.
+
 It is an **audit/checklist authority only**. It does not override:
 
 - `release-simcore` as runtime/deployment authority;

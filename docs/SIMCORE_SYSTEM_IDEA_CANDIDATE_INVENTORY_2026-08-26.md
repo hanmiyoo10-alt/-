@@ -120,11 +120,11 @@ FUTURE
 ```text
 TOTAL SYSTEM CANDIDATES = 52
 
-NOW_DESIGNABLE      = 39
-POST_M2_3           = 8
+NOW_DESIGNABLE      = 40
+POST_M2_3           = 7
 POST_M2_4           = 0 explicit candidates in this first pass
-POST_RELEASE_PROOF  = 5
-EVIDENCE             = 2
+POST_RELEASE_PROOF  = 4
+EVIDENCE             = 1
 EXTERNAL             = 0 explicit candidates in this first pass
 FUTURE               = 0 explicit candidates in this first pass
 ```

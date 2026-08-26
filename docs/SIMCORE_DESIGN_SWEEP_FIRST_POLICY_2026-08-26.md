@@ -1,6 +1,6 @@
 # SimCore Design Sweep First Policy — 2026-08-26
 
-Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19/SYS-01/SYS-51 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
+Status: `CANONICAL CURRENT-PHASE OPERATING PRIORITY · SYSTEM-IDEA INCREMENTAL DESIGN SWEEP ACTIVE · SYS-19/SYS-01/SYS-51/SYS-08 FROZEN · APPLY QUEUES HELD · NO RUNTIME CHANGE`
 
 Purpose: finish the currently selected gate-open SimCore idea designs one item at a time before applying/implementing the frozen items.
 
@@ -48,14 +48,17 @@ SYS-01 Living Authority Map
 
 SYS-51 Close-Step Trigger Matrix
 = SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
+
+SYS-08 Work-Item Close Receipt
+= SMALL / I5 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY
 ```
 
 Current inventory state:
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 3
-OPEN NOW            = 37
+FROZEN              = 4
+OPEN NOW            = 36
 GATED/DEPENDENCY    = 12
 ```
 
@@ -63,7 +66,6 @@ Remaining highest-priority open edge:
 
 ```text
 I5 / D2 / NOW
-SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
 ```
@@ -71,13 +73,16 @@ SYS-48 Gate-Blocked Reason Surface
 Downstream-leverage choice:
 
 ```text
-NEXT = SYS-08 Work-Item Close Receipt
+NEXT = SYS-10 Stale Next-Action Scanner
 ```
 
 Reason:
 - SYS-01 defines authority lookup;
 - SYS-51 defines which close surfaces are evaluated;
-- SYS-08 can now define the bounded receipt of actual close results.
+- SYS-08 defines the bounded receipt of actual close results;
+- SYS-10 next attacks the recurring living-memory drift where completed work remains advertised as `NEXT`.
+
+SYS-48 remains open but benefits from the later explicit gate dependency design before its fullest form.
 
 ## 4. Apply hold
 
@@ -85,6 +90,7 @@ Reason:
 SYS-19 application = HOLD
 SYS-01 application = HOLD
 SYS-51 application = HOLD
+SYS-08 application = HOLD
 ```
 
 The current system design sweep remains active. Do not materialize these `NR_DOC_ONLY` artifacts in the same transaction as design freeze.
@@ -121,7 +127,7 @@ v0.64.7 LIVE GATE    = PENDING_REAL_LONG_CHAT
 
 ```text
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-FROZEN = SYS-19 + SYS-01 + SYS-51
-CURRENT NEXT DESIGN = SYS-08 Work-Item Close Receipt
+FROZEN = SYS-19 + SYS-01 + SYS-51 + SYS-08
+CURRENT NEXT DESIGN = SYS-10 Stale Next-Action Scanner
 SYSTEM APPLY/HARVEST = HOLD
 ```

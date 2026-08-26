@@ -18,6 +18,8 @@ B6 adds the first bounded writer-side **opt-in canary**: a manual Canonical Main
 
 B7 adds an explicit opt-in **repository-native receipt sync**: an open Work Record issue carrying `<!-- repository-coordination-receipt-request:v1 -->` may receive or refresh its B3 Coordination Receipt from fresh repository evidence on issue lifecycle events. This automates coordination evidence creation only; it does not run a writer.
 
+B8 adds an explicit opt-in **automatic authoritative handoff** for one canonical-main route only: after successful B7 receipt sync, a Work Record carrying `<!-- repository-authoritative-handoff-request:v1 -->` may hand the same issue number to the existing Canonical Main Operations workflow only when fresh B5 gate evidence is READY and the audited route is exactly `CANONICAL_MAIN_OPERATIONS_REFRESH`. The called writer re-runs the gate before its unchanged mutation.
+
 The Harness coordinates work transactions. It does **not** own Git, CI, main-write, release, production, product-runtime, or project authority.
 
 ## Authority boundary
@@ -157,6 +159,25 @@ The sync fails closed and does not edit the issue when discovery, request marker
 
 B7 uses `issues: write` only to persist coordination evidence on the requested Work Record issue. It does not dispatch workflows, run authoritative writers, mutate refs, or infer mutation/execution authority from receipt readiness.
 
+## Opt-in automatic authoritative handoff — HARNESS-B8
+
+`authoritative-handoff.cjs` evaluates a second standalone request marker:
+
+```text
+<!-- repository-authoritative-handoff-request:v1 -->
+```
+
+No marker means ordinary B7-only behavior. Duplicate request markers fail closed. A unique request is eligible only when:
+
+- the active Work Record scope is exactly `canonical-main`;
+- `requiredCapability` is exactly `CANONICAL_MAIN_OPERATIONS_REFRESH`;
+- the audited adapter route is exactly the existing `canonical-main-ops.yml` `GITHUB_WORKFLOW` route with `MUTATING / ISSUE_RECONCILIATION / HANDOFF_ONLY` semantics;
+- a freshly recomputed B5 mutation gate is `MUTATION_GATE_READY` for the same Work Record issue.
+
+When all conditions pass, the receipt-sync workflow calls `canonical-main-ops.yml` as a reusable workflow with that exact issue number. The called workflow resolves the bounded input through environment state, re-runs `mutation-gate.cjs`, and only then reaches the unchanged `orchestrator/refresh.cjs refresh` writer.
+
+B8 therefore automates **handoff**, not mutation authority. It does not set `mutationAuthorized` or `executionAuthorized`, add a generic dispatcher, or permit any other adapter/workflow route.
+
 ## Current non-goals
 
 The current Harness still does **not** add:
@@ -164,8 +185,8 @@ The current Harness still does **not** add:
 - mandatory/default receipt enforcement across Canonical Main Operations;
 - receipt enforcement at `repo-main-write.py` or product writers;
 - mutating executor invocation;
-- GitHub workflow dispatch through the Harness;
-- automatic authoritative writer execution after receipt sync;
+- generic GitHub workflow dispatch through the Harness;
+- automatic handoff to product/release/runtime writers;
 - a top-level general-purpose repository CLI/default front door;
 - main-write/release/production authority changes;
 - product/runtime behavior changes;
@@ -190,4 +211,5 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-gat
 node .github/plugin-control-plane/canonical-main/work-harness/tests/canonical-main-canary-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
 ```

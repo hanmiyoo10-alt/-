@@ -1,8 +1,8 @@
 # SimCore Idea Priority — NON_RUNTIME / RUNTIME Split Queues — 2026-08-26
 
-Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN R DESIGN SWEEP CLOSED · S-04 DOC_APPLIED · NO RUNTIME CHANGE`
+Status: `CANONICAL IDEA SELECTION QUEUES · NR DIFFICULTY-1/2/3 HARVEST COMPLETE · CURRENT GATE-OPEN R DESIGN SWEEP CLOSED · S-04 DOC_APPLIED · AUXILIARY APPLY/FIXTURE QUEUES EXHAUSTED · NO RUNTIME CHANGE`
 
-Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling harvest work and future runtime stabilization do not compete in one mixed priority queue.
+Purpose: keep NON_RUNTIME and RUNTIME idea selection independent so repository/tooling/static/evidence/test work and future runtime stabilization do not compete in one mixed priority queue.
 
 Related authority:
 - `docs/SIMCORE_IDEA_PRIORITY_DIFFICULTY_MATRIX_2026-08-26.md`
@@ -15,6 +15,7 @@ Related authority:
 - `docs/SIMCORE_DESIGN_SWEEP_FIRST_POLICY_2026-08-26.md`
 - `docs/SIMCORE_IDEA_DESIGN_PROGRESS_LEDGER_2026-08-26.md`
 - `docs/SIMCORE_LIVE_EVIDENCE_REVIEW_CLASSIFICATION_HANDOFF_TEMPLATE.md`
+- `docs/SIMCORE_REGRESSION_FIXTURE_IMPLEMENTATION_PROGRESS_2026-08-26.md`
 
 This document is the current NR/R selection queue authority.
 
@@ -250,17 +251,23 @@ EMPTY
 
 R DOC APPLIED
 S-04
+
+SEPARATE PERMANENT FIXTURE PORTFOLIO
+COMPLETE / NO NEXT ITEM
 ```
 
 Current legitimate next operation:
 
 ```text
-wait for a legitimate NR/R design gate to open
-OR
-perform separately selected non-runtime permanent-fixture work under its own authority
-OR
-close the pending v0.64.7 real-long-chat gate before physical M2-3
+PRIMARY
+= close the pending v0.64.7 real-long-chat gate before physical M2-3
+
+ALTERNATIVES ONLY WHEN TRIGGERED
+= preserve/classify new natural evidence or anomaly
+= start a new incremental design/harvest cycle when a legitimate NR/R gate opens
 ```
+
+Do not resurrect the completed four-item permanent fixture portfolio as unfinished work.
 
 Production boundary remains:
 

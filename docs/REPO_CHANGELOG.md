@@ -297,3 +297,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e197f331381ab8826ca420b31e5a6dbf4eb06a04)
 - Event ID: `8d99b7ecfc37e2d75319fe628e78efd7847902e7276128f4684f39876fbbcb32`
 <!-- canonical-main-doc-promoted:8d99b7ecfc37e2d75319fe628e78efd7847902e7276128f4684f39876fbbcb32 -->
+
+### 2026-08-27 — fix: parse standalone harness receipt requests
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `889bbb26fd0fd3f97e82648c34c8b6592e82fe18`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/889bbb26fd0fd3f97e82648c34c8b6592e82fe18)
+- Event ID: `0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905`
+<!-- canonical-main-doc-promoted:0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905 -->

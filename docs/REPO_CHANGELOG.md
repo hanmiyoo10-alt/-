@@ -100,3 +100,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b24c76b01d4fb6963af81ea75c6415d19a281bd1)
 - Event ID: `5df456c736176b78429c8f915092d5f64b136015c07130702de2cf0ef25a8389`
 <!-- canonical-main-doc-promoted:5df456c736176b78429c8f915092d5f64b136015c07130702de2cf0ef25a8389 -->
+
+### 2026-08-26 — infra: add ChatGPT bridge for canonical documentation promotion
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7cbbe97dfccda7efa4f8bee02b8ff9e917e0a013`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7cbbe97dfccda7efa4f8bee02b8ff9e917e0a013)
+- Event ID: `05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0`
+<!-- canonical-main-doc-promoted:05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0 -->

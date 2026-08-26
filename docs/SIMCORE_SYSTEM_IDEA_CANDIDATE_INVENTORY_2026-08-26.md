@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 15 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 16 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -61,7 +61,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-35 | Repository Transaction Ledger | Release | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-36 | Branch/PR Relationship Auditor | Release | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-37 | Release-System Residual Cleanup Registry | Release | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-38 | Architecture Contract Diff Reporter | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-38 | Architecture Contract Diff Reporter | Architecture | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-39 | Import-Boundary Trend Report | Architecture | MEDIUM | 3 | 3 | NON_RUNTIME | EVIDENCE | NR_UNASSESSED |
 | SYS-40 | Dead Module / Export Scanner | Architecture | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
 | SYS-41 | Public Test-Seam Inventory | Architecture | MEDIUM | 4 | 3 | NON_RUNTIME | POST_M2_3 | NR_UNASSESSED |
@@ -95,21 +95,22 @@ SYS-13 → docs/SIMCORE_SYS13_VERIFICATION_PROOF_MATRIX_DESIGN.md
 SYS-17 → docs/SIMCORE_SYS17_MISSING_EVIDENCE_SLOT_ANALYZER_DESIGN.md
 SYS-22 → docs/SIMCORE_SYS22_TEST_INTENT_MANIFEST_DESIGN.md
 SYS-21 → docs/SIMCORE_SYS21_FORENSIC_CLASSIFICATION_CONSISTENCY_CHECK_DESIGN.md
+SYS-38 → docs/SIMCORE_SYS38_ARCHITECTURE_CONTRACT_DIFF_REPORTER_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 15
-UNFROZEN             = 37
-OPEN NOW             = 25
+FROZEN               = 16
+UNFROZEN             = 36
+OPEN NOW             = 24
 GATED / DEPENDENCY   = 12
 
 NR_DOC_ONLY   = 10
-NR_EXECUTABLE = 4
+NR_EXECUTABLE = 5
 NR_PROTECTED  = 1
-NR_UNASSESSED = 37
+NR_UNASSESSED = 36
 ```
 
 ## Canonical selection
@@ -139,6 +140,7 @@ SYS-13 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-17 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-22 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-21 = I5 D3 / FROZEN / NR_DOC_ONLY
+SYS-38 = I5 D3 / FROZEN / NR_EXECUTABLE
 ```
 
 Remaining I5 / D3 / NOW:
@@ -146,16 +148,15 @@ Remaining I5 / D3 / NOW:
 ```text
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
-SYS-38 Architecture Contract Diff Reporter
 ```
 
 Canonical next:
 
 ```text
-NEXT = SYS-38 Architecture Contract Diff Reporter
+NEXT = SYS-31 Version-Bump Blast-Radius Check
 ```
 
-Reason: the evidence-integrity chain is now bounded through SYS-13 / SYS-17 / SYS-22 / SYS-21. The next physical SimCore architecture work after the v0.64.7 live gate is M2-3, so SYS-38 has the strongest immediate downstream leverage: make human/machine architecture contract deltas reviewable before and after ownership extraction without replacing the existing Contracts v2 checker. SYS-31 becomes more material at the next version bump/release, while SYS-35 is a broader transaction-history layer that can follow the current close/receipt controls.
+Reason: SYS-38 now freezes the before/after architecture-delta observation layer needed around the upcoming M2-3 ownership extraction without replacing Contracts v2 enforcement. Of the remaining I5/D3/NOW pair, SYS-31 has stronger immediate downstream leverage because the next genuine runtime architecture checkpoint necessarily creates a version/release boundary; freezing version-bump blast-radius review before that release is more immediately actionable than adding the broader historical transaction ledger. SYS-35 remains valuable but follows the already frozen close/receipt and release-boundary controls.
 
 ## Non-duplication boundaries
 
@@ -181,9 +182,10 @@ proof-kind × claim-kind scope/non-equivalence matrix → SYS-13
 explicit bounded required-evidence-slot completeness → SYS-17
 test surface → intended claims + explicit non-claims → SYS-22
 forensic classification ↔ cited evidence/proof/impact consistency → SYS-21; human-reviewed only, no auto severity promotion/demotion, recurrence discovery, gate close, or repo mutation
+immutable M-11 snapshots + machine contracts → exact before/after architecture delta → SYS-38; no second parser/checker, no expectedness/conformance judgment, no contract/CI mutation
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest. SYS-38 is `NR_EXECUTABLE` and remains implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

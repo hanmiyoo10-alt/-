@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 13 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 14 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -45,7 +45,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-19 | Live-Gate Handoff Packet | Evidence | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-21 | Forensic Classification Consistency Check | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-22 | Test Intent Manifest | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-22 | Test Intent Manifest | Regression | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-23 | Negative-Control Registry | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-24 | Fixture Orphan Detector | Regression | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-25 | Golden Fixture Mutation Receipt | Regression | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -93,21 +93,22 @@ SYS-42 → docs/SIMCORE_SYS42_IMPLEMENTATION_SLICE_CONFORMANCE_CHECKER_DESIGN.md
 SYS-11 → docs/SIMCORE_SYS11_DESIGN_TO_IMPLEMENTATION_DRIFT_AUDIT_DESIGN.md
 SYS-13 → docs/SIMCORE_SYS13_VERIFICATION_PROOF_MATRIX_DESIGN.md
 SYS-17 → docs/SIMCORE_SYS17_MISSING_EVIDENCE_SLOT_ANALYZER_DESIGN.md
+SYS-22 → docs/SIMCORE_SYS22_TEST_INTENT_MANIFEST_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 13
-UNFROZEN             = 39
-OPEN NOW             = 27
+FROZEN               = 14
+UNFROZEN             = 38
+OPEN NOW             = 26
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 8
+NR_DOC_ONLY   = 9
 NR_EXECUTABLE = 4
 NR_PROTECTED  = 1
-NR_UNASSESSED = 39
+NR_UNASSESSED = 38
 ```
 
 ## Canonical selection
@@ -135,13 +136,13 @@ SYS-42 = I5 D3 / FROZEN / NR_PROTECTED
 SYS-11 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-13 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-17 = I5 D3 / FROZEN / NR_EXECUTABLE
+SYS-22 = I5 D3 / FROZEN / NR_DOC_ONLY
 ```
 
 Remaining I5 / D3 / NOW:
 
 ```text
 SYS-21 Forensic Classification Consistency Check
-SYS-22 Test Intent Manifest
 SYS-31 Version-Bump Blast-Radius Check
 SYS-35 Repository Transaction Ledger
 SYS-38 Architecture Contract Diff Reporter
@@ -150,10 +151,10 @@ SYS-38 Architecture Contract Diff Reporter
 Canonical next:
 
 ```text
-NEXT = SYS-22 Test Intent Manifest
+NEXT = SYS-21 Forensic Classification Consistency Check
 ```
 
-Reason: SYS-13 now defines proof fitness and SYS-17 identifies explicitly registered missing proof slots. The strongest next shared regression/evidence dependency is a stable statement of what each permanent/focused test is intended to prove and explicitly does not prove. SYS-22 gives those proof claims a named test-intent authority before later evidence consistency and coverage work.
+Reason: SYS-13 defines proof fitness, SYS-17 identifies explicit missing evidence slots, and SYS-22 now freezes what a named test is intended to prove and explicitly not prove. SYS-21 is the strongest next evidence-integrity layer: verify that forensic dispositions/classifications remain consistent with the proof maturity and non-claims already recorded rather than silently escalating or downgrading evidence semantics.
 
 ## Non-duplication boundaries
 
@@ -176,7 +177,8 @@ work-family/role bundling preflight → SYS-50
 machine-verifiable frozen implementation-slice conformance → SYS-42
 human semantic design-to-implementation drift review → SYS-11
 proof-kind × claim-kind scope/non-equivalence matrix → SYS-13
-explicit bounded required-evidence-slot completeness → SYS-17; no evidence discovery, row-absence inference, gate close, evidence promotion, or repo mutation
+explicit bounded required-evidence-slot completeness → SYS-17
+test surface → intended claims + explicit non-claims → SYS-22; no harness/registry mutation, no execution claim, no live/release proof promotion
 ```
 
 Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest.

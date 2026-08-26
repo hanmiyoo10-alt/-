@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-47 design freeze:
+Current state after SYS-05 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 20
-UNFROZEN                = 32
+FROZEN                  = 21
+UNFROZEN                = 31
 
-NR_DOC_ONLY   = 13
+NR_DOC_ONLY   = 14
 NR_EXECUTABLE = 5
 NR_PROTECTED  = 2
-NR_UNASSESSED = 32
+NR_UNASSESSED = 31
 ```
 
 Frozen system apply classes:
@@ -192,6 +192,7 @@ SYS-21 Forensic Classification Consistency Check
 SYS-35 Repository Transaction Ledger
 SYS-46 Canonical Task Card
 SYS-47 User Handoff Card
+SYS-05 Historical-vs-Living Document Registry
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -217,7 +218,7 @@ SYS-31
 → both require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, and SYS-47 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, and SYS-05 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -227,6 +228,7 @@ SYS-21 = human forensic classification-consistency audit; automatic severity pro
 SYS-35 = curated cross-work repository transaction lineage; Git/GitHub already provide mechanical facts and automatic semantic inclusion would create noise/false authority
 SYS-46 = bounded internal task identity/objective/work-type/scope/gate/mutation/stop contract; v1 is a template/procedural repository artifact and deliberately does not schedule, authorize, execute, or enforce work
 SYS-47 = bounded user-facing projection of reviewed task/gate facts; v1 is a template/procedural communication contract and deliberately does not create task identity, live-experiment semantics, proof, classification, scheduling, or repository writes
+SYS-05 = curated document lifecycle/role registry with explicit mixed-section exceptions; v1 deliberately avoids automatic semantic classification, crawling, linting, rewriting, or current-state value storage
 ```
 
 Why SYS-17 and SYS-38 are executable:
@@ -257,10 +259,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 15
+NR_DOC_ONLY    = 16
 NR_EXECUTABLE  = 10
 NR_PROTECTED   = 3
-NR_UNASSESSED  = 38
+NR_UNASSESSED  = 37
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -273,7 +275,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 20 gate-open NOW designs remain after SYS-47 freeze
+= 19 gate-open NOW designs remain after SYS-05 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -409,6 +411,7 @@ SYS-38 = frozen NR_EXECUTABLE architecture delta reporter
 SYS-35 = frozen NR_DOC_ONLY repository transaction-lineage ledger
 SYS-46 = frozen NR_DOC_ONLY canonical internal task-card contract
 SYS-47 = frozen NR_DOC_ONLY user-facing handoff projection contract
+SYS-05 = frozen NR_DOC_ONLY document lifecycle-role registry design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

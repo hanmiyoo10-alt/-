@@ -1,6 +1,6 @@
 # SimCore Permanent Regression Fixture — Implementation Progress — 2026-08-26
 
-Status: `CURRENT IMPLEMENTATION PROGRESS AUTHORITY · SUMMARY-SCOPE + NARRATIVE-CLOCK COMPLETE · NO RUNTIME CHANGE`
+Status: `CURRENT IMPLEMENTATION PROGRESS AUTHORITY · SUMMARY-SCOPE + NARRATIVE-CLOCK + FRAME COMPLETE · NO RUNTIME CHANGE`
 
 Research/design authority:
 - `docs/SIMCORE_REGRESSION_FIXTURE_EXPANSION_COMPLETENESS_AUDIT_2026-08-26.md`
@@ -9,6 +9,7 @@ Research/design authority:
 Implementation evidence:
 - `docs/SIMCORE_SUMMARY_SCOPE_PERMANENT_FIXTURE_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
 - `docs/SIMCORE_NARRATIVE_CLOCK_PERMANENT_FIXTURE_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
+- `docs/SIMCORE_FRAME_PERMANENT_FIXTURE_IMPLEMENTATION_EVIDENCE_2026-08-26.md`
 
 Purpose: track implementation progress for the already-frozen permanent regression expansion portfolio without rewriting the point-in-time research/design documents.
 
@@ -49,25 +50,30 @@ narrative-clock
 = SimCore CI 32919972593 Verify PASS / Required PASS
 
 frame
-= DESIGN FROZEN
-= IMPLEMENTATION READY
-= NEXT
+= IMPLEMENTED
+= EXECUTABLE
+= required true
+= goldenGate true
+= 20 frozen cases
+= PR #429
+= main merge 9b58a01b13f72224a1aa57da9cc4708119ac8db5
+= SimCore CI 32920570077 Verify PASS / Required PASS
 
 broadcast-closure expansion
 = FROZEN EXTEND_EXISTING decision
-= PENDING
+= NEXT
 ```
 
 ## 3. Current permanent registry consequence
 
 Before this expansion portfolio the permanent registry contained nine required golden-gate suites.
 
-After the first two implementations:
+After the first three implementations:
 
 ```text
-required permanent suites = 11
-new stable suite ids       = summary-scope, narrative-clock
-coverage                   = EXECUTABLE for both
+required permanent suites = 12
+new stable suite ids       = summary-scope, narrative-clock, frame
+coverage                   = EXECUTABLE for all three
 ```
 
 No second harness was created.
@@ -90,9 +96,17 @@ explicit flashback natural close         = VALIDATION_ONLY
 post-B_END first-C natural close          = DIRECT_LIVE_CONTROL
 ```
 
+`frame` preserves its owner/evidence split:
+
+```text
+Frame deterministic continuity = ESTABLISHED
+CHATINDEX_SAME repair           = DIRECT_LIVE_CONTROL / v0.64.5
+Structure frame envelope        = GOLDEN_CONTRACT / EXECUTABLE
+```
+
 Do not promote live-evidence maturity from CI success alone.
 
-The remaining fixture families retain the evidence maturity recorded in their frozen design documents until their own implementation/evidence work changes it.
+The remaining fixture family retains the evidence maturity recorded in its frozen design/audit documents until its own implementation/evidence work changes it.
 
 ## 5. Separate M2-3 migrations
 
@@ -132,7 +146,7 @@ RUNTIME SEMANTICS    = UNCHANGED
 
 ```text
 NEXT PERMANENT FIXTURE WORK
-= frame
+= broadcast-closure expansion
 ```
 
-Use its frozen design as authority and perform it as a separate work branch / PR / permanent-CI / main-evidence transaction.
+Use the frozen EXTEND_EXISTING decision/design authority and perform it as a separate work branch / PR / permanent-CI / main-evidence transaction.

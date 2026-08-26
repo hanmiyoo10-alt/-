@@ -2,11 +2,11 @@
 
 function pendingDescriptor(id, observation) {
   if (!observation || observation.known === true) return null;
-  const summary = String(observation.summary || 'UNKNOWN');
-  const pending = /^PENDING\b/.test(summary);
-  const run = observation.data?.run || (Array.isArray(observation.data) ? observation.data.find((row) => row?.run)?.run : null);
+  const pendingRow = Array.isArray(observation.data) ? observation.data.find((row) => row?.known === false) : null;
+  const summary = String(pendingRow?.summary || observation.summary || 'UNKNOWN');
+  const run = pendingRow?.run || observation.data?.run || null;
   const since = run?.created_at || run?.run_started_at || null;
-  return {id, pending, summary, since};
+  return {id: pendingRow?.id || id, summary, since};
 }
 
 function deriveConvergence(observations, policy, now = Date.now()) {

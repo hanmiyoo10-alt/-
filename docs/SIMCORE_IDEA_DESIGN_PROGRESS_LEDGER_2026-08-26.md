@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 32 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 33 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -131,6 +131,9 @@ SYS-18 Evidence Provenance Chain Receipt
 
 SYS-14 Evidence Freshness Ledger
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-07 Cross-Reference Integrity Auditor
+= MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 ```
 
 SYS-46 contract:
@@ -299,23 +302,35 @@ exact historical evidence identity
 
 Freshness is never a global property of an evidence artifact and never an age timer. The same evidence may remain `FRESH_FOR_SCOPE` for an immutable historical/identity claim while being `REVALIDATION_REQUIRED` for a later implementation claim. `STALE_FOR_SCOPE` does not invalidate historical evidence or SYS-18 provenance. SYS-14 cannot broaden SYS-13 proof fitness, create required evidence slots, assign verification-debt/blocker posture, close gates, authorize releases, infer freshness from version arithmetic, or mutate evidence/runtime/release state.
 
+SYS-07 contract:
+
+```text
+registered structured reference field
++ explicit reference class
++ exact target identity
++ reviewed lifecycle / supersession / provenance / freshness metadata when required
+→ deterministic cross-reference-integrity findings
+```
+
+SYS-07 separates mechanical target resolution from semantic eligibility. A path that exists may still be ineligible for a `CURRENT_AUTHORITY_REF`, while superseded historical evidence can remain fully valid for a historical field. Current evidence reuse requires the exact SYS-14 freshness context rather than age/version heuristics. v1 is local, read-only, no-network tooling over explicitly registered structured references only; it never crawls arbitrary prose, invents supersession/freshness/provenance, verifies GitHub-side branch/PR relationships, repairs links, mutates repository state, or becomes CI/release authority.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 32
-OPEN NOW            = 8
+FROZEN              = 33
+OPEN NOW            = 7
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 23
-NR_EXECUTABLE       = 6
+NR_EXECUTABLE       = 7
 NR_PROTECTED        = 3
-NR_UNASSESSED       = 20
+NR_UNASSESSED       = 19
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18/SYS-14 on the I4/D3/NOW edge are frozen.
+All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18/SYS-14/SYS-07 on the I4/D3/NOW edge are frozen.
 
 The earlier selection-drift FIX remains preserved:
 
@@ -329,7 +344,6 @@ The full remaining highest-priority open edge is now:
 
 ```text
 I4 / D3 / NOW
-SYS-07 Cross-Reference Integrity Auditor
 SYS-16 Anomaly Recurrence Correlator
 SYS-25 Golden Fixture Mutation Receipt
 SYS-36 Branch/PR Relationship Auditor
@@ -339,19 +353,19 @@ SYS-49 Safe Parallel Work Finder
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-07 Cross-Reference Integrity Auditor
+NEXT SYSTEM DESIGN = SYS-36 Branch/PR Relationship Auditor
 ```
 
 Reason:
 
 ```text
-SYS-14 now freezes claim-scoped current-reuse semantics on top of SYS-18 point-in-time provenance and SYS-06 evidence→decision lineage.
-SYS-07 is the strongest foundational next consumer because it can now audit reference resolution while preserving lifecycle, supersession, provenance, and freshness boundaries rather than treating every resolvable reference as semantically current.
-That structural/reference layer reduces ambiguity before recurrence, fixture-mutation, branch/PR, or workflow-parallelism designs.
+SYS-07 now freezes deterministic integrity rules for registered repository-memory references while deliberately leaving GitHub-side branch/PR/commit relationship truth out of scope.
+SYS-36 is the strongest next complement because it can own those exact external repository relationships without making SYS-07 network-dependent.
+A frozen branch/PR relationship authority will also provide cleaner inputs for later SYS-49 safe-parallel-work reasoning and release/repository-operation evidence.
 The complete remaining I4/D3/NOW edge is listed explicitly so no peer candidate is silently skipped.
 ```
 
-After SYS-07, recompute the remaining I4/D3 edge rather than assuming later ordering.
+After SYS-36, recompute the remaining I4/D3 edge rather than assuming later ordering.
 
 ## 5. Apply/implementation hold
 
@@ -389,6 +403,7 @@ SYS-52 application     = HOLD
 SYS-06 application     = HOLD
 SYS-18 application     = HOLD
 SYS-14 application     = HOLD
+SYS-07 implementation  = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -441,7 +456,9 @@ SYS-18 adds point-in-time evidence provenance without retroactive basis inflatio
 
 SYS-14 adds claim-scoped current-reuse review without invalidating history. `FRESH_FOR_SCOPE` means only that the exact historical evidence remains reusable for the exact named current claim/context under reviewed change boundaries; it does not establish PASS, broaden proof scope, or imply every related claim is fresh. `REVALIDATION_REQUIRED` does not itself create blocker posture, while `STALE_FOR_SCOPE` never erases the historical evidence or SYS-18 receipt.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only by design.
+SYS-07 adds deterministic registered-reference integrity without promoting mechanical resolution into semantic authority. `XREF_AUDIT_CLEAN` means only that the selected registered structured references resolve and satisfy their configured lifecycle/supersession/provenance/freshness eligibility rules using already-reviewed metadata. It does not prove arbitrary prose links, external GitHub relationships, current-state truth, evidence validity, gate PASS, release readiness, or runtime correctness. SYS-07 is not implemented, so no machine CLEAN claim exists yet.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, and SYS-24 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only by design.
 
 ## 7. Production boundary
 
@@ -461,7 +478,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 32 / 52
+SYSTEM DESIGNS FROZEN = 33 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 I4/D2/NOW EDGE = FROZEN
@@ -477,8 +494,9 @@ SYS-52 OPERATOR ERROR SPECIMEN LEDGER = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-06 EVIDENCE-TO-DECISION TRACE MAP = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-18 EVIDENCE PROVENANCE CHAIN RECEIPT = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-14 EVIDENCE FRESHNESS LEDGER = FROZEN / NR_DOC_ONLY / APPLY HOLD
+SYS-07 CROSS-REFERENCE INTEGRITY AUDITOR = FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
-CURRENT NEXT = SYS-07 Cross-Reference Integrity Auditor
+CURRENT NEXT = SYS-36 Branch/PR Relationship Auditor
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

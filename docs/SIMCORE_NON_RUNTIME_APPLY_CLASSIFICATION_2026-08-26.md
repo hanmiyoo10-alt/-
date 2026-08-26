@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-05 design freeze:
+Current state after SYS-04 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 21
-UNFROZEN                = 31
+FROZEN                  = 22
+UNFROZEN                = 30
 
 NR_DOC_ONLY   = 14
-NR_EXECUTABLE = 5
+NR_EXECUTABLE = 6
 NR_PROTECTED  = 2
-NR_UNASSESSED = 31
+NR_UNASSESSED = 30
 ```
 
 Frozen system apply classes:
@@ -200,6 +200,7 @@ SYS-03 Gate Dependency Graph
 SYS-50 Work Bundling Conflict Detector
 SYS-17 Missing Evidence Slot Analyzer
 SYS-38 Architecture Contract Diff Reporter
+SYS-04 Status Vocabulary Linter
 
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
@@ -231,7 +232,7 @@ SYS-47 = bounded user-facing projection of reviewed task/gate facts; v1 is a tem
 SYS-05 = curated document lifecycle/role registry with explicit mixed-section exceptions; v1 deliberately avoids automatic semantic classification, crawling, linting, rewriting, or current-state value storage
 ```
 
-Why SYS-17 and SYS-38 are executable:
+Why SYS-17, SYS-38, and SYS-04 are executable:
 
 ```text
 SYS-17
@@ -244,11 +245,17 @@ immutable M-11 snapshots
 + immutable machine Contracts v2 inputs
 → deterministic exact architecture delta report
 
-Both remain read-only/non-runtime.
-Neither changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
+SYS-04
+registered status namespace
++ registered structured target
++ reviewed SYS-05 lifecycle scope
+→ deterministic vocabulary/namespace/cardinality lint
+
+All three remain read-only/non-runtime.
+None changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, or Report.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, or Report.
 
 ---
 
@@ -260,9 +267,9 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 16
-NR_EXECUTABLE  = 10
+NR_EXECUTABLE  = 11
 NR_PROTECTED   = 3
-NR_UNASSESSED  = 37
+NR_UNASSESSED  = 36
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -275,7 +282,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 19 gate-open NOW designs remain after SYS-05 freeze
+= 18 gate-open NOW designs remain after SYS-04 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -412,6 +419,7 @@ SYS-35 = frozen NR_DOC_ONLY repository transaction-lineage ledger
 SYS-46 = frozen NR_DOC_ONLY canonical internal task-card contract
 SYS-47 = frozen NR_DOC_ONLY user-facing handoff projection contract
 SYS-05 = frozen NR_DOC_ONLY document lifecycle-role registry design
+SYS-04 = frozen NR_EXECUTABLE registered-field status vocabulary linter design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 10 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 11 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -65,38 +65,40 @@ SYS-50 Work Bundling Conflict Detector
 
 SYS-42 Implementation Slice Conformance Checker
 = MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
+
+SYS-11 Design-to-Implementation Drift Audit
+= MEDIUM / I5 / D3 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
-SYS-42 contract:
+SYS-11 contract:
 
 ```text
-frozen human design authority
-→ reviewed machine-readable slice contract
-+ immutable base/head diff
-→ deterministic machine-verifiable conformance report
+immutable frozen design
++ immutable implementation identity
++ reviewed implementation/evidence packet
++ SYS-42 result when applicable
+→ human semantic drift audit
 
-SLICE_CONFORMANT
-SLICE_REVIEW_REQUIRED
-SLICE_VIOLATION
-SLICE_BLOCKED
+DRIFT_AUDIT_CLEAN
+DRIFT_AUDIT_FINDINGS
+DRIFT_AUDIT_REVIEW_REQUIRED
+DRIFT_AUDIT_BLOCKED
 ```
 
-It does not parse design prose, replace Contracts v2, prove semantic equivalence, authorize release, or mutate the repository. `SLICE_CONFORMANT` means only that the explicitly projected machine-verifiable slice rules passed. Broader semantic/design-intent drift remains a separate SYS-11 concern.
-
-SYS-42 is `NR_PROTECTED` because it polices architecture/design governance boundaries. Its later implementation must be a dedicated protected transaction and must not be bundled with the runtime/architecture work it evaluates.
+It preserves `UNPROVEN` as distinct from `SATISFIED`, so static/CI conformance cannot silently substitute for required live evidence or stronger proof. It is document-only by design and does not create an automatic semantic judge.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 10
-OPEN NOW            = 30
+FROZEN              = 11
+OPEN NOW            = 29
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 6
+NR_DOC_ONLY         = 7
 NR_EXECUTABLE       = 3
 NR_PROTECTED        = 1
-NR_UNASSESSED       = 42
+NR_UNASSESSED       = 41
 ```
 
 ## 4. Current next design
@@ -105,7 +107,6 @@ Remaining highest-priority edge:
 
 ```text
 I5 / D3 / NOW
-SYS-11 Design-to-Implementation Drift Audit
 SYS-13 Verification Proof Matrix
 SYS-17 Missing Evidence Slot Analyzer
 SYS-21 Forensic Classification Consistency Check
@@ -118,18 +119,19 @@ SYS-38 Architecture Contract Diff Reporter
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-11 Design-to-Implementation Drift Audit
+NEXT SYSTEM DESIGN = SYS-13 Verification Proof Matrix
 ```
 
 Reason:
 
 ```text
-SYS-42 now freezes deterministic machine-verifiable implementation-slice conformance.
-It explicitly cannot prove complete design intent or detect omissions in the reviewed machine slice itself.
-SYS-11 is therefore the strongest complementary next layer: broader design-to-implementation drift review without pretending every semantic requirement is mechanically decidable.
+SYS-42 = machine-verifiable slice conformance
+SYS-11 = human semantic design-fidelity audit
+SYS-11 explicitly separates SATISFIED from UNPROVEN
+SYS-13 can now define the proof/maturity matrix needed to stop syntax/static/CI/live/release evidence from being treated as interchangeable proof classes.
 ```
 
-After SYS-11, recompute the remaining I5/D3 edge rather than precommitting a static order.
+After SYS-13, recompute the remaining I5/D3 edge rather than precommitting a static order.
 
 ## 5. Apply/implementation hold
 
@@ -145,6 +147,7 @@ SYS-03 implementation  = HOLD
 SYS-09 application     = HOLD
 SYS-50 implementation  = HOLD
 SYS-42 implementation  = HOLD / PROTECTED
+SYS-11 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -155,7 +158,7 @@ SYS-42 additionally requires a dedicated protected implementation transaction; i
 
 Existing non-blocking focused/direct-execution WATCHes for S-10/S-11/M-10/M-11/M-13 remain unchanged.
 
-SYS-10, SYS-03, and SYS-50 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09 remains document-only by design.
+SYS-10, SYS-03, and SYS-50 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 is protected executable governance tooling by design but likewise has no implementation/test/CI claim yet. SYS-09 and SYS-11 are document-only by design.
 
 ## 7. Production boundary
 
@@ -175,8 +178,8 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 10 / 52
-CURRENT NEXT = SYS-11 Design-to-Implementation Drift Audit
+SYSTEM DESIGNS FROZEN = 11 / 52
+CURRENT NEXT = SYS-13 Verification Proof Matrix
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT

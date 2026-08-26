@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 12 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 13 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -40,7 +40,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-14 | Evidence Freshness Ledger | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-15 | WATCH Aging Review | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-16 | Anomaly Recurrence Correlator | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-17 | Missing Evidence Slot Analyzer | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-17 | Missing Evidence Slot Analyzer | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
 | SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-19 | Live-Gate Handoff Packet | Evidence | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -92,21 +92,22 @@ SYS-50 → docs/SIMCORE_SYS50_WORK_BUNDLING_CONFLICT_DETECTOR_DESIGN.md
 SYS-42 → docs/SIMCORE_SYS42_IMPLEMENTATION_SLICE_CONFORMANCE_CHECKER_DESIGN.md
 SYS-11 → docs/SIMCORE_SYS11_DESIGN_TO_IMPLEMENTATION_DRIFT_AUDIT_DESIGN.md
 SYS-13 → docs/SIMCORE_SYS13_VERIFICATION_PROOF_MATRIX_DESIGN.md
+SYS-17 → docs/SIMCORE_SYS17_MISSING_EVIDENCE_SLOT_ANALYZER_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 12
-UNFROZEN             = 40
-OPEN NOW             = 28
+FROZEN               = 13
+UNFROZEN             = 39
+OPEN NOW             = 27
 GATED / DEPENDENCY   = 12
 
 NR_DOC_ONLY   = 8
-NR_EXECUTABLE = 3
+NR_EXECUTABLE = 4
 NR_PROTECTED  = 1
-NR_UNASSESSED = 40
+NR_UNASSESSED = 39
 ```
 
 ## Canonical selection
@@ -133,12 +134,12 @@ SYS-50 = I5 D3 / FROZEN / NR_EXECUTABLE
 SYS-42 = I5 D3 / FROZEN / NR_PROTECTED
 SYS-11 = I5 D3 / FROZEN / NR_DOC_ONLY
 SYS-13 = I5 D3 / FROZEN / NR_DOC_ONLY
+SYS-17 = I5 D3 / FROZEN / NR_EXECUTABLE
 ```
 
 Remaining I5 / D3 / NOW:
 
 ```text
-SYS-17 Missing Evidence Slot Analyzer
 SYS-21 Forensic Classification Consistency Check
 SYS-22 Test Intent Manifest
 SYS-31 Version-Bump Blast-Radius Check
@@ -149,10 +150,10 @@ SYS-38 Architecture Contract Diff Reporter
 Canonical next:
 
 ```text
-NEXT = SYS-17 Missing Evidence Slot Analyzer
+NEXT = SYS-22 Test Intent Manifest
 ```
 
-Reason: SYS-13 now freezes the proof-kind × claim-kind vocabulary, direct/conditional/supporting/none relationships, immutable proof identity discipline, and explicit `NOT_CLAIMED` handling. SYS-17 can next consume that vocabulary to identify required evidence claims whose acceptable proof slots remain absent without inventing proof or upgrading evidence maturity.
+Reason: SYS-13 now defines proof fitness and SYS-17 identifies explicitly registered missing proof slots. The strongest next shared regression/evidence dependency is a stable statement of what each permanent/focused test is intended to prove and explicitly does not prove. SYS-22 gives those proof claims a named test-intent authority before later evidence consistency and coverage work.
 
 ## Non-duplication boundaries
 
@@ -174,7 +175,8 @@ change-family → review obligations → SYS-09
 work-family/role bundling preflight → SYS-50
 machine-verifiable frozen implementation-slice conformance → SYS-42
 human semantic design-to-implementation drift review → SYS-11
-proof-kind × claim-kind scope/non-equivalence matrix → SYS-13; no global confidence score, no proof substitution, no CI/log scanner, no automatic evidence promotion
+proof-kind × claim-kind scope/non-equivalence matrix → SYS-13
+explicit bounded required-evidence-slot completeness → SYS-17; no evidence discovery, row-absence inference, gate close, evidence promotion, or repo mutation
 ```
 
 Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42 is `NR_PROTECTED`, so its later implementation requires a dedicated protected transaction rather than ordinary NR harvest.

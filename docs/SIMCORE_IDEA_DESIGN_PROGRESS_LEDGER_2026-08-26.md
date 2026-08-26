@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 34 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 35 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -136,6 +136,9 @@ SYS-07 Cross-Reference Integrity Auditor
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 
 SYS-36 Branch/PR Relationship Auditor
+= MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
+
+SYS-49 Safe Parallel Work Finder
 = MEDIUM / I4 / D3 / NON_RUNTIME / FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 ```
 
@@ -330,23 +333,36 @@ explicit relationship audit mode
 
 SYS-36 separates PR state, `merged_at`, `merge_commit_sha`, mutable branch refs, immutable commit identities, exact expected base/head contracts, and fixed-SHA ancestry facts. `merge_commit_sha != null` never establishes merged state while `merged_at == null`. Generic base movement is not an error without an exact-base contract, and deleted head branches remain valid for historical closed/merged relations unless the historical claim requires them. Because the tool polices branch/PR governance relationships, its implementation class is `NR_PROTECTED` despite being read-only. It does not classify PR hygiene, merge/close/delete/rebase anything, authorize releases, decide safe parallelism, or write repository state.
 
+SYS-49 contract:
+
+```text
+2+ independently legitimate bounded tasks
++ reviewed semantic read/write/dependency profiles
++ current SYS-36 relationship facts when repository relations matter
++ current gate/dependency facts
++ frozen parallel conflict/guard rules
+→ deterministic pairwise/group parallel-safety disposition
+```
+
+SYS-49 separates same-transaction bundling from cross-transaction concurrency. `BUNDLE_CLEAN`, different branches, disjoint filenames, or `RELATION_CLEAN` never establish `PARALLEL_SAFE` by themselves. Shared primary mutation, direct predecessor dependencies, protected-governance interference, and production-identity stability conflicts require serialization. Disjoint substantive work with only shared living close-sync may be `PARALLEL_GUARDED`, provided close writes serialize, current authorities are reread, counts/NEXT are recomputed, and a newly discovered live anomaly preempts stale close-sync work. Material task/scope/ref changes stale the assessment. Because this judgment polices repository/work concurrency, SYS-49 is `NR_PROTECTED` despite being read-only and has no scheduler/lock/repo-writer authority.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 34
-OPEN NOW            = 6
+FROZEN              = 35
+OPEN NOW            = 5
 GATED/DEPENDENCY    = 12
 
 NR_DOC_ONLY         = 23
 NR_EXECUTABLE       = 7
-NR_PROTECTED        = 4
-NR_UNASSESSED       = 18
+NR_PROTECTED        = 5
+NR_UNASSESSED       = 17
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18/SYS-14/SYS-07/SYS-36 on the I4/D3/NOW edge are frozen.
+All gate-open Importance-5 designs, the I4/D1 edge, all I4/D2/NOW designs, and SYS-06/SYS-18/SYS-14/SYS-07/SYS-36/SYS-49 on the I4/D3/NOW edge are frozen.
 
 The earlier selection-drift FIX remains preserved:
 
@@ -362,25 +378,25 @@ The full remaining highest-priority open edge is now:
 I4 / D3 / NOW
 SYS-16 Anomaly Recurrence Correlator
 SYS-25 Golden Fixture Mutation Receipt
-SYS-49 Safe Parallel Work Finder
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-49 Safe Parallel Work Finder
+NEXT SYSTEM DESIGN = SYS-16 Anomaly Recurrence Correlator
 ```
 
 Reason:
 
 ```text
-SYS-36 now freezes exact branch/PR/ref/SHA/merge/capture relationship facts while deliberately leaving parallel-safety judgment out of scope.
-SYS-49 is the strongest next consumer because it can combine SYS-36 relationship truth with SYS-46 bounded task scope, SYS-50 bundling-conflict rules, SYS-09 change-impact obligations, and explicit write scopes.
-The already-preserved SYS-07 parallel-main activity WATCH is a real specimen showing why exact relationship truth must precede safe-parallel-work reasoning.
+SYS-49 closes the workflow/concurrency foundation for separately bounded work.
+The v0.64.7 real-long-chat gate is still pending and SimCore already requires suspicious natural evidence to be captured/classified immediately, making recurrence handling directly relevant to current operations.
+SYS-16 can consume existing anomaly/specimen authorities while preserving their source-owned WATCH/DEFER/FIX/BLOCKER semantics and can later provide a stable recurrence input to SYS-15 WATCH Aging Review.
+SYS-25 remains the other I4/D3/NOW peer, but the permanent fixture expansion portfolio is already complete and no fixture mutation currently blocks the live gate.
 The complete remaining I4/D3/NOW edge is listed explicitly so no peer candidate is silently skipped.
 ```
 
-After SYS-49, recompute the remaining I4/D3 edge rather than assuming later ordering.
+After SYS-16, recompute the remaining I4/D3 edge rather than assuming later ordering.
 
 ## 5. Apply/implementation hold
 
@@ -420,11 +436,12 @@ SYS-18 application     = HOLD
 SYS-14 application     = HOLD
 SYS-07 implementation  = HOLD
 SYS-36 implementation  = HOLD / PROTECTED
+SYS-49 implementation  = HOLD / PROTECTED
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
 
-SYS-42, SYS-31, SYS-24, and SYS-36 require dedicated protected implementation transactions; none is ordinary SAFE_NON_RUNTIME harvestable merely because it is read-only/non-runtime.
+SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 require dedicated protected implementation transactions; none is ordinary SAFE_NON_RUNTIME harvestable merely because it is read-only/non-runtime.
 
 ## 6. Verification WATCH preservation
 
@@ -476,7 +493,9 @@ SYS-07 adds deterministic registered-reference integrity without promoting mecha
 
 SYS-36 adds protected repository-relationship integrity without authorizing repository action. `RELATION_CLEAN` means only that the selected PR/ref/SHA/merge/ancestry facts satisfy the explicit audit contract for one coherent capture. It does not mean the PR should merge, the branch should be deleted, the work is approved, CI passed, a release is ready, or two work items are safe to run in parallel. SYS-36 is not implemented, so no machine CLEAN claim exists yet.
 
-SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, SYS-24, and SYS-36 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only by design.
+SYS-49 adds protected parallel-work coordination without scheduling or authorization. `PARALLEL_SAFE` means only that already-legitimate bounded tasks have no frozen concurrency conflict under the current semantic mutation/dependency/repository facts. `PARALLEL_GUARDED` remains conditional on its named serial-close/ref/revalidation guards. Different branches, disjoint filenames, `BUNDLE_CLEAN`, or `RELATION_CLEAN` do not prove safe parallelism. Any material task/gate/scope/ref change makes the assessment stale. SYS-49 is not implemented, so no machine SAFE claim exists yet.
+
+SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, SYS-04, and SYS-07 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42, SYS-31, SYS-24, SYS-36, and SYS-49 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, SYS-18, and SYS-14 are document-only by design.
 
 ## 7. Production boundary
 
@@ -496,7 +515,7 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 34 / 52
+SYSTEM DESIGNS FROZEN = 35 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
 I4/D2/NOW EDGE = FROZEN
@@ -514,12 +533,14 @@ SYS-18 EVIDENCE PROVENANCE CHAIN RECEIPT = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-14 EVIDENCE FRESHNESS LEDGER = FROZEN / NR_DOC_ONLY / APPLY HOLD
 SYS-07 CROSS-REFERENCE INTEGRITY AUDITOR = FROZEN / NR_EXECUTABLE / IMPLEMENTATION HOLD
 SYS-36 BRANCH/PR RELATIONSHIP AUDITOR = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
+SYS-49 SAFE PARALLEL WORK FINDER = FROZEN / NR_PROTECTED / IMPLEMENTATION HOLD
 SELECTION DRIFT SYS-24 OMISSION = FIXED / PRESERVED
-CURRENT NEXT = SYS-49 Safe Parallel Work Finder
+CURRENT NEXT = SYS-16 Anomaly Recurrence Correlator
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED
 SYS-24 APPLY CLASS = NR_PROTECTED
 SYS-36 APPLY CLASS = NR_PROTECTED
+SYS-49 APPLY CLASS = NR_PROTECTED
 v0.64.7 LIVE GATE = PENDING_REAL_LONG_CHAT
 ```

@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 30 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · 31 SYSTEM DESIGNS FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as every other SimCore idea family.
 
@@ -41,7 +41,7 @@ APPLY CLASS   = freeze-time DOC_* or NR_* classification
 | SYS-15 | WATCH Aging Review | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-16 | Anomaly Recurrence Correlator | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-17 | Missing Evidence Slot Analyzer | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_EXECUTABLE |
-| SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-18 | Evidence Provenance Chain Receipt | Evidence | MEDIUM | 4 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-19 | Live-Gate Handoff Packet | Evidence | SMALL | 5 | 1 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-20 | Natural Evidence Intake Checklist Generator | Evidence | SMALL | 3 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-21 | Forensic Classification Consistency Check | Evidence | MEDIUM | 5 | 3 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
@@ -110,21 +110,22 @@ SYS-33 → docs/SIMCORE_SYS33_ROLLBACK_READINESS_CHECKLIST_DESIGN.md
 SYS-24 → docs/SIMCORE_SYS24_FIXTURE_ORPHAN_DETECTOR_DESIGN.md
 SYS-52 → docs/SIMCORE_SYS52_OPERATOR_ERROR_SPECIMEN_LEDGER_DESIGN.md
 SYS-06 → docs/SIMCORE_SYS06_EVIDENCE_TO_DECISION_TRACE_MAP_DESIGN.md
+SYS-18 → docs/SIMCORE_SYS18_EVIDENCE_PROVENANCE_CHAIN_RECEIPT_DESIGN.md
 ```
 
 ## Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 30
-UNFROZEN             = 22
-OPEN NOW             = 10
+FROZEN               = 31
+UNFROZEN             = 21
+OPEN NOW             = 9
 GATED / DEPENDENCY   = 12
 
-NR_DOC_ONLY   = 21
+NR_DOC_ONLY   = 22
 NR_EXECUTABLE = 6
 NR_PROTECTED  = 3
-NR_UNASSESSED = 22
+NR_UNASSESSED = 21
 ```
 
 ## Canonical selection
@@ -169,6 +170,7 @@ SYS-33 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-24 = I4 D2 / FROZEN / NR_PROTECTED
 SYS-52 = I4 D2 / FROZEN / NR_DOC_ONLY
 SYS-06 = I4 D3 / FROZEN / NR_DOC_ONLY
+SYS-18 = I4 D3 / FROZEN / NR_DOC_ONLY
 ```
 
 Selection drift note:
@@ -187,7 +189,6 @@ I4 / D3 / NOW
 SYS-07 Cross-Reference Integrity Auditor
 SYS-14 Evidence Freshness Ledger
 SYS-16 Anomaly Recurrence Correlator
-SYS-18 Evidence Provenance Chain Receipt
 SYS-25 Golden Fixture Mutation Receipt
 SYS-36 Branch/PR Relationship Auditor
 SYS-49 Safe Parallel Work Finder
@@ -196,10 +197,10 @@ SYS-49 Safe Parallel Work Finder
 Canonical next:
 
 ```text
-NEXT = SYS-18 Evidence Provenance Chain Receipt
+NEXT = SYS-14 Evidence Freshness Ledger
 ```
 
-Reason: SYS-06 freezes the reviewed semantic link from exact evidence identities to exact decision identities. SYS-18 is the most direct downstream consumer and can now package source evidence → proof identity → SYS-06 trace → bounded decision into a receipt without independently inventing causality. Freezing that provenance-chain contract next also gives SYS-14 a cleaner basis for freshness and SYS-07 a clearer set of references to audit. The full remaining I4/D3/NOW edge is enumerated above to prevent silent candidate omission.
+Reason: SYS-18 now freezes the point-in-time provenance chain for a bounded decision while preserving exact source, proof, trace and decision identities. SYS-14 is the strongest next downstream consumer because it can review whether a historically valid evidence basis is still reusable for a current claim without rewriting the historical receipt. That freshness layer will also make later SYS-07 cross-reference integrity review safer by distinguishing a reference that merely resolves from evidence that is still semantically current. The complete remaining I4/D3/NOW edge is enumerated above to prevent silent candidate omission.
 
 ## Non-duplication boundaries
 
@@ -240,9 +241,10 @@ current production identity + reviewed release intent + exact eligible rollback 
 registry-owned permanent-suite graph + bounded suite/fixture namespaces → exact missing/unregistered/duplicate/out-of-scope membership findings → SYS-24; no repo-wide test discovery, fixture/schema execution, semantic coverage judgment, fixture/registry mutation, auto-cleanup, CI authority, release authority, or runtime behavior
 reviewed operator/tooling deviation + actual mutation facts + containment + WATCH/DEFER/FIX/BLOCKER + evidence refs → curated process-regression specimen → SYS-52; no blame/actor scoring, auto ingestion, recurrence engine, repo mutation, gate authority, product-defect replacement, release authority, or runtime behavior
 exact evidence identity + bounded decision identity + reviewed role/scope + source-backed basis → curated evidence→decision lineage → SYS-06; no evidence discovery, proof-strength inference, decision/gate engine, severity classification, slot/debt calculation, supersession, generic backlink graph, repo writer, release authority, or runtime behavior
+bounded decision-time source/derivative/proof identities + SYS-06 trace edges + explicit non-basis/unresolved links → immutable provenance receipt → SYS-18; no evidence discovery, causality invention, proof/freshness judgment, gate/decision authority, historical backfill with later evidence, repo writer, release authority, or runtime behavior
 ```
 
-Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, and SYS-24 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, and SYS-06 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
+Application/implementation remains a separate transaction and is held while the current system design sweep is active. SYS-42, SYS-31, and SYS-24 are `NR_PROTECTED`, so their later implementations require dedicated protected transactions rather than ordinary NR harvest. SYS-10, SYS-03, SYS-50, SYS-17, SYS-38, and SYS-04 are `NR_EXECUTABLE`; SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, SYS-23, SYS-33, SYS-52, SYS-06, and SYS-18 are `NR_DOC_ONLY`; all remain application/implementation-HOLD while this design sweep is active.
 
 ## Production boundary
 

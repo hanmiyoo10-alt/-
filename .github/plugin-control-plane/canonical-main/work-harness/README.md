@@ -2,7 +2,7 @@
 
 This directory implements the bounded Phase A slices of U-25 `Repository Work Harness`.
 
-Phase A is **read-only shadow governance**. It normalizes repository-visible Work Records, discovers active records from GitHub issues, and evaluates whether already-legitimate bounded work may overlap. It does not dispatch executors, mutate Git/GitHub state, authorize release/production work, or replace project-specific authorities.
+Phase A is **read-only shadow governance**. It normalizes repository-visible Work Records, discovers active records from GitHub issues, evaluates whether already-legitimate bounded work may overlap, and automatically surfaces advisory scan results when issue state changes. It does not dispatch executors, mutate Git/GitHub state, authorize release/production work, or replace project-specific authorities.
 
 ## Authority boundary
 
@@ -117,6 +117,21 @@ Expected environment:
 
 A successful scan process exits normally even when the shadow disposition is `PARALLEL_GUARDED` or `PARALLEL_SERIALIZE_REQUIRED`; Phase A findings are advisory. Transport/auth/parser execution failures may still produce a process error.
 
+## Automatic shadow surfacing — HARNESS-A3
+
+`.github/workflows/repository-work-harness-shadow.yml` runs the A2 scanner automatically for issue `opened`, `edited`, `reopened`, and `closed` events, with `workflow_dispatch` as a manual recheck path.
+
+Safety contract:
+
+- checkout always uses the repository default branch as the trusted controller;
+- workflow permissions are read-only: `contents: read` and `issues: read`;
+- the workflow does not comment on issues, update labels/status, push refs, dispatch executors, or call release/main-write paths;
+- exact scan JSON is uploaded as an Actions artifact;
+- `report.cjs` renders the same scan into `$GITHUB_STEP_SUMMARY` with active count, startability, disposition, reason/guard evidence, and issue provenance;
+- a `GUARDED`, `SERIALIZE_REQUIRED`, `NOT_STARTABLE`, or `BLOCKED` disposition remains advisory shadow evidence and is not itself mutation enforcement.
+
+The Plugin Control Plane CI owns the Harness contract regression lane and runs A1/A2/A3 tests on relevant PRs.
+
 ## Current non-goals
 
 Phase A does not add:
@@ -125,7 +140,7 @@ Phase A does not add:
 - a top-level general-purpose repository CLI;
 - persistent coordination receipts;
 - mutation-boundary enforcement;
-- workflow scheduling/automatic periodic scans;
+- issue/status mutation or notifications from shadow scan results;
 - main-write/release changes;
 - product/runtime behavior changes;
 - global locks or scheduler/prioritizer behavior.
@@ -139,4 +154,6 @@ Run:
 ```sh
 node .github/plugin-control-plane/canonical-main/work-harness/tests/preflight-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/active-work-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/report-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/workflow-contract.cjs
 ```

@@ -45,7 +45,7 @@ The apply class exists to make that distinction explicit.
 NR_DOC_ONLY
 = the useful implementation is entirely non-executable repository memory / documentation
 = no script/tool/test harness/build/release/CI authority is required
-= examples: curated index, corpus, manual registry, checklist, proof-scope matrix
+= examples: curated index, corpus, manual registry, checklist
 
 NR_EXECUTABLE
 = the useful implementation includes local executable tooling such as a script, generator, analyzer, formatter, or focused tooling test
@@ -123,6 +123,7 @@ Original-pool counts remain:
 
 ```text
 ORIGINAL NON_RUNTIME total = 14
+
 NR_DOC_ONLY    = 2
 NR_EXECUTABLE  = 5
 NR_PROTECTED   = 1
@@ -161,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-13 design freeze:
+Current state after SYS-17 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 12
-UNFROZEN                = 40
+FROZEN                  = 13
+UNFROZEN                = 39
 
 NR_DOC_ONLY   = 8
-NR_EXECUTABLE = 3
+NR_EXECUTABLE = 4
 NR_PROTECTED  = 1
-NR_UNASSESSED = 40
+NR_UNASSESSED = 39
 ```
 
 Frozen system apply classes:
@@ -191,6 +192,7 @@ NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
 SYS-03 Gate Dependency Graph
 SYS-50 Work Bundling Conflict Detector
+SYS-17 Missing Evidence Slot Analyzer
 
 NR_PROTECTED
 SYS-42 Implementation Slice Conformance Checker
@@ -205,25 +207,27 @@ its purpose is to police frozen design / architecture-governance boundaries
 → protected implementation transaction required
 ```
 
-Why SYS-11 is document-only:
+Why SYS-11 and SYS-13 are document-only:
 
 ```text
-its purpose is human semantic design-fidelity review
-machine semantic inference is intentionally prohibited
-SYS-42 already owns the protected machine-verifiable lower bound
-→ reusable audit protocol/template is sufficient v1 implementation
+SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
+SYS-13 = durable proof-scope policy/matrix; no CI/log scanner required for v1
 ```
 
-Why SYS-13 is document-only:
+Why SYS-17 is executable:
 
 ```text
-its useful v1 product is a durable proof-kind × claim-kind scope matrix
-it does not need to scrape CI logs or infer execution
-it explicitly forbids automatic proof promotion
-→ reusable proof-scope policy/table is sufficient v1 implementation
+explicit reviewed evidence slots
++ reviewed proof state
+→ deterministic missing/not-claimed/conflicted/blocked analysis
+
+no evidence discovery
+no repository-wide crawl
+no gate mutation
+no CI wiring
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Report, or Matrix.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, or Report.
 
 ---
 
@@ -235,9 +239,9 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
 NR_DOC_ONLY    = 10
-NR_EXECUTABLE  = 8
+NR_EXECUTABLE  = 9
 NR_PROTECTED   = 2
-NR_UNASSESSED  = 46
+NR_UNASSESSED  = 45
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -250,7 +254,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 28 gate-open NOW designs remain after SYS-13 freeze
+= 27 gate-open NOW designs remain after SYS-17 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -272,15 +276,6 @@ terminology matches frozen authority
 no executable/runtime file changed
 no fabricated current runtime fact
 no release-simcore change
-```
-
-For proof/verification documents such as SYS-13, additionally preserve:
-
-```text
-proof scope must be explicit
-NOT_CLAIMED must not be silently promoted
-conditional proof must name its condition
-no global confidence score unless separately designed
 ```
 
 ### NR_EXECUTABLE
@@ -386,9 +381,8 @@ Current phase summary:
 original gate-open NR harvest = EXHAUSTED / EMPTY
 system-idea NON_RUNTIME design sweep = ACTIVE
 system apply/implementation = HELD
-SYS-42 = first frozen system idea classified NR_PROTECTED
-SYS-11 = frozen NR_DOC_ONLY human semantic audit protocol
-SYS-13 = frozen NR_DOC_ONLY verification proof-scope matrix
+SYS-42 = frozen NR_PROTECTED governance checker
+SYS-17 = frozen NR_EXECUTABLE bounded evidence-slot analyzer
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

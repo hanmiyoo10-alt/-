@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 19 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 20 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -92,6 +92,9 @@ SYS-35 Repository Transaction Ledger
 
 SYS-46 Canonical Task Card
 = SMALL / I4 / D1 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-47 User Handoff Card
+= SMALL / I4 / D1 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -102,48 +105,65 @@ selected bounded work
 → one canonical internal task identity/objective/WT/scope/gate/mutation/stop contract
 ```
 
-It is transaction-scoped, not a global current-task singleton. It does not authorize work by itself, open gates, schedule tasks, judge bundles/conformance, prove verification, close work, or replace user-facing handoff. Once READY and work begins, material objective/scope/work-type/gate/mutation changes require an explicit amendment or superseding/split card rather than silent widening. SYS-47 is expected to consume this stable internal card as a bounded user-facing projection.
+It is transaction-scoped, not a global current-task singleton. It does not authorize work by itself, open gates, schedule tasks, judge bundles/conformance, prove verification, close work, or replace user-facing handoff. Once READY and work begins, material objective/scope/work-type/gate/mutation changes require an explicit amendment or superseding/split card rather than silent widening.
+
+SYS-47 contract:
+
+```text
+canonical task/gate facts
++ user-relevant authoritative facts
+→ one compact user-facing action/decision/wait/scope/stop projection
+```
+
+It consumes SYS-46 rather than minting a parallel task identity. General user-facing handoff belongs to SYS-47; exact real-long-chat experiment semantics remain with SYS-19. `USER_HANDOFF_READY` establishes only that the projection is faithful and actionable for its posture; it is not task authorization, gate open, implementation PASS, or live PASS.
 
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 19
-OPEN NOW            = 21
+FROZEN              = 20
+OPEN NOW            = 20
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 12
+NR_DOC_ONLY         = 13
 NR_EXECUTABLE       = 5
 NR_PROTECTED        = 2
-NR_UNASSESSED       = 33
+NR_UNASSESSED       = 32
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs are frozen, and SYS-46 closed the first I4/D1 edge.
+All gate-open Importance-5 designs and the I4/D1 edge are now frozen.
 
-Highest-priority open edge now:
+Highest-priority open edge:
 
 ```text
-I4 / D1 / NOW
-SYS-47 User Handoff Card
+I4 / D2 / NOW
+SYS-02 Decision / Supersession Graph
+SYS-04 Status Vocabulary Linter
+SYS-05 Historical-vs-Living Document Registry
+SYS-12 Current-State Snapshot Page
+SYS-23 Negative-Control Registry
+SYS-28 Verification Debt Index
+SYS-33 Rollback Readiness Checklist
+SYS-52 Operator Error Specimen Ledger
 ```
 
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-47 User Handoff Card
+NEXT SYSTEM DESIGN = SYS-05 Historical-vs-Living Document Registry
 ```
 
 Reason:
 
 ```text
-SYS-46 now freezes the internal task identity/objective/work-type/scope/gate/mutation/stop contract.
-SYS-47 can consume that reviewed internal card and project only user-relevant fields.
-No other remaining gate-open I4/D1 item exists.
+The I4/D2 candidates tie on formal score.
+SYS-05 can freeze a shared reviewed distinction between living/current authorities and historical point-in-time evidence.
+That distinction can constrain later status linting, current-state projection, supersession navigation, and stale-current-language review without requiring each downstream design to rediscover document role independently.
 ```
 
-After SYS-47, recompute the remaining edge rather than assuming later I4 ordering.
+After SYS-05, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -168,6 +188,7 @@ SYS-38 implementation  = HOLD
 SYS-31 implementation  = HOLD / PROTECTED
 SYS-35 application     = HOLD
 SYS-46 application     = HOLD
+SYS-47 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -194,7 +215,9 @@ SYS-35 adds historical repository-transaction navigation without adding proof. A
 
 SYS-46 adds bounded task-definition continuity without adding authorization or proof. `TASK_CARD_READY` means the card consistently represents already-legitimate selected work; it does not open the gate, authorize implementation independently, prove a bundle is clean, establish slice conformance, or establish verification/live PASS.
 
-SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, and SYS-46 are document-only by design.
+SYS-47 adds user-facing communication continuity without adding semantic authority. `USER_HANDOFF_READY` means the user-facing projection faithfully reflects its source task/gate state and selected action posture; it does not authorize work, prove correctness, replace SYS-19 live experiment authority, or classify returned evidence.
+
+SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, and SYS-47 are document-only by design.
 
 ## 7. Production boundary
 
@@ -214,10 +237,12 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 19 / 52
+SYSTEM DESIGNS FROZEN = 20 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
+I4/D1 EDGE = FROZEN
 SYS-46 CANONICAL TASK CARD = FROZEN / NR_DOC_ONLY / APPLY HOLD
-CURRENT NEXT = SYS-47 User Handoff Card
+SYS-47 USER HANDOFF CARD = FROZEN / NR_DOC_ONLY / APPLY HOLD
+CURRENT NEXT = SYS-05 Historical-vs-Living Document Registry
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

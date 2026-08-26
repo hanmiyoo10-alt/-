@@ -1,6 +1,6 @@
 # SimCore System-Idea Candidate Inventory — 2026-08-26
 
-Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · SYS-19/SYS-01/SYS-51 FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
+Status: `SYSTEM IDEA INVENTORY · UNIFIED CLASSIFICATION · SYS-19/SYS-01/SYS-51/SYS-08 FROZEN · SYSTEM DESIGN SWEEP ACTIVE · NO RUNTIME CHANGE`
 
 Purpose: living inventory for the 52 SimCore system/operations ideas. All rows use the same classification system as product/runtime ideas.
 
@@ -36,7 +36,7 @@ All system ideas remain `NON_RUNTIME` unless a frozen design proves otherwise. U
 | SYS-05 | Historical-vs-Living Document Registry | Authority | SMALL | 4 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-06 | Evidence-to-Decision Trace Map | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-07 | Cross-Reference Integrity Auditor | Authority | MEDIUM | 4 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
-| SYS-08 | Work-Item Close Receipt | Authority | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
+| SYS-08 | Work-Item Close Receipt | Authority | SMALL | 5 | 2 | NON_RUNTIME | FROZEN | NR_DOC_ONLY |
 | SYS-09 | Change-Impact Review Map | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-10 | Stale Next-Action Scanner | Authority | SMALL | 5 | 2 | NON_RUNTIME | NOW | NR_UNASSESSED |
 | SYS-11 | Design-to-Implementation Drift Audit | Authority | MEDIUM | 5 | 3 | NON_RUNTIME | NOW | NR_UNASSESSED |
@@ -86,14 +86,15 @@ Frozen design authorities:
 - SYS-19 → `docs/SIMCORE_SYS19_LIVE_GATE_HANDOFF_PACKET_DESIGN.md`
 - SYS-01 → `docs/SIMCORE_SYS01_LIVING_AUTHORITY_MAP_DESIGN.md`
 - SYS-51 → `docs/SIMCORE_SYS51_CLOSE_STEP_TRIGGER_MATRIX_DESIGN.md`
+- SYS-08 → `docs/SIMCORE_SYS08_WORK_ITEM_CLOSE_RECEIPT_DESIGN.md`
 
 ## 3. Counts
 
 ```text
 TOTAL                = 52
-FROZEN               = 3
-UNFROZEN             = 49
-OPEN NOW             = 37
+FROZEN               = 4
+UNFROZEN             = 48
+OPEN NOW             = 36
 GATED / DEPENDENCY   = 12
 
 SIZE
@@ -106,8 +107,8 @@ NON_RUNTIME = 52
 RUNTIME     = 0
 
 APPLY CLASS
-NR_DOC_ONLY   = 3
-NR_UNASSESSED = 49
+NR_DOC_ONLY   = 4
+NR_UNASSESSED = 48
 ```
 
 Importance/difficulty baseline remains unchanged:
@@ -132,13 +133,13 @@ Completed:
 SYS-19 = I5 D1 / FROZEN / NR_DOC_ONLY
 SYS-01 = I5 D2 / FROZEN / NR_DOC_ONLY
 SYS-51 = I5 D2 / FROZEN / NR_DOC_ONLY
+SYS-08 = I5 D2 / FROZEN / NR_DOC_ONLY
 ```
 
 Remaining highest-priority edge:
 
 ```text
 I5 / D2 / NOW
-SYS-08 Work-Item Close Receipt
 SYS-10 Stale Next-Action Scanner
 SYS-48 Gate-Blocked Reason Surface
 ```
@@ -146,10 +147,10 @@ SYS-48 Gate-Blocked Reason Surface
 Downstream-leverage next:
 
 ```text
-NEXT = SYS-08 Work-Item Close Receipt
+NEXT = SYS-10 Stale Next-Action Scanner
 ```
 
-Reason: SYS-01 now defines authority lookup and SYS-51 defines which close surfaces are evaluated; SYS-08 can now freeze the bounded receipt that records the actual close result without inventing a second authority.
+Reason: SYS-01 establishes living authority lookup, SYS-51 selects close surfaces, and SYS-08 standardizes the close receipt. SYS-10 can now freeze a bounded detector for the exact recurring failure where completed work remains advertised as current NEXT. SYS-48 benefits from a later explicit gate-dependency model and remains second in this edge.
 
 ## 5. Non-duplication boundaries
 
@@ -161,6 +162,8 @@ PR stale classification → S-11
 architecture parsing/contracts → existing architecture checker
 release publication → existing permanent release authority
 RT semantics → Real-Time Close-Step parent design
+close trigger selection → SYS-51
+one-work closure summary → SYS-08
 ```
 
 A system idea that duplicates one of these authorities must be redesigned before freeze.

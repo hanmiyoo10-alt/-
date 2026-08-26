@@ -1,6 +1,12 @@
 name: Canonical Main Operations
 
 on:
+  workflow_call:
+    inputs:
+      coordination_work_issue:
+        description: 'Required active Work Record issue for trusted Harness handoff'
+        required: true
+        type: string
   # Break-glass only. Steady-state operation is fully automatic through events + schedule.
   workflow_dispatch:
     inputs:
@@ -62,7 +68,7 @@ jobs:
         with:
           node-version: 22
       - name: Resolve Harness canary Work Record
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
+        if: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
         env:
           CANARY_EVENT_NAME: ${{ github.event_name }}
           CANARY_DISPATCH_WORK_ISSUE: ${{ inputs.coordination_work_issue }}
@@ -73,7 +79,7 @@ jobs:
           let workIssue = '';
           if (process.env.CANARY_EVENT_NAME === 'issues') {
             workIssue = String(event.issue?.number ?? '');
-          } else if (process.env.CANARY_EVENT_NAME === 'workflow_dispatch') {
+          } else if (process.env.CANARY_EVENT_NAME === 'workflow_dispatch' || process.env.CANARY_EVENT_NAME === 'workflow_call') {
             workIssue = String(process.env.CANARY_DISPATCH_WORK_ISSUE || '');
           }
           if (!/^[1-9]\d*$/.test(workIssue)) {
@@ -83,7 +89,7 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, `COORDINATION_WORK_ISSUE=${workIssue}\n`);
           NODE
       - name: Harness coordination receipt canary gate
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
+        if: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.coordination_work_issue != '') || github.event_name == 'issues' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

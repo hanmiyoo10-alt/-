@@ -89,11 +89,11 @@ Tracking issue: #412
 
 | ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
-| `NV-FUNDING-AUTH` | DevPass funding-source provenance 조사 | 높음 | #348 candidate 8 | DevPass 요청이 plan allowance인지 PAYG overflow credits인지 explicit upstream billing evidence로 구분 가능한지 조사한다. model/cost/tier/account-scope 추론 금지. 조사 결과만 기록하며 product bytes는 변경하지 않는다. |
-| `NV-FALLBACK-INVENTORY` | Runtime compatibility / fallback path inventory | 높음 | Runtime Slimming Backlog §1 | Plugin/Engine/Manager의 legacy/fallback branch를 owner, trigger, regression, recent real-device evidence, replacement path, removal confidence로 분류한다. |
-| `NV-PARSER-INVENTORY` | Parser / normalizer duplication inventory | 높음 | Runtime Slimming Backlog §2 | recent request, cache, service tier, duration/provenance, organization/usage, diagnostics formatting 중복을 조사한다. cleanup은 하지 않고 후보만 증거화한다. |
-| `NV-RELEASE-PR-BOOTSTRAP` | Release PR bootstrap / trusted PR event 단순화 | 높음 | #254 | product bytes를 건드리지 않고 E6 PR bootstrap 403 및 trusted validation event friction을 줄이는 release-infra 개선. exact candidate / full CI / monotonic promotion은 보존한다. |
-| `NV-STATE-LIFECYCLE` | Retained state / memory lifecycle inventory | 높음 | Runtime Slimming Backlog §3 | long-lived Map/Set, in-flight Promise, Request Ledger, render cache, secondary queue, diagnostics history, large response closure retention을 계측/분류한다. |
+| `NV-FUNDING-AUTH` | DevPass funding-source provenance 조사 | 높음 | **IMPLEMENTED — NOT_PROVEN** · #416 · `docs/USAGE_DASHBOARD_FUNDING_AUTHORITY_INVESTIGATION.md` | current pinned evidence에서 request별 plan allowance vs PAYG authority가 증명되지 않았다. funding은 UNKNOWN 유지, `V-FUNDING-PROVENANCE`는 BLOCKED. |
+| `NV-FALLBACK-INVENTORY` | Runtime compatibility / fallback path inventory | 높음 | **IMPLEMENTED** · #417 · `docs/USAGE_DASHBOARD_RUNTIME_FALLBACK_INVENTORY.md` | Plugin/Engine/Manager fallback을 계약 단위로 분류했다. 현재 SAFE REMOVAL CANDIDATE는 0개이며 후속 prune은 fresh SAFE evidence만 소비한다. |
+| `NV-PARSER-INVENTORY` | Parser / normalizer duplication inventory | 높음 | **IMPLEMENTED** · #418 · `docs/USAGE_DASHBOARD_PARSER_NORMALIZER_INVENTORY.md` | cross-layer trust/privacy/identity 방어를 intentional layering으로 분리했다. 현재 즉시 SAFE consolidation 후보는 0개, org/status cluster는 MEASURE_MORE. |
+| `NV-RELEASE-PR-BOOTSTRAP` | Release PR bootstrap / trusted PR event 단순화 | 높음 | **IMPLEMENTED / RESOLVED_BY_E7_E13** · #254 · `docs/USAGE_DASHBOARD_PR_BOOTSTRAP_CURRENT_CONTRACT.md` | E6-era 403/close-reopen friction은 E7/E13과 5.80 실릴리즈로 해소됨을 확정하고 current deterministic PR handoff를 canonical contract로 고정했다. |
+| `NV-STATE-LIFECYCLE` | Retained state / memory lifecycle inventory | 높음 | **IMPLEMENTED** · #419 · `docs/USAGE_DASHBOARD_STATE_LIFECYCLE_INVENTORY.md` | retained state의 owner/bound/release를 분류했다. SAFE cleanup 0개, 반복 init/resume/panel 누적 증거는 `NV-LIFECYCLE-STRESS`로 넘긴다. |
 | `NV-CLI-FOOTPRINT` | Managed CLI 실제 설치 용량 측정 | 중간 | Runtime Slimming Backlog §7 | PocketRisu/Android에서 managed `@llmgateway/cli`와 dependency footprint를 실제 측정한다. package 이름만 보고 추정하지 않는다. 실기 측정이 필요한 항목. |
 | `NV-LOCAL-COST-MAP` | Local CPU/render/persist 비용 측정표 갱신 | 중간 | Runtime Slimming Backlog §5 | ledger normalize, sort/filter, diagnostics construction, render, DOM/style dedup, JSON persistence 비용을 실기 diagnostics에서 지속 기록한다. 측정 전 최적화 금지. |
 
@@ -136,7 +136,7 @@ Tracking issue: #412
 | ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
 | `V-MODEL-CATEGORY` | Catalog-proven Premium / Regular model category | 높음 | Post-stabilization · #343 | 실제 served model을 현재 version-pinned LLMGateway catalog로 확인한 경우만 Premium/Regular로 분류한다. catalog 미확인/미등록 모델은 UNKNOWN, 이름/비용/provider 추론 금지. |
-| `V-FUNDING-PROVENANCE` | DevPass plan vs PAYG funding-source 표시 | 높음 | Post-stabilization · #348 + `NV-FUNDING-AUTH` 선행 | 조사에서 explicit upstream billing authority가 증명된 경우에만 request row에 실제 funding source를 표시한다. account scope/service tier/model category와 별도 축으로 유지. |
+| `V-FUNDING-PROVENANCE` | DevPass plan vs PAYG funding-source 표시 | 높음 | **BLOCKED — authority NOT_PROVEN** · #348 + #416 | `NV-FUNDING-AUTH`에서 request-level plan-vs-PAYG authority가 증명되지 않았다. 새 pinned upstream evidence가 생기기 전까지 UNKNOWN 유지, 구현 금지. |
 | `V-RUNTIME-FALLBACK-PRUNE` | Evidence-led legacy/fallback pruning | 높음 | Stabilization/slimming · Runtime Slimming Backlog | `NV-FALLBACK-INVENTORY`에서 SAFE REMOVAL CANDIDATE로 증명된 runtime branch만 작은 release 단위로 제거한다. working fallback을 happy-path 이유만으로 삭제하지 않는다. |
 | `V-PARSER-CONSOLIDATION` | Evidence-led parser/normalizer consolidation | 높음 | Stabilization/slimming · Runtime Slimming Backlog | `NV-PARSER-INVENTORY` 결과를 바탕으로 한 owner씩 중복 normalization을 합친다. UNKNOWN/source fidelity/dedupe identity를 보존한다. |
 | `V-LIFECYCLE-CLEANUP` | Timer/listener/retained-state cleanup | 높음 | Stabilization/slimming · `NV-LIFECYCLE-STRESS` 선행 | 실기/회귀에서 실제 누적 또는 불필요 work가 측정된 항목만 제거/통합한다. measured bottleneck이 아닌 코드는 최적화하지 않는다. |
@@ -205,10 +205,15 @@ read-only 우선 후보:
 # 7. 현재 authority 링크
 
 - Feature Source / Truth Matrix: `docs/USAGE_DASHBOARD_SOURCE_TRUTH_MATRIX.md`
+- Funding Authority Investigation: `docs/USAGE_DASHBOARD_FUNDING_AUTHORITY_INVESTIGATION.md`
+- Runtime Fallback Inventory: `docs/USAGE_DASHBOARD_RUNTIME_FALLBACK_INVENTORY.md`
+- Parser / Normalizer Inventory: `docs/USAGE_DASHBOARD_PARSER_NORMALIZER_INVENTORY.md`
+- Current Release PR Bootstrap Contract: `docs/USAGE_DASHBOARD_PR_BOOTSTRAP_CURRENT_CONTRACT.md`
+- State Lifecycle Inventory: `docs/USAGE_DASHBOARD_STATE_LIFECYCLE_INVENTORY.md`
 - Repository History / Tool Inventory: `docs/USAGE_DASHBOARD_REPO_HISTORY_INVENTORY.md`
 - Request Metadata Fidelity design: #343
 - DevPass/Credits parity backlog: #348
-- Release PR bootstrap follow-up: #254
+- Release PR bootstrap historical authority: #254
 - Runtime Slimming & Legacy Pruning: `docs/USAGE_DASHBOARD_RUNTIME_SLIMMING_BACKLOG.md`
 - Idea-list tracking: #412
 

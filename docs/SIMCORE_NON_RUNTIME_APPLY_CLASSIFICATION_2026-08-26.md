@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-42 design freeze:
+Current state after SYS-11 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 10
-UNFROZEN                = 42
+FROZEN                  = 11
+UNFROZEN                = 41
 
-NR_DOC_ONLY   = 6
+NR_DOC_ONLY   = 7
 NR_EXECUTABLE = 3
 NR_PROTECTED  = 1
-NR_UNASSESSED = 42
+NR_UNASSESSED = 41
 ```
 
 Frozen system apply classes:
@@ -185,6 +185,7 @@ SYS-51 Close-Step Trigger Matrix
 SYS-08 Work-Item Close Receipt
 SYS-48 Gate-Blocked Reason Surface
 SYS-09 Change-Impact Review Map
+SYS-11 Design-to-Implementation Drift Audit
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -204,6 +205,15 @@ its purpose is to police frozen design / architecture-governance boundaries
 → protected implementation transaction required
 ```
 
+Why SYS-11 is document-only:
+
+```text
+its purpose is human semantic design-fidelity review
+machine semantic inference is intentionally prohibited
+SYS-42 already owns the protected machine-verifiable lower bound
+→ reusable audit protocol/template is sufficient v1 implementation
+```
+
 System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, or Report.
 
 ---
@@ -215,10 +225,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 8
+NR_DOC_ONLY    = 9
 NR_EXECUTABLE  = 8
 NR_PROTECTED   = 2
-NR_UNASSESSED  = 48
+NR_UNASSESSED  = 47
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -231,13 +241,13 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 30 gate-open NOW designs remain after SYS-42 freeze
+= 29 gate-open NOW designs remain after SYS-11 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
 ```
 
-Therefore old wording such as `current open NR remains empty` is valid only for the **original NR harvest queue**, not as a global statement about all NON_RUNTIME idea design work.
+Therefore wording such as `current open NR remains empty` is valid only for the **original NR harvest queue**, not as a global statement about all NON_RUNTIME idea design work.
 
 ---
 
@@ -359,6 +369,7 @@ original gate-open NR harvest = EXHAUSTED / EMPTY
 system-idea NON_RUNTIME design sweep = ACTIVE
 system apply/implementation = HELD
 SYS-42 = first frozen system idea classified NR_PROTECTED
+SYS-11 = frozen NR_DOC_ONLY human semantic audit protocol
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

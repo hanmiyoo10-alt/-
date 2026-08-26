@@ -180,6 +180,20 @@
 - Event ID: `3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52`
 <!-- canonical-main-doc-promoted:3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52 -->
 
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `f6b7f299bf17cf686c12fa0e2ee7ee1ced3f99e2003fefe8ca57e7bf9bcb1828`
+<!-- canonical-main-doc-promoted:f6b7f299bf17cf686c12fa0e2ee7ee1ced3f99e2003fefe8ca57e7bf9bcb1828 -->
+
+### 2026-08-26 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `0a7aa5d50cd4d0d0ec8dff297ad27448e74c2036fc80819d2a53c79646151c23`
+<!-- canonical-main-doc-promoted:0a7aa5d50cd4d0d0ec8dff297ad27448e74c2036fc80819d2a53c79646151c23 -->
+
 ### 2026-08-26 — feat: add Repository Work Harness shadow preflight foundation
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -275,3 +289,19 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/648b4173f37c163a9df8ccad802c2be37ff44732)
 - Event ID: `1181cc56ac04868763bc7a11fdd2dbe8e5550797244e511fc46fe425508bd8a2`
 <!-- canonical-main-doc-promoted:1181cc56ac04868763bc7a11fdd2dbe8e5550797244e511fc46fe425508bd8a2 -->
+
+### 2026-08-27 — infra: add automatic harness receipt sync
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e197f331381ab8826ca420b31e5a6dbf4eb06a04`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e197f331381ab8826ca420b31e5a6dbf4eb06a04)
+- Event ID: `8d99b7ecfc37e2d75319fe628e78efd7847902e7276128f4684f39876fbbcb32`
+<!-- canonical-main-doc-promoted:8d99b7ecfc37e2d75319fe628e78efd7847902e7276128f4684f39876fbbcb32 -->
+
+### 2026-08-27 — fix: parse standalone harness receipt requests
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `889bbb26fd0fd3f97e82648c34c8b6592e82fe18`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/889bbb26fd0fd3f97e82648c34c8b6592e82fe18)
+- Event ID: `0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905`
+<!-- canonical-main-doc-promoted:0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905 -->

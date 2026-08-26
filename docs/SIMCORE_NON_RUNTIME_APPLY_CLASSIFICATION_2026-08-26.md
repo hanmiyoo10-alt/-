@@ -162,17 +162,17 @@ The separate 52-item system/operations idea inventory is also currently classifi
 Current system-idea authority:
 - `docs/SIMCORE_SYSTEM_IDEA_CANDIDATE_INVENTORY_2026-08-26.md`
 
-Current state after SYS-28 design freeze:
+Current state after SYS-23 design freeze:
 
 ```text
 SYSTEM NON_RUNTIME total = 52
-FROZEN                  = 25
-UNFROZEN                = 27
+FROZEN                  = 26
+UNFROZEN                = 26
 
-NR_DOC_ONLY   = 17
+NR_DOC_ONLY   = 18
 NR_EXECUTABLE = 6
 NR_PROTECTED  = 2
-NR_UNASSESSED = 27
+NR_UNASSESSED = 26
 ```
 
 Frozen system apply classes:
@@ -196,6 +196,7 @@ SYS-05 Historical-vs-Living Document Registry
 SYS-02 Decision / Supersession Graph
 SYS-12 Current-State Snapshot Page
 SYS-28 Verification Debt Index
+SYS-23 Negative-Control Registry
 
 NR_EXECUTABLE
 SYS-10 Stale Next-Action Scanner
@@ -222,7 +223,7 @@ SYS-31
 → both require dedicated protected implementation transactions
 ```
 
-Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, and SYS-28 are document-only:
+Why SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, SYS-05, SYS-02, SYS-12, SYS-28, and SYS-23 are document-only:
 
 ```text
 SYS-11 = human semantic design-fidelity review; automatic semantic judge intentionally prohibited
@@ -236,6 +237,7 @@ SYS-05 = curated document lifecycle/role registry with explicit mixed-section ex
 SYS-02 = curated semantic predecessor/successor decision lineage with explicit affected/preserved scope; v1 deliberately prohibits automatic supersession inference from timestamps, versions, status words, references, commits, or semantic similarity
 SYS-12 = compact current-only source-referenced projection page; v1 deliberately avoids parsing/generation, authority promotion, current-state selection, stale scanning, gate decisions, or repository writes
 SYS-28 = curated verification-debt index preserving exact claim/proof/due/blocking semantics; v1 deliberately avoids evidence-requirement invention, CI/log scanning, automatic severity/blocker promotion, proof inference, and scalar quality scoring
+SYS-23 = curated negative-control semantic registry; v1 deliberately leaves executable enforcement to actual fixture/test/live authorities and prohibits automatic inverse generation, absence-as-proof, fixture mutation, fuzzing, or CI/release integration
 ```
 
 Why SYS-17, SYS-38, and SYS-04 are executable:
@@ -261,7 +263,7 @@ All three remain read-only/non-runtime.
 None changes CI, release, repository-writer, runtime, or architecture-policy authority in v1.
 ```
 
-System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, or Report.
+System candidates that are not yet frozen remain `NR_UNASSESSED`; do not infer their apply class from names such as Scanner, Auditor, Ledger, Generator, Analyzer, Manifest, Reporter, Check, Linter, Graph, Snapshot, Index, Registry, or Report.
 
 ---
 
@@ -272,10 +274,10 @@ Across the original 14-item NR pool plus the separate 52-item system-idea pool:
 ```text
 CURRENT INVENTORIED NON_RUNTIME total = 66
 
-NR_DOC_ONLY    = 19
+NR_DOC_ONLY    = 20
 NR_EXECUTABLE  = 11
 NR_PROTECTED   = 3
-NR_UNASSESSED  = 33
+NR_UNASSESSED  = 32
 ```
 
 This combined count is a classification view only. It does not merge the original NR queue with the system-idea design sweep or authorize implementation.
@@ -288,7 +290,7 @@ ORIGINAL NR harvest queue
 
 SYSTEM-IDEA design sweep
 = ACTIVE
-= 15 gate-open NOW designs remain after SYS-28 freeze
+= 14 gate-open NOW designs remain after SYS-23 freeze
 
 SYSTEM-IDEA apply/implementation
 = HOLD while Design Sweep First remains active
@@ -429,6 +431,7 @@ SYS-04 = frozen NR_EXECUTABLE registered-field status vocabulary linter design
 SYS-02 = frozen NR_DOC_ONLY decision/supersession lineage graph design
 SYS-12 = frozen NR_DOC_ONLY current-state snapshot projection design
 SYS-28 = frozen NR_DOC_ONLY verification-debt index design
+SYS-23 = frozen NR_DOC_ONLY negative-control registry design
 ```
 
 Classification visibility does not bypass gate or Design Sweep First ordering.

@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "id": "narrative-clock.contract-matrix",
+  "suite": "narrative-clock",
+  "input": {
+    "currentFloorCases": [
+      {
+        "id": "current-floor-backward-clamp",
+        "floor": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+        "content": "⏱️[2031-03-14 (Fri) 11:30 PM]\n현재 장면"
+      },
+      {
+        "id": "current-floor-equal-pass",
+        "floor": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+        "content": "⏱️[2031-03-28 (Fri) 10:15 PM]\n현재 장면"
+      },
+      {
+        "id": "current-floor-later-pass",
+        "floor": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+        "content": "⏱️[2031-03-28 (Fri) 11:00 PM]\n현재 장면"
+      },
+      {
+        "id": "current-floor-historical-token-preserved",
+        "floor": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+        "content": "⏱️[2031-03-14 (Fri) 11:30 PM]\n현재 장면\n과거 회상:\n⏱️[2017-06-01 (Thu) 08:00 PM]",
+        "historical": "⏱️[2017-06-01 (Thu) 08:00 PM]"
+      }
+    ],
+    "tailCases": [
+      {
+        "id": "tail-monotonic-promotes-terminal",
+        "mode": "C",
+        "previous": "⏱️[2031-03-28 (Fri) 12:30 AM]",
+        "content": "⏱️[2031-03-28 (Fri) 01:00 AM]\n현재 장면\n⏱️[2031-03-28 (Fri) 03:00 AM]\n장면 종료"
+      },
+      {
+        "id": "tail-frame-only-stays-frame",
+        "mode": "C",
+        "previous": "⏱️[2031-03-28 (Fri) 12:30 AM]",
+        "content": "⏱️[2031-03-28 (Fri) 01:00 AM]\n현재 장면"
+      },
+      {
+        "id": "tail-nonmonotonic-fails-closed",
+        "mode": "C",
+        "previous": "⏱️[2031-03-28 (Fri) 12:30 AM]",
+        "content": "⏱️[2031-03-28 (Fri) 03:00 AM]\n현재 장면\n⏱️[2031-03-28 (Fri) 01:00 AM]\n잘못된 후퇴"
+      },
+      {
+        "id": "broadcast-mode-does-not-commit-narrative",
+        "mode": "B_END",
+        "previous": "⏱️[2031-03-28 (Fri) 01:00 AM]",
+        "content": "⏱️[2031-03-28 (Fri) 03:00 AM]\n방송"
+      }
+    ],
+    "postBEndCases": [
+      {
+        "id": "post-bend-direct-complete-applied",
+        "mode": "C",
+        "previousMode": "B_END",
+        "sendIndex": 2,
+        "narrative": "⏱️[2031-03-14 (Fri) 11:30 PM]",
+        "state": {
+          "broadcastLocked": false,
+          "broadcastAirtime": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+        },
+        "lineage": { "lastRequestMode": "B", "lastRequestIndex": 0 },
+        "facts": {
+          "available": true,
+          "outIndex": 1,
+          "closureComplete": true,
+          "terminalExplicit": true,
+          "terminalTimestamp": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+          "structureClean": true,
+          "issueCount": 0,
+          "reason": "complete"
+        }
+      },
+      {
+        "id": "post-bend-narrative-already-later",
+        "mode": "C",
+        "previousMode": "B_END",
+        "sendIndex": 2,
+        "narrative": "⏱️[2031-03-28 (Fri) 10:50 PM]",
+        "state": {
+          "broadcastLocked": false,
+          "broadcastAirtime": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+        },
+        "lineage": { "lastRequestMode": "B", "lastRequestIndex": 0 },
+        "facts": {
+          "available": true,
+          "outIndex": 1,
+          "closureComplete": true,
+          "terminalExplicit": true,
+          "terminalTimestamp": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+          "structureClean": true,
+          "issueCount": 0,
+          "reason": "complete"
+        }
+      },
+      {
+        "id": "post-bend-second-c-ineligible",
+        "mode": "C",
+        "previousMode": "C",
+        "sendIndex": 4,
+        "narrative": "⏱️[2031-03-28 (Fri) 10:20 PM]",
+        "state": {
+          "broadcastLocked": false,
+          "broadcastAirtime": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+        },
+        "lineage": { "lastRequestMode": "C", "lastRequestIndex": 2 },
+        "facts": {
+          "available": true,
+          "outIndex": 3,
+          "closureComplete": true,
+          "terminalExplicit": true,
+          "terminalTimestamp": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+          "structureClean": true,
+          "issueCount": 0,
+          "reason": "complete"
+        }
+      },
+      {
+        "id": "post-bend-incomplete-closure-fails-closed",
+        "mode": "C",
+        "previousMode": "B_END",
+        "sendIndex": 2,
+        "narrative": "⏱️[2031-03-14 (Fri) 11:30 PM]",
+        "state": {
+          "broadcastLocked": false,
+          "broadcastAirtime": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+        },
+        "lineage": { "lastRequestMode": "B", "lastRequestIndex": 0 },
+        "facts": {
+          "available": true,
+          "outIndex": 1,
+          "closureComplete": false,
+          "terminalExplicit": true,
+          "terminalTimestamp": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+          "structureClean": false,
+          "issueCount": 1,
+          "reason": "structure-not-clean"
+        }
+      },
+      {
+        "id": "post-bend-terminal-storage-mismatch-invalid-source",
+        "mode": "C",
+        "previousMode": "B_END",
+        "sendIndex": 2,
+        "narrative": "⏱️[2031-03-14 (Fri) 11:30 PM]",
+        "state": {
+          "broadcastLocked": false,
+          "broadcastAirtime": "⏱️[2031-03-28 (Fri) 10:10 PM]"
+        },
+        "lineage": { "lastRequestMode": "B", "lastRequestIndex": 0 },
+        "facts": {
+          "available": true,
+          "outIndex": 1,
+          "closureComplete": true,
+          "terminalExplicit": true,
+          "terminalTimestamp": "⏱️[2031-03-28 (Fri) 10:15 PM]",
+          "structureClean": true,
+          "issueCount": 0,
+          "reason": "complete"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "current-floor-backward-clamp": {
+      "changed": true,
+      "reason": "clamped-backward",
+      "observed": "⏱️[2031-03-14 (Fri) 11:30 PM]",
+      "floor": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+    },
+    "current-floor-equal-pass": { "changed": false, "reason": "same" },
+    "current-floor-later-pass": { "changed": false, "reason": "forward" },
+    "current-floor-historical-token-preserved": {
+      "changed": true,
+      "reason": "clamped-backward",
+      "observed": "⏱️[2031-03-14 (Fri) 11:30 PM]",
+      "floor": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+    },
+    "tail-monotonic-promotes-terminal": {
+      "frameTimestamp": "⏱️[2031-03-28 (Fri) 01:00 AM]",
+      "candidate": "⏱️[2031-03-28 (Fri) 03:00 AM]",
+      "tailStatus": "MONOTONIC",
+      "tailPromoted": true,
+      "commitTimestamp": "⏱️[2031-03-28 (Fri) 03:00 AM]"
+    },
+    "tail-frame-only-stays-frame": {
+      "frameTimestamp": "⏱️[2031-03-28 (Fri) 01:00 AM]",
+      "candidate": "⏱️[2031-03-28 (Fri) 01:00 AM]",
+      "tailStatus": "FRAME_ONLY",
+      "tailPromoted": false
+    },
+    "tail-nonmonotonic-fails-closed": {
+      "frameTimestamp": "⏱️[2031-03-28 (Fri) 03:00 AM]",
+      "candidate": "⏱️[2031-03-28 (Fri) 03:00 AM]",
+      "tailStatus": "SKIPPED_NON_MONOTONIC",
+      "tailPromoted": false
+    },
+    "broadcast-mode-does-not-commit-narrative": {
+      "changed": false,
+      "reason": "broadcast",
+      "timestamp": null,
+      "tailStatus": "INELIGIBLE_BROADCAST"
+    },
+    "post-bend-direct-complete-applied": {
+      "eligible": true,
+      "eligibilityReason": "eligible-direct-complete-post-b-end-c",
+      "disposition": "APPLIED",
+      "effectiveFloor": "⏱️[2031-03-28 (Fri) 10:15 PM]"
+    },
+    "post-bend-narrative-already-later": {
+      "eligible": true,
+      "eligibilityReason": "eligible-direct-complete-post-b-end-c",
+      "disposition": "ALREADY_SATISFIED",
+      "effectiveFloor": "⏱️[2031-03-28 (Fri) 10:50 PM]"
+    },
+    "post-bend-second-c-ineligible": {
+      "eligible": false,
+      "eligibilityReason": "not-direct-post-b-end-c"
+    },
+    "post-bend-incomplete-closure-fails-closed": {
+      "eligible": false,
+      "eligibilityReason": "previous-b-end-closure-incomplete"
+    },
+    "post-bend-terminal-storage-mismatch-invalid-source": {
+      "eligible": true,
+      "eligibilityReason": "eligible-direct-complete-post-b-end-c",
+      "disposition": "INVALID_SOURCE",
+      "resolutionReason": "terminal-stored-airtime-mismatch",
+      "effectiveFloor": "⏱️[2031-03-14 (Fri) 11:30 PM]"
+    }
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "evidenceMaturity": "MIXED",
+    "explicitFlashbackNaturalClose": "VALIDATION_ONLY",
+    "postBEndNaturalClose": "DIRECT_LIVE_CONTROL",
+    "migrationFrom": "v0.63.57 current timeline + v0.63.58 narrative tail + v0.64.6 post-B_END clock controls"
+  }
+}

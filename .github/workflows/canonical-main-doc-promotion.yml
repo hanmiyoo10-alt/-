@@ -42,7 +42,7 @@ jobs:
           BASE_SHA="$(git rev-parse HEAD)"
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
           node .github/plugin-control-plane/canonical-main/documentation-stream/promote.cjs
-          if git diff --quiet -- $DOC_FILES; then
+          if [[ -z "$(git status --porcelain -- $DOC_FILES)" ]]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "CANONICAL_MAIN_DOC_PROMOTION:NOOP"
             exit 0
@@ -50,6 +50,7 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           tar -czf /tmp/canonical-main-docs.tgz $DOC_FILES
           git reset --hard HEAD
+          git clean -fd -- $DOC_FILES
       - name: Update one bounded documentation promotion PR
         if: steps.render.outputs.changed == 'true'
         id: publish

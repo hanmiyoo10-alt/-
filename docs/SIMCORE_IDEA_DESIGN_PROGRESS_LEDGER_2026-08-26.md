@@ -1,6 +1,6 @@
 # SimCore Idea Design Progress Ledger — 2026-08-26
 
-Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 20 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
+Status: `CURRENT GLOBAL IDEA-DESIGN + APPLY/HARVEST LEDGER · ORIGINAL POOLS CLOSED · SYSTEM-IDEA SWEEP ACTIVE · 21 SYS DESIGNS FROZEN · NO RUNTIME CHANGE`
 
 Purpose: current global design/apply/harvest progress across original SimCore ideas and the active system/operations idea sweep.
 
@@ -95,6 +95,9 @@ SYS-46 Canonical Task Card
 
 SYS-47 User Handoff Card
 = SMALL / I4 / D1 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
+
+SYS-05 Historical-vs-Living Document Registry
+= SMALL / I4 / D2 / NON_RUNTIME / FROZEN / NR_DOC_ONLY / APPLY HOLD
 ```
 
 SYS-46 contract:
@@ -117,23 +120,34 @@ canonical task/gate facts
 
 It consumes SYS-46 rather than minting a parallel task identity. General user-facing handoff belongs to SYS-47; exact real-long-chat experiment semantics remain with SYS-19. `USER_HANDOFF_READY` establishes only that the projection is faithful and actionable for its posture; it is not task authorization, gate open, implementation PASS, or live PASS.
 
+SYS-05 contract:
+
+```text
+reviewed document / bounded document family
++ lifecycle role
++ explicit section exceptions when needed
+→ curated document-role registry metadata
+```
+
+It preserves the constitutional distinction between living current authorities and point-in-time/frozen history without forcing a false binary at whole-file level. Mixed documents such as `CURRENT_DEVELOPMENT.md` may have a living primary role with explicit historical section exceptions. SYS-05 does not store current values, infer authority from age/filename, scan content, lint statuses, build a supersession graph, or rewrite documents.
+
 ## 3. Current system counts
 
 ```text
 TOTAL SYSTEM IDEAS = 52
-FROZEN              = 20
-OPEN NOW            = 20
+FROZEN              = 21
+OPEN NOW            = 19
 GATED/DEPENDENCY    = 12
 
-NR_DOC_ONLY         = 13
+NR_DOC_ONLY         = 14
 NR_EXECUTABLE       = 5
 NR_PROTECTED        = 2
-NR_UNASSESSED       = 32
+NR_UNASSESSED       = 31
 ```
 
 ## 4. Current next design
 
-All gate-open Importance-5 designs and the I4/D1 edge are now frozen.
+All gate-open Importance-5 designs and the I4/D1 edge are frozen. SYS-05 closes the first I4/D2 selection.
 
 Highest-priority open edge:
 
@@ -141,7 +155,6 @@ Highest-priority open edge:
 I4 / D2 / NOW
 SYS-02 Decision / Supersession Graph
 SYS-04 Status Vocabulary Linter
-SYS-05 Historical-vs-Living Document Registry
 SYS-12 Current-State Snapshot Page
 SYS-23 Negative-Control Registry
 SYS-28 Verification Debt Index
@@ -152,18 +165,18 @@ SYS-52 Operator Error Specimen Ledger
 Current downstream-leverage selection:
 
 ```text
-NEXT SYSTEM DESIGN = SYS-05 Historical-vs-Living Document Registry
+NEXT SYSTEM DESIGN = SYS-04 Status Vocabulary Linter
 ```
 
 Reason:
 
 ```text
-The I4/D2 candidates tie on formal score.
-SYS-05 can freeze a shared reviewed distinction between living/current authorities and historical point-in-time evidence.
-That distinction can constrain later status linting, current-state projection, supersession navigation, and stale-current-language review without requiring each downstream design to rediscover document role independently.
+SYS-05 now freezes a reviewed lifecycle/section-role boundary.
+SYS-04 can consume that boundary to lint current-status vocabulary without treating preserved historical status/version text as drift.
+A frozen status vocabulary can then strengthen later current-state projection and supersession/navigation designs.
 ```
 
-After SYS-05, recompute the remaining edge rather than assuming later I4 ordering.
+After SYS-04, recompute the remaining edge rather than assuming later I4 ordering.
 
 ## 5. Apply/implementation hold
 
@@ -189,6 +202,7 @@ SYS-31 implementation  = HOLD / PROTECTED
 SYS-35 application     = HOLD
 SYS-46 application     = HOLD
 SYS-47 application     = HOLD
+SYS-05 application     = HOLD
 ```
 
 Do not materialize/implement these frozen items until the current bounded system design sweep closes or priority is explicitly changed.
@@ -217,7 +231,9 @@ SYS-46 adds bounded task-definition continuity without adding authorization or p
 
 SYS-47 adds user-facing communication continuity without adding semantic authority. `USER_HANDOFF_READY` means the user-facing projection faithfully reflects its source task/gate state and selected action posture; it does not authorize work, prove correctness, replace SYS-19 live experiment authority, or classify returned evidence.
 
-SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, and SYS-47 are document-only by design.
+SYS-05 adds reviewed document-lifecycle metadata without deciding current truth. `ROLE_READY` / `ROLE_MIXED_READY` only establish that living/historical/frozen/evidence/template maintenance semantics are classified; they do not prove a living document is fresh, make historical evidence non-authoritative for its point in time, or promote a document into a current-state authority.
+
+SYS-10, SYS-03, SYS-50, SYS-17, and SYS-38 are executable by design but not implemented, therefore no focused tool/CI execution claim exists for them yet. SYS-42 and SYS-31 are protected executable governance tooling by design and likewise have no implementation/test/CI claim yet. SYS-09, SYS-11, SYS-13, SYS-22, SYS-21, SYS-35, SYS-46, SYS-47, and SYS-05 are document-only by design.
 
 ## 7. Production boundary
 
@@ -237,12 +253,11 @@ No system-design transaction changes those runtime/release facts.
 ```text
 ORIGINAL POOLS = CLOSED / UNCHANGED
 SYSTEM-IDEA DESIGN SWEEP = ACTIVE
-SYSTEM DESIGNS FROZEN = 20 / 52
+SYSTEM DESIGNS FROZEN = 21 / 52
 ALL GATE-OPEN I5 DESIGNS = FROZEN
 I4/D1 EDGE = FROZEN
-SYS-46 CANONICAL TASK CARD = FROZEN / NR_DOC_ONLY / APPLY HOLD
-SYS-47 USER HANDOFF CARD = FROZEN / NR_DOC_ONLY / APPLY HOLD
-CURRENT NEXT = SYS-05 Historical-vs-Living Document Registry
+SYS-05 HISTORICAL-VS-LIVING REGISTRY = FROZEN / NR_DOC_ONLY / APPLY HOLD
+CURRENT NEXT = SYS-04 Status Vocabulary Linter
 SYSTEM APPLY / IMPLEMENTATION = HELD
 SYS-42 APPLY CLASS = NR_PROTECTED
 SYS-31 APPLY CLASS = NR_PROTECTED

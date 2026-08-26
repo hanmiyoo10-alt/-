@@ -60,6 +60,7 @@ assert.equal(actual.result.executed, true);
 assert.equal(actual.result.status, 'PASS');
 assert.equal(actual.result.exitCode, 0);
 assert.match(actual.result.stdout, /harness self-test PASS/);
+console.log(`work-harness bounded executor output: ${actual.result.stdout.trim()}`);
 
 const canonical = workRecord({
   workId: 'TEST-MUTATING-NO-INVOKE',

@@ -18,7 +18,7 @@ B6 adds the first bounded writer-side **opt-in canary**: a manual Canonical Main
 
 B7 adds an explicit opt-in **repository-native receipt sync**: an open Work Record issue carrying `<!-- repository-coordination-receipt-request:v1 -->` may receive or refresh its B3 Coordination Receipt from fresh repository evidence on issue lifecycle events. This automates coordination evidence creation only; it does not run a writer.
 
-B8 adds an explicit opt-in **automatic authoritative handoff** for one canonical-main route only: after successful B7 receipt sync, a Work Record carrying `<!-- repository-authoritative-handoff-request:v1 -->` may hand the same issue number to the existing Canonical Main Operations workflow only when fresh B5 gate evidence is READY and the audited route is exactly `CANONICAL_MAIN_OPERATIONS_REFRESH`. The called writer re-runs the gate before its unchanged mutation.
+B8 adds an explicit opt-in **automatic authoritative handoff** for one canonical-main route only: after successful B7 receipt sync, a Work Record carrying `<!-- repository-authoritative-handoff-request:v1 -->` may hand the same issue number to the existing Canonical Main Operations workflow only when fresh B5 gate evidence is READY and the audited route is exactly `CANONICAL_MAIN_OPERATIONS_REFRESH`. The called writer re-runs the gate before its unchanged mutation. Implementation packet: #510.
 
 The Harness coordinates work transactions. It does **not** own Git, CI, main-write, release, production, product-runtime, or project authority.
 

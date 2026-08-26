@@ -108,3 +108,43 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7cbbe97dfccda7efa4f8bee02b8ff9e917e0a013)
 - Event ID: `05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0`
 <!-- canonical-main-doc-promoted:05490cc8e1a79defe34ba44681f62235509139b062760a369af7b8f9ef2ee9d0 -->
+
+### 2026-08-26 — infra: add canonical-main work decomposition system
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2453a6e91e6966b8960efe6a619c8886c234b309`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2453a6e91e6966b8960efe6a619c8886c234b309)
+- Event ID: `3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52`
+<!-- canonical-main-doc-promoted:3fc64665a35376764d0106ced2c9815f0aaf5d83cc7b0f266500336764840f52 -->
+
+### 2026-08-26 — feat: add Repository Work Harness shadow preflight foundation
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `68b416dc1379c73f40d2ec1c4f6c9efa983ff1d8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/68b416dc1379c73f40d2ec1c4f6c9efa983ff1d8)
+- Event ID: `89c55e0977e32bfc5d61f3d95c52edad91b228488375129cd1c504ae456c2204`
+<!-- canonical-main-doc-promoted:89c55e0977e32bfc5d61f3d95c52edad91b228488375129cd1c504ae456c2204 -->
+
+### 2026-08-26 — feat: add active Work Record discovery for Harness shadow scans
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a0f69e68db7a74b1ef445d2953055e3949585a92`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a0f69e68db7a74b1ef445d2953055e3949585a92)
+- Event ID: `9da118b046f887644eab0610243d382b0def2c12bab4fa290b9dfe30479911ae`
+<!-- canonical-main-doc-promoted:9da118b046f887644eab0610243d382b0def2c12bab4fa290b9dfe30479911ae -->
+
+### 2026-08-26 — feat: surface automatic Repository Work Harness shadow scans
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `992a0ba7347b703009229ae2a380288f22a8c83b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/992a0ba7347b703009229ae2a380288f22a8c83b)
+- Event ID: `d440188b0bb89f5ade2a52a5a055bfecdf082e84316faae23c3f736fb6b204e9`
+<!-- canonical-main-doc-promoted:d440188b0bb89f5ade2a52a5a055bfecdf082e84316faae23c3f736fb6b204e9 -->
+
+### 2026-08-26 — feat: add dry-run Repository Work Harness dispatch planning (#482)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `12532f9ebd4a2546e4bd948b1dd74d697c5939dc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/12532f9ebd4a2546e4bd948b1dd74d697c5939dc)
+- Event ID: `f3bb79e4d90d2ba663813e6804e4af4b71dd154d21aeafcbdbb3044824cc1ee2`
+<!-- canonical-main-doc-promoted:f3bb79e4d90d2ba663813e6804e4af4b71dd154d21aeafcbdbb3044824cc1ee2 -->

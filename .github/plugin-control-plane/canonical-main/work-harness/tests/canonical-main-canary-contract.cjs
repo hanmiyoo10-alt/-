@@ -29,10 +29,10 @@ for (const required of [
   'persist-credentials: false',
   'name: Resolve Harness canary Work Record',
   "CANARY_EVENT_NAME: ${{ github.event_name }}",
+  "CANARY_DISPATCH_WORK_ISSUE: ${{ inputs.coordination_work_issue }}",
   'GITHUB_EVENT_PATH',
   "fs.appendFileSync(process.env.GITHUB_ENV, `COORDINATION_WORK_ISSUE=${workIssue}\\n`)",
   'name: Harness coordination receipt canary gate',
-  "github.event_name == 'workflow_call'",
   'GH_TOKEN: ${{ github.token }}',
   'GITHUB_REPOSITORY: ${{ github.repository }}',
   'node .github/plugin-control-plane/canonical-main/work-harness/mutation-gate.cjs',
@@ -41,8 +41,8 @@ for (const required of [
   'run: node .github/plugin-control-plane/canonical-main/orchestrator/refresh.cjs refresh',
 ]) assert.ok(workflow.includes(required), `canonical-main canary workflow missing: ${required}`);
 
-const jobGuard = "if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}";
-assert.ok(workflow.includes(jobGuard), 'issue canary must remain owner-only and explicitly marked; reusable calls must not weaken issue-event protection');
+const jobGuard = "if: ${{ inputs.coordination_work_issue != '' || github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}";
+assert.ok(workflow.includes(jobGuard), 'bounded reusable input may enter while direct issue canary remains owner-only and explicitly marked');
 assert.equal((workflow.match(/repository-harness-canary:v1/g) || []).length, 1, 'issue canary marker must have one exact owner-gated entry condition');
 assert.equal((workflow.match(/^  pull_request(?:_target)?:/gm) || []).length, 0, 'temporary B6 pull_request proof transport must stay retired');
 assert.equal(workflow.includes('repository-harness-canary-pr:v1'), false, 'temporary PR canary marker must not return');
@@ -55,8 +55,10 @@ const refreshIndex = workflow.indexOf('name: Refresh canonical-main modular oper
 assert.ok(resolveIndex >= 0 && gateIndex > resolveIndex && refreshIndex > gateIndex, 'work issue resolution and receipt gate must run before canonical-main writer refresh');
 
 const resolveSection = workflow.slice(resolveIndex, gateIndex);
-assert.ok(resolveSection.includes("workIssue = String(event.issue?.number ?? '')"), 'issue canary must resolve numeric Work Record issue from trusted event JSON');
-assert.ok(resolveSection.includes("process.env.CANARY_EVENT_NAME === 'workflow_dispatch' || process.env.CANARY_EVENT_NAME === 'workflow_call'"), 'reusable and manual calls must resolve the same bounded input path');
+assert.ok(resolveSection.includes("if (process.env.CANARY_DISPATCH_WORK_ISSUE)"), 'bounded reusable/manual input must take precedence over inherited caller event context');
+assert.ok(resolveSection.includes("workIssue = String(process.env.CANARY_DISPATCH_WORK_ISSUE)"), 'bounded input must be copied as data, not shell interpolation');
+assert.ok(resolveSection.includes("process.env.CANARY_EVENT_NAME === 'issues'"), 'direct issue canary must retain trusted event issue fallback');
+assert.ok(resolveSection.includes("workIssue = String(event.issue?.number ?? '')"), 'direct issue canary must resolve numeric Work Record issue from trusted event JSON');
 assert.ok(resolveSection.includes("!/^[1-9]\\d*$/.test(workIssue)"), 'all work issue values must be positive integers');
 assert.ok(resolveSection.includes('process.env.GITHUB_ENV'), 'resolved issue number must cross steps through GitHub environment state');
 assert.equal(resolveSection.includes('pull_request'), false, 'retired PR transport must not remain in resolver');

@@ -5,89 +5,49 @@
       "adapterId": "canonical-main",
       "supportedScopeIds": ["canonical-main"],
       "scopeKinds": ["repo"],
-      "capabilities": [
-        "CANONICAL_MAIN_CONTROL_PLANE",
-        "CANONICAL_MAIN_OPERATIONS_REFRESH",
-        "CANONICAL_MAIN_WORK_HARNESS"
-      ],
-      "entrypoints": [
-        ".github/plugin-control-plane/canonical-main/orchestrator/refresh.cjs"
-      ],
-      "workflows": [
-        ".github/workflows/canonical-main-ops.yml"
-      ],
-      "possibleMutationClasses": [
-        "ISSUE_RECONCILIATION"
-      ],
-      "receiptRequiredFor": [
-        "ISSUE_RECONCILIATION"
-      ],
-      "verificationHooks": [
-        ".github/workflows/plugin-control-plane-ci.yml"
+      "capabilities": ["CANONICAL_MAIN_CONTROL_PLANE", "CANONICAL_MAIN_OPERATIONS_REFRESH", "CANONICAL_MAIN_WORK_HARNESS"],
+      "entrypoints": [".github/plugin-control-plane/canonical-main/orchestrator/refresh.cjs"],
+      "workflows": [".github/workflows/canonical-main-ops.yml"],
+      "possibleMutationClasses": ["ISSUE_RECONCILIATION"],
+      "receiptRequiredFor": ["ISSUE_RECONCILIATION"],
+      "verificationHooks": [".github/workflows/plugin-control-plane-ci.yml"],
+      "routes": [
+        {"capability":"CANONICAL_MAIN_CONTROL_PLANE","targetKind":"LOCAL_NODE","target":".github/plugin-control-plane/canonical-main/orchestrator/refresh.cjs","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"ISSUE_RECONCILIATION","invokePolicy":"HANDOFF_ONLY"},
+        {"capability":"CANONICAL_MAIN_OPERATIONS_REFRESH","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/canonical-main-ops.yml","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"ISSUE_RECONCILIATION","invokePolicy":"HANDOFF_ONLY"}
       ]
     },
     {
       "adapterId": "simcore",
       "supportedScopeIds": ["simcore"],
       "scopeKinds": ["plugin"],
-      "capabilities": [
-        "SIMCORE_VALIDATE",
-        "SIMCORE_CANDIDATE",
-        "SIMCORE_STATE",
-        "SIMCORE_RELEASE"
-      ],
-      "entrypoints": [
-        "products/simcore/tooling/check.mjs",
-        "products/simcore/tooling/test.mjs",
-        "products/simcore/tooling/candidate-materialize.mjs",
-        "products/simcore/tooling/admin-state-transition.mjs",
-        "products/simcore/tooling/release-publish.mjs",
-        "products/simcore/tooling/declare-production.mjs"
-      ],
-      "workflows": [
-        ".github/workflows/simcore-ci.yml",
-        ".github/workflows/simcore-release.yml",
-        ".github/workflows/simcore-release-command.yml"
-      ],
-      "possibleMutationClasses": [
-        "PROJECT_STATE",
-        "CANDIDATE_STATE",
-        "RELEASE_CHANNEL"
-      ],
-      "receiptRequiredFor": [
-        "PROJECT_STATE",
-        "CANDIDATE_STATE",
-        "RELEASE_CHANNEL"
-      ],
-      "verificationHooks": [
-        ".github/workflows/simcore-ci.yml"
+      "capabilities": ["SIMCORE_VALIDATE", "SIMCORE_HARNESS_SELF_TEST", "SIMCORE_CANDIDATE", "SIMCORE_STATE", "SIMCORE_RELEASE"],
+      "entrypoints": ["products/simcore/tooling/check.mjs", "products/simcore/tooling/test.mjs", "products/simcore/tooling/candidate-materialize.mjs", "products/simcore/tooling/admin-state-transition.mjs", "products/simcore/tooling/release-publish.mjs", "products/simcore/tooling/declare-production.mjs"],
+      "workflows": [".github/workflows/simcore-ci.yml", ".github/workflows/simcore-release.yml", ".github/workflows/simcore-release-command.yml"],
+      "possibleMutationClasses": ["PROJECT_STATE", "CANDIDATE_STATE", "RELEASE_CHANNEL"],
+      "receiptRequiredFor": ["PROJECT_STATE", "CANDIDATE_STATE", "RELEASE_CHANNEL"],
+      "verificationHooks": [".github/workflows/simcore-ci.yml"],
+      "routes": [
+        {"capability":"SIMCORE_VALIDATE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/simcore-ci.yml","fixedArgs":[],"executionClass":"READ_ONLY","mutationClass":null,"invokePolicy":"HANDOFF_ONLY"},
+        {"capability":"SIMCORE_HARNESS_SELF_TEST","targetKind":"LOCAL_NODE","target":"products/simcore/tooling/test.mjs","fixedArgs":["--self-test"],"executionClass":"READ_ONLY","mutationClass":null,"invokePolicy":"READ_ONLY_LOCAL"},
+        {"capability":"SIMCORE_CANDIDATE","targetKind":"LOCAL_NODE","target":"products/simcore/tooling/candidate-materialize.mjs","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"CANDIDATE_STATE","invokePolicy":"HANDOFF_ONLY"},
+        {"capability":"SIMCORE_STATE","targetKind":"LOCAL_NODE","target":"products/simcore/tooling/admin-state-transition.mjs","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"PROJECT_STATE","invokePolicy":"HANDOFF_ONLY"},
+        {"capability":"SIMCORE_RELEASE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/simcore-release-command.yml","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"RELEASE_CHANNEL","invokePolicy":"HANDOFF_ONLY"}
       ]
     },
     {
       "adapterId": "usage-dashboard",
       "supportedScopeIds": ["usage-dashboard"],
       "scopeKinds": ["plugin"],
-      "capabilities": [
-        "USAGE_DASHBOARD_VALIDATE",
-        "USAGE_DASHBOARD_CANDIDATE",
-        "USAGE_DASHBOARD_RELEASE"
-      ],
+      "capabilities": ["USAGE_DASHBOARD_VALIDATE", "USAGE_DASHBOARD_CANDIDATE", "USAGE_DASHBOARD_RELEASE"],
       "entrypoints": [],
-      "workflows": [
-        ".github/workflows/usage-dashboard-validate.yml",
-        ".github/workflows/usage-dashboard-prepare-candidate.yml",
-        ".github/workflows/usage-dashboard-promote.yml"
-      ],
-      "possibleMutationClasses": [
-        "CANDIDATE_STATE",
-        "RELEASE_STATE"
-      ],
-      "receiptRequiredFor": [
-        "CANDIDATE_STATE",
-        "RELEASE_STATE"
-      ],
-      "verificationHooks": [
-        ".github/workflows/usage-dashboard-validate.yml"
+      "workflows": [".github/workflows/usage-dashboard-validate.yml", ".github/workflows/usage-dashboard-prepare-candidate.yml", ".github/workflows/usage-dashboard-promote.yml"],
+      "possibleMutationClasses": ["CANDIDATE_STATE", "RELEASE_STATE"],
+      "receiptRequiredFor": ["CANDIDATE_STATE", "RELEASE_STATE"],
+      "verificationHooks": [".github/workflows/usage-dashboard-validate.yml"],
+      "routes": [
+        {"capability":"USAGE_DASHBOARD_VALIDATE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/usage-dashboard-validate.yml","fixedArgs":[],"executionClass":"READ_ONLY","mutationClass":null,"invokePolicy":"HANDOFF_ONLY"},
+        {"capability":"USAGE_DASHBOARD_CANDIDATE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/usage-dashboard-prepare-candidate.yml","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"CANDIDATE_STATE","invokePolicy":"HANDOFF_ONLY"},
+        {"capability":"USAGE_DASHBOARD_RELEASE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/usage-dashboard-promote.yml","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"RELEASE_STATE","invokePolicy":"HANDOFF_ONLY"}
       ]
     }
   ]

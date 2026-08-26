@@ -132,3 +132,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a0f69e68db7a74b1ef445d2953055e3949585a92)
 - Event ID: `9da118b046f887644eab0610243d382b0def2c12bab4fa290b9dfe30479911ae`
 <!-- canonical-main-doc-promoted:9da118b046f887644eab0610243d382b0def2c12bab4fa290b9dfe30479911ae -->
+
+### 2026-08-26 — feat: surface automatic Repository Work Harness shadow scans
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `992a0ba7347b703009229ae2a380288f22a8c83b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/992a0ba7347b703009229ae2a380288f22a8c83b)
+- Event ID: `d440188b0bb89f5ade2a52a5a055bfecdf082e84316faae23c3f736fb6b204e9`
+<!-- canonical-main-doc-promoted:d440188b0bb89f5ade2a52a5a055bfecdf082e84316faae23c3f736fb6b204e9 -->

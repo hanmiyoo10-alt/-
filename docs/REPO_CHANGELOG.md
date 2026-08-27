@@ -447,3 +447,27 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8d95fb7d425cfcb0d90f0832a5033fecde114ca0)
 - Event ID: `95f22dfb07645eaba1386510c8c8542ae809f8322fbed27ebcb529ae3700efd4`
 <!-- canonical-main-doc-promoted:95f22dfb07645eaba1386510c8c8542ae809f8322fbed27ebcb529ae3700efd4 -->
+
+### 2026-08-27 — infra: add last-seen main delta presentation (#570)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d9481d5c70b573fbd4aa56553e37a6722a051452`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d9481d5c70b573fbd4aa56553e37a6722a051452)
+- Event ID: `f99ef5f3ecfe7d3059cdcec768fc95f2b50a58f9a9dcc5aca9939d0134361b7c`
+<!-- canonical-main-doc-promoted:f99ef5f3ecfe7d3059cdcec768fc95f2b50a58f9a9dcc5aca9939d0134361b7c -->
+
+### 2026-08-27 — infra: add owner-comment anchor dispatch bridge (#574)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `849de90dc86816a4056aa6d9b141d49ea295ebe1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/849de90dc86816a4056aa6d9b141d49ea295ebe1)
+- Event ID: `6588d655551c6a284ddbc66fa54ef796bb60934dffc617a408a3d957fc057a63`
+<!-- canonical-main-doc-promoted:6588d655551c6a284ddbc66fa54ef796bb60934dffc617a408a3d957fc057a63 -->
+
+### 2026-08-27 — infra: add deterministic canonical idea classification core (#580)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5a258b250547fca0cb6e34a3152f3ad145dcb674`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5a258b250547fca0cb6e34a3152f3ad145dcb674)
+- Event ID: `36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b`
+<!-- canonical-main-doc-promoted:36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b -->

@@ -541,3 +541,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/77990dc367006e637ba12e71b0a6f5872fa9c6b4)
 - Event ID: `5b83095dde4c3c414f33f5aa7ac9baab54870a7f0e0378bf48d14852860f3ede`
 <!-- canonical-main-doc-promoted:5b83095dde4c3c414f33f5aa7ac9baab54870a7f0e0378bf48d14852860f3ede -->
+
+### 2026-08-27 — docs(simcore): inherit repository common rules (#613)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c73887acc3fbe74b94b1a099af4cb36cc6327174`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c73887acc3fbe74b94b1a099af4cb36cc6327174)
+- Event ID: `8c7e5bd7fc681dc44aec3f29ea0fbdff190a05cf20856e37ecd01c40c39ea84e`
+<!-- canonical-main-doc-promoted:8c7e5bd7fc681dc44aec3f29ea0fbdff190a05cf20856e37ecd01c40c39ea84e -->

@@ -28,6 +28,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'e12-event-convergence-simplification-contract.cjs',
   'e13-stage-handoff-wake-simplification-contract.cjs',
   'e14-ancestry-convergence-contract.cjs',
+  'e14-governance-alignment-contract.cjs',
   'pr-lifecycle-closure-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([

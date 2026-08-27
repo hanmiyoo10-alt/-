@@ -32,9 +32,16 @@ assert.equal(loadPolicy().bootstrap.sharedInteractionContract, sharedContract, '
 assert.equal(sharedInteractionContract(), sharedContract, 'bootstrap must resolve the canonical shared interaction contract');
 const sharedText = fs.readFileSync(path.join(root, sharedContract), 'utf8');
 assert.match(sharedText, /repository-shared-stage-boundary-reporting:v1/, 'shared contract must expose a stable stage-boundary marker');
+assert.match(sharedText, /repository-shared-long-work-major-checkpoint:v1/, 'shared contract must expose a stable long-work major-checkpoint marker');
+assert.match(sharedText, /canonical-main\/repository-scope work itself/i, 'shared contract must explicitly cover canonical-main/repository-scope work');
 assert.match(sharedText, /meaningful stage boundary/i, 'shared contract must define meaningful stage boundaries');
 assert.match(sharedText, /what changed/i, 'shared contract must require delta-focused reporting');
-assert.match(sharedText, /does not replace or outrank/i, 'shared contract must preserve project-specific authority');
+assert.match(sharedText, /simple work/i, 'shared contract must define simple-work pacing');
+assert.match(sharedText, /complete end-to-end in one pass/i, 'simple work must complete without artificial checkpointing');
+assert.match(sharedText, /major checkpoint boundary/i, 'shared contract must define major checkpoint boundaries for long work');
+assert.match(sharedText, /remaining work is clearly small and safely finishable/i, 'long-work pacing must finish small safe remainder instead of forcing a checkpoint');
+assert.match(sharedText, /atomic transition or required immediate validation\/close-sync/i, 'checkpointing must not interrupt atomic or required immediate verification state');
+assert.match(sharedText, /does not replace or outrank/i, 'shared contract must preserve repository/project authority');
 
 for (const descriptor of descriptors) {
   assert.deepEqual(validateDescriptor(descriptor), [], `${descriptor.id} descriptor shape must validate`);
@@ -77,6 +84,10 @@ for (const descriptor of descriptors) {
 const renderedFutureGuidelines = renderGuidelines(byId['voyage-token-check'], 'hanmiyoo10-alt/-');
 assert(renderedFutureGuidelines.includes(`Repository-wide shared interaction contract: \`${sharedContract}\``), 'future bootstrap render must include the shared interaction contract');
 assert.match(renderedFutureGuidelines, /inherits that shared interaction contract/, 'future bootstrap render must make inheritance explicit');
+
+const workSystemText = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/work-system/README.md'), 'utf8');
+assert(workSystemText.includes(`read \`${sharedContract}\` as the repository-wide reporting and work-pacing contract`), 'canonical-main worker/chat bootstrap must explicitly read the shared interaction contract');
+assert.match(workSystemText, /shared interaction contract supplies repo-wide interaction\/reporting\/pacing behavior/i, 'canonical-main work system must preserve the interaction-contract role without turning it into mutable authority');
 
 const coverage = descriptorCoverage(root);
 assert.equal(coverage.expectedCount, expectedIds.length);

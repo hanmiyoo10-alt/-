@@ -92,17 +92,20 @@ function snapshot(overrides = {}) {
   assert.match(rendered, /- UNKNOWN: NONE/);
 
   const incidentSnapshot = snapshot({
-    incidents: {active: [{severity: 'P1', reasonCode: 'REQUIRED_CHECK_FAILED', issue: {number: 502}}]},
+    incidents: {active: [{severity: 'P1', reasonCode: 'REQUIRED_CHECK_FAILED', issue: {number: 502, body: '- Reason: `REQUIRED_CHECK_FAILED`\n', labels: [{name: 'scope:repo'}]}}]},
   });
   assert.deepEqual(topOperationalReason(incidentSnapshot), {why: 'REQUIRED_CHECK_FAILED #502', next: 'REVIEW_INCIDENT #502'});
+  assert.match(renderSummary(incidentSnapshot), /- WHY: `REQUIRED_CHECK_FAILED` — evidence `issue:#502`, `severity:P1` — owner `scope:repo`/);
   assert.match(renderSummary(incidentSnapshot), /- NEXT: `REVIEW_INCIDENT #502`/);
   assert.doesNotMatch(renderSummary(incidentSnapshot), /- NEXT: `REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE`/);
 
-  const attentionSnapshot = snapshot({incidents: {attention: [{severity: 'P2', reasonCode: 'UNSTABLE_COMPONENT', issue: {number: 437}}]}});
+  const attentionSnapshot = snapshot({incidents: {attention: [{severity: 'P2', reasonCode: 'UNSTABLE_COMPONENT', issue: {number: 437, labels: [{name: 'scope:repo'}]}}]}});
   assert.deepEqual(topOperationalReason(attentionSnapshot), {why: 'UNSTABLE_COMPONENT #437', next: 'REVIEW_ATTENTION #437'});
+  assert.match(renderSummary(attentionSnapshot), /- WHY: `UNSTABLE_COMPONENT` — evidence `issue:#437`, `severity:P2` — owner `scope:repo`/);
 
   const settlingSnapshot = snapshot({convergence: {state: 'SETTLING', waitingFor: ['requiredCi'], ageSeconds: 30, stale: false}});
   assert.deepEqual(topOperationalReason(settlingSnapshot), {why: 'EVIDENCE_SETTLING', next: 'WAIT_FOR_CURRENT_EVIDENCE'});
+  assert.match(renderSummary(settlingSnapshot), /- WHY: `EVIDENCE_SETTLING` — evidence `observation:requiredCi` — owner `scope:repo`/);
 
   const unknownSnapshot = snapshot({observations: {
     mainDelta: {known: false, summary: 'UNKNOWN — anchor invalid', data: {state: 'UNKNOWN'}},

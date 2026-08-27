@@ -1,5 +1,7 @@
 'use strict';
 
+const {explainBlocked, legacyReason, renderWhy} = require('../domains/why-blocked.cjs');
+
 function inlineCode(value) {
   return `\`${String(value ?? 'UNKNOWN').replace(/`/g, "'")}\``;
 }
@@ -12,35 +14,7 @@ function compactConvergence(convergence) {
 }
 
 function topOperationalReason(snapshot) {
-  const active = (snapshot.incidents?.active || []).filter((row) => row.severity === 'P0' || row.severity === 'P1');
-  const incident = active.sort((a, b) => String(a.severity).localeCompare(String(b.severity)))[0];
-  if (incident) {
-    const number = Number(incident.issue?.number || 0);
-    return {
-      why: `${incident.reasonCode || 'INCIDENT'}${number > 0 ? ` #${number}` : ''}`,
-      next: `REVIEW_INCIDENT${number > 0 ? ` #${number}` : ''}`,
-    };
-  }
-
-  const attention = (snapshot.incidents?.attention || [])[0];
-  if (attention) {
-    const number = Number(attention.issue?.number || 0);
-    return {
-      why: `${attention.reasonCode || 'ATTENTION'}${number > 0 ? ` #${number}` : ''}`,
-      next: `REVIEW_ATTENTION${number > 0 ? ` #${number}` : ''}`,
-    };
-  }
-
-  if (snapshot.convergence?.state === 'SETTLING') {
-    return {
-      why: snapshot.convergence.stale ? 'CONVERGENCE_STALE' : 'EVIDENCE_SETTLING',
-      next: snapshot.convergence.stale ? 'REVIEW_STALE_EVIDENCE' : 'WAIT_FOR_CURRENT_EVIDENCE',
-    };
-  }
-  if (snapshot.operatorState === 'UNKNOWN' || snapshot.freshness?.valid === false) {
-    return {why: 'EVIDENCE_UNKNOWN', next: 'REVIEW_UNKNOWN_EVIDENCE'};
-  }
-  return {why: 'NONE', next: null};
+  return legacyReason(explainBlocked(snapshot));
 }
 
 function changeSummary(observation) {
@@ -83,15 +57,15 @@ function renderCompatibilityMetadata(snapshot) {
 
 function renderSummary(snapshot) {
   const protection = snapshot.observations?.protection?.data || {};
-  const reason = topOperationalReason(snapshot);
+  const blocked = explainBlocked(snapshot);
   const delta = snapshot.observations?.mainDelta;
-  const next = reason.next || (delta?.known === true && delta.data?.actionRequired ? delta.data.actionCode : 'NONE');
+  const next = blocked.blocked ? blocked.nextAction : (delta?.known === true && delta.data?.actionRequired ? delta.data.actionCode : 'NONE');
   return [
     '## Canonical Operator Capsule',
     `- STATE: ${inlineCode(snapshot.operatorState)}`,
     `- MAIN: ${inlineCode(snapshot.observedMainSha)} / Required ${snapshot.observations?.requiredCi?.summary || 'UNKNOWN'}`,
     `- CHANGE: ${changeSummary(delta)}`,
-    `- WHY: ${inlineCode(reason.why)}`,
+    `- WHY: ${renderWhy(blocked, inlineCode)}`,
     `- NEXT: ${inlineCode(next)}`,
     `- AUTHORITY: Production ${snapshot.observations?.productionAuthority?.summary || 'UNKNOWN'}; native protection ${inlineCode(protection.state || 'UNKNOWN')} / protected ${inlineCode(protection.protected === true)}; soft fallback ${inlineCode(protection.softEnforcementEnabled ? 'ACTIVE' : 'DISABLED')}`,
     `- UNKNOWN: ${unknownEvidence(snapshot)}`,

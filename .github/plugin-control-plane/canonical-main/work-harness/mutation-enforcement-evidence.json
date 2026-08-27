@@ -83,7 +83,7 @@
       "mutationClass": "CANDIDATE_STATE",
       "targetKind": "GITHUB_WORKFLOW",
       "target": ".github/workflows/usage-dashboard-prepare-candidate.yml",
-      "enforcementState": "REQUIRED_INSTALLED",
+      "enforcementState": "REQUIRED_PROVEN",
       "enforcementSurface": ".github/workflows/usage-dashboard-prepare-candidate.yml",
       "requiredMarkers": [
         "coordination_work_issue",
@@ -94,10 +94,14 @@
         "USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE"
       ],
       "proofRefs": [
-        "issue:#528",
-        "issue:#551"
+        "issue:#551",
+        "issue:#553",
+        "workflow-run:33040477819",
+        "workflow-run:33040929939",
+        "workflow-run:33040975702",
+        "receipt:05a75604800d29fcf5b40097ccc4fbd7c14d29af33d973e6ab446a10af28f358"
       ],
-      "note": "Required receipt enforcement is installed at the already live-proven Usage Dashboard candidate mutation boundary. No-op preparation stays receipt-free because it does not reach the writer; live required-mode mutation proof remains separate C6-V1."
+      "note": "Required receipt enforcement is live-proven: a no-work real candidate mutation was blocked before the writer, then a fresh coordination receipt was revalidated and the unchanged writer advanced only the disposable proof ref. The receipt remains coordination evidence only and does not authorize mutation or execution."
     },
     {
       "adapterId": "usage-dashboard",

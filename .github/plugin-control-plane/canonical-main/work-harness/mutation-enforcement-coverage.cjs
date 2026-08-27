@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const COVERAGE_STATES = new Set(['OPT_IN_PROVEN', 'INSTALLED_OPT_IN', 'REQUIRED_INSTALLED', 'UNGATED']);
+const COVERAGE_STATES = new Set(['OPT_IN_PROVEN', 'INSTALLED_OPT_IN', 'REQUIRED_INSTALLED', 'REQUIRED_PROVEN', 'UNGATED']);
 
 function routeKey(route) {
   return [
@@ -119,7 +119,7 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
           throw new Error(`COVERAGE_FORBIDDEN_MARKER_PRESENT:${key}:${marker}`);
         }
       }
-      if (evidenceRow.enforcementState === 'OPT_IN_PROVEN' && proofRefs.length === 0) {
+      if ((evidenceRow.enforcementState === 'OPT_IN_PROVEN' || evidenceRow.enforcementState === 'REQUIRED_PROVEN') && proofRefs.length === 0) {
         throw new Error(`COVERAGE_PROOF_MISSING:${key}`);
       }
     }
@@ -142,10 +142,14 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     optInProven: rows.filter((row) => row.enforcementState === 'OPT_IN_PROVEN').length,
     installedOptIn: rows.filter((row) => row.enforcementState === 'INSTALLED_OPT_IN').length,
     requiredInstalled: rows.filter((row) => row.enforcementState === 'REQUIRED_INSTALLED').length,
+    requiredProven: rows.filter((row) => row.enforcementState === 'REQUIRED_PROVEN').length,
     ungated: rows.filter((row) => row.enforcementState === 'UNGATED').length,
   };
   const requiredInstalledRouteKeys = rows
     .filter((row) => row.enforcementState === 'REQUIRED_INSTALLED')
+    .map(routeKey);
+  const requiredProvenRouteKeys = rows
+    .filter((row) => row.enforcementState === 'REQUIRED_PROVEN')
     .map(routeKey);
 
   return {
@@ -155,6 +159,7 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     counts,
     rows,
     requiredInstalledRouteKeys,
+    requiredProvenRouteKeys,
     ungatedRouteKeys: rows
       .filter((row) => row.enforcementState === 'UNGATED')
       .map(routeKey),

@@ -54,6 +54,10 @@ function snapshot(overrides = {}) {
       return {
         status: 'ahead',
         ahead_by: 2,
+        commits: [
+          {sha: 'c'.repeat(40), commit: {message: 'docs: promote canonical-main generated documentation (#99)'}},
+          {sha: 'd'.repeat(40), commit: {message: 'ci: change workflow'}},
+        ],
         files: [{filename: 'docs/NOTE.md'}, {filename: '.github/workflows/example.yml'}],
       };
     }},
@@ -61,15 +65,20 @@ function snapshot(overrides = {}) {
   assert.equal(observed.known, true);
   assert.equal(observed.data.generation, 7);
   assert.equal(observed.data.commitCount, 2);
+  assert.equal(observed.data.meaningfulCommitCount, 1);
+  assert.equal(observed.data.routineGeneratedDocCommitCount, 1);
   assert.equal(observed.data.fileCount, 2);
   assert.equal(observed.data.riskLevel, 'HIGH');
   assert.equal(observed.data.actionCode, 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE');
+  assert(observed.data.riskDrivers.includes('.github/workflows/example.yml'));
   assert.deepEqual(calls, [{path: `/compare/${anchorSha}...${mainSha}`, options: undefined}], 'Q1 delta observation must be read-only compare access');
 
   const noChange = await mainDelta.observe({allIssues: [issue(renderAnchorMarker({schemaVersion: 1, scope: 'canonical-main', anchorSha: mainSha, generation: 8, advancedFrom: anchorSha, advanceReason: 'EXPLICIT_BRIEF_DELIVERED', sourceRefs: []}))], mainSha, client: {api: async () => { throw new Error('compare must not run for identical anchor'); }}});
   assert.equal(noChange.known, true);
   assert.equal(noChange.data.riskLevel, 'NONE');
   assert.equal(noChange.data.commitCount, 0);
+  assert.equal(noChange.data.meaningfulCommitCount, 0);
+  assert.equal(noChange.data.routineGeneratedDocCommitCount, 0);
 
   const divergent = await mainDelta.observe({allIssues: [issue()], mainSha, client: {api: async () => ({status: 'diverged', ahead_by: 1, files: []})}});
   assert.equal(divergent.known, false);
@@ -84,7 +93,7 @@ function snapshot(overrides = {}) {
   assert.equal(visible.length, 8, 'default capsule must remain heading + exactly seven compact fields');
   for (const label of ['STATE', 'MAIN', 'CHANGE', 'WHY', 'NEXT', 'AUTHORITY', 'UNKNOWN']) assert(visible.some((line) => line.startsWith(`- ${label}:`)), `missing capsule field ${label}`);
   assert.match(rendered, /- STATE: `CLEAR`/);
-  assert.match(rendered, /- CHANGE: HIGH — 2 commit\(s\) \/ 2 file\(s\)/);
+  assert.match(rendered, /- CHANGE: HIGH — 2 total commit\(s\) \(1 meaningful \+ 1 routine generated-doc\) \/ 2 file\(s\)/);
   assert.match(rendered, /- WHY: `NONE`/);
   assert.match(rendered, /- NEXT: `REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE`/);
   assert.match(rendered, /native protection `READY_TO_ACTIVATE` \/ protected `false`/);

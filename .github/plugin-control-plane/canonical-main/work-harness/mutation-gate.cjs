@@ -5,6 +5,7 @@ const { createGitHubClient } = require('../infra/github-client.cjs');
 const { createIssueStore } = require('../infra/issue-store.cjs');
 const { discoverActiveWorkRecords } = require('./active-work.cjs');
 const { loadAdapterRegistry, loadProjectRegistry } = require('./dispatch.cjs');
+const { observeExpectedBranchRefs } = require('./expected-ref-observer.cjs');
 const { validateMutationBoundary } = require('./mutation-boundary.cjs');
 const { parseReceiptMarker } = require('./receipt.cjs');
 
@@ -42,7 +43,7 @@ function targetWork(discovery, issueNumber) {
   return { ok: true, record: recordMatches[0], provenance: matches[0] };
 }
 
-function evaluateMutationGate({ issues, workIssueNumber, mainSha, adapterRegistry, projectRegistry } = {}) {
+function evaluateMutationGate({ issues, workIssueNumber, mainSha, observedRefs, adapterRegistry, projectRegistry } = {}) {
   if (!Number.isInteger(workIssueNumber) || workIssueNumber < 1) {
     return blocked(['MUTATION_GATE_WORK_ISSUE_INVALID'], 'SUPPLY_ACTIVE_WORK_ISSUE_NUMBER');
   }
@@ -79,10 +80,13 @@ function evaluateMutationGate({ issues, workIssueNumber, mainSha, adapterRegistr
     );
   }
 
+  const refs = observedRefs && typeof observedRefs === 'object' && !Array.isArray(observedRefs)
+    ? observedRefs
+    : { main: mainSha };
   const boundary = validateMutationBoundary(
     target.record,
     discovery.records,
-    { main: mainSha },
+    refs,
     adapterRegistry,
     projectRegistry,
     parsed.receipt,
@@ -120,6 +124,16 @@ function parseArgs(argv = process.argv.slice(2)) {
   return { workIssueNumber: Number(argv[1]) };
 }
 
+function mutationObservationReason(code) {
+  if (code.startsWith('EXPECTED_REF_OBSERVER_REF_INVALID:')) {
+    return `MUTATION_GATE_OBSERVED_BRANCH_REF_INVALID:${code.slice('EXPECTED_REF_OBSERVER_REF_INVALID:'.length)}`;
+  }
+  if (code.startsWith('EXPECTED_REF_OBSERVER_READ_FAILED:')) {
+    return `MUTATION_GATE_OBSERVED_BRANCH_READ_FAILED:${code.slice('EXPECTED_REF_OBSERVER_READ_FAILED:'.length)}`;
+  }
+  return `MUTATION_GATE_OBSERVED_BRANCH_UNKNOWN:${code}`;
+}
+
 async function run({ token, repo, root = path.resolve(__dirname, '../../../..'), workIssueNumber, fetchImpl } = {}) {
   const client = createGitHubClient({
     token: token || process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
@@ -130,10 +144,35 @@ async function run({ token, repo, root = path.resolve(__dirname, '../../../..'),
   const issueStore = createIssueStore(client);
   const issues = await issueStore.listIssues('open');
   const branch = await client.api('/branches/main');
+  const mainSha = branch?.commit?.sha;
+
+  const discovery = discoverActiveWorkRecords(issues);
+  if (!discovery.errors.length) {
+    const target = targetWork(discovery, workIssueNumber);
+    if (target.ok) {
+      const observation = await observeExpectedBranchRefs({ client, workRecord: target.record, mainSha });
+      if (observation.reasonCodes.length) {
+        return blocked(
+          observation.reasonCodes.map(mutationObservationReason),
+          'REFRESH_EXPECTED_BRANCH_EVIDENCE',
+          { workId: target.record.workId },
+        );
+      }
+      return evaluateMutationGate({
+        issues,
+        workIssueNumber,
+        mainSha,
+        observedRefs: observation.observedRefs,
+        adapterRegistry: loadAdapterRegistry(root),
+        projectRegistry: loadProjectRegistry(root),
+      });
+    }
+  }
+
   return evaluateMutationGate({
     issues,
     workIssueNumber,
-    mainSha: branch?.commit?.sha,
+    mainSha,
     adapterRegistry: loadAdapterRegistry(root),
     projectRegistry: loadProjectRegistry(root),
   });
@@ -155,4 +194,4 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { blocked, evaluateMutationGate, exitCodeFor, main, parseArgs, run, targetWork };
+module.exports = { blocked, evaluateMutationGate, exitCodeFor, main, mutationObservationReason, parseArgs, run, targetWork };

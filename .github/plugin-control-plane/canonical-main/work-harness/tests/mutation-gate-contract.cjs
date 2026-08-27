@@ -11,6 +11,9 @@ const root = path.resolve(__dirname, '../../../../..');
 const adapters = loadAdapterRegistry(root);
 const projects = loadProjectRegistry(root);
 const gateSource = fs.readFileSync(path.join(__dirname, '..', 'mutation-gate.cjs'), 'utf8');
+const MAIN = 'abc123';
+const CANDIDATE = 'c'.repeat(40);
+const CANDIDATE_REF = 'release/usage-dashboard-harness-c3-v1';
 
 function workRecord(overrides = {}) {
   return {
@@ -29,8 +32,8 @@ function workRecord(overrides = {}) {
     protectedSurfaces: ['ref:main'],
     closeSyncSurfaces: [],
     dependsOn: [],
-    expectedBases: [{ ref: 'main', mode: 'EXACT', sha: 'abc123', mayAdvance: true }],
-    sourceAuthorityRefs: ['issue:#493', 'commit:abc123'],
+    expectedBases: [{ ref: 'main', mode: 'EXACT', sha: MAIN, mayAdvance: true }],
+    sourceAuthorityRefs: ['issue:#493', `commit:${MAIN}`],
     stopCondition: 'test only',
     ...overrides,
   };
@@ -50,13 +53,13 @@ function issue(number, record, receiptMarker = '') {
 }
 
 const record = workRecord();
-const issued = issueCoordinationReceipt(record, [record], { main: 'abc123' }, adapters, projects);
+const issued = issueCoordinationReceipt(record, [record], { main: MAIN }, adapters, projects);
 assert.equal(issued.status, 'RECEIPT_ISSUED');
 const receiptMarker = renderReceiptMarker(issued.receipt);
 const readyIssue = issue(700, record, receiptMarker);
 
 const ready = evaluateMutationGate({
-  issues: [readyIssue], workIssueNumber: 700, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  issues: [readyIssue], workIssueNumber: 700, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
 });
 assert.equal(ready.status, 'MUTATION_GATE_READY');
 assert.equal(ready.coordinationReady, true);
@@ -74,9 +77,9 @@ function assertCrossScopeGateReady({ number, workId, objectiveId, scopeId, capab
     scopeId,
     requiredCapability: capability,
     writeAuthorities: [{ surface: writeSurface, role: 'PRIMARY_WRITE' }],
-    sourceAuthorityRefs: [`issue:#${number}`, 'commit:abc123'],
+    sourceAuthorityRefs: [`issue:#${number}`, `commit:${MAIN}`],
   });
-  const scopedIssued = issueCoordinationReceipt(scopedRecord, [scopedRecord], { main: 'abc123' }, adapters, projects);
+  const scopedIssued = issueCoordinationReceipt(scopedRecord, [scopedRecord], { main: MAIN }, adapters, projects);
   assert.equal(scopedIssued.status, 'RECEIPT_ISSUED');
   assert.equal(scopedIssued.receipt.adapterId, scopeId);
   assert.equal(scopedIssued.receipt.requiredCapability, capability);
@@ -85,7 +88,7 @@ function assertCrossScopeGateReady({ number, workId, objectiveId, scopeId, capab
 
   const scopedIssue = issue(number, scopedRecord, renderReceiptMarker(scopedIssued.receipt));
   const scopedReady = evaluateMutationGate({
-    issues: [scopedIssue], workIssueNumber: number, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+    issues: [scopedIssue], workIssueNumber: number, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
   });
   assert.equal(scopedReady.status, 'MUTATION_GATE_READY');
   assert.equal(scopedReady.coordinationReady, true);
@@ -115,8 +118,54 @@ assertCrossScopeGateReady({
   writeSurface: 'ref:candidate/simcore/test-c1',
 });
 
+const crossRefRecord = workRecord({
+  workId: 'TEST-C3-R2-USAGE-DASHBOARD',
+  objectiveId: 'TEST:C3:R2:USAGE_DASHBOARD',
+  scopeId: 'usage-dashboard',
+  requiredCapability: 'USAGE_DASHBOARD_CANDIDATE',
+  writeAuthorities: [{ surface: `ref:${CANDIDATE_REF}`, role: 'PRIMARY_WRITE' }],
+  protectedSurfaces: ['ref:main', 'ref:release-usage-dashboard'],
+  expectedBases: [
+    { ref: 'main', mode: 'EXACT', sha: MAIN, mayAdvance: false },
+    { ref: CANDIDATE_REF, mode: 'EXACT', sha: CANDIDATE, mayAdvance: true },
+  ],
+  sourceAuthorityRefs: ['issue:#712', `commit:${MAIN}`, `commit:${CANDIDATE}`],
+});
+const crossRefIssued = issueCoordinationReceipt(
+  crossRefRecord,
+  [crossRefRecord],
+  { main: MAIN, [CANDIDATE_REF]: CANDIDATE },
+  adapters,
+  projects,
+);
+assert.equal(crossRefIssued.status, 'RECEIPT_ISSUED');
+const crossRefIssue = issue(712, crossRefRecord, renderReceiptMarker(crossRefIssued.receipt));
+
+const crossRefMainOnlyBlocked = evaluateMutationGate({
+  issues: [crossRefIssue],
+  workIssueNumber: 712,
+  mainSha: MAIN,
+  adapterRegistry: adapters,
+  projectRegistry: projects,
+});
+assert.equal(crossRefMainOnlyBlocked.status, 'MUTATION_GATE_BLOCKED');
+assert.ok(crossRefMainOnlyBlocked.reasonCodes.includes(`RECEIPT_OBSERVED_REF_MISSING:${CANDIDATE_REF}`));
+
+const crossRefReady = evaluateMutationGate({
+  issues: [crossRefIssue],
+  workIssueNumber: 712,
+  mainSha: MAIN,
+  observedRefs: { main: MAIN, [CANDIDATE_REF]: CANDIDATE },
+  adapterRegistry: adapters,
+  projectRegistry: projects,
+});
+assert.equal(crossRefReady.status, 'MUTATION_GATE_READY');
+assert.equal(crossRefReady.boundary.status, 'MUTATION_BOUNDARY_READY');
+assert.equal(crossRefReady.mutationAuthorized, false);
+assert.equal(crossRefReady.executionAuthorized, false);
+
 const absent = evaluateMutationGate({
-  issues: [issue(700, record)], workIssueNumber: 700, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  issues: [issue(700, record)], workIssueNumber: 700, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
 });
 assert.equal(absent.status, 'MUTATION_GATE_BLOCKED');
 assert.ok(absent.reasonCodes.includes('MUTATION_GATE_RECEIPT_REQUIRED'));
@@ -136,7 +185,7 @@ const tampered = JSON.parse(JSON.stringify(issued.receipt));
 tampered.adapterId = 'simcore';
 const tamperedMarker = `<!-- repository-coordination-receipt:v1 -->\n\`\`\`json\n${JSON.stringify(tampered, null, 2)}\n\`\`\`\n<!-- /repository-coordination-receipt:v1 -->`;
 const invalid = evaluateMutationGate({
-  issues: [issue(700, record, tamperedMarker)], workIssueNumber: 700, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  issues: [issue(700, record, tamperedMarker)], workIssueNumber: 700, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
 });
 assert.equal(invalid.status, 'MUTATION_GATE_BLOCKED');
 assert.ok(invalid.reasonCodes.includes('MUTATION_GATE_RECEIPT_INVALID'));
@@ -144,14 +193,14 @@ assert.ok(invalid.reasonCodes.includes('RECEIPT_PAYLOAD_INVALID'));
 assert.ok(invalid.reasonCodes.includes('RECEIPT_INTEGRITY_HASH_INVALID'));
 
 const missingTarget = evaluateMutationGate({
-  issues: [readyIssue], workIssueNumber: 701, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  issues: [readyIssue], workIssueNumber: 701, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
 });
 assert.equal(missingTarget.status, 'MUTATION_GATE_BLOCKED');
 assert.ok(missingTarget.reasonCodes.includes('MUTATION_GATE_TARGET_WORK_NOT_ACTIVE'));
 
 const duplicateIssue = issue(701, record);
 const discoveryBlocked = evaluateMutationGate({
-  issues: [readyIssue, duplicateIssue], workIssueNumber: 700, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  issues: [readyIssue, duplicateIssue], workIssueNumber: 700, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
 });
 assert.equal(discoveryBlocked.status, 'MUTATION_GATE_BLOCKED');
 assert.ok(discoveryBlocked.reasonCodes.includes('MUTATION_GATE_DISCOVERY_BLOCKED'));
@@ -160,11 +209,11 @@ assert.ok(discoveryBlocked.reasonCodes.includes('DISCOVERY_DUPLICATE_WORK_ID:TES
 const conflict = workRecord({
   workId: 'TEST-B5-CONFLICT',
   objectiveId: 'TEST:B5:CONFLICT',
-  sourceAuthorityRefs: ['issue:#701', 'commit:abc123'],
-  expectedBases: [{ ref: 'main', mode: 'EXACT', sha: 'abc123', mayAdvance: false }],
+  sourceAuthorityRefs: ['issue:#701', `commit:${MAIN}`],
+  expectedBases: [{ ref: 'main', mode: 'EXACT', sha: MAIN, mayAdvance: false }],
 });
 const conflictBlocked = evaluateMutationGate({
-  issues: [readyIssue, issue(701, conflict)], workIssueNumber: 700, mainSha: 'abc123', adapterRegistry: adapters, projectRegistry: projects,
+  issues: [readyIssue, issue(701, conflict)], workIssueNumber: 700, mainSha: MAIN, adapterRegistry: adapters, projectRegistry: projects,
 });
 assert.equal(conflictBlocked.status, 'MUTATION_GATE_BLOCKED');
 assert.ok(conflictBlocked.reasonCodes.includes('MUTATION_GATE_BOUNDARY_BLOCKED'));
@@ -209,7 +258,7 @@ async function testReadOnlyRun() {
     fetchImpl: async (url, options = {}) => {
       seen.push({ url, method: options.method || 'GET' });
       if (url.endsWith('/issues?state=open&per_page=100&page=1')) return response([readyIssue]);
-      if (url.endsWith('/branches/main')) return response({ commit: { sha: 'abc123' } });
+      if (url.endsWith('/branches/main')) return response({ commit: { sha: MAIN } });
       return response({ message: 'not found' }, 404);
     },
   });
@@ -219,9 +268,52 @@ async function testReadOnlyRun() {
   assert.ok(seen[1].url.endsWith('/branches/main'));
 }
 
-testReadOnlyRun()
-  .then(() => console.log('work-harness mutation-gate-contract: ok'))
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
+async function testCrossRefReadOnlyRun() {
+  const seen = [];
+  const fetched = await run({
+    token: 'test-token',
+    repo: 'owner/repo',
+    root,
+    workIssueNumber: 712,
+    fetchImpl: async (url, options = {}) => {
+      seen.push({ url, method: options.method || 'GET' });
+      if (url.endsWith('/issues?state=open&per_page=100&page=1')) return response([crossRefIssue]);
+      if (url.endsWith('/branches/main')) return response({ commit: { sha: MAIN } });
+      if (url.endsWith(`/git/ref/heads/${CANDIDATE_REF}`)) return response({ object: { sha: CANDIDATE } });
+      return response({ message: 'not found' }, 404);
+    },
   });
+  assert.equal(fetched.status, 'MUTATION_GATE_READY');
+  assert.equal(fetched.boundary.status, 'MUTATION_BOUNDARY_READY');
+  assert.deepEqual(seen.map((entry) => entry.method), ['GET', 'GET', 'GET']);
+  assert.ok(seen[2].url.endsWith(`/git/ref/heads/${CANDIDATE_REF}`));
+}
+
+async function testCrossRefMissingRun() {
+  const fetched = await run({
+    token: 'test-token',
+    repo: 'owner/repo',
+    root,
+    workIssueNumber: 712,
+    fetchImpl: async (url) => {
+      if (url.endsWith('/issues?state=open&per_page=100&page=1')) return response([crossRefIssue]);
+      if (url.endsWith('/branches/main')) return response({ commit: { sha: MAIN } });
+      if (url.endsWith(`/git/ref/heads/${CANDIDATE_REF}`)) return response({ message: 'not found' }, 404);
+      return response({ message: 'not found' }, 404);
+    },
+  });
+  assert.equal(fetched.status, 'MUTATION_GATE_BLOCKED');
+  assert.ok(fetched.reasonCodes.includes(`RECEIPT_OBSERVED_REF_MISSING:${CANDIDATE_REF}`));
+  assert.equal(fetched.mutationAuthorized, false);
+  assert.equal(fetched.executionAuthorized, false);
+}
+
+(async () => {
+  await testReadOnlyRun();
+  await testCrossRefReadOnlyRun();
+  await testCrossRefMissingRun();
+  console.log('work-harness mutation-gate-contract: ok');
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

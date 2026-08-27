@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.64.8-intent-02",
+  "releaseId": "simcore-v0.64.8-new-02",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "sourceCommit": "93da303cc9a81be77593fc362a1b5971f55e0567",
+  "candidateCommit": "f5e29464452728f859a1a6a8191a846468353531",
+  "candidateReleaseBlob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.64.8-intent-02",
+  "builderPath": "products/simcore/tooling/build-06408-output-complete-checkpoint-repair.py",
+  "builderSha256": "cfac10dd8498641395f5f50ab4bfd88476949ad73c9ae7afb1cbb196e2d04f3f",
+  "verifierCommit": "93da303cc9a81be77593fc362a1b5971f55e0567",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "7cdc1c94333938d0122dc23c23253d119b985c3b665719f9fcf5dd421c3e2eec",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

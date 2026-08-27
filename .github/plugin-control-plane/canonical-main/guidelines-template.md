@@ -12,6 +12,15 @@ Never infer the current production version from conversation memory.
 Read the actual repository and production release branch first.
 
 
+## Repository common-rules inheritance
+
+This project guideline inherits the applicable repository-wide shared policy from `docs/REPOSITORY_COMMON_RULES.md` by reference. Do not copy the common-rule body into this project document.
+
+Repository `HARD_INVARIANT` rules remain binding and must not be silently weakened. This project may explicitly specialize repository `DEFAULT` and applicable `CONDITIONAL` behavior when its own contract or evidence requires a more specific rule.
+
+The common-rules layer does not own this project's mutable production, release, runtime, deployment, device, or validation truth. Those facts remain owned by the project-specific authority chain defined below and by its current repository evidence.
+
+
 ## Current production snapshot
 
 <!-- PLUGIN_RELEASE_STATE_START -->

@@ -93,11 +93,16 @@ function clientScenario({capsuleSha = mainSha, compareStatus = 'ahead', barrierM
   assert.equal(parsed.operatorState, 'CLEAR');
   assert.equal(parseCapsule('no capsule').reasonCode, 'SESSION_CAPSULE_MISSING');
 
-  assert.equal(invocationFromIssueCommentEvent(event(), {owner: 'owner'}).ok, true);
+  const requested = invocationFromIssueCommentEvent(event(), {owner: 'owner'});
+  assert.equal(requested.ok, true);
+  assert.equal(requested.requested, true);
   assert.equal(invocationFromIssueCommentEvent(event({comment: {user: {login: 'other'}, author_association: 'OWNER', body: COMMAND}}), {owner: 'owner'}).ok, false);
   assert.equal(invocationFromIssueCommentEvent(event({comment: {user: {login: 'owner'}, author_association: 'MEMBER', body: COMMAND}}), {owner: 'owner'}).ok, false);
   assert.equal(invocationFromIssueCommentEvent(event({issue: {number: 999}}), {owner: 'owner'}).ok, false);
-  assert.equal(invocationFromIssueCommentEvent(event({comment: {user: {login: 'owner'}, author_association: 'OWNER', body: `${COMMAND} now`}}), {owner: 'owner'}).ok, false);
+  const unrelated = invocationFromIssueCommentEvent(event({comment: {user: {login: 'owner'}, author_association: 'OWNER', body: `${COMMAND} now`}}), {owner: 'owner'});
+  assert.equal(unrelated.ok, true);
+  assert.equal(unrelated.requested, false);
+  assert(unrelated.reasonCodes.includes('SESSION_COMMAND_NOT_REQUESTED'));
 
   const success = clientScenario();
   const staged = await executeSessionCompose({client: success.client});
@@ -148,12 +153,13 @@ function clientScenario({capsuleSha = mainSha, compareStatus = 'ahead', barrierM
 
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-delta-anchor.yml'), 'utf8');
   assert.match(workflow, /compose-session:/);
-  assert.match(workflow, /github\.event\.comment\.body == '\/canonical-main-session-start compose'/);
   assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
   assert.match(workflow, /github\.event\.comment\.author_association == 'OWNER'/);
   assert.match(workflow, /main-delta-session-command\.cjs/);
+  assert.match(workflow, /steps\.session\.outputs\.compose == 'true'/);
   assert.match(workflow, /main-delta-session-start\.cjs compose/);
   assert.match(workflow, /ref: main/);
+  assert.doesNotMatch(workflow, /run:[\s\S]*github\.event\.comment\.body/, 'raw issue comment body must stay before shell run blocks');
 
   console.log('CANONICAL_MAIN_SESSION_START_CONTRACT:OK');
 })().catch((error) => {

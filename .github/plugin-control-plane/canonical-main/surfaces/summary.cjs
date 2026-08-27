@@ -23,7 +23,13 @@ function changeSummary(observation) {
     return `UNKNOWN — ${detail}`;
   }
   const data = observation.data;
-  return `${data.riskLevel || 'UNKNOWN'} — ${data.commitCount || 0} commit(s) / ${data.fileCount || 0} file(s) since ${String(data.anchorSha || 'UNKNOWN').slice(0, 12)}`;
+  const total = Number.isSafeInteger(data.commitCount) ? data.commitCount : 0;
+  const routine = Number.isSafeInteger(data.routineGeneratedDocCommitCount) ? data.routineGeneratedDocCommitCount : 0;
+  const meaningful = Number.isSafeInteger(data.meaningfulCommitCount) ? data.meaningfulCommitCount : Math.max(0, total - routine);
+  const commits = routine > 0
+    ? `${total} total commit(s) (${meaningful} meaningful + ${routine} routine generated-doc)`
+    : `${total} commit(s)`;
+  return `${data.riskLevel || 'UNKNOWN'} — ${commits} / ${data.fileCount || 0} file(s) since ${String(data.anchorSha || 'UNKNOWN').slice(0, 12)}`;
 }
 
 function unknownEvidence(snapshot, limit = 4) {

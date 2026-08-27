@@ -76,6 +76,10 @@ function clientScenario({capsuleSha = mainSha, compareStatus = 'ahead', barrierM
         return {
           status: compareStatus,
           ahead_by: 2,
+          commits: [
+            {sha: 'c'.repeat(40), commit: {message: 'docs: promote canonical-main generated documentation (#99)'}},
+            {sha: 'd'.repeat(40), commit: {message: 'ci: change workflow'}},
+          ],
           files: [{filename: '.github/workflows/example.yml'}, {filename: 'docs/NOTE.md'}],
         };
       }
@@ -115,11 +119,15 @@ function clientScenario({capsuleSha = mainSha, compareStatus = 'ahead', barrierM
   assert.equal(staged.anchorGeneration, 3);
   assert.equal(staged.commentId, 12345);
   assert.equal(staged.brief.deliveryState, 'PENDING_USER_VISIBLE_DELIVERY');
+  assert.equal(staged.brief.commitCount, 2);
+  assert.equal(staged.brief.meaningfulCommitCount, 1);
+  assert.equal(staged.brief.routineGeneratedDocCommitCount, 1);
   assert.equal(staged.brief.riskLevel, 'HIGH');
   assert.equal(staged.brief.actionCode, 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE');
   const post = success.calls.find((row) => row.endpoint === '/issues/562/comments');
   assert(post, 'session composition must stage exactly one issue comment');
   assert.match(post.options.body.body, /PENDING_USER_VISIBLE_DELIVERY/);
+  assert.match(post.options.body.body, /CHANGE: HIGH — 2 total commit\(s\) \(1 meaningful \+ 1 routine generated-doc\) \/ 2 file\(s\)/);
   assert.match(post.options.body.body, new RegExp(anchorSha));
   assert.match(post.options.body.body, new RegExp(mainSha));
   assert.equal(success.calls.some((row) => row.endpoint === '/issues/562' && row.options?.method === 'PATCH'), false, 'composer must never PATCH anchor state');
@@ -150,6 +158,7 @@ function clientScenario({capsuleSha = mainSha, compareStatus = 'ahead', barrierM
   const composerSource = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/main-delta-session-start.cjs'), 'utf8');
   assert.doesNotMatch(composerSource, /method:\s*['"]PATCH['"]/, 'session composer must not own anchor PATCH');
   assert.doesNotMatch(composerSource, /executeAnchorAdvance|planAnchorAdvance/, 'session composer must not import anchor mutation owner');
+  assert.match(composerSource, /changeSummary\(delta\)/, 'session brief must reuse the Q1 CHANGE presentation owner');
 
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-delta-anchor.yml'), 'utf8');
   assert.match(workflow, /compose-session:/);

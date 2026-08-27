@@ -1,7 +1,7 @@
 'use strict';
 
 const {ANCHOR_START, parseAnchorMarker} = require('../main-delta-anchor.cjs');
-const {classifyPath, deriveRiskAndAction} = require('../main-delta-presentation.cjs');
+const {classifyPath, deriveRiskAndAction, summarizeCommitNoise} = require('../main-delta-presentation.cjs');
 
 function unknown(summary, reasonCode, data = {}) {
   return {
@@ -12,12 +12,16 @@ function unknown(summary, reasonCode, data = {}) {
   };
 }
 
-function knownDelta({anchorSha, generation, headSha, commitCount, files}) {
+function knownDelta({anchorSha, generation, headSha, commitCount, files, commits = []}) {
   const classified = files.map(classifyPath);
   const risk = deriveRiskAndAction(classified);
+  const noise = summarizeCommitNoise(commits, commitCount);
+  const commitSummary = noise.routineGeneratedDocCommitCount > 0
+    ? `${commitCount} total commit(s) (${noise.meaningfulCommitCount} meaningful + ${noise.routineGeneratedDocCommitCount} routine generated-doc)`
+    : `${commitCount} commit(s)`;
   return {
     known: true,
-    summary: `${risk.riskLevel} — ${commitCount} commit(s) / ${files.length} file(s)`,
+    summary: `${risk.riskLevel} — ${commitSummary} / ${files.length} file(s)`,
     events: [],
     data: {
       state: 'OK',
@@ -25,6 +29,8 @@ function knownDelta({anchorSha, generation, headSha, commitCount, files}) {
       generation,
       headSha,
       commitCount,
+      meaningfulCommitCount: noise.meaningfulCommitCount,
+      routineGeneratedDocCommitCount: noise.routineGeneratedDocCommitCount,
       fileCount: files.length,
       riskLevel: risk.riskLevel,
       actionRequired: risk.actionRequired,
@@ -51,7 +57,7 @@ async function observe(context) {
   if (!/^[0-9a-f]{40}$/.test(String(mainSha || ''))) return unknown('current main SHA is invalid', 'MAIN_DELTA_MAIN_SHA_INVALID');
 
   const {anchorSha, generation} = parsed.state;
-  if (anchorSha === mainSha) return knownDelta({anchorSha, generation, headSha: mainSha, commitCount: 0, files: []});
+  if (anchorSha === mainSha) return knownDelta({anchorSha, generation, headSha: mainSha, commitCount: 0, files: [], commits: []});
   if (!client || typeof client.api !== 'function') return unknown('GitHub compare client is unavailable', 'MAIN_DELTA_COMPARE_CLIENT_UNAVAILABLE', {anchorSha, headSha: mainSha});
 
   const comparison = await client.api(`/compare/${anchorSha}...${mainSha}`);
@@ -74,7 +80,8 @@ async function observe(context) {
   const commitCount = Number.isSafeInteger(comparison.ahead_by)
     ? comparison.ahead_by
     : (Array.isArray(comparison.commits) ? comparison.commits.length : 0);
-  return knownDelta({anchorSha, generation, headSha: mainSha, commitCount, files});
+  const commits = Array.isArray(comparison.commits) ? comparison.commits : [];
+  return knownDelta({anchorSha, generation, headSha: mainSha, commitCount, files, commits});
 }
 
 module.exports = {knownDelta, observe, unknown};

@@ -471,3 +471,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5a258b250547fca0cb6e34a3152f3ad145dcb674)
 - Event ID: `36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b`
 <!-- canonical-main-doc-promoted:36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b -->
+
+### 2026-08-27 — infra: add conservative raw-text idea classification signals (#584)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d4948c496f9d4d89ab2d4df3c2b6fa39af35b85b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d4948c496f9d4d89ab2d4df3c2b6fa39af35b85b)
+- Event ID: `2d5f1b33caf7f9519785e200fb080d8973509f605f5dbc12232e85cf92b3c80f`
+<!-- canonical-main-doc-promoted:2d5f1b33caf7f9519785e200fb080d8973509f605f5dbc12232e85cf92b3c80f -->

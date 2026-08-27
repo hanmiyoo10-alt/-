@@ -5,6 +5,10 @@ const { createIssueStore } = require('../infra/issue-store.cjs');
 const { discoverActiveWorkRecords } = require('./active-work.cjs');
 const { loadAdapterRegistry, loadProjectRegistry } = require('./dispatch.cjs');
 const {
+  branchRefEndpoint,
+  observeExpectedBranchRefs: observeExpectedBranchRefsShared,
+} = require('./expected-ref-observer.cjs');
+const {
   RECEIPT_END,
   RECEIPT_START,
   issueCoordinationReceipt,
@@ -143,35 +147,22 @@ function activeTargetRecord(issues, targetIssueNumber) {
   return discovery.records.find((record) => record.workId === sources[0].workId) || null;
 }
 
-function branchRefEndpoint(ref) {
-  if (typeof ref !== 'string' || !ref || ref === 'main') return null;
-  if (ref.startsWith('/') || ref.endsWith('/') || ref.includes('//') || ref.includes('..') || ref.includes('@{')) return null;
-  if (/[\\\s~^:?*\[]/.test(ref) || ref.endsWith('.') || ref.split('/').some((part) => !part || part === '.' || part === '..' || part.endsWith('.lock'))) return null;
-  return `/git/ref/heads/${ref.split('/').map((part) => encodeURIComponent(part)).join('/')}`;
+function receiptObservationReason(code) {
+  if (code.startsWith('EXPECTED_REF_OBSERVER_REF_INVALID:')) {
+    return `RECEIPT_SYNC_OBSERVED_BRANCH_REF_INVALID:${code.slice('EXPECTED_REF_OBSERVER_REF_INVALID:'.length)}`;
+  }
+  if (code.startsWith('EXPECTED_REF_OBSERVER_READ_FAILED:')) {
+    return `RECEIPT_SYNC_OBSERVED_BRANCH_READ_FAILED:${code.slice('EXPECTED_REF_OBSERVER_READ_FAILED:'.length)}`;
+  }
+  return `RECEIPT_SYNC_OBSERVED_BRANCH_UNKNOWN:${code}`;
 }
 
-async function observeExpectedBranchRefs({ client, workRecord, mainSha } = {}) {
-  const observedRefs = {};
-  const reasonCodes = [];
-  if (typeof mainSha === 'string' && mainSha) observedRefs.main = mainSha;
-  if (!client || !workRecord || !Array.isArray(workRecord.expectedBases)) return { observedRefs, reasonCodes };
-
-  const refs = [...new Set(workRecord.expectedBases.map((base) => base?.ref).filter((ref) => typeof ref === 'string' && ref && ref !== 'main'))].sort();
-  for (const ref of refs) {
-    const endpoint = branchRefEndpoint(ref);
-    if (!endpoint) {
-      reasonCodes.push(`RECEIPT_SYNC_OBSERVED_BRANCH_REF_INVALID:${ref}`);
-      continue;
-    }
-    try {
-      const result = await client.api(endpoint, { allow404: true });
-      const sha = result?.object?.sha;
-      if (typeof sha === 'string' && sha) observedRefs[ref] = sha;
-    } catch {
-      reasonCodes.push(`RECEIPT_SYNC_OBSERVED_BRANCH_READ_FAILED:${ref}`);
-    }
-  }
-  return { observedRefs, reasonCodes: [...new Set(reasonCodes)].sort() };
+async function observeExpectedBranchRefs(args = {}) {
+  const observation = await observeExpectedBranchRefsShared(args);
+  return {
+    observedRefs: observation.observedRefs,
+    reasonCodes: (observation.reasonCodes || []).map(receiptObservationReason).sort(),
+  };
 }
 
 async function run({ argv = process.argv.slice(2), env = process.env } = {}) {

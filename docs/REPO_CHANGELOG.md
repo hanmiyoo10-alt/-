@@ -454,6 +454,20 @@
 - Event ID: `103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3`
 <!-- canonical-main-doc-promoted:103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3 -->
 
+### 2026-08-27 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `0635f292c705f09872e23b91b75a4c2a6807d2e6c932df335a6e0e9e874b7418`
+<!-- canonical-main-doc-promoted:0635f292c705f09872e23b91b75a4c2a6807d2e6c932df335a6e0e9e874b7418 -->
+
+### 2026-08-27 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `9f6535d14885010e6b22dc333bbccd127849762cdc2939acc6dd948890e54514`
+<!-- canonical-main-doc-promoted:9f6535d14885010e6b22dc333bbccd127849762cdc2939acc6dd948890e54514 -->
+
 ### 2026-08-27 — infra: add canonical main delta brief core (#561)
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

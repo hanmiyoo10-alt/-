@@ -61,7 +61,7 @@ function main() {
     '',
     `/canonical-main-delta-anchor advance ${A}`,
     `/canonical-main-delta-anchor advance ${A} ${B} bad-reason`,
-    `/canonical-main-delta-anchor advance ${A.toUpperCase()} ${B}`,
+    `/canonical-main-delta-anchor advance ${'A'.repeat(40)} ${B}`,
     `prefix /canonical-main-delta-anchor advance ${A} ${B}`,
     `/canonical-main-delta-anchor advance ${A} ${B}\nextra`,
   ]) {

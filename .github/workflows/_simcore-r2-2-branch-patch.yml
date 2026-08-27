@@ -10,15 +10,16 @@ permissions:
 
 jobs:
   patch-current-development:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(simcore): retry bounded R2.2 current-state patch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Apply exact R2.2-A prose patch
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('docs/CURRENT_DEVELOPMENT.md')
@@ -56,10 +57,10 @@ Runtime changes remain frozen while the active product live gate is pending. M2-
               text = text.replace(old_text, new_text, 1)
 
           path.write_text(text, encoding='utf-8')
-
-          workflow = Path('.github/workflows/_simcore-r2-2-branch-patch.yml')
-          workflow.unlink()
+          Path('.github/workflows/_simcore-r2-2-branch-patch.yml').unlink()
+          PY
       - name: Commit bounded patch and remove temporary workflow
+        shell: bash
         run: |
           git diff --check
           test ! -e .github/workflows/_simcore-r2-2-branch-patch.yml

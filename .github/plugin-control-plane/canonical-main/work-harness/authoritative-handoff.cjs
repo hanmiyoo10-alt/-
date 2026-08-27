@@ -63,11 +63,13 @@ function findAuditedWorkflowRoute(workRecord, adapterRegistry) {
 
   const adapters = (adapterRegistry?.adapters || []).filter((adapter) =>
     adapter.supportedScopeIds?.includes(scopeId) && adapter.capabilities?.includes(capability));
-  if (adapters.length !== 1) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ADAPTER_AMBIGUOUS'] };
+  if (adapters.length === 0) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_CAPABILITY_NOT_ALLOWED'] };
+  if (adapters.length > 1) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ADAPTER_AMBIGUOUS'] };
 
   const adapter = adapters[0];
   const routes = (adapter.routes || []).filter((route) => route.capability === capability);
-  if (routes.length !== 1) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ROUTE_AMBIGUOUS'] };
+  if (routes.length === 0) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ROUTE_NOT_ALLOWED'] };
+  if (routes.length > 1) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ROUTE_AMBIGUOUS'] };
 
   const route = routes[0];
   const valid = route.targetKind === 'GITHUB_WORKFLOW'

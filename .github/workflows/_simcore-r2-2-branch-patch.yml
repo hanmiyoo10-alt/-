@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch-current-development:
-    if: github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(simcore): retry bounded R2.2 current-state patch'
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(simcore): retry2 bounded R2.2 current-state patch' }}"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

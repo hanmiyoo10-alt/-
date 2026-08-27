@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.64.7-intent-99",
+  "releaseId": "simcore-v0.64.7-correction-99",
+  "product": "SimCore",
+  "targetVersion": "0.64.7",
+  "releaseName": "Harness C4 V1 Receipt Canary Proof",
+  "releaseMode": "SAME_VERSION_CORRECTION",
+  "expectedProductionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "builderPath": "products/simcore/tooling/build-harness-c4-v1-proof.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "CANDIDATE_CONTROL_PROOF",
+  "primaryGoalId": "HARNESS-C4-V1",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "HARNESS_C4_V1_NON_PRODUCTION_CANDIDATE_PROOF",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "issue:#544",
+    "issue:#542",
+    "pr:#543"
+  ],
+  "coordinationWorkIssue": 544
+}

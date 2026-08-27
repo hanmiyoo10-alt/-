@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const {validateDescriptor} = require('./contract.cjs');
+const {validateDescriptor, loadPolicy} = require('./contract.cjs');
 
 const TEMPLATE_PATH = path.join(__dirname, 'guidelines-template.md');
 const REGISTRY_PATH = path.join(__dirname, '..', 'registry.json');
@@ -23,6 +23,14 @@ function flattenStrings(value, rows = []) {
   else if (Array.isArray(value)) value.forEach((row) => flattenStrings(row, rows));
   else if (value && typeof value === 'object') Object.values(value).forEach((row) => flattenStrings(row, rows));
   return rows;
+}
+
+function sharedInteractionContract(policy = loadPolicy()) {
+  return String(policy.bootstrap?.sharedInteractionContract || '').trim();
+}
+
+function guidancePaths(descriptor, policy = loadPolicy()) {
+  return [sharedInteractionContract(policy), descriptor.guidelines].filter(Boolean);
 }
 
 function registryEntry(descriptor, registry = readJson(REGISTRY_PATH)) {
@@ -60,6 +68,7 @@ function registryBindingErrors(descriptor, registry = readJson(REGISTRY_PATH)) {
 function repositoryBindingErrors(descriptor, root = process.cwd(), options = {}) {
   const errors = [];
   const requireGuidelines = options.requireGuidelines !== false;
+  const policy = options.policy || loadPolicy();
   const checkPath = (label, value) => {
     if (!value) return null;
     const {target, inside} = safeTarget(root, value);
@@ -68,6 +77,9 @@ function repositoryBindingErrors(descriptor, root = process.cwd(), options = {})
   };
 
   checkPath('projectPath', descriptor.projectPath);
+  const sharedContract = sharedInteractionContract(policy);
+  if (!sharedContract) errors.push('bootstrap sharedInteractionContract missing');
+  else checkPath('shared interaction contract', sharedContract);
   if (requireGuidelines) checkPath('guidelines', descriptor.guidelines);
 
   const authority = descriptor.authority || {};
@@ -134,7 +146,17 @@ function renderGuidelines(descriptor, repository) {
   for (const [token, value] of Object.entries(placeholderValues(descriptor, repository))) {
     text = text.split(token).join(String(value));
   }
-  return text;
+  const sharedContract = sharedInteractionContract();
+  if (!sharedContract) throw new Error('bootstrap sharedInteractionContract missing');
+  const inheritance = [
+    '',
+    `Repository-wide shared interaction contract: \`${sharedContract}\``,
+    '',
+    'This project inherits that shared interaction contract in addition to the project-specific rules in this document.',
+  ].join('\n');
+  const firstBreak = text.indexOf('\n');
+  if (firstBreak < 0) return `${text}${inheritance}\n`;
+  return `${text.slice(0, firstBreak + 1)}${inheritance}${text.slice(firstBreak + 1)}`;
 }
 
 function main() {
@@ -154,6 +176,7 @@ function main() {
   }
   if (command === 'check') {
     console.log(`BOOTSTRAP_DESCRIPTOR_OK:${descriptor.id}:${descriptor.memory.profile}`);
+    console.log(`BOOTSTRAP_GUIDANCE:${descriptor.id}:${guidancePaths(descriptor).join('|')}`);
     return;
   }
   if (!outputPath) throw new Error('render requires output path');
@@ -169,10 +192,12 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  guidancePaths,
   repositoryBindingErrors,
   registryBindingErrors,
   registryEntry,
   registryPathCovers,
   placeholderValues,
   renderGuidelines,
+  sharedInteractionContract,
 };

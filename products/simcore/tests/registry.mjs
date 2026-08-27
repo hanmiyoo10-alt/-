@@ -10,6 +10,7 @@ export const registry = Object.freeze([
   { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'candidate-materialize', module: './suites/candidate-materialize.test.mjs', fixtureDir: 'candidate-materialize', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'candidate-receipt', module: './suites/candidate-receipt.test.mjs', fixtureDir: 'candidate-receipt', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'release-spec-contract', module: './suites/release-spec-contract.test.mjs', fixtureDir: 'release-spec-contract', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'release-approval', module: './suites/release-approval.test.mjs', fixtureDir: 'release-approval', coverage: 'EXECUTABLE', required: true, goldenGate: true }
 ]);
 

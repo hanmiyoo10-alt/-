@@ -306,6 +306,13 @@
 - Event ID: `0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905`
 <!-- canonical-main-doc-promoted:0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905 -->
 
+### 2026-08-27 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/547)
+- Event ID: `8bf959161e0c10444b1ec36a2c529c4676b4e4b3a91a7cd6203e574837e4004f`
+<!-- canonical-main-doc-promoted:8bf959161e0c10444b1ec36a2c529c4676b4e4b3a91a7cd6203e574837e4004f -->
+
 ### 2026-08-27 — infra: add opt-in authoritative Harness handoff
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -313,6 +320,13 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/227a9cdb1221ddd75b72fee1698b46184af43be5)
 - Event ID: `e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973`
 <!-- canonical-main-doc-promoted:e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973 -->
+
+### 2026-08-27 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/547)
+- Event ID: `dd7a6ab930e4581f4c685fdae12e06b49463cbd1e19e7fde7e7210841304a38c`
+<!-- canonical-main-doc-promoted:dd7a6ab930e4581f4c685fdae12e06b49463cbd1e19e7fde7e7210841304a38c -->
 
 ### 2026-08-27 — fix: preserve hidden Harness proof artifacts
 - Class: `CHANGE`
@@ -393,3 +407,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3786b77efaa91826b9f988fa6f6cd9c1029620dd)
 - Event ID: `1c95729153e325835fbd3d90c36723a4cbda3bce1e1d0e01116acd691de430c4`
 <!-- canonical-main-doc-promoted:1c95729153e325835fbd3d90c36723a4cbda3bce1e1d0e01116acd691de430c4 -->
+
+### 2026-08-27 — docs(repo): promote canonical-main generated documentation
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8eea410241f1f8720e32fa481f0db96d2da975fd`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8eea410241f1f8720e32fa481f0db96d2da975fd)
+- Event ID: `c558a5dba7d1f95b567a68281a01a4f1eba87026cdc03694ad39c328c8b9b8cc`
+<!-- canonical-main-doc-promoted:c558a5dba7d1f95b567a68281a01a4f1eba87026cdc03694ad39c328c8b9b8cc -->

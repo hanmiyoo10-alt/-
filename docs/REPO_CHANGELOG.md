@@ -415,3 +415,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8eea410241f1f8720e32fa481f0db96d2da975fd)
 - Event ID: `c558a5dba7d1f95b567a68281a01a4f1eba87026cdc03694ad39c328c8b9b8cc`
 <!-- canonical-main-doc-promoted:c558a5dba7d1f95b567a68281a01a4f1eba87026cdc03694ad39c328c8b9b8cc -->
+
+### 2026-08-27 — infra: add Harness mutation enforcement coverage
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d68d32e64a72fd4ba6363c240c7a6816c58259f1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d68d32e64a72fd4ba6363c240c7a6816c58259f1)
+- Event ID: `a39cf2762ce0d96f897a94b18bc708dd63f0fb79ba8f91bd8dd6f5f0bd3e3351`
+<!-- canonical-main-doc-promoted:a39cf2762ce0d96f897a94b18bc708dd63f0fb79ba8f91bd8dd6f5f0bd3e3351 -->

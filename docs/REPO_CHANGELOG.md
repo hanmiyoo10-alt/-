@@ -455,3 +455,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d9481d5c70b573fbd4aa56553e37a6722a051452)
 - Event ID: `f99ef5f3ecfe7d3059cdcec768fc95f2b50a58f9a9dcc5aca9939d0134361b7c`
 <!-- canonical-main-doc-promoted:f99ef5f3ecfe7d3059cdcec768fc95f2b50a58f9a9dcc5aca9939d0134361b7c -->
+
+### 2026-08-27 — infra: add owner-comment anchor dispatch bridge (#574)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `849de90dc86816a4056aa6d9b141d49ea295ebe1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/849de90dc86816a4056aa6d9b141d49ea295ebe1)
+- Event ID: `6588d655551c6a284ddbc66fa54ef796bb60934dffc617a408a3d957fc057a63`
+<!-- canonical-main-doc-promoted:6588d655551c6a284ddbc66fa54ef796bb60934dffc617a408a3d957fc057a63 -->

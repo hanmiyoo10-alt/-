@@ -13,14 +13,17 @@ function disabledWindow() {
   return value;
 }
 
+function countOf(source, needle) {
+  return source.split(needle).length - 1;
+}
+
 export async function runSuite({ source, loader, fixtures }) {
   const fixture = fixtures[0];
   const version = source.match(/^\/\/@version\s+([^\s]+)\s*$/m)?.[1] || '';
   const assertions = [];
   const pass = (id) => assertions.push({ id, status: 'PASS' });
 
-  // The verifier lands before the candidate. Keep the current v0.64.6 production
-  // as an explicit negative/baseline control until CANDIDATE_REQUIRED evaluates 0.64.7.
+  // Historical pre-session transport baseline remains executable when replayed.
   if (version === '0.64.6') {
     assert(source.includes("const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';"), 'v0.64.6 memory handoff baseline missing');
     assert(!source.includes(fixture.input.sessionKey), 'v0.64.6 unexpectedly contains session handoff');
@@ -28,8 +31,9 @@ export async function runSuite({ source, loader, fixtures }) {
     return { coverage: 'EXECUTABLE', status: 'PASS', assertions };
   }
 
-  equal(version, '0.64.7', 'reload continuity gate version');
-  assert(source.includes("const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';"), 'v0.64.7 memory handoff compatibility control missing');
+  assert(['0.64.7', '0.64.8'].includes(version), `reload continuity gate version ${version}`);
+  const checkpointRepair = version === '0.64.8';
+  assert(source.includes("const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';"), 'memory handoff compatibility control missing');
   pass('unchanged-reload-control');
   const telemetry = loader.load('runtime-telemetry');
   for (const name of ['capture', 'publish', 'claim', 'validate', 'diagnostics']) assert(typeof telemetry[name] === 'function', `${name} surface missing`);
@@ -37,7 +41,7 @@ export async function runSuite({ source, loader, fixtures }) {
   const now = 2000000000000;
   const loc = 'character:chat';
   const make = (overrides = {}) => telemetry.capture({
-    sourceVersion: '0.64.7',
+    sourceVersion: version,
     locationKey: loc,
     capturedAt: now,
     runtimePromptCache: { version: 1, key: 'k', previous: { stable: true } },
@@ -139,6 +143,50 @@ export async function runSuite({ source, loader, fixtures }) {
     pass('bounded-session-serialization');
   }
 
+  if (!checkpointRepair) {
+    assert(!source.includes("checkpointRuntimeTelemetry('OUTPUT_COMMIT')"), 'v0.64.7 unexpectedly contains output checkpoint repair');
+  } else {
+    const processCall = source.indexOf('    const result = await cs.processOutput(outIndex, content, outputDetail);');
+    const activeGate = source.indexOf('    if (!result.active) {', processCall);
+    const checkpointCall = source.indexOf("      checkpointRuntimeTelemetry('OUTPUT_COMMIT');", activeGate);
+    const committedMark = source.indexOf("    markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'COMMITTED', outputAt: Date.now() });", checkpointCall);
+    assert(processCall >= 0 && activeGate > processCall && checkpointCall > activeGate && committedMark > checkpointCall,
+      'OUTPUT_COMMIT checkpoint is not wired after active authoritative processOutput and before COMMITTED bookkeeping');
+    equal(countOf(source, "checkpointRuntimeTelemetry('OUTPUT_COMMIT')"), 1, 'OUTPUT_COMMIT checkpoint call count');
+    pass('output-commit-callsite');
+
+    assert(source.includes("    if (runtimeIsCurrent() && String(coreKey || coreLocationKey || '')) {\n      checkpointRuntimeTelemetry('OUTPUT_COMMIT');\n    }"),
+      'OUTPUT_COMMIT checkpoint eligibility guard missing');
+    pass('output-commit-eligibility-guard');
+
+    const unloadStart = source.indexOf('  await Risuai.onUnload(async () => {');
+    const unloadCall = source.indexOf("    checkpointRuntimeTelemetry('UNLOAD');", unloadStart);
+    const unloadEnd = source.indexOf('    await runtimeHooks.remove(Risuai, beforeRequestHandler, outputHandler);', unloadStart);
+    assert(unloadStart >= 0 && unloadCall > unloadStart && unloadEnd > unloadCall, 'UNLOAD checkpoint redundancy missing');
+    assert(!source.slice(unloadStart, unloadEnd).includes('runtimeTelemetryRules.publish('), 'UNLOAD forked a second direct publish path');
+    equal(countOf(source, "checkpointRuntimeTelemetry('UNLOAD')"), 1, 'UNLOAD checkpoint call count');
+    pass('unload-redundancy-callsite');
+
+    assert(source.includes('  function checkpointRuntimeTelemetry(trigger) {'), 'canonical checkpoint wrapper missing');
+    assert(source.includes("        session: 'FAILED',\n        serializedChars: 0,\n        elapsedMs: 0,\n        retainedBodies: false,"),
+      'checkpoint failure-isolation probe missing');
+    assert(source.includes('    } catch (_) {'), 'checkpoint wrapper does not fail closed');
+    pass('checkpoint-failure-isolation');
+
+    assert(source.includes('`Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `SESSION · ${lastTelemetryCheckpointProbe.session'),
+      'bounded Telemetry checkpoint diagnostic missing');
+    assert(source.includes('· trigger ${lastTelemetryCheckpointProbe.trigger'), 'checkpoint trigger diagnostic missing');
+    pass('checkpoint-diagnostic-surface');
+
+    assert(source.includes('const MAX_AGE_MS = 10 * 60 * 1000;'), '10-minute telemetry age bound changed');
+    assert(source.includes('const MAX_SESSION_CHARS = 16384;'), 'session telemetry size bound changed');
+    assert(source.includes("const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';"), 'session key changed');
+    pass('checkpoint-transport-contract-frozen');
+  }
+
   equal(assertions.filter((row) => fixture.input.cases.includes(row.id)).length, fixture.input.cases.length, 'frozen fixture coverage');
+  if (checkpointRepair) {
+    equal(assertions.filter((row) => fixture.input.checkpointCases.includes(row.id)).length, fixture.input.checkpointCases.length, 'v0.64.8 checkpoint fixture coverage');
+  }
   return { coverage: 'EXECUTABLE', status: 'PASS', assertions };
 }

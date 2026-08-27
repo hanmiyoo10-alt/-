@@ -20,16 +20,27 @@
     return nextTier || currentTier || '';
   }
 
+  function requestAccountScopeLabel(value) {
+    const scope = requestAccountScopeValue(value);
+    if (scope === 'devpass') return 'DevPass';
+    if (scope === 'credits') return 'Credits';
+    return '—';
+  }
+
   function requestServiceTierText(row) {
+    const scopeText = requestAccountScopeLabel(row?.requestAccountScope);
     const requested = normalizeServiceTierValue(row?.requestedServiceTier);
     const served = normalizeServiceTierValue(row?.servedServiceTier);
     const label = value => value === 'flex' ? 'FLEX' : value === 'priority' ? 'PRIORITY' : value === 'standard' ? 'STANDARD' : '?';
+    let tierText = 'TIER ?';
     if (serviceTierKnown(requested) && serviceTierKnown(served)) {
-      return requested === served ? label(served) : `요청 ${label(requested)} → 실제 ${label(served)}`;
+      tierText = requested === served ? label(served) : `요청 ${label(requested)} → 실제 ${label(served)}`;
+    } else if (serviceTierKnown(served)) {
+      tierText = `실제 ${label(served)}`;
+    } else if (serviceTierKnown(requested)) {
+      tierText = `요청 ${label(requested)} · 실제 ?`;
     }
-    if (serviceTierKnown(served)) return `실제 ${label(served)}`;
-    if (serviceTierKnown(requested)) return `요청 ${label(requested)} · 실제 ?`;
-    return 'TIER ?';
+    return `${scopeText} · ${tierText}`;
   }
 
   function requestServiceTierStats(rows) {

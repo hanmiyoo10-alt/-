@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.80
+//@version 3.0.0-alpha.5.81
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.80';
+  const VERSION = '3.0.0-alpha.5.81';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -1332,16 +1332,27 @@ async function importLegacyTodayBaselines() {
     return nextTier || currentTier || '';
   }
 
+  function requestAccountScopeLabel(value) {
+    const scope = requestAccountScopeValue(value);
+    if (scope === 'devpass') return 'DevPass';
+    if (scope === 'credits') return 'Credits';
+    return '—';
+  }
+
   function requestServiceTierText(row) {
+    const scopeText = requestAccountScopeLabel(row?.requestAccountScope);
     const requested = normalizeServiceTierValue(row?.requestedServiceTier);
     const served = normalizeServiceTierValue(row?.servedServiceTier);
     const label = value => value === 'flex' ? 'FLEX' : value === 'priority' ? 'PRIORITY' : value === 'standard' ? 'STANDARD' : '?';
+    let tierText = 'TIER ?';
     if (serviceTierKnown(requested) && serviceTierKnown(served)) {
-      return requested === served ? label(served) : `요청 ${label(requested)} → 실제 ${label(served)}`;
+      tierText = requested === served ? label(served) : `요청 ${label(requested)} → 실제 ${label(served)}`;
+    } else if (serviceTierKnown(served)) {
+      tierText = `실제 ${label(served)}`;
+    } else if (serviceTierKnown(requested)) {
+      tierText = `요청 ${label(requested)} · 실제 ?`;
     }
-    if (serviceTierKnown(served)) return `실제 ${label(served)}`;
-    if (serviceTierKnown(requested)) return `요청 ${label(requested)} · 실제 ?`;
-    return 'TIER ?';
+    return `${scopeText} · ${tierText}`;
   }
 
   function requestServiceTierStats(rows) {
@@ -1880,13 +1891,6 @@ async function importLegacyTodayBaselines() {
     return baseHtml + hourlyRequestDrilldownHtml(scopeKey);
   }
 
-  function requestAccountScopeLabel(value) {
-    const scope = requestAccountScopeValue(value);
-    if (scope === 'devpass') return 'DevPass';
-    if (scope === 'credits') return 'Credits';
-    return '—';
-  }
-
   function requestAccountScopeStats(rows) {
     const list = Array.isArray(rows) ? rows : [];
     const stats = {rows:list.length,devpass:0,credits:0,unknown:0,conflict:0};
@@ -1897,13 +1901,6 @@ async function importLegacyTodayBaselines() {
     }
     return stats;
   }
-
-  const requestServiceTierTextBeforeProvenance = requestServiceTierText;
-  requestServiceTierText = function requestServiceTierTextWithProvenance(row) {
-    const scopeText = requestAccountScopeLabel(row?.requestAccountScope);
-    const tierText = requestServiceTierTextBeforeProvenance(row);
-    return `${scopeText} · ${tierText}`;
-  };
 
   function normalizeRequestProvenanceMetadata(raw) {
     if (!raw || typeof raw !== 'object') return null;

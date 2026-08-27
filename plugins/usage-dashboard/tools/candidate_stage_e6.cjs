@@ -13,6 +13,7 @@ const GENERATED_EXACT = new Set([
 const GENERATED_PREFIXES = Object.freeze([
   'plugins/usage-dashboard/src/',
   'plugins/usage-dashboard/runtime/',
+  'plugins/usage-dashboard/runtime-src/bridge-engine/',
 ]);
 const FROZEN_MAIN_TRAILER_PREFIX = 'Usage-Dashboard-Frozen-Main:';
 const FROZEN_MAIN_TRAILER = /^Usage-Dashboard-Frozen-Main: ([0-9a-f]{40})$/;

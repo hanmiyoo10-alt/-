@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.64.8-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "0fab08e458f4073229701f84438127755a96b657",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.64.8-new-02.json",
+  "releaseSpecSha256": "727acb22a576a0881a81833925c3c69ba665e154ef1fb3458d644fed37347ccb",
+  "productionCommit": "f5e29464452728f859a1a6a8191a846468353531",
+  "previousProductionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "productionBlob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
+  "version": "0.64.8",
+  "releaseName": "Output-Complete Telemetry Checkpoint Repair",
+  "verificationReportSha256": "fe57f111951fb9263c4e959c917f256c148cfb35c8b2ddf0fdb7fce9d4cd6120",
+  "verifierCommit": "20c569894a8596ce5d5b6734ec2c69902b1bb084",
+  "publisherRunId": "33086543601",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

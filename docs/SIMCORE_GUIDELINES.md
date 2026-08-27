@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.7 — Cross-Reload Cache Observer Continuity
-Release commit: a7ce8ce33a97797630f885c6753415e4b2ccc7fc
+SimCore v0.64.8 — Output-Complete Telemetry Checkpoint Repair
+Release commit: f5e29464452728f859a1a6a8191a846468353531
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

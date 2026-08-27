@@ -108,7 +108,9 @@ Deeper coordination surfaces are conditional rather than routine startup reads:
 - read `#464` only when idea/design identity, lifecycle, overlap, or priority is needed;
 - read `#293` only when raw audit or conversation provenance is needed.
 
-This fast path ends as soon as repository work is requested. Execution still follows the packet bootstrap below, including repository common rules, the packet itself, and every packet-named project/domain authority. The two-read protocol never authorizes a write, merge, release, protection change, or project/runtime action.
+The repository shared interaction contract at `.github/plugin-control-plane/canonical-main/shared-interaction-contract.md` governs canonical-main/repository-scope interaction and pacing. It does not add a third authority read to this routine two-read orientation path; repository work follows the packet bootstrap below, which reads the contract explicitly.
+
+This fast path ends as soon as repository work is requested. Execution still follows the packet bootstrap below, including repository common rules, the shared interaction contract, the packet itself, and every packet-named project/domain authority. The two-read protocol never authorizes a write, merge, release, protection change, or project/runtime action.
 
 ## Worker / chat bootstrap
 
@@ -116,12 +118,13 @@ Before acting on a packet, a worker or chat must:
 
 1. inspect current `main`;
 2. read `docs/REPOSITORY_COMMON_RULES.md` as the repository-wide shared policy layer;
-3. read the packet issue;
-4. read every authority input named by the packet, including the owning project/domain contract;
-5. confirm the packet is not already actively owned by another implementation flow;
-6. confirm write scope and dependencies are still valid.
+3. read `.github/plugin-control-plane/canonical-main/shared-interaction-contract.md` as the repository-wide reporting and work-pacing contract;
+4. read the packet issue;
+5. read every authority input named by the packet, including the owning project/domain contract;
+6. confirm the packet is not already actively owned by another implementation flow;
+7. confirm write scope and dependencies are still valid.
 
-The common-rules document supplies shared policy, not mutable project truth. Owning repository/project authority still decides current production, release, runtime, deployment, and validation facts. Project/domain contracts may explicitly specialize repository `DEFAULT` and applicable `CONDITIONAL` behavior, but must not silently weaken a repository `HARD_INVARIANT`.
+The common-rules document supplies shared policy, and the shared interaction contract supplies repo-wide interaction/reporting/pacing behavior; neither owns mutable project truth. Owning repository/project authority still decides current production, release, runtime, deployment, and validation facts. Project/domain contracts may explicitly specialize repository `DEFAULT` and applicable `CONDITIONAL` behavior, but must not silently weaken a repository `HARD_INVARIANT`.
 
 Conversation memory is context only, never sufficient authority.
 

@@ -369,3 +369,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/60ef139420e7073f9d38809535528a2a0b074d53)
 - Event ID: `2ae958780980cae3d28f3211acc26aa1a0b0c8a803e8a781198d496b2a677797`
 <!-- canonical-main-doc-promoted:2ae958780980cae3d28f3211acc26aa1a0b0c8a803e8a781198d496b2a677797 -->
+
+### 2026-08-27 — docs: promote canonical-main generated documentation
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `21bfb7e52c449bdbccd03725470a7dada53c6fb2`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/21bfb7e52c449bdbccd03725470a7dada53c6fb2)
+- Event ID: `957d8ba518bc993009bfb58f17b5abea21e5eacdbb7b00c4868014df59a47659`
+<!-- canonical-main-doc-promoted:957d8ba518bc993009bfb58f17b5abea21e5eacdbb7b00c4868014df59a47659 -->

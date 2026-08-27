@@ -8668,3 +8668,4 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   });
   console.log(SIMCORE_LOG_PREFIX + ' initialized');
 })();
+// HARNESS_C4_V1_CANDIDATE_PROOF_ONLY

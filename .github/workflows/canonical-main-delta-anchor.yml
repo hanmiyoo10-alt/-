@@ -17,6 +17,8 @@ on:
         description: Stable uppercase reason code for the advancement
         required: true
         default: EXPLICIT_BRIEF_DELIVERED
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -28,6 +30,14 @@ concurrency:
 
 jobs:
   advance:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.number == 562 &&
+       github.event.issue.pull_request == null &&
+       github.event.comment.user.login == github.repository_owner &&
+       github.event.comment.author_association == 'OWNER' &&
+       startsWith(github.event.comment.body, '/canonical-main-delta-anchor advance '))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted canonical main controller
@@ -40,14 +50,39 @@ jobs:
         with:
           node-version: 22
 
+      - name: Normalize manual dispatch inputs
+        id: manual
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          ANCHOR_ISSUE: ${{ inputs.anchor_issue }}
+          EXPECTED_ANCHOR: ${{ inputs.expected_anchor }}
+          TARGET_MAIN: ${{ inputs.target_main }}
+          ADVANCE_REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          node .github/plugin-control-plane/canonical-main/main-delta-anchor-command.cjs manual
+
+      - name: Normalize owner issue-comment command
+        id: comment
+        if: github.event_name == 'issue_comment'
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          node .github/plugin-control-plane/canonical-main/main-delta-anchor-command.cjs comment
+
       - name: Advance issue-backed last-seen anchor
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          ANCHOR_ISSUE: ${{ steps.manual.outputs.anchor_issue || steps.comment.outputs.anchor_issue }}
+          EXPECTED_ANCHOR: ${{ steps.manual.outputs.expected_anchor || steps.comment.outputs.expected_anchor }}
+          TARGET_MAIN: ${{ steps.manual.outputs.target_main || steps.comment.outputs.target_main }}
+          ADVANCE_REASON: ${{ steps.manual.outputs.reason || steps.comment.outputs.reason }}
         run: |
           set -euo pipefail
           node .github/plugin-control-plane/canonical-main/main-delta-anchor.cjs advance \
-            --issue '${{ inputs.anchor_issue }}' \
-            --expected-anchor '${{ inputs.expected_anchor }}' \
-            --target-main '${{ inputs.target_main }}' \
-            --reason '${{ inputs.reason }}'
+            --issue "$ANCHOR_ISSUE" \
+            --expected-anchor "$EXPECTED_ANCHOR" \
+            --target-main "$TARGET_MAIN" \
+            --reason "$ADVANCE_REASON"

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_2_CLOSURE_INTEGRITY",
-  "status": "DESIGN_RECORDED_IMPLEMENTATION_NOT_STARTED",
+  "status": "IMPLEMENTED_A_B_PERMANENT_CI_PENDING",
   "date": "2026-08-28",
   "name": "Closure Integrity",
   "predecessor": {
@@ -12,6 +12,7 @@
     "retrospective": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_FIRST_GENUINE_RELEASE_RETROSPECTIVE_2026-08-28.md"
   },
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_2_CLOSURE_INTEGRITY_DESIGN.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_2_IMPLEMENTATION_EVIDENCE_2026-08-28.md",
   "objective": {
     "stabilityPreserved": true,
     "simplicityPreserved": true,
@@ -26,14 +27,14 @@
     {
       "id": "R2_2_A_SINGLE_CURRENT_STATE_AUTHORITY",
       "classification": "FIX",
-      "status": "DESIGNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_CI_PENDING",
       "sourceIssue": 640,
       "goal": "Machine-managed CURRENT_DEVELOPMENT current-state blocks become the sole current production and live-gate authority; duplicate human current-production verdict is retired."
     },
     {
       "id": "R2_2_B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS",
       "classification": "FIX",
-      "status": "DESIGNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_CI_PENDING",
       "sourceIssue": 641,
       "goal": "A release blocker remains open through DEFECT_FIXED/RELEASE_RECOVERY_PENDING and closes only after recovered production and durable LIVE_PENDING state are reobserved."
     },
@@ -44,6 +45,18 @@
       "goal": "Prefer durable receipts and exact identities over transient run observation; do not redesign run correlation absent a proven wrong-run bind."
     }
   ],
+  "implementation": {
+    "currentDevelopmentAuthority": "MACHINE_MANAGED_BLOCKS_ONLY",
+    "humanProductionVerdictRetired": true,
+    "blockerIncidentPolicy": "products/simcore/tooling/release-blocker-incident-policy.mjs",
+    "blockerIncidentPolicyDoc": "docs/SIMCORE_RELEASE_SYSTEM_V2_2_BLOCKER_INCIDENT_POLICY.md",
+    "permanentSuite": "closure-integrity",
+    "permanentFixture": "products/simcore/tests/fixtures/closure-integrity/case.json",
+    "releaseSpecParityRegressionPreserved": true,
+    "newIssueAutomationController": false,
+    "newPolling": false,
+    "newPublisher": false
+  },
   "preservedSafety": {
     "explicitReleaseWorkItemRequired": true,
     "standingBackgroundReleaseAuthority": false,
@@ -69,16 +82,12 @@
     "HANDOFF_TO_USER_REAL_LONG_CHAT",
     "PR3_LIVE_PASS_CLOSURE"
   ],
-  "implementationOrder": [
-    "R2_2_A_SINGLE_CURRENT_STATE_AUTHORITY",
-    "R2_2_B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS",
-    "R2_2_C_WATCH_ONLY_UNLESS_NEW_EVIDENCE"
-  ],
   "qualification": {
     "productionMutationRequired": false,
     "runtimeMutationRequired": false,
     "historicalReplay": "V0_64_8_NEW_01_REPAIR_NEW_02",
-    "mustPreserveR2_1ReleaseSchemaParityRegression": true
+    "mustPreserveR2_1ReleaseSchemaParityRegression": true,
+    "permanentCi": "PENDING"
   },
   "currentProductGateUnchanged": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "runtimeMutation": "NONE",

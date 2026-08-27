@@ -423,3 +423,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d68d32e64a72fd4ba6363c240c7a6816c58259f1)
 - Event ID: `a39cf2762ce0d96f897a94b18bc708dd63f0fb79ba8f91bd8dd6f5f0bd3e3351`
 <!-- canonical-main-doc-promoted:a39cf2762ce0d96f897a94b18bc708dd63f0fb79ba8f91bd8dd6f5f0bd3e3351 -->
+
+### 2026-08-27 — infra: require Usage Dashboard candidate coordination receipt
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `04a29949c824a089e4f07710c405f4467eb7b6f6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/04a29949c824a089e4f07710c405f4467eb7b6f6)
+- Event ID: `74a2ebc775e4498be31f6c2f09e9d9dc4b942c9fbcf6a4f68c52dd96e3161dba`
+<!-- canonical-main-doc-promoted:74a2ebc775e4498be31f6c2f09e9d9dc4b942c9fbcf6a4f68c52dd96e3161dba -->

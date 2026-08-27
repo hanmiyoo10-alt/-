@@ -439,3 +439,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1279ca05f3717a3f3da0583e93ce72adfc98d131)
 - Event ID: `103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3`
 <!-- canonical-main-doc-promoted:103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3 -->
+
+### 2026-08-27 — infra: add canonical main delta brief core (#561)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8d95fb7d425cfcb0d90f0832a5033fecde114ca0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8d95fb7d425cfcb0d90f0832a5033fecde114ca0)
+- Event ID: `95f22dfb07645eaba1386510c8c8542ae809f8322fbed27ebcb529ae3700efd4`
+<!-- canonical-main-doc-promoted:95f22dfb07645eaba1386510c8c8542ae809f8322fbed27ebcb529ae3700efd4 -->

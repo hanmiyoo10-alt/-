@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.64.7",
-  "release_name": "Cross-Reload Cache Observer Continuity",
+  "production_version": "0.64.8",
+  "release_name": "Output-Complete Telemetry Checkpoint Repair",
   "release_branch": "release-simcore",
-  "release_commit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
-  "release_blob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
+  "release_commit": "f5e29464452728f859a1a6a8191a846468353531",
+  "release_blob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+  "current_priority": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

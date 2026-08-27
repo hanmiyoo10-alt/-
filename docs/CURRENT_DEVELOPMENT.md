@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.7`
-- Release: `Cross-Reload Cache Observer Continuity`
+- Version: `0.64.8`
+- Release: `Output-Complete Telemetry Checkpoint Repair`
 - Release branch: `release-simcore`
-- Release commit: `a7ce8ce33a97797630f885c6753415e4b2ccc7fc`
-- Release blob: `676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0`
+- Release commit: `f5e29464452728f859a1a6a8191a846468353531`
+- Release blob: `bed3d5faff9641071cdd9003b67c45d42b3e32ee`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -29,6 +29,18 @@
 
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
+
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
+
+- Release transaction: `simcore-v0.64.8-new-02`
+- Production commit: `f5e29464452728f859a1a6a8191a846468353531`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
+
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

@@ -66,6 +66,21 @@ function unknownEvidence(snapshot, limit = 4) {
   return `${visible.map(inlineCode).join(', ')}${suffix}`;
 }
 
+function renderCompatibilityMetadata(snapshot) {
+  const protection = snapshot.observations?.protection?.data || {};
+  const delivery = snapshot.observations?.delivery?.data || {};
+  return [
+    '<!-- canonical-main-summary-compat:v1',
+    `Operator state: ${snapshot.operatorState}`,
+    `Convergence: ${compactConvergence(snapshot.convergence)}`,
+    `Required: ${snapshot.observations?.requiredCi?.summary || 'UNKNOWN'}`,
+    `Production authority: ${snapshot.observations?.productionAuthority?.summary || 'UNKNOWN'}`,
+    `Native protection: ${inlineCode(protection.state || 'UNKNOWN')} / protected ${inlineCode(protection.protected === true)}`,
+    `Notification bridge: ${inlineCode(delivery.health || 'UNKNOWN')} / ${inlineCode(snapshot.policy?.notifications?.bridgeState || 'UNKNOWN')}`,
+    '-->',
+  ].join('\n');
+}
+
 function renderSummary(snapshot) {
   const protection = snapshot.observations?.protection?.data || {};
   const reason = topOperationalReason(snapshot);
@@ -80,7 +95,9 @@ function renderSummary(snapshot) {
     `- NEXT: ${inlineCode(next)}`,
     `- AUTHORITY: Production ${snapshot.observations?.productionAuthority?.summary || 'UNKNOWN'}; native protection ${inlineCode(protection.state || 'UNKNOWN')} / protected ${inlineCode(protection.protected === true)}; soft fallback ${inlineCode(protection.softEnforcementEnabled ? 'ACTIVE' : 'DISABLED')}`,
     `- UNKNOWN: ${unknownEvidence(snapshot)}`,
+    '',
+    renderCompatibilityMetadata(snapshot),
   ].join('\n');
 }
 
-module.exports = {changeSummary, compactConvergence, renderSummary, topOperationalReason, unknownEvidence};
+module.exports = {changeSummary, compactConvergence, renderCompatibilityMetadata, renderSummary, topOperationalReason, unknownEvidence};

@@ -272,6 +272,8 @@ jobs:
           [[ "$(sha256sum "$BUNDLE" | awk '{print $1}')" == "$EXPECTED_BUNDLE_SHA256" ]] || { echo 'CANDIDATE_BUNDLE_SHA256_MISMATCH'; exit 1; }
           REMOTE_BEFORE="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
           [[ "$REMOTE_BEFORE" == "$EXPECTED_HEAD_SHA" ]] || { echo "CANDIDATE_BRANCH_MOVED:$REMOTE_BEFORE:expected=$EXPECTED_HEAD_SHA"; exit 1; }
+          git fetch --no-tags --depth=1 origin "refs/heads/$TARGET_BRANCH:refs/candidate/prerequisite"
+          [[ "$(git rev-parse refs/candidate/prerequisite)" == "$EXPECTED_HEAD_SHA" ]] || { echo 'CANDIDATE_PREREQUISITE_FETCH_MISMATCH'; exit 1; }
           git bundle verify "$BUNDLE"
           git fetch "$BUNDLE" 'refs/heads/candidate-payload:refs/candidate/payload'
           [[ "$(git rev-parse refs/candidate/payload)" == "$PAYLOAD_SHA" ]] || { echo 'CANDIDATE_PAYLOAD_SHA_MISMATCH'; exit 1; }

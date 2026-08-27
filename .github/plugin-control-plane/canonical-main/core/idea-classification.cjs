@@ -15,6 +15,44 @@ const SORT_RANK = Object.freeze({
   size: Object.freeze({ 작음: 0, 중간: 1, 큼: 2, '매우 큼': 3, [TBD]: 9 }),
 });
 
+const RAW_TEXT_FIELDS = Object.freeze(['title', 'problem', 'benefit', 'notes']);
+
+function signalRule(id, value, pattern) {
+  return Object.freeze({ id, value, pattern: Object.freeze(pattern) });
+}
+
+const RAW_TEXT_SIGNAL_TABLE = Object.freeze({
+  systemImpact: Object.freeze([
+    signalRule('SYS-NO-EXPLICIT', 'NO_SYSTEM_UPDATE', /(?:system[\s_-]*impact|시스템\s*영향)\s*[:=]\s*no_system_update\b/i),
+    signalRule('SYS-NO-LEGACY', 'NO_SYSTEM_UPDATE', /\bupdate\s*:\s*n\b/i),
+    signalRule('SYS-NO-PHRASE-EN', 'NO_SYSTEM_UPDATE', /\b(?:no system update|docs?-only|documentation-only)\b/i),
+    signalRule('SYS-NO-PHRASE-KO', 'NO_SYSTEM_UPDATE', /(?:시스템\s*업데이트\s*(?:없음|불필요)|문서\s*만\s*(?:변경|수정))/i),
+    signalRule('SYS-YES-EXPLICIT', 'SYSTEM_UPDATE_REQUIRED', /(?:system[\s_-]*impact|시스템\s*영향)\s*[:=]\s*system_update_required\b/i),
+    signalRule('SYS-YES-LEGACY', 'SYSTEM_UPDATE_REQUIRED', /\bupdate\s*:\s*y\b/i),
+    signalRule('SYS-YES-CHANGE-EN', 'SYSTEM_UPDATE_REQUIRED', /\b(?:add|change|modify|update|replace|remove)\s+(?:a\s+|the\s+)?(?:github\s+actions?\s+)?(?:workflow|ci|runtime|release|writer|mutation|automation|control[- ]plane)\b/i),
+    signalRule('SYS-YES-REQUIRED-EN', 'SYSTEM_UPDATE_REQUIRED', /\b(?:workflow|ci|runtime|release|writer|mutation|automation|control[- ]plane)\s+(?:change|update|modification|addition)\s+required\b/i),
+    signalRule('SYS-YES-CHANGE-KO', 'SYSTEM_UPDATE_REQUIRED', /(?:워크플로|ci|런타임|릴리스|writer|뮤테이션|자동화|컨트롤\s*플레인)\s*(?:변경|추가|수정)\s*(?:필요|함|한다)/i),
+  ]),
+  importance: Object.freeze([
+    signalRule('IMP-TOP', '최상', /(?:importance|중요도)\s*[:=]\s*(?:very\s+high|최상)\b/i),
+    signalRule('IMP-HIGH', '높음', /(?:importance|중요도)\s*[:=]\s*(?:high|높음)\b/i),
+    signalRule('IMP-MEDIUM', '중간', /(?:importance|중요도)\s*[:=]\s*(?:medium|중간)\b/i),
+    signalRule('IMP-LOW', '낮음', /(?:importance|중요도)\s*[:=]\s*(?:low|낮음)\b/i),
+  ]),
+  difficulty: Object.freeze([
+    signalRule('DIFF-LOW', '낮음', /(?:difficulty|난이도)\s*[:=]\s*(?:low|낮음)\b/i),
+    signalRule('DIFF-MEDIUM', '중간', /(?:difficulty|난이도)\s*[:=]\s*(?:medium|중간)\b/i),
+    signalRule('DIFF-HIGH', '높음', /(?:difficulty|난이도)\s*[:=]\s*(?:high|높음)\b/i),
+    signalRule('DIFF-VERY-HIGH', '매우 높음', /(?:difficulty|난이도)\s*[:=]\s*(?:very\s+high|매우\s*높음)\b/i),
+  ]),
+  size: Object.freeze([
+    signalRule('SIZE-SMALL', '작음', /(?:size|크기)\s*[:=]\s*(?:small|s|작음)\b/i),
+    signalRule('SIZE-MEDIUM', '중간', /(?:size|크기)\s*[:=]\s*(?:medium|m|중간)\b/i),
+    signalRule('SIZE-LARGE', '큼', /(?:size|크기)\s*[:=]\s*(?:large|l|큼)\b/i),
+    signalRule('SIZE-VERY-LARGE', '매우 큼', /(?:size|크기)\s*[:=]\s*(?:xl|very\s+large|매우\s*큼)\b/i),
+  ]),
+});
+
 function normalizeProposal(axis, proposal) {
   const rawValue = proposal && typeof proposal === 'object' ? proposal.value : proposal;
   const rawReason = proposal && typeof proposal === 'object' ? proposal.reason : '';
@@ -85,6 +123,128 @@ function draftIdeaClassification(input = {}) {
   });
 }
 
+function normalizeRawTextValue(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(normalizeRawTextValue).filter(Boolean).join(' ');
+  return '';
+}
+
+function normalizeRawIdeaText(input = {}) {
+  const raw = typeof input === 'string'
+    ? input
+    : RAW_TEXT_FIELDS.map((field) => normalizeRawTextValue(input && input[field])).filter(Boolean).join(' ');
+
+  return raw
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function freezeMatches(matches) {
+  return Object.freeze(matches.map((match) => Object.freeze({ ...match })));
+}
+
+function inferAxisSignal(axis, normalizedText) {
+  const rules = RAW_TEXT_SIGNAL_TABLE[axis];
+  const matches = [];
+
+  for (const rule of rules) {
+    const match = normalizedText.match(rule.pattern);
+    if (!match) continue;
+    matches.push({
+      ruleId: rule.id,
+      value: rule.value,
+      evidence: match[0],
+    });
+  }
+
+  const candidates = [...new Set(matches.map((match) => match.value))];
+  const frozenMatches = freezeMatches(matches);
+  const frozenCandidates = Object.freeze([...candidates]);
+
+  if (candidates.length === 1) {
+    const ruleIds = matches.map((match) => match.ruleId);
+    return Object.freeze({
+      status: 'PROPOSED',
+      proposal: Object.freeze({
+        value: candidates[0],
+        reason: `RAW_TEXT_SIGNAL:${ruleIds.join(',')}`,
+      }),
+      candidates: frozenCandidates,
+      matches: frozenMatches,
+    });
+  }
+
+  return Object.freeze({
+    status: candidates.length > 1 ? 'CONFLICT' : 'NO_SIGNAL',
+    proposal: null,
+    candidates: frozenCandidates,
+    matches: frozenMatches,
+  });
+}
+
+function inferIdeaClassificationSignals(input = {}) {
+  const normalizedText = normalizeRawIdeaText(input);
+  const axes = {};
+  const proposals = {};
+
+  for (const axis of Object.keys(CANONICAL_VALUES)) {
+    const result = inferAxisSignal(axis, normalizedText);
+    axes[axis] = result;
+    if (result.proposal) proposals[axis] = result.proposal;
+  }
+
+  return Object.freeze({
+    schemaVersion: 1,
+    source: Object.freeze({
+      fields: typeof input === 'string' ? Object.freeze(['text']) : RAW_TEXT_FIELDS,
+      normalizedLength: normalizedText.length,
+    }),
+    proposals: Object.freeze({ ...proposals }),
+    axes: Object.freeze({ ...axes }),
+  });
+}
+
+function hasOwn(object, key) {
+  return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function draftIdeaClassificationFromText(input = {}) {
+  const inference = inferIdeaClassificationSignals(input);
+  const explicitProposals = input && typeof input === 'object' && input.proposals && typeof input.proposals === 'object'
+    ? input.proposals
+    : {};
+  const mergedProposals = {};
+  const precedence = {};
+
+  for (const axis of Object.keys(CANONICAL_VALUES)) {
+    if (hasOwn(explicitProposals, axis)) {
+      mergedProposals[axis] = explicitProposals[axis];
+      precedence[axis] = 'EXPLICIT';
+    } else if (inference.proposals[axis]) {
+      mergedProposals[axis] = inference.proposals[axis];
+      precedence[axis] = 'INFERRED';
+    } else {
+      precedence[axis] = inference.axes[axis].status;
+    }
+  }
+
+  const draft = draftIdeaClassification({
+    dependencyUnlock: input && typeof input === 'object' ? input.dependencyUnlock : undefined,
+    proposals: mergedProposals,
+  });
+
+  return Object.freeze({
+    ...draft,
+    inference: Object.freeze({
+      source: inference.source,
+      axes: inference.axes,
+      precedence: Object.freeze({ ...precedence }),
+    }),
+  });
+}
+
 function readClassificationValue(idea, axis) {
   const nested = idea && idea.classification && idea.classification[axis];
   const direct = idea && idea[axis];
@@ -131,7 +291,10 @@ function sortCanonicalIdeas(ideas) {
 module.exports = {
   TBD,
   CANONICAL_VALUES,
+  RAW_TEXT_SIGNAL_TABLE,
   draftIdeaClassification,
+  inferIdeaClassificationSignals,
+  draftIdeaClassificationFromText,
   canonicalIdeaSortKey,
   compareCanonicalIdeas,
   sortCanonicalIdeas,

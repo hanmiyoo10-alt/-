@@ -463,3 +463,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/849de90dc86816a4056aa6d9b141d49ea295ebe1)
 - Event ID: `6588d655551c6a284ddbc66fa54ef796bb60934dffc617a408a3d957fc057a63`
 <!-- canonical-main-doc-promoted:6588d655551c6a284ddbc66fa54ef796bb60934dffc617a408a3d957fc057a63 -->
+
+### 2026-08-27 — infra: add deterministic canonical idea classification core (#580)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5a258b250547fca0cb6e34a3152f3ad145dcb674`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5a258b250547fca0cb6e34a3152f3ad145dcb674)
+- Event ID: `36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b`
+<!-- canonical-main-doc-promoted:36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b -->

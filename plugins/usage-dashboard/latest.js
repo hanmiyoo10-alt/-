@@ -1,13 +1,13 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.81
+//@version 3.0.0-alpha.5.82
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.81';
+  const VERSION = '3.0.0-alpha.5.82';
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +26,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.22';
+  const REQUIRED_BRIDGE_VERSION = '1.6.23';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -2097,10 +2097,10 @@ async function importLegacyTodayBaselines() {
       } : null;
       const devpassAccount = ds ? {
         plan:String(ds.plan || 'none'),
-        cycle:ds.cycle === null || ds.cycle === undefined ? '' : String(ds.cycle),
+        cycle:typeof ds.cycle === 'string' ? ds.cycle.trim() : '',
         billingCycleStart:ds.billingCycleStart || null,
         expiresAt:ds.expiresAt || null,
-        cancelled:ds.cancelled === true,
+        cancelled:typeof ds.cancelled === 'boolean' ? ds.cancelled : null,
         pendingTier:ds.pendingTier === null || ds.pendingTier === undefined ? '' : String(ds.pendingTier),
         serviceTier:String(ds.serviceTier || 'default'),
         routingStrategy:String(ds.routingStrategy || 'auto'),
@@ -2849,6 +2849,7 @@ async function importLegacyTodayBaselines() {
       `Request account scope fidelity: DevPass ${Math.max(0, Number(diagRequestProvenance?.devpass || 0))}/${diagRequestProvenanceRows} · Credits ${Math.max(0, Number(diagRequestProvenance?.credits || 0))}/${diagRequestProvenanceRows} · Unknown ${Math.max(0, Number(diagRequestProvenance?.unknown || 0))}/${diagRequestProvenanceRows} · conflict ${Math.max(0, Number(diagRequestProvenance?.conflict || 0))}`,
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
+      `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${money(diagAccount?.regularCredits)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
@@ -3006,6 +3007,19 @@ function todayOverviewMetrics(d) {
         : String(devpassAccount.plan || 'none') !== 'none'
           ? 'ACTIVE'
           : '—';
+    const billingPlanText = devpassAccount && String(devpassAccount.plan || '').trim() && String(devpassAccount.plan).toLowerCase() !== 'none'
+      ? String(devpassAccount.plan).toUpperCase()
+      : '—';
+    const billingCycleText = typeof devpassAccount?.cycle === 'string' && devpassAccount.cycle.trim()
+      ? devpassAccount.cycle.trim()
+      : '—';
+    const billingStartText = dashboardDateText(devpassAccount?.billingCycleStart, true);
+    const billingEndText = dashboardDateText(devpassAccount?.expiresAt, true);
+    const billingEndTimestamp = resetTimestamp(devpassAccount?.expiresAt);
+    const billingRemainingText = Number.isFinite(billingEndTimestamp) && billingEndTimestamp > Date.now()
+      ? remainingTimeForDashboard(devpassAccount.expiresAt)
+      : '—';
+    const billingCancelledText = devpassAccount?.cancelled === true ? '취소 예정' : '—';
     const devpassIncludedPassText = num(devpassAccount?.includedResetPassesRemaining)
       ? (num(devpassAccount?.includedResetPasses)
         ? `${Number(devpassAccount.includedResetPassesRemaining)} / ${Number(devpassAccount.includedResetPasses)}장`
@@ -3031,10 +3045,18 @@ function todayOverviewMetrics(d) {
             <div class="mini"><span>PAYG overflow</span><b>${devpassAccount.paygEnabled ? '켜짐' : '꺼짐'}</b></div>
             <div class="mini cyan"><span>Regular Credits</span><b>${money(devpassAccount.regularCredits)}</b></div>
           </div></div>
+          <div class="usage-detail-box billing-cycle-truth-strip"><div class="recent-head"><h3>Billing Cycle</h3><span>source truth</span></div><div class="minis">
+            <div class="mini"><span>Plan</span><b>${esc(billingPlanText)}</b></div>
+            <div class="mini"><span>Cycle</span><b>${esc(billingCycleText)}</b></div>
+            <div class="mini"><span>기간 시작</span><b>${esc(billingStartText)}</b></div>
+            <div class="mini"><span>기간 종료</span><b>${esc(billingEndText)}</b></div>
+            <div class="mini"><span>남은 기간</span><b>${esc(billingRemainingText)}</b></div>
+            <div class="mini"><span>취소 상태</span><b>${esc(billingCancelledText)}</b></div>
+          </div></div>
         </div>`
       : '';
     const scopeExtra = scopeKey === 'devpass'
-      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div><div class="mini purple"><span>프리미엄 남음</span><b>${money(d.weekly?.remaining)}</b></div><div class="mini purple"><span>Reset Pass</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>`
+      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>기간 종료</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div><div class="mini purple"><span>프리미엄 남음</span><b>${money(d.weekly?.remaining)}</b></div><div class="mini purple"><span>Reset Pass</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>`
       : scopeKey === 'credits'
         ? `<div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div><div class="mini cyan"><span>Runway</span><b>${num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '—'}</b></div>`
         : `<div class="mini accent"><span>DevPass 월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div>`;
@@ -3053,7 +3075,7 @@ function todayOverviewMetrics(d) {
     const analyticsTopModel = Array.isArray(analyticsW24?.models) && analyticsW24.models[0]?.name ? String(analyticsW24.models[0].name) : '—';
     const analyticsFetchedAt = analyticsBundle?.fetchedAt || d.analyticsScopes?.fetchedAt || analyticsW24?.fetchedAt || d.fetchedAt;
     const analyticsExtra = analyticsScopeKey === 'devpass'
-      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
+      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>기간 종료</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
       : analyticsScopeKey === 'credits'
         ? `<div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div><div class="mini cyan"><span>Runway</span><b>${num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '—'}</b></div>`
         : `<div class="mini accent"><span>DevPass 월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div>`;

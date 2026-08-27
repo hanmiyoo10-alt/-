@@ -3,8 +3,13 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const {validateDescriptor} = require('../contract.cjs');
-const {repositoryBindingErrors} = require('../bootstrap.cjs');
+const {loadPolicy, validateDescriptor} = require('../contract.cjs');
+const {
+  guidancePaths,
+  renderGuidelines,
+  repositoryBindingErrors,
+  sharedInteractionContract,
+} = require('../bootstrap.cjs');
 const {
   descriptorCoverage,
   renderBootstrapSection,
@@ -18,13 +23,27 @@ const expectedIds = [...Object.keys(registry.plugins || {}), ...Object.keys(regi
 const descriptorFiles = fs.readdirSync(descriptorDir).filter((name) => name.endsWith('.json')).sort();
 const descriptors = descriptorFiles.map((name) => JSON.parse(fs.readFileSync(path.join(descriptorDir, name), 'utf8')));
 const actualIds = descriptors.map((descriptor) => descriptor.id).sort();
+const sharedContract = '.github/plugin-control-plane/canonical-main/shared-interaction-contract.md';
 
 assert.deepEqual(actualIds, expectedIds, 'every operational registry scope must have exactly one canonical bootstrap descriptor');
 assert.equal(new Set(actualIds).size, actualIds.length, 'bootstrap descriptor ids must be unique');
 
+assert.equal(loadPolicy().bootstrap.sharedInteractionContract, sharedContract, 'canonical bootstrap policy must own the shared interaction contract path');
+assert.equal(sharedInteractionContract(), sharedContract, 'bootstrap must resolve the canonical shared interaction contract');
+const sharedText = fs.readFileSync(path.join(root, sharedContract), 'utf8');
+assert.match(sharedText, /repository-shared-stage-boundary-reporting:v1/, 'shared contract must expose a stable stage-boundary marker');
+assert.match(sharedText, /meaningful stage boundary/i, 'shared contract must define meaningful stage boundaries');
+assert.match(sharedText, /what changed/i, 'shared contract must require delta-focused reporting');
+assert.match(sharedText, /does not replace or outrank/i, 'shared contract must preserve project-specific authority');
+
 for (const descriptor of descriptors) {
   assert.deepEqual(validateDescriptor(descriptor), [], `${descriptor.id} descriptor shape must validate`);
   assert.deepEqual(repositoryBindingErrors(descriptor, root), [], `${descriptor.id} repository binding must validate`);
+  assert.deepEqual(
+    guidancePaths(descriptor),
+    [sharedContract, descriptor.guidelines],
+    `${descriptor.id} must inherit shared interaction guidance before project-specific guidelines`,
+  );
 }
 
 const byId = Object.fromEntries(descriptors.map((descriptor) => [descriptor.id, descriptor]));
@@ -55,6 +74,10 @@ for (const descriptor of descriptors) {
   assert.match(guidelines, /Development & Operations Guidelines|Development & Operations|Development Guidelines/, `${descriptor.id} guidelines must be durable operating guidance`);
 }
 
+const renderedFutureGuidelines = renderGuidelines(byId['voyage-token-check'], 'hanmiyoo10-alt/-');
+assert(renderedFutureGuidelines.includes(`Repository-wide shared interaction contract: \`${sharedContract}\``), 'future bootstrap render must include the shared interaction contract');
+assert.match(renderedFutureGuidelines, /inherits that shared interaction contract/, 'future bootstrap render must make inheritance explicit');
+
 const coverage = descriptorCoverage(root);
 assert.equal(coverage.expectedCount, expectedIds.length);
 assert.equal(coverage.registeredCount, expectedIds.length);
@@ -78,4 +101,4 @@ const opsWorkflow = fs.readFileSync(path.join(root, '.github/workflows/canonical
 assert.match(opsWorkflow, /bootstrap-surface\.cjs refresh/);
 assert.match(opsWorkflow, /docs\/\*_GUIDELINES\.md/);
 
-console.log(`CANONICAL_MAIN_BOOTSTRAP_ROLLOUT:OK:${coverage.readyCount}/${coverage.expectedCount}`);
+console.log(`CANONICAL_MAIN_BOOTSTRAP_ROLLOUT:OK:${coverage.readyCount}/${coverage.expectedCount}:shared-guidance`);

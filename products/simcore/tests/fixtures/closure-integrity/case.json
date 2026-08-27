@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "closure-integrity-v1",
+  "suite": "closure-integrity",
+  "input": {
+    "historicalReplay": "V0_64_8_NEW_01_REPAIR_NEW_02"
+  },
+  "expected": {
+    "status": "PASS"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_RELEASE_SYSTEM_V2_2_CLOSURE_INTEGRITY_DESIGN.md"
+  }
+}

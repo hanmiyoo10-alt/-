@@ -239,6 +239,26 @@ def sync_release_memory() -> None:
     GUIDELINES.write_text(text, encoding='utf-8')
 
 
+def sync_manager_engine_identity() -> None:
+    engine_sha = sha256(ENGINE)
+    manager_text = MANAGER.read_text(encoding='utf-8')
+    manager_text, version_count = re.subn(
+        r"const BUNDLED_ENGINE_VERSION = '[^']+';",
+        f"const BUNDLED_ENGINE_VERSION = '{TARGET_ENGINE}';",
+        manager_text,
+        count=1,
+    )
+    manager_text, sha_count = re.subn(
+        r"const BUNDLED_ENGINE_SHA256 = '[0-9a-f]{64}';",
+        f"const BUNDLED_ENGINE_SHA256 = '{engine_sha}';",
+        manager_text,
+        count=1,
+    )
+    if version_count != 1 or sha_count != 1:
+        raise SystemExit('5.82 Manager bundled Engine identity markers missing')
+    MANAGER.write_text(manager_text, encoding='utf-8')
+
+
 def sync_manifest_hashes() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     manifest['components']['bridge']['sha256'] = sha256(ENGINE)
@@ -285,6 +305,10 @@ def validate_target() -> None:
         raise SystemExit('5.82 Engine source version mismatch')
     if f"const PRODUCT_VERSION = '{TARGET_VERSION}';" not in manager_text:
         raise SystemExit('5.82 Manager product identity mismatch')
+    if f"const BUNDLED_ENGINE_VERSION = '{TARGET_ENGINE}';" not in manager_text:
+        raise SystemExit('5.82 Manager bundled Engine version mismatch')
+    if f"const BUNDLED_ENGINE_SHA256 = '{sha256(ENGINE)}';" not in manager_text:
+        raise SystemExit('5.82 Manager bundled Engine hash mismatch')
 
     independent = function_slice(engine_sources, 'function normalizeIndependentDevPassStatus(payload) {', '\n\nasync function loadDevPassStatus()')
     fallback = function_slice(engine_sources, 'async function loadDevPassStatus() {', '\n\nfunction deepFindNumber')
@@ -365,6 +389,7 @@ run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
 run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
 run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write')
 run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
+sync_manager_engine_identity()
 sync_manifest_hashes()
 run('node', '--check', str(LATEST))
 run('node', '--check', str(MANAGER))

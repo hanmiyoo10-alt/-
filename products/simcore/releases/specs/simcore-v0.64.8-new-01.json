@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.64.8-new-01",
+  "product": "SimCore",
+  "version": "0.64.8",
+  "releaseName": "Output-Complete Telemetry Checkpoint Repair",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "7a9a2a90f36fb9a7f64d37f5d91be787340e2ee6",
+  "expectedProductionCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
+  "candidateReleaseBlob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
+  "primaryGoalId": "06408_OUTPUT_CHECKPOINT_REPAIR",
+  "changeClass": "RUNTIME_CORRECTNESS_REPAIR",
+  "evidenceRefs": [
+    "issue:#623",
+    "docs/SIMCORE_06408_OUTPUT_COMPLETE_TELEMETRY_CHECKPOINT_REPAIR_ACTIVATION.md",
+    "docs/SIMCORE_06407_OUTPUT_CHECKPOINT_LIVE_FAILURE_2026-08-27.md",
+    "docs/SIMCORE_LIVE_06407_VALIDATION_2026-08-27.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

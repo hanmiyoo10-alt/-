@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
+const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
 const workspacePath = 'plugins/usage-dashboard/src/62-diagnostics-workspace.part.js';
 const ledgerPath = 'plugins/usage-dashboard/src/14-request-ledger.part.js';
@@ -11,6 +12,7 @@ const lifecyclePath = 'plugins/usage-dashboard/src/80-lifecycle.part.js';
 const bootstrapPath = 'plugins/usage-dashboard/src/90-bootstrap.part.js';
 const enginePath = 'plugins/usage-dashboard/runtime/bridge-engine.mjs';
 
+const release = assertCurrentReleaseArtifacts();
 const workspace = fs.readFileSync(workspacePath, 'utf8');
 const ledger = fs.readFileSync(ledgerPath, 'utf8');
 const refresh = fs.readFileSync(refreshPath, 'utf8');
@@ -82,7 +84,9 @@ for (const marker of [
   'diagnosticsMode:capturedMode',
 ]) assert.ok(workspace.includes(marker), `P37 must preserve instant Diagnostics switch in the direct workspace owner: ${marker}`);
 
-const engineSha = crypto.createHash('sha256').update(fs.readFileSync(enginePath)).digest('hex');
-assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P37 Engine must remain byte-identical');
+if (release.engineVersion === '1.6.22') {
+  const engineSha = crypto.createHash('sha256').update(fs.readFileSync(enginePath)).digest('hex');
+  assert.equal(engineSha, '85682703e8aeb345d20d9cb436231887fc7cc2050e850a61a54ac5298c5a2c69', 'P37 Engine 1.6.22 historical byte lock must remain exact');
+}
 
-console.log('P37 Runtime Weight & Lifecycle Audit: OK · module 62 direct audit owner · Detailed-only bounded evidence · no new I/O/polling · UNKNOWN preserved · Engine byte-identical');
+console.log(`P37 Runtime Weight & Lifecycle Audit: OK · module 62 direct audit owner · Detailed-only bounded evidence · no new I/O/polling · UNKNOWN preserved · Engine ${release.engineVersion} authority verified`);

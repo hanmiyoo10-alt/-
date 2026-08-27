@@ -55,7 +55,14 @@ function softEnforcementContractErrors(root, contract = loadProtectedMainContrac
   if (!/github\.event\.workflow_run\.event == 'push'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_PUSH_SCOPE_MISSING');
   if (!/github\.event\.workflow_run\.head_branch == 'main'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_MAIN_SCOPE_MISSING');
   if (!/github\.event\.workflow_run\.conclusion == 'success'/.test(workflow)) errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_SUCCESS_GATE_MISSING');
-  if (!/Confirm successful result still belongs to current main/.test(workflow) || !/git rev-parse origin\/main/.test(workflow)) {
+
+  const legacyIdentityBarrier = /Confirm successful result still belongs to current main/.test(workflow)
+    && /git rev-parse origin\/main/.test(workflow);
+  const neutralIdentityBarrier = /id:\s*target_currentness/.test(workflow)
+    && /git rev-parse origin\/main/.test(workflow)
+    && /disposition=SUPERSEDED_CURRENT_MAIN/.test(workflow)
+    && /steps\.target_currentness\.outputs\.disposition == 'CURRENT_MAIN'/.test(workflow);
+  if (!legacyIdentityBarrier && !neutralIdentityBarrier) {
     errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_MAIN_IDENTITY_BARRIER_MISSING');
   }
 

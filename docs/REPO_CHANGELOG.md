@@ -321,6 +321,13 @@
 - Event ID: `e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973`
 <!-- canonical-main-doc-promoted:e7b0efb99ae94ba7bfb406c51e40a2c91cb391e22f91c2e9e13b52bad0369973 -->
 
+### 2026-08-27 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/547)
+- Event ID: `dd7a6ab930e4581f4c685fdae12e06b49463cbd1e19e7fde7e7210841304a38c`
+<!-- canonical-main-doc-promoted:dd7a6ab930e4581f4c685fdae12e06b49463cbd1e19e7fde7e7210841304a38c -->
+
 ### 2026-08-27 — fix: preserve hidden Harness proof artifacts
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

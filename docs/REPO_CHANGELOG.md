@@ -353,3 +353,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4902649ccfeecb55f88906dac17bfb063084a4ca)
 - Event ID: `c2b3f121afaa4769995868253f2acf0f5d32c76efd1c85493fe333f19532b0e8`
 <!-- canonical-main-doc-promoted:c2b3f121afaa4769995868253f2acf0f5d32c76efd1c85493fe333f19532b0e8 -->
+
+### 2026-08-27 — fix: observe exact branch refs for receipt sync
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d8511e2a2b4db34b7139350f53b7d9f64e10082a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d8511e2a2b4db34b7139350f53b7d9f64e10082a)
+- Event ID: `c9da095f667b422daa322f3a7b70b565840e747944334b4bd853dafd2b16997c`
+<!-- canonical-main-doc-promoted:c9da095f667b422daa322f3a7b70b565840e747944334b4bd853dafd2b16997c -->

@@ -1,201 +1,239 @@
 # SimCore v0.64.7 Real Long-Chat Validation — 2026-08-27
 
-Status: **IN_PROGRESS · PRE-BOUNDARY BASELINE CAPTURED · LIVE GATE OPEN**
+Status: **CLOSED · FAIL · CONFIRMED BLOCKING · REPAIR RELEASE REQUIRED**
 Scenario: `06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT`
 Production: `v0.64.7 — Cross-Reload Cache Observer Continuity`
 Release authority: `release-simcore` commit `a7ce8ce33a97797630f885c6753415e4b2ccc7fc`
 Release blob: `676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0` (`latest.js == install.js`)
 Evidence source: user-supplied `SimCore Last Turn Diagnostic` packets from a real long chat
 
-## 1. Classification
+## 1. Final classification
 
 ```text
-current live-gate disposition:
-WATCH / LIVE_GATE_INCOMPLETE_EVIDENCE / NON_BLOCKING_TO_RUNTIME_CORRECTNESS
+06407 live gate:
+FAIL
 
-gate status:
-OPEN
+classification:
+CONFIRMED_BLOCKING / RUNTIME_FIX_REQUIRED
 
-reason:
-required cross-runtime boundary has not been demonstrated in the supplied packet set
+confirmed implementation gap:
+OUTPUT_CHECKPOINT_CALLSITE_OMITTED
+
+M2-3 physical implementation:
+BLOCKED
+
+next unrelated runtime release:
+BLOCKED
 ```
 
-This is **not** a v0.64.7 product FIX finding. The supplied packets establish a useful healthy same-generation baseline, but they do not show the required new runtime generation adopting a compatible telemetry capsule.
+The gate is now **classified and closed as FAIL**. It is no longer `OPEN / INCOMPLETE_EVIDENCE`.
 
-The v0.64.7 activation contract requires:
+The released v0.64.7 production identity remains immutable evidence. Do not mutate `release-simcore` in place.
 
-```text
-A. establish healthy cache trajectory in v0.64.7
-B. confirm telemetry checkpoint exists before the boundary
-C. refresh the page or perform a plugin runtime update
-D. first natural request in the new runtime generation
-E. second natural request
-```
+## 2. Healthy pre-boundary baseline
 
-The supplied evidence covers substantial parts of A and normal-regression controls, but does not prove C/D/E.
-
-## 2. Runtime identity and specimen sequence
-
-All supplied packets report the same runtime generation:
+The pre-refresh long-chat runtime was:
 
 ```text
-runtime boot: 2026-08-27T11:42:11.881Z
+boot:       2026-08-27T11:42:11.881Z
 generation: mtbgdju1-fwtefm
-reload safety: ARMED · epoch 1 · stale drops 0
-version: 0.64.7
+version:    0.64.7
 ```
 
-Observed diagnostic captures:
+Observed baseline controls included:
 
 ```text
-2026-08-27T12:24:30.798Z · B_END
-2026-08-27T12:29:32.168Z · C
-2026-08-27T12:32:39.597Z · C
-2026-08-27T12:34:52.078Z · C repeat-send shape
-```
-
-Because the generation identifier does not change across these packets, this packet set cannot itself establish the v0.64.7 cross-reload adoption contract.
-
-## 3. Same-generation baseline evidence
-
-### B_END specimen
-
-Observed:
-
-```text
-Runtime status: ACTIVE · output COMMITTED
-Mode: B_END
+B_END closure: COMPLETE / terminal EXPLICIT / structure PASS
+post-B_END C clock handoff: APPLIED
+representation-fast reconcile: observed healthy
+genuine manual edit: MANUAL_EDIT_REBUILT / expected positive control
+cache trajectory: ESTABLISHED
+last repeat-send topology: STABLE · 60/60 · 100%
+cache break: NONE on the stable repeat-send control
+SimCore contribution: NO_BREAK on that control
 Warnings: 0
-Broadcast lifecycle: ENDING
-Broadcast end authority: ALLOWED · explicit-b-end
-Broadcast closure: COMPLETE · terminal EXPLICIT · structure PASS
-Continuity summary: PASS
-Telemetry continuity: FRESH · no-compatible-handoff
-Cache trajectory: ESTABLISHED
 provider cache: UNVERIFIED
 ```
 
-This is useful regression evidence for normal Core/Broadcast behavior, but `FRESH · no-compatible-handoff` is not a cross-reload PASS signal.
-
-### Direct post-B_END C specimen
-
-Observed:
+The intentional same-length manual edit remains resolved as:
 
 ```text
-Mode: C
-Edit reconcile: REPRESENTATION_FAST_RECONCILED
-Edit origin: REPRESENTATION_DRIFT_CORRELATED
-Continuity summary: PASS
-Post-B_END clock handoff: APPLIED
-Current-time authority: POST_B_END_FLOOR
+EXPECTED_USER_EDIT_BEHAVIOR / POSITIVE_CONTROL / NON_06407
+```
+
+The same-input retry that cleared a partial previous-turn semantic replay remains a separate generation-semantic evidence track and is not attributed to v0.64.7.
+
+## 3. Actual refresh boundary
+
+The user performed the required same-tab page refresh after the healthy pre-boundary baseline.
+
+The new runtime was:
+
+```text
+boot:       2026-08-27T13:12:46.965Z
+generation: mtbjm1kl-1lbkiq
+```
+
+This is a genuine runtime boundary because the boot time and generation identifier both changed from the pre-refresh runtime.
+
+## 4. First natural post-refresh request — FAIL point
+
+Packet:
+
+```text
+capture: 2026-08-27T13:25:37.514Z
+user @2162 → assistant @2163
+mode C
+new generation mtbjm1kl-1lbkiq
+```
+
+Key observations:
+
+```text
 Telemetry continuity: FRESH · no-compatible-handoff
+Prompt prefix: BASELINE
+Cache topology: BASELINE · messages 62 · chars 201,708
+Cache integrity: BASELINE
+Cache break: BASELINE
+History mutation: BASELINE
+Runtime identity: COMPILER_TIERS · all BASELINE
+SimCore contribution: BASELINE
+Cache trajectory: BASELINE · family 2a715208 · distinct 1 · attempts 1
 provider cache: UNVERIFIED
-```
-
-This preserves the validated v0.64.6 post-B_END C behavior while running v0.64.7 and provides a useful frozen regression control.
-
-### Subsequent C / repeat-send stabilization specimen
-
-The later packets show the same runtime generation continuing normally. The final packet reports:
-
-```text
-Stability: OBSERVED
-Cache topology: STABLE · 60/60 messages · 100.0%
-Cache integrity: STABLE
-Cache break: NONE
-Cache effect: REUSE_WINDOW_STABLE
-Runtime identity: stable/slow/volatile/full SAME
-SimCore contribution: NO_BREAK
-Telemetry continuity: FRESH · no-compatible-handoff
 Warnings: 0
-Compatibility diagnostics: 0
+Continuity summary: PASS
 ```
 
-This is strong same-generation observer stability evidence, but it is still pre-boundary for the v0.64.7 release claim.
+Required result was an adopted SESSION/GLOBAL handoff with compatible tracker restoration. Instead every observer began from a fresh baseline.
 
-## 4. Genuine user-edit positive control
+Therefore the first post-boundary pass condition failed.
 
-One supplied C packet reports:
+The first post-refresh request itself remained semantically healthy: the visible Mode C response directly answered the current community input rather than replaying the previous turn's response frame.
+
+The first post-refresh `MANUAL_EDIT_REBUILT` is not classified as a user-edit anomaly. `Prior representation: UNAVAILABLE` is expected after a fresh runtime has no previous in-memory Representation ledger; this conservative rebuild is outside the v0.64.7 telemetry-transport ownership boundary.
+
+## 5. Second natural post-refresh request — confirms fresh restart
+
+Packet:
 
 ```text
-Edit reconcile: MANUAL_EDIT_REBUILT · 3.928 s
-Edit origin: AMBIGUOUS_CHANGE
-shape: NEW_VISIBLE_REPRESENTATION
-current matches neither prior canonical nor prior Fresh identity
-Rebuild attribution: PREEXISTING_REQUEST_MUTATION · HIGH
-Mutation attribution: NO_PROVENANCE_MATCH · LOW
+capture: 2026-08-27T13:31:37.917Z
+user @2164 → assistant @2165
+mode A
+same new generation mtbjm1kl-1lbkiq
 ```
 
-User clarification confirms that this visible change was an intentional manual edit.
-
-Resolved classification:
+Key observations:
 
 ```text
-RESOLVED / EXPECTED_USER_EDIT_BEHAVIOR / POSITIVE_CONTROL / NON_06407
+Telemetry continuity: FRESH · no-compatible-handoff
+Cache trajectory: OBSERVING · family 2a715208 · distinct 2 · attempts 2
+Cache topology: COMMON_PREFIX · 33/64 · 63.5%
+Cache break: PRE_SIMCORE · CHAT_HISTORY
+SimCore contribution: NOT_FIRST_BREAK
+provider cache: UNVERIFIED
+Warnings: 0
+Continuity summary: PASS
+Frame sequence: PASS
 ```
 
-Therefore the 3.928 s `MANUAL_EDIT_REBUILT` event is **not an anomaly** and **not a v0.64.7 regression**. It is compatible with the frozen genuine-user-edit control: when the current visible representation matches neither prior canonical nor prior Fresh identity, the request remains eligible for the full manual-edit reconstruction path.
+This is a newly established trajectory inside the new runtime, not continuation from the pre-refresh `ESTABLISHED` trajectory.
 
-This specimen is retained as positive regression evidence that v0.64.7 did not incorrectly route a genuine user edit through `REPRESENTATION_FAST_RECONCILED`.
+The second visible response also followed its current Mode A scene request and advanced Chapter 10→11 / Chatindex 1053→1054 normally. Normal Core semantics therefore remained usable while the local observer continuity feature failed.
 
-## 5. Storage/performance observations
+## 6. Source-level implementation finding
 
-The supplied packets include storage-dominated request/output timings, including request Turn Storage and output state storage in the hundreds of milliseconds.
+The activation design requires:
+
+```text
+completed output/state commit
+→ bounded telemetry checkpoint to sessionStorage
+
+plus
+
+onUnload
+→ last-chance memory + session checkpoint
+```
+
+Source inspection of released v0.64.7 and `products/simcore/tooling/build-06407-reload-cache-continuity.py` shows:
+
+```text
+runtime-telemetry helper:
+sessionStorage transport implemented
+boot-time claim implemented
+
+outer-shell checkpoint callsites:
+onUnload publish only
+output-complete publish/checkpoint absent
+```
+
+The deterministic builder replaces the one pre-existing outer `runtimeTelemetryRules.publish(...)` call, which is inside `Risuai.onUnload(...)`. It does not add the frozen completed-output checkpoint callsite.
 
 Classification:
 
 ```text
-OBSERVED / EXISTING_NON_GOAL / NON_06407
+DESIGN_IMPLEMENTATION_DRIFT
+OUTPUT_CHECKPOINT_CALLSITE_OMITTED
+CONFIRMED RUNTIME FIX
 ```
 
-The v0.64.7 activation contract explicitly excludes Store write latency from this release scope. These timings therefore do not affect the cache-observer continuity gate unless separate evidence establishes a correctness consequence.
+The exact host/browser reason the unload-only fallback failed to leave an adoptable sidecar is not claimed. That narrower unknown does not prevent classification because the released runtime independently omitted a required checkpoint callsite and the required same-tab live scenario failed end-to-end.
 
-## 6. What is still required to close v0.64.7
+## 7. Diagnostic-surface co-finding
 
-Before classifying the live gate PASS, capture the actual boundary sequence:
+The activation design also requires a bounded line such as:
 
 ```text
-1. while still in the current healthy v0.64.7 runtime, preserve the pre-boundary state
-2. refresh the page or perform a compatible runtime/plugin reload
-3. confirm Runtime boot / generation changes
-4. on the first natural request after that boundary, require:
-   - Telemetry continuity: ADOPTED
-   - transport SESSION or GLOBAL as appropriate
-   - same location accepted
-   - topology/runtime-prefix/trajectory restored where compatible
-   - provider cache remains UNVERIFIED
-   - normal Core request/output semantics unchanged
-5. on the second natural request, require:
-   - trajectory continues from restored state
-   - no artificial family reset caused by handoff
-   - no repeated adoption of the same capsule
+Telemetry checkpoint: SESSION · WRITTEN · <chars> · <ms>
 ```
 
-A real PRE_SIMCORE host/history prefix break remains reportable and does not by itself fail v0.64.7; this release must preserve that truth rather than hide it.
+The released runtime retains `lastWriteProbe` internally but does not expose it in Last Turn Diagnostic.
 
-## 7. Current verdict
+This was previously a non-blocking WATCH. It is now a repair co-finding because the failed live gate demonstrates why pre-boundary checkpoint visibility is needed to distinguish `WRITTEN`, `UNAVAILABLE`, `FAILED`, and `OVERSIZE` before a refresh.
+
+The missing diagnostic line is not itself the root cause of lost continuity; it is an observability gap that should travel with the repair.
+
+## 8. Final verdict matrix
 
 ```text
-healthy same-generation long-chat baseline: OBSERVED
+healthy same-generation long-chat baseline: PASS / OBSERVED
 B_END closure regression control: PASS
 post-B_END C regression control: PASS
-genuine manual-edit control: PASS / EXPECTED_USER_EDIT_BEHAVIOR
-same-generation cache observer stability: OBSERVED
-new runtime generation: NOT OBSERVED IN SUPPLIED PACKETS
-cross-reload telemetry adoption: NOT OBSERVED
-second post-boundary continuation: NOT OBSERVED
+genuine manual-edit positive control: PASS
+normal post-refresh Core semantics: PASS / OBSERVED
+new runtime generation: PASS / OBSERVED
+post-refresh telemetry adoption: FAIL
+pre-refresh trajectory restoration: FAIL
+second-request restored continuation: FAIL (fresh OBSERVING instead)
 provider cache claim: UNVERIFIED (correct)
 
-06407 live gate: OPEN
-classification: WATCH / INCOMPLETE_EVIDENCE
+06407 live gate: FAIL / CLOSED
 ```
 
-Do not begin M2-3 or another runtime release on the basis of this packet set alone. The next evidence should be the first and second natural requests after an actual same-tab refresh/runtime boundary.
+## 9. Required repair boundary
 
-## 8. Authority references
+The next repair work item must remain narrow and must not absorb M2-3:
+
+```text
+- add completed-output telemetry checkpoint to sessionStorage
+- keep onUnload as last-chance redundancy
+- expose bounded Telemetry checkpoint diagnostics
+- preserve metadata-only / 16,384-char / 10-minute / same-location contracts
+- preserve single-consumption claim semantics
+- preserve provider cache UNVERIFIED
+- add permanent verification of the actual output-complete callsite
+- release as a new immutable repair version
+- repeat the same real long-chat refresh experiment
+```
+
+Exact repair version and release authorization belong to the next runtime work item.
+
+## 10. Authority references
 
 - `docs/SIMCORE_06407_RELOAD_CACHE_CONTINUITY_ACTIVATION.md`
 - `docs/SIMCORE_06407_IMPLEMENTATION_EVIDENCE.md`
-- `docs/CURRENT_DEVELOPMENT.md`
-- `docs/SIMCORE_DEFERRED_LEDGER.md`
+- `docs/SIMCORE_06407_OUTPUT_CHECKPOINT_LIVE_FAILURE_2026-08-27.md`
+- `docs/SIMCORE_06407_TELEMETRY_CHECKPOINT_DIAGNOSTIC_GAP_2026-08-27.md`
+- `docs/SIMCORE_DIAGNOSTIC_REVIEW_STANDARD.md`
+- `products/simcore/tooling/build-06407-reload-cache-continuity.py`
 - `release-simcore/plugins/simcore/latest.js`

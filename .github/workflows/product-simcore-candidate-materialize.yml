@@ -19,11 +19,13 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      issues: read
     outputs:
       intent_id: ${{ steps.request.outputs.intent_id }}
       release_id: ${{ steps.request.outputs.release_id }}
       request_path: ${{ steps.request.outputs.request_path }}
       source_commit: ${{ steps.request.outputs.source_commit }}
+      coordination_work_issue: ${{ steps.request.outputs.coordination_work_issue }}
       candidate_commit: ${{ steps.candidate.outputs.candidate_commit }}
       candidate_disposition: ${{ steps.candidate.outputs.candidate_disposition }}
     steps:
@@ -66,8 +68,16 @@ jobs:
           suffix={'NEW_VERSION':'new','SAME_VERSION_CORRECTION':'correction','ROLLBACK':'rollback'}.get(mode)
           if suffix is None: raise SystemExit('CANDIDATE_REQUEST_RELEASE_MODE_INVALID')
           if not re.fullmatch(rf'simcore-v{re.escape(version)}-{suffix}-[0-9]{{2,}}',rid): raise SystemExit('CANDIDATE_RELEASE_ID_INVALID')
+          work=r.get('coordinationWorkIssue')
+          if work is None or work == '':
+              work=''
+          elif type(work) is int and work > 0:
+              work=str(work)
+          else:
+              raise SystemExit('SIMCORE_CANDIDATE_COORDINATION_ISSUE_INVALID')
           print('intent_id='+str(r['intentId']))
           print('release_id='+rid)
+          print('coordination_work_issue='+work)
           PY
           echo "request_path=$REQUEST" >> "$GITHUB_OUTPUT"
           echo "source_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -82,6 +92,42 @@ jobs:
           P="$(git rev-parse origin/release-simcore)"
           [[ "$P" =~ ^[0-9a-f]{40}$ ]]
           echo "production_commit=$P" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate optional candidate coordination receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_WORK_ISSUE: ${{ steps.request.outputs.coordination_work_issue }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$TARGET_WORK_ISSUE" ]]; then
+            echo 'SIMCORE_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE'
+            exit 0
+          fi
+          [[ "$TARGET_WORK_ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo 'SIMCORE_CANDIDATE_COORDINATION_ISSUE_INVALID'; exit 3; }
+          mkdir -p "$RUNNER_TEMP/simcore-candidate-gate"
+          RESULT="$RUNNER_TEMP/simcore-candidate-gate/mutation-gate.json"
+          set +e
+          node .github/plugin-control-plane/canonical-main/work-harness/mutation-gate.cjs --work-issue "$TARGET_WORK_ISSUE" > "$RESULT"
+          code=$?
+          set -e
+          status="$(node -e "const x=require(process.argv[1]); process.stdout.write(String(x.status || ''))" "$RESULT")"
+          adapter="$(node -e "const x=require(process.argv[1]); process.stdout.write(String(x.boundary?.adapterId || ''))" "$RESULT")"
+          mutation="$(node -e "const x=require(process.argv[1]); process.stdout.write(String(x.boundary?.mutationClass || ''))" "$RESULT")"
+          {
+            echo '### SimCore Candidate Coordination Gate'
+            echo '```json'
+            cat "$RESULT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$code" -ne 0 || "$status" != 'MUTATION_GATE_READY' ]]; then
+            echo "SIMCORE_CANDIDATE_COORDINATION_GATE_BLOCKED:$status"
+            exit 3
+          fi
+          [[ "$adapter" == 'simcore' ]] || { echo "SIMCORE_CANDIDATE_ADAPTER_MISMATCH:$adapter"; exit 3; }
+          [[ "$mutation" == 'CANDIDATE_STATE' ]] || { echo "SIMCORE_CANDIDATE_MUTATION_CLASS_MISMATCH:$mutation"; exit 3; }
+          echo "SIMCORE_CANDIDATE_COORDINATION_GATE_READY:$TARGET_WORK_ISSUE"
 
       - name: Materialize or reuse exact candidate
         id: candidate

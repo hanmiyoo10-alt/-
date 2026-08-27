@@ -10,9 +10,36 @@ const SURFACE_ORDER = Object.freeze([
   'DOCUMENTATION',
   'OTHER',
 ]);
+const ROUTINE_GENERATED_DOC_SUBJECTS = Object.freeze([
+  /^docs:\s+promote canonical-main generated documentation(?:\s+\(#\d+\))?$/i,
+  /\[repo-docs-generated\]/i,
+]);
 
 function normalizePath(value) {
   return String(value || '').replace(/\\/g, '/');
+}
+
+function commitSubject(value) {
+  const candidate = typeof value === 'string'
+    ? value
+    : (value?.subject ?? value?.commit?.message ?? value?.message ?? '');
+  return String(candidate).split(/\r?\n/, 1)[0].trim();
+}
+
+function isRoutineGeneratedDocCommit(value) {
+  const subject = commitSubject(value);
+  return Boolean(subject) && ROUTINE_GENERATED_DOC_SUBJECTS.some((pattern) => pattern.test(subject));
+}
+
+function summarizeCommitNoise(commits, totalCommitCount = null) {
+  const rows = Array.isArray(commits) ? commits : [];
+  const routineGeneratedDocCommitCount = rows.filter(isRoutineGeneratedDocCommit).length;
+  const total = Number.isSafeInteger(totalCommitCount) && totalCommitCount >= 0 ? totalCommitCount : rows.length;
+  return {
+    totalCommitCount: total,
+    meaningfulCommitCount: Math.max(0, total - routineGeneratedDocCommitCount),
+    routineGeneratedDocCommitCount,
+  };
 }
 
 function isTestPath(path) {
@@ -130,6 +157,8 @@ function buildMainDeltaPresentation({ base, head, cwd = process.cwd() }) {
   const delta = buildMainDeltaBrief({ base, head, cwd });
   const classifiedFiles = delta.files.map(classifyPath);
   const risk = deriveRiskAndAction(classifiedFiles);
+  const commits = delta.commits.map((entry) => ({ ...entry }));
+  const noise = summarizeCommitNoise(commits, delta.commitCount);
 
   return {
     schemaVersion: 1,
@@ -139,6 +168,8 @@ function buildMainDeltaPresentation({ base, head, cwd = process.cwd() }) {
     headSha: delta.headSha,
     hasChanges: delta.commitCount > 0 || delta.fileCount > 0,
     commitCount: delta.commitCount,
+    meaningfulCommitCount: noise.meaningfulCommitCount,
+    routineGeneratedDocCommitCount: noise.routineGeneratedDocCommitCount,
     fileCount: delta.fileCount,
     riskLevel: risk.riskLevel,
     actionRequired: risk.actionRequired,
@@ -146,7 +177,7 @@ function buildMainDeltaPresentation({ base, head, cwd = process.cwd() }) {
     riskDrivers: risk.riskDrivers,
     claimsCurrentHealth: false,
     currentHealthState: 'NOT_EVALUATED_BY_U02',
-    commits: delta.commits.map((entry) => ({ ...entry })),
+    commits,
     surfaces: summarizeSurfaces(classifiedFiles),
     advancementRequest: buildAdvancementRequest(delta.baseSha, delta.headSha),
   };
@@ -163,6 +194,20 @@ function renderSurfaceLine(surface) {
   return `- ${surface.surface}: ${surface.count} file(s)${preview ? ` — ${preview}` : ''}${suffix}`;
 }
 
+function renderChangeCounts(presentation) {
+  const routine = Number.isSafeInteger(presentation?.routineGeneratedDocCommitCount)
+    ? presentation.routineGeneratedDocCommitCount
+    : 0;
+  const total = Number.isSafeInteger(presentation?.commitCount) ? presentation.commitCount : 0;
+  const meaningful = Number.isSafeInteger(presentation?.meaningfulCommitCount)
+    ? presentation.meaningfulCommitCount
+    : Math.max(0, total - routine);
+  if (routine > 0) {
+    return `${total} total commit(s) (${meaningful} meaningful + ${routine} routine generated-doc) / ${presentation.fileCount || 0} file(s)`;
+  }
+  return `${total} commit(s) / ${presentation.fileCount || 0} file(s)`;
+}
+
 function renderMainDeltaMarkdown(presentation) {
   if (!presentation || presentation.state !== 'OK') throw new Error('MAIN_DELTA_PRESENTATION_INVALID');
 
@@ -170,7 +215,7 @@ function renderMainDeltaMarkdown(presentation) {
     '## Last-Seen Main Delta Brief',
     `- From: ${inlineCode(presentation.baseSha)}`,
     `- To: ${inlineCode(presentation.headSha)}`,
-    `- Changes: ${presentation.commitCount} commit(s) / ${presentation.fileCount} file(s)`,
+    `- Changes: ${renderChangeCounts(presentation)}`,
     `- Risk: **${presentation.riskLevel}**`,
     `- Action: ${inlineCode(presentation.actionCode)}${presentation.actionRequired ? ' — review recommended' : ''}`,
     '- Current health: not evaluated by U-02; this brief describes change scope only.',
@@ -181,8 +226,11 @@ function renderMainDeltaMarkdown(presentation) {
   if (!presentation.commits.length) {
     lines.push('- none');
   } else {
-    for (const commit of presentation.commits) {
+    for (const commit of presentation.commits.filter((entry) => !isRoutineGeneratedDocCommit(entry))) {
       lines.push(`- ${inlineCode(commit.sha.slice(0, 12))} ${String(commit.subject).replace(/\r?\n/g, ' ')}`);
+    }
+    if (presentation.routineGeneratedDocCommitCount > 0) {
+      lines.push(`- ${presentation.routineGeneratedDocCommitCount} routine generated-documentation promotion commit(s) compacted; full structured commit evidence retained.`);
     }
   }
 
@@ -239,14 +287,19 @@ if (require.main === module) {
 
 module.exports = {
   RISK_SCORE,
+  ROUTINE_GENERATED_DOC_SUBJECTS,
   SURFACE_ORDER,
   buildAdvancementRequest,
   buildMainDeltaPresentation,
   classifyPath,
+  commitSubject,
   deriveRiskAndAction,
+  isRoutineGeneratedDocCommit,
   isTestPath,
   normalizePath,
   parseArgs,
+  renderChangeCounts,
   renderMainDeltaMarkdown,
+  summarizeCommitNoise,
   summarizeSurfaces,
 };

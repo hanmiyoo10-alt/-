@@ -557,3 +557,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/77a7a02ad56b8b01f4766347c361abe53cd8d2a1)
 - Event ID: `0617b6afd9bc6b967e6efd2081c2dd0890aa511aba50a3267240042b33ed83bc`
 <!-- canonical-main-doc-promoted:0617b6afd9bc6b967e6efd2081c2dd0890aa511aba50a3267240042b33ed83bc -->
+
+### 2026-08-27 — infra: add repo-wide long-work checkpoint pacing (#622)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ee3feab78225cfe060b6c4a6ec7d8ca83bff1c1e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ee3feab78225cfe060b6c4a6ec7d8ca83bff1c1e)
+- Event ID: `de762785afbc2308b5e486e499c8e78ea06bd8f9fd81eee7aaffea720dc03d9b`
+<!-- canonical-main-doc-promoted:de762785afbc2308b5e486e499c8e78ea06bd8f9fd81eee7aaffea720dc03d9b -->

@@ -361,3 +361,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d8511e2a2b4db34b7139350f53b7d9f64e10082a)
 - Event ID: `c9da095f667b422daa322f3a7b70b565840e747944334b4bd853dafd2b16997c`
 <!-- canonical-main-doc-promoted:c9da095f667b422daa322f3a7b70b565840e747944334b4bd853dafd2b16997c -->
+
+### 2026-08-27 — fix: revalidate mutation gate with exact branch refs
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `60ef139420e7073f9d38809535528a2a0b074d53`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/60ef139420e7073f9d38809535528a2a0b074d53)
+- Event ID: `2ae958780980cae3d28f3211acc26aa1a0b0c8a803e8a781198d496b2a677797`
+<!-- canonical-main-doc-promoted:2ae958780980cae3d28f3211acc26aa1a0b0c8a803e8a781198d496b2a677797 -->

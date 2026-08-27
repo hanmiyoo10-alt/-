@@ -29,43 +29,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  compose-session:
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.event.issue.number == 562 &&
-      github.event.issue.pull_request == null &&
-      github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.author_association == 'OWNER' &&
-      github.event.comment.body == '/canonical-main-session-start compose'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout trusted canonical main session composer
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Validate owner session-start command
-        env:
-          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          node .github/plugin-control-plane/canonical-main/main-delta-session-command.cjs
-
-      - name: Compose and stage current session brief
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          node .github/plugin-control-plane/canonical-main/main-delta-session-start.cjs compose \
-            --anchor-issue 562 \
-            --ops-issue 485
-
   advance:
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -123,3 +86,41 @@ jobs:
             --expected-anchor "$EXPECTED_ANCHOR" \
             --target-main "$TARGET_MAIN" \
             --reason "$ADVANCE_REASON"
+
+  compose-session:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 562 &&
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted canonical main session composer
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Parse owner session-start command
+        id: session
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          node .github/plugin-control-plane/canonical-main/main-delta-session-command.cjs
+
+      - name: Compose and stage current session brief
+        if: steps.session.outputs.compose == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          node .github/plugin-control-plane/canonical-main/main-delta-session-start.cjs compose \
+            --anchor-issue 562 \
+            --ops-issue 485

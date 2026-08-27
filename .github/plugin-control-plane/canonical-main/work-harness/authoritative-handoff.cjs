@@ -25,7 +25,9 @@ function base(status, details = {}) {
     workId: details.workId || null,
     targetIssueNumber: details.targetIssueNumber || null,
     receiptId: details.receiptId || null,
+    adapterId: details.adapterId || null,
     targetWorkflow: details.targetWorkflow || null,
+    autoInvokeSupported: details.autoInvokeSupported === true,
     coordinationReady: details.coordinationReady === true,
     mutationAuthorized: false,
     executionAuthorized: false,
@@ -52,23 +54,43 @@ function blocked(targetIssueNumber, reasonCodes, details = {}) {
   });
 }
 
-function findCanonicalRoute(workRecord, adapterRegistry) {
-  if (!workRecord || workRecord.scopeId !== CANONICAL_SCOPE || workRecord.requiredCapability !== CANONICAL_CAPABILITY) {
+function findAuditedWorkflowRoute(workRecord, adapterRegistry) {
+  const scopeId = workRecord?.scopeId;
+  const capability = workRecord?.requiredCapability;
+  if (!scopeId || !capability) {
     return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_CAPABILITY_NOT_ALLOWED'] };
   }
+
   const adapters = (adapterRegistry?.adapters || []).filter((adapter) =>
-    adapter.supportedScopeIds?.includes(CANONICAL_SCOPE) && adapter.capabilities?.includes(CANONICAL_CAPABILITY));
+    adapter.supportedScopeIds?.includes(scopeId) && adapter.capabilities?.includes(capability));
   if (adapters.length !== 1) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ADAPTER_AMBIGUOUS'] };
-  const routes = (adapters[0].routes || []).filter((route) => route.capability === CANONICAL_CAPABILITY);
+
+  const adapter = adapters[0];
+  const routes = (adapter.routes || []).filter((route) => route.capability === capability);
   if (routes.length !== 1) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ROUTE_AMBIGUOUS'] };
+
   const route = routes[0];
   const valid = route.targetKind === 'GITHUB_WORKFLOW'
-    && route.target === CANONICAL_WORKFLOW
+    && typeof route.target === 'string'
+    && adapter.workflows?.includes(route.target)
     && route.executionClass === 'MUTATING'
-    && route.mutationClass === 'ISSUE_RECONCILIATION'
+    && typeof route.mutationClass === 'string'
+    && adapter.receiptRequiredFor?.includes(route.mutationClass)
     && route.invokePolicy === 'HANDOFF_ONLY';
   if (!valid) return { ok: false, reasonCodes: ['AUTHORITATIVE_HANDOFF_ROUTE_NOT_ALLOWED'] };
-  return { ok: true, adapterId: adapters[0].adapterId, route };
+
+  const autoInvokeSupported = scopeId === CANONICAL_SCOPE
+    && capability === CANONICAL_CAPABILITY
+    && route.target === CANONICAL_WORKFLOW;
+  return { ok: true, adapterId: adapter.adapterId, route, autoInvokeSupported };
+}
+
+function findCanonicalRoute(workRecord, adapterRegistry) {
+  const found = findAuditedWorkflowRoute(workRecord, adapterRegistry);
+  if (!found.ok || !found.autoInvokeSupported) {
+    return { ok: false, reasonCodes: found.ok ? ['AUTHORITATIVE_HANDOFF_CAPABILITY_NOT_ALLOWED'] : found.reasonCodes };
+  }
+  return found;
 }
 
 function planAuthoritativeHandoff({ issue, workRecord, gateResult, adapterRegistry } = {}) {
@@ -78,7 +100,7 @@ function planAuthoritativeHandoff({ issue, workRecord, gateResult, adapterRegist
   if (requests === 0) return notRequested(issueNumber, workId);
   if (requests !== 1) return blocked(issueNumber, ['AUTHORITATIVE_HANDOFF_REQUEST_DUPLICATE'], { workId });
 
-  const route = findCanonicalRoute(workRecord, adapterRegistry);
+  const route = findAuditedWorkflowRoute(workRecord, adapterRegistry);
   if (!route.ok) return blocked(issueNumber, route.reasonCodes, { workId });
 
   if (!gateResult || gateResult.status !== 'MUTATION_GATE_READY') {
@@ -87,16 +109,36 @@ function planAuthoritativeHandoff({ issue, workRecord, gateResult, adapterRegist
       ...((gateResult && gateResult.reasonCodes) || []),
     ], {
       workId,
+      adapterId: route.adapterId,
+      targetWorkflow: route.route.target,
       receiptId: gateResult?.receiptId || null,
       legalNextAction: gateResult?.legalNextAction || 'REFRESH_COORDINATION_EVIDENCE_AND_RETRY',
+    });
+  }
+
+  if (!route.autoInvokeSupported) {
+    return base('AUTHORITATIVE_HANDOFF_ROUTE_READY', {
+      targetIssueNumber: issueNumber,
+      workId,
+      adapterId: route.adapterId,
+      receiptId: gateResult.receiptId,
+      targetWorkflow: route.route.target,
+      coordinationReady: true,
+      reasonCodes: [
+        'AUTHORITATIVE_HANDOFF_ROUTE_AUDITED',
+        'AUTHORITATIVE_HANDOFF_AUTO_INVOKE_NOT_ENABLED',
+      ],
+      legalNextAction: 'ENABLE_BOUNDED_EXISTING_WORKFLOW_HANDOFF_IN_SEPARATE_PACKET',
     });
   }
 
   return base('AUTHORITATIVE_HANDOFF_READY', {
     targetIssueNumber: issueNumber,
     workId,
+    adapterId: route.adapterId,
     receiptId: gateResult.receiptId,
     targetWorkflow: route.route.target,
+    autoInvokeSupported: true,
     coordinationReady: true,
     reasonCodes: ['AUTHORITATIVE_HANDOFF_CANONICAL_ROUTE_READY'],
     legalNextAction: 'CALL_EXISTING_CANONICAL_MAIN_OPERATIONS_WITH_SAME_WORK_ISSUE',
@@ -176,6 +218,7 @@ module.exports = {
   HANDOFF_REQUEST,
   blocked,
   exitCodeFor,
+  findAuditedWorkflowRoute,
   findCanonicalRoute,
   markerCount,
   notRequested,

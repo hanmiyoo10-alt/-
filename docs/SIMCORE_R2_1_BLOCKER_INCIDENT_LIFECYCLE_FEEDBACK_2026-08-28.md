@@ -2,6 +2,7 @@
 
 Date: 2026-08-28 KST
 Classification: **FIX / INCIDENT_LIFECYCLE / NON_RUNTIME / NON_BLOCKING**
+Tracking issue: **#641**
 
 ## Observation
 

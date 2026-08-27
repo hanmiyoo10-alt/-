@@ -15,6 +15,10 @@ on:
         description: Explicit target release spec path under .github/usage-dashboard/releases
         required: true
         type: string
+      coordination_work_issue:
+        description: Optional active Repository Work Harness issue for writer-side receipt canary
+        required: false
+        type: string
   issue_comment:
     types: [created]
 
@@ -163,9 +167,70 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  commit-candidate:
+  coordination-gate:
     needs: prepare
     if: needs.prepare.outputs.has_changes == 'true'
+    permissions:
+      contents: read
+      issues: read
+    runs-on: ubuntu-latest
+    outputs:
+      gate_ready: ${{ steps.gate.outputs.gate_ready }}
+    steps:
+      - name: Checkout trusted current-main Harness gate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.coordination_work_issue != '' }}
+        with:
+          node-version: 22
+
+      - name: Revalidate optional candidate coordination receipt
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_WORK_ISSUE: ${{ inputs.coordination_work_issue }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$TARGET_WORK_ISSUE" ]]; then
+            echo 'gate_ready=true' >> "$GITHUB_OUTPUT"
+            echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE'
+            exit 0
+          fi
+          [[ "$TARGET_WORK_ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_ISSUE_INVALID'; exit 3; }
+          mkdir -p "$RUNNER_TEMP/usage-dashboard-candidate-gate"
+          RESULT="$RUNNER_TEMP/usage-dashboard-candidate-gate/mutation-gate.json"
+          set +e
+          node .github/plugin-control-plane/canonical-main/work-harness/mutation-gate.cjs --work-issue "$TARGET_WORK_ISSUE" > "$RESULT"
+          code=$?
+          set -e
+          status="$(node -e "const x=require(process.argv[1]); process.stdout.write(String(x.status || ''))" "$RESULT")"
+          adapter="$(node -e "const x=require(process.argv[1]); process.stdout.write(String(x.boundary?.adapterId || ''))" "$RESULT")"
+          mutation="$(node -e "const x=require(process.argv[1]); process.stdout.write(String(x.boundary?.mutationClass || ''))" "$RESULT")"
+          {
+            echo '### Usage Dashboard Candidate Coordination Gate'
+            echo '```json'
+            cat "$RESULT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$code" -ne 0 || "$status" != 'MUTATION_GATE_READY' ]]; then
+            echo "USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BLOCKED:$status"
+            exit 3
+          fi
+          [[ "$adapter" == 'usage-dashboard' ]] || { echo "USAGE_DASHBOARD_CANDIDATE_ADAPTER_MISMATCH:$adapter"; exit 3; }
+          [[ "$mutation" == 'CANDIDATE_STATE' ]] || { echo "USAGE_DASHBOARD_CANDIDATE_MUTATION_CLASS_MISMATCH:$mutation"; exit 3; }
+          echo 'gate_ready=true' >> "$GITHUB_OUTPUT"
+          echo "USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_READY:$TARGET_WORK_ISSUE"
+
+  commit-candidate:
+    needs: [prepare, coordination-gate]
+    if: needs.prepare.outputs.has_changes == 'true' && needs.coordination-gate.outputs.gate_ready == 'true'
     permissions:
       contents: write
     runs-on: ubuntu-latest

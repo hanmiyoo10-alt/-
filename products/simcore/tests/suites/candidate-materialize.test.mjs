@@ -52,6 +52,8 @@ export async function runSuite({ fixtures }) {
   };
   validateRequest(sample);
   pass('B-N1-valid-schema-control');
+  validateRequest({ ...sample, coordinationWorkIssue: 542 });
+  pass('C4-optional-coordination-metadata-compatible');
   expectCode(() => validateRequest({ ...sample, schemaVersion: 2 }), 'CANDIDATE_REQUEST_SCHEMA_INVALID');
   pass('B-N1-invalid-schema');
   expectCode(() => validateRequest({ ...sample, builderPath: 'scripts/evil.py' }), 'CANDIDATE_REQUEST_BUILDER_INVALID');
@@ -132,6 +134,17 @@ export async function runSuite({ fixtures }) {
   assert(materializeJob.includes('release-simcore'), 'production parent observation missing');
   assert(materializeJob.includes('candidate-materialize.mjs'), 'generic materializer invocation missing');
   pass('B-N13-N14-static-authority-boundary');
+
+  assert(materializeJob.includes('issues: read'), 'C4 gate needs bounded issue read permission');
+  assert(materializeJob.includes("r.get('coordinationWorkIssue')"), 'C4 optional request transport missing');
+  assert(materializeJob.includes('SIMCORE_CANDIDATE_COORDINATION_ISSUE_INVALID'), 'C4 positive-integer validation missing');
+  assert(materializeJob.includes('mutation-gate.cjs --work-issue "$TARGET_WORK_ISSUE"'), 'C4 mutation gate invocation missing');
+  assert(materializeJob.includes("[[ \"$adapter\" == 'simcore' ]]"), 'C4 adapter binding missing');
+  assert(materializeJob.includes("[[ \"$mutation\" == 'CANDIDATE_STATE' ]]"), 'C4 mutation-class binding missing');
+  assert(materializeJob.includes('SIMCORE_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE'), 'C4 ordinary request bypass marker missing');
+  assert(materializeJob.includes('SIMCORE_CANDIDATE_COORDINATION_GATE_READY'), 'C4 READY marker missing');
+  assert(materializeJob.indexOf('Revalidate optional candidate coordination receipt') < materializeJob.indexOf('Materialize or reuse exact candidate'), 'C4 gate must run before existing candidate writer');
+  pass('C4-opt-in-receipt-gate-wiring');
 
   return { coverage: 'EXECUTABLE', status: 'PASS', assertions };
 }

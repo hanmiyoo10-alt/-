@@ -509,3 +509,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3d69329c816305a7ad100c0a47ab6820dd047489)
 - Event ID: `e0e598c2c9127c2d9c8954b46385c43fb785e62b44affe806ab5c7a6916d1d63`
 <!-- canonical-main-doc-promoted:e0e598c2c9127c2d9c8954b46385c43fb785e62b44affe806ab5c7a6916d1d63 -->
+
+### 2026-08-27 — docs(main): wire repository common rules into GPT bootstrap (#604)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9a5a0c880b6e6ddaecc85e279a6654791f129e81`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9a5a0c880b6e6ddaecc85e279a6654791f129e81)
+- Event ID: `60e6ee09cd4c66b08e57fade19236938d7c9f66cf12a1ed87fac98bb27769097`
+<!-- canonical-main-doc-promoted:60e6ee09cd4c66b08e57fade19236938d7c9f66cf12a1ed87fac98bb27769097 -->

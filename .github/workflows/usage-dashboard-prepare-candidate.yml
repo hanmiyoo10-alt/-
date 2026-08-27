@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       coordination_work_issue:
-        description: Optional active Repository Work Harness issue for writer-side receipt canary
+        description: Active Repository Work Harness issue required only when preparation would mutate the candidate ref
         required: false
         type: string
   issue_comment:
@@ -198,7 +198,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Revalidate optional candidate coordination receipt
+      - name: Require and revalidate candidate coordination receipt
         id: gate
         shell: bash
         env:
@@ -208,9 +208,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$TARGET_WORK_ISSUE" ]]; then
-            echo 'gate_ready=true' >> "$GITHUB_OUTPUT"
-            echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE'
-            exit 0
+            echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_REQUIRED'
+            exit 3
           fi
           [[ "$TARGET_WORK_ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_ISSUE_INVALID'; exit 3; }
           mkdir -p "$RUNNER_TEMP/usage-dashboard-candidate-gate"

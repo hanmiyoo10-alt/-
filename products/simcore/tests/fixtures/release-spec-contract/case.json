@@ -1,0 +1,8 @@
+{
+  "input": {
+    "contract": "release-schema-v1"
+  },
+  "expected": {
+    "status": "PASS"
+  }
+}

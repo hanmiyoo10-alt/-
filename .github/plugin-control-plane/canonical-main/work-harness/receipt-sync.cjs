@@ -135,6 +135,45 @@ function publicResult(plan, status = plan.status) {
   };
 }
 
+function activeTargetRecord(issues, targetIssueNumber) {
+  const discovery = discoverActiveWorkRecords(Array.isArray(issues) ? issues : []);
+  if (discovery.errors.length) return null;
+  const sources = discovery.provenance.filter((entry) => entry.issueNumber === targetIssueNumber);
+  if (sources.length !== 1) return null;
+  return discovery.records.find((record) => record.workId === sources[0].workId) || null;
+}
+
+function branchRefEndpoint(ref) {
+  if (typeof ref !== 'string' || !ref || ref === 'main') return null;
+  if (ref.startsWith('/') || ref.endsWith('/') || ref.includes('//') || ref.includes('..') || ref.includes('@{')) return null;
+  if (/[\\\s~^:?*\[]/.test(ref) || ref.endsWith('.') || ref.split('/').some((part) => !part || part === '.' || part === '..' || part.endsWith('.lock'))) return null;
+  return `/git/ref/heads/${ref.split('/').map((part) => encodeURIComponent(part)).join('/')}`;
+}
+
+async function observeExpectedBranchRefs({ client, workRecord, mainSha } = {}) {
+  const observedRefs = {};
+  const reasonCodes = [];
+  if (typeof mainSha === 'string' && mainSha) observedRefs.main = mainSha;
+  if (!client || !workRecord || !Array.isArray(workRecord.expectedBases)) return { observedRefs, reasonCodes };
+
+  const refs = [...new Set(workRecord.expectedBases.map((base) => base?.ref).filter((ref) => typeof ref === 'string' && ref && ref !== 'main'))].sort();
+  for (const ref of refs) {
+    const endpoint = branchRefEndpoint(ref);
+    if (!endpoint) {
+      reasonCodes.push(`RECEIPT_SYNC_OBSERVED_BRANCH_REF_INVALID:${ref}`);
+      continue;
+    }
+    try {
+      const result = await client.api(endpoint, { allow404: true });
+      const sha = result?.object?.sha;
+      if (typeof sha === 'string' && sha) observedRefs[ref] = sha;
+    } catch {
+      reasonCodes.push(`RECEIPT_SYNC_OBSERVED_BRANCH_READ_FAILED:${ref}`);
+    }
+  }
+  return { observedRefs, reasonCodes: [...new Set(reasonCodes)].sort() };
+}
+
 async function run({ argv = process.argv.slice(2), env = process.env } = {}) {
   const targetIssueNumber = parseArgs(argv);
   if (!targetIssueNumber) {
@@ -147,11 +186,18 @@ async function run({ argv = process.argv.slice(2), env = process.env } = {}) {
   const issueStore = createIssueStore(client);
   const issues = await issueStore.listIssues('open');
   const main = await client.api('/branches/main');
-  const observedRefs = { main: main && main.commit && main.commit.sha };
+  const targetRecord = activeTargetRecord(issues, targetIssueNumber);
+  const observation = await observeExpectedBranchRefs({ client, workRecord: targetRecord, mainSha: main?.commit?.sha });
+  if (observation.reasonCodes.length) {
+    const result = blocked(targetIssueNumber, observation.reasonCodes, targetRecord?.workId || null);
+    process.stdout.write(`${JSON.stringify(publicResult(result), null, 2)}\n`);
+    return 2;
+  }
+
   const plan = planReceiptSyncForIssue({
     issues,
     targetIssueNumber,
-    observedRefs,
+    observedRefs: observation.observedRefs,
     adapterRegistry: loadAdapterRegistry(process.cwd()),
     projectRegistry: loadProjectRegistry(process.cwd()),
   });
@@ -176,7 +222,10 @@ if (require.main === module) {
 
 module.exports = {
   RECEIPT_REQUEST,
+  activeTargetRecord,
+  branchRefEndpoint,
   markerCount,
+  observeExpectedBranchRefs,
   parseArgs,
   planReceiptSyncForIssue,
   publicResult,

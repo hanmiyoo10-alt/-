@@ -345,3 +345,27 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d407f172960f365db95269a06632af4451a30016)
 - Event ID: `896821c08025d44db02dd22421f5b8718e8d13d3a30105d1da50c2842bd01b59`
 <!-- canonical-main-doc-promoted:896821c08025d44db02dd22421f5b8718e8d13d3a30105d1da50c2842bd01b59 -->
+
+### 2026-08-27 — feat: add route-aware authoritative handoff planning (#523)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `4902649ccfeecb55f88906dac17bfb063084a4ca`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4902649ccfeecb55f88906dac17bfb063084a4ca)
+- Event ID: `c2b3f121afaa4769995868253f2acf0f5d32c76efd1c85493fe333f19532b0e8`
+<!-- canonical-main-doc-promoted:c2b3f121afaa4769995868253f2acf0f5d32c76efd1c85493fe333f19532b0e8 -->
+
+### 2026-08-27 — fix: observe exact branch refs for receipt sync
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d8511e2a2b4db34b7139350f53b7d9f64e10082a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d8511e2a2b4db34b7139350f53b7d9f64e10082a)
+- Event ID: `c9da095f667b422daa322f3a7b70b565840e747944334b4bd853dafd2b16997c`
+<!-- canonical-main-doc-promoted:c9da095f667b422daa322f3a7b70b565840e747944334b4bd853dafd2b16997c -->
+
+### 2026-08-27 — fix: revalidate mutation gate with exact branch refs
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `60ef139420e7073f9d38809535528a2a0b074d53`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/60ef139420e7073f9d38809535528a2a0b074d53)
+- Event ID: `2ae958780980cae3d28f3211acc26aa1a0b0c8a803e8a781198d496b2a677797`
+<!-- canonical-main-doc-promoted:2ae958780980cae3d28f3211acc26aa1a0b0c8a803e8a781198d496b2a677797 -->

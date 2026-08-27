@@ -1,10 +1,12 @@
 # SimCore Release System v2.2 — Closure Integrity Implementation Evidence
 
 Date: 2026-08-28 KST
-Status: **IMPLEMENTED · PERMANENT CI PENDING · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI QUALIFIED · MAIN MERGE PENDING · NON-RUNTIME**
 Design authority: `docs/SIMCORE_RELEASE_SYSTEM_V2_2_CLOSURE_INTEGRITY_DESIGN.md`
-Implementation branch: `infra/simcore-r2-2-closure-integrity-implementation`
-Design/base commit: `e65497780d825e0c215fc35be8a849f31335e25e`
+Design merge: `e65497780d825e0c215fc35be8a849f31335e25e`
+Implementation branch: `infra/simcore-r2-2-closure-integrity-implementation-v2`
+Fresh implementation base: `7eb2a7642b336bdcceaf9046d3d3472fcb422a0d`
+Implementation PR: `#647`
 
 ## Scope
 
@@ -149,7 +151,7 @@ Observed final successful temporary run:
 33089764734 = SUCCESS
 ```
 
-These temporary files must be absent from the implementation PR diff.
+A fresh-main implementation branch was then materialized from the final eight-file tree, so temporary tooling commits/files are absent from PR `#647` history and diff.
 
 ## Runtime audit lens
 
@@ -200,6 +202,26 @@ append-only recovery preserved
 human LIVE_PASS preserved
 ```
 
+## First permanent CI qualification
+
+PR `#647` first qualification head:
+
+```text
+426094d5a06103f129ff5fb9ed1858be1f27ed92
+```
+
+Permanent SimCore CI:
+
+```text
+run      33090503073
+Verify   98581728770  PASS
+Required 98581946147  PASS
+```
+
+The proposed permanent verifier and final enforced conclusion both passed with the new `closure-integrity` suite registered in `batch-a`.
+
+After recording these IDs, the branch receives one final SimCore CI run. Main merge is allowed only if that latest exact head again passes `Verify` and `Required`.
+
 ## Current product boundary
 
 R2.2 is independent from the still-pending product gate:
@@ -214,12 +236,11 @@ R2.2 implementation does not close or substitute for that real-long-chat gate.
 
 ## Qualification state
 
-At document creation:
-
 ```text
 implementation = COMPLETE ON WORK BRANCH
-permanent SimCore Verify = PENDING
-permanent SimCore Required = PENDING
+first permanent SimCore Verify = PASS
+first permanent SimCore Required = PASS
+final exact-head SimCore CI = PENDING
 main merge = PENDING
 #640 closure = PENDING POST-MERGE REOBSERVATION
 #641 closure = PENDING POST-MERGE REOBSERVATION

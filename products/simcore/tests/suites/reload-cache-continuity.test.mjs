@@ -146,10 +146,10 @@ export async function runSuite({ source, loader, fixtures }) {
   if (!checkpointRepair) {
     assert(!source.includes("checkpointRuntimeTelemetry('OUTPUT_COMMIT')"), 'v0.64.7 unexpectedly contains output checkpoint repair');
   } else {
-    const activeGate = source.indexOf('    if (!result.active) {');
     const processCall = source.indexOf('    const result = await cs.processOutput(outIndex, content, outputDetail);');
-    const checkpointCall = source.indexOf("      checkpointRuntimeTelemetry('OUTPUT_COMMIT');");
-    const committedMark = source.indexOf("    markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'COMMITTED', outputAt: Date.now() });");
+    const activeGate = source.indexOf('    if (!result.active) {', processCall);
+    const checkpointCall = source.indexOf("      checkpointRuntimeTelemetry('OUTPUT_COMMIT');", activeGate);
+    const committedMark = source.indexOf("    markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'COMMITTED', outputAt: Date.now() });", checkpointCall);
     assert(processCall >= 0 && activeGate > processCall && checkpointCall > activeGate && committedMark > checkpointCall,
       'OUTPUT_COMMIT checkpoint is not wired after active authoritative processOutput and before COMMITTED bookkeeping');
     equal(countOf(source, "checkpointRuntimeTelemetry('OUTPUT_COMMIT')"), 1, 'OUTPUT_COMMIT checkpoint call count');

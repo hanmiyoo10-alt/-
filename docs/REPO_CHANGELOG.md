@@ -360,6 +360,20 @@
 - Event ID: `896821c08025d44db02dd22421f5b8718e8d13d3a30105d1da50c2842bd01b59`
 <!-- canonical-main-doc-promoted:896821c08025d44db02dd22421f5b8718e8d13d3a30105d1da50c2842bd01b59 -->
 
+### 2026-08-27 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `1583f54bd03fddf35d00450e34a6b569ff4a916ad2045b1ea07e4ccb52aa602f`
+<!-- canonical-main-doc-promoted:1583f54bd03fddf35d00450e34a6b569ff4a916ad2045b1ea07e4ccb52aa602f -->
+
+### 2026-08-27 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `9794b0a907fb11dab4c2a4dd9b23ea101f776fa2b38078f0a3dfae2bf8054547`
+<!-- canonical-main-doc-promoted:9794b0a907fb11dab4c2a4dd9b23ea101f776fa2b38078f0a3dfae2bf8054547 -->
+
 ### 2026-08-27 — feat: add route-aware authoritative handoff planning (#523)
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -471,3 +485,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5a258b250547fca0cb6e34a3152f3ad145dcb674)
 - Event ID: `36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b`
 <!-- canonical-main-doc-promoted:36b0e12fba6bbf1e79bea09c7da13cdb2fbc06d6b4fd17ca96a10eb7613d492b -->
+
+### 2026-08-27 — infra: add conservative raw-text idea classification signals (#584)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d4948c496f9d4d89ab2d4df3c2b6fa39af35b85b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d4948c496f9d4d89ab2d4df3c2b6fa39af35b85b)
+- Event ID: `2d5f1b33caf7f9519785e200fb080d8973509f605f5dbc12232e85cf92b3c80f`
+<!-- canonical-main-doc-promoted:2d5f1b33caf7f9519785e200fb080d8973509f605f5dbc12232e85cf92b3c80f -->

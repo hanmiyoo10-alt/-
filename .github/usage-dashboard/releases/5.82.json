@@ -8,7 +8,7 @@
   "snapshotContract": 1,
   "recentRequestContract": 1,
   "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.80 — Request Ledger Provenance Ownership Consolidation`",
-  "materializer": "plugins/usage-dashboard/tools/release_billing_cycle_truth_strip_582.py",
+  "materializer": "plugins/usage-dashboard/tools/release_billing_cycle_truth_strip_582_v2.py",
   "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
   "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
   "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",

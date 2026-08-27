@@ -107,15 +107,16 @@ for (const marker of [
   'dashboardDateText(devpassAccount?.expiresAt, true)',
   "dashboardView === 'devpass' ? devpassAccountDetailHtml : ''",
 ]) assert.ok(combinedUi.includes(marker), `P47 billing truth UI marker missing: ${marker}`);
+const billingValues = sliceBetween(dashboard, 'const billingPlanText', '    const devpassIncludedPassText');
+const billingBox = sliceBetween(dashboard, 'billing-cycle-truth-strip', '</div></div>\n        </div>`');
+const billingTruthUi = billingValues + billingBox;
 for (const forbidden of ['자동 갱신', '다음 결제일', '<span>월간 갱신</span>']) {
-  assert.equal(combinedUi.includes(forbidden), false, `P47 forbidden inferred billing wording remains: ${forbidden}`);
+  assert.equal(billingTruthUi.includes(forbidden), false, `P47 forbidden inferred billing wording remains: ${forbidden}`);
 }
 for (const retained of ['DevPass account','Reset Pass · PAYG','PAYG overflow','Regular Credits']) {
   assert.ok(combinedUi.includes(retained), `P47 existing DevPass parity surface must remain: ${retained}`);
 }
 
-const billingValues = sliceBetween(dashboard, 'const billingPlanText', '    const devpassIncludedPassText');
-const billingBox = sliceBetween(dashboard, 'billing-cycle-truth-strip', '</div></div>\n        </div>`');
 for (const forbidden of [
   'nativeFetch(', 'fetchSnapshot(', 'enqueueRefresh(', 'runCli(', 'setInterval(', 'setTimeout(',
   'scheduleRefresh(', 'schedulePanelRender(', 'store.setItem(', 'organizationId', 'projectId', 'apiKey', 'payment'

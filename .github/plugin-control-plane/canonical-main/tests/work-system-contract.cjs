@@ -41,6 +41,17 @@ for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', '
 assert.ok(readme.includes('one active implementation owner'));
 assert.ok(readme.includes('do not silently widen'));
 assert.ok(readme.includes('Conversation memory is context only'));
+assert.match(readme, /## Normal canonical-main startup/);
+assert.match(readme, /exactly two required reads/);
+assert.match(readme, /1\. read direct current `main` authority/);
+assert.match(readme, /2\. read `#485` and its Canonical Operator Capsule/);
+assert.match(readme, /read `#465` only when work execution, activation, ownership, or coordination is requested or already active/);
+assert.match(readme, /read `#462` only when distilled memory or historical operating context is needed/);
+assert.match(readme, /read `#464` only when idea\/design identity, lifecycle, overlap, or priority is needed/);
+assert.match(readme, /read `#293` only when raw audit or conversation provenance is needed/);
+assert.match(readme, /direct current `main` does not match the `MAIN` SHA rendered by `#485`/);
+assert.match(readme, /This fast path ends as soon as repository work is requested/);
+assert.match(readme, /The two-read protocol never authorizes a write, merge, release, protection change, or project\/runtime action/);
 assert.ok(workflow.includes('work-system-contract.cjs'));
 
 console.log('work-system-contract: ok');

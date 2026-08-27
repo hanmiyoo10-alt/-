@@ -385,3 +385,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f2c9cff2f0b82f837bc1564a395bc0c51af57d97)
 - Event ID: `8f42bc29ee68214ee62f8a4f683f2d04bffd075af0e780fb00395fd647262dc3`
 <!-- canonical-main-doc-promoted:8f42bc29ee68214ee62f8a4f683f2d04bffd075af0e780fb00395fd647262dc3 -->
+
+### 2026-08-27 — ops: share stage-boundary reporting across registered projects
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3786b77efaa91826b9f988fa6f6cd9c1029620dd`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3786b77efaa91826b9f988fa6f6cd9c1029620dd)
+- Event ID: `1c95729153e325835fbd3d90c36723a4cbda3bce1e1d0e01116acd691de430c4`
+<!-- canonical-main-doc-promoted:1c95729153e325835fbd3d90c36723a4cbda3bce1e1d0e01116acd691de430c4 -->

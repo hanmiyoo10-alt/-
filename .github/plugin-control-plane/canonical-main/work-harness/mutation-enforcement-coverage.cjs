@@ -144,6 +144,9 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     requiredInstalled: rows.filter((row) => row.enforcementState === 'REQUIRED_INSTALLED').length,
     ungated: rows.filter((row) => row.enforcementState === 'UNGATED').length,
   };
+  const requiredInstalledRouteKeys = rows
+    .filter((row) => row.enforcementState === 'REQUIRED_INSTALLED')
+    .map(routeKey);
 
   return {
     schemaVersion: 1,
@@ -151,13 +154,16 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     status: 'COVERAGE_COMPLETE',
     counts,
     rows,
+    requiredInstalledRouteKeys,
     ungatedRouteKeys: rows
       .filter((row) => row.enforcementState === 'UNGATED')
       .map(routeKey),
     authorityNeutral: true,
     mutationAuthorized: false,
     executionAuthorized: false,
-    nextLegalAction: 'REVIEW_UNGATED_ROUTES_AND_ACTIVATE_ONE_BOUNDED_PACKET',
+    nextLegalAction: requiredInstalledRouteKeys.length > 0
+      ? 'ACTIVATE_BOUNDED_REQUIRED_RECEIPT_LIVE_PROOF'
+      : 'REVIEW_UNGATED_ROUTES_AND_ACTIVATE_ONE_BOUNDED_PACKET',
   };
 }
 

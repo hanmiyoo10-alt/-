@@ -16,13 +16,29 @@ const validatorWorkflow = fs.readFileSync('.github/workflows/usage-dashboard-val
 
 assert.match(fallbackWorkflow, /^  workflow_dispatch:/m);
 assert.match(fallbackWorkflow, /^  issue_comment:\n    types: \[created\]$/m);
-for (const input of ['target_branch:','expected_head_sha:','release_spec:']) assert.ok(fallbackWorkflow.includes(input));
+for (const input of ['target_branch:','expected_head_sha:','release_spec:','coordination_work_issue:']) assert.ok(fallbackWorkflow.includes(input));
 assert.match(fallbackWorkflow, /startsWith\(github\.event\.comment\.body, '\/usage-dashboard prepare '\)/);
 assert.doesNotMatch(fallbackWorkflow.match(/^    if:.*$/m)?.[0] || '', /\/usage-dashboard stage /,
   'legacy preparation workflow must no longer own the normal stage command');
 assert.match(fallbackWorkflow, /candidate_preparation_policy\.cjs --verify-payload/);
 assert.match(fallbackWorkflow, /git bundle create/);
 assert.equal((fallbackWorkflow.match(/contents: write/g) || []).length, 1, 'fallback must retain one constrained writer');
+assert.equal((fallbackWorkflow.match(/issues: read/g) || []).length, 1, 'candidate receipt gate must use one read-only issue permission');
+assert.doesNotMatch(fallbackWorkflow,/issues: write|pull-requests: write/,'candidate receipt gate must not gain issue or PR write authority');
+assert.match(fallbackWorkflow,/\n  coordination-gate:\n/);
+assert.match(fallbackWorkflow,/mutation-gate\.cjs --work-issue "\$TARGET_WORK_ISSUE"/);
+assert.match(fallbackWorkflow,/MUTATION_GATE_READY/);
+assert.match(fallbackWorkflow,/USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE/);
+assert.match(fallbackWorkflow,/USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_READY/);
+assert.match(fallbackWorkflow,/\[\[ "\$adapter" == 'usage-dashboard' \]\]/);
+assert.match(fallbackWorkflow,/\[\[ "\$mutation" == 'CANDIDATE_STATE' \]\]/);
+assert.match(fallbackWorkflow,/needs: \[prepare, coordination-gate\]/);
+assert.match(fallbackWorkflow,/needs\.coordination-gate\.outputs\.gate_ready == 'true'/);
+assert.doesNotMatch(fallbackWorkflow,/repository-authoritative-handoff-request|authoritative-handoff\.cjs/,
+  'C3 writer canary revalidates receipt evidence only and must not turn Harness planning into product auto-invocation');
+const fallbackGateAt = fallbackWorkflow.indexOf('\n  coordination-gate:');
+const fallbackWriterAt = fallbackWorkflow.indexOf('\n  commit-candidate:');
+assert.ok(fallbackGateAt > 0 && fallbackWriterAt > fallbackGateAt, 'read-only coordination gate must precede the existing candidate writer');
 
 assert.match(e7Workflow,/github\.event\.issue\.number == 197/);
 assert.match(e7Workflow,/github\.actor == github\.repository_owner/);
@@ -134,4 +150,4 @@ try {
   fs.rmSync(temp,{recursive:true,force:true});
 }
 
-console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved');
+console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved with opt-in receipt gate');

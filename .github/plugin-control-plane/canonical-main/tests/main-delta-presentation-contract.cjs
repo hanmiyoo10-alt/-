@@ -9,7 +9,9 @@ const path = require('node:path');
 const {
   buildMainDeltaPresentation,
   classifyPath,
+  isRoutineGeneratedDocCommit,
   renderMainDeltaMarkdown,
+  summarizeCommitNoise,
 } = require('../main-delta-presentation.cjs');
 
 function git(cwd, args) {
@@ -37,6 +39,9 @@ try {
   write(cwd, 'README.md', '# base\n');
   const base = commit(cwd, 'base');
 
+  write(cwd, 'docs/REPO_CHANGELOG.md', '# generated changelog\n');
+  const routineHead = commit(cwd, 'docs: promote canonical-main generated documentation (#999)');
+
   write(cwd, 'docs/guide.md', '# docs\n');
   const docsHead = commit(cwd, 'docs: update guide');
 
@@ -50,6 +55,26 @@ try {
   assert.equal(classifyPath('plugins/example/tests/x.cjs').surface, 'TEST_ONLY');
   assert.equal(classifyPath('docs/guide.md').riskLevel, 'LOW');
   assert.equal(classifyPath('src/index.js').riskLevel, 'MEDIUM');
+  assert.equal(isRoutineGeneratedDocCommit('docs: promote canonical-main generated documentation (#12)'), true);
+  assert.equal(isRoutineGeneratedDocCommit('docs(repo): promote canonical documentation [repo-docs-generated]'), true);
+  assert.equal(isRoutineGeneratedDocCommit('docs: update guide'), false);
+  assert.deepEqual(summarizeCommitNoise([
+    {subject: 'docs: promote canonical-main generated documentation (#12)'},
+    {subject: 'ci: change workflow'},
+  ], 2), {totalCommitCount: 2, meaningfulCommitCount: 1, routineGeneratedDocCommitCount: 1});
+
+  const routineOnly = buildMainDeltaPresentation({ base, head: routineHead, cwd });
+  assert.equal(routineOnly.riskLevel, 'LOW');
+  assert.equal(routineOnly.actionRequired, false);
+  assert.equal(routineOnly.actionCode, 'NO_IMMEDIATE_ACTION');
+  assert.equal(routineOnly.commitCount, 1);
+  assert.equal(routineOnly.meaningfulCommitCount, 0);
+  assert.equal(routineOnly.routineGeneratedDocCommitCount, 1);
+  assert.equal(routineOnly.commits.length, 1, 'structured commit evidence must be retained');
+  const routineMarkdown = renderMainDeltaMarkdown(routineOnly);
+  assert.match(routineMarkdown, /1 total commit\(s\) \(0 meaningful \+ 1 routine generated-doc\)/);
+  assert.match(routineMarkdown, /1 routine generated-documentation promotion commit\(s\) compacted; full structured commit evidence retained/);
+  assert.doesNotMatch(routineMarkdown, /docs: promote canonical-main generated documentation/, 'routine generated-doc subject should be compacted from default markdown');
 
   const docsOnly = buildMainDeltaPresentation({ base, head: docsHead, cwd });
   assert.equal(docsOnly.schemaVersion, 1);
@@ -58,6 +83,8 @@ try {
   assert.equal(docsOnly.riskLevel, 'LOW');
   assert.equal(docsOnly.actionRequired, false);
   assert.equal(docsOnly.actionCode, 'NO_IMMEDIATE_ACTION');
+  assert.equal(docsOnly.meaningfulCommitCount, 1);
+  assert.equal(docsOnly.routineGeneratedDocCommitCount, 1);
   assert.equal(docsOnly.claimsCurrentHealth, false);
   assert.equal(docsOnly.currentHealthState, 'NOT_EVALUATED_BY_U02');
   assert.equal(docsOnly.advancementRequest.state, 'READY_AFTER_USER_VISIBLE_DELIVERY');
@@ -73,26 +100,34 @@ try {
   assert.equal(product.actionRequired, true);
   assert.equal(product.actionCode, 'REVIEW_PRODUCT_OR_RUNTIME_CHANGE');
   assert(product.riskDrivers.includes('plugins/example/index.js'));
+  assert.equal(product.routineGeneratedDocCommitCount, 1, 'routine docs must not erase a later product action');
 
   const governance = buildMainDeltaPresentation({ base, head: governanceHead, cwd });
   assert.equal(governance.riskLevel, 'HIGH');
   assert.equal(governance.actionRequired, true);
   assert.equal(governance.actionCode, 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE');
   assert(governance.riskDrivers.includes('.github/workflows/example.yml'));
-  assert.deepEqual(governance.commits.map((entry) => entry.sha), [docsHead, productHead, governanceHead]);
+  assert.equal(governance.commitCount, 4);
+  assert.equal(governance.meaningfulCommitCount, 3);
+  assert.equal(governance.routineGeneratedDocCommitCount, 1);
+  assert.deepEqual(governance.commits.map((entry) => entry.sha), [routineHead, docsHead, productHead, governanceHead]);
 
   const markdown = renderMainDeltaMarkdown(governance);
   assert.equal(markdown, renderMainDeltaMarkdown(governance), 'render must be deterministic');
   assert.match(markdown, /Last-Seen Main Delta Brief/);
+  assert.match(markdown, /4 total commit\(s\) \(3 meaningful \+ 1 routine generated-doc\)/);
   assert.match(markdown, /Risk: \*\*HIGH\*\*/);
   assert.match(markdown, /REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE/);
   assert.match(markdown, /Current health: not evaluated by U-02/);
   assert.match(markdown, /READY_AFTER_USER_VISIBLE_DELIVERY/);
+  assert.match(markdown, /routine generated-documentation promotion commit\(s\) compacted/);
   assert.doesNotMatch(markdown, /health: PASS|health: HEALTHY/i, 'U-02 must not claim current health');
 
   const empty = buildMainDeltaPresentation({ base: governanceHead, head: governanceHead, cwd });
   assert.equal(empty.hasChanges, false);
   assert.equal(empty.commitCount, 0);
+  assert.equal(empty.meaningfulCommitCount, 0);
+  assert.equal(empty.routineGeneratedDocCommitCount, 0);
   assert.equal(empty.fileCount, 0);
   assert.equal(empty.riskLevel, 'NONE');
   assert.equal(empty.actionRequired, false);

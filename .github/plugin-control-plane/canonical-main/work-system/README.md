@@ -92,6 +92,24 @@ Blocked work does not block unrelated packets.
 
 This is the operational analogue of canonical-main's module split rule: oversized or mixed-responsibility code is split into modules; oversized or mixed-goal work is split into packets.
 
+## Normal canonical-main startup
+
+Routine read-only canonical-main orientation uses exactly two required reads:
+
+1. read direct current `main` authority and capture the exact SHA;
+2. read `#485` and its Canonical Operator Capsule.
+
+The second read is a derived projection, not a replacement authority. If direct current `main` does not match the `MAIN` SHA rendered by `#485`, treat the view as settling or stale and refresh/wait for current evidence; never infer green state from the older capsule.
+
+Deeper coordination surfaces are conditional rather than routine startup reads:
+
+- read `#465` only when work execution, activation, ownership, or coordination is requested or already active;
+- read `#462` only when distilled memory or historical operating context is needed;
+- read `#464` only when idea/design identity, lifecycle, overlap, or priority is needed;
+- read `#293` only when raw audit or conversation provenance is needed.
+
+This fast path ends as soon as repository work is requested. Execution still follows the packet bootstrap below, including repository common rules, the packet itself, and every packet-named project/domain authority. The two-read protocol never authorizes a write, merge, release, protection change, or project/runtime action.
+
 ## Worker / chat bootstrap
 
 Before acting on a packet, a worker or chat must:

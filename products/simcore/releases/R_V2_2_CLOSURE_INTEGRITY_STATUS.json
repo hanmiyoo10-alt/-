@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_2_CLOSURE_INTEGRITY",
-  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_PENDING_MAIN_MERGE",
+  "status": "CLOSED_ACTIVE_PERMANENT_CI_QUALIFIED",
   "date": "2026-08-28",
   "name": "Closure Integrity",
   "predecessor": {
@@ -27,14 +27,14 @@
     {
       "id": "R2_2_A_SINGLE_CURRENT_STATE_AUTHORITY",
       "classification": "FIX",
-      "status": "IMPLEMENTED_CI_PASS_PENDING_MAIN_MERGE",
+      "status": "CLOSED_ACTIVE_CI_PASS",
       "sourceIssue": 640,
       "goal": "Machine-managed CURRENT_DEVELOPMENT current-state blocks become the sole current production and live-gate authority; duplicate human current-production verdict is retired."
     },
     {
       "id": "R2_2_B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS",
       "classification": "FIX",
-      "status": "IMPLEMENTED_CI_PASS_PENDING_MAIN_MERGE",
+      "status": "CLOSED_ACTIVE_CI_PASS",
       "sourceIssue": 641,
       "goal": "A release blocker remains open through DEFECT_FIXED/RELEASE_RECOVERY_PENDING and closes only after recovered production and durable LIVE_PENDING state are reobserved."
     },
@@ -55,7 +55,9 @@
     "releaseSpecParityRegressionPreserved": true,
     "newIssueAutomationController": false,
     "newPolling": false,
-    "newPublisher": false
+    "newPublisher": false,
+    "implementationPr": 647,
+    "implementationMerge": "26061b03c3aa22978f96e2d82cd43d34a4de6577"
   },
   "preservedSafety": {
     "explicitReleaseWorkItemRequired": true,
@@ -90,7 +92,18 @@
     "permanentCi": "PASS",
     "firstQualifiedRun": 33090503073,
     "firstQualifiedVerifyJob": 98581728770,
-    "firstQualifiedRequiredJob": 98581946147
+    "firstQualifiedRequiredJob": 98581946147,
+    "finalExactHeadRun": 33090711141,
+    "finalExactHeadVerifyJob": 98582501518,
+    "finalExactHeadRequiredJob": 98582689766
+  },
+  "postMergeReobservation": {
+    "mainCommit": "26061b03c3aa22978f96e2d82cd43d34a4de6577",
+    "currentDevelopmentSingleAuthority": true,
+    "releaseSimcoreCommit": "f5e29464452728f859a1a6a8191a846468353531",
+    "productionVersion": "0.64.8",
+    "productionUnchanged": true,
+    "currentProductGate": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT"
   },
   "currentProductGateUnchanged": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "runtimeMutation": "NONE",

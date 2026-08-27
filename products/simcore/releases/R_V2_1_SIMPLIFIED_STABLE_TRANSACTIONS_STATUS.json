@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS",
-  "status": "DELEGATED_OPERATOR_POLICY_ACTIVE_AWAITING_GENUINE_RELEASE_PROOF",
-  "date": "2026-08-25",
+  "status": "DELEGATED_OPERATOR_POLICY_OPERATIONALLY_PROVEN_TO_LIVE_PENDING",
+  "date": "2026-08-28",
   "parentFeedback": "products/simcore/releases/R_FIRST_REAL_RELEASE_FEEDBACK_STATUS.json",
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_SIMPLIFIED_STABLE_TRANSACTIONS.md",
   "objective": {
@@ -20,7 +20,7 @@
     { "id": "R2_1_C_CANDIDATE_RECEIPT_MACHINE_SPEC", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_D_LIVE_PENDING_STATE_CONVERGENCE", "classification": "FIX", "priority": "HIGH", "status": "CLOSED" },
     { "id": "R2_1_E_EXACT_RELEASE_APPROVAL_CONSOLIDATION", "classification": "FIX", "priority": "AFTER_B_C_D_QUALIFIED", "status": "CLOSED" },
-    { "id": "R2_1_E_DELEGATED_OPERATOR_POLICY", "classification": "FIX", "priority": "AFTER_E_IMPLEMENTATION", "status": "CLOSED_ACTIVE_AWAITING_REAL_RELEASE_PROOF" }
+    { "id": "R2_1_E_DELEGATED_OPERATOR_POLICY", "classification": "FIX", "priority": "AFTER_E_IMPLEMENTATION", "status": "CLOSED_ACTIVE_OPERATIONALLY_PROVEN" }
   ],
   "feedbackDisposition": {
     "R_CANDIDATE_ORCHESTRATION_VERSION_SPECIFIC": "FIXED_R2_1_B",
@@ -29,10 +29,14 @@
     "CANDIDATE_PREPARATION_OBSERVABILITY_NOT_PERMANENT": "FIXED_R2_1_B",
     "LIVE_PENDING_DURABLE_CLOSURE_FRAGMENTED": "FIXED_R2_1_D",
     "MACHINE_KNOWN_RELEASE_FACTS_REENTERED_MANUALLY": "FIXED_R2_1_C_D_E_PACKAGE",
-    "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR": "FIXED_BY_DELEGATED_EXACT_APPROVAL_PR_PENDING_OPERATIONAL_PROOF",
+    "RELEASE_AUTHORIZATION_ACTIVATION_DOUBLE_PR": "FIXED_BY_DELEGATED_EXACT_APPROVAL_PR_OPERATIONALLY_PROVEN",
     "R2_1_E_ROLLBACK_MACHINE_SPEC_MISSING_ROLLBACK_BLOCK": "FIXED_PRE_ACTIVATION",
     "R2_1_E_PREMERGE_BASE_DRIFT": "FIXED_FRESH_REBASE_AND_MAIN_MERGE",
-    "R2_1_E_OPERATIONAL_APPROVAL_POLICY": "FIXED_POLICY_DELEGATED_OPERATOR_TO_LIVE_PENDING_ACTIVE",
+    "R2_1_E_OPERATIONAL_APPROVAL_POLICY": "FIXED_POLICY_DELEGATED_OPERATOR_TO_LIVE_PENDING_PROVEN",
+    "R2_1_RELEASE_SPEC_CONTRACT_PARITY_DRIFT": "FIXED_PR631_PERMANENT_REGRESSION_OWNED",
+    "R2_1_BLOCKER_INCIDENT_PREMATURE_AUTOCLOSE": "FIX_PENDING_INCIDENT_LIFECYCLE_NON_BLOCKING",
+    "CURRENT_DEVELOPMENT_DUPLICATE_CURRENT_STATE_AUTHORITY": "FIX_TRACKED_ISSUE_640_NON_BLOCKING",
+    "R2_1_CONNECTED_RUN_OBSERVABILITY_NOISE": "WATCH_TOOL_SURFACE_NON_BLOCKING",
     "PERMANENT_ACTIVATION_RUN_DISCOVERY_POLLING": "WATCH_RETAIN",
     "CANDIDATE_TRANSPORT_REF_RETIREMENT": "DEFER_TOOL_SURFACE",
     "GITHUB_ACTIONS_NODE20_TARGET_FORCED_NODE24": "WATCH_NON_BLOCKING",
@@ -59,7 +63,7 @@
     "userManualPreLiveGithubActions": 0,
     "userNextPhysicalAction": "APPLY_PLUGIN_PLUS_AND_REAL_LONG_CHAT",
     "userCanInterruptBeforePublication": true,
-    "genuineRuntimeReleaseProof": false
+    "genuineRuntimeReleaseProof": true
   },
   "steadyStateOperatorPath": [
     "EXPLICIT_USER_RELEASE_WORK_ITEM",
@@ -78,7 +82,7 @@
     "D_REPLAY_06407_STATE_AS_ALREADY_CONVERGED",
     "E_SHADOW_MACHINE_SPEC_AND_APPROVAL_RESOLUTION",
     "E_DELEGATED_APPROVAL_PACKAGE_AND_ADAPTER_STATIC_NEGATIVES",
-    "NEXT_GENUINE_RUNTIME_RELEASE_OPERATIONAL_PROOF"
+    "V0_64_8_GENUINE_RUNTIME_RELEASE_OPERATIONAL_PROOF_PASS"
   ],
   "activationRules": {
     "genericCandidateMayActivateAfter": "R2_1_B_PERMANENT_NEGATIVES_PASS",
@@ -96,16 +100,37 @@
   "delegatedOperatorAdapterPermanentCiVerified": true,
   "machineDerivedSpecAuthority": "SHADOW_ONLY_PRE_APPROVAL__AUTHORIZED_SPEC_AT_EXACT_APPROVAL_MERGE",
   "publicationDispatchFromR2_1_E": "ENABLED_VIA_EXACT_APPROVAL_ADAPTER",
-  "operationalProof": "AWAITING_NEXT_GENUINE_RUNTIME_RELEASE",
-  "currentProductGateUnchanged": "06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT",
+  "operationalProof": "PROVEN_BY_SIMCORE_V0_64_8_NEW_02_TO_LIVE_PENDING",
+  "currentProductGateUnchanged": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "runtimeMutation": "NONE",
-  "releaseSimcoreMutation": "NONE",
+  "releaseSimcoreMutation": "NONE_FROM_THIS_STATUS_UPDATE",
+  "firstGenuineReleaseProof": {
+    "targetVersion": "0.64.8",
+    "failedReleaseId": "simcore-v0.64.8-new-01",
+    "failedActivationRun": 33084339175,
+    "failedDisposition": "APPROVAL_SPEC_INVALID_PRODUCTION_UNCHANGED",
+    "contractRepairPr": 631,
+    "contractRepairMerge": "e58cfdb672b92a3a8915d79ab7c5b661ee36f0e4",
+    "successfulIntent": "simcore-v0.64.8-intent-02",
+    "successfulReleaseId": "simcore-v0.64.8-new-02",
+    "successfulApprovalPr": 636,
+    "successfulApprovalMerge": "20c569894a8596ce5d5b6734ec2c69902b1bb084",
+    "permanentReleaseRun": 33086543601,
+    "permanentReleaseResult": "SUCCESS",
+    "livePendingStateCommit": "dbaa095df47b0293a39283c9664fefa1feafd756",
+    "userManualPreLiveGithubActions": 0,
+    "actualPrsIncludingIncidentEvidenceAndRepair": 6,
+    "steadyStateTargetPrsToLivePendingRetained": 2,
+    "humanLivePass": "PENDING"
+  },
   "productionReobservation": {
-    "releaseCommit": "a7ce8ce33a97797630f885c6753415e4b2ccc7fc",
-    "version": "0.64.7",
-    "latestBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
-    "installBlob": "676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0",
-    "latestInstallEqual": true
+    "releaseCommit": "f5e29464452728f859a1a6a8191a846468353531",
+    "version": "0.64.8",
+    "latestBlob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
+    "installBlob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
+    "latestInstallEqual": true,
+    "validationStatus": "PENDING_REAL_LONG_CHAT",
+    "currentPriority": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT"
   },
   "currentEvidence": {
     "r2_1_a": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_A_ONE_SHOT_RETIREMENT_EVIDENCE.md",
@@ -125,7 +150,10 @@
     "operatorDelegationFinalCiRun": 32769840775,
     "operatorDelegationFinalVerifyJob": 97567528932,
     "operatorDelegationFinalRequiredJob": 97567646673,
-    "operatorDelegationMerge": "ff3d2233b8acac795aa1d62d219c4ef6538427f2"
+    "operatorDelegationMerge": "ff3d2233b8acac795aa1d62d219c4ef6538427f2",
+    "firstGenuineReleaseRetrospective": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_FIRST_GENUINE_RELEASE_RETROSPECTIVE_2026-08-28.md",
+    "releaseContractBlockerIssue": 629,
+    "currentDevelopmentDocDriftIssue": 640
   },
-  "recommendedNextWorkItemAfterApproval": "NEXT_GENUINE_RUNTIME_RELEASE_OPERATIONAL_PROOF"
+  "recommendedNextWorkItemAfterApproval": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT"
 }

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_2_CLOSURE_INTEGRITY",
+  "status": "DESIGN_RECORDED_IMPLEMENTATION_NOT_STARTED",
+  "date": "2026-08-28",
+  "name": "Closure Integrity",
+  "predecessor": {
+    "version": "R2.1",
+    "status": "DELEGATED_OPERATOR_POLICY_OPERATIONALLY_PROVEN_TO_LIVE_PENDING",
+    "proof": "products/simcore/releases/R_V2_1_FIRST_GENUINE_RELEASE_PROOF.json",
+    "retrospective": "docs/SIMCORE_RELEASE_SYSTEM_V2_1_FIRST_GENUINE_RELEASE_RETROSPECTIVE_2026-08-28.md"
+  },
+  "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_2_CLOSURE_INTEGRITY_DESIGN.md",
+  "objective": {
+    "stabilityPreserved": true,
+    "simplicityPreserved": true,
+    "steadyStatePrsToLivePending": 2,
+    "steadyStatePrsThroughLivePass": 3,
+    "userManualPreLiveGithubActions": 0,
+    "newCleanPathGate": 0,
+    "newPublisher": 0,
+    "safetyWeakeningAllowed": false
+  },
+  "hardeningUnits": [
+    {
+      "id": "R2_2_A_SINGLE_CURRENT_STATE_AUTHORITY",
+      "classification": "FIX",
+      "status": "DESIGNED_NOT_IMPLEMENTED",
+      "sourceIssue": 640,
+      "goal": "Machine-managed CURRENT_DEVELOPMENT current-state blocks become the sole current production and live-gate authority; duplicate human current-production verdict is retired."
+    },
+    {
+      "id": "R2_2_B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS",
+      "classification": "FIX",
+      "status": "DESIGNED_NOT_IMPLEMENTED",
+      "sourceIssue": 641,
+      "goal": "A release blocker remains open through DEFECT_FIXED/RELEASE_RECOVERY_PENDING and closes only after recovered production and durable LIVE_PENDING state are reobserved."
+    },
+    {
+      "id": "R2_2_C_DURABLE_EVIDENCE_FIRST_OBSERVABILITY",
+      "classification": "WATCH",
+      "status": "NO_IMPLEMENTATION_REQUIRED_WITHOUT_NEW_EVIDENCE",
+      "goal": "Prefer durable receipts and exact identities over transient run observation; do not redesign run correlation absent a proven wrong-run bind."
+    }
+  ],
+  "preservedSafety": {
+    "explicitReleaseWorkItemRequired": true,
+    "standingBackgroundReleaseAuthority": false,
+    "singlePublisher": true,
+    "exactCandidateParentBinding": true,
+    "candidateRequired": true,
+    "fastForwardOnlyProduction": true,
+    "latestInstallEquality": true,
+    "failedTransactionImmutable": true,
+    "appendOnlyRecovery": true,
+    "postPublishCannotRepublish": true,
+    "humanLivePassRequired": true,
+    "releaseSimcoreRuntimeAuthority": true,
+    "mainDesignEvidenceAdminAuthority": true
+  },
+  "cleanPath": [
+    "EXPLICIT_USER_RELEASE_WORK_ITEM",
+    "PR1_PRODUCT_PLUS_RELEASE_INTENT",
+    "GENERIC_CANDIDATE_AND_MACHINE_RECEIPT",
+    "PR2_DELEGATED_EXACT_APPROVAL_PACKAGE",
+    "VERIFY_REQUIRED_PASS",
+    "PERMANENT_PUBLICATION_AND_LIVE_PENDING_CONVERGENCE",
+    "HANDOFF_TO_USER_REAL_LONG_CHAT",
+    "PR3_LIVE_PASS_CLOSURE"
+  ],
+  "implementationOrder": [
+    "R2_2_A_SINGLE_CURRENT_STATE_AUTHORITY",
+    "R2_2_B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS",
+    "R2_2_C_WATCH_ONLY_UNLESS_NEW_EVIDENCE"
+  ],
+  "qualification": {
+    "productionMutationRequired": false,
+    "runtimeMutationRequired": false,
+    "historicalReplay": "V0_64_8_NEW_01_REPAIR_NEW_02",
+    "mustPreserveR2_1ReleaseSchemaParityRegression": true
+  },
+  "currentProductGateUnchanged": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

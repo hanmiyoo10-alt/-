@@ -97,10 +97,13 @@ This is the operational analogue of canonical-main's module split rule: oversize
 Before acting on a packet, a worker or chat must:
 
 1. inspect current `main`;
-2. read the packet issue;
-3. read every authority input named by the packet;
-4. confirm the packet is not already actively owned by another implementation flow;
-5. confirm write scope and dependencies are still valid.
+2. read `docs/REPOSITORY_COMMON_RULES.md` as the repository-wide shared policy layer;
+3. read the packet issue;
+4. read every authority input named by the packet, including the owning project/domain contract;
+5. confirm the packet is not already actively owned by another implementation flow;
+6. confirm write scope and dependencies are still valid.
+
+The common-rules document supplies shared policy, not mutable project truth. Owning repository/project authority still decides current production, release, runtime, deployment, and validation facts. Project/domain contracts may explicitly specialize repository `DEFAULT` and applicable `CONDITIONAL` behavior, but must not silently weaken a repository `HARD_INVARIANT`.
 
 Conversation memory is context only, never sufficient authority.
 

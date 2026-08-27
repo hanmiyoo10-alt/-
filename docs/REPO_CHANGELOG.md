@@ -501,3 +501,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3449fb6a60c689977b1bc9c81015b223bb7e6bab)
 - Event ID: `5e1a084215dbeb1630983ec760070eea4ed4300b9ea0c9c477f0bca286721a00`
 <!-- canonical-main-doc-promoted:5e1a084215dbeb1630983ec760070eea4ed4300b9ea0c9c477f0bca286721a00 -->
+
+### 2026-08-27 — infra: add why-blocked one-action explanation (#601)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3d69329c816305a7ad100c0a47ab6820dd047489`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3d69329c816305a7ad100c0a47ab6820dd047489)
+- Event ID: `e0e598c2c9127c2d9c8954b46385c43fb785e62b44affe806ab5c7a6916d1d63`
+<!-- canonical-main-doc-promoted:e0e598c2c9127c2d9c8954b46385c43fb785e62b44affe806ab5c7a6916d1d63 -->

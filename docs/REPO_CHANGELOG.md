@@ -306,6 +306,13 @@
 - Event ID: `0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905`
 <!-- canonical-main-doc-promoted:0a607f417025061bc312d665d0d58be82ddaff93a7ec85356be363f2789d3905 -->
 
+### 2026-08-27 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/547)
+- Event ID: `8bf959161e0c10444b1ec36a2c529c4676b4e4b3a91a7cd6203e574837e4004f`
+<!-- canonical-main-doc-promoted:8bf959161e0c10444b1ec36a2c529c4676b4e4b3a91a7cd6203e574837e4004f -->
+
 ### 2026-08-27 — infra: add opt-in authoritative Harness handoff
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

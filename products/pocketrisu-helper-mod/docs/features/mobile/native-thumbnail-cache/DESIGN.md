@@ -30,6 +30,16 @@ Long character/media grids can amplify memory pressure through full-image decode
 
 The same forward range also reduces Android in-memory asset-cache budgets and adds throttled import progress (`aef7e7479a24dbc1f2adf95a40131de8dedd62ff`). This is credible external code evidence, but PocketRisu-specific benefit is not yet measured, so Evidence remains MEDIUM.
 
+### Additional forward evidence — 2026-08-28
+
+The later Haejeok sequence strengthens the same design rather than creating a new idea:
+
+- `91dc8cb0aafce9b2083a9cc0d9ece115cc69669b` adds `prepareThumbnails` batch preparation, request de-duplication, a dedicated `/_risu_thumb_/` serving path, and replaces a file-count limit with a byte budget (128 MiB limit / 96 MiB target).
+- `7aea7329c2ce4323c9a3bf4b72cf5adc88cc03a1` throttles expensive maintenance: pruning only after batches of thumbnail creation and access-time touches no more frequently than every five minutes, specifically to avoid I/O amplification while scrolling image grids.
+- `51513f9edef1a74fe0b718943da68fcdc8a149e2` adds direct WebView serving for immutable local Risu assets, reinforcing the broader principle that derived/static local bytes should avoid unnecessary JS/Base64 materialization when a capability-gated local URL can safely own delivery.
+
+These commits improve evidence for **budget ownership and maintenance-frequency control**. They do not remove the PocketRisu-specific measurement dependency, so lifecycle remains `DESIGN_NEEDED` and Evidence remains `MEDIUM`.
+
 ## Minimal safe scope
 
 Do **not** port the source plugin wholesale. First isolate one read-only display path: character-list thumbnails on Android only. The first implementation slice, if later promoted, should contain only:
@@ -61,7 +71,7 @@ No backup, import/export, DB, notification, or generation-lifecycle changes belo
 6. Publish via temporary file -> replace/rename so readers never observe partial thumbnail bytes.
 7. Return a local file URL/path to the WebView rather than materializing the encoded image as a JS Base64 string.
 8. Coalesce equal in-flight loads and bound concurrent decode workers.
-9. Prune deterministically by a bounded budget; failure to prune is non-fatal and must not delete canonical assets.
+9. Prune deterministically by a bounded **byte** budget, not merely by entry count. Maintenance itself must be throttled so grid scrolling cannot turn LRU bookkeeping into sustained filesystem I/O.
 10. Any native failure falls back to the current image path without affecting chat/save state.
 
 ## Compatibility / invariants
@@ -74,6 +84,7 @@ No backup, import/export, DB, notification, or generation-lifecycle changes belo
 - No Android notification on the server phone.
 - Cache hits must never return bytes belonging to an older asset revision under the same logical key.
 - A failed/cancelled thumbnail generation must not leave a file that can later be mistaken for a valid hit.
+- Cache-budget enforcement must not perform unbounded prune/touch I/O during a fast scrolling burst.
 
 ## Validation / acceptance
 
@@ -84,9 +95,10 @@ Before promotion to `READY_TO_PORT`:
 3. Prove fallback parity on web/non-Android platforms.
 4. Regression-test stale invalidation after replacing an asset under the same logical key.
 5. Regression-test duplicate concurrent requests coalescing to one native work item.
-6. Regression-test cache pruning never touching canonical assets.
+6. Regression-test byte-budget pruning never touching canonical assets and converging toward its target without synchronous prune storms.
 7. Regression-test corrupt/unsupported image, missing asset, cancelled navigation, activity recreation, and plugin teardown.
-8. Acceptance requires lower or equal peak memory with no wrong-image/stale-image regression and no worse steady-state interaction correctness.
+8. Measure filesystem operation rate during rapid grid scrolling so access-time/prune maintenance stays bounded.
+9. Acceptance requires lower or equal peak memory with no wrong-image/stale-image regression and no worse steady-state interaction correctness.
 
 ## Risk / blast radius
 
@@ -99,8 +111,8 @@ A single feature flag/capability check must be able to disable the native path. 
 ## Dependencies and PR decomposition
 
 1. **Audit/measurement only:** map current image loading/cache ownership and capture Android baseline.
-2. **Pure contract/tests:** define thumbnail provider result, cache-key/fingerprint rules, and fallback behavior without native implementation.
+2. **Pure contract/tests:** define thumbnail provider result, cache-key/fingerprint rules, byte-budget ownership, bounded maintenance cadence, and fallback behavior without native implementation.
 3. **Android native implementation:** one isolated feature branch/PR only after steps 1-2 resolve assumptions.
-4. **Optional tuning:** worker/budget tuning from physical measurements, separate from correctness.
+4. **Optional tuning:** worker/budget/maintenance tuning from physical measurements, separate from correctness.
 
 Do not bundle native backup/import/export or foreground generation-service work into this feature.

@@ -533,3 +533,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b7f04507a957acbab592e051a482012ca67b82f0)
 - Event ID: `72c72b6ac51d46957699eb55fcb83ef91bad8aaf270bdaa2d9fb9af4da3695f6`
 <!-- canonical-main-doc-promoted:72c72b6ac51d46957699eb55fcb83ef91bad8aaf270bdaa2d9fb9af4da3695f6 -->
+
+### 2026-08-27 — infra: simplify canonical-main startup and compact doc noise (#610)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `77990dc367006e637ba12e71b0a6f5872fa9c6b4`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/77990dc367006e637ba12e71b0a6f5872fa9c6b4)
+- Event ID: `5b83095dde4c3c414f33f5aa7ac9baab54870a7f0e0378bf48d14852860f3ede`
+<!-- canonical-main-doc-promoted:5b83095dde4c3c414f33f5aa7ac9baab54870a7f0e0378bf48d14852860f3ede -->

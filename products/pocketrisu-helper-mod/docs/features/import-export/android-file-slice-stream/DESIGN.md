@@ -69,3 +69,18 @@ One feature branch / one PR:
 
 - `nevaeh5379/HaejeokRisuai` commit `860280bcdd7e08c49a00a7391076de89d3c68e0e`
 - PocketRisu current location: `src/ts/process/processzip.ts` `CharXImporter.#toStream()`
+
+## Autonomous progression record
+
+- Personal fork branch: `hanmiyoo10-alt/PocketRisu:feat/android-safe-charx-file-stream`
+- Source implementation commit: `f69d4f695d6d88af069257cc6d68eaba608ea5e2`
+- Regression-test commit: `607d9cdf251babdf783be6e90b8a13fef36cf9a4`
+- Branch diff against `main`: only `src/ts/process/processzip.ts` and `src/ts/process/processzip.test.ts`; +56/-5 total.
+- Static verification: current PocketRisu `main` was confirmed to call `File.stream()` directly; branch replaces only that File-input branch and leaves Uint8Array/ReadableStream paths unchanged.
+- Test execution blocker: the automation runner could not clone GitHub because external DNS resolution failed (`Could not resolve host: github.com`). This is recorded as an execution-environment/integration failure, not a code or CI failure.
+- GitHub combined status for test commit had no checks/statuses at inspection time.
+- Draft PR intentionally not opened yet because the project gate requires focused Vitest + `pnpm check` to pass first.
+
+### Next step
+
+When an execution environment with repository/network access is available, run the focused test for `src/ts/process/processzip.test.ts` and `pnpm check`. If both pass and the branch remains limited to the documented boundary, open a personal-fork draft PR with this Feature-ID. Do not open an official upstream PR automatically.

@@ -19,7 +19,7 @@ RELEASE_NOTE = '''// v0.64.8 Output-Complete Telemetry Checkpoint Repair:
 // - Repairs the confirmed v0.64.7 live-gate omission where same-tab session telemetry was published only from onUnload and no output-complete checkpoint existed before a full page refresh
 // - Adds one best-effort outer-runtime telemetry checkpoint wrapper shared by active authoritative OUTPUT_COMMIT and UNLOAD; the existing runtime-telemetry capsule schema, memory-first/session-fallback transport, 10-minute age bound and 16,384-character session bound remain unchanged
 // - OUTPUT_COMMIT checkpointing occurs only after CoreRulesetSession.processOutput returns active from its authoritative out save, requires the runtime generation to remain current and a known location key, and never downgrades or throws through an already committed output
-// - Adds a bounded Last Turn Diagnostic `Telemetry checkpoint:` line exposing session write disposition, serialized character count, local checkpoint cost and trigger only; no exception message or raw capsule/body content is retained
+// - Adds one bounded Last Turn Diagnostic checkpoint line exposing session write disposition, serialized character count, local checkpoint cost and trigger only; no exception message or raw capsule/body content is retained
 // - Provider cache remains explicitly UNVERIFIED; no provider-cache control/claim, network call, timer loop, pluginStorage write, SnapshotStore semantic write, host chat write or request-history mutation is introduced
 // - Representation/Edit Reconcile, Recovery, Broadcast/Frame/Time/Evidence/Lineage/Handoff/Recurrence/Summary/Structure/COMMUNITY/Reaction/Prompt semantics and M2-3 ownership remain frozen
 //
@@ -152,7 +152,7 @@ def patch(text: str) -> str:
     checks = {
         "output-checkpoint-call": text.count("checkpointRuntimeTelemetry('OUTPUT_COMMIT')"),
         "unload-checkpoint-call": text.count("checkpointRuntimeTelemetry('UNLOAD')"),
-        "checkpoint-diagnostic": text.count('Telemetry checkpoint:'),
+        "checkpoint-diagnostic": text.count('`Telemetry checkpoint: ${lastTelemetryCheckpointProbe ?'),
         "checkpoint-helper": text.count('function checkpointRuntimeTelemetry(trigger)'),
         "session-key": text.count("__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__"),
     }

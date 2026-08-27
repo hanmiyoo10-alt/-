@@ -1,0 +1,118 @@
+'use strict';
+
+const assert = require('assert');
+const {renderAnchorMarker} = require('../main-delta-anchor.cjs');
+const mainDelta = require('../observers/main-delta.cjs');
+const {renderSummary, topOperationalReason, unknownEvidence} = require('../surfaces/summary.cjs');
+
+const anchorSha = 'a'.repeat(40);
+const mainSha = 'b'.repeat(40);
+const anchorBody = renderAnchorMarker({
+  schemaVersion: 1,
+  scope: 'canonical-main',
+  anchorSha,
+  generation: 7,
+  advancedFrom: null,
+  advanceReason: 'EXPLICIT_BRIEF_DELIVERED',
+  sourceRefs: ['issue:#562'],
+});
+
+function issue(body = anchorBody) {
+  return {number: 562, state: 'open', body};
+}
+
+function snapshot(overrides = {}) {
+  const base = {
+    operatorState: 'CLEAR',
+    observedMainSha: mainSha,
+    observedAt: '2026-08-27T09:10:00Z',
+    convergence: {state: 'STABLE', waitingFor: [], ageSeconds: 0, stale: false},
+    observations: {
+      requiredCi: {known: true, summary: 'PASS — run 42'},
+      productionAuthority: {known: true, summary: 'MATCH — release-simcore abc'},
+      writers: {known: true, summary: 'PASS'},
+      bootstrap: {known: true, summary: 'PASS'},
+      projectStatus: {known: true, summary: 'FRESH'},
+      mainDelta: {known: true, summary: 'HIGH — 2 commit(s) / 2 file(s)', data: {state: 'OK', anchorSha, headSha: mainSha, commitCount: 2, fileCount: 2, riskLevel: 'HIGH', actionRequired: true, actionCode: 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE'}},
+      protection: {known: true, data: {state: 'READY_TO_ACTIVATE', protected: false, softEnforcementEnabled: true}},
+      delivery: {known: true, data: {health: 'HEALTHY'}},
+    },
+    incidents: {active: [], attention: []},
+    freshness: {configuredCoverageComplete: true, observationCoverageValid: true, projectStatusFresh: true, valid: true},
+    policy: {notifications: {bridgeState: 'ACTIVE_PROVEN'}},
+  };
+  return {...base, ...overrides, observations: {...base.observations, ...(overrides.observations || {})}, incidents: {...base.incidents, ...(overrides.incidents || {})}, freshness: {...base.freshness, ...(overrides.freshness || {})}};
+}
+
+(async () => {
+  const calls = [];
+  const observed = await mainDelta.observe({
+    allIssues: [issue()],
+    mainSha,
+    client: {api: async (path, options) => {
+      calls.push({path, options});
+      return {
+        status: 'ahead',
+        ahead_by: 2,
+        files: [{filename: 'docs/NOTE.md'}, {filename: '.github/workflows/example.yml'}],
+      };
+    }},
+  });
+  assert.equal(observed.known, true);
+  assert.equal(observed.data.generation, 7);
+  assert.equal(observed.data.commitCount, 2);
+  assert.equal(observed.data.fileCount, 2);
+  assert.equal(observed.data.riskLevel, 'HIGH');
+  assert.equal(observed.data.actionCode, 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE');
+  assert.deepEqual(calls, [{path: `/compare/${anchorSha}...${mainSha}`, options: undefined}], 'Q1 delta observation must be read-only compare access');
+
+  const noChange = await mainDelta.observe({allIssues: [issue(renderAnchorMarker({schemaVersion: 1, scope: 'canonical-main', anchorSha: mainSha, generation: 8, advancedFrom: anchorSha, advanceReason: 'EXPLICIT_BRIEF_DELIVERED', sourceRefs: []}))], mainSha, client: {api: async () => { throw new Error('compare must not run for identical anchor'); }}});
+  assert.equal(noChange.known, true);
+  assert.equal(noChange.data.riskLevel, 'NONE');
+  assert.equal(noChange.data.commitCount, 0);
+
+  const divergent = await mainDelta.observe({allIssues: [issue()], mainSha, client: {api: async () => ({status: 'diverged', ahead_by: 1, files: []})}});
+  assert.equal(divergent.known, false);
+  assert.equal(divergent.data.reasonCode, 'MAIN_DELTA_COMPARE_NOT_AHEAD');
+  const duplicateAnchor = await mainDelta.observe({allIssues: [issue(), {...issue(), number: 999}], mainSha, client: {api: async () => ({})}});
+  assert.equal(duplicateAnchor.known, false);
+  assert.equal(duplicateAnchor.data.reasonCode, 'MAIN_DELTA_ANCHOR_CARDINALITY');
+
+  const clear = snapshot({observations: {mainDelta: observed}});
+  const rendered = renderSummary(clear);
+  const visible = rendered.split('\n<!-- canonical-main-summary-compat:v1')[0].trim().split('\n');
+  assert.equal(visible.length, 8, 'default capsule must remain heading + exactly seven compact fields');
+  for (const label of ['STATE', 'MAIN', 'CHANGE', 'WHY', 'NEXT', 'AUTHORITY', 'UNKNOWN']) assert(visible.some((line) => line.startsWith(`- ${label}:`)), `missing capsule field ${label}`);
+  assert.match(rendered, /- STATE: `CLEAR`/);
+  assert.match(rendered, /- CHANGE: HIGH — 2 commit\(s\) \/ 2 file\(s\)/);
+  assert.match(rendered, /- WHY: `NONE`/);
+  assert.match(rendered, /- NEXT: `REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE`/);
+  assert.match(rendered, /native protection `READY_TO_ACTIVATE` \/ protected `false`/);
+  assert.match(rendered, /soft fallback `ACTIVE`/);
+  assert.match(rendered, /- UNKNOWN: NONE/);
+
+  const incidentSnapshot = snapshot({
+    incidents: {active: [{severity: 'P1', reasonCode: 'REQUIRED_CHECK_FAILED', issue: {number: 502}}]},
+  });
+  assert.deepEqual(topOperationalReason(incidentSnapshot), {why: 'REQUIRED_CHECK_FAILED #502', next: 'REVIEW_INCIDENT #502'});
+  assert.match(renderSummary(incidentSnapshot), /- NEXT: `REVIEW_INCIDENT #502`/);
+  assert.doesNotMatch(renderSummary(incidentSnapshot), /- NEXT: `REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE`/);
+
+  const attentionSnapshot = snapshot({incidents: {attention: [{severity: 'P2', reasonCode: 'UNSTABLE_COMPONENT', issue: {number: 437}}]}});
+  assert.deepEqual(topOperationalReason(attentionSnapshot), {why: 'UNSTABLE_COMPONENT #437', next: 'REVIEW_ATTENTION #437'});
+
+  const settlingSnapshot = snapshot({convergence: {state: 'SETTLING', waitingFor: ['requiredCi'], ageSeconds: 30, stale: false}});
+  assert.deepEqual(topOperationalReason(settlingSnapshot), {why: 'EVIDENCE_SETTLING', next: 'WAIT_FOR_CURRENT_EVIDENCE'});
+
+  const unknownSnapshot = snapshot({observations: {
+    mainDelta: {known: false, summary: 'UNKNOWN — anchor invalid', data: {state: 'UNKNOWN'}},
+    extraA: {known: false}, extraB: {known: false}, extraC: {known: false}, extraD: {known: false},
+  }});
+  assert.match(renderSummary(unknownSnapshot), /- CHANGE: UNKNOWN — anchor invalid/);
+  assert.match(unknownEvidence(unknownSnapshot), /\(\+1 more\)$/);
+
+  console.log('CANONICAL_MAIN_OPERATOR_CAPSULE_CONTRACT:OK');
+})().catch((error) => {
+  console.error(error.stack || String(error));
+  process.exitCode = 1;
+});

@@ -6,6 +6,7 @@ const writerWorkflows = require('../observers/writer-workflows.cjs');
 const bootstrap = require('../observers/bootstrap.cjs');
 const protection = require('../observers/protection.cjs');
 const projectStatus = require('../observers/project-status.cjs');
+const mainDelta = require('../observers/main-delta.cjs');
 const deliveryReceipts = require('../observers/delivery-receipts.cjs');
 
 function descriptor(id, observe, permissionClass, phase, capabilities) {
@@ -18,6 +19,7 @@ const modules = Object.freeze([
   descriptor('bootstrap', bootstrap.observe, 'contents:read', 'base', ['events', 'requiredCoverage']),
   descriptor('protection', protection.observe, 'contents:read', 'base', ['protectionSurface']),
   descriptor('projectStatus', projectStatus.observe, 'issues:read', 'base', ['projectSurface']),
+  descriptor('mainDelta', mainDelta.observe, 'issues:read+contents:read', 'base', ['operatorCapsuleChange']),
   descriptor('delivery', deliveryReceipts.observe, 'issues:read', 'post-incidents', ['deliverySurface']),
 ]);
 function modulesForPhase(phase = 'base') { return modules.filter((module) => module.phase === phase); }

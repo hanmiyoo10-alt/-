@@ -454,6 +454,20 @@
 - Event ID: `103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3`
 <!-- canonical-main-doc-promoted:103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3 -->
 
+### 2026-08-27 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `0635f292c705f09872e23b91b75a4c2a6807d2e6c932df335a6e0e9e874b7418`
+<!-- canonical-main-doc-promoted:0635f292c705f09872e23b91b75a4c2a6807d2e6c932df335a6e0e9e874b7418 -->
+
+### 2026-08-27 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `9f6535d14885010e6b22dc333bbccd127849762cdc2939acc6dd948890e54514`
+<!-- canonical-main-doc-promoted:9f6535d14885010e6b22dc333bbccd127849762cdc2939acc6dd948890e54514 -->
+
 ### 2026-08-27 — infra: add canonical main delta brief core (#561)
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`
@@ -517,3 +531,59 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9a5a0c880b6e6ddaecc85e279a6654791f129e81)
 - Event ID: `60e6ee09cd4c66b08e57fade19236938d7c9f66cf12a1ed87fac98bb27769097`
 <!-- canonical-main-doc-promoted:60e6ee09cd4c66b08e57fade19236938d7c9f66cf12a1ed87fac98bb27769097 -->
+
+### 2026-08-27 — docs(repo): inherit common rules in check-only project guidelines (#608)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9de12957e4e475dc22522b4f26b83fcf69ddff64`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9de12957e4e475dc22522b4f26b83fcf69ddff64)
+- Event ID: `e1c8b831ba37e1e5224942c383e5853dcb2398d1449a403997360cb93432a4fb`
+<!-- canonical-main-doc-promoted:e1c8b831ba37e1e5224942c383e5853dcb2398d1449a403997360cb93432a4fb -->
+
+### 2026-08-27 — docs(termux): inherit repository common rules (#611)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `b7f04507a957acbab592e051a482012ca67b82f0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b7f04507a957acbab592e051a482012ca67b82f0)
+- Event ID: `72c72b6ac51d46957699eb55fcb83ef91bad8aaf270bdaa2d9fb9af4da3695f6`
+<!-- canonical-main-doc-promoted:72c72b6ac51d46957699eb55fcb83ef91bad8aaf270bdaa2d9fb9af4da3695f6 -->
+
+### 2026-08-27 — infra: simplify canonical-main startup and compact doc noise (#610)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `77990dc367006e637ba12e71b0a6f5872fa9c6b4`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/77990dc367006e637ba12e71b0a6f5872fa9c6b4)
+- Event ID: `5b83095dde4c3c414f33f5aa7ac9baab54870a7f0e0378bf48d14852860f3ede`
+<!-- canonical-main-doc-promoted:5b83095dde4c3c414f33f5aa7ac9baab54870a7f0e0378bf48d14852860f3ede -->
+
+### 2026-08-27 — docs(simcore): inherit repository common rules (#613)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c73887acc3fbe74b94b1a099af4cb36cc6327174`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c73887acc3fbe74b94b1a099af4cb36cc6327174)
+- Event ID: `8c7e5bd7fc681dc44aec3f29ea0fbdff190a05cf20856e37ecd01c40c39ea84e`
+<!-- canonical-main-doc-promoted:8c7e5bd7fc681dc44aec3f29ea0fbdff190a05cf20856e37ecd01c40c39ea84e -->
+
+### 2026-08-27 — docs(usage-dashboard): inherit repository common rules (#616)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `77a7a02ad56b8b01f4766347c361abe53cd8d2a1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/77a7a02ad56b8b01f4766347c361abe53cd8d2a1)
+- Event ID: `0617b6afd9bc6b967e6efd2081c2dd0890aa511aba50a3267240042b33ed83bc`
+<!-- canonical-main-doc-promoted:0617b6afd9bc6b967e6efd2081c2dd0890aa511aba50a3267240042b33ed83bc -->
+
+### 2026-08-27 — infra: add repo-wide long-work checkpoint pacing (#622)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ee3feab78225cfe060b6c4a6ec7d8ca83bff1c1e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ee3feab78225cfe060b6c4a6ec7d8ca83bff1c1e)
+- Event ID: `de762785afbc2308b5e486e499c8e78ea06bd8f9fd81eee7aaffea720dc03d9b`
+<!-- canonical-main-doc-promoted:de762785afbc2308b5e486e499c8e78ea06bd8f9fd81eee7aaffea720dc03d9b -->
+
+### 2026-08-27 — Merge pull request #624 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.82
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `633a74748be613a7e1def9eb80cb9bf293de2d49`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/633a74748be613a7e1def9eb80cb9bf293de2d49)
+- Event ID: `54793e6cc42d3c3c98809a48b941760044510eb0d31d1e2c17aad5dc9d59cc93`
+<!-- canonical-main-doc-promoted:54793e6cc42d3c3c98809a48b941760044510eb0d31d1e2c17aad5dc9d59cc93 -->

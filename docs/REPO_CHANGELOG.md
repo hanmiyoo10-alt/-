@@ -367,6 +367,13 @@
 - Event ID: `1583f54bd03fddf35d00450e34a6b569ff4a916ad2045b1ea07e4ccb52aa602f`
 <!-- canonical-main-doc-promoted:1583f54bd03fddf35d00450e34a6b569ff4a916ad2045b1ea07e4ccb52aa602f -->
 
+### 2026-08-27 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `9794b0a907fb11dab4c2a4dd9b23ea101f776fa2b38078f0a3dfae2bf8054547`
+<!-- canonical-main-doc-promoted:9794b0a907fb11dab4c2a4dd9b23ea101f776fa2b38078f0a3dfae2bf8054547 -->
+
 ### 2026-08-27 — feat: add route-aware authoritative handoff planning (#523)
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

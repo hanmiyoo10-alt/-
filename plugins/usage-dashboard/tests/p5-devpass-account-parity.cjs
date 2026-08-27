@@ -12,10 +12,10 @@ const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.js
 const requiredEngineVersion = String(manifest.components.bridge.requiredVersion || '');
 
 for (const marker of [
-  'cycle:ds.cycle',
+  'cycle:typeof ds.cycle',
+  "cancelled:typeof ds.cancelled === 'boolean' ? ds.cancelled : null",
   'billingCycleStart:ds.billingCycleStart',
   'expiresAt:ds.expiresAt',
-  'cancelled:ds.cancelled === true',
   'hasBillingHistory:',
   'resetPasses:num(ds.resetPasses)',
   'includedResetPasses:num(ds.includedResetPasses)',
@@ -23,6 +23,7 @@ for (const marker of [
   'resetPassPrice:num(ds.resetPassPrice)',
   'regularCredits:num(ds.regularCredits)',
 ]) assert.ok(usage.includes(marker), `missing DevPass account adapter field: ${marker}`);
+assert.equal(usage.includes('cancelled:ds.cancelled === true'), false, 'DevPass account adapter must not collapse missing cancellation to false');
 
 for (const marker of [
   'DevPass account',
@@ -49,4 +50,4 @@ assert.ok(!ui.includes('<span>Organization ID</span>') && !ui.includes('<span>Pr
 assert.ok(/^1\.6\.\d+$/.test(requiredEngineVersion), `unexpected bridge contract version: ${requiredEngineVersion}`);
 assert.equal(manifest.contracts.snapshot, 1);
 assert.equal(manifest.contracts.recentRequest, 1);
-console.log(`usage-dashboard P5 DevPass account detail parity: OK · engine ${requiredEngineVersion}`);
+console.log(`usage-dashboard P5 DevPass account detail parity: OK · nullable billing-cycle/cancellation fidelity · engine ${requiredEngineVersion}`);

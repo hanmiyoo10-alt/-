@@ -277,6 +277,17 @@ function finite(value) {
   return negativeParens ? -Math.abs(n) : n;
 }
 
+
+function explicitBillingCycle(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim().toLowerCase();
+  return text || null;
+}
+
+function explicitBillingBoolean(value) {
+  return typeof value === 'boolean' ? value : null;
+}
+
 function normalizeOrganizations(rawOrgs, rawCredits) {
   const rows = firstArray(rawOrgs, ['organizations', 'data', 'items', 'results']);
   const creditRows = firstArray(rawCredits, ['organizations', 'credits', 'data', 'items', 'results']);
@@ -299,13 +310,14 @@ function normalizeOrganizations(rawOrgs, rawCredits) {
       plan: String(pick(row, ['plan'], 'free') || 'free'),
       credits: directCredits ?? creditsById.get(id) ?? null,
       devPlan: String(pick(row, ['devPlan', 'dev_plan'], 'none') || 'none'),
-      devPlanCycle: String(pick(row, ['devPlanCycle', 'dev_plan_cycle'], 'monthly') || 'monthly'),
+      devPlanCycle: explicitBillingCycle(pick(row, ['devPlanCycle', 'dev_plan_cycle'], null)),
       devPlanCreditsUsed: finite(pick(row, ['devPlanCreditsUsed', 'dev_plan_credits_used'], null)),
       devPlanCreditsLimit: finite(pick(row, ['devPlanCreditsLimit', 'dev_plan_credits_limit'], null)),
       devPlanPremiumCreditsUsed: finite(pick(row, ['devPlanPremiumCreditsUsed', 'dev_plan_premium_credits_used'], null)),
       devPlanPremiumWeekStart: pick(row, ['devPlanPremiumWeekStart', 'dev_plan_premium_week_start'], null),
       devPlanBillingCycleStart: pick(row, ['devPlanBillingCycleStart', 'dev_plan_billing_cycle_start'], null),
       devPlanExpiresAt: pick(row, ['devPlanExpiresAt', 'dev_plan_expires_at'], null),
+      devPlanCancelled: explicitBillingBoolean(pick(row, ['devPlanCancelled', 'dev_plan_cancelled'], null)),
       devPlanResetPassesLite: finite(pick(row, ['devPlanResetPassesLite', 'dev_plan_reset_passes_lite'], null)),
       devPlanResetPassesPro: finite(pick(row, ['devPlanResetPassesPro', 'dev_plan_reset_passes_pro'], null)),
       devPlanResetPassesMax: finite(pick(row, ['devPlanResetPassesMax', 'dev_plan_reset_passes_max'], null)),
@@ -354,7 +366,7 @@ function enrichDevPassFromStatus(rows, payload) {
   const current = rows[targetIndex];
   const patch = {
     devPlan: plan && plan !== 'none' ? plan : current.devPlan,
-    devPlanCycle: String(pick(raw, ['devPlanCycle', 'dev_plan_cycle'], current.devPlanCycle || 'monthly') || current.devPlanCycle || 'monthly'),
+    devPlanCycle: explicitBillingCycle(pick(raw, ['devPlanCycle', 'dev_plan_cycle', 'cycle'], null)) ?? current.devPlanCycle ?? null,
     devPlanBillingCycleStart: pick(raw, [
       'devPlanBillingCycleStart', 'dev_plan_billing_cycle_start',
       'billingCycleStart', 'currentPeriodStart', 'current_period_start'
@@ -363,6 +375,7 @@ function enrichDevPassFromStatus(rows, payload) {
       'devPlanExpiresAt', 'dev_plan_expires_at', 'currentPeriodEnd',
       'current_period_end', 'renewsAt', 'renewAt', 'expiresAt'
     ], current.devPlanExpiresAt),
+    devPlanCancelled: explicitBillingBoolean(pick(raw, ['devPlanCancelled', 'dev_plan_cancelled', 'cancelled'], null)) ?? current.devPlanCancelled ?? null,
     devPlanPremiumWeekStart: pick(raw, [
       'devPlanPremiumWeekStart', 'dev_plan_premium_week_start'
     ], current.devPlanPremiumWeekStart),
@@ -392,7 +405,7 @@ function normalizeIndependentDevPassStatus(payload) {
   if (!raw || typeof raw !== 'object') return null;
 
   const plan = String(pick(raw, ['devPlan', 'dev_plan', 'plan', 'tier'], '') || '').toLowerCase();
-  const cycle = String(pick(raw, ['devPlanCycle', 'dev_plan_cycle', 'cycle'], 'monthly') || 'monthly').toLowerCase();
+  const cycle = explicitBillingCycle(pick(raw, ['devPlanCycle', 'dev_plan_cycle', 'cycle'], null));
   const billingCycleStart = pick(raw, [
     'devPlanBillingCycleStart', 'dev_plan_billing_cycle_start',
     'billingCycleStart', 'currentPeriodStart', 'current_period_start'
@@ -412,7 +425,7 @@ function normalizeIndependentDevPassStatus(payload) {
     billingCycleStart,
     expiresAt,
     premiumWeekResetsAt: pick(raw, ['devPlanPremiumWeekResetsAt', 'dev_plan_premium_week_resets_at'], null),
-    cancelled: Boolean(pick(raw, ['devPlanCancelled', 'dev_plan_cancelled', 'cancelled'], false)),
+    cancelled: explicitBillingBoolean(pick(raw, ['devPlanCancelled', 'dev_plan_cancelled', 'cancelled'], null)),
     paygEnabled: Boolean(pick(raw, ['devPlanPaygEnabled', 'dev_plan_payg_enabled', 'paygEnabled'], false)),
     hasPersonalOrg: Boolean(pick(raw, ['hasPersonalOrg', 'has_personal_org'], plan && plan !== 'none')),
     hasBillingHistory: Boolean(pick(raw, ['hasBillingHistory', 'has_billing_history'], false)),
@@ -460,9 +473,10 @@ async function loadDevPassStatus() {
     if (devOrg) {
       return {
         plan: devOrg.devPlan,
-        cycle: devOrg.devPlanCycle || 'monthly',
+        cycle: explicitBillingCycle(devOrg.devPlanCycle),
         billingCycleStart: devOrg.devPlanBillingCycleStart || null,
         expiresAt: devOrg.devPlanExpiresAt || null,
+        cancelled: explicitBillingBoolean(devOrg.devPlanCancelled),
         premiumWeekStart: devOrg.devPlanPremiumWeekStart || null,
         creditsUsed: devOrg.devPlanCreditsUsed,
         creditsLimit: devOrg.devPlanCreditsLimit,

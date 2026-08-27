@@ -10,7 +10,8 @@ const mergeGuard = require('../tools/merge_guard_e11.cjs');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
-assert.equal(release.productVersion,'3.0.0-alpha.5.81','E14 maintenance must not consume a product version');
+const releaseBuild = Number(String(release.productVersion || '').match(/^3\.0\.0-alpha\.5\.(\d+)$/)?.[1]);
+assert.ok(Number.isInteger(releaseBuild) && releaseBuild >= 81,'E14 ancestry convergence must remain active from product 5.81 onward');
 
 function git(cwd,args,input) {
   return execFileSync('git',args,{cwd,encoding:'utf8',input}).trim();

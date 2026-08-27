@@ -194,10 +194,10 @@
       } : null;
       const devpassAccount = ds ? {
         plan:String(ds.plan || 'none'),
-        cycle:ds.cycle === null || ds.cycle === undefined ? '' : String(ds.cycle),
+        cycle:typeof ds.cycle === 'string' ? ds.cycle.trim() : '',
         billingCycleStart:ds.billingCycleStart || null,
         expiresAt:ds.expiresAt || null,
-        cancelled:ds.cancelled === true,
+        cancelled:typeof ds.cancelled === 'boolean' ? ds.cancelled : null,
         pendingTier:ds.pendingTier === null || ds.pendingTier === undefined ? '' : String(ds.pendingTier),
         serviceTier:String(ds.serviceTier || 'default'),
         routingStrategy:String(ds.routingStrategy || 'auto'),

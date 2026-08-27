@@ -35,6 +35,19 @@
         : String(devpassAccount.plan || 'none') !== 'none'
           ? 'ACTIVE'
           : '—';
+    const billingPlanText = devpassAccount && String(devpassAccount.plan || '').trim() && String(devpassAccount.plan).toLowerCase() !== 'none'
+      ? String(devpassAccount.plan).toUpperCase()
+      : '—';
+    const billingCycleText = typeof devpassAccount?.cycle === 'string' && devpassAccount.cycle.trim()
+      ? devpassAccount.cycle.trim()
+      : '—';
+    const billingStartText = dashboardDateText(devpassAccount?.billingCycleStart, true);
+    const billingEndText = dashboardDateText(devpassAccount?.expiresAt, true);
+    const billingEndTimestamp = resetTimestamp(devpassAccount?.expiresAt);
+    const billingRemainingText = Number.isFinite(billingEndTimestamp) && billingEndTimestamp > Date.now()
+      ? remainingTimeForDashboard(devpassAccount.expiresAt)
+      : '—';
+    const billingCancelledText = devpassAccount?.cancelled === true ? '취소 예정' : '—';
     const devpassIncludedPassText = num(devpassAccount?.includedResetPassesRemaining)
       ? (num(devpassAccount?.includedResetPasses)
         ? `${Number(devpassAccount.includedResetPassesRemaining)} / ${Number(devpassAccount.includedResetPasses)}장`
@@ -60,10 +73,18 @@
             <div class="mini"><span>PAYG overflow</span><b>${devpassAccount.paygEnabled ? '켜짐' : '꺼짐'}</b></div>
             <div class="mini cyan"><span>Regular Credits</span><b>${money(devpassAccount.regularCredits)}</b></div>
           </div></div>
+          <div class="usage-detail-box billing-cycle-truth-strip"><div class="recent-head"><h3>Billing Cycle</h3><span>source truth</span></div><div class="minis">
+            <div class="mini"><span>Plan</span><b>${esc(billingPlanText)}</b></div>
+            <div class="mini"><span>Cycle</span><b>${esc(billingCycleText)}</b></div>
+            <div class="mini"><span>기간 시작</span><b>${esc(billingStartText)}</b></div>
+            <div class="mini"><span>기간 종료</span><b>${esc(billingEndText)}</b></div>
+            <div class="mini"><span>남은 기간</span><b>${esc(billingRemainingText)}</b></div>
+            <div class="mini"><span>취소 상태</span><b>${esc(billingCancelledText)}</b></div>
+          </div></div>
         </div>`
       : '';
     const scopeExtra = scopeKey === 'devpass'
-      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>월간 갱신</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div><div class="mini purple"><span>프리미엄 남음</span><b>${money(d.weekly?.remaining)}</b></div><div class="mini purple"><span>Reset Pass</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>`
+      ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>기간 종료</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div><div class="mini purple"><span>프리미엄 남음</span><b>${money(d.weekly?.remaining)}</b></div><div class="mini purple"><span>Reset Pass</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>`
       : scopeKey === 'credits'
         ? `<div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div><div class="mini cyan"><span>Runway</span><b>${num(runway?.runwayDays) ? `약 ${Math.round(Number(runway.runwayDays))}일` : '—'}</b></div>`
         : `<div class="mini accent"><span>DevPass 월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini cyan"><span>Credits 잔액</span><b>${money(c?.balance)}</b></div>`;

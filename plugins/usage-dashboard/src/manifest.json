@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.81",
+  "version": "3.0.0-alpha.5.82",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "8edd1ab52ac975e52de5974cdb020309a4e7694bbb1f06b303d54611d98d598b",
+  "artifactSha256": "41029d8d684d586287b507e91c7710b45752864cc330a9ae939008fe68b1dcfd",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
       "bytes": 13707,
-      "sha256": "2605565a3496e3ee7927168b8b994ae5ec190a06a5fecb60a66c7439eafbf77c"
+      "sha256": "f0b16b10d2d17a60b5449d1bb95280043791256449511ef697306066f648f339"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -64,8 +64,8 @@
     {
       "file": "16-usage-analytics.part.js",
       "label": "usage + analytics normalization",
-      "bytes": 18827,
-      "sha256": "b6f601091ffac6d9bb215941ed230bcace0265c89a6e194f9c8374eb4b49e27e"
+      "bytes": 18845,
+      "sha256": "0490f096f7eefd9dc32141e465a56995521e04747aade497d7ed3aa38c0811ce"
     },
     {
       "file": "20-bridge-io.part.js",
@@ -82,20 +82,20 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 45521,
-      "sha256": "f8e67202a744e7bd4d15417419652e9afb2502f6c66eeba48cbfda717ba8c2fd"
+      "bytes": 46056,
+      "sha256": "598ed0b666cc71f68fa2b2e64cc5b5d1b7788605bebc53f0909553df66bf104d"
     },
     {
       "file": "50-dashboard-context.part.js",
       "label": "dashboard/context",
-      "bytes": 7777,
-      "sha256": "90a59ce72503444b29a95c7df1a1442790a0a90f91636e4729eb22bb4a7a8cf0"
+      "bytes": 9396,
+      "sha256": "69b3100326c81c2deac0133ea953832ed98a4f3513f2c940c2488800c9e3438d"
     },
     {
       "file": "52-analytics-context.part.js",
       "label": "dashboard/analytics context",
       "bytes": 2107,
-      "sha256": "ca57396414484e74c6a12121f530837c1a285e560f8fd81287a08c72584b12e0"
+      "sha256": "455b101d63371c3f9ee46366caa7930537f637cae5fa8f6f142e4f80d6ecc3b6"
     },
     {
       "file": "54-dashboard-markup.part.js",

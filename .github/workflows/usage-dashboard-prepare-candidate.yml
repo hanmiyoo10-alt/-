@@ -38,6 +38,7 @@ jobs:
       target_branch: ${{ steps.request.outputs.target_branch }}
       expected_head_sha: ${{ steps.request.outputs.expected_head_sha }}
       release_spec: ${{ steps.request.outputs.release_spec }}
+      coordination_work_issue: ${{ steps.request.outputs.coordination_work_issue }}
     steps:
       - name: Checkout immutable trusted fallback control plane
         uses: actions/checkout@v4
@@ -53,6 +54,7 @@ jobs:
           RAW_TARGET_BRANCH: ${{ inputs.target_branch }}
           RAW_EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
           RAW_RELEASE_SPEC: ${{ inputs.release_spec }}
+          RAW_COORDINATION_WORK_ISSUE: ${{ inputs.coordination_work_issue }}
           CONTROL_COMMAND: ${{ github.event.comment.body }}
           CONTROL_ISSUE_NUMBER: ${{ github.event.issue.number }}
           CONTROL_ACTOR: ${{ github.actor }}
@@ -65,17 +67,24 @@ jobs:
             TARGET_BRANCH="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-target "$CONTROL_COMMAND")"
             EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-sha "$CONTROL_COMMAND")"
             RELEASE_SPEC="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-spec "$CONTROL_COMMAND")"
+            COORDINATION_WORK_ISSUE="$(node plugins/usage-dashboard/tools/release_control_command.cjs --prepare-work-issue "$CONTROL_COMMAND")"
           else
             TARGET_BRANCH="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-target "$RAW_TARGET_BRANCH")"
             EXPECTED_HEAD_SHA="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-sha "$RAW_EXPECTED_HEAD_SHA")"
             RELEASE_SPEC="$(node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --normalize-spec "$RAW_RELEASE_SPEC")"
+            COORDINATION_WORK_ISSUE="$RAW_COORDINATION_WORK_ISSUE"
           fi
           node plugins/usage-dashboard/tools/candidate_preparation_policy.cjs --check-target "$TARGET_BRANCH"
           case "$RELEASE_SPEC" in .github/usage-dashboard/releases/*.json) ;; *) echo "CANDIDATE_PREP_RELEASE_SPEC_DENIED:$RELEASE_SPEC"; exit 1 ;; esac
+          if [[ -n "$COORDINATION_WORK_ISSUE" && ! "$COORDINATION_WORK_ISSUE" =~ ^[1-9][0-9]*$ ]]; then
+            echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_ISSUE_INVALID'
+            exit 3
+          fi
           echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
           echo "expected_head_sha=${EXPECTED_HEAD_SHA,,}" >> "$GITHUB_OUTPUT"
           echo "release_spec=$RELEASE_SPEC" >> "$GITHUB_OUTPUT"
-          echo "CANDIDATE_PREP_FALLBACK_REQUEST:$TARGET_BRANCH:${EXPECTED_HEAD_SHA,,}:$RELEASE_SPEC"
+          echo "coordination_work_issue=$COORDINATION_WORK_ISSUE" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_PREP_FALLBACK_REQUEST:$TARGET_BRANCH:${EXPECTED_HEAD_SHA,,}:$RELEASE_SPEC:work_issue=${COORDINATION_WORK_ISSUE:-none}"
 
       - name: Checkout exact fallback candidate head
         uses: actions/checkout@v4
@@ -185,7 +194,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/setup-node@v4
-        if: ${{ inputs.coordination_work_issue != '' }}
+        if: ${{ needs.prepare.outputs.coordination_work_issue != '' }}
         with:
           node-version: 22
 
@@ -195,7 +204,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          TARGET_WORK_ISSUE: ${{ inputs.coordination_work_issue }}
+          TARGET_WORK_ISSUE: ${{ needs.prepare.outputs.coordination_work_issue }}
         run: |
           set -euo pipefail
           if [[ -z "$TARGET_WORK_ISSUE" ]]; then

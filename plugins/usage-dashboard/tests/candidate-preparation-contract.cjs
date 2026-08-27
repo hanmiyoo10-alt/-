@@ -34,6 +34,12 @@ assert.match(fallbackWorkflow,/\[\[ "\$adapter" == 'usage-dashboard' \]\]/);
 assert.match(fallbackWorkflow,/\[\[ "\$mutation" == 'CANDIDATE_STATE' \]\]/);
 assert.match(fallbackWorkflow,/needs: \[prepare, coordination-gate\]/);
 assert.match(fallbackWorkflow,/needs\.coordination-gate\.outputs\.gate_ready == 'true'/);
+assert.match(fallbackWorkflow,/--prepare-work-issue "\$CONTROL_COMMAND"/);
+assert.match(fallbackWorkflow,/coordination_work_issue=\$COORDINATION_WORK_ISSUE/);
+assert.match(fallbackWorkflow,/TARGET_WORK_ISSUE: \$\{\{ needs\.prepare\.outputs\.coordination_work_issue \}\}/);
+assert.match(fallbackWorkflow,/if: \$\{\{ needs\.prepare\.outputs\.coordination_work_issue != '' \}\}/);
+assert.doesNotMatch(fallbackWorkflow,/TARGET_WORK_ISSUE: \$\{\{ inputs\.coordination_work_issue \}\}/,
+  'gate must consume normalized prepare output so issue-comment and workflow-dispatch share one path');
 assert.doesNotMatch(fallbackWorkflow,/repository-authoritative-handoff-request|authoritative-handoff\.cjs/,
   'C3 writer canary revalidates receipt evidence only and must not turn Harness planning into product auto-invocation');
 const fallbackGateAt = fallbackWorkflow.indexOf('\n  coordination-gate:');
@@ -101,6 +107,20 @@ assert.deepEqual(control.parseStageCommand(`/usage-dashboard stage ${sourceBranc
 assert.throws(() => control.parseStageCommand(`/usage-dashboard stage ${sourceBranch} extra`),/UD_CONTROL_STAGE_DENIED/);
 const prepareCommand = `/usage-dashboard prepare ${sourceBranch} ${sourceSha} ${releaseSpec}`;
 assert.deepEqual(control.parsePrepareCommand(prepareCommand),{targetBranch:sourceBranch,expectedHeadSha:sourceSha,releaseSpec});
+const prepareWithWorkIssue = `${prepareCommand} 526`;
+assert.deepEqual(control.parsePrepareCommand(prepareWithWorkIssue),{
+  targetBranch:sourceBranch,
+  expectedHeadSha:sourceSha,
+  releaseSpec,
+  coordinationWorkIssue:526,
+});
+for (const denied of [
+  `${prepareCommand} 0`,
+  `${prepareCommand} -1`,
+  `${prepareCommand} abc`,
+  `${prepareCommand} 526 extra`,
+  `${prepareCommand}\n526`,
+]) assert.throws(() => control.parsePrepareCommand(denied),/UD_CONTROL_PREPARE_DENIED/);
 
 function git(cwd,args,input) { return execFileSync('git',args,{cwd,encoding:'utf8',input}).trim(); }
 function write(root,rel,text) { const file=path.join(root,rel); fs.mkdirSync(path.dirname(file),{recursive:true}); fs.writeFileSync(file,text); }
@@ -150,4 +170,4 @@ try {
   fs.rmSync(temp,{recursive:true,force:true});
 }
 
-console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved with opt-in receipt gate');
+console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved with optional owner-only coordination transport + opt-in receipt gate');

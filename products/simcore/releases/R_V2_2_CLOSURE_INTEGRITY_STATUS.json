@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_2_CLOSURE_INTEGRITY",
-  "status": "IMPLEMENTED_A_B_PERMANENT_CI_PENDING",
+  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_PENDING_MAIN_MERGE",
   "date": "2026-08-28",
   "name": "Closure Integrity",
   "predecessor": {
@@ -27,14 +27,14 @@
     {
       "id": "R2_2_A_SINGLE_CURRENT_STATE_AUTHORITY",
       "classification": "FIX",
-      "status": "IMPLEMENTED_CI_PENDING",
+      "status": "IMPLEMENTED_CI_PASS_PENDING_MAIN_MERGE",
       "sourceIssue": 640,
       "goal": "Machine-managed CURRENT_DEVELOPMENT current-state blocks become the sole current production and live-gate authority; duplicate human current-production verdict is retired."
     },
     {
       "id": "R2_2_B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS",
       "classification": "FIX",
-      "status": "IMPLEMENTED_CI_PENDING",
+      "status": "IMPLEMENTED_CI_PASS_PENDING_MAIN_MERGE",
       "sourceIssue": 641,
       "goal": "A release blocker remains open through DEFECT_FIXED/RELEASE_RECOVERY_PENDING and closes only after recovered production and durable LIVE_PENDING state are reobserved."
     },
@@ -87,7 +87,10 @@
     "runtimeMutationRequired": false,
     "historicalReplay": "V0_64_8_NEW_01_REPAIR_NEW_02",
     "mustPreserveR2_1ReleaseSchemaParityRegression": true,
-    "permanentCi": "PENDING"
+    "permanentCi": "PASS",
+    "firstQualifiedRun": 33090503073,
+    "firstQualifiedVerifyJob": 98581728770,
+    "firstQualifiedRequiredJob": 98581946147
   },
   "currentProductGateUnchanged": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "runtimeMutation": "NONE",

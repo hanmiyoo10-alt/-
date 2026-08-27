@@ -1,12 +1,14 @@
 # SimCore Release System v2.2 — Closure Integrity Implementation Evidence
 
 Date: 2026-08-28 KST
-Status: **IMPLEMENTED · PERMANENT CI QUALIFIED · MAIN MERGE PENDING · NON-RUNTIME**
+Status: **CLOSED ACTIVE · PERMANENT CI QUALIFIED · NON-RUNTIME**
 Design authority: `docs/SIMCORE_RELEASE_SYSTEM_V2_2_CLOSURE_INTEGRITY_DESIGN.md`
 Design merge: `e65497780d825e0c215fc35be8a849f31335e25e`
 Implementation branch: `infra/simcore-r2-2-closure-integrity-implementation-v2`
 Fresh implementation base: `7eb2a7642b336bdcceaf9046d3d3472fcb422a0d`
 Implementation PR: `#647`
+Implementation merge: `26061b03c3aa22978f96e2d82cd43d34a4de6577`
+Closure sync PR: `#648`
 
 ## Scope
 
@@ -44,6 +46,15 @@ Final tree delta for this file immediately after the bounded patch was exactly:
 ```
 
 The machine-managed blocks themselves were not rewritten by R2.2-A.
+
+Post-merge reobservation on `main@26061b03c3aa22978f96e2d82cd43d34a4de6577` confirmed:
+
+```text
+machine production snapshot = v0.64.8
+machine live gate = 06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT
+active human heading = How to read current operational state
+human Production verdict = absent
+```
 
 ## R2.2-B — Blocker Incident Closure Semantics
 
@@ -151,7 +162,7 @@ Observed final successful temporary run:
 33089764734 = SUCCESS
 ```
 
-A fresh-main implementation branch was then materialized from the final eight-file tree, so temporary tooling commits/files are absent from PR `#647` history and diff.
+A fresh-main implementation branch was then materialized from the final eight-file tree, so temporary tooling commits/files were absent from PR `#647` history and diff.
 
 ## Runtime audit lens
 
@@ -202,25 +213,56 @@ append-only recovery preserved
 human LIVE_PASS preserved
 ```
 
-## First permanent CI qualification
+## Permanent CI qualification
 
-PR `#647` first qualification head:
+First qualification head:
 
 ```text
 426094d5a06103f129ff5fb9ed1858be1f27ed92
-```
-
-Permanent SimCore CI:
-
-```text
 run      33090503073
 Verify   98581728770  PASS
 Required 98581946147  PASS
 ```
 
+Final exact implementation head:
+
+```text
+5cc84693ac15853632d76cd9f7f0f004fc2e0454
+run      33090711141
+Verify   98582501518  PASS
+Required 98582689766  PASS
+```
+
 The proposed permanent verifier and final enforced conclusion both passed with the new `closure-integrity` suite registered in `batch-a`.
 
-After recording these IDs, the branch receives one final SimCore CI run. Main merge is allowed only if that latest exact head again passes `Verify` and `Required`.
+## Post-merge production reobservation
+
+After implementation PR `#647` merged:
+
+```text
+main = 26061b03c3aa22978f96e2d82cd43d34a4de6577
+release-simcore = f5e29464452728f859a1a6a8191a846468353531
+production version = 0.64.8
+production mutation from R2.2 = NONE
+current product gate = 06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT
+validation = PENDING_REAL_LONG_CHAT
+```
+
+`release-simcore` therefore remained untouched by the R2.2 release-system/admin implementation.
+
+## Feedback closure
+
+After closure sync PR `#648` merges and is reobserved, the two source feedback issues are eligible for completed closure:
+
+```text
+#640 CURRENT_DEVELOPMENT duplicate current-state authority
+→ FIXED by R2.2-A + permanent closure-integrity regression
+
+#641 blocker incident premature auto-close semantics
+→ FIXED by R2.2-B policy + v0.64.8 historical replay / negative control
+```
+
+R2.2-C remains WATCH and is intentionally not converted into additional machinery.
 
 ## Current product boundary
 
@@ -234,15 +276,17 @@ live gate = 06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT
 
 R2.2 implementation does not close or substitute for that real-long-chat gate.
 
-## Qualification state
+## Final qualification state
 
 ```text
-implementation = COMPLETE ON WORK BRANCH
-first permanent SimCore Verify = PASS
-first permanent SimCore Required = PASS
-final exact-head SimCore CI = PENDING
-main merge = PENDING
-#640 closure = PENDING POST-MERGE REOBSERVATION
-#641 closure = PENDING POST-MERGE REOBSERVATION
+implementation = MERGED ON MAIN
+permanent SimCore Verify = PASS
+permanent SimCore Required = PASS
+post-merge main reobservation = PASS
+post-merge release-simcore unchanged = PASS
+closure sync PR #648 = PENDING CI / MERGE
+#640 closure = PENDING CLOSURE SYNC MERGE
+#641 closure = PENDING CLOSURE SYNC MERGE
+runtime mutation = NONE
 release-simcore mutation = NONE
 ```

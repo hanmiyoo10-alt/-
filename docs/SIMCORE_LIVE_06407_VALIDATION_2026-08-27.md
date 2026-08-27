@@ -113,7 +113,7 @@ Compatibility diagnostics: 0
 
 This is strong same-generation observer stability evidence, but it is still pre-boundary for the v0.64.7 release claim.
 
-## 4. Separate representation/edit observation
+## 4. Genuine user-edit positive control
 
 One supplied C packet reports:
 
@@ -126,15 +126,17 @@ Rebuild attribution: PREEXISTING_REQUEST_MUTATION · HIGH
 Mutation attribution: NO_PROVENANCE_MATCH · LOW
 ```
 
-Classification:
+User clarification confirms that this visible change was an intentional manual edit.
+
+Resolved classification:
 
 ```text
-WATCH / REPRESENTATION_ATTRIBUTION_UNRESOLVED / NON_06407 / NON_BLOCKING
+RESOLVED / EXPECTED_USER_EDIT_BEHAVIOR / POSITIVE_CONTROL / NON_06407
 ```
 
-This is **not** evidence that the v0.64.7 cross-reload telemetry transport failed. v0.64.7 explicitly freezes Representation/Edit Reconcile semantics and does not solve manual-edit rebuild latency.
+Therefore the 3.928 s `MANUAL_EDIT_REBUILT` event is **not an anomaly** and **not a v0.64.7 regression**. It is compatible with the frozen genuine-user-edit control: when the current visible representation matches neither prior canonical nor prior Fresh identity, the request remains eligible for the full manual-edit reconstruction path.
 
-If the visible change was an intentional user edit, the rebuild is compatible with the frozen genuine-edit control. If it was not intentional, it remains a separate representation-attribution WATCH and must not be causally assigned to v0.64.7 without additional evidence.
+This specimen is retained as positive regression evidence that v0.64.7 did not incorrectly route a genuine user edit through `REPRESENTATION_FAST_RECONCILED`.
 
 ## 5. Storage/performance observations
 
@@ -177,6 +179,7 @@ A real PRE_SIMCORE host/history prefix break remains reportable and does not by 
 healthy same-generation long-chat baseline: OBSERVED
 B_END closure regression control: PASS
 post-B_END C regression control: PASS
+genuine manual-edit control: PASS / EXPECTED_USER_EDIT_BEHAVIOR
 same-generation cache observer stability: OBSERVED
 new runtime generation: NOT OBSERVED IN SUPPLIED PACKETS
 cross-reload telemetry adoption: NOT OBSERVED

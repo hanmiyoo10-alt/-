@@ -1,10 +1,14 @@
 # Local Usage Dashboard — E14 Ancestry Convergence Design
 
-Status: **DESIGN READY — simplification + stabilization, implementation not started**
+Status: **IMPLEMENTED / 5.82 REAL-RELEASE PROVEN — governance-aligned baseline**
 
-Generation: `E14`
+Candidate DAG baseline: `E14`
+
+Durable transaction generation: `E13`
 
 Scope: release-control maintenance only. No product/runtime version bump.
+
+Governance note after 5.82: `E14` names the ancestry-aware candidate-DAG baseline, not a new durable transaction/wake generation. The backward-compatible durable request field `release_generation` therefore remains on `E13`. See `docs/USAGE_DASHBOARD_E14_GOVERNANCE_ALIGNMENT_DESIGN.md` and feedback #632 / implementation #635.
 
 ## Fresh baseline
 
@@ -270,6 +274,22 @@ E14 becomes the default release-control baseline only after one subsequent real 
 - monotonic exact-byte promotion succeeds;
 - production parity VERIFIED;
 - durable request closes normally.
+
+### 5.82 real-release proof — COMPLETE
+
+Product `3.0.0-alpha.5.82` fulfilled that acceptance:
+
+- candidate `b7ffce33096743dc809ab117b06a4128c1126090` used the one-parent converged form;
+- candidate `df3dc10949e11474ddfb84988fd8b7bc117b530a` used ordered parents `[b7ffce3..., d7691ed...]` after main advance;
+- final candidate `6e321627ca160a1f6e2819821037d235c350d0bf` used ordered parents `[df3dc10..., 8f1bf733...]` after another main advance;
+- no ancestry-only source refresh PR was required;
+- exact-SHA validation GREEN;
+- E11 `MERGE_READY_NO_DRIFT` agreed with GitHub mergeability;
+- expected-head merge produced main SHA `633a74748be613a7e1def9eb80cb9bf293de2d49`;
+- exact-byte promotion produced `release-usage-dashboard` SHA `de5a8f8993bbb1e55b815d663bcdf0bd1dab96a3` with parity VERIFIED;
+- durable request #617 closed completed.
+
+This proves the E14 candidate-DAG baseline while the durable transaction generation correctly remains E13.
 
 ## Explicit non-goals
 

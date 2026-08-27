@@ -3,6 +3,7 @@
 const {createGitHubClient} = require('./infra/github-client.cjs');
 const {parseAnchorMarker} = require('./main-delta-anchor.cjs');
 const mainDelta = require('./observers/main-delta.cjs');
+const {changeSummary} = require('./surfaces/summary.cjs');
 
 const CAPSULE_HEADING = '## Canonical Operator Capsule';
 const BRIEF_START = '<!-- canonical-main-session-brief:v1:start -->';
@@ -70,6 +71,8 @@ function buildBrief({capsule, delta, anchorState, mainSha}) {
     targetMainSha: mainSha,
     anchorGeneration: anchorState.generation,
     commitCount: data.commitCount,
+    meaningfulCommitCount: Number.isSafeInteger(data.meaningfulCommitCount) ? data.meaningfulCommitCount : data.commitCount,
+    routineGeneratedDocCommitCount: Number.isSafeInteger(data.routineGeneratedDocCommitCount) ? data.routineGeneratedDocCommitCount : 0,
     fileCount: data.fileCount,
     riskLevel: data.riskLevel,
     actionRequired: Boolean(data.actionRequired),
@@ -82,7 +85,7 @@ function buildBrief({capsule, delta, anchorState, mainSha}) {
     '- DELIVERY: `PENDING_USER_VISIBLE_DELIVERY`',
     `- STATE: ${capsule.fields.STATE}`,
     `- MAIN: ${capsule.fields.MAIN}`,
-    `- CHANGE: ${data.riskLevel} — ${data.commitCount} commit(s) / ${data.fileCount} file(s) since ${anchorState.anchorSha.slice(0, 12)}`,
+    `- CHANGE: ${changeSummary(delta)}`,
     `- WHY: ${capsule.fields.WHY}`,
     `- NEXT: ${capsule.fields.NEXT}`,
     `- AUTHORITY: ${capsule.fields.AUTHORITY}`,

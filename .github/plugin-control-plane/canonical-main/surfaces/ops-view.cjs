@@ -1,6 +1,6 @@
 'use strict';
 
-const {renderSummary} = require('./summary.cjs');
+const {compactConvergence, renderSummary} = require('./summary.cjs');
 const {renderProtectionSection} = require('./protection.cjs');
 const {renderBootstrapSection} = require('./bootstrap.cjs');
 const {renderWriterStatus} = require('./writers.cjs');
@@ -24,8 +24,10 @@ function renderOpsView(snapshot) {
     '',
     '- Branch: `main`',
     `- Observed SHA: \`${snapshot.observedMainSha}\``,
+    `- Convergence: ${compactConvergence(snapshot.convergence)}`,
     `- Required gate observation: ${snapshot.observations.requiredCi.summary}`,
     `- Production authority observation: ${snapshot.observations.productionAuthority.summary}`,
+    `- Last-seen delta observation: ${snapshot.observations.mainDelta?.summary || 'UNKNOWN'}`,
     `- Adapter contract complete: \`${snapshot.freshness.configuredCoverageComplete}\``,
     `- Current adapter observations valid: \`${snapshot.freshness.observationCoverageValid}\``,
     `- Project status freshness valid: \`${snapshot.freshness.projectStatusFresh}\``,

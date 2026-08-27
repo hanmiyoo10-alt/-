@@ -431,3 +431,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/04a29949c824a089e4f07710c405f4467eb7b6f6)
 - Event ID: `74a2ebc775e4498be31f6c2f09e9d9dc4b942c9fbcf6a4f68c52dd96e3161dba`
 <!-- canonical-main-doc-promoted:74a2ebc775e4498be31f6c2f09e9d9dc4b942c9fbcf6a4f68c52dd96e3161dba -->
+
+### 2026-08-27 — infra: promote required receipt coverage proof (#556)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1279ca05f3717a3f3da0583e93ce72adfc98d131`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1279ca05f3717a3f3da0583e93ce72adfc98d131)
+- Event ID: `103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3`
+<!-- canonical-main-doc-promoted:103d738c2da985304b3ac39f020d1e0eb591f5fdd49788f96dae7190e351fbe3 -->

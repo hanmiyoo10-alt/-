@@ -42,16 +42,30 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Confirm successful result still belongs to current main
+      - name: Classify successful result against current main
+        id: target_currentness
         if: github.event_name == 'workflow_run'
         env:
           TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
-          test "$(git rev-parse origin/main)" = "$TARGET_SHA"
+          observed="$(git rev-parse origin/main)"
+          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+          echo "observed_main_sha=$observed" >> "$GITHUB_OUTPUT"
+          if [ "$observed" = "$TARGET_SHA" ]; then
+            echo "disposition=CURRENT_MAIN" >> "$GITHUB_OUTPUT"
+            echo "TARGET_DISPOSITION=CURRENT_MAIN expected=$TARGET_SHA observed=$observed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "disposition=SUPERSEDED_CURRENT_MAIN" >> "$GITHUB_OUTPUT"
+            echo "TARGET_DISPOSITION=SUPERSEDED_CURRENT_MAIN expected=$TARGET_SHA observed=$observed" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Attempt GitHub-native main protection
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'workflow_run' &&
+           steps.target_currentness.outputs.disposition == 'CURRENT_MAIN')
         env:
           GH_TOKEN: ${{ github.token }}
           PROTECTION_ISSUE_NUMBER: '321'

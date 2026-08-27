@@ -415,3 +415,19 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8eea410241f1f8720e32fa481f0db96d2da975fd)
 - Event ID: `c558a5dba7d1f95b567a68281a01a4f1eba87026cdc03694ad39c328c8b9b8cc`
 <!-- canonical-main-doc-promoted:c558a5dba7d1f95b567a68281a01a4f1eba87026cdc03694ad39c328c8b9b8cc -->
+
+### 2026-08-27 — infra: add Harness mutation enforcement coverage
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d68d32e64a72fd4ba6363c240c7a6816c58259f1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d68d32e64a72fd4ba6363c240c7a6816c58259f1)
+- Event ID: `a39cf2762ce0d96f897a94b18bc708dd63f0fb79ba8f91bd8dd6f5f0bd3e3351`
+<!-- canonical-main-doc-promoted:a39cf2762ce0d96f897a94b18bc708dd63f0fb79ba8f91bd8dd6f5f0bd3e3351 -->
+
+### 2026-08-27 — infra: require Usage Dashboard candidate coordination receipt
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `04a29949c824a089e4f07710c405f4467eb7b6f6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/04a29949c824a089e4f07710c405f4467eb7b6f6)
+- Event ID: `74a2ebc775e4498be31f6c2f09e9d9dc4b942c9fbcf6a4f68c52dd96e3161dba`
+<!-- canonical-main-doc-promoted:74a2ebc775e4498be31f6c2f09e9d9dc4b942c9fbcf6a4f68c52dd96e3161dba -->

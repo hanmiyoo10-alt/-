@@ -549,3 +549,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c73887acc3fbe74b94b1a099af4cb36cc6327174)
 - Event ID: `8c7e5bd7fc681dc44aec3f29ea0fbdff190a05cf20856e37ecd01c40c39ea84e`
 <!-- canonical-main-doc-promoted:8c7e5bd7fc681dc44aec3f29ea0fbdff190a05cf20856e37ecd01c40c39ea84e -->
+
+### 2026-08-27 — docs(usage-dashboard): inherit repository common rules (#616)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `77a7a02ad56b8b01f4766347c361abe53cd8d2a1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/77a7a02ad56b8b01f4766347c361abe53cd8d2a1)
+- Event ID: `0617b6afd9bc6b967e6efd2081c2dd0890aa511aba50a3267240042b33ed83bc`
+<!-- canonical-main-doc-promoted:0617b6afd9bc6b967e6efd2081c2dd0890aa511aba50a3267240042b33ed83bc -->

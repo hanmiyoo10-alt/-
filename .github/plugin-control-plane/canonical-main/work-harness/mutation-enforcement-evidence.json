@@ -83,19 +83,21 @@
       "mutationClass": "CANDIDATE_STATE",
       "targetKind": "GITHUB_WORKFLOW",
       "target": ".github/workflows/usage-dashboard-prepare-candidate.yml",
-      "enforcementState": "OPT_IN_PROVEN",
+      "enforcementState": "REQUIRED_INSTALLED",
       "enforcementSurface": ".github/workflows/usage-dashboard-prepare-candidate.yml",
       "requiredMarkers": [
         "coordination_work_issue",
         "mutation-gate.cjs",
+        "USAGE_DASHBOARD_CANDIDATE_COORDINATION_REQUIRED"
+      ],
+      "forbiddenMarkers": [
         "USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE"
       ],
       "proofRefs": [
         "issue:#528",
-        "workflow-run:33027730741",
-        "workflow-run:33029602664"
+        "issue:#551"
       ],
-      "note": "Existing Usage Dashboard candidate writer is live-proven behind an opt-in receipt gate; ordinary no-work-issue requests remain compatible."
+      "note": "Required receipt enforcement is installed at the already live-proven Usage Dashboard candidate mutation boundary. No-op preparation stays receipt-free because it does not reach the writer; live required-mode mutation proof remains separate C6-V1."
     },
     {
       "adapterId": "usage-dashboard",

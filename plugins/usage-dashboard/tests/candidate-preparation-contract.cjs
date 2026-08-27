@@ -28,7 +28,8 @@ assert.doesNotMatch(fallbackWorkflow,/issues: write|pull-requests: write/,'candi
 assert.match(fallbackWorkflow,/\n  coordination-gate:\n/);
 assert.match(fallbackWorkflow,/mutation-gate\.cjs --work-issue "\$TARGET_WORK_ISSUE"/);
 assert.match(fallbackWorkflow,/MUTATION_GATE_READY/);
-assert.match(fallbackWorkflow,/USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE/);
+assert.match(fallbackWorkflow,/USAGE_DASHBOARD_CANDIDATE_COORDINATION_REQUIRED/);
+assert.doesNotMatch(fallbackWorkflow,/USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE/);
 assert.match(fallbackWorkflow,/USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_READY/);
 assert.match(fallbackWorkflow,/\[\[ "\$adapter" == 'usage-dashboard' \]\]/);
 assert.match(fallbackWorkflow,/\[\[ "\$mutation" == 'CANDIDATE_STATE' \]\]/);
@@ -37,11 +38,13 @@ assert.match(fallbackWorkflow,/needs\.coordination-gate\.outputs\.gate_ready == 
 assert.match(fallbackWorkflow,/--prepare-work-issue "\$CONTROL_COMMAND"/);
 assert.match(fallbackWorkflow,/coordination_work_issue=\$COORDINATION_WORK_ISSUE/);
 assert.match(fallbackWorkflow,/TARGET_WORK_ISSUE: \$\{\{ needs\.prepare\.outputs\.coordination_work_issue \}\}/);
+assert.match(fallbackWorkflow,/if: needs\.prepare\.outputs\.has_changes == 'true'/);
+assert.match(fallbackWorkflow,/if \[\[ -z "\$TARGET_WORK_ISSUE" \]\]; then\n            echo 'USAGE_DASHBOARD_CANDIDATE_COORDINATION_REQUIRED'\n            exit 3/);
 assert.match(fallbackWorkflow,/if: \$\{\{ needs\.prepare\.outputs\.coordination_work_issue != '' \}\}/);
 assert.doesNotMatch(fallbackWorkflow,/TARGET_WORK_ISSUE: \$\{\{ inputs\.coordination_work_issue \}\}/,
   'gate must consume normalized prepare output so issue-comment and workflow-dispatch share one path');
 assert.doesNotMatch(fallbackWorkflow,/repository-authoritative-handoff-request|authoritative-handoff\.cjs/,
-  'C3 writer canary revalidates receipt evidence only and must not turn Harness planning into product auto-invocation');
+  'required writer gate revalidates receipt evidence only and must not turn Harness planning into product auto-invocation');
 const fallbackGateAt = fallbackWorkflow.indexOf('\n  coordination-gate:');
 const fallbackWriterAt = fallbackWorkflow.indexOf('\n  commit-candidate:');
 assert.ok(fallbackGateAt > 0 && fallbackWriterAt > fallbackGateAt, 'read-only coordination gate must precede the existing candidate writer');
@@ -170,4 +173,4 @@ try {
   fs.rmSync(temp,{recursive:true,force:true});
 }
 
-console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved with optional owner-only coordination transport + opt-in receipt gate');
+console.log('usage-dashboard candidate preparation contract: OK · E7 inherits source/derived authority, E14 ancestry convergence, fast-forward writer, config-free orchestration split, fallback prepare preserved with owner-only coordination transport + required receipt gate for candidate mutation');

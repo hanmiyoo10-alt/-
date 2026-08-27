@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const COVERAGE_STATES = new Set(['OPT_IN_PROVEN', 'INSTALLED_OPT_IN', 'UNGATED']);
+const COVERAGE_STATES = new Set(['OPT_IN_PROVEN', 'INSTALLED_OPT_IN', 'REQUIRED_INSTALLED', 'UNGATED']);
 
 function routeKey(route) {
   return [
@@ -92,13 +92,14 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     }
 
     const markers = Array.isArray(evidenceRow.requiredMarkers) ? evidenceRow.requiredMarkers : null;
+    const forbiddenMarkers = Array.isArray(evidenceRow.forbiddenMarkers) ? evidenceRow.forbiddenMarkers : [];
     const proofRefs = Array.isArray(evidenceRow.proofRefs) ? evidenceRow.proofRefs : null;
     if (!markers || !proofRefs) {
       throw new Error(`COVERAGE_EVIDENCE_SHAPE_INVALID:${key}`);
     }
 
     if (evidenceRow.enforcementState === 'UNGATED') {
-      if (markers.length !== 0 || proofRefs.length !== 0) {
+      if (markers.length !== 0 || forbiddenMarkers.length !== 0 || proofRefs.length !== 0) {
         throw new Error(`COVERAGE_UNGATED_EVIDENCE_INVALID:${key}`);
       }
     } else {
@@ -108,6 +109,14 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
       for (const marker of markers) {
         if (typeof marker !== 'string' || marker.length === 0 || !surface.includes(marker)) {
           throw new Error(`COVERAGE_GATE_MARKER_MISSING:${key}:${marker}`);
+        }
+      }
+      for (const marker of forbiddenMarkers) {
+        if (typeof marker !== 'string' || marker.length === 0) {
+          throw new Error(`COVERAGE_FORBIDDEN_MARKER_INVALID:${key}`);
+        }
+        if (surface.includes(marker)) {
+          throw new Error(`COVERAGE_FORBIDDEN_MARKER_PRESENT:${key}:${marker}`);
         }
       }
       if (evidenceRow.enforcementState === 'OPT_IN_PROVEN' && proofRefs.length === 0) {
@@ -132,8 +141,12 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     totalMutatingRoutes: rows.length,
     optInProven: rows.filter((row) => row.enforcementState === 'OPT_IN_PROVEN').length,
     installedOptIn: rows.filter((row) => row.enforcementState === 'INSTALLED_OPT_IN').length,
+    requiredInstalled: rows.filter((row) => row.enforcementState === 'REQUIRED_INSTALLED').length,
     ungated: rows.filter((row) => row.enforcementState === 'UNGATED').length,
   };
+  const requiredInstalledRouteKeys = rows
+    .filter((row) => row.enforcementState === 'REQUIRED_INSTALLED')
+    .map(routeKey);
 
   return {
     schemaVersion: 1,
@@ -141,13 +154,16 @@ function evaluateCoverage({ registry, evidence, readSurface }) {
     status: 'COVERAGE_COMPLETE',
     counts,
     rows,
+    requiredInstalledRouteKeys,
     ungatedRouteKeys: rows
       .filter((row) => row.enforcementState === 'UNGATED')
       .map(routeKey),
     authorityNeutral: true,
     mutationAuthorized: false,
     executionAuthorized: false,
-    nextLegalAction: 'REVIEW_UNGATED_ROUTES_AND_ACTIVATE_ONE_BOUNDED_PACKET',
+    nextLegalAction: requiredInstalledRouteKeys.length > 0
+      ? 'ACTIVATE_BOUNDED_REQUIRED_RECEIPT_LIVE_PROOF'
+      : 'REVIEW_UNGATED_ROUTES_AND_ACTIVATE_ONE_BOUNDED_PACKET',
   };
 }
 

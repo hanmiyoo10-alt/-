@@ -20,19 +20,23 @@ assert.equal(report.mode, 'MUTATION_ENFORCEMENT_COVERAGE');
 assert.equal(report.status, 'COVERAGE_COMPLETE');
 assert.deepEqual(report.counts, {
   totalMutatingRoutes: 7,
-  optInProven: 3,
+  optInProven: 2,
   installedOptIn: 0,
+  requiredInstalled: 1,
   ungated: 4,
 });
 assert.equal(report.authorityNeutral, true);
 assert.equal(report.mutationAuthorized, false);
 assert.equal(report.executionAuthorized, false);
-assert.equal(report.nextLegalAction, 'REVIEW_UNGATED_ROUTES_AND_ACTIVATE_ONE_BOUNDED_PACKET');
+assert.equal(report.nextLegalAction, 'ACTIVATE_BOUNDED_REQUIRED_RECEIPT_LIVE_PROOF');
+assert.deepEqual(report.requiredInstalledRouteKeys, [
+  'usage-dashboard::USAGE_DASHBOARD_CANDIDATE::CANDIDATE_STATE::GITHUB_WORKFLOW::.github/workflows/usage-dashboard-prepare-candidate.yml',
+]);
 
 const byCapability = new Map(report.rows.map((row) => [`${row.adapterId}:${row.capability}`, row]));
 assert.equal(byCapability.get('canonical-main:CANONICAL_MAIN_OPERATIONS_REFRESH').enforcementState, 'OPT_IN_PROVEN');
 assert.equal(byCapability.get('simcore:SIMCORE_CANDIDATE').enforcementState, 'OPT_IN_PROVEN');
-assert.equal(byCapability.get('usage-dashboard:USAGE_DASHBOARD_CANDIDATE').enforcementState, 'OPT_IN_PROVEN');
+assert.equal(byCapability.get('usage-dashboard:USAGE_DASHBOARD_CANDIDATE').enforcementState, 'REQUIRED_INSTALLED');
 assert.equal(byCapability.get('canonical-main:CANONICAL_MAIN_CONTROL_PLANE').enforcementState, 'UNGATED');
 assert.equal(byCapability.get('simcore:SIMCORE_STATE').enforcementState, 'UNGATED');
 assert.equal(byCapability.get('simcore:SIMCORE_RELEASE').enforcementState, 'UNGATED');
@@ -79,6 +83,20 @@ const tamperedReader = (surface) => {
 assert.throws(
   () => evaluateCoverage({ registry, evidence: markerTamper, readSurface: tamperedReader }),
   /COVERAGE_GATE_MARKER_MISSING:usage-dashboard::USAGE_DASHBOARD_CANDIDATE::CANDIDATE_STATE::GITHUB_WORKFLOW::\.github\/workflows\/usage-dashboard-prepare-candidate\.yml:mutation-gate\.cjs/,
+);
+
+const bypassReintroduced = clone(evidence);
+const required = bypassReintroduced.rows.find((row) => row.capability === 'USAGE_DASHBOARD_CANDIDATE');
+const bypassReader = (surface) => {
+  const content = readSurface(surface);
+  if (surface === required.enforcementSurface) {
+    return `${content}\n# USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE\n`;
+  }
+  return content;
+};
+assert.throws(
+  () => evaluateCoverage({ registry, evidence: bypassReintroduced, readSurface: bypassReader }),
+  /COVERAGE_FORBIDDEN_MARKER_PRESENT:usage-dashboard::USAGE_DASHBOARD_CANDIDATE::CANDIDATE_STATE::GITHUB_WORKFLOW::\.github\/workflows\/usage-dashboard-prepare-candidate\.yml:USAGE_DASHBOARD_CANDIDATE_COORDINATION_GATE_BYPASS:NO_WORK_ISSUE/,
 );
 
 const invalidUngatedEvidence = clone(evidence);

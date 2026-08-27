@@ -2,7 +2,7 @@
 'use strict';
 
 const CONTROL_ISSUE_NUMBER = 197;
-const PREPARE_RE = /^\/usage-dashboard prepare (release\/usage-dashboard-[A-Za-z0-9._-]+) ([0-9a-fA-F]{40}) (\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json)$/;
+const PREPARE_RE = /^\/usage-dashboard prepare (release\/usage-dashboard-[A-Za-z0-9._-]+) ([0-9a-fA-F]{40}) (\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json)(?: ([1-9]\d*))?$/;
 const READY_RE = /^\/usage-dashboard ready ([0-9a-fA-F]{40})$/;
 const READY_BRANCH_RE = /^\/usage-dashboard ready-branch (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
 const STAGE_RE = /^\/usage-dashboard stage (release\/usage-dashboard-[A-Za-z0-9._-]+)$/;
@@ -40,11 +40,13 @@ function parsePrepareCommand(value) {
   const text = singleLine(value, 'UD_CONTROL_PREPARE_DENIED');
   const match = PREPARE_RE.exec(text);
   if (!match) fail('UD_CONTROL_PREPARE_DENIED');
-  return {
+  const parsed = {
     targetBranch: match[1],
     expectedHeadSha: match[2].toLowerCase(),
     releaseSpec: match[3],
   };
+  if (match[4]) parsed.coordinationWorkIssue = Number(match[4]);
+  return parsed;
 }
 
 function parseReadyCommand(value) {
@@ -105,6 +107,11 @@ function main() {
   }
   if (command === '--prepare-spec') {
     process.stdout.write(parsePrepareCommand(args.join(' ')).releaseSpec);
+    return;
+  }
+  if (command === '--prepare-work-issue') {
+    const parsed = parsePrepareCommand(args.join(' '));
+    process.stdout.write(parsed.coordinationWorkIssue ? String(parsed.coordinationWorkIssue) : '');
     return;
   }
   if (command === '--ready-sha') {

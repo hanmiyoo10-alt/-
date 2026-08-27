@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.7
+//@version 0.64.8
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -29,6 +29,14 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.8 Output-Complete Telemetry Checkpoint Repair:
+// - Repairs the confirmed v0.64.7 live-gate omission where same-tab session telemetry was published only from onUnload and no output-complete checkpoint existed before a full page refresh
+// - Adds one best-effort outer-runtime telemetry checkpoint wrapper shared by active authoritative OUTPUT_COMMIT and UNLOAD; the existing runtime-telemetry capsule schema, memory-first/session-fallback transport, 10-minute age bound and 16,384-character session bound remain unchanged
+// - OUTPUT_COMMIT checkpointing occurs only after CoreRulesetSession.processOutput returns active from its authoritative out save, requires the runtime generation to remain current and a known location key, and never downgrades or throws through an already committed output
+// - Adds one bounded Last Turn Diagnostic checkpoint line exposing session write disposition, serialized character count, local checkpoint cost and trigger only; no exception message or raw capsule/body content is retained
+// - Provider cache remains explicitly UNVERIFIED; no provider-cache control/claim, network call, timer loop, pluginStorage write, SnapshotStore semantic write, host chat write or request-history mutation is introduced
+// - Representation/Edit Reconcile, Recovery, Broadcast/Frame/Time/Evidence/Lineage/Handoff/Recurrence/Summary/Structure/COMMUNITY/Reaction/Prompt semantics and M2-3 ownership remain frozen
 //
 // v0.64.7 Cross-Reload Cache Observer Continuity:
 // - Extends the existing metadata-only runtime telemetry handoff from globalThis memory to a two-tier same-tab transport: globalThis first, window.sessionStorage fallback
@@ -626,7 +634,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.64.7';
+const SIMCORE_RUNTIME_VERSION = '0.64.8';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6867,6 +6875,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   let lastPreambleProvenance = null;
   let lastDiagnosticRequestProbe = null;
   let lastDiagnosticCopyProbe = null;
+  let lastTelemetryCheckpointProbe = null;
 
   const { perfNow, perfMs } = ops;
   const host = runtimeHostRules.createHostAdapter(Risuai);
@@ -6875,6 +6884,48 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   const cacheCandidates = runtimeCacheCandidateRules.createCacheCandidateTracker();
   let pendingTelemetryHandoff = runtimeTelemetryRules.claim(globalThis, typeof window !== 'undefined' ? window : null);
   let telemetryAdoptionAttempted = false;
+
+  function checkpointRuntimeTelemetry(trigger) {
+    const normalizedTrigger = trigger === 'UNLOAD' ? 'UNLOAD' : 'OUTPUT_COMMIT';
+    try {
+      const locationKey = String(coreKey || coreLocationKey || '');
+      if (!locationKey) return null;
+      const startedAt = perfNow();
+      const capsule = runtimeTelemetryRules.capture({
+        sourceVersion: SIMCORE_RUNTIME_VERSION,
+        locationKey,
+        capturedAt: Date.now(),
+        runtimePromptCache: runtimePromptCache.exportState(),
+        requestTopology: requestTopology.exportState(),
+        cacheCandidates: cacheCandidates.exportState(),
+      });
+      if (!capsule) return null;
+      runtimeTelemetryRules.publish(globalThis, typeof window !== 'undefined' ? window : null, capsule);
+      const write = runtimeTelemetryRules.diagnostics().write || null;
+      const probe = Object.freeze({
+        trigger: normalizedTrigger,
+        memory: write?.memory || 'UNAVAILABLE',
+        session: write?.session || 'UNAVAILABLE',
+        serializedChars: Number(write?.serializedChars || 0),
+        elapsedMs: perfMs(startedAt),
+        retainedBodies: false,
+      });
+      lastTelemetryCheckpointProbe = probe;
+      return probe;
+    } catch (_) {
+      const probe = Object.freeze({
+        trigger: normalizedTrigger,
+        memory: 'FAILED',
+        session: 'FAILED',
+        serializedChars: 0,
+        elapsedMs: 0,
+        retainedBodies: false,
+      });
+      lastTelemetryCheckpointProbe = probe;
+      return probe;
+    }
+  }
+
   const runtimeSession = runtimeSessionRules.createSessionRuntime({
     coreRules, host, perfNow, perfMs, textMessageContent,
     readState: () => ({ coreSession, coreKey, coreLocationKey }),
@@ -7562,6 +7613,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'BYPASSED', outputAt: Date.now() });
       return content;
     }
+    if (runtimeIsCurrent() && String(coreKey || coreLocationKey || '')) {
+      checkpointRuntimeTelemetry('OUTPUT_COMMIT');
+    }
     markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'COMMITTED', outputAt: Date.now() });
 
     const issues = result.issues || [];
@@ -8111,6 +8165,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
       `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,
       `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
+      `Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `SESSION · ${lastTelemetryCheckpointProbe.session || 'UNAVAILABLE'} · ${Number(lastTelemetryCheckpointProbe.serializedChars || 0)} chars · ${diagnosticFormatMs(lastTelemetryCheckpointProbe.elapsedMs)} · trigger ${lastTelemetryCheckpointProbe.trigger || 'UNKNOWN'}` : 'n/a'}`,
       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Broadcast lifecycle: ${probeFresh && budget ? `${budget.broadcastSessionState || 'CLOSED'} · mode ${budget.mode || 'n/a'}` : 'n/a'}`,
@@ -8633,16 +8688,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   await Risuai.onUnload(async () => {
     runtimeDisposed = true;
     runtimeEpoch += 1;
-    try {
-      runtimeTelemetryRules.publish(globalThis, typeof window !== 'undefined' ? window : null, runtimeTelemetryRules.capture({
-        sourceVersion: SIMCORE_RUNTIME_VERSION,
-        locationKey: String(coreKey || coreLocationKey || ''),
-        capturedAt: Date.now(),
-        runtimePromptCache: runtimePromptCache.exportState(),
-        requestTopology: requestTopology.exportState(),
-        cacheCandidates: cacheCandidates.exportState(),
-      }));
-    } catch (_) {}
+    checkpointRuntimeTelemetry('UNLOAD');
     await runtimeHooks.remove(Risuai, beforeRequestHandler, outputHandler);
     for (const part of simcoreUiParts.splice(0)) {
       if (!part?.id) continue;

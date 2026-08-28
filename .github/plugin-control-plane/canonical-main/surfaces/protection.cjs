@@ -4,7 +4,28 @@ const START = '<!-- canonical-main-protection-start -->';
 const END = '<!-- canonical-main-protection-end -->';
 function renderProtectionSection(observation) {
   const checks = observation.requiredChecks.length ? observation.requiredChecks.map((row) => `\`${row}\``).join(', ') : 'none';
-  return [START, '## Protected main', '', `- Protection state: \`${observation.state}\``, `- GitHub branch protected: \`${observation.protected}\``, `- Required status-check enforcement: \`${observation.enforcementLevel}\``, `- Required target: \`${observation.requiredName}\` / API context \`${observation.requiredApiContext}\` — \`${observation.requiredPresent ? 'PRESENT' : 'NOT_ENFORCED'}\``, `- Observed required checks: ${checks}`, `- Protected writer gateway: \`${observation.writerGatewayReady ? 'READY' : 'DRIFT'}\` — ${observation.activeWriterCount} active writers`, `- Exact-candidate shadow proof: \`${observation.shadowProof}\``, `- Automatic native activation attempt: \`${observation.automaticActivationAttempt ? 'ENABLED' : 'DISABLED'}\``, `- Soft enforcement fallback: \`${observation.softEnforcementEnabled ? 'ACTIVE' : 'DISABLED'}\` — \`${observation.softEnforcementStrategy}\``, `- Soft fallback equals native protection: \`${observation.nativeProtectionEquivalent}\``, ...(observation.writerErrors.length ? observation.writerErrors.map((row) => `- Writer contract error: \`${row}\``) : []), '- This is direct GitHub governance read-back. A PASS Required run or ACTIVE soft fallback alone does not mean native branch protection is enabled.', END].join('\n');
+  const attemptState = observation.automaticActivationAttempt
+    ? observation.automaticActivationDeferred ? 'DEFERRED_PERMISSION' : 'ENABLED'
+    : 'DISABLED';
+  return [
+    START,
+    '## Protected main',
+    '',
+    `- Protection state: \`${observation.state}\``,
+    `- GitHub branch protected: \`${observation.protected}\``,
+    `- Required status-check enforcement: \`${observation.enforcementLevel}\``,
+    `- Required target: \`${observation.requiredName}\` / API context \`${observation.requiredApiContext}\` — \`${observation.requiredPresent ? 'PRESENT' : 'NOT_ENFORCED'}\``,
+    `- Observed required checks: ${checks}`,
+    `- Protected writer gateway: \`${observation.writerGatewayReady ? 'READY' : 'DRIFT'}\` — ${observation.activeWriterCount} active writers`,
+    `- Exact-candidate shadow proof: \`${observation.shadowProof}\``,
+    `- Native activation capability: \`${observation.activationCapabilityState}\` — \`${observation.activationCapabilityReason}\``,
+    `- Automatic native activation attempt: \`${attemptState}\``,
+    `- Soft enforcement fallback: \`${observation.softEnforcementEnabled ? 'ACTIVE' : 'DISABLED'}\` — \`${observation.softEnforcementStrategy}\``,
+    `- Soft fallback equals native protection: \`${observation.nativeProtectionEquivalent}\``,
+    ...(observation.writerErrors.length ? observation.writerErrors.map((row) => `- Writer contract error: \`${row}\``) : []),
+    '- Native protection truth comes only from direct GitHub read-back. Capability accounting may defer attempts, and an ACTIVE soft fallback never makes native protection active.',
+    END,
+  ].join('\n');
 }
 function replaceProtectionSection(body, section) {
   const pattern = new RegExp(`${START}[\\s\\S]*?${END}`);

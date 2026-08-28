@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -57,6 +58,27 @@ class StoreTests(unittest.TestCase):
         final = self.store.get_job(job["job_id"])
         self.assertEqual(final["logical_state"], "SUSPECTED_STALL")
         self.assertEqual(final["remote_state"], "UNKNOWN")
+
+    @patch("runtime.notifier.notify")
+    @patch("runtime.chatgpt_notification.snapshot")
+    @patch("runtime.chatgpt_notification.available", return_value=True)
+    def test_chatgpt_notification_is_candidate_signal(self, _available, snapshot, notify):
+        snapshot.side_effect = [{"baseline"}, {"baseline", "new"}]
+        job = self.store.create_job(
+            ["com.openai.chatgpt", "30"],
+            adapter="chatgpt_notification",
+            name="ChatGPT notification observer",
+        )
+        rc = run_worker(self.store, job["job_id"], heartbeat_interval=0.01)
+        self.assertEqual(rc, 0)
+        final = self.store.get_job(job["job_id"])
+        self.assertEqual(final["logical_state"], "COMPLETED")
+        self.assertEqual(final["signal_confidence"], "MEDIUM")
+        self.assertEqual(final["remote_state"], "ANDROID_NOTIFICATION")
+        events = self.store.events(job["job_id"])
+        self.assertEqual(events[-1]["event_type"], "CHATGPT_NOTIFICATION_SEEN")
+        self.assertEqual(events[-1]["detail"]["semantic"], "candidate_only_not_response_completion_proof")
+        notify.assert_called_once()
 
 
 if __name__ == "__main__":

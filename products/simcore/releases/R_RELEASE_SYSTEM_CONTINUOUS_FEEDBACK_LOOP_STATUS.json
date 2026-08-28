@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_RELEASE_SYSTEM_CONTINUOUS_FEEDBACK_LOOP",
+  "status": "ACTIVE_OPERATING_POLICY",
+  "date": "2026-08-28",
+  "policy": "docs/SIMCORE_RELEASE_SYSTEM_CONTINUOUS_FEEDBACK_LOOP.md",
+  "currentSystemAtCreation": {
+    "version": "R2.4",
+    "name": "Preflight Compression",
+    "state": "DESIGN_RECORDED_IMPLEMENTATION_NOT_STARTED"
+  },
+  "loop": [
+    "USE_CURRENT_RELEASE_SYSTEM",
+    "SHIP_REAL_SIMCORE_UPDATE",
+    "OBSERVE_REAL_OPERATION",
+    "RECORD_DURABLE_FEEDBACK",
+    "CLASSIFY_FINDINGS",
+    "CHOOSE_KEEP_STABILIZE_OR_UPDATE",
+    "APPLY_ONLY_EVIDENCE_BACKED_CHANGE_IF_NEEDED",
+    "USE_RESULT_ON_NEXT_REAL_UPDATE",
+    "REPEAT"
+  ],
+  "systemDisposition": {
+    "allowed": [
+      "KEEP",
+      "STABILIZE",
+      "UPDATE"
+    ],
+    "default": "KEEP",
+    "versionBumpRequiredPerRuntimeRelease": false
+  },
+  "priorities": {
+    "safety": 1,
+    "simplicity": 2,
+    "automation": 3,
+    "automationMode": "EARLY_CHECKING_AND_REPETITIVE_WORK_REDUCTION_WITHOUT_NEW_AUTHORITY"
+  },
+  "findingClasses": [
+    "WATCH",
+    "DEFER",
+    "FIX",
+    "BLOCKER"
+  ],
+  "frozenUnlessEvidenceRequiresChange": {
+    "singlePublisher": true,
+    "exactImmutableCandidate": true,
+    "fastForwardOnlyPublication": true,
+    "latestEqualsInstall": true,
+    "appendOnlyRecovery": true,
+    "humanLivePassRequired": true,
+    "singleCurrentProductionAuthority": true,
+    "releaseBlockerClosureIntegrity": true,
+    "cleanWorkItemTerminalIntegrity": true
+  },
+  "steadyStateTargets": {
+    "prsToLivePending": 2,
+    "prsThroughTerminalClosure": 3,
+    "userManualPreLiveGithubOperations": 0,
+    "newAuthorityByDefault": 0
+  },
+  "automationPolicy": {
+    "prefer": [
+      "FAIL_EARLIER_IN_EXISTING_CI",
+      "DERIVE_FROM_DURABLE_MACHINE_EVIDENCE",
+      "REDUCE_DUPLICATED_BOOKKEEPING",
+      "REUSE_EXACT_IMMUTABLE_CANDIDATES",
+      "BOUNDED_DIAGNOSTIC_EVIDENCE"
+    ],
+    "avoidWithoutSeparateProof": [
+      "SECOND_PUBLISHER",
+      "ISSUE_CLOSING_AUTHORITY",
+      "OBSERVABILITY_ONLY_POLLING",
+      "AUTOMATIC_HUMAN_LIVE_PASS",
+      "EXTRA_CLEAN_PATH_PR",
+      "EXTRA_CLEAN_PATH_APPROVAL_GATE",
+      "BACKGROUND_RETRY_LOOP"
+    ]
+  },
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

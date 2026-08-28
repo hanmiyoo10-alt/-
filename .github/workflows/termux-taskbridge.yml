@@ -26,10 +26,13 @@ jobs:
         run: |
           python -m py_compile \
             plugins/termux/taskbridge/taskbridge.py \
+            plugins/termux/taskbridge/coordinator.py \
             plugins/termux/taskbridge/store.py \
             plugins/termux/taskbridge/state_machine.py \
             plugins/termux/taskbridge/runtime.py \
             plugins/termux/taskbridge/notifier.py \
-            plugins/termux/taskbridge/adapters/shell.py
+            plugins/termux/taskbridge/chatgpt_calibration.py \
+            plugins/termux/taskbridge/adapters/shell.py \
+            plugins/termux/taskbridge/adapters/chatgpt_notification.py
       - name: Unit tests
         run: python -m unittest discover -s plugins/termux/taskbridge/tests -v

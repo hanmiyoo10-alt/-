@@ -1,14 +1,17 @@
-# TaskBridge v0.3
+# TaskBridge v0.3.1
 
 TaskBridge is a low-RAM, provider-neutral long-task control plane designed for Android + Termux.
 
 It tracks job identity, lifecycle, heartbeat, reconnect/stall state, event history, local process execution, and optional Android notifications without treating a lost UI/local observer as proof that a remote task failed.
 
-## v0.3 scope
+## v0.3.1 scope
 
 - Python standard library only.
 - SQLite metadata store under `~/.local/state/taskbridge` by default.
 - One lightweight coordinator daemon; workers exist only while jobs are active.
+- The resident coordinator now runs from dedicated `coordinator.py` instead of keeping the full CLI/ChatGPT integration stack imported in the daemon process.
+- `taskbridge.py` lazy-loads ChatGPT/calibration/notifier/runtime helpers only for commands that actually need them.
+- `doctor` exposes `daemon_impl`; the optimized daemon reports `lean_coordinator_v1`.
 - `shell` remains the executable adapter.
 - `chatgpt_notification` is an observation-only adapter using Android notification access through `termux-notification-list`.
 - ChatGPT integration does **not** scrape ChatGPT cookies, private auth, or undocumented endpoints.
@@ -61,4 +64,4 @@ For the ChatGPT observer, an observation timeout becomes `UNKNOWN`, not `FAILED`
 
 ## Resource evidence
 
-The coordinator design target remains <=25 MB idle RSS on Android/Termux. Earlier v0.1 real-device runs were roughly 22.8 MiB RSS, while the v0.2 observer-enabled build was later observed around 26.6 MiB on the same Android device. Therefore the <=25 MB target is currently **not consistently met** and remains an optimization target rather than a verified property.
+The coordinator design target remains <=25 MB idle RSS on Android/Termux. Earlier v0.1 real-device runs were roughly 22.8 MiB RSS; v0.2/v0.3 observer-enabled builds were later observed around 26.6-26.9 MiB on the same Android device. v0.3.1 changes the resident process architecture specifically to remove full CLI/ChatGPT imports from the coordinator. The expected RSS reduction must be verified on the real device before the <=25 MB target can be marked VERIFIED.

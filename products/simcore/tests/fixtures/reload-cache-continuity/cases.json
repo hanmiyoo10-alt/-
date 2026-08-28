@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "reload-cache-continuity-v2",
+  "id": "reload-cache-continuity-v3",
   "suite": "reload-cache-continuity",
   "input": {
     "cases": [
@@ -24,6 +24,21 @@
       "checkpoint-diagnostic-surface",
       "checkpoint-transport-contract-frozen"
     ],
+    "rootCases": [
+      "root-surface-classification",
+      "window-only-session-root",
+      "global-this-only-session-root",
+      "distinct-root-first-success",
+      "same-storage-deduped",
+      "first-write-fails-second-once",
+      "both-writes-fail-bounded",
+      "oversize-no-write-cleanup",
+      "malformed-first-valid-second-claim",
+      "root-aware-memory-priority",
+      "session-claim-root-and-one-time-consume",
+      "root-resolution-bounded-no-new-io",
+      "root-attributed-diagnostics"
+    ],
     "sessionKey": "__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__",
     "maxSessionChars": 16384,
     "maxAgeMs": 600000
@@ -37,11 +52,14 @@
     "malformedAccepted": false,
     "disabledFatal": false,
     "outputCheckpointRequiredFromVersion": "0.64.8",
+    "rootResolutionRequiredFromVersion": "0.64.9",
+    "rootPriority": ["WINDOW", "GLOBAL_THIS"],
+    "maxDistinctSessionWriteAttempts": 2,
     "checkpointTriggers": ["OUTPUT_COMMIT", "UNLOAD"]
   },
   "meta": {
     "goldenGate": true,
     "coverageExpectation": "EXECUTABLE",
-    "source": "docs/SIMCORE_06408_OUTPUT_COMPLETE_TELEMETRY_CHECKPOINT_REPAIR_ACTIVATION.md"
+    "source": "docs/SIMCORE_06409_SESSION_TRANSPORT_ROOT_RESOLUTION_ACTIVATION.md"
   }
 }

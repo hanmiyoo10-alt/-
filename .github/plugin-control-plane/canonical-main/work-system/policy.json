@@ -35,6 +35,16 @@
     "stopCondition",
     "handoff"
   ],
+  "queueProjection": {
+    "liveHealthMode": "pointer-only",
+    "liveHealthAuthorities": ["direct-main", "issue-485"],
+    "duplicateLiveMainSha": false,
+    "duplicateRequiredState": false,
+    "duplicateProductionState": false,
+    "duplicateNativeProtectionState": false,
+    "allowHistoricalSynchronizationSha": true,
+    "historicalSynchronizationShaMustBeLabeled": true
+  },
   "parallelism": {
     "requireDisjointWriteScopes": true,
     "oneActiveOwnerPerPacket": true,

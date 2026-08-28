@@ -15,7 +15,8 @@ def patch(text):
     text=rep(text,'// v0.64.10 Host-Local One-Shot Telemetry Handoff:',NOTE+'// v0.64.10 Host-Local One-Shot Telemetry Handoff:','note')
     text=rep(text,"const HOST_COMPAT_VERSION = '0.64.10';","const HOST_COMPAT_VERSION = '0.64.11';",'host-version')
     text=rep(text,"  const prepared = serializeCapsule(capsule);\n  const base = publishPrepared(root, windowLike, capsule, prepared);","  const prepared = capsule?.__simcorePreparedSerialized || serializeCapsule(capsule);\n  const base = publishPrepared(root, windowLike, capsule, prepared);",'prepared')
-    text=rep(text,'(async () => {',PATCH_LAYER+'\n(async () => {','patch-layer')
+    outer="(async () => {\n  const kernel = SimCore.require('kernel');"
+    text=rep(text,outer,PATCH_LAYER+'\n'+outer,'patch-layer')
     old="""      const capsule = runtimeTelemetryRules.capture({
         sourceVersion: SIMCORE_RUNTIME_VERSION,
         locationKey,

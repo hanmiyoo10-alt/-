@@ -643,3 +643,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d14bb3ac0ce00caaff251e28f8d2fff0a423e88e)
 - Event ID: `18d1a49158fd46fb2765ff8f2fd42fc745349712585af96a290b4688c99e2309`
 <!-- canonical-main-doc-promoted:18d1a49158fd46fb2765ff8f2fd42fc745349712585af96a290b4688c99e2309 -->
+
+### 2026-08-28 — canonical-main: automate deterministic issue-only closure bookkeeping
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1291aa08b66f0a10b263a0ae23c267cbe0c1356f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1291aa08b66f0a10b263a0ae23c267cbe0c1356f)
+- Event ID: `4e5cf7894a62d9aea169322813b5875fadbee60a8c1a4c5e61d15cb8ffb1a084`
+<!-- canonical-main-doc-promoted:4e5cf7894a62d9aea169322813b5875fadbee60a8c1a4c5e61d15cb8ffb1a084 -->

@@ -603,3 +603,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/119a6859121cafa4b92e59d5f45900beac524a30)
 - Event ID: `a02e66f1b973e5cb46b091295edaee876d3989f625e41ae221b7102a78c67f4c`
 <!-- canonical-main-doc-promoted:a02e66f1b973e5cb46b091295edaee876d3989f625e41ae221b7102a78c67f4c -->
+
+### 2026-08-28 — canonical-main: make native protection capability aware
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `73bca434d9a326d2b3ef6106d2fc3e8535b5e3d0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/73bca434d9a326d2b3ef6106d2fc3e8535b5e3d0)
+- Event ID: `71794b9b26379646dd91e96c464d592c66a74fb23c63e048a3979aff45f3d7bf`
+<!-- canonical-main-doc-promoted:71794b9b26379646dd91e96c464d592c66a74fb23c63e048a3979aff45f3d7bf -->

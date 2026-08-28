@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "releaseTitle": "Exact Final HTTP Status Fidelity",
   "productVersion": "3.0.0-alpha.5.83",
   "engineVersion": "1.6.24",
@@ -10,7 +11,14 @@
     "snapshot": 1,
     "recentRequest": 1
   },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.80 — Request Ledger Provenance Ownership Consolidation`",
   "materializer": "plugins/usage-dashboard/tools/release_http_status_update_guidance_583.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
   "workflows": {
     "stage": "usage-dashboard-e7-candidate-ready.yml",
     "validation": "usage-dashboard-e9-candidate-validation.yml",

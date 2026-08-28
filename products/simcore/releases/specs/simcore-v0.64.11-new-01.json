@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.64.11-new-01",
+  "product": "SimCore",
+  "version": "0.64.11",
+  "releaseName": "Bounded Telemetry Capsule Compaction",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "expectedProductionCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+  "candidateReleaseBlob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+  "primaryGoalId": "06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION",
+  "changeClass": "RUNTIME_CORRECTION",
+  "evidenceRefs": [
+    "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_ACTIVATION.md",
+    "docs/SIMCORE_LIVE_06410_HOST_LOCAL_CAPSULE_OVERSIZE_2026-08-28.md",
+    "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_IMPLEMENTATION_EVIDENCE.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

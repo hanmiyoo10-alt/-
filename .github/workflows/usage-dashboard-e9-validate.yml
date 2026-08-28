@@ -74,6 +74,7 @@ jobs:
           node - "$RUNNER_TEMP/request.json" "$RUNNER_TEMP/pr.json" "$GITHUB_REPOSITORY" "$REPOSITORY_OWNER" "$RAW_REQUEST_ISSUE" "$CANDIDATE_SHA" <<'NODE'
           const fs=require('node:fs');
           const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
+          const handoff=require('./plugins/usage-dashboard/tools/release_handoff_e15.cjs');
           const [requestFile,prFile,repo,owner,requestNumber,candidateSha]=process.argv.slice(2);
           const issue=JSON.parse(fs.readFileSync(requestFile,'utf8'));
           const pr=JSON.parse(fs.readFileSync(prFile,'utf8'));
@@ -87,7 +88,7 @@ jobs:
           const expectedBranch=`stage/usage-dashboard-${request.releaseVersion}`;
           if(pr.head?.ref!==expectedBranch) throw new Error(`E9_VALIDATION_PR_BRANCH_MISMATCH:${pr.head?.ref}:expected=${expectedBranch}`);
           if(pr.head?.sha!==candidateSha) throw new Error(`E9_VALIDATION_IDENTITY_MISMATCH:${pr.head?.sha}:expected=${candidateSha}`);
-          if(!String(pr.body||'').includes(`Usage-Dashboard-Release-Request: #${requestNumber}`)) throw new Error('E9_VALIDATION_PR_REQUEST_MARKER_MISSING');
+          handoff.validateStablePrBody(pr.body||'',Number(requestNumber));
           NODE
 
           CANDIDATE_BRANCH="$(jq -r '.head.ref' "$RUNNER_TEMP/pr.json")"

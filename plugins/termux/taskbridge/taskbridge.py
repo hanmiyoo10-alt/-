@@ -7,11 +7,12 @@ import sys
 import time
 from pathlib import Path
 
+from adapters import chatgpt_notification
 import notifier
 from runtime import adopt_child, daemon_loop, launch_detached, pid_alive, process_rss_kb, run_worker, terminate_pid
 from store import Store
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 def parser() -> argparse.ArgumentParser:
@@ -26,6 +27,13 @@ def parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="register and start a shell job")
     run.add_argument("--name")
     run.add_argument("command", nargs=argparse.REMAINDER)
+
+    probe_chatgpt = sub.add_parser("probe-chatgpt", help="probe Android notification access for the ChatGPT app")
+    probe_chatgpt.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
+
+    watch_chatgpt = sub.add_parser("watch-chatgpt", help="watch for a new ChatGPT Android notification")
+    watch_chatgpt.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
+    watch_chatgpt.add_argument("--timeout", type=int, default=1800, help="seconds before the observer stops as UNKNOWN")
 
     start = sub.add_parser("start", help="start a registered job")
     start.add_argument("job_id")
@@ -132,6 +140,32 @@ def main(argv: list[str] | None = None) -> int:
         store.request(job["job_id"], "RUN")
         print(job["job_id"])
         return 0
+    if args.cmd == "probe-chatgpt":
+        try:
+            data = chatgpt_notification.probe(args.package)
+        except Exception as exc:
+            data = {
+                "available": chatgpt_notification.available(),
+                "package": args.package,
+                "error": type(exc).__name__,
+                "detail": str(exc)[:200],
+            }
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return 1
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return 0
+    if args.cmd == "watch-chatgpt":
+        if args.timeout <= 0:
+            raise SystemExit("--timeout must be greater than 0")
+        job = store.create_job(
+            [args.package, str(args.timeout)],
+            adapter="chatgpt_notification",
+            name="ChatGPT notification observer",
+        )
+        ensure_daemon(store, script)
+        store.request(job["job_id"], "RUN")
+        print(job["job_id"])
+        return 0
     if args.cmd == "start":
         ensure_daemon(store, script)
         job = store.get_job(args.job_id)
@@ -182,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
             "daemon_alive": pid_alive(daemon_pid),
             "active_jobs": len(active),
             "termux_notification": notifier.available(),
+            "termux_notification_list": chatgpt_notification.available(),
             "self_rss_kb": process_rss_kb(),
             "daemon_rss_kb": process_rss_kb(daemon_pid) if pid_alive(daemon_pid) else None,
             "platform": sys.platform,

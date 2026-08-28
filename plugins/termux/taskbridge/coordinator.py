@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from store import Store, utc_ts
+import autowatch
 
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 
@@ -52,7 +53,7 @@ def launch_detached(args: list[str]) -> int:
 def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 2.0) -> int:
     store.set_meta("daemon_pid", str(os.getpid()))
     store.set_meta("daemon_started_at", str(utc_ts()))
-    store.set_meta("daemon_impl", "lean_coordinator_v1")
+    store.set_meta("daemon_impl", "lean_coordinator_v2_autowatch")
 
     while True:
         try:
@@ -125,6 +126,7 @@ def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 2.
                             worker_pid=None,
                         )
 
+            autowatch.arm_if_needed(store)
             time.sleep(max(0.5, interval))
         except KeyboardInterrupt:
             break

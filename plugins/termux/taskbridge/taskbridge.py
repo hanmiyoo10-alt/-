@@ -9,7 +9,7 @@ from pathlib import Path
 
 from store import Store
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 CHATGPT_PACKAGE = "com.openai.chatgpt"
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 
@@ -33,6 +33,7 @@ def parser() -> argparse.ArgumentParser:
     watch_chatgpt = sub.add_parser("watch-chatgpt", help="watch for a new ChatGPT Android notification")
     watch_chatgpt.add_argument("--package", default=CHATGPT_PACKAGE)
     watch_chatgpt.add_argument("--timeout", type=int, default=1800, help="seconds before the observer stops as UNKNOWN")
+    watch_chatgpt.add_argument("--poll-interval", type=float, default=5.0, help="notification polling interval in seconds (2-60)")
 
     confirm_chatgpt = sub.add_parser(
         "confirm-chatgpt",
@@ -42,6 +43,21 @@ def parser() -> argparse.ArgumentParser:
 
     calibration = sub.add_parser("chatgpt-calibration", help="show local ChatGPT completion calibration status")
     calibration.add_argument("--package", default=CHATGPT_PACKAGE)
+
+    autowatch = sub.add_parser("autowatch-chatgpt", help="keep exactly one ChatGPT notification observer armed automatically")
+    autowatch_sub = autowatch.add_subparsers(dest="autowatch_cmd", required=True)
+    autowatch_enable = autowatch_sub.add_parser("enable")
+    autowatch_enable.add_argument("--package", default=CHATGPT_PACKAGE)
+    autowatch_enable.add_argument("--poll-interval", type=float, default=5.0, help="notification polling interval in seconds (2-60)")
+    autowatch_sub.add_parser("disable")
+    autowatch_sub.add_parser("status")
+
+    boot = sub.add_parser("boot", help="install or inspect the Termux:Boot launcher script")
+    boot_sub = boot.add_subparsers(dest="boot_cmd", required=True)
+    boot_install = boot_sub.add_parser("install")
+    boot_install.add_argument("--wake-lock", action="store_true", help="request a Termux wake lock at boot (higher standby battery use)")
+    boot_sub.add_parser("status")
+    boot_sub.add_parser("remove")
 
     start = sub.add_parser("start", help="start a registered job")
     start.add_argument("job_id")
@@ -109,7 +125,6 @@ def ensure_daemon(store: Store, script: Path) -> int:
             str(script),
         ]
     else:
-        # Safe fallback for partial/legacy installs. New mobile packages include coordinator.py.
         command = [sys.executable, str(script), "--state-dir", str(store.state_dir), "_daemon"]
 
     pid = launch_detached(command)
@@ -147,6 +162,63 @@ def find_active_chatgpt_observer(store: Store, package: str) -> dict | None:
 def _observer_package(job: dict) -> str:
     command = job.get("command") or []
     return command[0] if command else CHATGPT_PACKAGE
+
+
+def validate_poll_interval(value: float) -> float:
+    import autowatch
+
+    try:
+        return autowatch.validate_poll_interval(value)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def boot_script_path(home: Path | None = None) -> Path:
+    root = Path.home() if home is None else Path(home)
+    return root / ".termux" / "boot" / "50-taskbridge"
+
+
+def render_boot_script(script: Path, store: Store, *, wake_lock: bool = False) -> str:
+    import shlex
+
+    python = shlex.quote(sys.executable)
+    taskbridge = shlex.quote(str(script.resolve()))
+    state_dir = shlex.quote(str(store.state_dir.resolve()))
+    workdir = shlex.quote(str(script.resolve().parent))
+    log_path = shlex.quote(str((store.state_dir / "boot.log").resolve()))
+    lines = [
+        "#!/data/data/com.termux/files/usr/bin/sh",
+        "export HOME=/data/data/com.termux/files/home",
+    ]
+    if wake_lock:
+        lines.append("command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock")
+    lines.extend(
+        [
+            f"cd {workdir} || exit 1",
+            f"{python} {taskbridge} --state-dir {state_dir} daemon start >> {log_path} 2>&1",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def install_boot_script(script: Path, store: Store, *, wake_lock: bool = False, home: Path | None = None) -> Path:
+    path = boot_script_path(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_boot_script(script, store, wake_lock=wake_lock))
+    path.chmod(0o700)
+    return path
+
+
+def boot_status(home: Path | None = None) -> dict:
+    path = boot_script_path(home)
+    text = path.read_text(errors="replace") if path.exists() else ""
+    return {
+        "installed": path.exists(),
+        "path": str(path),
+        "wake_lock_requested": "termux-wake-lock" in text,
+        "activation_note": "Open the Termux:Boot app once after installing it so Android can run boot scripts.",
+    }
 
 
 def do_reconnect(store: Store, job_id: str, script: Path) -> dict:
@@ -189,7 +261,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "probe-chatgpt":
         from adapters import chatgpt_notification
-
         try:
             data = chatgpt_notification.probe(args.package)
         except Exception as exc:
@@ -207,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "watch-chatgpt":
         if args.timeout <= 0:
             raise SystemExit("--timeout must be greater than 0")
+        poll_interval = validate_poll_interval(args.poll_interval)
         active = find_active_chatgpt_observer(store, args.package)
         if active:
             raise SystemExit(
@@ -214,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"({active['logical_state']}/{active['local_state']})"
             )
         job = store.create_job(
-            [args.package, str(args.timeout)],
+            [args.package, str(args.timeout), str(poll_interval)],
             adapter="chatgpt_notification",
             name="ChatGPT notification observer",
         )
@@ -225,7 +297,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "confirm-chatgpt":
         import chatgpt_calibration
-
         job = store.get_job(args.job_id)
         if job.get("adapter") != "chatgpt_notification":
             raise SystemExit("job is not a ChatGPT notification observer")
@@ -253,9 +324,49 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "chatgpt-calibration":
         import chatgpt_calibration
-
         print(json.dumps(chatgpt_calibration.status(store, args.package), indent=2, ensure_ascii=False))
         return 0
+
+    if args.cmd == "autowatch-chatgpt":
+        import autowatch
+
+        if args.autowatch_cmd == "enable":
+            poll_interval = validate_poll_interval(args.poll_interval)
+            autowatch.enable(store, args.package, poll_interval)
+            ensure_daemon(store, script)
+            armed = autowatch.arm_if_needed(store)
+            data = autowatch.status(store)
+            data["armed_job_id"] = armed.get("job_id") if armed else None
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return 0
+        if args.autowatch_cmd == "disable":
+            data = autowatch.disable(store)
+            ensure_daemon(store, script)
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return 0
+        if args.autowatch_cmd == "status":
+            print(json.dumps(autowatch.status(store), indent=2, ensure_ascii=False))
+            return 0
+
+    if args.cmd == "boot":
+        if args.boot_cmd == "install":
+            path = install_boot_script(script, store, wake_lock=args.wake_lock)
+            data = boot_status()
+            data["installed_path"] = str(path)
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return 0
+        if args.boot_cmd == "status":
+            print(json.dumps(boot_status(), indent=2, ensure_ascii=False))
+            return 0
+        if args.boot_cmd == "remove":
+            path = boot_script_path()
+            removed = path.exists()
+            if removed:
+                path.unlink()
+            data = boot_status()
+            data["removed"] = removed
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return 0
 
     if args.cmd == "start":
         ensure_daemon(store, script)
@@ -302,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "doctor":
         from adapters import chatgpt_notification
         import chatgpt_calibration
+        import autowatch
         import notifier
         from runtime import pid_alive, process_rss_kb
 
@@ -321,6 +433,8 @@ def main(argv: list[str] | None = None) -> int:
             "termux_notification": notifier.available(),
             "termux_notification_list": chatgpt_notification.available(),
             "chatgpt_completion_calibration": chatgpt_calibration.status(store, CHATGPT_PACKAGE),
+            "chatgpt_autowatch": autowatch.status(store),
+            "boot": boot_status(),
             "self_rss_kb": process_rss_kb(),
             "daemon_rss_kb": process_rss_kb(daemon_pid) if pid_alive(daemon_pid) else None,
             "platform": sys.platform,
@@ -330,7 +444,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "daemon":
         from runtime import pid_alive, terminate_pid
-
         raw = store.get_meta("daemon_pid")
         daemon_pid = int(raw) if raw and raw.isdigit() else None
         if args.daemon_cmd == "start":
@@ -350,17 +463,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "_daemon":
         from runtime import daemon_loop
-
         return daemon_loop(store, script, args.interval)
 
     if args.cmd == "_worker":
         from runtime import run_worker
-
         return run_worker(store, args.job_id)
 
     if args.cmd == "_adopt":
         from runtime import adopt_child
-
         return adopt_child(store, args.job_id, args.child_pid)
 
     return 2

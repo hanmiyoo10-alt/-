@@ -334,34 +334,34 @@ def apply_http_diagnostics() -> None:
 
 
 def apply_release_guidance_ui() -> None:
-    helpers = r'''  function releaseNotesPanelHtml() {
-    const highlights = RELEASE_NOTES.highlights.map(item => `<li>${esc(item)}</li>`).join('');
-    const hints = RELEASE_NOTES.diagnosticHints.map(item => `<li>${esc(item)}</li>`).join('');
-    return `<div id="release-notes-panel" class="usage-detail-box release-notes-panel" hidden>
-      <div class="recent-head"><h3>${esc(RELEASE_NOTES.title)}</h3><span>v${esc(VERSION)}</span></div>
-      <p><b>이번 업데이트</b></p><ul>${highlights}</ul>
-      <p><b>다음 진단 때 확인하면 좋은 것</b></p><ul>${hints}</ul>
-      <div class="actions"><button id="copy-release-guide">진단 제출 가이드 복사</button></div>
-    </div>`;
-  }
+    helpers = r'''    function releaseNotesPanelHtml() {
+      const highlights = RELEASE_NOTES.highlights.map(item => `<li>${esc(item)}</li>`).join('');
+      const hints = RELEASE_NOTES.diagnosticHints.map(item => `<li>${esc(item)}</li>`).join('');
+      return `<div id="release-notes-panel" class="usage-detail-box release-notes-panel" hidden>
+        <div class="recent-head"><h3>${esc(RELEASE_NOTES.title)}</h3><span>v${esc(VERSION)}</span></div>
+        <p><b>이번 업데이트</b></p><ul>${highlights}</ul>
+        <p><b>다음 진단 때 확인하면 좋은 것</b></p><ul>${hints}</ul>
+        <div class="actions"><button id="copy-release-guide" data-release-guide="${esc(releaseDiagnosticGuideText())}">진단 제출 가이드 복사</button></div>
+      </div>`;
+    }
 
-  function releaseDiagnosticGuideText() {
-    const hints = RELEASE_NOTES.diagnosticHints.map(item => `- ${item}`).join('\n');
-    return [
-      `Local Usage Dashboard v${VERSION}`,
-      `Release: ${RELEASE_NOTES.title}`,
-      '',
-      '다음 진단 때 확인:',
-      hints,
-      '',
-      '문제/관찰 한 줄: [직접 작성]',
-      '재현 행동: [직접 작성]',
-      '필요하면 Runtime Diagnostics > 전체 Diagnostics 복사를 함께 첨부'
-    ].join('\n');
-  }
+    function releaseDiagnosticGuideText() {
+      const hints = RELEASE_NOTES.diagnosticHints.map(item => `- ${item}`).join('\n');
+      return [
+        `Local Usage Dashboard v${VERSION}`,
+        `Release: ${RELEASE_NOTES.title}`,
+        '',
+        '다음 진단 때 확인:',
+        hints,
+        '',
+        '문제/관찰 한 줄: [직접 작성]',
+        '재현 행동: [직접 작성]',
+        '필요하면 Runtime Diagnostics > 전체 Diagnostics 복사를 함께 첨부'
+      ].join('\n');
+    }
 
 '''
-    replace_once_or_target(DASHBOARD, '  function settingsHtml() {', helpers + '  function settingsHtml() {', '5.83 release guidance helpers')
+    replace_once_or_target(DASHBOARD, '  function settingsHtml() {', '  function settingsHtml() {\n' + helpers, '5.83 release guidance helpers')
 
     old_markup = '''        <div class="bridge-config-static"><div class="settings-section-title"><b>Connection</b><span>Bridge endpoint · token</span></div><label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
 '''
@@ -382,10 +382,11 @@ def apply_release_guidance_ui() -> None:
     };
     if (q('#copy-release-guide')) q('#copy-release-guide').onclick = async e => {
       const button = e.currentTarget;
+      const guide = String(button.getAttribute('data-release-guide') || '');
       let ok = false;
       try {
-        if (navigator?.clipboard?.writeText) {
-          await navigator.clipboard.writeText(releaseDiagnosticGuideText());
+        if (guide && navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(guide);
           ok = true;
         }
       } catch (_) {}
@@ -527,12 +528,15 @@ def validate_target(title, highlights, hints) -> None:
     if 'HTTP final status fidelity:' not in diagnostics:
         raise SystemExit('5.83 HTTP diagnostic summary missing')
 
+    if not dashboard.startswith('\n  function settingsHtml() {'):
+        raise SystemExit('5.83 dashboard/context module boundary drifted')
     for marker in [
         'function releaseNotesPanelHtml()',
         'function releaseDiagnosticGuideText()',
         '이번 업데이트',
         '다음 진단 때 확인하면 좋은 것',
         '진단 제출 가이드 복사',
+        'data-release-guide="${esc(releaseDiagnosticGuideText())}"',
         '문제/관찰 한 줄: [직접 작성]',
         '재현 행동: [직접 작성]',
     ]:
@@ -547,6 +551,8 @@ def validate_target(title, highlights, hints) -> None:
     if handler_start < 0 or handler_end <= handler_start:
         raise SystemExit('5.83 bounded release-note handler block missing')
     handlers = settings[handler_start:handler_end]
+    if "button.getAttribute('data-release-guide')" not in handlers or 'releaseDiagnosticGuideText()' in handlers:
+        raise SystemExit('5.83 copy handler must consume static DOM guide handoff')
     for forbidden in ['persist(', 'enqueueRefresh(', 'scheduleRefresh(', 'schedulePanelRender(', 'store.setItem(', 'store.removeItem(', 'setTimeout(', 'setInterval(', 'nativeFetch(', 'fetchSnapshot(', 'runCli(', 'Risuai.', 'bridgeBase']:
         if forbidden in handlers:
             raise SystemExit(f'5.83 release-note handlers must not own {forbidden}')

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.64.11",
-  "release_name": "Bounded Telemetry Capsule Compaction",
+  "production_version": "0.65.0",
+  "release_name": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence",
   "release_branch": "release-simcore",
-  "release_commit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
-  "release_blob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+  "release_commit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "release_blob": "1b38e2b2874f2581edae8f1080edc39558febefa",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+  "current_priority": "06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

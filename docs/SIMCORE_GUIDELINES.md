@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.11 — Bounded Telemetry Capsule Compaction
-Release commit: 7765ad75359f8d9736a7dea65141e4e45b713c10
+SimCore v0.65.0 — M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence
+Release commit: c6659296c68b4322d0ed43f7d8a3339e57f1cbf1
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

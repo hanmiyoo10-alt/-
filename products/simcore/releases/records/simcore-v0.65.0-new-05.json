@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.65.0-new-05",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "1039bcb63ed2039666608dc346c61d6f1578b93e",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.65.0-new-05.json",
+  "releaseSpecSha256": "7df4a743b5d214cdd26bfd7abf1130655ecfe73e19c0d4cb7ccdf710ae524e76",
+  "productionCommit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "previousProductionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "productionBlob": "1b38e2b2874f2581edae8f1080edc39558febefa",
+  "version": "0.65.0",
+  "releaseName": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence",
+  "verificationReportSha256": "3c8660ec8e1ebec5919507003318baa9b3a019595f8666b2de9d5351399252b5",
+  "verifierCommit": "6297463049f3c942dad3b5d1951abda1290d1ffa",
+  "publisherRunId": "33173049653",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

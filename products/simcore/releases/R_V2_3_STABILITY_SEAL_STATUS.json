@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_3_STABILITY_SEAL",
-  "status": "IMPLEMENTED_PERMANENT_CI_PENDING_REAL_TERMINAL_PROOF_PENDING",
+  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_PROOF_PENDING",
   "date": "2026-08-28",
   "name": "Stability Seal",
   "trackingIssue": 673,
@@ -20,7 +20,10 @@
     "suitePath": "products/simcore/tests/suites/stability-seal.test.mjs",
     "fixture": "products/simcore/tests/fixtures/stability-seal/case.json",
     "registryRequired": true,
-    "permanentCi": "PENDING",
+    "permanentCi": "PASS",
+    "qualificationRun": 33141818351,
+    "verifyJob": 98754100717,
+    "requiredJob": 98754155453,
     "realTerminalOperationalProof": "PENDING"
   },
   "designInput": {
@@ -49,19 +52,19 @@
     {
       "id": "R2_3_A_CLEAN_RELEASE_WORK_ITEM_CLOSURE_CONTRACT",
       "classification": "STABILIZE",
-      "status": "IMPLEMENTED_POLICY_PERMANENT_CI_PENDING",
+      "status": "IMPLEMENTED_PERMANENT_CI_PASS",
       "goal": "A required-live-gate work item stays open past LIVE_PENDING and closes only after an explicit terminal disposition and durable closure evidence."
     },
     {
       "id": "R2_3_B_HUMAN_LIVE_PASS_PR3_TERMINAL_SEAL",
       "classification": "STABILIZE",
-      "status": "IMPLEMENTED_POLICY_REAL_PR3_PROOF_PENDING",
+      "status": "IMPLEMENTED_POLICY_PERMANENT_CI_PASS_REAL_PR3_PROOF_PENDING",
       "goal": "Keep PR3 as the existing third clean-path admin/evidence transaction and require post-PR3 durable reobservation before work-item completion."
     },
     {
       "id": "R2_3_C_REPOSITORY_LABEL_NON_AUTHORITY",
       "classification": "WATCH",
-      "status": "REGRESSION_SEALED_NO_CLASSIFIER_IMPLEMENTATION",
+      "status": "REGRESSION_SEALED_PERMANENT_CI_PASS_NO_CLASSIFIER_IMPLEMENTATION",
       "goal": "Repository labels remain convenience metadata and cannot determine release identity, publication authority, live truth, or closure eligibility."
     },
     {
@@ -105,9 +108,9 @@
   "implementationGate": {
     "originalRequiredEvidence": "V0_64_9_HUMAN_EVIDENCE_AND_PR3_TERMINAL_SHAPE",
     "operatorOverride": "EXPLICIT_IMPLEMENTATION_AUTHORIZATION_RECEIVED_2026_08_28",
-    "mechanicalPolicyImplementation": "ACTIVE",
+    "mechanicalPolicyImplementation": "ACTIVE_PERMANENT_CI_QUALIFIED",
     "realTerminalQualification": "PENDING",
-    "reason": "The policy and permanent regression may be implemented now, while genuine terminal proof remains evidence-gated and cannot be inferred from synthetic tests."
+    "reason": "The policy and permanent regression are qualified, while genuine terminal proof remains evidence-gated and cannot be inferred from synthetic tests."
   },
   "watch": [
     "WORK_ITEM_CLOSURE_WORDING_NOW_POLICY_OWNED",

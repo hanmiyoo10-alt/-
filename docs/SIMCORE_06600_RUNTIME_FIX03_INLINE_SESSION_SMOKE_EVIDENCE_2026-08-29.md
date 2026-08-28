@@ -4,7 +4,7 @@ Date: 2026-08-29 KST
 
 Status:
 
-`DESIGN FROZEN · FIX03 IMPLEMENTATION PENDING · PRODUCTION UNCHANGED`
+`DESIGN FROZEN · FIX03 IMPLEMENTED · PERMANENT PR CI PENDING · PRODUCTION UNCHANGED`
 
 Classification:
 
@@ -41,9 +41,13 @@ raw bytes = 563052
 
 The only authorized runtime mutation remains removal of exactly one stale shorthand `recovery,` line from Session `module.exports` after proving Session has no remaining Recovery runtime caller.
 
-## FIX03 design
+## FIX03 implementation
 
-FIX03 must be fully executable with only:
+Builder:
+
+`products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion-fix03.py`
+
+FIX03 is fully executable with only:
 
 ```text
 production worktree
@@ -52,22 +56,22 @@ production worktree
 + Node/Python toolchain
 ```
 
-It must not depend on any sibling builder or repository validation script path.
+It has no sibling-builder dependency and no repository validation-script dependency.
 
-FIX03 must:
+FIX03:
 
-1. resolve and prove frozen failed candidate C/P/blob/raw digest;
-2. read exact latest/install bytes from C and prove equality;
-3. isolate the Session module;
-4. prove no Session `require('./recovery')` or `recovery.` caller remains;
-5. remove exactly one stale `recovery,` export line from Session export tail;
-6. preserve the standalone Recovery compatibility facade;
-7. enforce a bounded generated-byte delta from C;
-8. write latest/install byte-identically;
-9. run `node --check` on both files;
-10. run an inline Node Session module-factory smoke test generated inside the builder itself;
-11. fail if Session factory evaluation throws, if module exports are not produced, or if `recovery` remains an own exported property;
-12. leave full historical semantic compatibility to the permanent `CANDIDATE_REQUIRED` legacy gate once an actual candidate exists.
+1. resolves and proves frozen failed candidate C/P/blob/raw digest;
+2. reads exact latest/install bytes from C and proves equality;
+3. isolates the Session module;
+4. proves no Session `require('./recovery')` or `recovery.` caller remains;
+5. removes exactly one stale `recovery,` export line from Session export tail;
+6. preserves the standalone Recovery compatibility facade;
+7. enforces a bounded generated-byte delta from C of greater than zero and at most 32 bytes;
+8. writes latest/install byte-identically;
+9. runs `node --check` on both files;
+10. runs an inline Node Session module-factory smoke test carried inside the builder itself;
+11. fails if Session factory evaluation throws, if module exports are not produced, or if `recovery` remains an own exported property;
+12. leaves full historical semantic compatibility to the permanent `CANDIDATE_REQUIRED` legacy gate once an actual candidate exists.
 
 ## Inline smoke contract
 
@@ -79,11 +83,29 @@ extract SimCore.define("session", ...)
 → capture session factory
 → call factory with inert recursive dependency stubs
 → require no exception
-→ require module.exports object
+→ require module.exports object/function
 → require !hasOwnProperty("recovery")
+→ emit SIMCORE_06600_FIX03_SESSION_SMOKE_PASS
 ```
 
+The recursive inert dependency stub is callable and property-safe so Session factory initialization can resolve top-level dependency bindings without supplying host/storage behavior. No Session methods are invoked by this smoke.
+
 This does not replace the permanent legacy semantic gate. It only makes the candidate builder self-contained against the exact dangling-export initialization defect.
+
+## Validation boundary
+
+FIX03 is not accepted merely because the builder exists. Required sequence:
+
+```text
+FIX03 permanent PR Verify + Required PASS
+→ merge FIX03 to main
+→ create fresh unused release intent
+→ PR1 dry executes FIX03 through generic single-file materialization and PASS
+→ actual candidate materialization
+→ full CANDIDATE_REQUIRED including legacy compatibility PASS
+```
+
+No publication or live validation is authorized before that sequence reaches the permanent publisher successfully.
 
 ## Release transaction rule
 

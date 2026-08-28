@@ -177,6 +177,26 @@
         if ((next === 'devpass' || next === 'credits') && previousUsageScope !== state.usageScopeView) renderSettings();
       };
     });
+    if (q('#release-notes-toggle')) q('#release-notes-toggle').onclick = e => {
+      const button = e.currentTarget;
+      const panel = q('#release-notes-panel');
+      if (!panel) return;
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      panel.hidden = expanded;
+    };
+    if (q('#copy-release-guide')) q('#copy-release-guide').onclick = async e => {
+      const button = e.currentTarget;
+      const guide = String(button.getAttribute('data-release-guide') || '');
+      let ok = false;
+      try {
+        if (guide && navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(guide);
+          ok = true;
+        }
+      } catch (_) {}
+      button.textContent = ok ? '복사됨 ✓' : '복사 실패';
+    };
     if (q('#connect')) q('#connect').onclick = async () => {
       try {
         state.bridgeBase = normalizeBridgeBase(q('#bridge-base')?.value || DEFAULT_BRIDGE);

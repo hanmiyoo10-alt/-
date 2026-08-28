@@ -683,6 +683,12 @@ function normalizeCapturedRecentLogs(root) {
     const durationExplicit = typeof row.durationMs === 'number' && Number.isFinite(row.durationMs) && row.durationMs >= 0
       && String(row.durationSource || '') === 'llmgateway-log-duration'
       && String(row.durationFidelity || '') === 'explicit';
+    const httpStatusExplicit = row?.httpStatusFidelity === 'explicit'
+      && row?.httpStatusSource === 'errorDetails.statusCode'
+      && typeof row?.httpStatusCode === 'number'
+      && Number.isInteger(row.httpStatusCode)
+      && row.httpStatusCode >= 100
+      && row.httpStatusCode <= 599;
     if (timestamp === null || !requestNumber) return null;
     return {
       timestamp,
@@ -702,6 +708,9 @@ function normalizeCapturedRecentLogs(root) {
       durationMs: durationExplicit ? Number(row.durationMs) : null,
       durationSource: durationExplicit ? 'llmgateway-log-duration' : '',
       durationFidelity: durationExplicit ? 'explicit' : 'unknown',
+      httpStatusCode: httpStatusExplicit ? row.httpStatusCode : null,
+      httpStatusSource: httpStatusExplicit ? 'errorDetails.statusCode' : '',
+      httpStatusFidelity: httpStatusExplicit ? 'explicit' : 'unknown',
       requestedServiceTier: row.requestedServiceTier ?? null,
       servedServiceTier: row.servedServiceTier ?? null,
       requestedServiceTierSource: String(row.requestedServiceTierSource || ''),

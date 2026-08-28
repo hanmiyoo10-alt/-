@@ -1,13 +1,27 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.82
+//@version 3.0.0-alpha.5.83
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.82';
+  const VERSION = '3.0.0-alpha.5.83';
+  const RELEASE_NOTES = Object.freeze({
+    title: "Exact Final HTTP Status Fidelity",
+    highlights: Object.freeze([
+    "실패 요청에서 source-backed final HTTP status를 정확히 표시",
+    "성공 요청에는 HTTP 200을 추정하지 않고 status 미제공은 UNKNOWN으로 유지",
+    "Settings에 현재 버전 업데이트 내역과 다음 진단 체크리스트를 추가"
+    ]),
+    diagnosticHints: Object.freeze([
+    "자연 발생한 실패 요청이 있으면 HTTP 코드가 해당 오류 요청에만 표시되는지 확인",
+    "정상 성공 요청에 합성 HTTP 200 배지가 생기지 않는지 확인",
+    "Settings의 업데이트 내역을 열고 진단 제출 가이드 복사가 동작하는지 확인",
+    "READY / Health ok / active errors 0 / failures 0이며 추가 refresh·CLI·network 작업이 없는지 확인"
+    ]),
+  });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.23';
+  const REQUIRED_BRIDGE_VERSION = '1.6.24';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;

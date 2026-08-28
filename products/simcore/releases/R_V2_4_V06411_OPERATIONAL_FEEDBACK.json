@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_4_V06411_OPERATIONAL_FEEDBACK",
+  "status": "FIRST_GENUINE_RELEASE_PROVEN_THROUGH_LIVE_PENDING_SYSTEM_KEEP",
+  "date": "2026-08-28",
+  "system": {
+    "version": "R2.4",
+    "name": "Preflight Compression",
+    "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_DESIGN.md",
+    "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_IMPLEMENTATION_EVIDENCE.md"
+  },
+  "runtimeRelease": {
+    "version": "0.64.11",
+    "releaseName": "Bounded Telemetry Capsule Compaction",
+    "releaseId": "simcore-v0.64.11-new-01",
+    "state": "LIVE_PENDING",
+    "validation": "PENDING_REAL_LONG_CHAT",
+    "liveGate": "06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "productionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+    "productionParent": "e43ace74241984f21f69299eff690d0c4f483381",
+    "productionBlob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+    "mainLivePendingCommit": "58fbc1182c30f41704a6250b4fcb1fa9b1f850dd",
+    "workItem": 704
+  },
+  "preLiveMetrics": {
+    "steadyStatePrsToLivePendingTarget": 2,
+    "observedPrsToLivePending": 2,
+    "prs": [715, 716],
+    "recoveryPrs": 0,
+    "durableCandidateAttempts": 1,
+    "userManualPreLiveGithubActions": 0,
+    "publisherCount": 1,
+    "newCleanPathGate": 0,
+    "newReleaseSystemPrStage": 0,
+    "newPolling": 0,
+    "newIssueAutomationController": 0
+  },
+  "evidence": {
+    "pr1": {
+      "number": 715,
+      "finalHead": "2375523a0c5ab50fdbc2c8b3223fad43e9b36e79",
+      "mergeCommit": "5e64cbe3ff3254b30e40b39bc4bfa7bde6afd209",
+      "finalSimcoreCiRun": 33160442865,
+      "finalVerifyJob": 98813342504,
+      "finalVerify": "PASS",
+      "finalRequired": "PASS",
+      "dryGate": "GATE_PR1_DRY"
+    },
+    "premergeDefectClassesCaught": [
+      "BUILDER_PREPARED_SERIALIZATION_ANCHOR_CARDINALITY",
+      "SHARED_HARNESS_ENVELOPE_FIXTURE_SHAPE",
+      "OUTER_ASYNC_IIFE_ANCHOR_SCOPE",
+      "V06411_COMPATIBILITY_WRAPPER_SOURCE_VERSION_SEMANTICS"
+    ],
+    "candidate": {
+      "runId": 33160512166,
+      "intentId": "simcore-v0.64.11-intent-01",
+      "releaseId": "simcore-v0.64.11-new-01",
+      "candidateDisposition": "CREATED",
+      "candidateCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+      "candidateReleaseBlob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+      "result": "PASS",
+      "productionMutation": "NONE",
+      "recoveryIntentRequired": false
+    },
+    "pr2": {
+      "number": 716,
+      "mergeCommit": "fca7747617f8fb2c60ad8e80b2994910b55dd227"
+    },
+    "approvalActivationRun": 33160910139,
+    "permanentReleaseRun": 33160920813,
+    "permanentReleaseResult": "PASS",
+    "latestEqualsInstall": true
+  },
+  "units": {
+    "R2_4_A_CANDIDATE_EQUIVALENT_PR1_DRY_QUALIFICATION": {
+      "result": "PASS",
+      "operationalState": "FIRST_GENUINE_RELEASE_OPERATIONALLY_PROVEN",
+      "effect": "REAL_PREMERGE_AUTHORING_DEFECTS_CAUGHT_BEFORE_DURABLE_CANDIDATE_TRANSACTION"
+    },
+    "R2_4_B_SEMANTIC_ASSERTION_DISCIPLINE": {
+      "result": "PASS",
+      "operationalState": "REAL_RELEASE_AUTHORING_USE_PROVEN",
+      "effect": "COMPATIBILITY_HARNESS_ADAPTED_WITHOUT_WEAKENING_RUNTIME_VERSION_GUARD"
+    },
+    "R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL": {
+      "result": "DEFER",
+      "operationalState": "DESIGN_BOUNDED_IMPLEMENTATION_HELD_FOR_REAL_PR3",
+      "issue": 691,
+      "reason": "NO_GENUINE_HUMAN_EVIDENCE_PR3_TRANSACTION_YET"
+    },
+    "R2_4_D_AUTOMATION_AUTHORITY_FREEZE": {
+      "result": "PASS",
+      "operationalState": "REAL_OPERATION_AUTHORITY_FREEZE_PRESERVED",
+      "newAuthority": 0
+    }
+  },
+  "findings": [
+    {
+      "classification": "WATCH",
+      "tag": "RELEASE_AUTHORING_ANCHOR_FRICTION",
+      "runtime": false,
+      "blocking": false,
+      "action": "NO_SYSTEM_CHANGE_UNLESS_REPEATED_FUTURE_EVIDENCE"
+    },
+    {
+      "classification": "DEFER",
+      "tag": "TERMINAL_DEBT_SEAL",
+      "runtime": false,
+      "blocking": false,
+      "action": "AWAIT_REAL_PR3"
+    }
+  ],
+  "systemDisposition": "KEEP",
+  "next": {
+    "createR2_5": false,
+    "useR2_4OnNextGenuineRuntimeRelease": true,
+    "awaitV06411HumanEvidence": true,
+    "evaluateR2_4_COnlyFromRealPr3": true
+  },
+  "feedbackDocument": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_V06411_OPERATIONAL_FEEDBACK_2026-08-28.md",
+  "runtimeMutationFromFeedback": "NONE",
+  "releaseSimcoreMutationFromFeedback": "NONE"
+}

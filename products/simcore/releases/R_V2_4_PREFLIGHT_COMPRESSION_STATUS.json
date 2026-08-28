@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_4_PREFLIGHT_COMPRESSION",
-  "status": "IMPLEMENTED_A_B_PERMANENT_CI_QUALIFIED_C_HELD_FOR_REAL_PR3",
+  "status": "A_B_D_FIRST_GENUINE_RELEASE_OPERATIONALLY_PROVEN_C_HELD_FOR_REAL_PR3",
   "date": "2026-08-28",
   "name": "Preflight Compression",
   "predecessor": {
@@ -13,6 +13,9 @@
   },
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_DESIGN.md",
   "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_IMPLEMENTATION_EVIDENCE.md",
+  "operationalFeedback": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_V06411_OPERATIONAL_FEEDBACK_2026-08-28.md",
+  "operationalFeedbackMachine": "products/simcore/releases/R_V2_4_V06411_OPERATIONAL_FEEDBACK.json",
+  "systemDisposition": "KEEP",
   "inputs": {
     "fixIssue": 690,
     "watchIssue": 691,
@@ -40,14 +43,14 @@
     {
       "id": "R2_4_A_CANDIDATE_EQUIVALENT_PR1_DRY_QUALIFICATION",
       "classification": "FIX",
-      "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED",
+      "status": "FIRST_GENUINE_RELEASE_OPERATIONALLY_PROVEN",
       "issue": 690,
       "goal": "Catch candidate packaging and candidate-specific regression failures inside the existing PR1 Verify lane before merge without creating durable candidate authority."
     },
     {
       "id": "R2_4_B_SEMANTIC_ASSERTION_DISCIPLINE",
       "classification": "STABILIZE",
-      "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED",
+      "status": "REAL_RELEASE_AUTHORING_OPERATION_PASS",
       "goal": "Prefer executable or scoped semantic assertions over brittle whole-source lexical occurrence counts without introducing a generalized parser framework."
     },
     {
@@ -60,7 +63,7 @@
     {
       "id": "R2_4_D_AUTOMATION_AUTHORITY_FREEZE",
       "classification": "FREEZE",
-      "status": "ACTIVE",
+      "status": "REAL_OPERATION_AUTHORITY_FREEZE_PROVEN",
       "goal": "Increase automatic checking while preserving exactly the same publication, approval and issue-closure authority boundaries."
     }
   ],
@@ -80,6 +83,26 @@
       "requiredJobId": 98775593764,
       "qualifiedHead": "72a63c31fd3589db60cfcd9a445a0ce3286947d1"
     }
+  },
+  "firstGenuineReleaseProof": {
+    "runtimeVersion": "0.64.11",
+    "releaseId": "simcore-v0.64.11-new-01",
+    "pr1": 715,
+    "pr1FinalHead": "2375523a0c5ab50fdbc2c8b3223fad43e9b36e79",
+    "pr1FinalCiRun": 33160442865,
+    "candidateRun": 33160512166,
+    "candidateAttempt": 1,
+    "recoveryPrs": 0,
+    "pr2": 716,
+    "permanentReleaseRun": 33160920813,
+    "productionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+    "productionBlob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+    "mainLivePendingCommit": "58fbc1182c30f41704a6250b4fcb1fa9b1f850dd",
+    "observedPrsToLivePending": 2,
+    "userManualPreLiveGithubActions": 0,
+    "state": "LIVE_PENDING",
+    "humanEvidence": "PENDING",
+    "realPr3": "PENDING"
   },
   "dryQualification": {
     "location": "EXISTING_SIMCORE_PR1_VERIFY_LANE",
@@ -121,10 +144,10 @@
     "mainDesignEvidenceAdminAuthority": true
   },
   "implementationOrder": [
-    "A_CANDIDATE_EQUIVALENT_DRY_QUALIFICATION_IMPLEMENTED",
-    "B_SEMANTIC_ASSERTION_REPLAY_IMPLEMENTED",
+    "A_CANDIDATE_EQUIVALENT_DRY_QUALIFICATION_IMPLEMENTED_AND_REAL_PROVEN",
+    "B_SEMANTIC_ASSERTION_REPLAY_IMPLEMENTED_AND_REAL_OPERATION_PASS",
     "C_HOLD_FOR_REAL_PR3",
-    "D_REVERIFY_AUTHORITY_AND_COST"
+    "D_AUTHORITY_AND_COST_REAL_OPERATION_PROVEN"
   ],
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE"

@@ -8,6 +8,7 @@ const {modulesForPhase, modulesWithCapability, moduleWithCapability} = require('
 const {repairIncidentConsistency} = require('../orchestrator/refresh.cjs');
 const {deriveConvergence, convergenceAttention} = require('../domains/convergence.cjs');
 const {metricsFromTransitions, metricsMarker, parseIncidentMetrics, unstableAttention} = require('../domains/incident-metrics.cjs');
+const {BLOCK_CLASSES, CIRCUIT_BREAKER_STATES, decideCircuitBreaker} = require('../domains/stability.cjs');
 const {scanFailedRun, eventClassForReason, recoverableReasons} = require('../observers/writer-workflows.cjs');
 const {renderSummary} = require('../surfaces/summary.cjs');
 
@@ -78,6 +79,71 @@ function event(eventId, disposition, from, to) {
   assert.equal(policy.notifications.appContract, undefined, 'static fallback contract must not remain in active runtime policy');
   assert.equal(policy.rehearsal, undefined, 'completed rehearsal identity must live outside active runtime policy');
 
+  const baseAttempt = {
+    action: 'ACTIVATE_NATIVE_PROTECTION',
+    target: 'main@abc',
+    owner: 'scope:repo',
+    reasonCode: 'ADMIN_WRITE_UNAVAILABLE',
+    evidenceFingerprint: 'permission:none|sha:abc',
+    blockClass: BLOCK_CLASSES.CAPABILITY,
+  };
+  const firstBlocked = decideCircuitBreaker(baseAttempt);
+  assert.equal(firstBlocked.state, CIRCUIT_BREAKER_STATES.BLOCKED_CAPABILITY);
+  assert.equal(firstBlocked.allowAttempt, false);
+  assert.equal(firstBlocked.deferred, false);
+
+  const repeatedBlocked = decideCircuitBreaker(baseAttempt, firstBlocked);
+  assert.equal(repeatedBlocked.state, CIRCUIT_BREAKER_STATES.DEFERRED_COOLDOWN);
+  assert.equal(repeatedBlocked.allowAttempt, false);
+  assert.equal(repeatedBlocked.deferred, true);
+
+  const changedCapability = decideCircuitBreaker({
+    ...baseAttempt,
+    blockClass: BLOCK_CLASSES.NONE,
+    evidenceFingerprint: 'permission:admin-write|sha:abc',
+  }, repeatedBlocked);
+  assert.equal(changedCapability.state, CIRCUIT_BREAKER_STATES.REARMED);
+  assert.equal(changedCapability.allowAttempt, true);
+
+  const changedTarget = decideCircuitBreaker({
+    ...baseAttempt,
+    target: 'main@def',
+    blockClass: BLOCK_CLASSES.NONE,
+    evidenceFingerprint: 'permission:admin-write|sha:def',
+  }, repeatedBlocked);
+  assert.equal(changedTarget.state, CIRCUIT_BREAKER_STATES.REARMED);
+  assert.equal(changedTarget.allowAttempt, true);
+
+  const freshAttempt = decideCircuitBreaker({
+    ...baseAttempt,
+    reasonCode: 'READY',
+    blockClass: BLOCK_CLASSES.NONE,
+    evidenceFingerprint: 'ready|sha:abc',
+  });
+  assert.equal(freshAttempt.state, CIRCUIT_BREAKER_STATES.ARMED);
+  assert.equal(freshAttempt.allowAttempt, true);
+
+  const staleAttempt = {
+    ...baseAttempt,
+    reasonCode: 'TARGET_NOT_CURRENT',
+    blockClass: BLOCK_CLASSES.STALE_TARGET,
+    evidenceFingerprint: 'target:abc|current:def',
+  };
+  const stale = decideCircuitBreaker(staleAttempt);
+  assert.equal(stale.state, CIRCUIT_BREAKER_STATES.STALE_TARGET);
+  assert.equal(stale.allowAttempt, false);
+  assert.equal(stale.neutral, true);
+  const repeatedStale = decideCircuitBreaker(staleAttempt, stale);
+  assert.equal(repeatedStale.state, CIRCUIT_BREAKER_STATES.DEFERRED_COOLDOWN);
+  assert.equal(repeatedStale.neutral, true);
+
+  const criticalBlocked = decideCircuitBreaker({...baseAttempt, severity: 'P1'}, firstBlocked);
+  assert.equal(criticalBlocked.state, CIRCUIT_BREAKER_STATES.BLOCKED_CAPABILITY);
+  assert.equal(criticalBlocked.deferred, false, 'current P0/P1 class failures must never be cooled down');
+  const criticalStale = decideCircuitBreaker({...staleAttempt, severity: 'P0'}, stale);
+  assert.equal(criticalStale.state, CIRCUIT_BREAKER_STATES.STALE_TARGET);
+  assert.equal(criticalStale.deferred, false, 'current P0/P1 stale evidence must remain explicit, never cooldown-hidden');
+
   assert.equal(eventClassForReason('PROTECTION_GUARD_FAILED'), 'CONTROL_PLANE');
   assert.equal(eventClassForReason('MEMORY_SYNC_FAILED'), 'DURABLE_MEMORY_SYNC');
   assert.equal(eventClassForReason('MAIN_WRITE_CONTENT_CONFLICT'), 'MAIN_WRITE');
@@ -97,10 +163,10 @@ function event(eventId, disposition, from, to) {
   assert.equal(settling.stale, false);
   assert.deepEqual(settling.waitingFor, ['requiredCi']);
   assert.equal(settling.ageSeconds, 60);
-  const stale = deriveConvergence(pendingObservations, policy, Date.parse('2026-08-26T02:15:01Z'));
-  assert.equal(stale.state, 'SETTLING');
-  assert.equal(stale.stale, true);
-  assert.equal(convergenceAttention(stale)[0].reasonCode, 'CONVERGENCE_STALE');
+  const staleConvergence = deriveConvergence(pendingObservations, policy, Date.parse('2026-08-26T02:15:01Z'));
+  assert.equal(staleConvergence.state, 'SETTLING');
+  assert.equal(staleConvergence.stale, true);
+  assert.equal(convergenceAttention(staleConvergence)[0].reasonCode, 'CONVERGENCE_STALE');
 
   const flapTransitions = [
     {state: 'OPEN', observedAt: '2026-08-26T02:00:00Z'}, {state: 'RECOVERED', observedAt: '2026-08-26T02:01:00Z'},

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.65.0-new-05",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.65.0-intent-05.json",
+  "authorityConfirmation": "RS2_4_RELEASE"
+}

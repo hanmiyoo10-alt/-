@@ -651,3 +651,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1291aa08b66f0a10b263a0ae23c267cbe0c1356f)
 - Event ID: `4e5cf7894a62d9aea169322813b5875fadbee60a8c1a4c5e61d15cb8ffb1a084`
 <!-- canonical-main-doc-promoted:4e5cf7894a62d9aea169322813b5875fadbee60a8c1a4c5e61d15cb8ffb1a084 -->
+
+### 2026-08-28 — canonical-main: codify intent-aware read routing
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `eff3d371cd5869234dff99c0e104a4ee9b8c2410`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/eff3d371cd5869234dff99c0e104a4ee9b8c2410)
+- Event ID: `cce79e69df686249d76991c4171e94499f24407e8fac139621589deb50ee0ccb`
+<!-- canonical-main-doc-promoted:cce79e69df686249d76991c4171e94499f24407e8fac139621589deb50ee0ccb -->

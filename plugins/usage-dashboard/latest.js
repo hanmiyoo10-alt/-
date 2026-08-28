@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.83
+//@version 3.0.0-alpha.5.84
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.83';
+  const VERSION = '3.0.0-alpha.5.84';
   const RELEASE_NOTES = Object.freeze({
-    title: "Exact Final HTTP Status Fidelity",
+    title: "Service Tier Selection-Source Fidelity",
     highlights: Object.freeze([
-    "실패 요청에서 source-backed final HTTP status를 정확히 표시",
-    "성공 요청에는 HTTP 200을 추정하지 않고 status 미제공은 UNKNOWN으로 유지",
-    "Settings에 현재 버전 업데이트 내역과 다음 진단 체크리스트를 추가"
+    "요청/실제 Service Tier를 기존 source-backed 규칙 그대로 보존",
+    "source가 제공할 때만 `요청 지정` / `플랜 기본` selection-source 표시",
+    "missing/null tier와 selection source는 UNKNOWN으로 유지하고 STANDARD를 합성하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "자연 발생한 실패 요청이 있으면 HTTP 코드가 해당 오류 요청에만 표시되는지 확인",
-    "정상 성공 요청에 합성 HTTP 200 배지가 생기지 않는지 확인",
-    "Settings의 업데이트 내역을 열고 진단 제출 가이드 복사가 동작하는지 확인",
-    "READY / Health ok / active errors 0 / failures 0이며 추가 refresh·CLI·network 작업이 없는지 확인"
+    "자연 발생 요청에서 selection-source chip이 source-backed 행에만 표시되는지 확인",
+    "selection source가 없는 행에는 chip이 없고 missing served tier가 STANDARD로 바뀌지 않는지 확인",
+    "requested/served mismatch 문구와 DevPass/Credits scope가 기존대로 유지되는지 확인",
+    "업데이트 내역/진단 가이드 복사가 동작하고 추가 refresh·CLI·network 작업이 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.24';
+  const REQUIRED_BRIDGE_VERSION = '1.6.25';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -1369,6 +1369,25 @@ async function importLegacyTodayBaselines() {
     return ['flex','standard','priority'].includes(normalizeServiceTierValue(value));
   }
 
+  function normalizeServiceTierSelectionSource(value) {
+    const text = String(value ?? '').trim().toLowerCase().replace(/_/g, '-');
+    if (text === 'request') return 'request';
+    if (text === 'coding-plan-default') return 'coding-plan-default';
+    return 'unknown';
+  }
+
+  function serviceTierSelectionSourceKnown(value) {
+    return ['request','coding-plan-default'].includes(normalizeServiceTierSelectionSource(value));
+  }
+
+  function preferKnownServiceTierSelectionSource(next, current) {
+    const nextSource = normalizeServiceTierSelectionSource(next);
+    const currentSource = normalizeServiceTierSelectionSource(current);
+    if (serviceTierSelectionSourceKnown(nextSource)) return nextSource;
+    if (serviceTierSelectionSourceKnown(currentSource)) return currentSource;
+    return 'unknown';
+  }
+
   function preferKnownServiceTier(next, current) {
     const nextTier = normalizeServiceTierValue(next);
     const currentTier = normalizeServiceTierValue(current);
@@ -1400,19 +1419,44 @@ async function importLegacyTodayBaselines() {
     return `${scopeText} · ${tierText}`;
   }
 
+  function requestServiceTierSelectionSourceText(row) {
+    const source = normalizeServiceTierSelectionSource(row?.serviceTierSelectionSource);
+    if (source === 'request') return '요청 지정';
+    if (source === 'coding-plan-default') return '플랜 기본';
+    return '';
+  }
+
   function requestServiceTierStats(rows) {
     const list = Array.isArray(rows) ? rows : [];
-    const stats = {rows:list.length, requestedKnown:0, servedKnown:0, flex:0, standard:0, priority:0, unknown:0, requestedSources:[], servedSources:[]};
+    const stats = {
+      rows:list.length, requestedKnown:0, servedKnown:0,
+      flex:0, standard:0, priority:0, unknown:0,
+      requested:{flex:0,standard:0,priority:0,unknown:0},
+      served:{flex:0,standard:0,priority:0,unknown:0},
+      selectionSource:{request:0,planDefault:0,unknown:0},
+      requestedSources:[], servedSources:[]
+    };
     const requestedSources = new Set();
     const servedSources = new Set();
     for (const row of list) {
       const requested = normalizeServiceTierValue(row?.requestedServiceTier);
       const served = normalizeServiceTierValue(row?.servedServiceTier);
-      if (serviceTierKnown(requested)) stats.requestedKnown += 1;
+      const selection = normalizeServiceTierSelectionSource(row?.serviceTierSelectionSource);
+      if (serviceTierKnown(requested)) {
+        stats.requestedKnown += 1;
+        stats.requested[requested] += 1;
+      } else stats.requested.unknown += 1;
       if (serviceTierKnown(served)) {
         stats.servedKnown += 1;
         stats[served] += 1;
-      } else stats.unknown += 1;
+        stats.served[served] += 1;
+      } else {
+        stats.unknown += 1;
+        stats.served.unknown += 1;
+      }
+      if (selection === 'request') stats.selectionSource.request += 1;
+      else if (selection === 'coding-plan-default') stats.selectionSource.planDefault += 1;
+      else stats.selectionSource.unknown += 1;
       if (row?.requestedServiceTierSource) requestedSources.add(String(row.requestedServiceTierSource));
       if (row?.servedServiceTierSource) servedSources.add(String(row.servedServiceTierSource));
     }
@@ -1479,6 +1523,7 @@ async function importLegacyTodayBaselines() {
       const servedServiceTier = normalizeServiceTierValue(servedTierField.value);
       const requestedServiceTierSource = String(recentRequestValue(row, ['requestedServiceTierSource','requested_service_tier_source'], requestedTierField.key) || requestedTierField.key || '');
       const servedServiceTierSource = String(recentRequestValue(row, ['servedServiceTierSource','served_service_tier_source'], servedTierField.key) || servedTierField.key || '');
+      const serviceTierSelectionSource = normalizeServiceTierSelectionSource(recentRequestValue(row, ['serviceTierSelectionSource','service_tier_selection_source'], 'unknown'));
       const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
       const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
       const requestAccountScope = requestNumber ? requestAccountScopeValue(recentRequestValue(row, ['requestAccountScope','request_account_scope'], 'unknown')) : 'unknown';
@@ -1524,6 +1569,7 @@ async function importLegacyTodayBaselines() {
         servedServiceTier,
         requestedServiceTierSource,
         servedServiceTierSource,
+        serviceTierSelectionSource,
         requestNumber,
         requestAccountScope,
         requestScopeFidelity,
@@ -1702,6 +1748,7 @@ async function importLegacyTodayBaselines() {
           servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
           servedServiceTierSource:String(row.servedServiceTierSource || current?.servedServiceTierSource || ''),
+          serviceTierSelectionSource:preferKnownServiceTierSelectionSource(row.serviceTierSelectionSource, current?.serviceTierSelectionSource),
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
@@ -1889,9 +1936,10 @@ async function importLegacyTodayBaselines() {
           : '성공';
         const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
+        const tierSelectionText = requestServiceTierSelectionSourceText(row);
         const durationText = `Duration ${requestDurationText(row)}`;
         const httpStatusText = requestHttpStatusText(row);
-        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
@@ -1933,9 +1981,10 @@ async function importLegacyTodayBaselines() {
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
       const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
+      const tierSelectionText = requestServiceTierSelectionSourceText(row);
       const durationText = `Duration ${requestDurationText(row)}`;
       const httpStatusText = requestHttpStatusText(row);
-      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
@@ -2901,6 +2950,9 @@ async function importLegacyTodayBaselines() {
       `Cache write telemetry: reported ${diagCacheObservability.writeReported}/${diagCacheObservability.rows} · not-reported ${diagCacheObservability.writeNotReported}/${diagCacheObservability.rows} · unknown-on-cache ${diagCacheObservability.writeUnknownOnCache}/${diagCacheObservability.rows} · read/no-write-value ${diagCacheObservability.readWithoutWriteValue}/${diagCacheObservability.rows} · TTL reported ${diagCacheObservability.ttlReported}/${diagCacheObservability.rows} · TTL unreported-after-write ${diagCacheObservability.ttlNotReported}/${diagCacheObservability.rows} · TTL unknown-after-write ${diagCacheObservability.ttlUnknownAfterWrite}/${diagCacheObservability.rows}`,
       `Cache semantics: request HIT rate = gateway replay only · LLMGateway cachedTokens = provider cache Read · cached total = Read + Write when both are known · unknown stays unknown · missing Write/TTL is never inferred from price/provider`,
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
+      `Service tier requested: FLEX ${diagTierFidelity.requested.flex} · STANDARD ${diagTierFidelity.requested.standard} · PRIORITY ${diagTierFidelity.requested.priority} · unknown ${diagTierFidelity.requested.unknown}`,
+      `Service tier served: FLEX ${diagTierFidelity.served.flex} · STANDARD ${diagTierFidelity.served.standard} · PRIORITY ${diagTierFidelity.served.priority} · unknown ${diagTierFidelity.served.unknown}`,
+      `Service tier selection source: request ${diagTierFidelity.selectionSource.request} · plan-default ${diagTierFidelity.selectionSource.planDefault} · unknown ${diagTierFidelity.selectionSource.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
       `HTTP final status fidelity: error rows ${diagHttpStatus.errorRows} · exact ${diagHttpStatus.exact}/${diagHttpStatus.errorRows} · unknown ${diagHttpStatus.unknown}/${diagHttpStatus.errorRows} · source ${diagHttpStatus.source}`,

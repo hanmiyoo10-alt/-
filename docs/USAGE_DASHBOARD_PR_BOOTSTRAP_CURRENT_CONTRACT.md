@@ -36,6 +36,34 @@ For one durable Local Usage Dashboard release request, the release PR must satis
 6. **One PR per durable request:** repair/restage reuses the same deterministic branch and same PR rather than opening parallel PRs.
 7. **Current candidate only:** stale head or ambiguous identity fails closed.
 
+## Stable PR-body presentation
+
+The PR body is a human-facing locator, not a mutable release-state database.
+
+Use stable authority references instead of copying mutable SHA values into prose:
+
+```text
+Usage-Dashboard-Release-Request: #<request-number>
+
+Candidate authority: current PR head
+Source authority: durable release request source_sha
+Frozen-main authority: candidate trailer + E11 receipt
+Expected tuple: <product / engine / manager / contracts>
+Release scope: <bounded release summary>
+```
+
+Do **not** present creation-time candidate/source/frozen-main SHA values as if they remain current after restage.
+
+Authoritative values stay where the control plane already owns them:
+
+- current candidate identity = current PR head SHA;
+- source identity = durable release request `source_sha`;
+- frozen-main identity = candidate `Usage-Dashboard-Frozen-Main` trailer plus current E11 receipt;
+- validation identity = current E9 exact-SHA validation receipt;
+- merge safety = fresh E11 receipt plus expected-head merge guard.
+
+This rule intentionally removes synchronization work rather than adding it. There is no PR-body refresh writer, no new reducer/state/queue/wake, and PR prose never becomes release authority.
+
 ## 5.80 operational proof
 
 Durable request #395 recorded:
@@ -51,7 +79,7 @@ PR #397 used:
 - base `main`;
 - head `stage/usage-dashboard-3.0.0-alpha.5.80`;
 - durable request marker `Usage-Dashboard-Release-Request: #395`;
-- candidate SHA recorded in the PR body;
+- a candidate SHA was historically copied into the PR body, but that creation-time presentation is **not** part of the current contract;
 - no user GitHub UI/settings step.
 
 The temporary RED validation in the 5.80 transaction is positive safety evidence: the bootstrap contract did not weaken exact-SHA validation and the same durable transaction supported repair/revalidation.
@@ -77,13 +105,15 @@ If source repair creates a new deterministic candidate head for the same release
 - reuse the same release PR;
 - re-record/reconcile the current exact candidate SHA;
 - require fresh exact-SHA validation;
-- never treat validation of an older candidate as authority for the repaired head.
+- never treat validation of an older candidate as authority for the repaired head;
+- do not add a second PR-body synchronization step for mutable SHA prose.
 
 ## Assistant-owned boundary
 
 The connected authorized assistant/control surface owns only the bounded GitHub operations that cannot safely be delegated to candidate/untrusted code, including:
 
 - deterministic PR ensure/reuse;
+- stable PR-body presentation using authority locators rather than mutable SHA copies;
 - recording the PR number on the durable request;
 - expected-head squash merge after authoritative receipts are current.
 
@@ -106,6 +136,7 @@ The following are **not** part of the current normal contract:
 - Actions dispatch used merely to compensate for PR bootstrap;
 - closing/reopening a PR to manufacture a trusted validation event;
 - making ordinary PR-event CI the release authority;
+- adding a PR-body SHA synchronization writer after restage;
 - requiring the user to click GitHub settings/UI controls.
 
 ## Fail-closed conditions
@@ -120,6 +151,8 @@ Do not validate/merge when any of these are ambiguous or stale:
 - head repository mismatch;
 - stale validation or merge-guard receipt;
 - expected-head mismatch at merge time.
+
+Stale or absent informational SHA prose in the PR body is not itself a release-state input because mutable SHA prose is not part of the current body contract.
 
 ## Product impact
 

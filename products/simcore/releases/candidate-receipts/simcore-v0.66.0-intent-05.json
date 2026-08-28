@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.66.0-intent-05",
+  "releaseId": "simcore-v0.66.0-new-05",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "sourceCommit": "f6c7d52a112c93e2b756f77919cd9f00cd7cc5ed",
+  "candidateCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "candidateReleaseBlob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.66.0-intent-05",
+  "builderPath": "products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion-fix03.py",
+  "builderSha256": "d3ec5e19673f20f5ec873a4e6823292d3efe67b00b3f4bc60ebb11de771ffc0e",
+  "verifierCommit": "f6c7d52a112c93e2b756f77919cd9f00cd7cc5ed",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "50f1b3202a734a4cafb282ec7b0b2b1fda6b63fc691669cf076d9f62bdd2be3c",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

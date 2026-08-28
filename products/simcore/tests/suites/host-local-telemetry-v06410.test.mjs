@@ -90,6 +90,8 @@ export async function runSuite(ctx) {
     'localStorage', 'IndexedDB', 'XMLHttpRequest', 'setInterval(', 'setTimeout(', 'Object.keys(', '.keys(',
   ]) assert(!actualTelemetrySource.includes(forbidden), `Host-local implementation introduced forbidden ${forbidden}`);
 
+  assert(actualSource.includes("serialization: write?.serialization || 'UNKNOWN'"), 'checkpoint probe does not retain serialization disposition');
+  assert(actualSource.includes('serialization ${lastTelemetryCheckpointProbe.serialization}'), 'checkpoint diagnostic omits serialization failure attribution');
   assert(actualSource.includes('provider cache UNVERIFIED'), 'provider cache changed from UNVERIFIED');
   assert(fixture.input.maxSerializedChars === 16384 && fixture.input.maxAgeMs === 600000, 'Host-local bounds fixture drift');
 
@@ -101,6 +103,7 @@ export async function runSuite(ctx) {
       { id: 'host-local-serialization-failure-no-io', status: 'PASS' },
       { id: 'host-local-read-failure-one-shot', status: 'PASS' },
       { id: 'host-local-active-current-output-gate', status: 'PASS' },
+      { id: 'host-local-serialization-diagnostic-attribution', status: 'PASS' },
     ],
   };
 }

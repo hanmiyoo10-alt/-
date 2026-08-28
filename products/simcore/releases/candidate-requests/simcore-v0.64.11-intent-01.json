@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.64.11-intent-01",
+  "releaseId": "simcore-v0.64.11-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.64.11",
+  "releaseName": "Bounded Telemetry Capsule Compaction",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+  "builderPath": "products/simcore/tooling/build-06411-bounded-telemetry-capsule-compaction.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_ACTIVATION.md",
+    "docs/SIMCORE_LIVE_06410_HOST_LOCAL_CAPSULE_OVERSIZE_2026-08-28.md",
+    "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_IMPLEMENTATION_EVIDENCE.md"
+  ]
+}

@@ -76,7 +76,8 @@ class ResponseTimerTests(unittest.TestCase):
             active = response_timer.tick(self.store, now_mono=started + 3.2)
 
         self.assertTrue(active)
-        current = response_timer.status(self.store)
+        with patch("response_timer.time.monotonic", return_value=started + 3.2):
+            current = response_timer.status(self.store)
         self.assertEqual(current["elapsed_seconds"], 3)
         self.assertEqual(notify.call_args.args[1], "응답 중 · 3초")
         self.assertTrue(notify.call_args.kwargs["ongoing"])

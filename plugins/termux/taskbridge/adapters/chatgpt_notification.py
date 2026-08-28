@@ -4,7 +4,7 @@ import hashlib
 import json
 import shutil
 import subprocess
-from typing import Any
+from typing import Any, Iterable
 
 CHATGPT_PACKAGE = "com.openai.chatgpt"
 
@@ -55,12 +55,16 @@ def list_notifications(*, timeout: float = 8.0) -> list[dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)]
 
 
-def snapshot(package: str = CHATGPT_PACKAGE) -> set[str]:
+def snapshot_from_items(items: Iterable[dict[str, Any]], package: str = CHATGPT_PACKAGE) -> set[str]:
     return {
         _fingerprint(item)
-        for item in list_notifications()
+        for item in items
         if str(item.get("packageName") or "") == package
     }
+
+
+def snapshot(package: str = CHATGPT_PACKAGE) -> set[str]:
+    return snapshot_from_items(list_notifications(), package)
 
 
 def probe(package: str = CHATGPT_PACKAGE) -> dict[str, Any]:

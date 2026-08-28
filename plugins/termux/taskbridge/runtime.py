@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from adapters import chatgpt_notification
+from adapters import foreground_ui_signal
 from adapters import shell as shell_adapter
 import chatgpt_calibration
 import notifier
@@ -85,7 +86,9 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
         return 0
 
     try:
-        baseline = chatgpt_notification.snapshot(package)
+        items = chatgpt_notification.list_notifications()
+        baseline = chatgpt_notification.snapshot_from_items(items, package)
+        baseline_ui = foreground_ui_signal.snapshot_from_items(items)
     except Exception as exc:
         store.transition(
             job_id,
@@ -109,7 +112,10 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
             {
                 "package": package,
                 "baseline_fingerprints": sorted(baseline),
-                "semantic": "new-notification-candidate-only",
+                "foreground_ui_baseline_fingerprints": sorted(baseline_ui),
+                "foreground_ui_package": foreground_ui_signal.COMPANION_PACKAGE,
+                "foreground_ui_notification_id": foreground_ui_signal.SIGNAL_NOTIFICATION_ID,
+                "semantic": "new-notification-candidate-or-local-ui-signal",
             },
             indent=2,
         )
@@ -123,6 +129,7 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
             "package": package,
             "timeout_seconds": timeout_seconds,
             "poll_interval_seconds": poll_interval_seconds,
+            "foreground_ui_signal_package": foreground_ui_signal.COMPANION_PACKAGE,
         },
         worker_pid=os.getpid(),
         local_state="OBSERVING",
@@ -157,7 +164,9 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
             return 0
 
         try:
-            current = chatgpt_notification.snapshot(package)
+            items = chatgpt_notification.list_notifications()
+            current = chatgpt_notification.snapshot_from_items(items, package)
+            current_ui = foreground_ui_signal.snapshot_from_items(items)
         except Exception as exc:
             read_errors += 1
             if read_errors >= 3:
@@ -181,6 +190,50 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
             continue
 
         read_errors = 0
+        new_ui_fingerprints = current_ui - baseline_ui
+        if new_ui_fingerprints:
+            detail = {
+                "package": package,
+                "new_count": len(new_ui_fingerprints),
+                "semantic": "locally_calibrated_response_completion_signal",
+                "source": foreground_ui_signal.SOURCE,
+                "source_semantic": foreground_ui_signal.SEMANTIC,
+                "source_package": foreground_ui_signal.COMPANION_PACKAGE,
+                "source_notification_id": foreground_ui_signal.SIGNAL_NOTIFICATION_ID,
+                "scope": "local_user_enabled_accessibility_companion",
+            }
+            observer_path.write_text(
+                json.dumps(
+                    {
+                        "package": package,
+                        "semantic": detail["semantic"],
+                        "source": detail["source"],
+                        "source_semantic": detail["source_semantic"],
+                        "new_count": detail["new_count"],
+                    },
+                    indent=2,
+                )
+            )
+            store.add_event(job_id, "CHATGPT_UI_COMPLETION_SIGNAL", detail)
+            store.transition(
+                job_id,
+                "COMPLETED",
+                event_type="CHATGPT_NOTIFICATION_SEEN",
+                detail=detail,
+                local_state="STOPPED",
+                remote_state="ANDROID_ACCESSIBILITY_UI",
+                signal_confidence="HIGH",
+                desired_action="NONE",
+                last_seen=utc_ts(),
+                worker_pid=None,
+            )
+            notifier.notify(
+                "ChatGPT 포그라운드 완료 감지",
+                f"{job_id} · 로컬 UI companion",
+                notification_id=f"taskbridge-{job_id}",
+            )
+            return 0
+
         new_fingerprints = current - baseline
         if new_fingerprints:
             calibration = chatgpt_calibration.status(store, package)
@@ -214,6 +267,7 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
                     "package": package,
                     "new_count": len(new_fingerprints),
                     "semantic": semantic,
+                    "source": "chatgpt_android_notification",
                     "calibration_count": calibration["confirmed_count"],
                     "calibration_threshold": calibration["threshold"],
                     "calibration_scope": calibration["scope"],

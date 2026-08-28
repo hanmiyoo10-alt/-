@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, Iterable
 
 from adapters import chatgpt_notification
 
@@ -35,8 +35,12 @@ def available() -> bool:
     return chatgpt_notification.available()
 
 
+def snapshot_from_items(items: Iterable[dict[str, Any]]) -> set[str]:
+    return {_fingerprint(item) for item in items if _matches(item)}
+
+
 def snapshot() -> set[str]:
-    return {_fingerprint(item) for item in chatgpt_notification.list_notifications() if _matches(item)}
+    return snapshot_from_items(chatgpt_notification.list_notifications())
 
 
 def probe() -> dict[str, Any]:

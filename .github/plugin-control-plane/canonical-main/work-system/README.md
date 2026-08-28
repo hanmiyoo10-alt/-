@@ -92,6 +92,31 @@ Packet lifecycle:
 
 Alternate states: `BLOCKED / CANCELLED / SUPERSEDED`.
 
+## Proof / closure taxonomy
+
+Packet lifecycle and proof/evidence disposition are separate axes. A packet can be `IN_PROGRESS` while some behavior is already `CONTRACT_PROVEN`, or can be `DONE` while explicitly non-blocking rare evidence remains `OBSERVATIONAL_PENDING`. Do not collapse these into one generic `PROVEN` label.
+
+Use this common vocabulary across packet, design, memory, and audit projections:
+
+- `IMPLEMENTED` — the declared implementation artifact/change exists at the relevant reviewed repository identity. This does not by itself prove behavior.
+- `CONTRACT_PROVEN` — deterministic static/contract/CI evidence proves the declared contract within that evidence scope. This must not be promoted to `LIVE_PROVEN` by inference.
+- `LIVE_PROVEN` — the declared behavior was observed on the real repository/runtime authority path named by the packet acceptance.
+- `OBSERVATIONAL_PENDING` — naturally rare live evidence has not yet occurred. This is legal only when the packet acceptance explicitly declares that observation non-blocking.
+- `BLOCKED_CAPABILITY` — a required external/platform capability is known unavailable. This preserves the blocker as evidence rather than converting it to green-by-absence.
+- `DONE` — every acceptance item declared required by the packet is satisfied at its required proof level and there is no unresolved required `UNKNOWN` evidence.
+
+Closure rules are fail closed:
+
+1. `IMPLEMENTED` does not imply `CONTRACT_PROVEN` or `LIVE_PROVEN`.
+2. `CONTRACT_PROVEN` does not imply `LIVE_PROVEN`.
+3. A packet MUST NOT become `DONE` while any declared required acceptance item is unsatisfied or its required evidence is `UNKNOWN`.
+4. `OBSERVATIONAL_PENDING` may coexist with `DONE` only when the packet acceptance explicitly labels that observation non-blocking.
+5. `BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected capability/evidence is explicitly non-blocking for that packet's acceptance; otherwise the packet remains blocked/not done.
+6. Safety-critical live proof remains blocking whenever the activated packet declared it required.
+7. Applying this taxonomy never retroactively weakens an already-activated packet's acceptance contract. In particular, v1.1 `V11-V1` keeps its original natural-live-observation requirement until that original acceptance is satisfied or explicitly redesigned through a separate reviewed decision.
+
+The taxonomy is coordination/proof language only. The underlying Git, CI, release, production, branch-protection, incident, and project authorities still decide whether the cited evidence is true.
+
 ## Parallelism
 
 Different packets may proceed in parallel only when their authority and write scopes do not conflict.
@@ -145,9 +170,11 @@ Conversation memory is context only, never sufficient authority.
 A worker ending a packet session records a concise handoff on the packet issue:
 
 - state reached;
+- proof/closure taxonomy terms reached and their exact evidence scope;
 - verified evidence;
 - files/issues/PRs changed;
-- unresolved UNKNOWNs;
+- unresolved required `UNKNOWN`s;
+- explicitly non-blocking `OBSERVATIONAL_PENDING` / `BLOCKED_CAPABILITY` evidence, if any;
 - blockers/dependencies;
 - exact next action.
 

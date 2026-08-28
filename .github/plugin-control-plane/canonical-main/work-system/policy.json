@@ -22,6 +22,27 @@
   },
   "ideaStates": ["CAPTURED", "DESIGNING", "DESIGN_READY", "PACKETIZED", "IMPLEMENTED", "HOLD", "SUPERSEDED"],
   "packetStates": ["READY", "CLAIMED", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED", "CANCELLED", "SUPERSEDED"],
+  "closureTaxonomy": {
+    "version": 1,
+    "terms": ["IMPLEMENTED", "CONTRACT_PROVEN", "LIVE_PROVEN", "OBSERVATIONAL_PENDING", "BLOCKED_CAPABILITY", "DONE"],
+    "roles": {
+      "implementation": ["IMPLEMENTED"],
+      "proof": ["CONTRACT_PROVEN", "LIVE_PROVEN"],
+      "disposition": ["OBSERVATIONAL_PENDING", "BLOCKED_CAPABILITY"],
+      "closure": ["DONE"]
+    },
+    "rules": {
+      "packetLifecycleSeparateFromProofDisposition": true,
+      "implementedDoesNotImplyProven": true,
+      "contractProvenDoesNotImplyLiveProven": true,
+      "doneRequiresAllRequiredAcceptanceSatisfied": true,
+      "doneAllowsUnknownRequiredEvidence": false,
+      "observationalPendingRequiresExplicitNonBlockingAcceptance": true,
+      "safetyCriticalLiveProofRemainsBlockingWhenRequired": true,
+      "blockedCapabilityMayCoexistWithDoneOnlyWhenExplicitlyNonBlocking": true,
+      "taxonomyMayRetroactivelyWeakenActivatedAcceptance": false
+    }
+  },
   "packetRequiredFields": [
     "packetId",
     "primaryGoal",

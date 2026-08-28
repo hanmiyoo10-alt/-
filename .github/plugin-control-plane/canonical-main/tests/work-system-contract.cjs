@@ -29,6 +29,36 @@ assert.equal(policy.authority.queueAuthorizesProduction, false);
 assert.equal(policy.authority.queueAuthorizesRelease, false);
 assert.equal(policy.authority.repositoryEvidenceWins, true);
 
+assert.equal(policy.closureTaxonomy.version, 1);
+assert.deepEqual(policy.closureTaxonomy.terms, [
+  'IMPLEMENTED',
+  'CONTRACT_PROVEN',
+  'LIVE_PROVEN',
+  'OBSERVATIONAL_PENDING',
+  'BLOCKED_CAPABILITY',
+  'DONE',
+]);
+assert.deepEqual(policy.closureTaxonomy.roles, {
+  implementation: ['IMPLEMENTED'],
+  proof: ['CONTRACT_PROVEN', 'LIVE_PROVEN'],
+  disposition: ['OBSERVATIONAL_PENDING', 'BLOCKED_CAPABILITY'],
+  closure: ['DONE'],
+});
+assert.deepEqual(policy.closureTaxonomy.rules, {
+  packetLifecycleSeparateFromProofDisposition: true,
+  implementedDoesNotImplyProven: true,
+  contractProvenDoesNotImplyLiveProven: true,
+  doneRequiresAllRequiredAcceptanceSatisfied: true,
+  doneAllowsUnknownRequiredEvidence: false,
+  observationalPendingRequiresExplicitNonBlockingAcceptance: true,
+  safetyCriticalLiveProofRemainsBlockingWhenRequired: true,
+  blockedCapabilityMayCoexistWithDoneOnlyWhenExplicitlyNonBlocking: true,
+  taxonomyMayRetroactivelyWeakenActivatedAcceptance: false,
+});
+assert.ok(policy.packetStates.includes('DONE'));
+assert.equal(policy.closureTaxonomy.roles.closure.includes('DONE'), true);
+assert.equal(policy.closureTaxonomy.roles.proof.includes('DONE'), false);
+
 assert.deepEqual(policy.queueProjection.liveHealthAuthorities, ['direct-main', 'issue-485']);
 assert.equal(policy.queueProjection.liveHealthMode, 'pointer-only');
 assert.equal(policy.queueProjection.duplicateLiveMainSha, false);
@@ -44,7 +74,7 @@ for (const marker of Object.values(policy.markers)) {
 for (const issue of Object.values(policy.surfaces)) {
   assert.ok(readme.includes(`#${issue}`));
 }
-for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', 'Bounded write scope', 'Dependencies / blockers', 'Expected outputs', 'Acceptance', 'Stop condition', 'Handoff']) {
+for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', 'Bounded write scope', 'Dependencies / blockers', 'Expected outputs', 'Acceptance', 'Proof / closure', 'Stop condition', 'Handoff']) {
   assert.ok(template.includes(field));
 }
 assert.ok(readme.includes('one active implementation owner'));
@@ -56,6 +86,29 @@ assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-hea
 assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
 assert.match(readme, /explicitly historical synchronization\/packet evidence/);
 assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
+assert.match(readme, /## Proof \/ closure taxonomy/);
+for (const term of policy.closureTaxonomy.terms) {
+  assert.ok(readme.includes(`\`${term}\``));
+  assert.ok(template.includes(term));
+}
+assert.match(readme, /Packet lifecycle and proof\/evidence disposition are separate axes/);
+assert.match(readme, /Do not collapse these into one generic `PROVEN` label/);
+assert.match(readme, /`IMPLEMENTED` does not imply `CONTRACT_PROVEN` or `LIVE_PROVEN`/);
+assert.match(readme, /`CONTRACT_PROVEN` does not imply `LIVE_PROVEN`/);
+assert.match(readme, /MUST NOT become `DONE` while any declared required acceptance item is unsatisfied or its required evidence is `UNKNOWN`/);
+assert.match(readme, /`OBSERVATIONAL_PENDING` may coexist with `DONE` only when the packet acceptance explicitly labels that observation non-blocking/);
+assert.match(readme, /`BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected capability\/evidence is explicitly non-blocking/);
+assert.match(readme, /Safety-critical live proof remains blocking whenever the activated packet declared it required/);
+assert.match(readme, /never retroactively weakens an already-activated packet's acceptance contract/);
+assert.match(readme, /v1\.1 `V11-V1` keeps its original natural-live-observation requirement/);
+assert.match(template, /## Proof \/ closure/);
+assert.match(template, /Evidence terms reached:/);
+assert.match(template, /Required acceptance UNKNOWNs:/);
+assert.match(template, /Explicitly non-blocking pending\/capability evidence:/);
+assert.match(template, /`DONE` belongs in the packet lifecycle State only after every declared required acceptance item is satisfied/);
+assert.match(template, /required UNKNOWN evidence is `NONE`/);
+assert.match(template, /may coexist with `DONE` only when the affected evidence was explicitly declared non-blocking/);
+assert.match(template, /Do not infer `LIVE_PROVEN` from `CONTRACT_PROVEN`/);
 assert.match(readme, /## Normal canonical-main startup/);
 assert.match(readme, /exactly two required reads/);
 assert.match(readme, /1\. read direct current `main` authority/);

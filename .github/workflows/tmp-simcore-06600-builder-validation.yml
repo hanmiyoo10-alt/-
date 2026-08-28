@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py | awk '{print $1}')" = 'd87afb81ef5f80e95f8e80a7b62492578b35a239d1519ab06979021128495024'
+          test "$(sha256sum products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py | awk '{print $1}')" = 'ad6009ffee41a86a2723456bfa1cd727e7e760568527a0be3e04fe355767bb50'
           python3 -m py_compile products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py
 
       - name: Build candidate from exact production

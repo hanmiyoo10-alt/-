@@ -19,21 +19,21 @@ ensureCaptureTap = async function ensureCaptureTapWithRequestProvenance() {
     source = replaceCaptureSourceOnce(
       source,
       "llmgateway.devpass.bridge.capture.v10",
-      "llmgateway.devpass.bridge.capture.v12",
+      "llmgateway.devpass.bridge.capture.v13",
       'capture-marker',
     );
 
     source = replaceCaptureSourceOnce(
       source,
       "      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
-      "      const requestProject = logField(row, ['projectId','project_id','project.id','metadata.projectId','metadata.project_id']);\n      const requestOrganization = logField(row, ['organizationId','organization_id','orgId','org_id','organization.id','metadata.organizationId','metadata.organization_id']);\n      const requestUsedMode = logField(row, ['usedMode','used_mode']);\n      const finalHttpStatus = logField(row, ['errorDetails.statusCode']);\n      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
+      "      const requestProject = logField(row, ['projectId','project_id','project.id','metadata.projectId','metadata.project_id']);\n      const requestOrganization = logField(row, ['organizationId','organization_id','orgId','org_id','organization.id','metadata.organizationId','metadata.organization_id']);\n      const requestUsedMode = logField(row, ['usedMode','used_mode']);\n      const finalHttpStatus = logField(row, ['errorDetails.statusCode']);\n      const serviceTierSelection = logField(row, ['routingMetadata.serviceTierSource']);\n      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
       'exact-final-http-status-input',
     );
 
     source = replaceCaptureSourceOnce(
       source,
       "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        requestedServiceTier: requestedTier.value,",
-      "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        httpStatusCode: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? finalHttpStatus.value : null,\n        httpStatusSource: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'errorDetails.statusCode' : '',\n        httpStatusFidelity: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'explicit' : 'unknown',\n        requestProjectId: requestProject.value === null ? '' : String(requestProject.value),\n        requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value),\n        requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value),\n        requestedServiceTier: requestedTier.value,",
+      "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        httpStatusCode: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? finalHttpStatus.value : null,\n        httpStatusSource: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'errorDetails.statusCode' : '',\n        httpStatusFidelity: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'explicit' : 'unknown',\n        serviceTierSelectionSource: ['request','coding-plan-default'].includes(String(serviceTierSelection.value || '').trim().toLowerCase()) ? String(serviceTierSelection.value).trim().toLowerCase() : 'unknown',\n        requestProjectId: requestProject.value === null ? '' : String(requestProject.value),\n        requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value),\n        requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value),\n        requestedServiceTier: requestedTier.value,",
       'exact-final-http-status-fields',
     );
 

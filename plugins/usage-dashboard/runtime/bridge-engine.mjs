@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.24';
+const VERSION = '1.6.25';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -1347,21 +1347,21 @@ ensureCaptureTap = async function ensureCaptureTapWithRequestProvenance() {
     source = replaceCaptureSourceOnce(
       source,
       "llmgateway.devpass.bridge.capture.v10",
-      "llmgateway.devpass.bridge.capture.v12",
+      "llmgateway.devpass.bridge.capture.v13",
       'capture-marker',
     );
 
     source = replaceCaptureSourceOnce(
       source,
       "      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
-      "      const requestProject = logField(row, ['projectId','project_id','project.id','metadata.projectId','metadata.project_id']);\n      const requestOrganization = logField(row, ['organizationId','organization_id','orgId','org_id','organization.id','metadata.organizationId','metadata.organization_id']);\n      const requestUsedMode = logField(row, ['usedMode','used_mode']);\n      const finalHttpStatus = logField(row, ['errorDetails.statusCode']);\n      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
+      "      const requestProject = logField(row, ['projectId','project_id','project.id','metadata.projectId','metadata.project_id']);\n      const requestOrganization = logField(row, ['organizationId','organization_id','orgId','org_id','organization.id','metadata.organizationId','metadata.organization_id']);\n      const requestUsedMode = logField(row, ['usedMode','used_mode']);\n      const finalHttpStatus = logField(row, ['errorDetails.statusCode']);\n      const serviceTierSelection = logField(row, ['routingMetadata.serviceTierSource']);\n      const cacheUsage = normalizeProviderCacheUsage(row);\n      const durationMs = typeof row.duration === 'number' && Number.isFinite(row.duration) && row.duration >= 0",
       'exact-final-http-status-input',
     );
 
     source = replaceCaptureSourceOnce(
       source,
       "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        requestedServiceTier: requestedTier.value,",
-      "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        httpStatusCode: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? finalHttpStatus.value : null,\n        httpStatusSource: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'errorDetails.statusCode' : '',\n        httpStatusFidelity: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'explicit' : 'unknown',\n        requestProjectId: requestProject.value === null ? '' : String(requestProject.value),\n        requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value),\n        requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value),\n        requestedServiceTier: requestedTier.value,",
+      "        durationFidelity: durationMs !== null ? 'explicit' : 'unknown',\n        httpStatusCode: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? finalHttpStatus.value : null,\n        httpStatusSource: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'errorDetails.statusCode' : '',\n        httpStatusFidelity: typeof finalHttpStatus.value === 'number' && Number.isInteger(finalHttpStatus.value) && finalHttpStatus.value >= 100 && finalHttpStatus.value <= 599 ? 'explicit' : 'unknown',\n        serviceTierSelectionSource: ['request','coding-plan-default'].includes(String(serviceTierSelection.value || '').trim().toLowerCase()) ? String(serviceTierSelection.value).trim().toLowerCase() : 'unknown',\n        requestProjectId: requestProject.value === null ? '' : String(requestProject.value),\n        requestOrganizationId: requestOrganization.value === null ? '' : String(requestOrganization.value),\n        requestUsedMode: requestUsedMode.value === null ? '' : String(requestUsedMode.value),\n        requestedServiceTier: requestedTier.value,",
       'exact-final-http-status-fields',
     );
 
@@ -2094,6 +2094,9 @@ function normalizeCapturedRecentLogs(root) {
       && Number.isInteger(row.httpStatusCode)
       && row.httpStatusCode >= 100
       && row.httpStatusCode <= 599;
+    const serviceTierSelectionSource = ['request','coding-plan-default'].includes(String(row?.serviceTierSelectionSource || '').trim().toLowerCase())
+      ? String(row.serviceTierSelectionSource).trim().toLowerCase()
+      : 'unknown';
     if (timestamp === null || !requestNumber) return null;
     return {
       timestamp,
@@ -2120,6 +2123,7 @@ function normalizeCapturedRecentLogs(root) {
       servedServiceTier: row.servedServiceTier ?? null,
       requestedServiceTierSource: String(row.requestedServiceTierSource || ''),
       servedServiceTierSource: String(row.servedServiceTierSource || ''),
+      serviceTierSelectionSource,
       requestNumber,
       success: row.success !== false,
     };

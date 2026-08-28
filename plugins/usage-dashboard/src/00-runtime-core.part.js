@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.83
+//@version 3.0.0-alpha.5.84
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.83';
+  const VERSION = '3.0.0-alpha.5.84';
   const RELEASE_NOTES = Object.freeze({
-    title: "Exact Final HTTP Status Fidelity",
+    title: "Service Tier Selection-Source Fidelity",
     highlights: Object.freeze([
-    "실패 요청에서 source-backed final HTTP status를 정확히 표시",
-    "성공 요청에는 HTTP 200을 추정하지 않고 status 미제공은 UNKNOWN으로 유지",
-    "Settings에 현재 버전 업데이트 내역과 다음 진단 체크리스트를 추가"
+    "요청/실제 Service Tier를 기존 source-backed 규칙 그대로 보존",
+    "source가 제공할 때만 `요청 지정` / `플랜 기본` selection-source 표시",
+    "missing/null tier와 selection source는 UNKNOWN으로 유지하고 STANDARD를 합성하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "자연 발생한 실패 요청이 있으면 HTTP 코드가 해당 오류 요청에만 표시되는지 확인",
-    "정상 성공 요청에 합성 HTTP 200 배지가 생기지 않는지 확인",
-    "Settings의 업데이트 내역을 열고 진단 제출 가이드 복사가 동작하는지 확인",
-    "READY / Health ok / active errors 0 / failures 0이며 추가 refresh·CLI·network 작업이 없는지 확인"
+    "자연 발생 요청에서 selection-source chip이 source-backed 행에만 표시되는지 확인",
+    "selection source가 없는 행에는 chip이 없고 missing served tier가 STANDARD로 바뀌지 않는지 확인",
+    "requested/served mismatch 문구와 DevPass/Credits scope가 기존대로 유지되는지 확인",
+    "업데이트 내역/진단 가이드 복사가 동작하고 추가 refresh·CLI·network 작업이 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.24';
+  const REQUIRED_BRIDGE_VERSION = '1.6.25';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;

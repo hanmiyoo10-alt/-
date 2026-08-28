@@ -588,6 +588,13 @@
 - Event ID: `54793e6cc42d3c3c98809a48b941760044510eb0d31d1e2c17aad5dc9d59cc93`
 <!-- canonical-main-doc-promoted:54793e6cc42d3c3c98809a48b941760044510eb0d31d1e2c17aad5dc9d59cc93 -->
 
+### 2026-08-28 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/309)
+- Event ID: `99fdcd08c48c4f74f320490fa3c808bde73b7ef257325c442922969c0953b8f2`
+<!-- canonical-main-doc-promoted:99fdcd08c48c4f74f320490fa3c808bde73b7ef257325c442922969c0953b8f2 -->
+
 ### 2026-08-28 — canonical-main: make work queue live health pointer-only
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

@@ -20,6 +20,7 @@ const exact=Object.freeze({
   'products/simcore/tooling/candidate-materialize.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tooling/candidate-receipt.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/release-approval-resolve.mjs':['CI_SELF','HARNESS'],
+  'products/simcore/tooling/release-approval-envelope.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tooling/release-approval-package.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tooling/declare-production.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/post-publish-state-shadow.mjs':['CI_SELF','HARNESS','STATE_SYNC'],

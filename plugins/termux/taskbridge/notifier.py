@@ -14,7 +14,17 @@ def notify(title: str, content: str, *, notification_id: str = "taskbridge") -> 
         return False
     try:
         subprocess.run(
-            [exe, "--id", notification_id, "--title", title, "--content", content, "--alert-once"],
+            [
+                exe,
+                "--id",
+                notification_id,
+                "--title",
+                title,
+                "--content",
+                content,
+                "--sound",
+                "--alert-once",
+            ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

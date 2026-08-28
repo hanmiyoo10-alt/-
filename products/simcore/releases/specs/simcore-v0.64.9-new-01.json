@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.64.9-new-01",
+  "product": "SimCore",
+  "version": "0.64.9",
+  "releaseName": "Session Transport Root Resolution",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "expectedProductionCommit": "f5e29464452728f859a1a6a8191a846468353531",
+  "candidateReleaseBlob": "7d2731d256b8aa18598c389fd919550cf3bbf146",
+  "primaryGoalId": "06409_SESSION_TRANSPORT_ROOT_RESOLUTION",
+  "changeClass": "RUNTIME_CORRECTION",
+  "evidenceRefs": [
+    "docs/SIMCORE_06409_SESSION_TRANSPORT_ROOT_RESOLUTION_ACTIVATION.md",
+    "docs/SIMCORE_06409_OPERATOR_RELEASE_CARD_ADJUNCT_DESIGN.md",
+    "docs/SIMCORE_06409_SESSION_TRANSPORT_ROOT_RESOLUTION_IMPLEMENTATION_EVIDENCE.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06409_SESSION_ROOT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

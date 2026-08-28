@@ -2,15 +2,30 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_3_STABILITY_SEAL",
-  "status": "DESIGN_RECORDED_IMPLEMENTATION_HELD_FOR_TERMINAL_EVIDENCE",
+  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_PROOF_PENDING",
   "date": "2026-08-28",
   "name": "Stability Seal",
+  "trackingIssue": 673,
   "predecessor": {
     "version": "R2.2",
     "status": "CLOSED_ACTIVE_PERMANENT_CI_QUALIFIED",
     "cleanReleaseFeedback": "products/simcore/releases/R_V2_2_FIRST_CLEAN_RELEASE_FEEDBACK.json"
   },
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_DESIGN.md",
+  "policy": "docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_POLICY.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_3_IMPLEMENTATION_EVIDENCE_2026-08-28.md",
+  "implementation": {
+    "closurePolicy": "products/simcore/tooling/release-work-item-closure-policy.mjs",
+    "requiredSuite": "stability-seal",
+    "suitePath": "products/simcore/tests/suites/stability-seal.test.mjs",
+    "fixture": "products/simcore/tests/fixtures/stability-seal/case.json",
+    "registryRequired": true,
+    "permanentCi": "PASS",
+    "qualificationRun": 33141818351,
+    "verifyJob": 98754100717,
+    "requiredJob": 98754155453,
+    "realTerminalOperationalProof": "PENDING"
+  },
   "designInput": {
     "releaseVersion": "0.64.9",
     "releaseId": "simcore-v0.64.9-new-01",
@@ -37,25 +52,25 @@
     {
       "id": "R2_3_A_CLEAN_RELEASE_WORK_ITEM_CLOSURE_CONTRACT",
       "classification": "STABILIZE",
-      "status": "DESIGNED_IMPLEMENTATION_HELD",
-      "goal": "A required-live-gate work item stays open past LIVE_PENDING and closes only after an explicit HUMAN_EVIDENCE terminal disposition and durable closure evidence."
+      "status": "IMPLEMENTED_PERMANENT_CI_PASS",
+      "goal": "A required-live-gate work item stays open past LIVE_PENDING and closes only after an explicit terminal disposition and durable closure evidence."
     },
     {
       "id": "R2_3_B_HUMAN_LIVE_PASS_PR3_TERMINAL_SEAL",
       "classification": "STABILIZE",
-      "status": "DESIGNED_AWAITING_V0_64_9_TERMINAL_EVIDENCE",
-      "goal": "Keep PR3 as the existing third clean-path admin/evidence transaction and make post-PR3 durable reobservation the close-step before work-item completion."
+      "status": "IMPLEMENTED_POLICY_PERMANENT_CI_PASS_REAL_PR3_PROOF_PENDING",
+      "goal": "Keep PR3 as the existing third clean-path admin/evidence transaction and require post-PR3 durable reobservation before work-item completion."
     },
     {
       "id": "R2_3_C_REPOSITORY_LABEL_NON_AUTHORITY",
       "classification": "WATCH",
-      "status": "NO_IMPLEMENTATION_REQUIRED_WITHOUT_AUTHORITY_IMPACT",
+      "status": "REGRESSION_SEALED_PERMANENT_CI_PASS_NO_CLASSIFIER_IMPLEMENTATION",
       "goal": "Repository labels remain convenience metadata and cannot determine release identity, publication authority, live truth, or closure eligibility."
     },
     {
       "id": "R2_3_D_DURABLE_EVIDENCE_ORDER",
       "classification": "FREEZE",
-      "status": "CARRY_FORWARD_R2_2",
+      "status": "CARRY_FORWARD_R2_2_NO_NEW_MACHINERY",
       "goal": "Preserve durable receipts and exact identities above workflow/log/label observations without adding polling or run-correlation machinery."
     }
   ],
@@ -91,13 +106,15 @@
     "WORK_ITEM_CLOSED"
   ],
   "implementationGate": {
-    "requiredEvidence": "V0_64_9_HUMAN_EVIDENCE_AND_PR3_TERMINAL_SHAPE",
-    "current": "PENDING",
-    "reason": "The R2.2 clean pre-live path is healthy; stabilization implementation should be qualified against the real terminal path before adding any executable policy surface."
+    "originalRequiredEvidence": "V0_64_9_HUMAN_EVIDENCE_AND_PR3_TERMINAL_SHAPE",
+    "operatorOverride": "EXPLICIT_IMPLEMENTATION_AUTHORIZATION_RECEIVED_2026_08_28",
+    "mechanicalPolicyImplementation": "ACTIVE_PERMANENT_CI_QUALIFIED",
+    "realTerminalQualification": "PENDING",
+    "reason": "The policy and permanent regression are qualified, while genuine terminal proof remains evidence-gated and cannot be inferred from synthetic tests."
   },
   "watch": [
-    "WORK_ITEM_CLOSURE_WORDING",
-    "CONTROL_PLANE_SCOPE_LABEL_NOISE"
+    "WORK_ITEM_CLOSURE_WORDING_NOW_POLICY_OWNED",
+    "CONTROL_PLANE_SCOPE_LABEL_NOISE_NON_AUTHORITY"
   ],
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE"

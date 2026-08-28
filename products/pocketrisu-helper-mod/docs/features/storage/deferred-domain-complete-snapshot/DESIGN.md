@@ -14,6 +14,7 @@ HaejeokRisuai provides several consistent examples of the paired requirement:
 - `fdd175297d23a1cd83e7e0484f04d0dbecf5c431` explicitly loads deferred chat-message batches before character export in both native SQLite and web SQLite paths, preventing portable character exports from silently omitting unloaded messages.
 - `5ddf12b9e5129186486ceee42363a896e23a6188` and `e6465f500f755dea89141b6a3dba73408a8bf113` add a newly durable `inlay` domain to shared backup entry classification and Android-native backup writing, then separate signature inlays from media materialization. This shows that completeness is not only hydration: every durable domain must also be represented in format classification and every supported backup path.
 - `9b150a269a757e0dd20c10267396383ae4d3793b` and `56b0385ce70bb0acf1475a7f34679b13d07a8173` hydrate shallow character details into the export target before serialization and add regression coverage, independently reinforcing logical export equivalence between shallow and fully hydrated runtime state.
+- `866de33e1ed579f31d2ceba95a20cf626e9d2a99` extends the same rule to chat export: hydrate the selected character/chat before serialization and re-resolve stable identity after awaited hydration rather than trusting a pre-await array index.
 
 The reusable invariant is broader than any one implementation: **a shallow runtime projection is never evidence that a persistence snapshot/export is complete, and a backup format is not complete unless every durable logical domain is explicitly classified and covered by every supported writer/restore path**.
 
@@ -40,10 +41,11 @@ Define a runtime-neutral contract that distinguishes `SHALLOW_RUNTIME_STATE` fro
 4. Complete backup/export paths call that boundary before serialization.
 5. Object-scoped exports request the exact domains needed for that object; e.g. character export must load every persisted chat/message/detail batch that belongs in the exported character.
 6. The boundary loads each required deferred domain from authoritative storage, joins concurrent hydration for the same key, and fails closed if a required domain cannot be loaded.
-7. Backup classifiers reject or explicitly type unknown/new durable entry families instead of relying on an unsafe generic-asset fallback.
-8. Typed non-media records are handled by their semantic type and excluded from media URL creation/preview paths.
-9. Restore writes authoritative storage first under existing safe replacement/rollback semantics, then initializes runtime hydration metadata consistently.
-10. Never silently replace an unavailable deferred domain with an empty/default value in a complete snapshot.
+7. After any awaited hydration, callers re-resolve the target by stable identity and fail if ownership changed; pre-await array indexes are never authoritative after async work.
+8. Backup classifiers reject or explicitly type unknown/new durable entry families instead of relying on an unsafe generic-asset fallback.
+9. Typed non-media records are handled by their semantic type and excluded from media URL creation/preview paths.
+10. Restore writes authoritative storage first under existing safe replacement/rollback semantics, then initializes runtime hydration metadata consistently.
+11. Never silently replace an unavailable deferred domain with an empty/default value in a complete snapshot.
 
 ## Compatibility / invariants
 
@@ -52,7 +54,8 @@ Define a runtime-neutral contract that distinguishes `SHALLOW_RUNTIME_STATE` fro
 - Preserve current save/integrity optimizations and revision/ETag semantics.
 - Preserve targeted V3 plugin reload; do not introduce full-page reload as a shortcut.
 - Backup/export created from shallow startup state must be logically equivalent to one created after full hydration.
-- Character export must contain the same persisted character details and chat messages whether those domains were already loaded in UI memory or still deferred in storage.
+- Character/chat export must contain the same persisted details and messages whether those domains were already loaded in UI memory or still deferred in storage.
+- Async hydration must re-resolve source identity before serialization; stale positional indexes cannot select a different source object.
 - Restore of a complete backup must preserve plugin definitions and plugin custom storage even if those domains are startup-deferred.
 - Every persisted domain has an explicit backup entry classification and round-trip fixture across each supported backup implementation.
 - Adding a durable domain without backup/export/restore classification coverage is a test failure, not an implicit generic fallback.
@@ -64,7 +67,8 @@ Define a runtime-neutral contract that distinguishes `SHALLOW_RUNTIME_STATE` fro
 - Fixture with a large plugin script/domain starts in an explicitly unhydrated state.
 - Fixture with one character containing multiple chats starts with at least one message batch and one character detail domain unloaded.
 - Complete backup hydrates required domains exactly once and includes byte-for-byte/logically equivalent plugin data.
-- Character export from the unloaded fixture is logically equivalent to export after explicit full hydration.
+- Character/chat export from the unloaded fixture is logically equivalent to export after explicit full hydration.
+- During awaited hydration, reorder/remove unrelated characters/chats and verify export re-resolves the intended stable identity or fails closed.
 - Durable-domain registry fixture enumerates every currently supported backup entry family and fails when a persisted domain lacks classifier/writer/restore coverage.
 - Native SQLite and web SQLite export paths produce equivalent complete logical content.
 - Native Android/server/web backup implementations round-trip the same durable-domain fixtures where those implementations exist.
@@ -78,7 +82,7 @@ Define a runtime-neutral contract that distinguishes `SHALLOW_RUNTIME_STATE` fro
 
 ## Risk / blast radius
 
-`HIGH`: confusing shallow runtime state with authoritative persistence, or omitting a durable domain from format classification, can create incomplete backups/exports or destructive restores. Generic fallback classification can also reinterpret typed records incorrectly. The design therefore keeps completeness enforcement inside persistence/format ownership, requires explicit domain coverage, and fails closed on missing domains. A naive hydrate-everything implementation can also erase the memory gains of deferral, so object/domain-scoped completeness is preferred.
+`HIGH`: confusing shallow runtime state with authoritative persistence, or omitting a durable domain from format classification, can create incomplete backups/exports or destructive restores. Generic fallback classification can also reinterpret typed records incorrectly. Async hydration adds an identity hazard: the object at a remembered array position can change while storage I/O is in flight. The design therefore keeps completeness enforcement inside persistence/format ownership, requires explicit domain coverage, re-resolves stable identity after awaits, and fails closed on missing domains. A naive hydrate-everything implementation can also erase the memory gains of deferral, so object/domain-scoped completeness is preferred.
 
 ## Rollback / fallback
 
@@ -88,7 +92,8 @@ Disable deferral for any domain whose completeness/compatibility tests fail. If 
 
 - identify PocketRisu's actual snapshot/export and restore owners;
 - enumerate all persisted domains and every supported backup classifier/writer/restore implementation;
-- identify object-scoped export paths such as character export that serialize logical subsets of storage;
+- identify object-scoped export paths such as character/chat export that serialize logical subsets of storage;
+- define stable identity ownership across awaited hydration and concurrent list mutation;
 - define authoritative read APIs for each deferred domain;
 - confirm plugin update/reload paths do not assume eager plugin definitions;
 - define the policy for unknown/new backup entry families so they fail explicitly rather than being silently misclassified.
@@ -96,7 +101,7 @@ Disable deferral for any domain whose completeness/compatibility tests fail. If 
 ## PR decomposition
 
 1. Pure completeness metadata/helper + durable-domain registry/classifier fixtures; no domain deferral and no storage migration.
-2. Add an object-scoped export completeness test around an existing lazy/unloaded domain, without changing storage architecture.
+2. Add an object-scoped export completeness test around an existing lazy/unloaded domain, including reorder/removal during awaited hydration, without changing storage architecture.
 3. Add parity fixtures for every existing backup implementation (web/server/native where applicable), including typed non-media records.
 4. One non-security-sensitive domain behind deferral with startup/first-use/export benchmarks.
 5. Plugin definitions only after targeted V3 update/reload and backup/restore tests pass.

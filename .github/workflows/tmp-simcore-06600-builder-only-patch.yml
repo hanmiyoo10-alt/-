@@ -1,0 +1,63 @@
+name: Temporary SimCore 06600 Builder Only Patch
+
+on:
+  push:
+    branches:
+      - runtime/simcore-v0.66.0-m2-4-boundary-completion
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-simcore-06600-builder-only-patch
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: runtime/simcore-v0.66.0-m2-4-boundary-completion
+          fetch-depth: 0
+
+      - name: Patch builder only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py')
+          text = p.read_text(encoding='utf-8')
+          old = '    if "deferredPruneIndex" in session or "deferredPruneRunning" in session or "scheduleDeferredPrune(outIndex)" in session:\n'
+          new = '    if "deferredPruneIndex" in session or "deferredPruneRunning" in session or "\\n  scheduleDeferredPrune(outIndex) {" in session:\n'
+          if old in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'assertion anchor count={text.count(old)}')
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('neither old nor repaired assertion found')
+          p.write_text(text, encoding='utf-8')
+          PY
+          python3 -m py_compile products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py
+          test ! -d products/simcore/tooling/__pycache__
+          git diff --check
+          echo "builder_sha256=$(sha256sum products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py | awk '{print $1}')"
+
+      - name: Commit builder only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Builder already repaired.'
+            exit 0
+          fi
+          git commit -m 'fix(simcore): narrow v0.66 Slice B builder assertion'
+          git push origin HEAD:runtime/simcore-v0.66.0-m2-4-boundary-completion

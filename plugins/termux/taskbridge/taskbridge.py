@@ -9,7 +9,7 @@ from pathlib import Path
 
 from store import Store
 
-VERSION = "0.4.0"
+VERSION = "0.4.3"
 CHATGPT_PACKAGE = "com.openai.chatgpt"
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 
@@ -183,19 +183,23 @@ def render_boot_script(script: Path, store: Store, *, wake_lock: bool = False) -
 
     python = shlex.quote(sys.executable)
     taskbridge = shlex.quote(str(script.resolve()))
+    fast_boot = shlex.quote(str(script.with_name("fast_boot.py").resolve()))
     state_dir = shlex.quote(str(store.state_dir.resolve()))
     workdir = shlex.quote(str(script.resolve().parent))
     log_path = shlex.quote(str((store.state_dir / "boot.log").resolve()))
+    trace_path = shlex.quote(str((store.state_dir / "boot.trace").resolve()))
     lines = [
         "#!/data/data/com.termux/files/usr/bin/sh",
         "export HOME=/data/data/com.termux/files/home",
+        f"printf '%s boot_script_enter shell_pid=%s\\n' \"$(date +%s 2>/dev/null || echo 0)\" \"$$\" >> {trace_path}",
     ]
     if wake_lock:
         lines.append("command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock")
     lines.extend(
         [
             f"cd {workdir} || exit 1",
-            f"{python} {taskbridge} --state-dir {state_dir} daemon start >> {log_path} 2>&1",
+            "# fast path replaces taskbridge daemon start",
+            f"{python} {fast_boot} --state-dir {state_dir} --taskbridge-script {taskbridge} >> {log_path} 2>&1",
             "",
         ]
     )
@@ -217,6 +221,7 @@ def boot_status(home: Path | None = None) -> dict:
         "installed": path.exists(),
         "path": str(path),
         "wake_lock_requested": "termux-wake-lock" in text,
+        "mode": "fast_launcher_v1" if "fast_boot.py" in text else "legacy_cli",
         "activation_note": "Open the Termux:Boot app once after installing it so Android can run boot scripts.",
     }
 

@@ -38,6 +38,8 @@ output COMMITTED
 
 Every such field is scoped to the subsystem/claim it owns.
 
+A release-level or episode-level verdict must never replace review of each supplied diagnostic packet. Every packet is an independent observation surface that must be completely swept before its facts are aggregated into a wider conclusion.
+
 ---
 
 ## 2. Review episode boundary
@@ -98,9 +100,152 @@ Ask:
 
 Visible truth may establish a symptom that no diagnostic field directly encodes.
 
-### 3.4 ORDER and COMPARE all related packets
+### 3.4 SWEEP every supplied packet field-by-field
 
-Compare adjacent packets on these axes:
+This step is mandatory **for each diagnostic packet individually** before cross-packet aggregation or release-level judgment.
+
+Do not review only fields relevant to the current release gate. Do not stop after finding one expected PASS or one obvious anomaly. The point of the diagnostic is that independent subsystem claims can disagree, reveal secondary findings, or provide controls for later attribution.
+
+For every packet, explicitly inspect the following surfaces when present:
+
+```text
+A. identity / binding
+   version
+   capture time
+   boot / generation / epoch
+   probe context
+   request hook / handshake
+   mode / stored mode
+   request user ↔ output assistant binding
+   Stability / stale / hooks / UI parts
+
+B. request path / timing
+   request timing
+   handshake breakdown
+   session load
+   post-handshake breakdown
+   onSend breakdown
+   pre snapshot
+   turn storage
+   request hotspot
+
+C. edit / representation / mirror
+   Edit reconcile
+   Prior representation
+   Edit origin
+   Edit delta / shape / boundary
+   output provenance
+   output representation
+   representation ownership
+   output mirror / deferred mirror
+   envelope recovery / safe-envelope reconcile
+
+D. output path / timing
+   output timing
+   handler breakdown
+   output process
+   output hotspot
+   hook activity
+   diagnostic age
+
+E. warning / compatibility / preamble
+   Warnings count + detail
+   Compatibility diagnostics + detail
+   Preamble provenance / action / policy / candidates
+
+F. prompt / cache / history
+   Prompt prefix
+   Cache posture
+   Cache topology / integrity / break / effect
+   Host prefix attribution / delta
+   History mutation / alignment / stabilization
+   Reconcile frontier / movement
+   Repeated break
+   Representation correlation
+   Mutation attribution
+   Rebuild attribution
+   Local exposure proxy
+   Runtime identity tiers
+   SimCore contribution
+   Cache placement / cadence / trajectory
+   cache topology cost
+   provider cache status
+
+G. telemetry / reload handoff
+   Telemetry continuity
+   Telemetry capsule + component budgets + precision
+   Handoff precision
+   Session surface
+   Host-local transport
+   Telemetry checkpoint
+
+H. mode / lifecycle / recurrence
+   Runtime prompt size/lines
+   Broadcast lifecycle / end authority / closure / terminal coverage
+   Short-C source lock
+   Summary scope
+   Template recurrence / guidance / history match
+   Request lineage
+   Source handoff
+
+I. frame / evidence / chronology
+   RAW frame continuity / regression
+   Continuity summary
+   Calendar transition
+   Frame sequence / frame guard
+   Evidence shape / boundary / mode / fences
+   Narrative clock
+   Post-B_END handoff
+   Current-time authority
+   Narrative tail coverage
+   Visible chronology
+   Stored broadcast
+
+J. RAW semantic control
+   직전 턴 RAW user vs assistant
+   최근 턴 RAW user vs assistant
+   current input intent vs current visible output
+   previous-turn frame vs current-output frame
+   any retry/reroll/edit/reload action supplied by operator
+```
+
+For every reviewed surface, classify the local observation as one of:
+
+```text
+EXPECTED / HEALTHY
+ANOMALOUS / CONTRADICTORY
+CONTROL / ATTRIBUTION EVIDENCE
+NOT_EXERCISED / UNAVAILABLE
+NOT_APPLICABLE
+UNRESOLVED
+```
+
+The reviewer does not need to repeat every healthy line verbatim in chat, but must actually evaluate every applicable surface before issuing `DIAG_REVIEW_COMPLETE_*`.
+
+Important consequences:
+
+```text
+one packet can contain:
+- a release-gate PASS signal,
+- an unrelated WATCH finding,
+- a timing hotspot,
+- and a semantic anomaly
+at the same time.
+```
+
+Therefore:
+
+```text
+release verdict != packet review
+packet review != one-field verdict
+healthy latest packet != earlier packet reviewed
+```
+
+If any material surface is not yet understood, use `DIAG_REVIEW_NEEDS_CONTEXT` rather than silently omitting it.
+
+### 3.5 ORDER and COMPARE all related packets
+
+Only after the individual packet sweep is complete, compare adjacent packets on these axes:
 
 ```text
 A. turn / request identity
@@ -129,7 +274,7 @@ NOT_APPLICABLE
 
 UNCHANGED facts are first-class attribution evidence.
 
-### 3.5 INTERPRET subsystem status only after RAW/sequence review
+### 3.6 INTERPRET subsystem status only after RAW/packet/sequence review
 
 Examples:
 
@@ -152,7 +297,7 @@ output COMMITTED
 
 Likewise, one DEGRADED/MISMATCH/SLOW field is not automatically a global defect.
 
-### 3.6 BUILD controls
+### 3.7 BUILD controls
 
 Identify available controls:
 
@@ -176,7 +321,7 @@ attribution maturity
 
 Default attribution is `UNPROVEN` unless evidence supports stronger wording.
 
-### 3.7 HAND OFF ownership
+### 3.8 HAND OFF ownership
 
 After the episode is understood:
 - SYS-16 owns independent recurrence classification;
@@ -332,6 +477,8 @@ runtime identity SAME while output behavior changes materially
 cache STABLE/NO_BREAK while semantic anomaly appears
 new independent natural specimen resembling a preserved family
 required diagnostic surface missing for a named live-gate step
+one packet contains a secondary anomaly outside the active release gate
+packet-level field contradiction hidden by an otherwise healthy episode summary
 ```
 
 ---
@@ -346,6 +493,8 @@ DIAG_REVIEW_BLOCKED
 ```
 
 These are review-completeness states only; they are not runtime severity labels.
+
+A `DIAG_REVIEW_COMPLETE_*` state is forbidden until **every supplied packet has completed the per-packet field sweep in §3.4** and every material contradiction or unavailable surface has been dispositioned.
 
 Precedence:
 
@@ -364,16 +513,17 @@ BLOCKED
 1. BIND every packet.
 2. READ current input before diagnostic status.
 3. READ visible output for semantic/structural correctness.
-4. ORDER all related packets; never latest-only.
-5. COMPARE adjacent packets on fixed axes.
-6. RECORD what changed AND what stayed invariant.
-7. INTERPRET PASS/STABLE/COMMITTED only within subsystem scope.
-8. USE retry/edit/reload/neighbor observations as controls, not shortcuts.
-9. SEPARATE symptom from attribution.
-10. HAND recurrence/classification/gate effects to owning authorities.
-11. PRESERVE suspicious or useful new evidence before moving on.
+4. SWEEP every applicable field of every packet; do not gate-cherry-pick.
+5. ORDER all related packets; never latest-only.
+6. COMPARE adjacent packets on fixed axes.
+7. RECORD what changed AND what stayed invariant.
+8. INTERPRET PASS/STABLE/COMMITTED only within subsystem scope.
+9. USE retry/edit/reload/neighbor observations as controls, not shortcuts.
+10. SEPARATE symptom from attribution.
+11. HAND recurrence/classification/gate effects to owning authorities.
+12. PRESERVE suspicious or useful new evidence before moving on.
 ```
 
 Operational motto:
 
-> Do not ask only “what does the diagnostic say?” Ask “does the diagnostic, RAW content, and sequence tell the same story?”
+> Do not ask only “what does the diagnostic say?” Ask “does every field in this packet, the RAW content, and the surrounding sequence tell the same story?”

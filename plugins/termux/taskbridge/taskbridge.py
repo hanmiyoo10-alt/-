@@ -7,13 +7,10 @@ import sys
 import time
 from pathlib import Path
 
-from adapters import chatgpt_notification
-import chatgpt_calibration
-import notifier
-from runtime import adopt_child, daemon_loop, launch_detached, pid_alive, process_rss_kb, run_worker, terminate_pid
 from store import Store
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
+CHATGPT_PACKAGE = "com.openai.chatgpt"
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 
 
@@ -31,10 +28,10 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("command", nargs=argparse.REMAINDER)
 
     probe_chatgpt = sub.add_parser("probe-chatgpt", help="probe Android notification access for the ChatGPT app")
-    probe_chatgpt.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
+    probe_chatgpt.add_argument("--package", default=CHATGPT_PACKAGE)
 
     watch_chatgpt = sub.add_parser("watch-chatgpt", help="watch for a new ChatGPT Android notification")
-    watch_chatgpt.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
+    watch_chatgpt.add_argument("--package", default=CHATGPT_PACKAGE)
     watch_chatgpt.add_argument("--timeout", type=int, default=1800, help="seconds before the observer stops as UNKNOWN")
 
     confirm_chatgpt = sub.add_parser(
@@ -44,7 +41,7 @@ def parser() -> argparse.ArgumentParser:
     confirm_chatgpt.add_argument("job_id")
 
     calibration = sub.add_parser("chatgpt-calibration", help="show local ChatGPT completion calibration status")
-    calibration.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
+    calibration.add_argument("--package", default=CHATGPT_PACKAGE)
 
     start = sub.add_parser("start", help="start a registered job")
     start.add_argument("job_id")
@@ -94,11 +91,28 @@ def normalize_command(parts: list[str]) -> list[str]:
 
 
 def ensure_daemon(store: Store, script: Path) -> int:
+    from runtime import launch_detached, pid_alive
+
     raw = store.get_meta("daemon_pid")
     pid = int(raw) if raw and raw.isdigit() else None
     if pid_alive(pid):
         return int(pid)
-    pid = launch_detached([sys.executable, str(script), "--state-dir", str(store.state_dir), "_daemon"])
+
+    coordinator = script.with_name("coordinator.py")
+    if coordinator.exists():
+        command = [
+            sys.executable,
+            str(coordinator),
+            "--state-dir",
+            str(store.state_dir),
+            "--taskbridge-script",
+            str(script),
+        ]
+    else:
+        # Safe fallback for partial/legacy installs. New mobile packages include coordinator.py.
+        command = [sys.executable, str(script), "--state-dir", str(store.state_dir), "_daemon"]
+
+    pid = launch_detached(command)
     store.set_meta("daemon_pid", str(pid))
     deadline = time.time() + 2.0
     while time.time() < deadline:
@@ -122,7 +136,7 @@ def find_active_chatgpt_observer(store: Store, package: str) -> dict | None:
         if job.get("adapter") != "chatgpt_notification":
             continue
         command = job.get("command") or []
-        job_package = command[0] if command else chatgpt_notification.CHATGPT_PACKAGE
+        job_package = command[0] if command else CHATGPT_PACKAGE
         if job_package != package:
             continue
         if job.get("logical_state") in {"CREATED", "ACTIVE", "RECONNECTED"}:
@@ -132,10 +146,12 @@ def find_active_chatgpt_observer(store: Store, package: str) -> dict | None:
 
 def _observer_package(job: dict) -> str:
     command = job.get("command") or []
-    return command[0] if command else chatgpt_notification.CHATGPT_PACKAGE
+    return command[0] if command else CHATGPT_PACKAGE
 
 
 def do_reconnect(store: Store, job_id: str, script: Path) -> dict:
+    from runtime import launch_detached, pid_alive
+
     job = store.get_job(job_id)
     if job["logical_state"] in TERMINAL_STATES:
         return job
@@ -163,13 +179,17 @@ def main(argv: list[str] | None = None) -> int:
         job = store.create_job(normalize_command(args.command), name=args.name)
         print(job["job_id"])
         return 0
+
     if args.cmd == "run":
         job = store.create_job(normalize_command(args.command), name=args.name)
         ensure_daemon(store, script)
         store.request(job["job_id"], "RUN")
         print(job["job_id"])
         return 0
+
     if args.cmd == "probe-chatgpt":
+        from adapters import chatgpt_notification
+
         try:
             data = chatgpt_notification.probe(args.package)
         except Exception as exc:
@@ -183,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(json.dumps(data, indent=2, ensure_ascii=False))
         return 0
+
     if args.cmd == "watch-chatgpt":
         if args.timeout <= 0:
             raise SystemExit("--timeout must be greater than 0")
@@ -201,7 +222,10 @@ def main(argv: list[str] | None = None) -> int:
         store.request(job["job_id"], "RUN")
         print(job["job_id"])
         return 0
+
     if args.cmd == "confirm-chatgpt":
+        import chatgpt_calibration
+
         job = store.get_job(args.job_id)
         if job.get("adapter") != "chatgpt_notification":
             raise SystemExit("job is not a ChatGPT notification observer")
@@ -226,9 +250,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
+
     if args.cmd == "chatgpt-calibration":
+        import chatgpt_calibration
+
         print(json.dumps(chatgpt_calibration.status(store, args.package), indent=2, ensure_ascii=False))
         return 0
+
     if args.cmd == "start":
         ensure_daemon(store, script)
         job = store.get_job(args.job_id)
@@ -237,10 +265,12 @@ def main(argv: list[str] | None = None) -> int:
         store.request(args.job_id, "RUN")
         print(args.job_id)
         return 0
+
     if args.cmd == "status":
         job = do_reconnect(store, args.job_id, script)
         print(json.dumps(job, indent=2, ensure_ascii=False) if args.json else fmt_job(job))
         return 0
+
     if args.cmd == "list":
         jobs = store.list_jobs(args.limit)
         if args.json:
@@ -249,10 +279,12 @@ def main(argv: list[str] | None = None) -> int:
             for job in jobs:
                 print(fmt_job(job))
         return 0
+
     if args.cmd == "events":
         for event in store.events(args.job_id, args.limit):
             print(f"{event['id']:>5} {event['event_type']:<28} {event['logical_state'] or '-':<16} {json.dumps(event['detail'], ensure_ascii=False)}")
         return 0
+
     if args.cmd == "cancel":
         job = store.get_job(args.job_id)
         if job["logical_state"] in TERMINAL_STATES:
@@ -262,10 +294,17 @@ def main(argv: list[str] | None = None) -> int:
         store.request(args.job_id, "CANCEL")
         print(args.job_id)
         return 0
+
     if args.cmd == "reconnect":
         print(fmt_job(do_reconnect(store, args.job_id, script)))
         return 0
+
     if args.cmd == "doctor":
+        from adapters import chatgpt_notification
+        import chatgpt_calibration
+        import notifier
+        from runtime import pid_alive, process_rss_kb
+
         raw = store.get_meta("daemon_pid")
         daemon_pid = int(raw) if raw and raw.isdigit() else None
         active = [j for j in store.list_jobs(500) if j["logical_state"] not in TERMINAL_STATES]
@@ -277,38 +316,53 @@ def main(argv: list[str] | None = None) -> int:
             "database_ok": store.db_path.exists(),
             "daemon_pid": daemon_pid,
             "daemon_alive": pid_alive(daemon_pid),
+            "daemon_impl": store.get_meta("daemon_impl"),
             "active_jobs": len(active),
             "termux_notification": notifier.available(),
             "termux_notification_list": chatgpt_notification.available(),
-            "chatgpt_completion_calibration": chatgpt_calibration.status(store, chatgpt_notification.CHATGPT_PACKAGE),
+            "chatgpt_completion_calibration": chatgpt_calibration.status(store, CHATGPT_PACKAGE),
             "self_rss_kb": process_rss_kb(),
             "daemon_rss_kb": process_rss_kb(daemon_pid) if pid_alive(daemon_pid) else None,
             "platform": sys.platform,
         }
         print(json.dumps(data, indent=2, ensure_ascii=False))
         return 0
+
     if args.cmd == "daemon":
+        from runtime import pid_alive, terminate_pid
+
         raw = store.get_meta("daemon_pid")
         daemon_pid = int(raw) if raw and raw.isdigit() else None
         if args.daemon_cmd == "start":
             print(ensure_daemon(store, script))
             return 0
         if args.daemon_cmd == "status":
-            print(json.dumps({"pid": daemon_pid, "alive": pid_alive(daemon_pid)}))
+            print(json.dumps({"pid": daemon_pid, "alive": pid_alive(daemon_pid), "impl": store.get_meta("daemon_impl")}))
             return 0
         if args.daemon_cmd == "stop":
             if terminate_pid(daemon_pid):
                 store.set_meta("daemon_pid", "")
+                store.set_meta("daemon_impl", "")
                 print("stopped")
             else:
                 print("not-running")
             return 0
+
     if args.cmd == "_daemon":
+        from runtime import daemon_loop
+
         return daemon_loop(store, script, args.interval)
+
     if args.cmd == "_worker":
+        from runtime import run_worker
+
         return run_worker(store, args.job_id)
+
     if args.cmd == "_adopt":
+        from runtime import adopt_child
+
         return adopt_child(store, args.job_id, args.child_pid)
+
     return 2
 
 

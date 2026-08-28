@@ -1,6 +1,7 @@
 'use strict';
 
 const { buildMainDeltaBrief } = require('./main-delta-brief.cjs');
+const { nextActionForRisk } = require('./domains/next-action.cjs');
 
 const RISK_SCORE = Object.freeze({ NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 });
 const SURFACE_ORDER = Object.freeze([
@@ -101,7 +102,7 @@ function deriveRiskAndAction(classifiedFiles) {
     return {
       riskLevel: 'NONE',
       actionRequired: false,
-      actionCode: 'NO_ACTION_REQUIRED',
+      actionCode: nextActionForRisk('NONE'),
       riskDrivers: [],
     };
   }
@@ -113,28 +114,10 @@ function deriveRiskAndAction(classifiedFiles) {
     .map((entry) => entry.path)
     .sort();
 
-  if (riskLevel === 'HIGH') {
-    return {
-      riskLevel,
-      actionRequired: true,
-      actionCode: 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE',
-      riskDrivers,
-    };
-  }
-
-  if (riskLevel === 'MEDIUM') {
-    return {
-      riskLevel,
-      actionRequired: true,
-      actionCode: 'REVIEW_PRODUCT_OR_RUNTIME_CHANGE',
-      riskDrivers,
-    };
-  }
-
   return {
     riskLevel,
-    actionRequired: false,
-    actionCode: 'NO_IMMEDIATE_ACTION',
+    actionRequired: riskLevel === 'HIGH' || riskLevel === 'MEDIUM',
+    actionCode: nextActionForRisk(riskLevel),
     riskDrivers,
   };
 }

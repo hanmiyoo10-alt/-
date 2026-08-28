@@ -2,13 +2,14 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const e15 = require('./release_handoff_e15.cjs');
 
 const TITLE_RE = /^\[usage-dashboard-release\] (3\.0\.0-alpha\.5\.\d+)$/;
 const BRANCH_RE = /^release\/usage-dashboard-[A-Za-z0-9._-]+$/;
 const SPEC_RE = /^\.github\/usage-dashboard\/releases\/[A-Za-z0-9._-]+\.json$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 // `release_generation` is the durable transaction/wake generation axis.
-// E14 is an orthogonal candidate-DAG baseline and intentionally does not extend this matcher.
+// E14 and E15 are orthogonal baselines and intentionally do not extend this matcher.
 const DURABLE_TRANSACTION_GENERATION_RE = /^(E9|E10|E11|E12|E13)$/;
 const GENERATION_RE = DURABLE_TRANSACTION_GENERATION_RE; // backward-compatible export name
 
@@ -31,6 +32,7 @@ function parseFieldLines(body) {
 function parseIssue(title, body) {
   const titleMatch = TITLE_RE.exec(String(title || '').trim());
   if (!titleMatch) fail('E9_REQUEST_TITLE_DENIED');
+  e15.validateRequestPluginDeclaration(body);
   const fields = parseFieldLines(body);
   const required = ['release_version','release_spec','source_branch','source_sha','feature_issue','release_generation'];
   for (const key of required) if (!fields[key]) fail('E9_REQUEST_FIELD_MISSING', key);

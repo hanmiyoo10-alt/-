@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.65.0`
-- Release: `M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence`
+- Version: `0.66.0`
+- Release: `M2-4 Session / Runtime Mirror Boundary Completion`
 - Release branch: `release-simcore`
-- Release commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
-- Release blob: `1b38e2b2874f2581edae8f1080edc39558febefa`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `4b6ae1a4c63f6be658c6163168cc46a1adef60aa`
+- Release blob: `f0da13d4c47fd98e9065d7dbf253a3296151ee16`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-3`

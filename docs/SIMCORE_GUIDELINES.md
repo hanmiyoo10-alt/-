@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.65.0 — M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence
-Release commit: c6659296c68b4322d0ed43f7d8a3339e57f1cbf1
+SimCore v0.66.0 — M2-4 Session / Runtime Mirror Boundary Completion
+Release commit: 4b6ae1a4c63f6be658c6163168cc46a1adef60aa
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

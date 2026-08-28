@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.65.0",
-  "release_name": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence",
+  "production_version": "0.66.0",
+  "release_name": "M2-4 Session / Runtime Mirror Boundary Completion",
   "release_branch": "release-simcore",
-  "release_commit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
-  "release_blob": "1b38e2b2874f2581edae8f1080edc39558febefa",
+  "release_commit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "release_blob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -32,7 +32,7 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "validation_status": "LIVE_PASS",
+  "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
   "major_update_checkpoint": "M2-3",

@@ -2,224 +2,98 @@
 
 Feature-ID: `db-save-optimization`
 Area: `server-phone`
-PR status: `UPSTREAM_D_OPEN`
+PR status: `UPSTREAM_SERIES_SETTLED_WITH_SUPERSEDED_D_E`
 Isolation status: `CLEAN`
-Dependencies status: `D_BASE_RESOLVED_E_WAITS_ON_D`
+Dependencies status: `B_C_ACCEPTED_D_E_ARCHITECTURE_SUPERSEDED`
 Deployment status: `NOT_READY`
-Local PR: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4`
-Official upstream PRs: `https://github.com/PocketRisu/PocketRisu/pull/67`, `https://github.com/PocketRisu/PocketRisu/pull/68`, `https://github.com/PocketRisu/PocketRisu/pull/69`, `https://github.com/PocketRisu/PocketRisu/pull/73`
-Current tracked upstream heads: A `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; B `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; C `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; D `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`
+Local PRs: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4` through `#8`
+Official upstream PRs: `https://github.com/PocketRisu/PocketRisu/pull/67`, `#68`, `#69`, `#73`
+Tracked upstream heads: A `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; B `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; C `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; D `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`
 
-## Clean staged branches / PRs
-- Stage A — empty patch fast path + opaque ETag: official `PocketRisu/PocketRisu#67`; head `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; CLOSED / NOT MERGED. Maintainer adopted the empty-patch early-return half into `develop` via `e3a63daafdac00c52968c4e668af0ac6f7adcc3b`; isolated opaque revision ETag was not accepted because it can conflict with content-MD5 ETags minted by `/api/read` and 409 responses. Future ETag unification belongs with upstream #66 served-view/revision redesign.
-- Stage B — compositional DB patch hash cache: official `PocketRisu/PocketRisu#68`; head `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; MERGED into `develop` as `7159bf9fd2913e06965cd68c27b9f5292dfb75b5`. Original stacked local draft remains `hanmiyoo10-alt/PocketRisu#5` at `04992dcdc47b144d14fbc8df6c6c1c2c7cadec7c` and must not be auto-merged.
-- Stage C — top-level selective clone: official `PocketRisu/PocketRisu#69`; head `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; MERGED into `develop` as `7e0e61af73e67f3d443352509d8c989ccd8f4773`. Original stacked local draft remains `hanmiyoo10-alt/PocketRisu#6` at `0d0c8104246a662d9601cffcddb832fd52f7d6f1` and must not be auto-merged.
-- Upstream follow-up after B/C: `e3a63daafdac00c52968c4e668af0ac6f7adcc3b` stores `result.newDocument`, rejects invalid/non-object roots, documents the no-in-place-mutation invariant for shared untouched branches, adds endpoint integration coverage, and includes the accepted empty-patch early return from Stage A.
-- Stage D — pluginCustomStorage direct-child hash/clone: official `PocketRisu/PocketRisu#73`; head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`; OPEN / MERGEABLE / NOT_DRAFT; exactly 1 commit / 3 files. The PR was manually submitted from `feat/db-save-optimization-plugin-storage-child-upstream` after connector cross-repository PR creation was blocked. At the latest check there are no workflow runs/status checks, no submitted reviews, and no review threads; absence of checks is not GREEN. The PR body is still the untouched repository template, so the next manual action should include filling the summary/changes/impact/checklist before review if desired. Original stacked local draft `#7` remains obsolete validation ancestry and must not be auto-merged.
-- Stage E — pluginCustomStorage depth-3 lazy subchild hash/clone: local draft `#8`; clean stacked head `1a937bc680658df732aab75632f0e030c2005f53`; 1 commit / 3 files. Do not promote until Stage D is officially reviewed/accepted/rebased.
+## Final series disposition
 
-The original stacked draft dependency rule remains B after A, C after B, D after C, E after D, but official B/C were independently rebased and merged into `develop`. Stage D's dependency on accepted Stage C is resolved and Stage D is now under official upstream review as #73. Stage E still waits on the final accepted/rebased Stage-D shape. Never merge the old stacked local drafts merely because their historical dependencies landed upstream; they are draft validation artifacts with obsolete ancestry.
+- **Stage A / upstream #67 — PARTIAL ADOPTION / CLOSED.** Empty-patch early return was adopted in `develop` via `e3a63daa`. The isolated opaque revision ETag was not accepted because `/api/read` and 409 responses still minted content-MD5 ETags, so mixing a random patch-success token with content hashes could create false conflicts.
+- **Stage B / upstream #68 — MERGED.** Compositional DB patch hash cache landed as `7159bf9f`. Maintainer review independently confirmed bit-identical behavior with reference `calculateHash()` across ordering, number/null/undefined edge cases, unicode, escaped pointers, add/remove/move/copy, and reset behavior after full write/restore.
+- **Stage C / upstream #69 — MERGED.** Selective top-level cloning landed as `7e0e61af`. Review confirmed atomicity, `path` + `from` cloning, and deep-copy semantics for `copy`. Follow-up `e3a63daa` stored `result.newDocument`, rejected invalid/non-object roots, added endpoint integration coverage, and documented the no-in-place-mutation invariant for shared untouched branches.
+- **Stage D / upstream #73 — CLOSED / ARCHITECTURE SUPERSEDED.** Maintainer validation found no correctness defect, but `pluginCustomStorage` moved out of `database.bin` into server-side per-key KV via `f0d4eee3`, eliminating the targeted hot path. This was an architecture-direction decision, not code rejection or CI failure.
+- **Stage E / local #8 — SUPERSEDED FALLBACK.** Never promoted upstream because it depended on the same retired in-DB plugin storage path. Keep only as validated historical/fallback design.
 
-## Problem / motivation
-Large `/api/patch` requests paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On large saves/pluginCustomStorage this produced roughly 1.1–1.8s patch latency in the verified local workload.
+Detailed Stage D/E closure reasoning lives in `STAGE-D-HOLD.md`.
 
-## Legacy evidence
-The optimized implementation is verified in the live/local PocketRisu server working tree and backups, but it was developed incrementally together with other server modifications and is not represented by one clean Git commit. Do not attempt Git-history surgery. Rebuild the independently verified optimization stages on the then-current upstream server implementation.
+## Architecture dependency resolution — upstream issue #66
 
-Primary legacy touch area:
-- `server/node/server.cjs`
+The Stage A review originally deferred ETag unification to the broader served-view/storage redesign associated with upstream issue #66. That issue was closed on 2026-08-25 after the maintainer reported all four storage/OOM phases in `develop`:
 
-Verified local rollback anchors are documented in this feature README; backup files themselves must never be committed.
+1. server asset manifest store/migration — upstream #72, `d851553c` plus hardening `bf777dbb`;
+2. client lazy asset API — upstream #74, `97cdd7a5`;
+3. plugin storage split — upstream self-implementation `f0d4eee3`, storing plugin values per key under server KV and reading only needed keys on demand;
+4. manifest-aware orphan cleanup — upstream #74.
 
-## Baseline cost model to re-check on current upstream
-Historical original `/api/patch` path:
-1. recursive whole stripped-DB hash;
-2. whole DB JSON stringify/parse deep clone;
-3. JSON patch apply;
-4. cache/mutation/save bookkeeping;
-5. full server encode + MD5 content ETag.
+The closing evidence establishes that the plugin-storage architecture migration actually landed, which permanently supersedes Stage D/E against current upstream. It does **not** state that #67's opaque revision ETag was adopted. Therefore do not revive or resubmit the isolated opaque-token implementation without a fresh upstream-wide ETag model review.
 
-Current upstream has changed this pipeline through merged Stages B/C and follow-up `e3a63daa`. Before every later stage, inspect current `/api/patch` and helper behavior first and only port optimizations that still match the accepted architecture.
+Evidence:
+- https://github.com/PocketRisu/PocketRisu/issues/66#issuecomment-5411444292
+- https://github.com/PocketRisu/PocketRisu/pull/73#issuecomment-5411392720
 
-## Minimal upstream scope
-Rebuild the optimization as a sequence of independent, correctness-first PRs against the current upstream `/api/patch` implementation. Each PR removes one measurable whole-DB cost while preserving atomicity, fallback behavior and persistent DB integrity; do not bundle unrelated worker/chunk-store/session/notification work.
+## Stage D maintainer reasoning
 
-## Upstream PR split plan
-This feature is intentionally **not** one giant PR. Prepare small prerequisite-sized PRs in this order when still applicable.
+Final review on #73 explicitly separated correctness from architecture:
 
-### PR A — Opaque revision ETag
-Goal:
-- stop computing an expensive full encoded-content MD5 solely to produce an HTTP ETag when clients treat ETag as an opaque revision token;
-- generate a new opaque revision only after a real accepted mutation.
+- incremental hash matched real `calculateHash()` bit-for-bit across integer-like keys, `__proto__`, move in/out, root operations, storage type transitions, and delete/re-add cases;
+- selective clone was safe: `copy` deep-cloned, `move` cloned the source child, and only untouched siblings shared identity;
+- reviewed suite passed 19/19;
+- closure occurred only after `f0d4eee3` removed `pluginCustomStorage` values from `database.bin` and routed child-key updates directly to per-key server storage.
 
-Current upstream disposition:
-- empty-patch early return accepted independently in `e3a63daa`;
-- opaque ETag portion superseded for now because patch success, `/api/read`, and 409 responses do not yet share one revision model;
-- do not re-submit the isolated random-token implementation. Revisit only with the broader #66 served-view/revision redesign.
+Historical improvement notes if a similar path ever returns:
+1. remove remaining O(total plugin keys) work from shallow storage copy, `new Map(childHashes)`, and per-key key-hash composition;
+2. centralize duplicated `collectPluginStorageChildKeys` logic;
+3. keep adversarial parity coverage, not only happy-path tests.
 
-### PR B — Zero-op + top-level compositional hash cache
-Goal:
-- detect no-op patches cheaply;
-- replace repeated whole recursive hash with cached top-level contributions where safe.
+The author replied after closure that a new direction had been found and a future PR may follow. Treat any such PR as a **new architecture proposal** unless its actual diff proves otherwise; do not reopen Stage D or revive Stage E automatically.
 
-Acceptance:
-- computed cached hash/equality decision matches full reference calculation across synthetic mutations;
-- cache invalidation covers all touched top-level branches.
+## Local fork PR disposition
 
-Upstream result:
-- MERGED as #68 / `7159bf9fd2913e06965cd68c27b9f5292dfb75b5`.
-- Maintainer independent review confirmed bit-identical behavior to reference `calculateHash()` across ordering, null/undefined, number edge cases, unicode, escaped pointers, and add/remove/move/copy; WeakMap state reset behavior on full write/restore was also accepted.
+- `hanmiyoo10-alt/PocketRisu#4`: OPEN, non-draft historical Stage A artifact; upstream outcome supersedes it as a merge candidate.
+- `#5`: OPEN DRAFT; superseded by merged upstream #68.
+- `#6`: OPEN DRAFT; superseded by merged upstream #69.
+- `#7`: OPEN DRAFT; validated ancestry/fallback for Stage D, superseded by plugin-storage KV architecture.
+- `#8`: OPEN DRAFT; depth-3 fallback design, superseded by the same architecture.
 
-### PR C — Top-level selective clone
-Goal:
-- avoid whole DB JSON deep clone;
-- clone only touched top-level branches while preserving atomicity/rollback semantics.
+Do not auto-merge or rebase these just because their historical dependencies landed. They are evidence artifacts, not current integration candidates.
 
-Acceptance:
-- patch failure cannot mutate the original live DB;
-- untouched branch identity may be shared only when it cannot be mutated by the patch path.
+## Problem / historical motivation
 
-Upstream result:
-- MERGED as #69 / `7e0e61af73e67f3d443352509d8c989ccd8f4773`.
-- Maintainer review confirmed atomicity, `path` + `from` branch cloning, and deep-copy behavior for `copy`; follow-up `e3a63daa` added explicit anti-alias coverage and documented the resulting server invariant that shared untouched branches must never be mutated in place.
+Large `/api/patch` requests historically paid repeated whole-database costs: recursive hash calculation, whole DB deep clone, patch application, persistence work, and full encoded-content MD5/ETag generation. On the verified local workload, large plugin storage patches were roughly 1.1–1.8s before the deeper optimization experiments.
 
-### PR D — pluginCustomStorage direct-child incremental hash + selective clone
-Goal:
-- for large `pluginCustomStorage`, track and clone/hash only touched direct children.
+The accepted upstream B/C work removed repeated whole-database hash and clone costs at the top level while preserving correctness. Historical Stage D/E experiments reduced a representative large plugin-storage patch to roughly 287ms (`clone ~195ms`, patch apply `~29ms`, hash update `~63ms`), but those measurements apply to the retired architecture and are not current upstream performance targets.
 
-Acceptance:
-- direct-child root operations fall back safely;
-- arrays/non-object/ambiguous shapes use conservative fallback.
+## Current upstream invariants to preserve
 
-Current upstream state:
-- official PR `PocketRisu/PocketRisu#73` is OPEN / MERGEABLE / NOT_DRAFT at head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`.
-- diff remains isolated: exactly 1 commit, 3 files, based on current accepted B/C follow-up shape.
-- latest check: no workflow runs or status checks, no submitted reviews, no review threads. This is waiting for validation/review, not GREEN.
-- PR description currently remains the default repository template and should be filled manually rather than by this lifecycle automation.
+- DB patch failure must not mutate the live database before commit.
+- Untouched branches may share identity between old/new roots only if server code never mutates those branches in place; replace the branch/root instead.
+- Preserve `result.newDocument` handling for root operations and non-object-root rejection.
+- Do not reintroduce `/api/db/flush` on hide/pagehide in this feature.
+- Preserve the intentional `flushServerDbKeepalive()` no-op policy unless a separate evidence-backed feature changes it.
+- Do not bundle worker structured-clone, chunk-store, session/write-lock, notification, plugin runtime reload, or unrelated persistence-format work into this feature.
+- Never deploy either phone or auto-merge upstream/source PRs from this lifecycle record.
 
-### PR E — pluginCustomStorage depth-3 lazy subchild optimization
-Goal:
-- for a huge plain-object direct child, lazily cache subchild contributions and clone only touched subchildren.
+## If a future PR revisits this area
 
-Acceptance:
-- both JSON Patch `path` and `from` are tracked for copy/move;
-- multiple touched subchildren work;
-- child-root operations fall back;
-- original object remains unchanged until commit.
+1. Inspect current upstream `/api/patch`, plugin-storage KV APIs, hash helper, selective-clone helper, and persistence path first.
+2. Assign a new Feature-ID if the optimization target is the new per-key architecture rather than the retired `pluginCustomStorage` DB branch.
+3. Preserve the accepted B/C invariants and endpoint-level integration coverage.
+4. Benchmark current code before claiming value; historical Stage D/E numbers are provenance only.
+5. Record maintainer requests as follow-up items before implementing them.
+6. Do not resurrect the opaque ETag Stage A half unless all ETag minting paths are reviewed together.
 
-Current state:
-- staged only; wait for Stage D official review/acceptance/rebase before preparing a current-upstream branch.
+## Verification / status snapshot — 2026-08-28
 
-Each PR must be independently benchmarked and correctness-tested. If current upstream makes any stage obsolete, skip it rather than recreating old architecture.
+- official #67: CLOSED / NOT MERGED; empty-patch half adopted, opaque ETag half not adopted;
+- official #68: MERGED as `7159bf9f`;
+- official #69: MERGED as `7e0e61af`;
+- official #73: CLOSED / NOT MERGED / architecture superseded;
+- local #4-#8: still open in their historical/draft states; no meaningful state change observed in this check;
+- no newly opened `hanmiyoo10-alt` PR found in either `PocketRisu/PocketRisu` or `hanmiyoo10-alt/PocketRisu` during this check;
+- upstream issue #66 is CLOSED after asset/plugin-storage lazy architecture landed; this confirms D/E supersession but does not revive or resolve the opaque ETag proposal.
 
-## Explicitly out of scope
-Do not bundle:
-- worker structured-clone optimization;
-- chunk-store CDC/hash/SQLite commit optimization;
-- session/write-lock logic;
-- response notification;
-- plugin runtime reload behavior;
-- forced DB flush on visibility/pagehide;
-- unrelated persistence format migration.
-
-Known remaining bottlenecks (worker structured clone before worker launch; synchronous chunk-store CDC/hash/SQLite commit after worker result) are separate future Feature-IDs if pursued.
-
-## Critical guardrails
-- Preserve DB atomicity and rollback behavior before performance.
-- Preserve upstream's new shared-branch invariant: untouched branches shared between old/new roots must never be mutated in place; replace the branch or whole root instead.
-- Never reintroduce `/api/db/flush` on hide/pagehide as part of this work.
-- Preserve the intentional `flushServerDbKeepalive()` no-op policy unless a separate feature with evidence replaces it.
-- Do not require `sqlite3` CLI; local validation uses Node + `better-sqlite3` when DB inspection is needed.
-- runit stays; do not introduce PM2.
-- server phone must not create Android notifications.
-- Preserve existing V3 targeted reload behavior unless a separate feature explicitly and safely replaces it.
-
-## Dependencies
-- Current upstream `/api/patch` implementation: resolved through merged #68/#69 plus follow-up `e3a63daa` for Stage-D preparation.
-- Stage A opaque ETag: not a prerequisite for D; empty-patch half landed, opaque-token half is superseded pending #66 revision redesign.
-- Stage D dependency on accepted/rebased Stage C: RESOLVED; official Stage D is now #73.
-- Stage E dependency on final accepted/rebased Stage D: UNRESOLVED.
-- No official upstream PR should be auto-merged by this automation.
-
-## Verification evidence
-### Correctness from the verified legacy implementation
-Synthetic hash tests:
-- all reference/cache comparisons reported `MATCH=YES`.
-
-Atomicity/selective-clone tests:
-- `DEEP_REPLACE`: apply success + original unchanged;
-- `MULTI_SUBCHILD`: success + original unchanged;
-- `CHILD_ROOT_FALLBACK`: success + original unchanged;
-- `COPY_MOVE`: success + original unchanged.
-
-Operational verification:
-- no Hash mismatch warnings;
-- no relevant warning/error after clean use;
-- BackgroundPersist commits succeeded;
-- restart preserved plugin/character state;
-- `node --check` passed after cleanup;
-- temporary PatchTiming/PatchShape instrumentation and dead ETag/hash helpers were removed after measurement.
-
-### Upstream verification now incorporated
-- #68 maintainer review independently verified compositional hash equivalence and cache reset behavior.
-- #69 maintainer review independently verified selective-clone atomicity and copy semantics.
-- `e3a63daa` adds endpoint-level `/api/patch` integration tests across nested, root, empty, and failing patches, stores `result.newDocument`, rejects invalid database roots, and documents the no-in-place-mutation invariant.
-- Maintainer plans to ship the merged B/C work after dogfooding on their own instance; this is upstream release timing, not permission for this automation to deploy to server-phone.
-- #73 is the official Stage-D submission at the same clean upstream-ready head previously prepared; current state has no CI/check or review result yet.
-
-### Historical performance
-Large pluginCustomStorage patch before optimization:
-- roughly 1.1–1.8s.
-
-After depth-3 hash + clone optimization, representative repeated measurement:
-- ops: ~828;
-- clone: ~195ms;
-- patch apply: ~29ms;
-- hash update: ~63ms;
-- total: ~287ms.
-
-Small plugin patch:
-- roughly 39–71ms.
-
-These numbers are evidence of value, **not** hard upstream acceptance thresholds; rerun benchmarks on current upstream/hardware.
-
-## Rebuild test plan
-For every staged PR:
-1. Run reference-vs-optimized hash/equality tests on add/replace/remove/copy/move.
-2. Verify original DB remains unchanged on failed patch and before commit.
-3. Test direct-root and ambiguous-shape fallbacks.
-4. Test multiple touched branches/subchildren in one patch.
-5. Test zero-op patch behavior.
-6. Restart server and verify persistent data survives.
-7. Run representative small and large patch benchmarks before/after.
-8. Inspect logs for hash mismatch, persistence warnings and unexpected errors.
-9. Remove temporary instrumentation before final PR.
-10. Preserve the upstream `result.newDocument` root handling and shared-branch no-in-place-mutation invariant added after #68/#69.
-
-## PR construction recipe
-1. Start each remaining official stage from latest accepted upstream `develop`, not from old stacked local drafts.
-2. INSPECT_ONLY current `/api/patch`, hash helper, selective clone helper and persistence pipeline first.
-3. Add temporary measurement only when needed; never ship debug instrumentation accidentally.
-4. Implement one optimization stage only.
-5. Run correctness + persistence tests before comparing performance.
-6. Submit/land that stage before constructing the next dependent stage.
-7. Rebase/re-inspect after every upstream stage because later code boundaries may shift.
-
-## Upstream pitch
-Large self-host databases should not pay whole-database hash/clone/ETag costs for small JSON patches. The accepted B/C work already removes whole-database hash/clone costs at the top level; Stage D is the next isolated optimization for large `pluginCustomStorage`, while deeper Stage E remains deliberately separate.
-
-## Review / PR state
-- dossier reconstruction: COMPLETE
-- legacy Git-history surgery: NOT REQUIRED
-- upstream strategy: STAGED_PR_SERIES
-- boundary validation: all currently open source-repo `feat/` PRs #4-#8 contain exactly one `Feature-ID: db-save-optimization` line and their branch names match the Feature-ID. Exactly one matching dossier folder exists at `docs/features/server-phone/db-save-optimization/`, with required `README.md`, `UPSTREAM.md`, and `FAILURES.md` present.
-- local PR #4: OPEN / MERGEABLE / NOT_DRAFT; historical branch is obsolete relative to upstream outcome and has no relevant CI/check runs, so it is not GREEN and must not be auto-merged.
-- local PRs #5-#8: OPEN / MERGEABLE / DRAFT; draft state blocks auto-merge. All five local feature heads currently have no relevant workflow runs; absence of checks also prevents GREEN and must never be treated as success.
-- official upstream PR #67: CLOSED / NOT_MERGED. Empty-patch half adopted in `e3a63daa`; opaque ETag half superseded pending #66 revision-model work.
-- official upstream PR #68: MERGED `7159bf9fd2913e06965cd68c27b9f5292dfb75b5`.
-- official upstream PR #69: MERGED `7e0e61af73e67f3d443352509d8c989ccd8f4773`.
-- official feedback: positive independent verification on #68/#69; #69 maintainer explicitly thanked the careful split across the three PRs. Both merged stages are planned for upstream dogfooding before release.
-- official upstream PR #73 (Stage D): OPEN / MERGEABLE / NOT_DRAFT; head `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`; 1 commit / 3 files; no CI/check runs or statuses yet; no reviews or review threads yet. PR body is still the default template.
-- Stage E: keep staged; do not promote until D receives official review/acceptance/rebase.
-- deployment gate: `docs/features/server-phone/safe-updater/UPSTREAM.md` currently has `AUTO_DEPLOY_GATE: DISABLED` and `AUTO_DEPLOY_VERIFIED: NO`; therefore no server-phone deployment, SSH, restart, direct git pull, or device action is permitted. Even after a future gate enablement, deployment must use the verified pull-based safe-updater rather than GitHub Actions push-SSH.
-- next action: monitor #73 for CI/checks and maintainer review; do not auto-merge it. Keep Stage E staged until #73 establishes the accepted Stage-D shape. If preparing #73 manually for review, fill its currently untouched PR description/checklist first.
+Next strategy: wait for an actually new PR/diff against the post-`f0d4eee3` architecture. Do not spend implementation effort on Stage D/E or the isolated random ETag design unless upstream code changes recreate a valid target.

@@ -27,6 +27,7 @@ jobs:
           python -m py_compile \
             plugins/termux/taskbridge/taskbridge.py \
             plugins/termux/taskbridge/coordinator.py \
+            plugins/termux/taskbridge/autowatch.py \
             plugins/termux/taskbridge/store.py \
             plugins/termux/taskbridge/state_machine.py \
             plugins/termux/taskbridge/runtime.py \

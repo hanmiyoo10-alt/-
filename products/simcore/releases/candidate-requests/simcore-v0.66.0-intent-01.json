@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.66.0-intent-01",
+  "releaseId": "simcore-v0.66.0-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.66.0",
+  "releaseName": "M2-4 Session / Runtime Mirror Boundary Completion",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "builderPath": "products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_ACTIVATION.md",
+    "docs/SIMCORE_06600_M2_4_IMPLEMENTATION_EVIDENCE.md",
+    "docs/SIMCORE_06600_ARCH_CONTRACT_POST_06500_PROMOTION_DRIFT_2026-08-29.md",
+    "docs/SIMCORE_06600_BUILDER_VALIDATION_FAILURE_01_SLICE_B_ASSERTION_2026-08-29.md",
+    "docs/SIMCORE_06600_BUILDER_VALIDATION_HARNESS_FAILURE_02_SELF_DELETE_STAGE_2026-08-29.md",
+    "docs/SIMCORE_06600_BUILDER_VALIDATION_HARNESS_FAILURE_03_WORKFLOW_PERMISSION_2026-08-29.md",
+    "docs/SIMCORE_06600_BUILDER_VALIDATION_HARNESS_FAILURE_04_PYCOMPILE_BYTECODE_2026-08-29.md",
+    "docs/SIMCORE_06600_BRANCH_HYGIENE_AND_DRAFT_PR_FAILURE_05_2026-08-29.md"
+  ]
+}

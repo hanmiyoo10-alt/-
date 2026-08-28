@@ -25,22 +25,23 @@
 - Declared validation status: `LIVE_PASS`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
-- Major update checkpoint: `M2-2`
+- Major update checkpoint: `M2-3`
 
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
-## Current Release Live Gate
+<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
+## Current Release Terminal State
 
 - Release transaction: `simcore-v0.65.0-new-05`
 - Production commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
-- Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT`
-- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
+- Validation status: `LIVE_PASS`
+- Current priority: `06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_IMPLEMENTATION`
+- Terminal disposition: `LIVE_PASS`
+- R lifecycle: `REAL_RELEASE_LIVE_PASS`
 
-This block is machine-managed by `release-state-converge` from immutable publication evidence.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
+This block is the terminal PR3 state backed by accepted human evidence and production reobservation.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
 
 ---
 
@@ -48,9 +49,9 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 ## How to read current operational state
 
-The machine-managed blocks above are authoritative for current production identity, validation status, and the active live gate. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
+The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-Runtime changes remain frozen while the active product live gate is pending. M2-3 remains blocked until the active product gate closes. Provider cache remains `UNVERIFIED` unless direct evidence changes it. R2.1 delegated operation is the proven pre-live release operating mode; R2.2 changes only state-expression and blocker-incident closure semantics and does not replace the required product live evidence.
+The predecessor product live gate is closed with accepted human evidence. Runtime work may proceed only within the currently authorized frozen scope. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains separate from the active runtime work item.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1176,29 +1177,32 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Run the required v0.64.7 real long-chat validation.
-Scenario: 06407_RELOAD_CACHE_CONTINUITY_REAL_LONG_CHAT
-Keep runtime bytes frozen while the live result is pending.
+Implement the frozen M2-4 Session / Runtime Mirror Boundary Completion on a dedicated runtime work branch.
+Keep the runtime change equivalence-first and separately attributable by Slice A / B / C / D.
+Do not fold release-system follow-up or unrelated WATCH items into the runtime checkpoint.
 ```
 
 Current success condition:
 
 ```text
-production identity remains v0.64.7 / a7ce8ce33a97797630f885c6753415e4b2ccc7fc
-latest.js == install.js == 676b7e2ca3d55a6676b7a5d3bfaf95be5ee6e9b0
-release record remains LIVE_PENDING until human evidence is supplied
+predecessor HUMAN_EVIDENCE / PR3 terminal closure = LIVE_PASS
+durable major checkpoint = M2-3
+current priority = M2-4 implementation
+production remains the machine snapshot above until a normal approved release transaction publishes a candidate
+latest.js == install.js remains mandatory
 
-real long-chat result PASS
-→ record the human live evidence
-→ close v0.64.7 as LIVE_PASS through the durable main documentation/state path
-→ only then select the next genuine runtime work item
+implementation
+→ Slice A differential/static proof
+→ Slice B proof
+→ Slice C zero-runtime-caller Recovery proof with facade retained
+→ Slice D full mirror observation/interpretation differential matrix
+→ combined candidate regression
+→ normal exact release transaction
+→ release-simcore publication
+→ real long-chat validation
 
 observed anomaly
-→ preserve the evidence immediately
+→ preserve evidence immediately
 → classify WATCH / DEFER / FIX / BLOCKER
 → unresolved FIX or BLOCKER stops advancement
-
-R2.1 delegated-operator end-to-end proof
-→ not part of the v0.64.7 live gate
-→ exercise on the next genuine runtime release after v0.64.7 closure
 ```

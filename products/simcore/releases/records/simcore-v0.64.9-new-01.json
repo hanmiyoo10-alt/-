@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.64.9-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "5e05e2e11440c5a138e071cf5563787d12ee1888",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.64.9-new-01.json",
+  "releaseSpecSha256": "4a1a40fb7cabcd86a63c746595f94ad85a8b9af6b5685151acd578a42c126055",
+  "productionCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "previousProductionCommit": "f5e29464452728f859a1a6a8191a846468353531",
+  "productionBlob": "7d2731d256b8aa18598c389fd919550cf3bbf146",
+  "version": "0.64.9",
+  "releaseName": "Session Transport Root Resolution",
+  "verificationReportSha256": "8339ded2579149940a60fdda02e87b94c24856407cf9c3e7c1444a1ca02be2e8",
+  "verifierCommit": "e9855cd915bc9c8049b1e1ab8de845fa81a74a4e",
+  "publisherRunId": "33140598953",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06409_SESSION_ROOT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

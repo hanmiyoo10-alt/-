@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.8 — Output-Complete Telemetry Checkpoint Repair
-Release commit: f5e29464452728f859a1a6a8191a846468353531
+SimCore v0.64.9 — Session Transport Root Resolution
+Release commit: 1c1037e44d6b3e903b3d622b579095b1f315758e
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

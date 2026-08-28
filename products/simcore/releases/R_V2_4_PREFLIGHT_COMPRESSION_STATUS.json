@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_4_PREFLIGHT_COMPRESSION",
-  "status": "IMPLEMENTED_A_B_CI_PENDING_C_HELD_FOR_REAL_PR3",
+  "status": "IMPLEMENTED_A_B_PERMANENT_CI_QUALIFIED_C_HELD_FOR_REAL_PR3",
   "date": "2026-08-28",
   "name": "Preflight Compression",
   "predecessor": {
@@ -40,14 +40,14 @@
     {
       "id": "R2_4_A_CANDIDATE_EQUIVALENT_PR1_DRY_QUALIFICATION",
       "classification": "FIX",
-      "status": "IMPLEMENTED_CI_PENDING",
+      "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED",
       "issue": 690,
       "goal": "Catch candidate packaging and candidate-specific regression failures inside the existing PR1 Verify lane before merge without creating durable candidate authority."
     },
     {
       "id": "R2_4_B_SEMANTIC_ASSERTION_DISCIPLINE",
       "classification": "STABILIZE",
-      "status": "IMPLEMENTED_CI_PENDING",
+      "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED",
       "goal": "Prefer executable or scoped semantic assertions over brittle whole-source lexical occurrence counts without introducing a generalized parser framework."
     },
     {
@@ -72,7 +72,14 @@
     "canonicalMaterializerMode": "verify",
     "permanentRegression": "preflight-compression",
     "semanticReplayOwner": "products/simcore/tests/suites/host-local-telemetry-v06410.test.mjs",
-    "ciQualification": "PENDING"
+    "ciQualification": {
+      "result": "PASS",
+      "pr": 701,
+      "runId": 33148724793,
+      "verifyJobId": 98775518797,
+      "requiredJobId": 98775593764,
+      "qualifiedHead": "72a63c31fd3589db60cfcd9a445a0ce3286947d1"
+    }
   },
   "dryQualification": {
     "location": "EXISTING_SIMCORE_PR1_VERIFY_LANE",

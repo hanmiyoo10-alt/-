@@ -32,7 +32,7 @@ function opsBody(sha = mainSha) {
     `- MAIN: \`${sha}\` / Required PASS — run 42`,
     '- CHANGE: HIGH — 2 commit(s) / 2 file(s) since aaaaaaaaaaaa',
     '- WHY: `NONE`',
-    '- NEXT: `REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE`',
+    '- NEXT: `NONE`',
     '- AUTHORITY: Production MATCH — release-simcore abc; native protection `READY_TO_ACTIVATE` / protected `false`; soft fallback `ACTIVE`',
     '- UNKNOWN: NONE',
     '',
@@ -123,11 +123,14 @@ function clientScenario({capsuleSha = mainSha, compareStatus = 'ahead', barrierM
   assert.equal(staged.brief.meaningfulCommitCount, 1);
   assert.equal(staged.brief.routineGeneratedDocCommitCount, 1);
   assert.equal(staged.brief.riskLevel, 'HIGH');
-  assert.equal(staged.brief.actionCode, 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE');
+  assert.equal(typeof staged.brief.actionCode, 'string');
+  assert.match(staged.brief.actionCode, /^[A-Z][A-Z0-9_]*$/);
+  assert.equal(Array.isArray(staged.brief.actionCode), false, 'session brief must carry exactly one scalar action code');
   const post = success.calls.find((row) => row.endpoint === '/issues/562/comments');
   assert(post, 'session composition must stage exactly one issue comment');
   assert.match(post.options.body.body, /PENDING_USER_VISIBLE_DELIVERY/);
   assert.match(post.options.body.body, /CHANGE: HIGH — 2 total commit\(s\) \(1 meaningful \+ 1 routine generated-doc\) \/ 2 file\(s\)/);
+  assert.match(post.options.body.body, new RegExp(staged.brief.actionCode), 'staged user-visible brief must pass through the producer-owned action code');
   assert.match(post.options.body.body, new RegExp(anchorSha));
   assert.match(post.options.body.body, new RegExp(mainSha));
   assert.equal(success.calls.some((row) => row.endpoint === '/issues/562' && row.options?.method === 'PATCH'), false, 'composer must never PATCH anchor state');

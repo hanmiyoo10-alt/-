@@ -682,3 +682,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f5a85b3a148a009a2b6ae63156510e80570f632a)
 - Event ID: `4f8aaedfa0e4538d3b3e7988e8acbe5953e0f21b3d6c5392cb6f707ced919f52`
 <!-- canonical-main-doc-promoted:4f8aaedfa0e4538d3b3e7988e8acbe5953e0f21b3d6c5392cb6f707ced919f52 -->
+
+### 2026-08-28 — release(usage-dashboard): 3.0.0-alpha.5.84 service-tier selection-source fidelity (#725)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c8778d868443c7bb99e4c6936183a74dd220ccc3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c8778d868443c7bb99e4c6936183a74dd220ccc3)
+- Event ID: `6843851761f87c347b78800aaafb98f512befc789e7b651dbb84ee27d56941c3`
+<!-- canonical-main-doc-promoted:6843851761f87c347b78800aaafb98f512befc789e7b651dbb84ee27d56941c3 -->

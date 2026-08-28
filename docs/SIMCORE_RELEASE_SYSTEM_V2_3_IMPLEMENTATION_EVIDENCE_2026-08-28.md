@@ -1,7 +1,7 @@
 # SimCore Release System v2.3 — Stability Seal Implementation Evidence
 
 Date: 2026-08-28 KST
-Status: **IMPLEMENTED ON WORK BRANCH · PERMANENT CI PENDING · REAL PR3 TERMINAL PROOF PENDING · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI QUALIFIED · REAL PR3 TERMINAL PROOF PENDING · NON-RUNTIME**
 Design authority: `docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_DESIGN.md`
 Active policy: `docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_POLICY.md`
 Tracking: `#673`
@@ -116,7 +116,21 @@ R2.2 blocker semantics remain unchanged
 R2.1 release-spec-contract and R2.2 closure-integrity remain required
 ```
 
-## 5. Preserved release-system boundaries
+## 5. Permanent CI evidence
+
+Implementation head qualification:
+
+```text
+SimCore CI run = 33141818351
+Verify job = 98754100717 PASS
+Required job = 98754155453 PASS
+```
+
+The CI run executed the proposed permanent verifier with `stability-seal` registered as required in `batch-a` and completed the stable aggregate gate successfully.
+
+The branch is reverified again after this evidence-only synchronization before merge; that final-head check is an operating merge condition and does not manufacture terminal HUMAN_EVIDENCE.
+
+## 6. Preserved release-system boundaries
 
 No changes were made to:
 
@@ -140,7 +154,7 @@ Steady-state release cost remains:
 0 user manual pre-live GitHub actions
 ```
 
-## 6. Runtime audit lens
+## 7. Runtime audit lens
 
 Applied the SimCore pre-release/runtime audit lens to the new tooling surface.
 
@@ -160,13 +174,13 @@ Runtime/plugin mutation: NONE
 
 No runtime-relevant BLOCKER or FIX was found in the R2.3 policy implementation.
 
-## 7. Qualification honesty
+## 8. Qualification honesty
 
 This implementation intentionally separates two claims:
 
 ```text
 mechanical policy + permanent regression qualification
-= can be proven now
+= PASS
 
 genuine v0.64.9 terminal operational proof
 = cannot be claimed until actual HUMAN_EVIDENCE + PR3 + post-merge reobservation exists
@@ -176,14 +190,14 @@ The suite uses a synthetic successful terminal case only to prove the mechanical
 
 Tracking issue `#673` remains open until the genuine terminal path is observed and recorded.
 
-## 8. Current implementation verdict
+## 9. Current implementation verdict
 
 ```text
-R2.3-A clean release work-item closure contract = IMPLEMENTED
+R2.3-A clean release work-item closure contract = IMPLEMENTED / CI PASS
 R2.3-B HUMAN LIVE_PASS / PR3 terminal seal = IMPLEMENTED POLICY / REAL PROOF PENDING
 R2.3-C repository label non-authority = REGRESSION-SEALED / NO CLASSIFIER WORK
 R2.3-D durable evidence order = PRESERVED / NO NEW MACHINERY
-permanent CI = PENDING
+permanent CI = PASS
 real v0.64.9 terminal proof = PENDING
 runtime mutation = NONE
 release-simcore mutation = NONE

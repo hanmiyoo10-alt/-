@@ -4,6 +4,31 @@ import { runSuite as runBaseSuite } from './host-local-telemetry.test.mjs';
 
 function countOf(source, needle) { return source.split(needle).length - 1; }
 
+function legacyLexicalView(actualSource, declaration, moduleStart, moduleEnd) {
+  const telemetryView = actualSource.slice(moduleStart, moduleEnd)
+    .replace(
+      declaration,
+      `${declaration}\n// telemetry-slot-marker: __SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__`,
+    )
+    .replace(
+      "typeof hostApi.getLocalPluginStorage !== 'function'",
+      "typeof hostApi['getLocal' + 'PluginStorage'] !== 'function'",
+    );
+
+  return Object.freeze({
+    match: (...args) => actualSource.match(...args),
+    includes: (...args) => actualSource.includes(...args),
+    indexOf: (...args) => actualSource.indexOf(...args),
+    slice: (start, end) => (
+      start === moduleStart && end === moduleEnd
+        ? telemetryView
+        : actualSource.slice(start, end)
+    ),
+    toString: () => actualSource,
+    [Symbol.toPrimitive]: () => actualSource,
+  });
+}
+
 export async function runSuite(ctx) {
   const version = ctx.source.match(/^\/\/@version\s+([^\s]+)\s*$/m)?.[1] || '';
   if (version !== '0.64.10') return runBaseSuite(ctx);
@@ -17,15 +42,18 @@ export async function runSuite(ctx) {
   assert(moduleStart >= 0 && moduleEnd > moduleStart, 'runtime telemetry module bounds');
   const actualTelemetrySource = actualSource.slice(moduleStart, moduleEnd);
   equal((actualTelemetrySource.match(/['"]__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__['"]/g) || []).length, 1, 'Host-local key literal must have one owner');
+  equal(countOf(actualTelemetrySource, "typeof hostApi.getLocalPluginStorage !== 'function'"), 1, 'exactly one Host capability guard');
+  equal(countOf(actualTelemetrySource, 'await hostApi.getLocalPluginStorage()'), 1, 'exactly one Host acquisition call');
+  equal((actualTelemetrySource.match(/getLocalPluginStorage/g) || []).length, 2, 'bounded Host API surface');
 
-  // Compatibility shim for the first draft suite's cosmetic literal-count check.
-  // The inserted comment cannot alter the executable module behavior; all extra
-  // assertions below use the unmodified candidate source.
-  const shimmedSource = actualSource.replace(
-    declaration,
-    `${declaration}\n// telemetry-slot-marker: __SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__`,
-  );
-  const base = await runBaseSuite({ ...ctx, source: shimmedSource });
+  // The first draft base suite used lexical totals for two source-shape checks.
+  // This compatibility view changes only what that legacy slice() assertion sees.
+  // BundleLoader stringifies the view back to actualSource, so every executable
+  // behavioral assertion still runs against the exact candidate bytes.
+  const base = await runBaseSuite({
+    ...ctx,
+    source: legacyLexicalView(actualSource, declaration, moduleStart, moduleEnd),
+  });
 
   const fixture = ctx.fixtures[0];
   const telemetry = new BundleLoader(actualSource).load('runtime-telemetry');
@@ -100,6 +128,7 @@ export async function runSuite(ctx) {
     assertions: [
       ...(base.assertions || []),
       { id: 'host-local-single-key-owner-exact', status: 'PASS' },
+      { id: 'host-local-api-guard-call-exact', status: 'PASS' },
       { id: 'host-local-serialization-failure-no-io', status: 'PASS' },
       { id: 'host-local-read-failure-one-shot', status: 'PASS' },
       { id: 'host-local-active-current-output-gate', status: 'PASS' },

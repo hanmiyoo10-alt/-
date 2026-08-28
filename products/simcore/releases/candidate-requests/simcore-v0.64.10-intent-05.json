@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.64.10-intent-05",
+  "releaseId": "simcore-v0.64.10-new-05",
+  "product": "SimCore",
+  "targetVersion": "0.64.10",
+  "releaseName": "Host-Local One-Shot Telemetry Handoff",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "builderPath": "products/simcore/tooling/build-06410-host-local-one-shot-telemetry-handoff-recovery-04.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "06410_HOST_LOCAL_ONE_SHOT_TELEMETRY_HANDOFF",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06410_HOST_LOCAL_ONE_SHOT_TELEMETRY_HANDOFF_ACTIVATION.md",
+    "docs/SIMCORE_LIVE_06409_SESSION_ACCESS_ERROR_2026-08-28.md",
+    "docs/SIMCORE_06410_HOST_LOCAL_ONE_SHOT_TELEMETRY_HANDOFF_IMPLEMENTATION_EVIDENCE.md"
+  ]
+}

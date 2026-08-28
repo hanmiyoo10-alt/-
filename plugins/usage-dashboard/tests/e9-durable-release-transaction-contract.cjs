@@ -98,6 +98,19 @@ for (const token of [
 ]) assert.ok(reconcile.includes(token),`durable reconciler missing ${token}`);
 assert.ok(!reconcile.includes('git push'),'durable reconciler must never mutate candidate or production refs directly');
 
+const bootstrap = fs.readFileSync('docs/USAGE_DASHBOARD_PR_BOOTSTRAP_CURRENT_CONTRACT.md','utf8');
+for (const token of [
+  'Candidate authority: current PR head',
+  'Source authority: durable release request source_sha',
+  'Frozen-main authority: candidate trailer + E11 receipt',
+  'The PR body is a human-facing locator, not a mutable release-state database.',
+  'There is no PR-body refresh writer',
+  'do not add a second PR-body synchronization step for mutable SHA prose',
+]) assert.ok(bootstrap.includes(token),`release PR bootstrap presentation contract missing ${token}`);
+for (const staleLabel of ['Candidate SHA: `','Source SHA: `','Frozen main: `']) {
+  assert.ok(!bootstrap.includes(staleLabel),`release PR bootstrap contract must not template mutable SHA prose: ${staleLabel}`);
+}
+
 const exact = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml','utf8');
 for (const token of [
   'workflow_dispatch:',
@@ -125,4 +138,4 @@ for (const token of [
   'E9-F',
 ]) assert.ok(runbook.includes(token),`E9 runbook missing ${token}`);
 
-console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10/E11 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure`);
+console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10/E11 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure + restage-stable PR presentation`);

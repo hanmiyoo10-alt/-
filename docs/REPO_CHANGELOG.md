@@ -611,3 +611,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/73bca434d9a326d2b3ef6106d2fc3e8535b5e3d0)
 - Event ID: `71794b9b26379646dd91e96c464d592c66a74fb23c63e048a3979aff45f3d7bf`
 <!-- canonical-main-doc-promoted:71794b9b26379646dd91e96c464d592c66a74fb23c63e048a3979aff45f3d7bf -->
+
+### 2026-08-28 — canonical-main: make proof and closure states explicit
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2bc30ea6620ebe8bca10db205aad94e3ad859003`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2bc30ea6620ebe8bca10db205aad94e3ad859003)
+- Event ID: `eba8a7e0c870a98293dfa651ef431dd7ead05bee0e80f1f90c8508380c4c8a8e`
+<!-- canonical-main-doc-promoted:eba8a7e0c870a98293dfa651ef431dd7ead05bee0e80f1f90c8508380c4c8a8e -->

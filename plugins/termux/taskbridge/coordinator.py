@@ -11,10 +11,11 @@ from pathlib import Path
 
 from store import Store, utc_ts
 import autowatch
+import response_timer
 
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 BOOT_ID_META = "system_boot_id"
-DAEMON_IMPL = "lean_coordinator_v3_autowatch_worker_identity"
+DAEMON_IMPL = "lean_coordinator_v4_autowatch_response_timer"
 MIN_OBSERVER_HEARTBEAT_GRACE = 45.0
 
 
@@ -217,7 +218,7 @@ def reconcile_rebooted_autowatch(
     return stale_ids
 
 
-def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 2.0) -> int:
+def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 1.0) -> int:
     store.set_meta("daemon_pid", str(os.getpid()))
     store.set_meta("daemon_started_at", str(utc_ts()))
     store.set_meta("daemon_impl", DAEMON_IMPL)
@@ -226,6 +227,7 @@ def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 2.
     startup_stale.extend(reconcile_stale_autowatch_workers(store))
     if startup_stale:
         autowatch.arm_if_needed(store, force=True)
+    response_timer.reconcile_after_startup(store)
 
     while True:
         try:
@@ -303,6 +305,7 @@ def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 2.
                         )
 
             autowatch.arm_if_needed(store)
+            response_timer.tick(store)
             time.sleep(max(0.5, interval))
         except KeyboardInterrupt:
             break
@@ -315,7 +318,7 @@ def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="taskbridge-coordinator")
     p.add_argument("--state-dir", required=True)
     p.add_argument("--taskbridge-script", required=True)
-    p.add_argument("--interval", type=float, default=2.0)
+    p.add_argument("--interval", type=float, default=1.0)
     return p
 
 

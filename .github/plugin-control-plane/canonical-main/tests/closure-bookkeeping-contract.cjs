@@ -109,6 +109,7 @@ const queueBody = [
   QUEUE_END,
   '## Coordination state',
   '- Completed v1.2 slices: V12-Q1, V12-A1.',
+  '- Active: **V12-A2 #677**.',
   '## Surfaces',
   '- active packet: #677',
   '- latest completed packet: #675',
@@ -117,6 +118,8 @@ const queue = parseQueue(queueBody);
 assert.equal(queue.valid, true);
 assert.equal(queue.activePacket, 677);
 assert.equal(queue.design, 650);
+assert.equal(queue.coordinationActive, 'V12-A2 #677');
+assert.equal(queue.coordinationActiveNone, false);
 assert.equal(queueDisposition(queue, identity).state, 'READY');
 const overlap = queueDisposition(queue, {packet: 999, design: 650});
 assert.equal(overlap.reasonCode, 'PACKET_SCOPE_OVERLAP');
@@ -133,9 +136,22 @@ assert(idleQueue.includes('**Queue state: IDLE / CANONICAL-MAIN-V1.2**'));
 assert(idleQueue.includes('- Active writable packet: **NONE**.'));
 assert(idleQueue.includes('V12-A2 #677 — DONE / IMPLEMENTED / CONTRACT_PROVEN / LIVE_PROVEN'));
 assert(idleQueue.includes('- Completed v1.2 slices: V12-Q1, V12-A1, V12-A2.'));
+assert(idleQueue.includes('- Active: **NONE**.'));
+assert(!idleQueue.includes('- Active: **V12-A2 #677**.'), 'stale lower active projection must not survive closure');
 assert(idleQueue.includes('- active packet: none'));
 assert(idleQueue.includes('- latest completed packet: #677'));
+const parsedIdle = parseQueue(idleQueue);
+assert.equal(parsedIdle.state, 'IDLE');
+assert.equal(parsedIdle.activeNone, true);
+assert.equal(parsedIdle.coordinationActiveNone, true);
+assert.equal(queueDisposition(parsedIdle, identity).state, 'IDEMPOTENT');
 assert.equal(renderQueueIdle(idleQueue, {...context, bundle: bundle()}), idleQueue, 'queue closure rendering must be idempotent');
+
+const inconsistentIdle = idleQueue.replace('- Active: **NONE**.', '- Active: **V12-A2 #677**.');
+const parsedInconsistent = parseQueue(inconsistentIdle);
+assert.equal(parsedInconsistent.state, 'IDLE');
+assert.equal(parsedInconsistent.coordinationActiveNone, false);
+assert.equal(queueDisposition(parsedInconsistent, identity).state, 'BLOCKED', 'internally contradictory IDLE must not be treated as already closed');
 
 const blockedText = renderBlocked(677, target, 104, partial);
 assert.equal((blockedText.match(/- reasonCode:/g) || []).length, 1);

@@ -4,11 +4,11 @@ Date: 2026-08-29 KST
 
 Status:
 
-`BLOCKER OPEN · PRODUCTION PUBLISHED · MAIN LIVE_PENDING NOT DURABLE`
+`BLOCKER OPEN · ROOT CAUSE CONFIRMED · PRODUCTION PUBLISHED · MAIN LIVE_PENDING NOT DURABLE`
 
-Classification:
+Final classification:
 
-`FIX · BLOCKER · POST_PUBLISH_MAIN_STATE_SYNC · NON_RUNTIME · PRODUCTION_EXPOSURE_EXISTS`
+`FIX · BLOCKER · RELEASE_STATE_MARKER_TRANSITION · POST_PUBLISH_MAIN_STATE_SYNC · NON_RUNTIME · PRODUCTION_EXPOSURE_EXISTS`
 
 ## Trigger
 
@@ -51,7 +51,7 @@ Therefore this incident occurs strictly after successful runtime publication.
 
 `Commit and gate bounded main state`
 
-The post-publish state tool itself successfully built a bounded LIVE_PENDING payload:
+The post-publish state tool successfully built a bounded LIVE_PENDING payload:
 
 ```text
 releaseAuthority   = RS2_4_PERMANENT
@@ -63,57 +63,159 @@ currentPriority    = 06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_
 disposition        = LIVE_PENDING_PAYLOAD_READY
 ```
 
-The payload boundary check also passed:
+The payload boundary check passed:
 
 `RS2_4_POST_PUBLISH_PAYLOAD_BOUNDARY_PASS`
 
 A local payload commit was created:
 
-`92f6d331` — `state(simcore): declare simcore-v0.66.0-new-05 live pending`
+`92f6d331e175ad0c844f32cd14b1d897a4bace95` — `state(simcore): declare simcore-v0.66.0-new-05 live pending`
 
-However the repository main-write gateway rejected promotion after its required MAIN_HEALTH workflow failed:
+The repository main-write gateway rejected promotion because required MAIN_HEALTH run `33206619653` failed.
+
+## MAIN_HEALTH diagnosis
+
+Run:
+
+`33206619653`
+
+All non-regression release gates passed:
 
 ```text
-MAIN_WRITE_GATE_WORKFLOW_FAILED
-run = 33206619653
-conclusion = failure
+GATE_STATIC        = PASS
+GATE_ARCH          = PASS
+GATE_STATE         = PASS
+GATE_COORDINATION  = PASS
+GATE_LEGACY_COMPAT = PASS
+GATE_REGRESSION    = FAIL
 ```
 
-As a result:
+Reason code:
+
+`PERMANENT_REGRESSION_FAIL`
+
+Exact failing assertion:
 
 ```text
-release-simcore publication = DURABLE / v0.66.0
-main LIVE_PENDING commit     = NOT DURABLE
-Permanent Release Required   = FAILURE
+SUITE_ASSERTION_FAILED: closure-integrity: single active release-state begin: expected=1 actual=2
 ```
+
+The verifier observed the already-published v0.66.0 production commit and byte-identical latest/install successfully. This failure is therefore not a runtime, architecture, state-schema, coordination, or legacy-compatibility defect.
+
+## Root cause
+
+Current durable `main` before state convergence contains exactly one machine release-state block:
+
+```text
+SIMCORE_RELEASE_STATE:LIVE_PASS
+release transaction = simcore-v0.65.0-new-05
+```
+
+`products/simcore/tooling/release-state-converge.mjs` currently defines only LIVE_PENDING-specific markers for its renderer:
+
+```text
+LIVE_BEGIN = SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN
+LIVE_END   = SIMCORE_RELEASE_STATE:LIVE_PENDING:END
+```
+
+`renderLiveBlock()` counts/replaces only an existing LIVE_PENDING block. When none exists, it inserts the new LIVE_PENDING block after the production snapshot. It does not detect or replace a predecessor LIVE_PASS block.
+
+The generated local payload `92f6d331...` consequently contains two machine release-state blocks:
+
+```text
+SIMCORE_RELEASE_STATE:LIVE_PENDING
+→ simcore-v0.66.0-new-05
+
+SIMCORE_RELEASE_STATE:LIVE_PASS
+→ simcore-v0.65.0-new-05
+```
+
+R2.2 permanent closure-integrity intentionally requires exactly one current machine release-state block regardless of mode:
+
+```text
+releaseBegins = match all SIMCORE_RELEASE_STATE:<mode>:BEGIN
+releaseEnds   = match all SIMCORE_RELEASE_STATE:<mode>:END
+require begins.length == 1
+require ends.length == 1
+require begin mode == end mode
+```
+
+Therefore the post-publish renderer and the permanent current-authority invariant are inconsistent during a terminal-to-live transition:
+
+```text
+LIVE_PASS predecessor
+→ publish next release
+→ release-state-converge inserts LIVE_PENDING instead of replacing predecessor state block
+→ two current release-state markers
+→ closure-integrity correctly rejects main write
+```
+
+## Missing regression coverage
+
+`products/simcore/tests/post-publish-state-permanent.test.mjs` initializes `docs/CURRENT_DEVELOPMENT.md` with a production snapshot only and no predecessor `SIMCORE_RELEASE_STATE:LIVE_PASS` block.
+
+Its positive LIVE_PENDING test therefore proves insertion into an empty release-state surface, but not the real steady-state transition:
+
+```text
+LIVE_PASS → LIVE_PENDING
+```
+
+The defect escaped because this transition fixture was absent.
+
+## Recovery-path implication
+
+The installed permanent post-publish recovery lane is not safe to invoke yet for this incident.
+
+That lane rebuilds the administrative payload through the same `post-publish-state.mjs → release-state-converge.mjs` owner. Without fixing marker transition semantics first, a recovery request would deterministically recreate the same two-marker payload and fail the same closure-integrity gate.
+
+Therefore:
+
+`DO_NOT_RERUN_PERMANENT_RECOVERY_UNTIL_MARKER_TRANSITION_FIX_REACHES_MAIN`
+
+## Authorized repair boundary
+
+Repair as a separate non-runtime release-system blocker fix. Do not mutate the already-published v0.66.0 runtime.
+
+Required narrow correction:
+
+1. `release-state-converge` must treat the entire `SIMCORE_RELEASE_STATE:<mode>` block family as one current-authority slot.
+2. When transitioning to LIVE_PENDING, exactly one well-formed existing release-state block of any mode must be replaced by the new LIVE_PENDING block.
+3. If no release-state block exists, insertion after `PRODUCTION_SNAPSHOT:END` remains allowed.
+4. Multiple/mismatched existing release-state markers must fail closed rather than guessing.
+5. Add permanent regression coverage for real `LIVE_PASS → LIVE_PENDING` replacement and resulting single-marker truth.
+6. Preserve publication authority, persistent payload allowlist, state receipt semantics, release records, main-write gateway, and `release-simcore` untouched.
+
+This is a release-state renderer/current-authority repair only, not a weakening of closure-integrity.
 
 ## Safety interpretation
 
-This is not a runtime publication rollback condition by itself. The exact runtime candidate already passed CANDIDATE_REQUIRED and was published by the single permanent publisher.
+This is not a runtime publication rollback condition. The exact runtime candidate passed CANDIDATE_REQUIRED and was published by the single permanent publisher.
 
-Do not mutate or republish runtime bytes while diagnosing this incident.
+Do not mutate or republish runtime bytes while repairing this incident.
 
 The inconsistent authority state is administrative:
 
 ```text
 release-simcore says v0.66.0 is production
-main still reflects pre-publication administrative truth
+main still reflects pre-publication v0.65 LIVE_PASS administrative truth
 ```
 
-Because `main` is the authority for design/evidence/roadmap/administrative records, this divergence is a release blocker before human real-long-chat acceptance may begin.
+Because `main` is the authority for design/evidence/roadmap/administrative records, this divergence remains a blocker before human real-long-chat acceptance may begin.
 
-## Advancement rule
+## Required recovery sequence
 
-STOP before live validation.
+```text
+record this incident on main
+→ implement narrow release-state marker transition fix on separate non-runtime work branch
+→ permanent static/CI validation
+→ merge fix to main
+→ create one-shot permanent published-state recovery request for exact new-05 publication
+→ recovery reobserves release-simcore C/blob
+→ rebuild LIVE_PENDING payload using fixed renderer
+→ MAIN_HEALTH / Required PASS
+→ durable main write
+→ verify manifest + CURRENT_DEVELOPMENT + GUIDELINES + release record + state receipt agreement
+→ only then begin human real-long-chat validation
+```
 
-Required next steps:
-
-1. inspect MAIN_HEALTH run `33206619653` and identify its exact gate/reason code;
-2. determine whether the failure is caused by the generated LIVE_PENDING payload, current main drift, or unrelated repository health noise;
-3. update this document with the exact diagnosis and final classification;
-4. repair only the administrative/state-sync path unless evidence proves otherwise;
-5. re-establish durable main LIVE_PENDING truth for exact production `4b6ae1a4...` / blob `f0da13d4...`;
-6. verify the release record/state receipt/current development/guidelines/manifest all agree;
-7. only then begin `06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT`.
-
-Do not fabricate human live evidence and do not treat the successful runtime publication as final release closure.
+Do not fabricate human live evidence and do not treat successful runtime publication as final release closure.

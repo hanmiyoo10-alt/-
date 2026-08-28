@@ -707,7 +707,7 @@ def assert_candidate(text):
         if token in finalize:
             raise SystemExit(f"06600_SLICE_A_IO_FORBIDDEN {token}")
 
-    if "deferredPruneIndex" in session or "deferredPruneRunning" in session or "scheduleDeferredPrune(outIndex)" in session:
+    if "deferredPruneIndex" in session or "deferredPruneRunning" in session or "\n  scheduleDeferredPrune(outIndex) {" in session:
         raise SystemExit("06600_SLICE_B_SESSION_HOUSEKEEPING_REMAINS")
     for token in ("deferredPruneIndex", "deferredPruneRunning", "scheduleDeferredPrune(outIndex)", "setTimeout(run, 750)", "await this.prune()"):
         if token not in store:

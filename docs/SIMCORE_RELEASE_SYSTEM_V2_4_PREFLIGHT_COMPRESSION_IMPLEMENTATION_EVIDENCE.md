@@ -115,7 +115,7 @@ products/simcore/tests/fixtures/preflight-compression/case.json
 products/simcore/tests/registry.mjs
 ```
 
-The suite permanently replays the v0.64.10 authoring failure classes:
+The suite permanently replays the v0.64.10 authoring failure classes.
 
 ### Valid control
 
@@ -228,7 +228,7 @@ The first semantic-order assertion could have matched the version fallback `runB
 
 ## 8. Files changed by R2.4 implementation
 
-Expected implementation set:
+Implementation set:
 
 ```text
 products/simcore/tooling/ci/pr1-dry-qualification.mjs
@@ -252,22 +252,40 @@ new approval step
 new issue controller
 ```
 
-## 9. Qualification state
+## 9. First permanent CI qualification
 
-At initial implementation commit:
+Implementation PR:
 
 ```text
-A = IMPLEMENTED / CI PENDING
-B = IMPLEMENTED / CI PENDING
-C = HELD FOR REAL PR3
-D = ACTIVE FREEZE
-production = unchanged v0.64.10
+#701
 ```
 
-After exact-head permanent SimCore `Verify / Required` succeeds, the machine status may advance to:
+First exact implementation head:
+
+```text
+72a63c31fd3589db60cfcd9a445a0ce3286947d1
+```
+
+Authoritative SimCore CI:
+
+```text
+run 33148724793
+Verify 98775518797 = PASS
+Required 98775593764 = PASS
+```
+
+This run included the new registered `preflight-compression` suite through the existing permanent verifier path.
+
+Machine status therefore advances to:
 
 ```text
 IMPLEMENTED_A_B_PERMANENT_CI_QUALIFIED_C_HELD_FOR_REAL_PR3
 ```
 
-Operational proof that the new dry lane catches a defect on a future genuine release PR remains a later real-use feedback item, not a prerequisite for mechanical activation.
+A/B are mechanically qualified. R2.4-C remains unimplemented by design.
+
+## 10. Final-head rule
+
+The CI evidence sync itself changes the PR head, so the final evidence-bearing head must pass the same SimCore `Verify / Required` pair again before merge.
+
+Operational proof that `GATE_PR1_DRY` catches a defect on a future genuine runtime release PR remains a later real-use feedback item under the continuous feedback loop. It is not publication authority and is not a prerequisite for R2.4 mechanical activation.

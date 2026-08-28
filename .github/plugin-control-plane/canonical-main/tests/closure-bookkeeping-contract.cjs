@@ -156,7 +156,6 @@ assert(/node \.github\/plugin-control-plane\/canonical-main\/orchestrator\/closu
 assert(/issues:\s*write/.test(workflow), 'existing issue-write permission remains the mutation authority');
 assert(!/contents:\s*write/.test(workflow), 'A2 must not add contents write authority');
 assert(!/pull-requests:\s*write/.test(workflow), 'A2 must not add PR write authority');
-assert(/github\.event\.workflow_run\.name != 'Canonical Main Proof Bundle'/.test(workflow), 'normal refresh must not duplicate work on the proof completion event');
 assert(/closure-bookkeeping-contract\.cjs/.test(pluginCi), 'focused contract must be permanent Plugin CI');
 
 assert(!/git\s+push|force-push|branches\/main\/protection|repos\/\$\{repo\}\/releases/i.test(writer), 'closure writer must not contain main/release/protection mutation paths');

@@ -57,8 +57,8 @@ for (const forbidden of ['routingMetadata', 'status_code', 'statusText', 'respon
 }
 
 assert.ok(engineSources.includes('const httpStatusExplicit ='), 'P48 Engine public strict HTTP predicate missing');
-assert.ok(engineSources.includes("row.httpStatusSource === 'errorDetails.statusCode'"), 'P48 Engine must require exact source provenance');
-assert.ok(engineSources.includes("row.httpStatusFidelity === 'explicit'"), 'P48 Engine must require explicit fidelity');
+assert.ok(engineSources.includes("row?.httpStatusSource === 'errorDetails.statusCode'"), 'P48 Engine must require exact source provenance');
+assert.ok(engineSources.includes("row?.httpStatusFidelity === 'explicit'"), 'P48 Engine must require explicit fidelity');
 assert.ok(engineSources.includes("httpStatusSource: httpStatusExplicit ? 'errorDetails.statusCode' : ''"), 'P48 Engine public source field missing');
 assert.ok(engineSources.includes("httpStatusFidelity: httpStatusExplicit ? 'explicit' : 'unknown'"), 'P48 Engine UNKNOWN fidelity missing');
 

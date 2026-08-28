@@ -332,9 +332,10 @@ jobs:
         run: |
           set -euo pipefail
           RECORD="products/simcore/releases/records/${RELEASE_ID}.json"
+          RECEIPT="products/simcore/releases/state-receipts/${RELEASE_ID}.json"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md "$RECORD"
+          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md "$RECORD" "$RECEIPT"
           if git diff --cached --quiet; then
             echo 'POST_PUBLISH_RECOVERY_ALREADY_DURABLE'
           else
@@ -345,6 +346,7 @@ jobs:
               --allow docs/CURRENT_DEVELOPMENT.md \
               --allow docs/SIMCORE_GUIDELINES.md \
               --allow "$RECORD" \
+              --allow "$RECEIPT" \
               --required-workflow simcore-ci.yml \
               --required-profile MAIN_HEALTH \
               --required-job Required \
@@ -363,15 +365,31 @@ jobs:
           test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_C"
           git show origin/main:product-manifest.json > .simcore-release/durable-manifest.json
           git show "origin/main:products/simcore/releases/records/${RELEASE_ID}.json" > .simcore-release/durable-record.json
+          git show "origin/main:products/simcore/releases/state-receipts/${RELEASE_ID}.json" > .simcore-release/durable-receipt.json
           python3 - <<'PY'
           import json, os
           m=json.load(open('.simcore-release/durable-manifest.json'))
           r=json.load(open('.simcore-release/durable-record.json'))
+          q=json.load(open('.simcore-release/durable-receipt.json'))
+          h=json.load(open('.simcore-release/handoff/post-publish-input.json'))
           assert m['release_commit']==os.environ['EXPECTED_C']
           assert m['release_blob']==os.environ['EXPECTED_BLOB']
           assert m['validation_status']=='PENDING_REAL_LONG_CHAT'
           assert r['releaseState']=='LIVE_PENDING'
           assert r['productionTruth']=='PUBLISHED_IDENTITY_VERIFIED'
           assert r['stateSyncStatus']=='PASS'
+          assert q['schemaVersion']==1 and q['product']=='SimCore'
+          assert q['releaseId']==os.environ['RELEASE_ID']
+          assert q['publisherRunId']==h['publisherRunId']
+          assert q['productionCommit']==os.environ['EXPECTED_C']
+          assert q['previousProductionCommit']==h['previousProductionCommit']
+          assert q['productionBlob']==os.environ['EXPECTED_BLOB']
+          assert q['liveScenarioId']==h['liveScenarioId']
+          assert q['validationStatus']=='PENDING_REAL_LONG_CHAT'
+          assert q['lifecycleState']=='REAL_RELEASE_LIVE_PENDING'
+          assert q['releaseRecordPath']==f"products/simcore/releases/records/{os.environ['RELEASE_ID']}.json"
+          assert q['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
+          assert q['releaseAuthority']=='RS2_4_PERMANENT'
+          assert q['result']=='PASS'
           print('RS2_4_POST_PUBLISH_RECOVERY_DURABLE_MAIN_PASS')
           PY

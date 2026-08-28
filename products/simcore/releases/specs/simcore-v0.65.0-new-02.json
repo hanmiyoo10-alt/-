@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.65.0-new-02",
+  "product": "SimCore",
+  "version": "0.65.0",
+  "releaseName": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "ddae3dbe4860f2729bdef55fff9818eac5cf646f",
+  "expectedProductionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "candidateReleaseBlob": "1b38e2b2874f2581edae8f1080edc39558febefa",
+  "primaryGoalId": "06500_M2_3_EDIT_RECONCILE_OWNERSHIP_EXTRACTION",
+  "changeClass": "RUNTIME_FEATURE",
+  "evidenceRefs": [
+    "docs/SIMCORE_06500_COMBINED_IDENTITY_M2_3_RELEASE_DECISION_2026-08-28.md",
+    "docs/SIMCORE_06500_IMPLEMENTATION_ACTIVATION_OWNERSHIP_SCOPE_2026-08-28.md",
+    "docs/SIMCORE_06500_M2_3_IDENTITY_CONVERGENCE_IMPLEMENTATION_EVIDENCE.md",
+    "docs/SIMCORE_06500_CANDIDATE_FAILURE_01_RELOAD_TEST_VERSION_BRIDGE_2026-08-28.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

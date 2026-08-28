@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "operator-release-card-v1",
+  "suite": "operator-release-card",
+  "input": {
+    "cases": [
+      "exact-button-label",
+      "panel-only-collapsed",
+      "no-new-top-level-ui-registration",
+      "version-name-one-scenario",
+      "plain-summary-bounds",
+      "numbered-steps-stop-and-capture-guidance",
+      "recent-version-ledger",
+      "explicit-non-authority",
+      "static-pure-no-side-effects",
+      "local-toggle-only"
+    ]
+  },
+  "expected": {
+    "topLevelRegisterButtonCount": 1,
+    "topLevelRegisterSettingCount": 1,
+    "minSummaryBullets": 3,
+    "maxSummaryBullets": 6,
+    "minRecentVersions": 3,
+    "recentVersions": ["0.64.9", "0.64.8", "0.64.7"],
+    "forbiddenTokens": [".setItem(", ".removeItem(", "localStorage", "pluginStorage", "fetch(", "XMLHttpRequest", "setInterval(", "setTimeout(", "Risuai.setDatabase", "runtimeTelemetryRules.publish(", "checkpointRuntimeTelemetry("]
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06409_OPERATOR_RELEASE_CARD_ADJUNCT_DESIGN.md"
+  }
+}

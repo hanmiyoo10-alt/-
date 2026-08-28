@@ -198,7 +198,9 @@ class ResponseTimerTests(unittest.TestCase):
 
     def test_stale_notification_button_cannot_complete_newer_session(self):
         _observer, first = self.start_timer()
-        with patch("response_timer._notify", return_value=True):
+        with patch("response_timer._notification_available", return_value=True), patch(
+            "response_timer._daemon_alive", return_value=True
+        ), patch("response_timer._notify", return_value=True):
             response_timer.stop(self.store)
             second = response_timer.start(self.store, self.package)
             result = response_timer.manual_complete(self.store, first["session_id"])

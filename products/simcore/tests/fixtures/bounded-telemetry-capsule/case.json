@@ -1,0 +1,18 @@
+{
+  "id": "bounded-telemetry-capsule-v06411",
+  "input": {
+    "promptLines": 80,
+    "messageCount": 70,
+    "systemChars": 300000
+  },
+  "expected": {
+    "maxPromptLines": 64,
+    "maxTopologySignatures": 64,
+    "maxSystemEdgeBlocks": 8,
+    "promptBudget": 4096,
+    "topologyBudget": 6144,
+    "trajectoryBudget": 2048,
+    "wholeBudget": 16384,
+    "assertionCount": 9
+  }
+}

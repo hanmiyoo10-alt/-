@@ -159,7 +159,7 @@ export async function runSuite({ fixtures }) {
   const guard = semantic.indexOf("typeof hostApi.getLocalPluginStorage !== 'function'");
   const call = semantic.indexOf('await hostApi.getLocalPluginStorage()');
   const bounded = semantic.indexOf("actualTelemetrySource.match(/getLocalPluginStorage/g)");
-  const baseRun = semantic.indexOf('runBaseSuite(');
+  const baseRun = semantic.indexOf('const base = await runBaseSuite(');
   assert(guard >= 0 && call >= 0 && bounded >= 0, 'semantic Host API surfaces missing');
   assert(baseRun > guard && baseRun > call, 'semantic Host checks must precede legacy compatibility execution');
   assert(!semantic.includes('actualSource.match(/getLocalPluginStorage/g)'), 'whole-source Host API count returned');

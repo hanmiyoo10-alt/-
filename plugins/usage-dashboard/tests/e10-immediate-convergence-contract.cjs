@@ -9,6 +9,7 @@ const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 const release = loadCurrentRelease();
 
 const e10Body = [
+  'Plugin: usage-dashboard',
   `release_version: ${release.productVersion}`,
   `release_spec: ${release.specPath}`,
   'source_branch: release/usage-dashboard-e10-fixture',

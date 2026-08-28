@@ -683,6 +683,13 @@
 - Event ID: `4f8aaedfa0e4538d3b3e7988e8acbe5953e0f21b3d6c5392cb6f707ced919f52`
 <!-- canonical-main-doc-promoted:4f8aaedfa0e4538d3b3e7988e8acbe5953e0f21b3d6c5392cb6f707ced919f52 -->
 
+### 2026-08-28 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `eec5e9d473e1d458cc26629c3505ec8a23c1f363f6260227849e78bed7444b97`
+<!-- canonical-main-doc-promoted:eec5e9d473e1d458cc26629c3505ec8a23c1f363f6260227849e78bed7444b97 -->
+
 ### 2026-08-28 — release(usage-dashboard): 3.0.0-alpha.5.84 service-tier selection-source fidelity (#725)
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

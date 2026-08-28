@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.10`
-- Release: `Host-Local One-Shot Telemetry Handoff`
+- Version: `0.64.11`
+- Release: `Bounded Telemetry Capsule Compaction`
 - Release branch: `release-simcore`
-- Release commit: `e43ace74241984f21f69299eff690d0c4f483381`
-- Release blob: `b7d76bd03a435356eeea6948968b0d33ac564ae7`
+- Release commit: `7765ad75359f8d9736a7dea65141e4e45b713c10`
+- Release blob: `cb2fe57da379f9b552f05d0f33eae9cffe498e52`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -33,10 +33,10 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
 ## Current Release Live Gate
 
-- Release transaction: `simcore-v0.64.10-new-05`
-- Production commit: `e43ace74241984f21f69299eff690d0c4f483381`
+- Release transaction: `simcore-v0.64.11-new-01`
+- Production commit: `7765ad75359f8d9736a7dea65141e4e45b713c10`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT`
+- Current priority / live gate: `06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT`
 - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
 This block is machine-managed by `release-state-converge` from immutable publication evidence.

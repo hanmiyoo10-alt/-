@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.64.10",
-  "release_name": "Host-Local One-Shot Telemetry Handoff",
+  "production_version": "0.64.11",
+  "release_name": "Bounded Telemetry Capsule Compaction",
   "release_branch": "release-simcore",
-  "release_commit": "e43ace74241984f21f69299eff690d0c4f483381",
-  "release_blob": "b7d76bd03a435356eeea6948968b0d33ac564ae7",
+  "release_commit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "release_blob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+  "current_priority": "06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

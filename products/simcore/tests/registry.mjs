@@ -10,6 +10,7 @@ export const registry = Object.freeze([
   { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity-v06410.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'operator-release-card', module: './suites/operator-release-card-v06410.test.mjs', fixtureDir: 'operator-release-card', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'host-local-telemetry', module: './suites/host-local-telemetry-v06410.test.mjs', fixtureDir: 'host-local-telemetry', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'preflight-compression', module: './suites/preflight-compression.test.mjs', fixtureDir: 'preflight-compression', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'candidate-materialize', module: './suites/candidate-materialize.test.mjs', fixtureDir: 'candidate-materialize', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'candidate-receipt', module: './suites/candidate-receipt.test.mjs', fixtureDir: 'candidate-receipt', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'release-spec-contract', module: './suites/release-spec-contract.test.mjs', fixtureDir: 'release-spec-contract', coverage: 'EXECUTABLE', required: true, goldenGate: true },

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "bounded-telemetry-capsule-v06411",
+  "suite": "bounded-telemetry-capsule",
+  "input": {
+    "promptLines": 80,
+    "messageCount": 70,
+    "systemChars": 300000
+  },
+  "expected": {
+    "maxPromptLines": 64,
+    "maxTopologySignatures": 64,
+    "maxSystemEdgeBlocks": 8,
+    "promptBudget": 4096,
+    "topologyBudget": 6144,
+    "trajectoryBudget": 2048,
+    "wholeBudget": 16384,
+    "assertionCount": 9
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_ACTIVATION.md"
+  }
+}

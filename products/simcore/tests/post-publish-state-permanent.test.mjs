@@ -77,6 +77,34 @@ function testP1BoundedLivePending(base) {
   const dev=fs.readFileSync(path.join(root,'docs/CURRENT_DEVELOPMENT.md'),'utf8');
   if(!dev.includes('SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN')||!dev.includes(`Current priority / live gate: \`${f.input.liveScenarioId}\``)||!dev.includes('REAL_RELEASE_LIVE_PENDING')) throw new Error('P1 development live gate block');
 }
+function testP1bReplacesPredecessorLivePass(base) {
+  const root=path.join(base,'p1b'); fs.mkdirSync(root); const f=initFixture(root);
+  write(root,'docs/CURRENT_DEVELOPMENT.md',[
+    'before',
+    '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->',
+    'stale',
+    '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->',
+    '',
+    '<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->',
+    '## Current Release Terminal State',
+    '',
+    '- Release transaction: `simcore-v1.0.0-new-01`',
+    `- Production commit: \`${f.P}\``,
+    '- Validation status: `LIVE_PASS`',
+    '- R lifecycle: `REAL_RELEASE_LIVE_PASS`',
+    '<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->',
+    '',
+    'after',
+    '',
+  ].join('\n'));
+  runPost(root);
+  const dev=fs.readFileSync(path.join(root,'docs/CURRENT_DEVELOPMENT.md'),'utf8');
+  const begins=[...dev.matchAll(/<!-- SIMCORE_RELEASE_STATE:([^:]+):BEGIN -->/g)];
+  const ends=[...dev.matchAll(/<!-- SIMCORE_RELEASE_STATE:([^:]+):END -->/g)];
+  if(begins.length!==1||ends.length!==1||begins[0][1]!=='LIVE_PENDING'||ends[0][1]!=='LIVE_PENDING') throw new Error(`P1b marker transition begins=${begins.length} ends=${ends.length}`);
+  if(dev.includes('SIMCORE_RELEASE_STATE:LIVE_PASS')||dev.includes('REAL_RELEASE_LIVE_PASS')) throw new Error('P1b predecessor LIVE_PASS survived');
+  if(!dev.includes(`Release transaction: \`${f.input.releaseId}\``)||!dev.includes(`Production commit: \`${f.C}\``)||!dev.includes(`Current priority / live gate: \`${f.input.liveScenarioId}\``)) throw new Error('P1b new LIVE_PENDING identity missing');
+}
 function testP2ObservedIdentityMismatch(base) {
   const root=path.join(base,'p2'); fs.mkdirSync(root); initFixture(root); write(root,'.published/install.js','diverged\n');
   const r=runPost(root,false);
@@ -119,6 +147,20 @@ function testDReceiptConflict(base) {
   const r=runPost(root,false);
   if(r.status===0||!r.stderr.includes('STATE_RECEIPT_CONFLICT')) throw new Error(`D-N12 ${r.stderr}`);
 }
+function testDReleaseMarkerModeMismatch(base) {
+  const root=path.join(base,'dn-marker'); fs.mkdirSync(root); initFixture(root);
+  write(root,'docs/CURRENT_DEVELOPMENT.md',[
+    '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:BEGIN -->',
+    'stale',
+    '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->',
+    '<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->',
+    'broken mixed marker',
+    '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->',
+    '',
+  ].join('\n'));
+  const r=runPost(root,false);
+  if(r.status===0||!r.stderr.includes('LIVE_PENDING_DOC_MARKER_INVALID')) throw new Error(`D marker mismatch ${r.stderr}`);
+}
 function testSharedOwnerBoundary() {
   const adapter=fs.readFileSync(POST,'utf8');
   const owner=fs.readFileSync(CONVERGE,'utf8');
@@ -130,14 +172,16 @@ function main() {
   const base=fs.mkdtempSync(path.join(os.tmpdir(),'simcore-rs2-4e-post-'));
   try {
     testP1BoundedLivePending(base);
+    testP1bReplacesPredecessorLivePass(base);
     testP2ObservedIdentityMismatch(base);
     testP3IdempotentRecovery(base);
     testP4NewerReleaseProtection(base);
     testP5PublishedTruthSurvivesAdminFailure(base);
     testDRequiredLiveGate(base);
     testDReceiptConflict(base);
+    testDReleaseMarkerModeMismatch(base);
     testSharedOwnerBoundary();
-    console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5');
+    console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5 + LIVE_PASS_TRANSITION');
   } finally { fs.rmSync(base,{recursive:true,force:true}); }
 }
 

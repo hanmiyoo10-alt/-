@@ -1,0 +1,35 @@
+name: Termux Background GPT
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/termux/background-gpt/**'
+      - 'docs/TERMUX_BACKGROUND_GPT.md'
+      - '.github/workflows/termux-background-gpt.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/termux/background-gpt/**'
+      - 'docs/TERMUX_BACKGROUND_GPT.md'
+      - '.github/workflows/termux-background-gpt.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            plugins/termux/background-gpt/background_gpt.py \
+            plugins/termux/background-gpt/openai_backend.py \
+            plugins/termux/background-gpt/state_store.py \
+            plugins/termux/background-gpt/notifications.py
+      - name: Unit tests
+        run: python -m unittest discover -s plugins/termux/background-gpt/tests -v

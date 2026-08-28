@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.64.11-intent-01",
+  "releaseId": "simcore-v0.64.11-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+  "sourceCommit": "5e64cbe3ff3254b30e40b39bc4bfa7bde6afd209",
+  "candidateCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "candidateReleaseBlob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.64.11-intent-01",
+  "builderPath": "products/simcore/tooling/build-06411-bounded-telemetry-capsule-compaction.py",
+  "builderSha256": "28a798804716a2aecaa4df946cc3f7ebafae40da3550bace8260c9ef24ba171e",
+  "verifierCommit": "5e64cbe3ff3254b30e40b39bc4bfa7bde6afd209",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "775e51893988deb873b282deeaea942e9eb2f10805a6bafdef67cefeff2fb524",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

@@ -8,11 +8,13 @@ import time
 from pathlib import Path
 
 from adapters import chatgpt_notification
+import chatgpt_calibration
 import notifier
 from runtime import adopt_child, daemon_loop, launch_detached, pid_alive, process_rss_kb, run_worker, terminate_pid
 from store import Store
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
+TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -34,6 +36,15 @@ def parser() -> argparse.ArgumentParser:
     watch_chatgpt = sub.add_parser("watch-chatgpt", help="watch for a new ChatGPT Android notification")
     watch_chatgpt.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
     watch_chatgpt.add_argument("--timeout", type=int, default=1800, help="seconds before the observer stops as UNKNOWN")
+
+    confirm_chatgpt = sub.add_parser(
+        "confirm-chatgpt",
+        help="confirm that a completed observer notification matched an actual ChatGPT response completion",
+    )
+    confirm_chatgpt.add_argument("job_id")
+
+    calibration = sub.add_parser("chatgpt-calibration", help="show local ChatGPT completion calibration status")
+    calibration.add_argument("--package", default=chatgpt_notification.CHATGPT_PACKAGE)
 
     start = sub.add_parser("start", help="start a registered job")
     start.add_argument("job_id")
@@ -106,9 +117,27 @@ def fmt_job(job: dict) -> str:
     )
 
 
+def find_active_chatgpt_observer(store: Store, package: str) -> dict | None:
+    for job in store.list_jobs(500):
+        if job.get("adapter") != "chatgpt_notification":
+            continue
+        command = job.get("command") or []
+        job_package = command[0] if command else chatgpt_notification.CHATGPT_PACKAGE
+        if job_package != package:
+            continue
+        if job.get("logical_state") in {"CREATED", "ACTIVE", "RECONNECTED"}:
+            return job
+    return None
+
+
+def _observer_package(job: dict) -> str:
+    command = job.get("command") or []
+    return command[0] if command else chatgpt_notification.CHATGPT_PACKAGE
+
+
 def do_reconnect(store: Store, job_id: str, script: Path) -> dict:
     job = store.get_job(job_id)
-    if job["logical_state"] in {"COMPLETED", "FAILED", "CANCELLED"}:
+    if job["logical_state"] in TERMINAL_STATES:
         return job
     if pid_alive(job.get("worker_pid")):
         if job["logical_state"] in {"SUSPECTED_STALL", "UNKNOWN"}:
@@ -157,6 +186,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "watch-chatgpt":
         if args.timeout <= 0:
             raise SystemExit("--timeout must be greater than 0")
+        active = find_active_chatgpt_observer(store, args.package)
+        if active:
+            raise SystemExit(
+                f"ChatGPT observer already active: {active['job_id']} "
+                f"({active['logical_state']}/{active['local_state']})"
+            )
         job = store.create_job(
             [args.package, str(args.timeout)],
             adapter="chatgpt_notification",
@@ -165,6 +200,34 @@ def main(argv: list[str] | None = None) -> int:
         ensure_daemon(store, script)
         store.request(job["job_id"], "RUN")
         print(job["job_id"])
+        return 0
+    if args.cmd == "confirm-chatgpt":
+        job = store.get_job(args.job_id)
+        if job.get("adapter") != "chatgpt_notification":
+            raise SystemExit("job is not a ChatGPT notification observer")
+        if job.get("logical_state") != "COMPLETED":
+            raise SystemExit(f"observer job is not COMPLETED: {job.get('logical_state')}")
+        events = store.events(args.job_id, 200)
+        if not any(event["event_type"] == "CHATGPT_NOTIFICATION_SEEN" for event in events):
+            raise SystemExit("observer job has no CHATGPT_NOTIFICATION_SEEN event")
+        package = _observer_package(job)
+        result = chatgpt_calibration.record_confirmation(store, package, args.job_id)
+        if result["added"]:
+            store.add_event(
+                args.job_id,
+                "CHATGPT_COMPLETION_CONFIRMED",
+                {
+                    "package": package,
+                    "confirmed_count": result["confirmed_count"],
+                    "threshold": result["threshold"],
+                    "trusted": result["trusted"],
+                    "scope": result["scope"],
+                },
+            )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.cmd == "chatgpt-calibration":
+        print(json.dumps(chatgpt_calibration.status(store, args.package), indent=2, ensure_ascii=False))
         return 0
     if args.cmd == "start":
         ensure_daemon(store, script)
@@ -192,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "cancel":
         job = store.get_job(args.job_id)
-        if job["logical_state"] in {"COMPLETED", "FAILED", "CANCELLED"}:
+        if job["logical_state"] in TERMINAL_STATES:
             print(fmt_job(job))
             return 0
         ensure_daemon(store, script)
@@ -205,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "doctor":
         raw = store.get_meta("daemon_pid")
         daemon_pid = int(raw) if raw and raw.isdigit() else None
-        active = [j for j in store.list_jobs(500) if j["logical_state"] not in {"COMPLETED", "FAILED", "CANCELLED"}]
+        active = [j for j in store.list_jobs(500) if j["logical_state"] not in TERMINAL_STATES]
         data = {
             "version": VERSION,
             "python": sys.version.split()[0],
@@ -217,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
             "active_jobs": len(active),
             "termux_notification": notifier.available(),
             "termux_notification_list": chatgpt_notification.available(),
+            "chatgpt_completion_calibration": chatgpt_calibration.status(store, chatgpt_notification.CHATGPT_PACKAGE),
             "self_rss_kb": process_rss_kb(),
             "daemon_rss_kb": process_rss_kb(daemon_pid) if pid_alive(daemon_pid) else None,
             "platform": sys.platform,

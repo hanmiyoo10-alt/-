@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import io
+import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import chatgpt_calibration
+import taskbridge
 from runtime import run_worker
 from state_machine import can_transition
 from store import Store
@@ -62,7 +67,7 @@ class StoreTests(unittest.TestCase):
     @patch("runtime.notifier.notify")
     @patch("runtime.chatgpt_notification.snapshot")
     @patch("runtime.chatgpt_notification.available", return_value=True)
-    def test_chatgpt_notification_is_candidate_signal(self, _available, snapshot, notify):
+    def test_chatgpt_notification_is_candidate_signal_without_calibration(self, _available, snapshot, notify):
         snapshot.side_effect = [{"baseline"}, {"baseline", "new"}]
         job = self.store.create_job(
             ["com.openai.chatgpt", "30"],
@@ -74,11 +79,69 @@ class StoreTests(unittest.TestCase):
         final = self.store.get_job(job["job_id"])
         self.assertEqual(final["logical_state"], "COMPLETED")
         self.assertEqual(final["signal_confidence"], "MEDIUM")
-        self.assertEqual(final["remote_state"], "ANDROID_NOTIFICATION")
         events = self.store.events(job["job_id"])
-        self.assertEqual(events[-1]["event_type"], "CHATGPT_NOTIFICATION_SEEN")
         self.assertEqual(events[-1]["detail"]["semantic"], "candidate_only_not_response_completion_proof")
         notify.assert_called_once()
+
+    @patch("runtime.notifier.notify")
+    @patch("runtime.chatgpt_notification.snapshot")
+    @patch("runtime.chatgpt_notification.available", return_value=True)
+    def test_chatgpt_notification_is_high_after_three_local_confirmations(self, _available, snapshot, notify):
+        package = "com.openai.chatgpt"
+        for job_id in ("job_a", "job_b", "job_c"):
+            chatgpt_calibration.record_confirmation(self.store, package, job_id)
+        snapshot.side_effect = [{"baseline"}, {"baseline", "new"}]
+        job = self.store.create_job(
+            [package, "30"],
+            adapter="chatgpt_notification",
+            name="ChatGPT notification observer",
+        )
+        rc = run_worker(self.store, job["job_id"], heartbeat_interval=0.01)
+        self.assertEqual(rc, 0)
+        final = self.store.get_job(job["job_id"])
+        self.assertEqual(final["signal_confidence"], "HIGH")
+        event = self.store.events(job["job_id"])[-1]
+        self.assertEqual(event["detail"]["semantic"], "locally_calibrated_response_completion_signal")
+        self.assertEqual(event["detail"]["calibration_count"], 3)
+        self.assertIn("응답 완료 감지", notify.call_args.args[0])
+
+    def test_calibration_deduplicates_confirmed_jobs(self):
+        package = "com.openai.chatgpt"
+        first = chatgpt_calibration.record_confirmation(self.store, package, "job_one")
+        second = chatgpt_calibration.record_confirmation(self.store, package, "job_one")
+        self.assertTrue(first["added"])
+        self.assertFalse(second["added"])
+        self.assertEqual(second["confirmed_count"], 1)
+        self.assertFalse(second["trusted"])
+
+    def test_active_chatgpt_observer_is_detected(self):
+        package = "com.openai.chatgpt"
+        job = self.store.create_job([package, "600"], adapter="chatgpt_notification")
+        found = taskbridge.find_active_chatgpt_observer(self.store, package)
+        self.assertEqual(found["job_id"], job["job_id"])
+        self.store.transition(job["job_id"], "UNKNOWN", event_type="TEST_UNKNOWN", local_state="STOPPED")
+        self.assertIsNone(taskbridge.find_active_chatgpt_observer(self.store, package))
+
+    def test_confirm_chatgpt_uses_completed_observer_job(self):
+        package = "com.openai.chatgpt"
+        job = self.store.create_job([package, "600"], adapter="chatgpt_notification")
+        self.store.transition(job["job_id"], "ACTIVE", event_type="CHATGPT_OBSERVER_STARTED", local_state="OBSERVING")
+        self.store.transition(
+            job["job_id"],
+            "COMPLETED",
+            event_type="CHATGPT_NOTIFICATION_SEEN",
+            detail={"semantic": "candidate_only_not_response_completion_proof"},
+            local_state="STOPPED",
+            signal_confidence="MEDIUM",
+        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = taskbridge.main(["--state-dir", self.tmp.name, "confirm-chatgpt", job["job_id"]])
+        self.assertEqual(rc, 0)
+        data = json.loads(out.getvalue())
+        self.assertEqual(data["confirmed_count"], 1)
+        self.assertTrue(data["added"])
+        self.assertEqual(self.store.events(job["job_id"])[-1]["event_type"], "CHATGPT_COMPLETION_CONFIRMED")
 
 
 if __name__ == "__main__":

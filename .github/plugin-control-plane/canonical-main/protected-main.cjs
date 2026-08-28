@@ -4,6 +4,13 @@ const fs = require('fs');
 const path = require('path');
 
 const CONTRACT_PATH = path.join(__dirname, 'protected-main.json');
+const READINESS_STATES = Object.freeze({
+  UNKNOWN: 'UNKNOWN',
+  READY_TO_ACTIVATE: 'READY_TO_ACTIVATE',
+  BLOCKED_PERMISSION: 'BLOCKED_PERMISSION',
+  ACTIVE: 'ACTIVE',
+  FAILED_CURRENT_TARGET: 'FAILED_CURRENT_TARGET',
+});
 
 function loadProtectedMainContract() {
   return JSON.parse(fs.readFileSync(CONTRACT_PATH, 'utf8'));
@@ -33,6 +40,23 @@ function directWriterInventory(root) {
     .sort();
 }
 
+function activationCapability(contract = loadProtectedMainContract()) {
+  const capability = contract.activation?.capability || {};
+  const state = Object.values(READINESS_STATES).includes(capability.state)
+    ? capability.state
+    : READINESS_STATES.UNKNOWN;
+  return Object.freeze({
+    state,
+    reasonCode: String(capability.reasonCode || 'UNKNOWN'),
+    evidenceFingerprint: String(capability.evidenceFingerprint || 'UNKNOWN'),
+    evidenceIssue: Number(capability.evidenceIssue || 0) || null,
+    evidenceComment: Number(capability.evidenceComment || 0) || null,
+    stableTarget: String(capability.stableTarget || 'branch:main/native-protection'),
+    explicitRearmEvent: String(capability.explicitRearmEvent || 'workflow_dispatch'),
+    automaticRetryOnEvidenceChange: capability.automaticRetryOnEvidenceChange === true,
+  });
+}
+
 function softEnforcementContractErrors(root, contract = loadProtectedMainContract()) {
   const errors = [];
   const soft = contract.softEnforcement || {};
@@ -56,15 +80,16 @@ function softEnforcementContractErrors(root, contract = loadProtectedMainContrac
   if (!/github\.event\.workflow_run\.head_branch == 'main'/.test(workflow)) errors.push('PROTECTED_MAIN_SOFT_GUARD_MAIN_SCOPE_MISSING');
   if (!/github\.event\.workflow_run\.conclusion == 'success'/.test(workflow)) errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_SUCCESS_GATE_MISSING');
 
-  const legacyIdentityBarrier = /Confirm successful result still belongs to current main/.test(workflow)
-    && /git rev-parse origin\/main/.test(workflow);
   const neutralIdentityBarrier = /id:\s*target_currentness/.test(workflow)
     && /git rev-parse origin\/main/.test(workflow)
     && /disposition=SUPERSEDED_CURRENT_MAIN/.test(workflow)
     && /steps\.target_currentness\.outputs\.disposition == 'CURRENT_MAIN'/.test(workflow);
-  if (!legacyIdentityBarrier && !neutralIdentityBarrier) {
-    errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_MAIN_IDENTITY_BARRIER_MISSING');
-  }
+  if (!neutralIdentityBarrier) errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_MAIN_IDENTITY_BARRIER_MISSING');
+
+  const circuitBreakerGate = /id:\s*attempt_gate/.test(workflow)
+    && /orchestrator\/protection-attempt\.cjs gate/.test(workflow)
+    && /steps\.attempt_gate\.outputs\.allow_attempt == 'true'/.test(workflow);
+  if (!circuitBreakerGate) errors.push('PROTECTED_MAIN_NATIVE_ACTIVATION_CIRCUIT_BREAKER_MISSING');
 
   for (const token of [
     'scripts/repo-main-write.py',
@@ -97,13 +122,8 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
     errors.push(`PROTECTED_MAIN_ACTIVE_WRITER_SET_MISMATCH:${activeInventory.join(',')}!=${declaredActive.join(',')}`);
   }
 
-  for (const name of directWriters) {
-    if (!inventory.has(name)) errors.push(`PROTECTED_MAIN_WRITER_UNCLASSIFIED:${name}`);
-  }
-
-  for (const name of inventory.keys()) {
-    if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
-  }
+  for (const name of directWriters) if (!inventory.has(name)) errors.push(`PROTECTED_MAIN_WRITER_UNCLASSIFIED:${name}`);
+  for (const name of inventory.keys()) if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
 
   for (const name of declaredActive) {
     const text = workflowText(root, name);
@@ -124,19 +144,10 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
     errors.push('PROTECTED_MAIN_HELPER_MISSING');
   } else {
     const helper = fs.readFileSync(helperPath, 'utf8');
-    for (const token of [
-      '--required-workflow',
-      '--required-profile',
-      '--required-job',
-      '--verify-gate-only',
-      'MAIN_WRITE_REQUIRED_GATE_PASS',
-      'MAIN_WRITE_BASE_MOVED_AFTER_GATE',
-    ]) {
+    for (const token of ['--required-workflow', '--required-profile', '--required-job', '--verify-gate-only', 'MAIN_WRITE_REQUIRED_GATE_PASS', 'MAIN_WRITE_BASE_MOVED_AFTER_GATE']) {
       if (!helper.includes(token)) errors.push(`PROTECTED_MAIN_HELPER_CONTRACT_MISSING:${token}`);
     }
-    if (helper.includes('force-with-lease') || helper.includes('"--force"') || helper.includes("'--force'")) {
-      errors.push('PROTECTED_MAIN_HELPER_FORCE_FORBIDDEN');
-    }
+    if (helper.includes('force-with-lease') || helper.includes('"--force"') || helper.includes("'--force'")) errors.push('PROTECTED_MAIN_HELPER_FORCE_FORBIDDEN');
   }
 
   if (contract.shadowProof?.result !== 'PASS' || contract.shadowProof?.mainMutation !== 'NONE' || contract.shadowProof?.stagingRefCleaned !== true) {
@@ -155,15 +166,20 @@ function observeProtection(branch, {root, policy, contract = loadProtectedMainCo
   const protectedFlag = branch?.protected === true;
   const enforcementLevel = branch?.protection?.required_status_checks?.enforcement_level || 'off';
   const requiredPresent = names.includes(requiredApiContext) || names.includes(requiredDisplayName);
-  const readiness = writerErrors.length === 0 && contract.declaredReadiness === 'READY_TO_ACTIVATE';
+  const repositoryReady = writerErrors.length === 0 && contract.repositoryReadiness === READINESS_STATES.READY_TO_ACTIVATE;
+  const capability = activationCapability(contract);
 
-  let state;
-  if (!protectedFlag) {
-    state = contract.enforcementExpected === true ? 'DRIFT' : readiness ? 'READY_TO_ACTIVATE' : 'OFF';
-  } else if (enforcementLevel === 'off' || !requiredPresent || writerErrors.length > 0) {
-    state = 'DRIFT';
-  } else {
-    state = 'ENFORCED';
+  let state = READINESS_STATES.UNKNOWN;
+  if (protectedFlag && enforcementLevel !== 'off' && requiredPresent && writerErrors.length === 0) {
+    state = READINESS_STATES.ACTIVE;
+  } else if (protectedFlag || contract.enforcementExpected === true) {
+    state = READINESS_STATES.FAILED_CURRENT_TARGET;
+  } else if (!repositoryReady) {
+    state = READINESS_STATES.UNKNOWN;
+  } else if (capability.state === READINESS_STATES.BLOCKED_PERMISSION) {
+    state = READINESS_STATES.BLOCKED_PERMISSION;
+  } else if (capability.state === READINESS_STATES.READY_TO_ACTIVATE) {
+    state = READINESS_STATES.READY_TO_ACTIVATE;
   }
 
   return {
@@ -179,6 +195,10 @@ function observeProtection(branch, {root, policy, contract = loadProtectedMainCo
     shadowProof: contract.shadowProof?.result || 'UNKNOWN',
     activeWriterCount: (contract.activeWriters || []).length,
     automaticActivationAttempt: contract.activation?.automaticAttempt === true,
+    activationCapabilityState: capability.state,
+    activationCapabilityReason: capability.reasonCode,
+    activationCapabilityFingerprint: capability.evidenceFingerprint,
+    automaticActivationDeferred: capability.state === READINESS_STATES.BLOCKED_PERMISSION && !protectedFlag,
     softEnforcementEnabled: contract.softEnforcement?.enabled === true,
     softEnforcementStrategy: contract.softEnforcement?.strategy || 'NONE',
     nativeProtectionEquivalent: contract.softEnforcement?.nativeProtectionEquivalent === true,
@@ -186,6 +206,8 @@ function observeProtection(branch, {root, policy, contract = loadProtectedMainCo
 }
 
 module.exports = {
+  READINESS_STATES,
+  activationCapability,
   loadProtectedMainContract,
   requiredCheckNames,
   workflowText,

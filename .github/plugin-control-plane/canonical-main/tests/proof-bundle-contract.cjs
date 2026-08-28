@@ -82,9 +82,9 @@ assert.equal(parsed.activeP0P1Count, 0);
 assert.equal(parsed.attentionKnown, true);
 assert.equal(parsed.attentionCount, 0);
 
-const root = path.resolve(__dirname, '..', '..', '..', '..');
+const githubDir = path.resolve(__dirname, '..', '..', '..');
 const collector = fs.readFileSync(path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs'), 'utf8');
-const workflow = fs.readFileSync(path.join(root, 'workflows', 'canonical-main-proof-bundle.yml'), 'utf8');
+const workflow = fs.readFileSync(path.join(githubDir, 'workflows', 'canonical-main-proof-bundle.yml'), 'utf8');
 assert(!/--method['",\s]+(?:POST|PATCH|PUT|DELETE)/i.test(collector), 'collector must not issue write API methods');
 assert(!/^\s*[a-z-]+:\s*write\s*$/mi.test(workflow), 'proof workflow permissions must be read-only');
 assert(/push:\s*\n\s*branches:\s*\[main\]/m.test(workflow), 'proof bundle must run automatically on main push');

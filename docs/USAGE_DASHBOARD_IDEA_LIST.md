@@ -6,9 +6,9 @@ Tracking issue: #412
 
 이 문서는 Local Usage Dashboard 관련 아이디어를 장기 보관하고 분류하기 위한 저장소다.
 
-이 문서의 순서는 **다음 버전 순서가 아니다.** 실제 구현 순서는 현재 production/source 확인, 안정화 게이트, 회귀 테스트, 실기 증거, release authority를 통해 별도로 결정한다.
+이 문서의 순서는 **다음 버전 순서가 아니다.** 실제 구현 순서는 현재 production/source 확인, 활성 release/stabilization gate, 회귀 테스트, 실기 증거, release authority를 통해 별도로 결정한다.
 
-현재의 post-stabilization feature gate도 그대로 유지한다. #343과 #348의 기능 확장은 안정화가 명시적으로 완료되기 전에는 구현하지 않는다.
+현재 checkpoint에서 S1 stabilization-to-feature gate는 **5.81 physical PASS 후 CLOSED**다. 현재 배포 baseline은 Product `3.0.0-alpha.5.82` / Engine `1.6.23` / Manager `1.3.0` / snapshot·recent-request `1/1`이며, 이 문서는 그 상태를 반영해 warehouse의 stale 항목을 정리한다. 이 checkpoint 자체가 다음 release를 자동 승인하지는 않는다.
 
 ---
 
@@ -101,8 +101,8 @@ Tracking issue: #412
 
 | ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
-| `NV-LIFECYCLE-STRESS` | 반복 init/resume/panel lifecycle 누적 stress audit | 높음 | Runtime Slimming Backlog §4 | 반복 초기화, visibility/resume, panel open/close, runtime adoption에서 timer/listener/scheduled work가 누적되지 않는지 장시간 실기 + regression으로 검증한다. cleanup은 별도 버전 작업으로 분리한다. |
-| `NV-TRANSACTION-AUTH` | 결제/Reset Pass/Auto-Reload write API 안전성 조사 | 높음 | #348 lower-priority candidates | top-up, Reset Pass purchase/redeem/refund, auto-reload mutation의 upstream API authority, 인증 범위, idempotency, retry/rollback, duplicate-write 방지 조건을 구현 전에 문서화한다. |
+| `NV-LIFECYCLE-STRESS` | 반복 init/resume/panel lifecycle 누적 stress audit | 높음 | **DESIGN READY · IMPLEMENTATION BATCH READY** · #558 | 반복 초기화, visibility/resume, panel open/close, runtime adoption에서 timer/listener/scheduled work가 누적되지 않는지 장시간 실기 + regression으로 검증한다. cleanup은 별도 버전 작업으로 분리한다. |
+| `NV-TRANSACTION-AUTH` | 결제/Reset Pass/Auto-Reload write API 안전성 조사 | 높음 | **DESIGN READY · IMPLEMENTATION BATCH READY** · #559 | top-up, Reset Pass purchase/redeem/refund, auto-reload mutation의 upstream API authority, 인증 범위, idempotency, retry/rollback, duplicate-write 방지 조건을 조사한다. 조사 자체는 live 금전/account mutation을 하지 않는다. |
 | `NV-MEMORY-INTEGRITY-QUALITY` | Long-term Memory Integrity / Coverage / Quality Audit | 높음 | **CAPTURED / CONSOLIDATED** · #653 · `docs/USAGE_DASHBOARD_LONG_TERM_MEMORY_IDEA_FAMILY.md` | 장기기억 duplicate/orphan/reference/chronology, retrieval regression, long-chat continuity, quality/self-audit를 repository/test evidence로 검증한다. 발견된 runtime 수리는 별도 versioned memory owner로 분리한다. |
 | `NV-BILLING-HISTORY-AUTH` | Billing history / invoice source authority 조사 | 중간 | #348 lower-priority candidates | invoice/billing-history를 안전하게 read-only로 가져올 authoritative authenticated source가 있는지, privacy surface가 무엇인지 조사한다. source가 없으면 UNKNOWN/미지원으로 남긴다. |
 
@@ -110,33 +110,34 @@ Tracking issue: #412
 
 # 4. 버전 업데이트를 해야 적용 가능
 
-> 기능 확장 항목은 현재 stabilization gate가 닫힐 때까지 구현하지 않는다. 안정화 cleanup 항목은 evidence-led S1 순서에서만 진행한다.
+> S1 stabilization-to-feature gate는 5.81 physical PASS 후 **CLOSED**다. 기능 확장 항목은 이제 fresh production/source, source authority, batch 상태, regression/PR/CI/release gate를 만족하면 진행할 수 있다. 이 warehouse의 상태만으로 구현 권한이 생기지는 않는다.
 
 ## 난이도: 낮음
 
-| ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
+| ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
-| `V-SERVICE-TIER-PRESENTATION-OWNER` | Service-tier presentation wrapper ownership 정리 | 높음 | Stabilization follow-up · #393 | module 15에 남겨둔 `requestServiceTierText` provenance presentation wrapper를 native owner로 이동하는 작은 cleanup 후보. 현재 표시 semantics는 그대로 유지. |
-| `V-RESET-STATUS` | Reset Pass read-only 상태 카드 | 높음 | Post-stabilization · #348 | included/purchased pass, included remaining, pass price, source-backed eligibility를 읽기 전용으로 표시한다. buy/redeem write는 포함하지 않는다. |
-| `V-BILLING-STRIP` | Billing-cycle / renewal strip | 높음 | Post-stabilization · #348 | plan, cycle start, authoritative period end/expiry, renewal/cancellation wording, 남은 시간을 표시한다. authoritative end가 없으면 날짜를 만들지 않는다. |
+| `V-SERVICE-TIER-PRESENTATION-OWNER` | Service-tier presentation wrapper ownership 정리 | 높음 | **IMPLEMENTED / PHYSICAL PASS 5.81** · #420 · P45 | module 12가 final scope+tier presentation을 직접 소유하도록 정리했고 module 15의 runtime reassignment hop을 제거했다. 표시 semantics는 유지됐다. |
+| `V-RESET-STATUS` | Reset Pass read-only 상태 카드 | 높음 | **IMPLEMENTED / READ-ONLY PARITY SHIPPED** · P5 · #572 reconciliation | 현재 DevPass `Reset Pass · PAYG` surface가 총 사용 가능, 구매/보유 패스, 기본 패스 남음, 가격, PAYG/regular-credit read-only parity를 이미 제공한다. unproven eligibility와 buy/redeem/refund write는 별도다. |
+| `V-BILLING-STRIP` | Billing-cycle / renewal strip | 높음 | **IMPLEMENTED / DEPLOYED 5.82** · #572 · P47 | plan/cycle/start/end/cancelled를 source-backed truth로 표시하고, 남은 기간은 explicit end에서만 계산한다. missing cycle/cancelled는 UNKNOWN으로 보존한다. |
+| `V-RELEASE-NOTES-GUIDANCE` | In-plugin 업데이트 내역 + 진단 가이드 | 중간 | **DESIGN READY / IMPLEMENTATION READY** · #643 · `docs/USAGE_DASHBOARD_583_IN_PLUGIN_RELEASE_NOTES_DIAGNOSTIC_GUIDANCE_DESIGN.md` | Settings에서 현재 설치 release의 업데이트 하이라이트와 다음 진단 관찰 포인트, 정적 진단 제출 가이드 복사를 제공한다. runtime GitHub fetch/auto-popup/seen-state persistence는 추가하지 않는다. |
 
 ## 난이도: 중간
 
-| ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
+| ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
-| `V-HTTP-STATUS` | 요청별 exact HTTP error status | 높음 | Post-stabilization · #343 | 실패 요청에서 source-backed `errorDetails.statusCode`만 `HTTP 429/401/503`처럼 표시한다. route-attempt status를 final status로 쓰지 않고 성공 요청에 200을 추정하지 않는다. |
-| `V-SERVICE-TIER-FIDELITY` | Request Service Tier fidelity 확대 | 높음 | Post-stabilization · #343 | requested/served FLEX/STANDARD/PRIORITY와 selection source를 source가 제공할 때만 표시한다. missing `usedServiceTier`는 UNKNOWN. |
-| `V-PREMIUM-METER` | DevPass weekly Premium allowance meter | 높음 | Post-stabilization · #348 | weekly Premium used/limit/percent, reset timing, >80% warning, exhausted state, source-proven PAYG-cover state를 표시한다. |
-| `V-PAYG-STATUS` | PAYG Overflow + Auto-Reload read-only status | 높음 | Post-stabilization · #348 | overflow on/off, regular credits, spendable balance, auto-reload enabled/threshold/amount를 source가 제공하는 범위에서 읽기 전용으로 표시한다. |
+| `V-HTTP-STATUS` | 요청별 exact HTTP error status | 높음 | **DESIGN READY · IMPLEMENTATION BATCH READY** · #575 | 실패 요청에서 source-backed `errorDetails.statusCode`만 `HTTP 429/401/503`처럼 표시한다. route-attempt status를 final status로 쓰지 않고 성공 요청에 200을 추정하지 않는다. |
+| `V-SERVICE-TIER-FIDELITY` | Request Service Tier fidelity 확대 | 높음 | **DESIGN READY · IMPLEMENTATION BATCH READY** · #577 | requested/served FLEX/STANDARD/PRIORITY와 selection source를 source가 제공할 때만 표시한다. missing `usedServiceTier`는 UNKNOWN. |
+| `V-PREMIUM-METER` | DevPass weekly Premium allowance meter | 높음 | **DESIGN READY · IMPLEMENTATION BATCH READY** · #581 | weekly Premium used/limit/remaining/percent, reset timing, >=80% warning, exhausted state를 source-backed 값으로 표시한다. allowance depletion + PAYG enabled를 request funding claim으로 연결하지 않는다. |
+| `V-PAYG-STATUS` | PAYG Overflow + Auto-Reload read-only status | 높음 | **DESIGN READY · IMPLEMENTATION BATCH READY** · #585 | overflow on/off, regular credits, account-level spendability, auto-reload enabled/threshold/amount를 source가 제공하는 범위에서 읽기 전용으로 표시한다. request-level funding source는 추론하지 않는다. |
 | `V-MEMORY-SESSION-CONTINUITY` | Session Checkpoint / Resume / Unresolved Threads | 높음 | Long-term Memory family · #653 | 중단 세션의 checkpoint/resume packet, unresolved thread, open question, bounded bootstrap context를 제공한다. canonical truth/retrieval owner를 대체하지 않는다. |
 | `V-MEMORY-OBSERVABILITY` | Memory Search / Diff / Health / Retrieval Diagnostics | 높음 | Long-term Memory family · #653 | last-seen delta, diff/search UI, health capsule, retrieval diagnostics/trace를 제공한다. 관찰 결과만으로 memory truth를 자동 변경하지 않는다. |
-| `V-CYCLE-SUMMARY` | This-cycle summary cards | 중간 | Post-stabilization · #348 | total requests, total tokens, cached share, peak day를 표시한다. authoritative billing-cycle start가 없으면 실제 7d/30d window로 명시한다. |
+| `V-CYCLE-SUMMARY` | This-cycle summary cards | 중간 | **DESIGN READY** · #587 | total requests, total tokens, cached input share, peak day를 표시한다. exact billing-cycle qualification이 안 되면 실제 30d/7d window로 fail-closed한다. |
 | `V-COST-DRIVER` | Compact cost-driver view | 중간 | Post-stabilization · #348 | 모델/provider별 cost/request count 상위 항목을 compact bar/donut/summary로 보여준다. 기존 표와 중복되는 UI는 피한다. |
 | `V-CREDITS-COST` | Credits cost composition + savings | 중간 | Post-stabilization · #348 | input/output/cached/storage/other cost와 discount savings를 source가 실제 제공하는 항목만 표시한다. 미제공 cost는 0으로 만들지 않는다. |
 
 ## 난이도: 높음
 
-| ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
+| ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
 | `V-MEMORY-CORE-TAXONOMY` | Layered Memory Core & Taxonomy | 최상 | Long-term Memory foundation · #653 | layered memory와 episodic/semantic/procedural/decision/entity/topic/timeline/dependency 분류를 소유한다. evidence/privacy/retention 정책은 별도 owner다. |
 | `V-MEMORY-POLICY-SCOPE` | Preference / Constraint / Scope Memory | 최상 | Long-term Memory foundation · #653 | preference와 hard constraint를 분리하고 repo/plugin/feature/release/session scope isolation을 명시한다. 반복 선호를 자동 hard invariant로 승격하지 않는다. |
@@ -156,7 +157,7 @@ Tracking issue: #412
 
 ## 난이도: 매우 높음
 
-| ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
+| ID | 아이디어 | 중요도 | 상태 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
 | `V-MEMORY-SNAPSHOT-ROLLBACK` | Known-good Snapshot / Replay / Safe Memory Rollback | 최상 | Long-term Memory late track · #653 | known-good memory snapshot, historical replay, rollback을 소유한다. exact identity, conflict handling, validation, idempotency가 증명되기 전에는 활성화하지 않는다. |
 | `V-MEMORY-PORTABILITY-SYNC` | Import/Export / Offline-first / Cross-device Sync | 높음 | Long-term Memory late track · #653 | schema migration, import/export, offline reconciliation, cross-device sync, sync receipt/incident/circuit-breaker를 소유한다. concurrent revision/privacy/conflict 계약이 선행되어야 한다. |
@@ -169,6 +170,17 @@ Tracking issue: #412
 # 5. 묶음 설계 관계
 
 아이디어 리스트에서는 평가를 위해 세부 항목을 나눠 두지만, 실제 release 설계에서는 서로 강하게 묶인 항목을 다시 하나의 bounded release로 합칠 수 있다.
+
+### Current version-required medium/high batch
+
+다음 네 항목은 모두 개별 `DESIGN READY`이며 그룹은 **IMPLEMENTATION BATCH READY**다:
+
+- `V-HTTP-STATUS` — #575
+- `V-SERVICE-TIER-FIDELITY` — #577
+- `V-PREMIUM-METER` — #581
+- `V-PAYG-STATUS` — #585
+
+이 batch-ready 상태는 항목별 재승인을 줄이기 위한 execution grouping이다. 실제 어느 기능이 어느 monotonic release의 primary goal이 되는지는 fresh release authority와 regression boundary에서 결정한다.
 
 ### Request Metadata Fidelity — #343
 
@@ -186,14 +198,21 @@ Tracking issue: #412
 
 ### DevPass Account Surface — #348
 
-read-only 우선 후보:
+이미 shipped/read-only parity가 있는 항목:
 
-- `V-PREMIUM-METER`
 - `V-RESET-STATUS`
-- `V-PAYG-STATUS`
 - `V-BILLING-STRIP`
 
-실제 release로 묶을지는 구현 직전 fresh source coverage와 regression scope를 보고 결정한다.
+남은 design-ready read-only 확장:
+
+- `V-PREMIUM-METER`
+- `V-PAYG-STATUS`
+
+request-level plan allowance vs PAYG funding source는 #416에서 NOT_PROVEN이므로 위 account surfaces와 결합해 추론하지 않는다.
+
+### In-plugin Release Notes / Diagnostic Guidance — #643
+
+`V-RELEASE-NOTES-GUIDANCE`는 현재 설치 release의 정적 업데이트 내역과 다음 physical/diagnostic observation hints를 Settings에 제공하는 별도 low-difficulty owner다. release-spec `highlights` / `diagnosticHints`가 authoring truth이며 runtime GitHub/history fetch나 별도 changelog database를 만들지 않는다.
 
 ### Long-Term Memory Canonical Family — #653
 
@@ -231,7 +250,7 @@ Repository MEM-01/#463은 원칙 참고용 precedent이며 Local Usage Dashboard
 3. UNKNOWN / privacy / identity 규칙 확정;
 4. 변경 범위와 non-goal 명시;
 5. 관련 regression 설계;
-6. 현재 stabilization/feature gate와 충돌하지 않는지 확인;
+6. 현재 active release/stabilization gate와 충돌하지 않는지 확인;
 7. 별도 issue에 **DESIGN ONLY** 상태로 구체화;
 8. 같은 중요도 + 같은 난이도 그룹의 대상 아이디어가 모두 `DESIGN READY`인지 확인;
 9. 그룹 전체를 **IMPLEMENTATION BATCH READY**로 승격;
@@ -251,6 +270,14 @@ Repository MEM-01/#463은 원칙 참고용 precedent이며 Local Usage Dashboard
 - State Lifecycle Inventory: `docs/USAGE_DASHBOARD_STATE_LIFECYCLE_INVENTORY.md`
 - Repository History / Tool Inventory: `docs/USAGE_DASHBOARD_REPO_HISTORY_INVENTORY.md`
 - Long-Term Memory Canonical Idea Family: `docs/USAGE_DASHBOARD_LONG_TERM_MEMORY_IDEA_FAMILY.md` / #653
+- Service-tier presentation ownership: #420
+- Billing Cycle Truth Strip: #572
+- Exact HTTP status design: #575
+- Service-tier fidelity design: #577
+- Premium meter design: #581
+- PAYG/Auto-Reload status design: #585
+- Cycle summary design: #587
+- In-plugin release notes / diagnostic guidance: #643 · `docs/USAGE_DASHBOARD_583_IN_PLUGIN_RELEASE_NOTES_DIAGNOSTIC_GUIDANCE_DESIGN.md`
 - Request Metadata Fidelity design: #343
 - DevPass/Credits parity backlog: #348
 - Release PR bootstrap historical authority: #254

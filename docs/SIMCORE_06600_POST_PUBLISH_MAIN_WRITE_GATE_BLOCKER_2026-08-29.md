@@ -4,7 +4,7 @@ Date: 2026-08-29 KST
 
 Status:
 
-`BLOCKER OPEN · ROOT CAUSE CONFIRMED · PRODUCTION PUBLISHED · MAIN LIVE_PENDING NOT DURABLE`
+`BLOCKER OPEN · ROOT CAUSE CONFIRMED · TRUSTED CI BOOTSTRAP REQUIRED · PRODUCTION PUBLISHED · MAIN LIVE_PENDING NOT DURABLE`
 
 Final classification:
 
@@ -172,6 +172,70 @@ Therefore:
 
 `DO_NOT_RERUN_PERMANENT_RECOVERY_UNTIL_MARKER_TRANSITION_FIX_REACHES_MAIN`
 
+## Trusted CI bootstrap cycle observed on FIX PR
+
+Narrow marker-transition implementation PR:
+
+`#781 fix(simcore): replace predecessor release-state marker on live pending`
+
+Latest head tested:
+
+`c1041f9c8e5100bcf57b6d192b6f55d1dcc4c9d4`
+
+SimCore CI run:
+
+`33207571791`
+
+The PR was correctly classified as CI-self/state-sync work:
+
+```text
+CI_SELF
+HARNESS
+STATE_SYNC
+SIMCORE_DOC_ONLY
+```
+
+Because this is a CI-self change, the permanent PR workflow first ran the trusted predecessor verifier from PR base `9b204178d2f74cd451e6dd049347ef6e9e1c1f45` against the already-published production commit `4b6ae1a4c63f6be658c6163168cc46a1adef60aa`.
+
+The trusted predecessor lane exited before proposed code execution:
+
+```text
+Current trusted lane for CI self-change = FAILURE
+Run proposed permanent verifier          = SKIPPED
+trusted conclusion                        = INFRA_ERROR
+```
+
+This repeats the previously documented post-publish recovery bootstrap cycle from the first real R release:
+
+```text
+production already advanced
+→ main administrative production identity still predecessor
+→ trusted predecessor MAIN_HEALTH cannot establish coherent current production/admin truth
+→ CI-self repair cannot reach proposed verifier
+```
+
+Classification:
+
+```text
+POST_PUBLISH_RECOVERY_TRUSTED_CI_BOOTSTRAP_CYCLE
+= FIX / BLOCKER / CI_TRUST_BOUNDARY / ADMIN_STATE / NON_RUNTIME / REPEATED_KNOWN_PATTERN
+```
+
+This is not evidence that the proposed marker-transition implementation failed. In run `33207571791`, the proposed verifier was never executed.
+
+Required handling follows the existing canonical precedent rather than bypassing trusted CI:
+
+```text
+canonical durable-memory bootstrap
+→ synchronize only production/admin identity to already-published v0.66.0
+→ keep runtime publication untouched
+→ close transport command PR without merge
+→ rebuild marker-transition FIX from synchronized current main
+→ rerun permanent PR verification
+```
+
+The stale-base #781 PR must not be treated as approval evidence after bootstrap because its pull-request base identity remains the pre-bootstrap main state.
+
 ## Authorized repair boundary
 
 Repair as a separate non-runtime release-system blocker fix. Do not mutate the already-published v0.66.0 runtime.
@@ -206,7 +270,8 @@ Because `main` is the authority for design/evidence/roadmap/administrative recor
 
 ```text
 record this incident on main
-→ implement narrow release-state marker transition fix on separate non-runtime work branch
+→ canonical durable-memory bootstrap to already-published v0.66 production identity
+→ rebuild narrow release-state marker transition fix from synchronized main
 → permanent static/CI validation
 → merge fix to main
 → create one-shot permanent published-state recovery request for exact new-05 publication

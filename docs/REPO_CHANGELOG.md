@@ -587,3 +587,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/633a74748be613a7e1def9eb80cb9bf293de2d49)
 - Event ID: `54793e6cc42d3c3c98809a48b941760044510eb0d31d1e2c17aad5dc9d59cc93`
 <!-- canonical-main-doc-promoted:54793e6cc42d3c3c98809a48b941760044510eb0d31d1e2c17aad5dc9d59cc93 -->
+
+### 2026-08-28 — canonical-main: make work queue live health pointer-only
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `832afcc3d6964676c9f0f315b88b30e93b4007d5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/832afcc3d6964676c9f0f315b88b30e93b4007d5)
+- Event ID: `aabd9f639d349a673ad790fc6154f8cdef99028b7450d837fae87932638143d7`
+<!-- canonical-main-doc-promoted:aabd9f639d349a673ad790fc6154f8cdef99028b7450d837fae87932638143d7 -->

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.64.10-new-05",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "161aec0f984a27c3e2d68a7f102e7fc41309da7f",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.64.10-new-05.json",
+  "releaseSpecSha256": "3207e2565c92405f4498a4ee2c8c87eae54c6da44dfbb49b454835b6546bf92c",
+  "productionCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+  "previousProductionCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "productionBlob": "b7d76bd03a435356eeea6948968b0d33ac564ae7",
+  "version": "0.64.10",
+  "releaseName": "Host-Local One-Shot Telemetry Handoff",
+  "verificationReportSha256": "21f797d0150222b9dfd682b2ef67199266543f306293bf23ea1429247db258fd",
+  "verifierCommit": "c8b33bd04a16198f13286e525ecf29c4d5b1daa1",
+  "publisherRunId": "33145856924",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

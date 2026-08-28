@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.9 — Session Transport Root Resolution
-Release commit: 1c1037e44d6b3e903b3d622b579095b1f315758e
+SimCore v0.64.10 — Host-Local One-Shot Telemetry Handoff
+Release commit: e43ace74241984f21f69299eff690d0c4f483381
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

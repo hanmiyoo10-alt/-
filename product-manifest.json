@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.64.8",
-  "release_name": "Output-Complete Telemetry Checkpoint Repair",
+  "production_version": "0.64.9",
+  "release_name": "Session Transport Root Resolution",
   "release_branch": "release-simcore",
-  "release_commit": "f5e29464452728f859a1a6a8191a846468353531",
-  "release_blob": "bed3d5faff9641071cdd9003b67c45d42b3e32ee",
+  "release_commit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "release_blob": "7d2731d256b8aa18598c389fd919550cf3bbf146",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06408_OUTPUT_CHECKPOINT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+  "current_priority": "06409_SESSION_ROOT_RELOAD_CONTINUITY_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

@@ -619,3 +619,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2bc30ea6620ebe8bca10db205aad94e3ad859003)
 - Event ID: `eba8a7e0c870a98293dfa651ef431dd7ead05bee0e80f1f90c8508380c4c8a8e`
 <!-- canonical-main-doc-promoted:eba8a7e0c870a98293dfa651ef431dd7ead05bee0e80f1f90c8508380c4c8a8e -->
+
+### 2026-08-28 — canonical-main: keep session-start action assertion owner-neutral
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e1bed2d4f983b0ca3e2e8ccbbe788a2a770c14b6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e1bed2d4f983b0ca3e2e8ccbbe788a2a770c14b6)
+- Event ID: `e243a78c845ae6dbcb1ad8e2f74eaf8c6511f0af4dfd2ee9b18c4dd7fa717d1b`
+<!-- canonical-main-doc-promoted:e243a78c845ae6dbcb1ad8e2f74eaf8c6511f0af4dfd2ee9b18c4dd7fa717d1b -->

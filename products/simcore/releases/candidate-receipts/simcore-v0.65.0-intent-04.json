@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.65.0-intent-04",
+  "releaseId": "simcore-v0.65.0-new-04",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "sourceCommit": "9762e664e080eeab3334462d850cdfc4a7683d2f",
+  "candidateCommit": "9dd3ca95e92a7abc58fb3b608df06776eca51d28",
+  "candidateReleaseBlob": "1b38e2b2874f2581edae8f1080edc39558febefa",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.65.0-intent-04",
+  "builderPath": "products/simcore/tooling/build-06500-m2-3-edit-reconcile-identity-convergence.py",
+  "builderSha256": "562195e065d0b54e2d898072ebc8a9c58d7531328481744884f925a25d1330b2",
+  "verifierCommit": "9762e664e080eeab3334462d850cdfc4a7683d2f",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "bda4aff22c84a192fbc24a8e7a1cdcc6619d97a42e96dfeb4db67baab51367f8",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

@@ -22,7 +22,7 @@
 - Release branch: `release-simcore`
 - Release commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
 - Release blob: `1b38e2b2874f2581edae8f1080edc39558febefa`
-- Declared validation status: `PENDING_REAL_LONG_CHAT`
+- Declared validation status: `LIVE_PASS`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-2`

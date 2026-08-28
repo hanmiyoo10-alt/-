@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.66.0-new-05",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "f30b11af562fa834ee796afe5737150cdd81d352",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.66.0-new-05.json",
+  "releaseSpecSha256": "975b009eccb6ce3373e765148d9aeb3b9fe3170f921cee0933b0d8cc04205e6d",
+  "productionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "previousProductionCommit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "productionBlob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
+  "version": "0.66.0",
+  "releaseName": "M2-4 Session / Runtime Mirror Boundary Completion",
+  "verificationReportSha256": "795c80b7cb8bf82e468083d6b59940641dac3e063550d16ddb7ac0de3e13642a",
+  "verifierCommit": "ab4e1af2f699ffb226bba1f25b5e57780eb25822",
+  "publisherRunId": "33206537749",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

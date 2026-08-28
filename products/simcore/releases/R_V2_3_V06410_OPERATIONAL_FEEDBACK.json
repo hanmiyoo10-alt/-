@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_3_V06410_OPERATIONAL_FEEDBACK",
+  "date": "2026-08-28",
+  "systemVersion": "R2.3",
+  "systemName": "Stability Seal",
+  "status": "OPERATIONALLY_PROVEN_THROUGH_LIVE_PENDING_WITH_RECOVERY_REAL_TERMINAL_PROOF_PENDING",
+  "releaseObserved": {
+    "version": "0.64.10",
+    "name": "Host-Local One-Shot Telemetry Handoff",
+    "releaseId": "simcore-v0.64.10-new-05",
+    "productionCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+    "productionBlob": "b7d76bd03a435356eeea6948968b0d33ac564ae7",
+    "releaseState": "LIVE_PENDING",
+    "liveGate": "06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "humanLivePass": "PENDING"
+  },
+  "verdict": {
+    "keepR23": true,
+    "r2_3_A_WorkItemClosure": "REAL_PASS_THROUGH_LIVE_PENDING",
+    "r2_3_B_HumanPr3TerminalSeal": "REAL_TERMINAL_PROOF_PENDING",
+    "r2_3_C_LabelNonAuthority": "REAL_PASS",
+    "r2_3_D_DurableEvidenceOrder": "REAL_PASS_UNDER_APPEND_ONLY_RECOVERY",
+    "productionSafety": "PASS"
+  },
+  "cost": {
+    "steadyStateTargetPrsToLivePending": 2,
+    "observedV06410PreLiveMergedPrs": 6,
+    "implementationPr": 681,
+    "recoveryPrs": [684, 685, 686, 687],
+    "exactApprovalPr": 688,
+    "interpretation": "RECOVERY_TAX_NOT_CLEAN_PATH_REDESIGN_SIGNAL"
+  },
+  "candidateRecovery": {
+    "failedIntentIds": [
+      "simcore-v0.64.10-intent-01",
+      "simcore-v0.64.10-intent-02",
+      "simcore-v0.64.10-intent-03",
+      "simcore-v0.64.10-intent-04"
+    ],
+    "successfulIntentId": "simcore-v0.64.10-intent-05",
+    "successfulCandidateRun": 33145535034,
+    "candidateCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+    "exactParent": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+    "releaseBlob": "b7d76bd03a435356eeea6948968b0d33ac564ae7",
+    "failedTransactionsImmutable": true,
+    "productionMutationBeforeExactPublication": "NONE",
+    "appendOnlyRecovery": "PASS"
+  },
+  "findings": [
+    {
+      "id": "R23_FEEDBACK_RELEASE_AUTHORING_QUALIFICATION_GAP",
+      "classification": "FIX",
+      "tags": ["RELEASE_AUTHORING_QUALIFICATION_GAP", "NON_RUNTIME", "NON_BLOCKING_CURRENT_PRODUCTION"],
+      "trackingIssue": 690,
+      "evidence": [
+        "PR1 passed permanent Verify/Required before merge",
+        "candidate attempt 01 failed sibling-file packaging contract",
+        "candidate attempts 02/03 exposed lexical Host API postcondition mismatch",
+        "candidate attempt 04 exposed same lexical misconception in permanent suite",
+        "recovery PRs 684-687 were required before exact approval"
+      ],
+      "preferredDirection": "Strengthen existing PR1 Verify with candidate-equivalent dry single-file materialization and semantic candidate regression without creating candidate authority or new clean-path stages."
+    },
+    {
+      "id": "R23_FEEDBACK_TERMINAL_CLOSURE_DEBT",
+      "classification": "WATCH",
+      "tags": ["TERMINAL_CLOSURE_DEBT", "NON_RUNTIME", "NON_BLOCKING"],
+      "trackingIssue": 691,
+      "evidence": [
+        "v0.64.9 #660 has accepted LIVE FAIL human evidence",
+        "successor v0.64.10 has published to LIVE_PENDING",
+        "#660 remains open pending bounded terminal closure transaction and reobservation"
+      ],
+      "preferredDirection": "Do not auto-close or block successor publication for hygiene; evaluate whether an already-required bounded terminal/admin transaction can seal predecessor handoff debt without an extra clean-path PR."
+    }
+  ],
+  "preserve": {
+    "singlePublisher": true,
+    "exactCandidateParentBlobBinding": true,
+    "candidateReceiptAndSpecShadow": true,
+    "fastForwardOnlyProduction": true,
+    "latestInstallEquality": true,
+    "failedTransactionImmutability": true,
+    "appendOnlyRecovery": true,
+    "humanLivePassRequired": true,
+    "singleCurrentStateAuthority": true,
+    "blockerIncidentClosureSemantics": true,
+    "workItemTerminalSeal": true,
+    "labelNonAuthority": true,
+    "newPolling": 0,
+    "newPublisher": 0
+  },
+  "nextSystemDesignInput": {
+    "fix": [690],
+    "watch": [691],
+    "freeze": [
+      "R2.3 closure semantics",
+      "R2.3 label non-authority",
+      "R2.2 exact publication architecture",
+      "append-only recovery"
+    ],
+    "hardConstraint": "IMPROVE_STABILITY_AND_SIMPLICITY_TOGETHER"
+  },
+  "terminalQualification": {
+    "r2_3TrackingIssue": 673,
+    "status": "PENDING_GENUINE_HUMAN_EVIDENCE_AND_PR3",
+    "mustNotClaimRealTerminalPassYet": true
+  }
+}

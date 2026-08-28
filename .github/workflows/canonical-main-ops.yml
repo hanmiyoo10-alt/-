@@ -57,9 +57,7 @@ concurrency:
 
 jobs:
   refresh:
-    if: >-
-      (github.event_name != 'workflow_run' || github.event.workflow_run.name != 'Canonical Main Proof Bundle') &&
-      (inputs.coordination_work_issue != '' || github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')))
+    if: ${{ inputs.coordination_work_issue != '' || github.event_name != 'issues' || (github.actor == github.repository_owner && contains(github.event.issue.body, '<!-- repository-harness-canary:v1 -->') && contains(github.event.issue.body, '<!-- repository-work-record:v1 -->')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted main automation

@@ -10,6 +10,7 @@ const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 const release = loadCurrentRelease();
 
 const requestBody = [
+  'Plugin: usage-dashboard',
   'release_version: 3.0.0-alpha.5.76',
   'release_spec: .github/usage-dashboard/releases/5.76.json',
   'source_branch: release/usage-dashboard-576-e9-fixture',
@@ -117,6 +118,8 @@ for (const token of [
   'request_issue:',
   'candidate_sha:',
   'E9_VALIDATION_IDENTITY_BOUND',
+  'release_handoff_e15.cjs',
+  'validateStablePrBody',
   'reusable-usage-dashboard-validate.yml',
   'UD_VALIDATION_RESULT',
   'authority: E9 exact-SHA full registry',
@@ -138,4 +141,4 @@ for (const token of [
   'E9-F',
 ]) assert.ok(runbook.includes(token),`E9 runbook missing ${token}`);
 
-console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10/E11 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure + restage-stable PR presentation`);
+console.log(`usage-dashboard E9 durable release transaction contract: OK · ${release.productVersion} · E9/E10/E11 request compatibility + exact source readiness + canonical changes + exact-SHA validation + idempotent closure + E15 stable handoff presentation`);

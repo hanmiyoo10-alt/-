@@ -176,6 +176,25 @@ class Store:
         with self.connect() as con:
             con.execute("INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)", (key, value))
 
+    def compare_and_set_meta(self, key: str, expected_value: str | None, new_value: str) -> bool:
+        """Atomically replace a metadata value only if it still matches what the caller read.
+
+        This prevents a stale coordinator tick from overwriting a newer user command such as
+        response-timer stop. `expected_value=None` means the key must not exist yet.
+        """
+        with self.connect() as con:
+            if expected_value is None:
+                cur = con.execute(
+                    "INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING",
+                    (key, new_value),
+                )
+            else:
+                cur = con.execute(
+                    "UPDATE meta SET value=? WHERE key=? AND value=?",
+                    (new_value, key, expected_value),
+                )
+            return cur.rowcount == 1
+
     def get_meta(self, key: str) -> str | None:
         with self.connect() as con:
             row = con.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()

@@ -15,7 +15,7 @@ import response_timer
 
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 BOOT_ID_META = "system_boot_id"
-DAEMON_IMPL = "lean_coordinator_v4_autowatch_response_timer"
+DAEMON_IMPL = "lean_coordinator_v5_response_timer_cas"
 MIN_OBSERVER_HEARTBEAT_GRACE = 45.0
 
 
@@ -85,14 +85,6 @@ def observer_heartbeat_grace(job: dict) -> float:
 
 
 def reconcile_stale_autowatch_workers(store: Store, *, now: float | None = None) -> list[str]:
-    """Invalidate automatic observers whose worker identity cannot be verified after a stale heartbeat.
-
-    Android can reuse PIDs across reboot and os.kill(pid, 0) may return PermissionError
-    for a process owned by another UID. Treating PermissionError as liveness can therefore
-    leave a dead TaskBridge observer logically ACTIVE forever. We only reconcile after a
-    conservative heartbeat grace period, then verify that /proc/<pid>/cmdline is the
-    expected TaskBridge `_worker <job_id>` process. We never signal an unverified PID.
-    """
     now = time.time() if now is None else float(now)
     stale_ids: list[str] = []
 
@@ -168,7 +160,6 @@ def reconcile_rebooted_autowatch(
     current_boot_id: str | None = None,
     boot_epoch: float | None = None,
 ) -> list[str]:
-    """Invalidate automatic observers that provably belong to an earlier boot."""
     previous_boot_id = store.get_meta(BOOT_ID_META)
     if current_boot_id is None:
         current_boot_id = read_boot_id()

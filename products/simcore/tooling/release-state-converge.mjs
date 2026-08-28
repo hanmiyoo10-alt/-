@@ -8,6 +8,8 @@ import { run as syncRun } from './sync-state.mjs';
 
 const LIVE_BEGIN = '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->';
 const LIVE_END = '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->';
+const RELEASE_BEGIN_RE = /<!-- SIMCORE_RELEASE_STATE:([^:]+):BEGIN -->/g;
+const RELEASE_END_RE = /<!-- SIMCORE_RELEASE_STATE:([^:]+):END -->/g;
 const SNAPSHOT_END = '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->';
 const HEX40 = /^[0-9a-f]{40}$/;
 const SAFE_GATE = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -100,13 +102,14 @@ function liveBlock(input) {
 function renderLiveBlock(file, input) {
   let text = fs.readFileSync(file, 'utf8');
   const expected = liveBlock(input);
-  const bc = text.split(LIVE_BEGIN).length - 1;
-  const ec = text.split(LIVE_END).length - 1;
-  if (bc !== ec || bc > 1) fail('LIVE_PENDING_DOC_MARKER_INVALID');
-  if (bc === 1) {
-    const start = text.indexOf(LIVE_BEGIN), end = text.indexOf(LIVE_END, start);
-    if (end < start) fail('LIVE_PENDING_DOC_MARKER_INVALID');
-    const finish = end + LIVE_END.length;
+  const begins = [...text.matchAll(RELEASE_BEGIN_RE)];
+  const ends = [...text.matchAll(RELEASE_END_RE)];
+  if (begins.length !== ends.length || begins.length > 1) fail('LIVE_PENDING_DOC_MARKER_INVALID');
+  if (begins.length === 1) {
+    const begin = begins[0], end = ends[0];
+    if (begin[1] !== end[1] || end.index < begin.index) fail('LIVE_PENDING_DOC_MARKER_INVALID');
+    const start = begin.index;
+    const finish = end.index + end[0].length;
     text = `${text.slice(0,start)}${expected}${text.slice(finish)}`;
   } else {
     const anchor = text.indexOf(SNAPSHOT_END);

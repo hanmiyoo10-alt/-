@@ -68,26 +68,28 @@ def patch(text):
     sm_start = '  async reconcileEditedOutput(outIndex, content, perfDetail = null) {'
     sm_end = '\n\n  storageDiagnostics()'
     ss, se, session_method = cut(text, sm_start, sm_end, 'session-reconcile')
-
     of_start = '  async function reconcileManualEdit(cs, chat, perfDetail = null) {'
     of_end = '\n\n  async function prepareCoreRequest'
-    os, oe, outer_function = cut(text, of_start, of_end, 'outer-reconcile')
-
+    _, _, outer_function = cut(text, of_start, of_end, 'outer-reconcile')
     edit_module = build_edit_module(session_method, outer_function)
+
+    # Replace original ownership sites first. Inserting the extracted module first would make
+    # its copied function signatures become the first anchors and patch the wrong region.
+    delegate = '''  async reconcileEditedOutput(outIndex, content, perfDetail = null) {\n    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail, {\n      kernel, time, recovery, finalizePreparedOutput, sessionNow, sessionElapsed,\n    });\n  }'''
+    text = text[:ss] + delegate + text[se:]
+
+    os, oe, _ = cut(text, of_start, of_end, 'outer-reconcile-after-session-delegate')
+    outer_delegate = '''  async function reconcileManualEdit(cs, chat, perfDetail = null) {\n    return editReconcileRules.reconcileVisiblePreviousAssistant(cs, chat, perfDetail, {\n      coreRules, textMessageContent, representationRegistry, representationRules,\n      coreLocationKey, SIMCORE_LOG_PREFIX,\n      reconcileSession: (outIndex, content, detail) => cs.reconcileEditedOutput(outIndex, content, detail),\n    });\n  }'''
+    text = text[:os] + outer_delegate + text[oe:]
+
     session_marker = 'SimCore.define("session", function (require, module, exports) {'
     text = one(text, session_marker, edit_module + '\n\n' + session_marker, 'edit-module-insert')
-
     text = one(
         text,
         "const recovery = require('./recovery');\nconst recurrence = require('./recurrence');",
         "const recovery = require('./recovery');\nconst editReconcile = require('./edit-reconcile');\nconst recurrence = require('./recurrence');",
         'session-require',
     )
-
-    ss, se, _ = cut(text, sm_start, sm_end, 'session-reconcile-after-insert')
-    delegate = '''  async reconcileEditedOutput(outIndex, content, perfDetail = null) {\n    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail, {\n      kernel, time, recovery, finalizePreparedOutput, sessionNow, sessionElapsed,\n    });\n  }'''
-    text = text[:ss] + delegate + text[se:]
-
     text = one(
         text,
         "  const representationRules = SimCore.require('representation');\n  const runtimeMirrorRules = SimCore.require('runtime-mirror');",
@@ -95,15 +97,10 @@ def patch(text):
         'outer-edit-require',
     )
 
-    os, oe, _ = cut(text, of_start, of_end, 'outer-reconcile-after-insert')
-    outer_delegate = '''  async function reconcileManualEdit(cs, chat, perfDetail = null) {\n    return editReconcileRules.reconcileVisiblePreviousAssistant(cs, chat, perfDetail, {\n      coreRules, textMessageContent, representationRegistry, representationRules,\n      coreLocationKey, SIMCORE_LOG_PREFIX,\n      reconcileSession: (outIndex, content, detail) => cs.reconcileEditedOutput(outIndex, content, detail),\n    });\n  }'''
-    text = text[:os] + outer_delegate + text[oe:]
-
     card_start = '  const OPERATOR_RELEASE_CARD = Object.freeze({'
     card_end = '\n\n\n  async function openPanel() {'
     cs, ce, _ = cut(text, card_start, card_end, 'operator-release-card')
     text = text[:cs] + CARD + text[ce:]
-
     return text
 
 
@@ -131,12 +128,18 @@ def assert_candidate(text):
     for needle in required:
         if needle not in text:
             raise SystemExit(f'06500_REQUIRED_MARKER_MISSING {needle}')
+
     session_slice = text.split('SimCore.define("session"', 1)[1].split('SimCore.define("ops"', 1)[0]
     if session_slice.count('async reconcileEditedOutput(outIndex, content, perfDetail = null)') != 1:
         raise SystemExit('06500_SESSION_DELEGATE_INVALID')
     if "detail.path = 'manual-edit-rebuilt'" in session_slice:
         raise SystemExit('06500_SESSION_STILL_OWNS_REBUILD')
-    outer_slice = text.split('async function reconcileManualEdit(cs, chat, perfDetail = null)', 1)[1].split('async function prepareCoreRequest', 1)[0]
+
+    outer_start = text.rfind('  async function reconcileManualEdit(cs, chat, perfDetail = null) {')
+    outer_end = text.find('\n\n  async function prepareCoreRequest', outer_start)
+    if outer_start < 0 or outer_end < 0:
+        raise SystemExit('06500_OUTER_DELEGATE_MISSING')
+    outer_slice = text[outer_start:outer_end]
     if 'representationFastEligible' in outer_slice or "USER_EDIT_CANDIDATE" in outer_slice:
         raise SystemExit('06500_OUTER_STILL_OWNS_EDIT_DECISION')
 

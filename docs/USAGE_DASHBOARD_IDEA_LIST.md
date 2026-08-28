@@ -103,6 +103,7 @@ Tracking issue: #412
 | --- | --- | --- | --- | --- |
 | `NV-LIFECYCLE-STRESS` | 반복 init/resume/panel lifecycle 누적 stress audit | 높음 | Runtime Slimming Backlog §4 | 반복 초기화, visibility/resume, panel open/close, runtime adoption에서 timer/listener/scheduled work가 누적되지 않는지 장시간 실기 + regression으로 검증한다. cleanup은 별도 버전 작업으로 분리한다. |
 | `NV-TRANSACTION-AUTH` | 결제/Reset Pass/Auto-Reload write API 안전성 조사 | 높음 | #348 lower-priority candidates | top-up, Reset Pass purchase/redeem/refund, auto-reload mutation의 upstream API authority, 인증 범위, idempotency, retry/rollback, duplicate-write 방지 조건을 구현 전에 문서화한다. |
+| `NV-MEMORY-INTEGRITY-QUALITY` | Long-term Memory Integrity / Coverage / Quality Audit | 높음 | **CAPTURED / CONSOLIDATED** · #653 · `docs/USAGE_DASHBOARD_LONG_TERM_MEMORY_IDEA_FAMILY.md` | 장기기억 duplicate/orphan/reference/chronology, retrieval regression, long-chat continuity, quality/self-audit를 repository/test evidence로 검증한다. 발견된 runtime 수리는 별도 versioned memory owner로 분리한다. |
 | `NV-BILLING-HISTORY-AUTH` | Billing history / invoice source authority 조사 | 중간 | #348 lower-priority candidates | invoice/billing-history를 안전하게 read-only로 가져올 authoritative authenticated source가 있는지, privacy surface가 무엇인지 조사한다. source가 없으면 UNKNOWN/미지원으로 남긴다. |
 
 ---
@@ -127,6 +128,8 @@ Tracking issue: #412
 | `V-SERVICE-TIER-FIDELITY` | Request Service Tier fidelity 확대 | 높음 | Post-stabilization · #343 | requested/served FLEX/STANDARD/PRIORITY와 selection source를 source가 제공할 때만 표시한다. missing `usedServiceTier`는 UNKNOWN. |
 | `V-PREMIUM-METER` | DevPass weekly Premium allowance meter | 높음 | Post-stabilization · #348 | weekly Premium used/limit/percent, reset timing, >80% warning, exhausted state, source-proven PAYG-cover state를 표시한다. |
 | `V-PAYG-STATUS` | PAYG Overflow + Auto-Reload read-only status | 높음 | Post-stabilization · #348 | overflow on/off, regular credits, spendable balance, auto-reload enabled/threshold/amount를 source가 제공하는 범위에서 읽기 전용으로 표시한다. |
+| `V-MEMORY-SESSION-CONTINUITY` | Session Checkpoint / Resume / Unresolved Threads | 높음 | Long-term Memory family · #653 | 중단 세션의 checkpoint/resume packet, unresolved thread, open question, bounded bootstrap context를 제공한다. canonical truth/retrieval owner를 대체하지 않는다. |
+| `V-MEMORY-OBSERVABILITY` | Memory Search / Diff / Health / Retrieval Diagnostics | 높음 | Long-term Memory family · #653 | last-seen delta, diff/search UI, health capsule, retrieval diagnostics/trace를 제공한다. 관찰 결과만으로 memory truth를 자동 변경하지 않는다. |
 | `V-CYCLE-SUMMARY` | This-cycle summary cards | 중간 | Post-stabilization · #348 | total requests, total tokens, cached share, peak day를 표시한다. authoritative billing-cycle start가 없으면 실제 7d/30d window로 명시한다. |
 | `V-COST-DRIVER` | Compact cost-driver view | 중간 | Post-stabilization · #348 | 모델/provider별 cost/request count 상위 항목을 compact bar/donut/summary로 보여준다. 기존 표와 중복되는 UI는 피한다. |
 | `V-CREDITS-COST` | Credits cost composition + savings | 중간 | Post-stabilization · #348 | input/output/cached/storage/other cost와 discount savings를 source가 실제 제공하는 항목만 표시한다. 미제공 cost는 0으로 만들지 않는다. |
@@ -135,17 +138,28 @@ Tracking issue: #412
 
 | ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
+| `V-MEMORY-CORE-TAXONOMY` | Layered Memory Core & Taxonomy | 최상 | Long-term Memory foundation · #653 | layered memory와 episodic/semantic/procedural/decision/entity/topic/timeline/dependency 분류를 소유한다. evidence/privacy/retention 정책은 별도 owner다. |
+| `V-MEMORY-POLICY-SCOPE` | Preference / Constraint / Scope Memory | 최상 | Long-term Memory foundation · #653 | preference와 hard constraint를 분리하고 repo/plugin/feature/release/session scope isolation을 명시한다. 반복 선호를 자동 hard invariant로 승격하지 않는다. |
+| `V-MEMORY-TRUTH-RECONCILIATION` | Provenance / UNKNOWN / Supersession / Conflict Reconciliation | 최상 | Long-term Memory foundation · #653 | provenance, assumption, UNKNOWN, evidence grade, stale/supersession/conflict를 authority ordering으로 reconcile한다. 최신 timestamp만으로 truth를 덮지 않는다. |
+| `V-MEMORY-PRIVACY-TRUST` | Privacy / Trust / Persistence Boundaries | 최상 | Long-term Memory foundation · #653 | poisoning guard, quarantine, secret/PII 차단, privacy scope, local-only/repo-safe persistence를 소유한다. untrusted text는 canonical memory가 아니다. |
+| `V-MEMORY-LIFECYCLE-COMPACTION` | Promotion / Compaction / Forgetting / History Lifecycle | 최상 | Long-term Memory foundation · #653 | duplicate merge, compaction, promotion/demotion, forgetting, pin, tombstone, revision history를 bounded lifecycle로 관리한다. |
+| `V-MEMORY-RETRIEVAL-CONTEXT` | Exact Retrieval / Routing / Context Budget | 최상 | Long-term Memory foundation · #653 | intent routing, bounded context budget, deterministic scoring, exact-identity-first retrieval, bounded related-memory expansion을 소유한다. |
 | `V-MODEL-CATEGORY` | Catalog-proven Premium / Regular model category | 높음 | Post-stabilization · #343 | 실제 served model을 현재 version-pinned LLMGateway catalog로 확인한 경우만 Premium/Regular로 분류한다. catalog 미확인/미등록 모델은 UNKNOWN, 이름/비용/provider 추론 금지. |
 | `V-FUNDING-PROVENANCE` | DevPass plan vs PAYG funding-source 표시 | 높음 | **BLOCKED — authority NOT_PROVEN** · #348 + #416 | `NV-FUNDING-AUTH`에서 request-level plan-vs-PAYG authority가 증명되지 않았다. 새 pinned upstream evidence가 생기기 전까지 UNKNOWN 유지, 구현 금지. |
 | `V-RUNTIME-FALLBACK-PRUNE` | Evidence-led legacy/fallback pruning | 높음 | Stabilization/slimming · Runtime Slimming Backlog | `NV-FALLBACK-INVENTORY`에서 SAFE REMOVAL CANDIDATE로 증명된 runtime branch만 작은 release 단위로 제거한다. working fallback을 happy-path 이유만으로 삭제하지 않는다. |
 | `V-PARSER-CONSOLIDATION` | Evidence-led parser/normalizer consolidation | 높음 | Stabilization/slimming · Runtime Slimming Backlog | `NV-PARSER-INVENTORY` 결과를 바탕으로 한 owner씩 중복 normalization을 합친다. UNKNOWN/source fidelity/dedupe identity를 보존한다. |
 | `V-LIFECYCLE-CLEANUP` | Timer/listener/retained-state cleanup | 높음 | Stabilization/slimming · `NV-LIFECYCLE-STRESS` 선행 | 실기/회귀에서 실제 누적 또는 불필요 work가 측정된 항목만 제거/통합한다. measured bottleneck이 아닌 코드는 최적화하지 않는다. |
+| `V-MEMORY-HUMAN-AUTOMATION` | Human Review / Suggestions / Evidence Reactivation | 높음 | Long-term Memory family · #653 | human review, suggested remember/forget, decision revisit, evidence-arrival reactivation, memory-to-idea/work routing을 제공한다. memory confidence는 구현 권한이 아니다. |
+| `V-MEMORY-RELEASE-DIAGNOSTIC` | Release / Physical / Diagnostic / Baseline Memory Integration | 높음 | Long-term Memory family · #653 | release snapshot, physical evidence, failure-repair/failed-attempt/playbook, update notes, feedback, diagnostic/behavior/performance baseline을 memory와 연결한다. deployment와 physical acceptance는 계속 분리한다. |
 | `V-BILLING-HISTORY` | Billing history / invoice read-only view | 중간 | Post-stabilization · #348 + `NV-BILLING-HISTORY-AUTH` 선행 | 안전한 authenticated source가 증명될 경우에만 invoice/history를 read-only로 추가한다. privacy surface와 retention을 최소화한다. |
+| `V-MEMORY-CROSS-REPO-INDEX` | Cross-repo Canonical Knowledge Index | 중간 | Long-term Memory family · #653 | 여러 repo/workspace의 canonical knowledge를 검색 가능하게 연결하되 각 repo authority/permission/privacy를 보존하고 second truth database를 만들지 않는다. |
 
 ## 난이도: 매우 높음
 
 | ID | 아이디어 | 중요도 | 트랙 / 근거 | 요약 |
 | --- | --- | --- | --- | --- |
+| `V-MEMORY-SNAPSHOT-ROLLBACK` | Known-good Snapshot / Replay / Safe Memory Rollback | 최상 | Long-term Memory late track · #653 | known-good memory snapshot, historical replay, rollback을 소유한다. exact identity, conflict handling, validation, idempotency가 증명되기 전에는 활성화하지 않는다. |
+| `V-MEMORY-PORTABILITY-SYNC` | Import/Export / Offline-first / Cross-device Sync | 높음 | Long-term Memory late track · #653 | schema migration, import/export, offline reconciliation, cross-device sync, sync receipt/incident/circuit-breaker를 소유한다. concurrent revision/privacy/conflict 계약이 선행되어야 한다. |
 | `V-TOPUP-WRITE` | Credits top-up controls | 중간 | Long-term · #348 + `NV-TRANSACTION-AUTH` 선행 | 실제 결제 write. idempotency, duplicate charge 방지, 실패/재시도/receipt 검증이 먼저 증명되어야 한다. |
 | `V-RESET-WRITE` | Reset Pass purchase / redeem / refund controls | 중간 | Long-term · #348 + `NV-TRANSACTION-AUTH` 선행 | 포함 pass 우선 사용, tier-bound purchase, monthly allowance eligibility, refund/transaction consistency까지 다뤄야 하는 고위험 write surface. |
 | `V-AUTORELOAD-WRITE` | Auto-Reload mutation controls | 중간 | Long-term · #348 + `NV-TRANSACTION-AUTH` 선행 | threshold/amount/enable-disable mutation. 결제 실패 backoff, prolonged failure disable, PAYG coupling을 source contract대로 보장해야 한다. |
@@ -181,6 +195,31 @@ read-only 우선 후보:
 
 실제 release로 묶을지는 구현 직전 fresh source coverage와 regression scope를 보고 결정한다.
 
+### Long-Term Memory Canonical Family — #653
+
+90개 atomic brainstorm은 정식 warehouse ID로 각각 승격하지 않고 14개 canonical owner로 overlap 제거해 압축한다. 정확한 M-01..M-90 mapping과 owner boundary는 `docs/USAGE_DASHBOARD_LONG_TERM_MEMORY_IDEA_FAMILY.md`가 보존한다.
+
+Foundation design batch — **최상 / 높음**:
+
+- `V-MEMORY-CORE-TAXONOMY`
+- `V-MEMORY-POLICY-SCOPE`
+- `V-MEMORY-TRUTH-RECONCILIATION`
+- `V-MEMORY-PRIVACY-TRUST`
+- `V-MEMORY-LIFECYCLE-COMPACTION`
+- `V-MEMORY-RETRIEVAL-CONTEXT`
+
+이 6개는 서로의 source/privacy/identity/retention/context 계약을 제한하므로 하나만 먼저 구현하지 않는다. **6개 모두 개별 DESIGN READY가 된 뒤** foundation implementation batch 승격 여부를 판단한다.
+
+후속 grouping:
+
+- 높음 / 중간: `V-MEMORY-SESSION-CONTINUITY`, `V-MEMORY-OBSERVABILITY`
+- 높음 / 높음: `V-MEMORY-HUMAN-AUTOMATION`, `V-MEMORY-RELEASE-DIAGNOSTIC`
+- no-version / 높음 / 높음: `NV-MEMORY-INTEGRITY-QUALITY` — 제품 release와 섞지 않음
+- late: `V-MEMORY-SNAPSHOT-ROLLBACK`, `V-MEMORY-PORTABILITY-SYNC`
+- independent later: `V-MEMORY-CROSS-REPO-INDEX`
+
+Repository MEM-01/#463은 원칙 참고용 precedent이며 Local Usage Dashboard runtime memory authority가 아니다.
+
 ---
 
 # 6. 아이디어 승격 규칙
@@ -211,6 +250,7 @@ read-only 우선 후보:
 - Current Release PR Bootstrap Contract: `docs/USAGE_DASHBOARD_PR_BOOTSTRAP_CURRENT_CONTRACT.md`
 - State Lifecycle Inventory: `docs/USAGE_DASHBOARD_STATE_LIFECYCLE_INVENTORY.md`
 - Repository History / Tool Inventory: `docs/USAGE_DASHBOARD_REPO_HISTORY_INVENTORY.md`
+- Long-Term Memory Canonical Idea Family: `docs/USAGE_DASHBOARD_LONG_TERM_MEMORY_IDEA_FAMILY.md` / #653
 - Request Metadata Fidelity design: #343
 - DevPass/Credits parity backlog: #348
 - Release PR bootstrap historical authority: #254

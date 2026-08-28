@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_2_FIRST_CLEAN_RUNTIME_RELEASE",
+  "status": "LIVE_PENDING_PATH_CLEANLY_PROVEN",
+  "date": "2026-08-28",
+  "release": {
+    "version": "0.64.9",
+    "releaseId": "simcore-v0.64.9-new-01",
+    "releaseName": "Session Transport Root Resolution",
+    "workItemIssue": 660,
+    "pr1": 663,
+    "pr1Merge": "437ef403978bea05933ef8d239372edbd88c4d9a",
+    "pr2": 664,
+    "pr2Merge": "e9855cd915bc9c8049b1e1ab8de845fa81a74a4e",
+    "productionCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+    "previousProductionCommit": "f5e29464452728f859a1a6a8191a846468353531",
+    "productionBlob": "7d2731d256b8aa18598c389fd919550cf3bbf146",
+    "publisherRunId": 33140598953,
+    "livePendingMainCommit": "c40e4ab434ee56300a91697d47f1ae43d9a217a7",
+    "liveGate": "06409_SESSION_ROOT_RELOAD_CONTINUITY_REAL_LONG_CHAT"
+  },
+  "result": {
+    "prsToLivePending": 2,
+    "recoveryPrs": 0,
+    "userManualPreLiveGithubActions": 0,
+    "manualReleaseSimcoreMutation": 0,
+    "currentStateAuthorityDriftObserved": false,
+    "accidentalWorkItemAutoCloseObserved": false,
+    "wrongRunBindingObserved": false,
+    "humanLivePass": "PENDING"
+  },
+  "r2_2": {
+    "A_SINGLE_CURRENT_STATE_AUTHORITY": "PASS_CLEAN_RELEASE_PROVEN",
+    "B_BLOCKER_INCIDENT_CLOSURE_SEMANTICS": "CLEAN_PATH_PASS_HISTORICAL_REPLAY_QUALIFIED_NO_NEW_BLOCKER_RUNTIME_PROOF",
+    "C_DURABLE_EVIDENCE_FIRST_OBSERVABILITY": "WATCH_STAYS_WATCH_CLEAN_RELEASE_PASS"
+  },
+  "watch": [
+    {
+      "id": "WORK_ITEM_CLOSURE_WORDING",
+      "classification": "WATCH_NON_RUNTIME_NON_BLOCKING",
+      "action": "Do not add a controller; clarify close authority in a future lifecycle design only if needed."
+    },
+    {
+      "id": "CONTROL_PLANE_SCOPE_LABEL_NOISE",
+      "classification": "WATCH_NON_RUNTIME_NON_BLOCKING",
+      "action": "No implementation absent routing or authority impact."
+    }
+  ],
+  "nextSystemRecommendation": "WAIT_FOR_V0_64_9_HUMAN_LIVE_PASS_AND_PR3_CLOSURE_EVIDENCE_BEFORE_REDESIGNING_R2_2_CLEAN_PATH",
+  "retrospective": "docs/SIMCORE_RELEASE_SYSTEM_V2_2_FIRST_CLEAN_RELEASE_FEEDBACK_2026-08-28.md",
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

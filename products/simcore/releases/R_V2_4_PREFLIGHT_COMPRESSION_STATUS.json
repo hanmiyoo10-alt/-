@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_4_PREFLIGHT_COMPRESSION",
+  "status": "DESIGN_RECORDED_IMPLEMENTATION_NOT_STARTED",
+  "date": "2026-08-28",
+  "name": "Preflight Compression",
+  "predecessor": {
+    "version": "R2.3",
+    "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_PROOF_PENDING",
+    "policy": "docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_POLICY.md",
+    "feedback": "docs/SIMCORE_RELEASE_SYSTEM_V2_3_V06410_OPERATIONAL_FEEDBACK_2026-08-28.md"
+  },
+  "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_DESIGN.md",
+  "inputs": {
+    "fixIssue": 690,
+    "watchIssue": 691,
+    "observedRelease": "0.64.10",
+    "productionCommitAtDesign": "e43ace74241984f21f69299eff690d0c4f483381",
+    "productionStateAtDesign": "LIVE_PENDING"
+  },
+  "objective": {
+    "preserveCurrentReleaseEngine": true,
+    "stabilityFirst": true,
+    "simplicityFirst": true,
+    "automationMode": "EARLY_NON_AUTHORITATIVE_VALIDATION",
+    "steadyStatePrsToLivePending": 2,
+    "steadyStatePrsThroughTerminalClosure": 3,
+    "userManualPreLiveGithubActions": 0,
+    "newPublisher": 0,
+    "newCleanPathPr": 0,
+    "newCleanPathGate": 0,
+    "newPolling": 0,
+    "newIssueAutomationController": 0,
+    "runtimeMutation": "NONE",
+    "releaseSimcoreMutation": "NONE"
+  },
+  "units": [
+    {
+      "id": "R2_4_A_CANDIDATE_EQUIVALENT_PR1_DRY_QUALIFICATION",
+      "classification": "FIX",
+      "status": "DESIGN_FROZEN",
+      "issue": 690,
+      "goal": "Catch candidate packaging and candidate-specific regression failures inside the existing PR1 Verify lane before merge without creating durable candidate authority."
+    },
+    {
+      "id": "R2_4_B_SEMANTIC_ASSERTION_DISCIPLINE",
+      "classification": "STABILIZE",
+      "status": "DESIGN_FROZEN",
+      "goal": "Prefer executable or scoped semantic assertions over brittle whole-source lexical occurrence counts without introducing a generalized parser framework."
+    },
+    {
+      "id": "R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL",
+      "classification": "WATCH",
+      "status": "DESIGN_BOUNDED_IMPLEMENTATION_HELD_FOR_REAL_PR3",
+      "issue": 691,
+      "goal": "Allow an existing PR3 to optionally seal at most one direct predecessor terminal handoff debt when durable evidence already exists, without adding a fourth PR or automatic issue closing."
+    },
+    {
+      "id": "R2_4_D_AUTOMATION_AUTHORITY_FREEZE",
+      "classification": "FREEZE",
+      "status": "DESIGN_FROZEN",
+      "goal": "Increase automatic checking while preserving exactly the same publication, approval and issue-closure authority boundaries."
+    }
+  ],
+  "dryQualification": {
+    "location": "EXISTING_SIMCORE_PR1_VERIFY_LANE",
+    "candidateEquivalentPackaging": true,
+    "singleFileBuilderIsolation": true,
+    "ephemeralOutputOnly": true,
+    "runCandidateSpecificRequiredRegression": true,
+    "createsCandidateRef": false,
+    "createsCandidateCommit": false,
+    "createsReceipt": false,
+    "createsSpecShadow": false,
+    "createsReleaseId": false,
+    "mutatesMain": false,
+    "mutatesReleaseSimcore": false,
+    "publishes": false
+  },
+  "terminalDebt": {
+    "maxDirectPredecessorsPerPr3": 1,
+    "blocksSuccessorPublication": false,
+    "addsPr": false,
+    "autoClosesIssue": false,
+    "requiresAcceptedTerminalEvidence": true,
+    "requiresDirectSuccessorRelationship": true,
+    "implementationHeldUntilRealPr3": true
+  },
+  "preservedSafety": {
+    "singlePublisher": true,
+    "exactCandidateParentBinding": true,
+    "candidateRequired": true,
+    "fastForwardOnlyProduction": true,
+    "latestInstallEquality": true,
+    "failedTransactionImmutable": true,
+    "appendOnlyRecovery": true,
+    "humanLivePassRequired": true,
+    "r2_2SingleCurrentStateAuthority": true,
+    "r2_2BlockerIncidentClosureSemantics": true,
+    "r2_3StabilitySeal": true,
+    "releaseSimcoreRuntimeAuthority": true,
+    "mainDesignEvidenceAdminAuthority": true
+  },
+  "implementationOrder": [
+    "A_CANDIDATE_EQUIVALENT_DRY_QUALIFICATION",
+    "B_SEMANTIC_ASSERTION_REPLAY",
+    "C_HOLD_FOR_REAL_PR3",
+    "D_REVERIFY_AUTHORITY_AND_COST"
+  ],
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

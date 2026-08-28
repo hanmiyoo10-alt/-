@@ -172,7 +172,7 @@ jobs:
             "release_name": "${RELEASE_NAME}",
             "release_branch": "release-simcore",
             "release_commit": "${RELEASE_COMMIT}",
-            "release_blob": "${RELEASE_BLOB}",
+            "release_blob": "$LATEST_BLOB",
             "canonical_manifest": "product-manifest.json",
             "canonical_guideline": "docs/SIMCORE_GUIDELINES.md",
             "canonical_development_memory": "docs/CURRENT_DEVELOPMENT.md"
@@ -316,7 +316,7 @@ jobs:
           assert p['releaseAuthority']=='RS2_4_PERMANENT'
           assert p['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
           assert p['lifecycleState']=='LIVE_PENDING'
-          assert p['disposition'] in ['POST_PUBLISH_PAYLOAD_READY','ADMIN_STATE_ALREADY_SYNCED']
+          assert p['disposition'] in ['LIVE_PENDING_PAYLOAD_READY','ALREADY_CONVERGED']
           allowed=set(p['persistentPayloadAllowlist'])
           changed=set(p['changedPaths'])
           assert changed <= allowed

@@ -1,7 +1,7 @@
 # SimCore Release-State Marker Transition Fix
 
 Date: 2026-08-29 KST
-Status: `DESIGN FROZEN · IMPLEMENTATION PENDING · NON_RUNTIME`
+Status: `IMPLEMENTED · PERMANENT CI PENDING · NON_RUNTIME`
 
 ## Trigger
 
@@ -26,7 +26,7 @@ version         = 0.66.0
 
 ## Root cause
 
-`release-state-converge.mjs` currently owns only the `LIVE_PENDING` marker pair when rendering the next post-publish state. If `CURRENT_DEVELOPMENT.md` already contains a predecessor terminal `LIVE_PASS` release-state block, the renderer inserts a new `LIVE_PENDING` block instead of replacing the existing active release-state block.
+`release-state-converge.mjs` owned only the `LIVE_PENDING` marker pair when rendering the next post-publish state. If `CURRENT_DEVELOPMENT.md` already contained a predecessor terminal `LIVE_PASS` release-state block, the renderer inserted a new `LIVE_PENDING` block instead of replacing the existing active release-state block.
 
 R2.2 closure integrity intentionally requires exactly one active machine release-state block across all modes.
 
@@ -62,9 +62,37 @@ state receipt conflict protection
 release-simcore mutation = NONE
 ```
 
+## Implementation evidence
+
+Work branch:
+
+`fix/simcore-r-release-state-marker-transition`
+
+Implementation commits:
+
+```text
+877fe92ab3c0b00aa5b150cc04dc996f0e8de37a
+  release-state-converge: generic active release-state slot replacement
+
+540d042aeb1a723f711e6b781ab9cbf658b861ee
+  permanent post-publish regression: LIVE_PASS -> LIVE_PENDING + mixed-marker negative control
+```
+
+Implementation behavior:
+
+```text
+existing generic begin/end markers are enumerated
+0 pairs  -> insert LIVE_PENDING after production snapshot
+1 pair   -> require matching mode and order, then replace whole active block
+>1 pairs -> fail LIVE_PENDING_DOC_MARKER_INVALID
+mode mismatch / malformed order -> fail LIVE_PENDING_DOC_MARKER_INVALID
+```
+
+The positive regression constructs a predecessor `LIVE_PASS` fixture and requires exactly one `LIVE_PENDING` begin/end pair after post-publish convergence. It also requires the predecessor LIVE_PASS marker/lifecycle text to be absent and the new release transaction, production commit, and live gate to be present.
+
 ## Scope
 
-Allowed implementation files:
+Changed implementation files:
 
 ```text
 products/simcore/tooling/release-state-converge.mjs
@@ -73,7 +101,7 @@ products/simcore/tests/post-publish-state-permanent.test.mjs
 
 Plus this design/evidence document.
 
-Forbidden in this work item:
+Forbidden and unchanged in this work item:
 
 ```text
 plugins/simcore/latest.js

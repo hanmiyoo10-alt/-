@@ -1,0 +1,35 @@
+name: Termux TaskBridge
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/termux/taskbridge/**'
+      - '.github/workflows/termux-taskbridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/termux/taskbridge/**'
+      - '.github/workflows/termux-taskbridge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            plugins/termux/taskbridge/taskbridge.py \
+            plugins/termux/taskbridge/store.py \
+            plugins/termux/taskbridge/state_machine.py \
+            plugins/termux/taskbridge/runtime.py \
+            plugins/termux/taskbridge/notifier.py \
+            plugins/termux/taskbridge/adapters/shell.py
+      - name: Unit tests
+        run: python -m unittest discover -s plugins/termux/taskbridge/tests -v

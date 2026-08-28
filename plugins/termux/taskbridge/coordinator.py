@@ -14,7 +14,8 @@ import autowatch
 
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 BOOT_ID_META = "system_boot_id"
-DAEMON_IMPL = "lean_coordinator_v2_autowatch_reboot_recovery"
+DAEMON_IMPL = "lean_coordinator_v3_autowatch_worker_identity"
+MIN_OBSERVER_HEARTBEAT_GRACE = 45.0
 
 
 def pid_alive(pid: int | None) -> bool:
@@ -52,6 +53,92 @@ def launch_detached(args: list[str]) -> int:
     return int(proc.pid)
 
 
+def read_process_cmdline(pid: int | None) -> list[str] | None:
+    if not pid or pid <= 0:
+        return None
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except (OSError, PermissionError):
+        return None
+    parts = [part.decode(errors="replace") for part in raw.split(b"\0") if part]
+    return parts or None
+
+
+def worker_identity_matches(job: dict, cmdline: list[str] | None = None) -> bool:
+    pid = job.get("worker_pid")
+    parts = read_process_cmdline(pid) if cmdline is None else cmdline
+    if not parts:
+        return False
+    return "_worker" in parts and job.get("job_id") in parts
+
+
+def observer_heartbeat_grace(job: dict) -> float:
+    command = job.get("command") or []
+    poll = autowatch.DEFAULT_POLL_INTERVAL
+    if len(command) >= 3:
+        try:
+            poll = autowatch.validate_poll_interval(float(command[2]))
+        except (TypeError, ValueError):
+            poll = autowatch.DEFAULT_POLL_INTERVAL
+    return max(MIN_OBSERVER_HEARTBEAT_GRACE, poll * 6.0 + 15.0)
+
+
+def reconcile_stale_autowatch_workers(store: Store, *, now: float | None = None) -> list[str]:
+    """Invalidate automatic observers whose worker identity cannot be verified after a stale heartbeat.
+
+    Android can reuse PIDs across reboot and os.kill(pid, 0) may return PermissionError
+    for a process owned by another UID. Treating PermissionError as liveness can therefore
+    leave a dead TaskBridge observer logically ACTIVE forever. We only reconcile after a
+    conservative heartbeat grace period, then verify that /proc/<pid>/cmdline is the
+    expected TaskBridge `_worker <job_id>` process. We never signal an unverified PID.
+    """
+    now = time.time() if now is None else float(now)
+    stale_ids: list[str] = []
+
+    for job in store.list_jobs(limit=500):
+        if job.get("adapter") != "chatgpt_notification":
+            continue
+        if job.get("name") != autowatch.AUTO_NAME:
+            continue
+        if job.get("logical_state") not in {"ACTIVE", "RECONNECTED"}:
+            continue
+
+        reference = job.get("last_seen") or job.get("started_at") or job.get("created_at") or now
+        heartbeat_age = max(0.0, now - float(reference))
+        grace = observer_heartbeat_grace(job)
+        if heartbeat_age < grace:
+            continue
+
+        pid = job.get("worker_pid")
+        cmdline = read_process_cmdline(pid)
+        if worker_identity_matches(job, cmdline):
+            continue
+
+        store.transition(
+            job["job_id"],
+            "SUSPECTED_STALL",
+            event_type="AUTOWATCH_WORKER_IDENTITY_STALE",
+            detail={
+                "reason": "stale_heartbeat_and_unverified_worker_identity",
+                "old_worker_pid": pid,
+                "heartbeat_age_seconds": round(heartbeat_age, 3),
+                "heartbeat_grace_seconds": round(grace, 3),
+                "cmdline_readable": bool(cmdline),
+                "pid_alive_hint": pid_alive(pid),
+            },
+            local_state="STALE",
+            remote_state="ANDROID_NOTIFICATION",
+            signal_confidence="LOW",
+            desired_action="NONE",
+            worker_pid=None,
+            child_pid=None,
+            last_seen=utc_ts(),
+        )
+        stale_ids.append(job["job_id"])
+
+    return stale_ids
+
+
 def read_boot_id(path: Path = Path("/proc/sys/kernel/random/boot_id")) -> str | None:
     try:
         value = path.read_text().strip()
@@ -80,12 +167,7 @@ def reconcile_rebooted_autowatch(
     current_boot_id: str | None = None,
     boot_epoch: float | None = None,
 ) -> list[str]:
-    """Invalidate automatic observers that provably belong to an earlier boot.
-
-    PID numbers are not stable across reboots. Android may reuse an old worker PID
-    for an unrelated process, and permission checks can make os.kill(pid, 0) look
-    alive. Boot identity / boot time is therefore the authoritative reboot signal.
-    """
+    """Invalidate automatic observers that provably belong to an earlier boot."""
     previous_boot_id = store.get_meta(BOOT_ID_META)
     if current_boot_id is None:
         current_boot_id = read_boot_id()
@@ -140,12 +222,17 @@ def coordinator_loop(store: Store, taskbridge_script: Path, interval: float = 2.
     store.set_meta("daemon_started_at", str(utc_ts()))
     store.set_meta("daemon_impl", DAEMON_IMPL)
 
-    reboot_stale = reconcile_rebooted_autowatch(store)
-    if reboot_stale:
+    startup_stale = reconcile_rebooted_autowatch(store)
+    startup_stale.extend(reconcile_stale_autowatch_workers(store))
+    if startup_stale:
         autowatch.arm_if_needed(store, force=True)
 
     while True:
         try:
+            identity_stale = reconcile_stale_autowatch_workers(store)
+            if identity_stale:
+                autowatch.arm_if_needed(store, force=True)
+
             for job in store.list_jobs(limit=500):
                 state = job["logical_state"]
                 if state in TERMINAL_STATES:

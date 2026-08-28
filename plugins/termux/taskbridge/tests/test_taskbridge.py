@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import chatgpt_calibration
+import autowatch
 import taskbridge
 from runtime import run_worker
 from state_machine import can_transition
@@ -158,6 +159,60 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(Path(command[1]).name, "coordinator.py")
         self.assertIn("--taskbridge-script", command)
         self.assertNotIn("_daemon", command)
+
+    def test_autowatch_arms_once_without_duplicate(self):
+        autowatch.enable(self.store, poll_interval=5)
+        first = autowatch.arm_if_needed(self.store)
+        self.assertIsNotNone(first)
+        second = autowatch.arm_if_needed(self.store)
+        self.assertIsNone(second)
+        active = autowatch.find_active_observer(self.store, autowatch.DEFAULT_PACKAGE)
+        self.assertEqual(active["job_id"], first["job_id"])
+        self.assertEqual(first["command"][1], "0")
+        self.assertEqual(first["command"][2], "5.0")
+
+    def test_autowatch_rearms_after_completed_observer(self):
+        autowatch.enable(self.store, poll_interval=5)
+        first = autowatch.arm_if_needed(self.store)
+        self.store.transition(first["job_id"], "ACTIVE", event_type="TEST_ACTIVE", local_state="OBSERVING")
+        self.store.transition(first["job_id"], "COMPLETED", event_type="TEST_DONE", local_state="STOPPED")
+        final = self.store.get_job(first["job_id"])
+        second = autowatch.arm_if_needed(self.store, now=float(final["updated_at"]) + autowatch.REARM_SECONDS + 0.1)
+        self.assertIsNotNone(second)
+        self.assertNotEqual(first["job_id"], second["job_id"])
+
+    def test_autowatch_disable_requests_cancel_for_owned_job(self):
+        autowatch.enable(self.store, poll_interval=5)
+        job = autowatch.arm_if_needed(self.store)
+        data = autowatch.disable(self.store)
+        self.assertFalse(data["enabled"])
+        updated = self.store.get_job(job["job_id"])
+        self.assertEqual(updated["desired_action"], "CANCEL")
+
+    def test_poll_interval_validation(self):
+        self.assertEqual(autowatch.validate_poll_interval(5), 5.0)
+        with self.assertRaises(ValueError):
+            autowatch.validate_poll_interval(1)
+        with self.assertRaises(ValueError):
+            autowatch.validate_poll_interval(61)
+
+    def test_boot_script_install_defaults_without_wake_lock(self):
+        root = Path(self.tmp.name)
+        script = root / "taskbridge.py"
+        script.write_text("# test\n")
+        path = taskbridge.install_boot_script(script, self.store, home=root)
+        text = path.read_text()
+        self.assertTrue(path.exists())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o700)
+        self.assertNotIn("termux-wake-lock", text)
+        self.assertIn("daemon start", text)
+
+    def test_boot_script_can_request_wake_lock(self):
+        root = Path(self.tmp.name)
+        script = root / "taskbridge.py"
+        script.write_text("# test\n")
+        path = taskbridge.install_boot_script(script, self.store, wake_lock=True, home=root)
+        self.assertIn("termux-wake-lock", path.read_text())
 
 
 if __name__ == "__main__":

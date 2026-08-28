@@ -202,3 +202,101 @@ This WATCH becomes a regression observation, not an automatic combined-release s
 ```
 
 If recurrence establishes a deterministic producer/host/diagnostic cause, promote a separate narrow repair unless the evidence proves direct overlap with an existing release owner.
+
+---
+
+## Neighboring natural-turn recovery control — @2240 → @2241
+
+A later natural turn in the **same runtime generation** provides a strong recovery/control specimen:
+
+```text
+Captured: 2026-08-28T10:59:34.696Z
+Runtime boot: 2026-08-28T09:59:09.960Z
+generation: mtcs4wi0-lrlsg6
+request user @2240
+output assistant @2241
+mode C
+```
+
+The current turn itself returned to a fully healthy representation shape:
+
+```text
+Stability: PASS
+binding BOUND
+out COMMITTED
+mirror COMMITTED
+Warnings: 0
+Compatibility diagnostics: 0
+Preamble provenance: THOUGHTS_COMPAT · action STRIPPED · policy SILENT_COMPAT
+CANONICAL 5759:b20b02a
+FRESH_CHAT 5759:b20b02a
+match CANONICAL
+CANONICAL↔FRESH Δchars +0 · EXACT
+```
+
+More importantly, the prior-turn view for the previously anomalous assistant @2239 was no longer absent:
+
+```text
+Prior representation: EXACT
+mirror CANONICAL
+canonical 4908:80f34fae
+fresh 4908:80f34fae
+
+Edit origin: NONE
+current 4908:80f34fae
+match FRESH_CHAT
+shape FRESH_EXACT_CARRYOVER
+```
+
+The copied `직전 턴 (RAW)` section in this later diagnostic also reproduced a full non-empty assistant body for @2239.
+
+This changes the bounded interpretation materially:
+
+```text
+@2239 was absent from copied RAW in the immediate anomalous diagnostic
+@2239 was non-empty and exact by the next natural request
+same runtime generation
+no retry/edit/reload was reported between these packets
+```
+
+Therefore the evidence now argues **against a persistent empty assistant turn** and supports a transient representation/observation divergence somewhere between output processing, host-visible chat representation, and diagnostic-copy observation.
+
+However, the exact transition is still not proven. The immediate anomalous packet reported:
+
+```text
+CANONICAL 7035
+FRESH_CHAT 4470
+copied RAW absent
+```
+
+while the neighboring request later observed the prior turn as:
+
+```text
+canonical 4908
+fresh 4908
+copied RAW non-empty
+```
+
+The three sizes are different. This proves that the representation visible to SimCore changed after the original output-hook snapshot, but it does **not** prove which host or SimCore action produced the 4908-character converged representation.
+
+Updated bounded hypothesis order:
+
+```text
+persistent blank turn                         = weakened by control
+transient host/chat representation transition = more plausible
+transient diagnostic-copy extraction race     = still plausible
+producer-only malformed response               = insufficient alone
+exact root                                    = OPEN
+```
+
+Do not promote to a runtime fix from this control alone. Preserve the episode as WATCH and correlate any recurrence with the same immediate-vs-next-request representation sequence.
+
+The control also independently confirms that telemetry remained healthy after the anomaly:
+
+```text
+Telemetry capsule: COMPACT_V2 · 4,610/16,384 chars · OK
+Host-local transport: API PRESENT · store USABLE · clear REMOVE · boot EMPTY
+Telemetry checkpoint: MEMORY WRITTEN · SESSION UNAVAILABLE · HOST_LOCAL WRITTEN · 4610 chars
+```
+
+So the anomaly remains separate from telemetry compaction/Host-local transport and from the known v0.64.11 runtime identity split.

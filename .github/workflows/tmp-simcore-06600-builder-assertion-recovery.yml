@@ -1,0 +1,71 @@
+name: Temporary SimCore 06600 Builder Assertion Recovery
+
+on:
+  push:
+    branches:
+      - runtime/simcore-v0.66.0-m2-4-boundary-completion
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-simcore-06600-builder-assertion-recovery
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: runtime/simcore-v0.66.0-m2-4-boundary-completion
+          fetch-depth: 0
+
+      - name: Apply proven assertion fix and refresh validation hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py')
+          text = p.read_text(encoding='utf-8')
+          old = '    if "deferredPruneIndex" in session or "deferredPruneRunning" in session or "scheduleDeferredPrune(outIndex)" in session:\n'
+          new = '    if "deferredPruneIndex" in session or "deferredPruneRunning" in session or "\\n  scheduleDeferredPrune(outIndex) {" in session:\n'
+          if old in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'assertion anchor count={text.count(old)}')
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('neither old nor repaired Slice B assertion found')
+          p.write_text(text, encoding='utf-8')
+          PY
+          sha="$(sha256sum products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py | awk '{print $1}')"
+          python3 - "$sha" <<'PY'
+          from pathlib import Path
+          import re, sys
+          sha = sys.argv[1]
+          p = Path('.github/workflows/tmp-simcore-06600-builder-validation.yml')
+          text = p.read_text(encoding='utf-8')
+          pattern = r"(build-06600-m2-4-session-runtime-mirror-boundary-completion\.py \| awk '\{print \$1\}'\)\" = ')[0-9a-f]{64}(')"
+          updated, count = re.subn(pattern, lambda m: m.group(1) + sha + m.group(2), text, count=1)
+          if count != 1:
+              raise SystemExit('validation hash anchor mismatch')
+          p.write_text(updated, encoding='utf-8')
+          print('builder_sha256=' + sha)
+          PY
+          rm -f .github/workflows/tmp-simcore-06600-builder-assertion-fix.yml
+          rm -f .github/workflows/tmp-simcore-06600-builder-assertion-recovery.yml
+          python3 -m py_compile products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion.py
+          git diff --check
+
+      - name: Commit bounded recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix(simcore): recover v0.66 Slice B builder assertion'
+          git push origin HEAD:runtime/simcore-v0.66.0-m2-4-boundary-completion

@@ -234,6 +234,7 @@
     const diagDurationFidelity = requestDurationStats(diagLedgerRows);
     const diagTierFidelity = requestServiceTierStats(diagLedgerRows);
     const diagOutcome = requestOutcomeStats(diagLedgerRows);
+    const diagHttpStatus = requestHttpStatusStats(diagLedgerRows);
     const diagRequestProvenance = requestProvenanceDiagnosticMetadata();
     const diagRequestProvenanceRows = Math.max(0, Number(diagRequestProvenance?.rows || 0));
     const diagRequestProvenanceMode = ['account-wide','project-fallback'].includes(String(diagRequestProvenance?.captureMode))
@@ -299,6 +300,7 @@
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
+      `HTTP final status fidelity: error rows ${diagHttpStatus.errorRows} · exact ${diagHttpStatus.exact}/${diagHttpStatus.errorRows} · unknown ${diagHttpStatus.unknown}/${diagHttpStatus.errorRows} · source ${diagHttpStatus.source}`,
       `Account request capture: ${diagRequestProvenanceMode} · rows ${diagRequestProvenanceRows} · fallback ${Math.max(0, Number(diagRequestProvenance?.fallbackCount || 0))}`,
       `Request account scope fidelity: DevPass ${Math.max(0, Number(diagRequestProvenance?.devpass || 0))}/${diagRequestProvenanceRows} · Credits ${Math.max(0, Number(diagRequestProvenance?.credits || 0))}/${diagRequestProvenanceRows} · Unknown ${Math.max(0, Number(diagRequestProvenance?.unknown || 0))}/${diagRequestProvenanceRows} · conflict ${Math.max(0, Number(diagRequestProvenance?.conflict || 0))}`,
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,

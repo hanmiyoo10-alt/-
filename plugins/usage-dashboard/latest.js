@@ -1,13 +1,27 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.82
+//@version 3.0.0-alpha.5.83
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.82';
+  const VERSION = '3.0.0-alpha.5.83';
+  const RELEASE_NOTES = Object.freeze({
+    title: "Exact Final HTTP Status Fidelity",
+    highlights: Object.freeze([
+    "실패 요청에서 source-backed final HTTP status를 정확히 표시",
+    "성공 요청에는 HTTP 200을 추정하지 않고 status 미제공은 UNKNOWN으로 유지",
+    "Settings에 현재 버전 업데이트 내역과 다음 진단 체크리스트를 추가"
+    ]),
+    diagnosticHints: Object.freeze([
+    "자연 발생한 실패 요청이 있으면 HTTP 코드가 해당 오류 요청에만 표시되는지 확인",
+    "정상 성공 요청에 합성 HTTP 200 배지가 생기지 않는지 확인",
+    "Settings의 업데이트 내역을 열고 진단 제출 가이드 복사가 동작하는지 확인",
+    "READY / Health ok / active errors 0 / failures 0이며 추가 refresh·CLI·network 작업이 없는지 확인"
+    ]),
+  });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
   const STATE_KEY = 'local-usage-dashboard-v3';
   const TOKEN_KEY = 'local-usage-dashboard-bridge-token-v1';
@@ -26,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.23';
+  const REQUIRED_BRIDGE_VERSION = '1.6.24';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -1212,6 +1226,37 @@ async function importLegacyTodayBaselines() {
       : '—';
   }
 
+  function requestHttpStatusMetadata(row) {
+    const raw = recentRequestValue(row, ['httpStatusCode','http_status_code'], null);
+    const source = String(recentRequestValue(row, ['httpStatusSource','http_status_source'], '') || '');
+    const fidelity = String(recentRequestValue(row, ['httpStatusFidelity','http_status_fidelity'], 'unknown') || 'unknown');
+    const explicit = typeof raw === 'number'
+      && Number.isInteger(raw)
+      && raw >= 100
+      && raw <= 599
+      && source === 'errorDetails.statusCode'
+      && fidelity === 'explicit';
+    return {
+      httpStatusCode: explicit ? raw : null,
+      httpStatusSource: explicit ? 'errorDetails.statusCode' : '',
+      httpStatusFidelity: explicit ? 'explicit' : 'unknown'
+    };
+  }
+
+  function requestHttpStatusText(row) {
+    const http = requestHttpStatusMetadata(row);
+    return requestOutcomeCategory(row) === 'error' && http.httpStatusFidelity === 'explicit'
+      ? `HTTP ${http.httpStatusCode}`
+      : '';
+  }
+
+  function requestHttpStatusStats(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const errorRows = list.filter(row => requestOutcomeCategory(row) === 'error');
+    const exact = errorRows.filter(row => requestHttpStatusMetadata(row).httpStatusFidelity === 'explicit').length;
+    return {errorRows:errorRows.length, exact, unknown:errorRows.length - exact, source:'errorDetails.statusCode'};
+  }
+
   function requestCacheSignal(row) {
     const explicit = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
     const text = typeof explicit === 'string' ? explicit.trim().toLowerCase() : '';
@@ -1418,6 +1463,7 @@ async function importLegacyTodayBaselines() {
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
       const duration = requestDurationMetadata(row);
+      const httpStatus = requestHttpStatusMetadata(row);
       const requestedTierField = recentRequestField(row, [
         'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
         'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
@@ -1461,6 +1507,9 @@ async function importLegacyTodayBaselines() {
         durationMs:duration.durationMs,
         durationSource:duration.durationSource,
         durationFidelity:duration.durationFidelity,
+        httpStatusCode:httpStatus.httpStatusCode,
+        httpStatusSource:httpStatus.httpStatusSource,
+        httpStatusFidelity:httpStatus.httpStatusFidelity,
         cachedInputTokens:cacheMetrics.cachedInputTokens,
         cacheReadInputTokens:cacheMetrics.cacheReadInputTokens,
         cacheCreationInputTokens:cacheMetrics.cacheCreationInputTokens,
@@ -1621,6 +1670,9 @@ async function importLegacyTodayBaselines() {
         const incomingDuration = requestDurationMetadata(row);
         const currentDuration = requestDurationMetadata(current || {});
         const duration = incomingDuration.durationFidelity === 'explicit' ? incomingDuration : currentDuration;
+        const incomingHttpStatus = requestHttpStatusMetadata(row);
+        const currentHttpStatus = requestHttpStatusMetadata(current || {});
+        const httpStatus = incomingHttpStatus.httpStatusFidelity === 'explicit' ? incomingHttpStatus : currentHttpStatus;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
         byKey.set(key, {
           ...(current || {}),
@@ -1632,6 +1684,9 @@ async function importLegacyTodayBaselines() {
           durationMs:duration.durationMs,
           durationSource:duration.durationSource,
           durationFidelity:duration.durationFidelity,
+          httpStatusCode:httpStatus.httpStatusCode,
+          httpStatusSource:httpStatus.httpStatusSource,
+          httpStatusFidelity:httpStatus.httpStatusFidelity,
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
           cachedInputTokens:num(row.cachedInputTokens) ? Number(row.cachedInputTokens) : (num(current?.cachedInputTokens) ? Number(current.cachedInputTokens) : null),
           cacheReadInputTokens:num(row.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : (num(current?.cacheReadInputTokens) ? Number(current.cacheReadInputTokens) : null),
@@ -1835,7 +1890,8 @@ async function importLegacyTodayBaselines() {
         const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
         const durationText = `Duration ${requestDurationText(row)}`;
-        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+        const httpStatusText = requestHttpStatusText(row);
+        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
@@ -1878,7 +1934,8 @@ async function importLegacyTodayBaselines() {
       const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
       const durationText = `Duration ${requestDurationText(row)}`;
-      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+      const httpStatusText = requestHttpStatusText(row);
+      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
@@ -2780,6 +2837,7 @@ async function importLegacyTodayBaselines() {
     const diagDurationFidelity = requestDurationStats(diagLedgerRows);
     const diagTierFidelity = requestServiceTierStats(diagLedgerRows);
     const diagOutcome = requestOutcomeStats(diagLedgerRows);
+    const diagHttpStatus = requestHttpStatusStats(diagLedgerRows);
     const diagRequestProvenance = requestProvenanceDiagnosticMetadata();
     const diagRequestProvenanceRows = Math.max(0, Number(diagRequestProvenance?.rows || 0));
     const diagRequestProvenanceMode = ['account-wide','project-fallback'].includes(String(diagRequestProvenance?.captureMode))
@@ -2845,6 +2903,7 @@ async function importLegacyTodayBaselines() {
       `Service tier fidelity: requested known ${diagTierFidelity.requestedKnown}/${diagTierFidelity.rows} · served known ${diagTierFidelity.servedKnown}/${diagTierFidelity.rows} · served flex ${diagTierFidelity.flex} · standard ${diagTierFidelity.standard} · priority ${diagTierFidelity.priority} · unknown ${diagTierFidelity.unknown}`,
       `Service tier source fields: requested ${diagTierFidelity.requestedSources.join(',') || 'none'} · served ${diagTierFidelity.servedSources.join(',') || 'none'}`,
       `Request outcome taxonomy: success ${diagOutcome.success} · error ${diagOutcome.error} · cancelled ${diagOutcome.cancelled} · unknown ${diagOutcome.unknown} · rows ${diagOutcome.rows}`,
+      `HTTP final status fidelity: error rows ${diagHttpStatus.errorRows} · exact ${diagHttpStatus.exact}/${diagHttpStatus.errorRows} · unknown ${diagHttpStatus.unknown}/${diagHttpStatus.errorRows} · source ${diagHttpStatus.source}`,
       `Account request capture: ${diagRequestProvenanceMode} · rows ${diagRequestProvenanceRows} · fallback ${Math.max(0, Number(diagRequestProvenance?.fallbackCount || 0))}`,
       `Request account scope fidelity: DevPass ${Math.max(0, Number(diagRequestProvenance?.devpass || 0))}/${diagRequestProvenanceRows} · Credits ${Math.max(0, Number(diagRequestProvenance?.credits || 0))}/${diagRequestProvenanceRows} · Unknown ${Math.max(0, Number(diagRequestProvenance?.unknown || 0))}/${diagRequestProvenanceRows} · conflict ${Math.max(0, Number(diagRequestProvenance?.conflict || 0))}`,
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
@@ -2972,6 +3031,33 @@ function todayOverviewMetrics(d) {
 }
 
   function settingsHtml() {
+    function releaseNotesPanelHtml() {
+      const highlights = RELEASE_NOTES.highlights.map(item => `<li>${esc(item)}</li>`).join('');
+      const hints = RELEASE_NOTES.diagnosticHints.map(item => `<li>${esc(item)}</li>`).join('');
+      return `<div id="release-notes-panel" class="usage-detail-box release-notes-panel" hidden>
+        <div class="recent-head"><h3>${esc(RELEASE_NOTES.title)}</h3><span>v${esc(VERSION)}</span></div>
+        <p><b>이번 업데이트</b></p><ul>${highlights}</ul>
+        <p><b>다음 진단 때 확인하면 좋은 것</b></p><ul>${hints}</ul>
+        <div class="actions"><button id="copy-release-guide" data-release-guide="${esc(releaseDiagnosticGuideText())}">진단 제출 가이드 복사</button></div>
+      </div>`;
+    }
+
+    function releaseDiagnosticGuideText() {
+      const hints = RELEASE_NOTES.diagnosticHints.map(item => `- ${item}`).join('\n');
+      return [
+        `Local Usage Dashboard v${VERSION}`,
+        `Release: ${RELEASE_NOTES.title}`,
+        '',
+        '다음 진단 때 확인:',
+        hints,
+        '',
+        '문제/관찰 한 줄: [직접 작성]',
+        '재현 행동: [직접 작성]',
+        '필요하면 Runtime Diagnostics > 전체 Diagnostics 복사를 함께 첨부'
+      ].join('\n');
+    }
+
+
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
     const productRuntime = bridgeRuntimeSnapshot();
@@ -3161,7 +3247,10 @@ function todayOverviewMetrics(d) {
         ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
       </section>
       <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">
-        <div class="bridge-config-static"><div class="settings-section-title"><b>Connection</b><span>Bridge endpoint · token</span></div><label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
+        <div class="bridge-config-static"><div class="settings-section-title"><b>Runtime & Update</b><span>현재 설치 버전 · 다음 진단 가이드</span></div>
+        <div class="actions"><button id="release-notes-toggle" aria-expanded="false" aria-controls="release-notes-panel">업데이트 내역</button></div>
+        ${releaseNotesPanelHtml()}
+        <div class="settings-section-title"><b>Connection</b><span>Bridge endpoint · token</span></div><label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
         <label><span>Bridge Token</span><textarea id="bridge-token" placeholder="저장된 값은 다시 표시하지 않음"></textarea></label>
         <div class="settings-section-title"><b>Refresh</b><span>주기 · stale policy</span></div><label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[600000,'10분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
         <label><span>STALE 기준</span><select id="stale-ms">${[[0,'사용 안 함 · Local JSON 기본'],[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
@@ -3399,6 +3488,26 @@ function todayOverviewMetrics(d) {
         if ((next === 'devpass' || next === 'credits') && previousUsageScope !== state.usageScopeView) renderSettings();
       };
     });
+    if (q('#release-notes-toggle')) q('#release-notes-toggle').onclick = e => {
+      const button = e.currentTarget;
+      const panel = q('#release-notes-panel');
+      if (!panel) return;
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      panel.hidden = expanded;
+    };
+    if (q('#copy-release-guide')) q('#copy-release-guide').onclick = async e => {
+      const button = e.currentTarget;
+      const guide = String(button.getAttribute('data-release-guide') || '');
+      let ok = false;
+      try {
+        if (guide && navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(guide);
+          ok = true;
+        }
+      } catch (_) {}
+      button.textContent = ok ? '복사됨 ✓' : '복사 실패';
+    };
     if (q('#connect')) q('#connect').onclick = async () => {
       try {
         state.bridgeBase = normalizeBridgeBase(q('#bridge-base')?.value || DEFAULT_BRIDGE);

@@ -80,7 +80,10 @@
         ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
       </section>
       <details class="panel wide advanced-panel"><summary><b>Local Bridge</b><span>연결 · 설정</span></summary><div class="advanced-body">
-        <div class="bridge-config-static"><div class="settings-section-title"><b>Connection</b><span>Bridge endpoint · token</span></div><label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
+        <div class="bridge-config-static"><div class="settings-section-title"><b>Runtime & Update</b><span>현재 설치 버전 · 다음 진단 가이드</span></div>
+        <div class="actions"><button id="release-notes-toggle" aria-expanded="false" aria-controls="release-notes-panel">업데이트 내역</button></div>
+        ${releaseNotesPanelHtml()}
+        <div class="settings-section-title"><b>Connection</b><span>Bridge endpoint · token</span></div><label><span>Bridge URL</span><input id="bridge-base" value="${esc(state.bridgeBase)}"></label>
         <label><span>Bridge Token</span><textarea id="bridge-token" placeholder="저장된 값은 다시 표시하지 않음"></textarea></label>
         <div class="settings-section-title"><b>Refresh</b><span>주기 · stale policy</span></div><label><span>갱신 주기</span><select id="refresh-ms">${[[15000,'15초'],[30000,'30초'],[60000,'1분'],[300000,'5분'],[600000,'10분'],[0,'수동']].map(([v,l])=>`<option value="${v}" ${Number(state.refreshMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>
         <label><span>STALE 기준</span><select id="stale-ms">${[[0,'사용 안 함 · Local JSON 기본'],[60000,'1분'],[300000,'5분'],[900000,'15분'],[1800000,'30분']].map(([v,l])=>`<option value="${v}" ${Number(state.staleAfterMs)===v?'selected':''}>${l}</option>`).join('')}</select></label>

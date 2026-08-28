@@ -1,5 +1,32 @@
 
   function settingsHtml() {
+    function releaseNotesPanelHtml() {
+      const highlights = RELEASE_NOTES.highlights.map(item => `<li>${esc(item)}</li>`).join('');
+      const hints = RELEASE_NOTES.diagnosticHints.map(item => `<li>${esc(item)}</li>`).join('');
+      return `<div id="release-notes-panel" class="usage-detail-box release-notes-panel" hidden>
+        <div class="recent-head"><h3>${esc(RELEASE_NOTES.title)}</h3><span>v${esc(VERSION)}</span></div>
+        <p><b>이번 업데이트</b></p><ul>${highlights}</ul>
+        <p><b>다음 진단 때 확인하면 좋은 것</b></p><ul>${hints}</ul>
+        <div class="actions"><button id="copy-release-guide" data-release-guide="${esc(releaseDiagnosticGuideText())}">진단 제출 가이드 복사</button></div>
+      </div>`;
+    }
+
+    function releaseDiagnosticGuideText() {
+      const hints = RELEASE_NOTES.diagnosticHints.map(item => `- ${item}`).join('\n');
+      return [
+        `Local Usage Dashboard v${VERSION}`,
+        `Release: ${RELEASE_NOTES.title}`,
+        '',
+        '다음 진단 때 확인:',
+        hints,
+        '',
+        '문제/관찰 한 줄: [직접 작성]',
+        '재현 행동: [직접 작성]',
+        '필요하면 Runtime Diagnostics > 전체 Diagnostics 복사를 함께 첨부'
+      ].join('\n');
+    }
+
+
     const d = state.data || {}, c = d.credits, a = d.activity, runway = d.runway, h = d.health || {};
     const bridgeDiag = bridgeStabilitySnapshot();
     const productRuntime = bridgeRuntimeSnapshot();

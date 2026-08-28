@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "releaseTitle": "Exact Final HTTP Status Fidelity",
+  "productVersion": "3.0.0-alpha.5.83",
+  "engineVersion": "1.6.24",
+  "managerVersion": "1.3.0",
+  "cliVersion": "0.13.2",
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.80 — Request Ledger Provenance Ownership Consolidation`",
+  "materializer": "plugins/usage-dashboard/tools/release_http_status_update_guidance_583.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
+  "workflows": {
+    "stage": "usage-dashboard-e7-candidate-ready.yml",
+    "validation": "usage-dashboard-e9-candidate-validation.yml",
+    "mergeGuard": "usage-dashboard-e11-merge-ready.yml",
+    "promotion": "usage-dashboard-e5-exact-byte-promotion.yml"
+  },
+  "engine": {
+    "sourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+    "buildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs"
+  },
+  "newTests": [
+    "plugins/usage-dashboard/tests/p48-exact-final-http-status.cjs",
+    "plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs"
+  ],
+  "highlights": [
+    "실패 요청에서 source-backed final HTTP status를 정확히 표시",
+    "성공 요청에는 HTTP 200을 추정하지 않고 status 미제공은 UNKNOWN으로 유지",
+    "Settings에 현재 버전 업데이트 내역과 다음 진단 체크리스트를 추가"
+  ],
+  "diagnosticHints": [
+    "자연 발생한 실패 요청이 있으면 HTTP 코드가 해당 오류 요청에만 표시되는지 확인",
+    "정상 성공 요청에 합성 HTTP 200 배지가 생기지 않는지 확인",
+    "Settings의 업데이트 내역을 열고 진단 제출 가이드 복사가 동작하는지 확인",
+    "READY / Health ok / active errors 0 / failures 0이며 추가 refresh·CLI·network 작업이 없는지 확인"
+  ]
+}

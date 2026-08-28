@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "v0.65.0 Subgate A+B live acceptance closure and v0.66.0 M2-4 implementation entry",
+  "expectedProductionCommit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "registeredTransition": "products/simcore/state-sync/active-admin-transition.json",
+  "mergeThisCommandPayload": false
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "operator-release-card-v06411",
+  "suite": "operator-release-card",
+  "input": {
+    "cases": [
+      "panel-registration-stable",
+      "v06411-version-name-scenario",
+      "v06411-guidance-and-ledger",
+      "v06411-card-pure-non-authority"
+    ]
+  },
+  "expected": {
+    "topLevelRegisterButtonCount": 1,
+    "topLevelRegisterSettingCount": 1,
+    "recentVersions": ["0.64.11", "0.64.10", "0.64.9"],
+    "requiredMarkers": [
+      "bounded compact capsule",
+      "16KB",
+      "COMPACTION_FAILED",
+      "HOST_LOCAL",
+      "<ol ",
+      "중지 조건"
+    ],
+    "forbiddenTokens": ["localStorage", "IndexedDB", "fetch(", "XMLHttpRequest", "setInterval(", "setTimeout(", "Risuai.setDatabase"]
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_ACTIVATION.md"
+  }
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -7,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 
+from adapters import chatgpt_notification
 from adapters import shell as shell_adapter
 import notifier
 from store import Store, utc_ts
@@ -49,8 +51,176 @@ def launch_detached(args: list[str], *, cwd: Path | None = None) -> int:
     return int(proc.pid)
 
 
+def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float = 2.0) -> int:
+    job = store.get_job(job_id)
+    if job["logical_state"] in {"COMPLETED", "FAILED", "CANCELLED"}:
+        return 0
+
+    package = job["command"][0] if job.get("command") else chatgpt_notification.CHATGPT_PACKAGE
+    try:
+        timeout_seconds = float(job["command"][1]) if len(job.get("command", [])) > 1 else 1800.0
+    except (TypeError, ValueError):
+        timeout_seconds = 1800.0
+
+    if not chatgpt_notification.available():
+        store.transition(
+            job_id,
+            "UNKNOWN",
+            event_type="CHATGPT_OBSERVER_UNAVAILABLE",
+            detail={"reason": "termux-notification-list unavailable"},
+            local_state="STOPPED",
+            remote_state="ANDROID_NOTIFICATION",
+            signal_confidence="LOW",
+            desired_action="NONE",
+            worker_pid=None,
+            last_seen=utc_ts(),
+        )
+        return 0
+
+    try:
+        baseline = chatgpt_notification.snapshot(package)
+    except Exception as exc:
+        store.transition(
+            job_id,
+            "UNKNOWN",
+            event_type="CHATGPT_OBSERVER_START_ERROR",
+            detail={"error": type(exc).__name__},
+            error_code=type(exc).__name__,
+            local_state="STOPPED",
+            remote_state="ANDROID_NOTIFICATION",
+            signal_confidence="LOW",
+            desired_action="NONE",
+            worker_pid=None,
+            last_seen=utc_ts(),
+        )
+        return 0
+
+    stdout_path, _ = store.job_paths(job_id)
+    observer_path = stdout_path.parent / "observer.json"
+    observer_path.write_text(
+        json.dumps(
+            {
+                "package": package,
+                "baseline_fingerprints": sorted(baseline),
+                "semantic": "new-notification-candidate-only",
+            },
+            indent=2,
+        )
+    )
+
+    store.transition(
+        job_id,
+        "ACTIVE" if job["logical_state"] == "CREATED" else "RECONNECTED",
+        event_type="CHATGPT_OBSERVER_STARTED",
+        detail={"package": package, "timeout_seconds": timeout_seconds},
+        worker_pid=os.getpid(),
+        local_state="OBSERVING",
+        remote_state="ANDROID_NOTIFICATION",
+        signal_confidence="MEDIUM",
+        desired_action="NONE",
+        started_at=job.get("started_at") or utc_ts(),
+        last_seen=utc_ts(),
+        result_ref=str(observer_path),
+    )
+
+    started = time.monotonic()
+    read_errors = 0
+    while True:
+        current_job = store.get_job(job_id)
+        if current_job["logical_state"] == "CANCELLED":
+            return 0
+
+        if timeout_seconds > 0 and time.monotonic() - started >= timeout_seconds:
+            store.transition(
+                job_id,
+                "UNKNOWN",
+                event_type="CHATGPT_OBSERVER_TIMEOUT",
+                detail={"timeout_seconds": timeout_seconds},
+                local_state="STOPPED",
+                remote_state="ANDROID_NOTIFICATION",
+                signal_confidence="LOW",
+                desired_action="NONE",
+                worker_pid=None,
+                last_seen=utc_ts(),
+            )
+            return 0
+
+        try:
+            current = chatgpt_notification.snapshot(package)
+        except Exception as exc:
+            read_errors += 1
+            if read_errors >= 3:
+                latest = store.get_job(job_id)
+                if latest["logical_state"] not in {"COMPLETED", "FAILED", "CANCELLED"}:
+                    store.transition(
+                        job_id,
+                        "SUSPECTED_STALL",
+                        event_type="CHATGPT_OBSERVER_READ_LOST",
+                        detail={"error": type(exc).__name__, "consecutive_errors": read_errors},
+                        error_code=type(exc).__name__,
+                        local_state="STOPPED",
+                        remote_state="ANDROID_NOTIFICATION",
+                        signal_confidence="LOW",
+                        desired_action="NONE",
+                        worker_pid=None,
+                        last_seen=utc_ts(),
+                    )
+                return 0
+            time.sleep(max(0.5, interval))
+            continue
+
+        read_errors = 0
+        new_fingerprints = current - baseline
+        if new_fingerprints:
+            observer_path.write_text(
+                json.dumps(
+                    {
+                        "package": package,
+                        "baseline_count": len(baseline),
+                        "observed_count": len(current),
+                        "new_count": len(new_fingerprints),
+                        "semantic": "new-notification-candidate-only",
+                    },
+                    indent=2,
+                )
+            )
+            store.transition(
+                job_id,
+                "COMPLETED",
+                event_type="CHATGPT_NOTIFICATION_SEEN",
+                detail={
+                    "package": package,
+                    "new_count": len(new_fingerprints),
+                    "semantic": "candidate_only_not_response_completion_proof",
+                },
+                local_state="STOPPED",
+                remote_state="ANDROID_NOTIFICATION",
+                signal_confidence="MEDIUM",
+                desired_action="NONE",
+                last_seen=utc_ts(),
+                worker_pid=None,
+            )
+            notifier.notify(
+                "ChatGPT 알림 감지",
+                f"{job_id} · 새 ChatGPT 알림 {len(new_fingerprints)}개",
+                notification_id=f"taskbridge-{job_id}",
+            )
+            return 0
+
+        store.update_fields(
+            job_id,
+            last_seen=utc_ts(),
+            local_state="OBSERVING",
+            remote_state="ANDROID_NOTIFICATION",
+            signal_confidence="MEDIUM",
+        )
+        time.sleep(max(0.5, interval))
+
+
 def run_worker(store: Store, job_id: str, heartbeat_interval: float = 5.0) -> int:
     job = store.get_job(job_id)
+    if job["adapter"] == "chatgpt_notification":
+        return _run_chatgpt_notification_worker(store, job_id, interval=heartbeat_interval)
     if job["adapter"] != "shell":
         store.transition(job_id, "FAILED", event_type="ADAPTER_UNSUPPORTED", error_code="ADAPTER_UNSUPPORTED", local_state="STOPPED", desired_action="NONE")
         return 2

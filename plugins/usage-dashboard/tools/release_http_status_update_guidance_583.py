@@ -164,10 +164,9 @@ def apply_capture_http_status() -> None:
 
 
 def apply_engine_http_status() -> None:
-    old = '''    const durationExplicit = row?.durationFidelity === 'explicit'
-      && typeof row?.durationMs === 'number'
-      && Number.isFinite(row.durationMs)
-      && row.durationMs >= 0;
+    old = '''    const durationExplicit = typeof row.durationMs === 'number' && Number.isFinite(row.durationMs) && row.durationMs >= 0
+      && String(row.durationSource || '') === 'llmgateway-log-duration'
+      && String(row.durationFidelity || '') === 'explicit';
 '''
     new = old + '''    const httpStatusExplicit = row?.httpStatusFidelity === 'explicit'
       && row?.httpStatusSource === 'errorDetails.statusCode'
@@ -178,7 +177,7 @@ def apply_engine_http_status() -> None:
 '''
     replace_once_or_target(ENGINE_SOURCES, old, new, '5.83 Engine explicit HTTP predicate')
 
-    old_out = '''      durationMs: durationExplicit ? row.durationMs : null,
+    old_out = '''      durationMs: durationExplicit ? Number(row.durationMs) : null,
       durationSource: durationExplicit ? 'llmgateway-log-duration' : '',
       durationFidelity: durationExplicit ? 'explicit' : 'unknown',
 '''

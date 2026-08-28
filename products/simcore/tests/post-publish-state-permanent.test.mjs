@@ -11,6 +11,7 @@ const REPO = path.resolve(HERE, '../../..');
 const POST = path.join(REPO, 'products/simcore/tooling/post-publish-state.mjs');
 const CONVERGE = path.join(REPO, 'products/simcore/tooling/release-state-converge.mjs');
 const RECOVERY_WORKFLOW = path.join(REPO, '.github/workflows/simcore-release-state-sync.yml');
+const PERMANENT_WORKFLOW = path.join(REPO, '.github/workflows/simcore-release-permanent.yml');
 
 function sh(cwd, command, args, check = true) {
   const r = spawnSync(command, args, { cwd, encoding:'utf8', maxBuffer:1024*1024 });
@@ -170,6 +171,25 @@ function testRecoveryDispositionParityStatic() {
     if(workflow.includes(legacy)) throw new Error(`D recovery workflow legacy disposition survived: ${legacy}`);
   }
 }
+function testStateReceiptDurabilityStatic() {
+  const workflows=[
+    ['permanent',fs.readFileSync(PERMANENT_WORKFLOW,'utf8')],
+    ['recovery',fs.readFileSync(RECOVERY_WORKFLOW,'utf8')],
+  ];
+  for(const [name,workflow] of workflows) {
+    for(const token of [
+      'RECEIPT="products/simcore/releases/state-receipts/${RELEASE_ID}.json"',
+      '"$RECORD" "$RECEIPT"',
+      '--allow "$RECEIPT"',
+      'durable-receipt.json',
+      'state-receipts/${RELEASE_ID}.json',
+      "q['lifecycleState']=='REAL_RELEASE_LIVE_PENDING'",
+      "q['result']=='PASS'",
+      "q['publisherRunId']==h['publisherRunId']",
+      "q['liveScenarioId']==h['liveScenarioId']",
+    ]) if(!workflow.includes(token)) throw new Error(`D ${name} state receipt durability token missing: ${token}`);
+  }
+}
 function testSharedOwnerBoundary() {
   const adapter=fs.readFileSync(POST,'utf8');
   const owner=fs.readFileSync(CONVERGE,'utf8');
@@ -190,8 +210,9 @@ function main() {
     testDReceiptConflict(base);
     testDReleaseMarkerModeMismatch(base);
     testRecoveryDispositionParityStatic();
+    testStateReceiptDurabilityStatic();
     testSharedOwnerBoundary();
-    console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5 + LIVE_PASS_TRANSITION + RECOVERY_DISPOSITION_PARITY');
+    console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5 + LIVE_PASS_TRANSITION + RECOVERY_DISPOSITION_PARITY + STATE_RECEIPT_DURABILITY');
   } finally { fs.rmSync(base,{recursive:true,force:true}); }
 }
 

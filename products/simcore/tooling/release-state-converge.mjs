@@ -41,7 +41,7 @@ function sha256(bytes) { return crypto.createHash('sha256').update(bytes).digest
 function gitBlobSha1(bytes) { return crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex'); }
 function hashOrMissing(file) { return fs.existsSync(file) ? sha256(fs.readFileSync(file)) : null; }
 function writeJsonAtomic(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive:true });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
   const tmp = `${file}.simcore-state-converge-${process.pid}.tmp`;
   fs.writeFileSync(tmp, bytes);
@@ -58,7 +58,7 @@ function sourceIdentity(bytes, version) {
   const v = text.match(/^\/\/@version\s+([^\r\n]+)$/m)?.[1]?.trim() || '';
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const n = text.match(new RegExp(`^// v${escaped}\\s+(.+?):\\s*$`, 'm'))?.[1]?.trim() || '';
-  return { version:v, releaseName:n };
+  return { version: v, releaseName: n };
 }
 function validatePublicationInput(input) {
   if (!input || input.schemaVersion !== 1 || input.product !== 'SimCore') fail('STATE_CONVERGE_INPUT_INVALID', 'envelope');
@@ -91,9 +91,9 @@ function liveBlock(input) {
     '',
     `- Release transaction: \`${input.releaseId}\``,
     `- Production commit: \`${input.productionCommit}\``,
-    '- Validation status: `PENDING_REAL_LONG_CHAT`',
+    `- Validation status: \`PENDING_REAL_LONG_CHAT\``,
     `- Current priority / live gate: \`${input.liveScenarioId}\``,
-    '- R lifecycle: `REAL_RELEASE_LIVE_PENDING`',
+    `- R lifecycle: \`REAL_RELEASE_LIVE_PENDING\``,
     '',
     'This block is machine-managed by `release-state-converge` from immutable publication evidence.',
     LIVE_END,

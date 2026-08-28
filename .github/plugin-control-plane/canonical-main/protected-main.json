@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "branch": "main",
-  "declaredReadiness": "READY_TO_ACTIVATE",
+  "repositoryReadiness": "READY_TO_ACTIVATE",
   "enforcementExpected": false,
   "requiredCheck": {
     "displayName": "SimCore CI / Required",
@@ -40,7 +40,17 @@
     "broadBypassAllowed": false,
     "requiredStatusCheckEnforcement": true,
     "enforceAdmins": true,
-    "forcePushAllowed": false
+    "forcePushAllowed": false,
+    "capability": {
+      "state": "BLOCKED_PERMISSION",
+      "reasonCode": "ADMINISTRATION_WRITE_UNAVAILABLE",
+      "evidenceFingerprint": "github-actions-token:repository-administration-write-unavailable:v1",
+      "evidenceIssue": 321,
+      "evidenceComment": 5405288873,
+      "stableTarget": "branch:main/native-protection",
+      "explicitRearmEvent": "workflow_dispatch",
+      "automaticRetryOnEvidenceChange": true
+    }
   },
   "softEnforcement": {
     "enabled": true,

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_4_PREFLIGHT_COMPRESSION",
-  "status": "DESIGN_RECORDED_IMPLEMENTATION_NOT_STARTED",
+  "status": "IMPLEMENTED_A_B_CI_PENDING_C_HELD_FOR_REAL_PR3",
   "date": "2026-08-28",
   "name": "Preflight Compression",
   "predecessor": {
@@ -12,6 +12,7 @@
     "feedback": "docs/SIMCORE_RELEASE_SYSTEM_V2_3_V06410_OPERATIONAL_FEEDBACK_2026-08-28.md"
   },
   "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_DESIGN.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_IMPLEMENTATION_EVIDENCE.md",
   "inputs": {
     "fixIssue": 690,
     "watchIssue": 691,
@@ -39,14 +40,14 @@
     {
       "id": "R2_4_A_CANDIDATE_EQUIVALENT_PR1_DRY_QUALIFICATION",
       "classification": "FIX",
-      "status": "DESIGN_FROZEN",
+      "status": "IMPLEMENTED_CI_PENDING",
       "issue": 690,
       "goal": "Catch candidate packaging and candidate-specific regression failures inside the existing PR1 Verify lane before merge without creating durable candidate authority."
     },
     {
       "id": "R2_4_B_SEMANTIC_ASSERTION_DISCIPLINE",
       "classification": "STABILIZE",
-      "status": "DESIGN_FROZEN",
+      "status": "IMPLEMENTED_CI_PENDING",
       "goal": "Prefer executable or scoped semantic assertions over brittle whole-source lexical occurrence counts without introducing a generalized parser framework."
     },
     {
@@ -59,10 +60,20 @@
     {
       "id": "R2_4_D_AUTOMATION_AUTHORITY_FREEZE",
       "classification": "FREEZE",
-      "status": "DESIGN_FROZEN",
+      "status": "ACTIVE",
       "goal": "Increase automatic checking while preserving exactly the same publication, approval and issue-closure authority boundaries."
     }
   ],
+  "implementation": {
+    "dryQualifier": "products/simcore/tooling/ci/pr1-dry-qualification.mjs",
+    "permanentVerifierOwner": "products/simcore/tooling/check.mjs",
+    "gateId": "GATE_PR1_DRY",
+    "trigger": "PR_MAIN_WITH_CHANGED_CANDIDATE_REQUEST",
+    "canonicalMaterializerMode": "verify",
+    "permanentRegression": "preflight-compression",
+    "semanticReplayOwner": "products/simcore/tests/suites/host-local-telemetry-v06410.test.mjs",
+    "ciQualification": "PENDING"
+  },
   "dryQualification": {
     "location": "EXISTING_SIMCORE_PR1_VERIFY_LANE",
     "candidateEquivalentPackaging": true,
@@ -103,8 +114,8 @@
     "mainDesignEvidenceAdminAuthority": true
   },
   "implementationOrder": [
-    "A_CANDIDATE_EQUIVALENT_DRY_QUALIFICATION",
-    "B_SEMANTIC_ASSERTION_REPLAY",
+    "A_CANDIDATE_EQUIVALENT_DRY_QUALIFICATION_IMPLEMENTED",
+    "B_SEMANTIC_ASSERTION_REPLAY_IMPLEMENTED",
     "C_HOLD_FOR_REAL_PR3",
     "D_REVERIFY_AUTHORITY_AND_COST"
   ],

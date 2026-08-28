@@ -52,6 +52,7 @@
       const servedServiceTier = normalizeServiceTierValue(servedTierField.value);
       const requestedServiceTierSource = String(recentRequestValue(row, ['requestedServiceTierSource','requested_service_tier_source'], requestedTierField.key) || requestedTierField.key || '');
       const servedServiceTierSource = String(recentRequestValue(row, ['servedServiceTierSource','served_service_tier_source'], servedTierField.key) || servedTierField.key || '');
+      const serviceTierSelectionSource = normalizeServiceTierSelectionSource(recentRequestValue(row, ['serviceTierSelectionSource','service_tier_selection_source'], 'unknown'));
       const requestNumberRaw = recentRequestValue(row, ['id','requestId','request_id','sequence','seq','requestNumber','request_number','number'], null);
       const requestNumber = requestNumberRaw !== null && requestNumberRaw !== undefined && requestNumberRaw !== '' ? String(requestNumberRaw) : '';
       const requestAccountScope = requestNumber ? requestAccountScopeValue(recentRequestValue(row, ['requestAccountScope','request_account_scope'], 'unknown')) : 'unknown';
@@ -97,6 +98,7 @@
         servedServiceTier,
         requestedServiceTierSource,
         servedServiceTierSource,
+        serviceTierSelectionSource,
         requestNumber,
         requestAccountScope,
         requestScopeFidelity,
@@ -275,6 +277,7 @@
           servedServiceTier:preferKnownServiceTier(row.servedServiceTier, current?.servedServiceTier),
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
           servedServiceTierSource:String(row.servedServiceTierSource || current?.servedServiceTierSource || ''),
+          serviceTierSelectionSource:preferKnownServiceTierSelectionSource(row.serviceTierSelectionSource, current?.serviceTierSelectionSource),
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
@@ -462,9 +465,10 @@
           : '성공';
         const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
+        const tierSelectionText = requestServiceTierSelectionSourceText(row);
         const durationText = `Duration ${requestDurationText(row)}`;
         const httpStatusText = requestHttpStatusText(row);
-        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
@@ -506,9 +510,10 @@
         : ['오류', row.errorCode ? esc(row.errorCode) : '', row.errorType ? esc(row.errorType) : ''].filter(Boolean).join(' · ');
       const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
+      const tierSelectionText = requestServiceTierSelectionSourceText(row);
       const durationText = `Duration ${requestDurationText(row)}`;
       const httpStatusText = requestHttpStatusText(row);
-      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);

@@ -689,6 +689,9 @@ function normalizeCapturedRecentLogs(root) {
       && Number.isInteger(row.httpStatusCode)
       && row.httpStatusCode >= 100
       && row.httpStatusCode <= 599;
+    const serviceTierSelectionSource = ['request','coding-plan-default'].includes(String(row?.serviceTierSelectionSource || '').trim().toLowerCase())
+      ? String(row.serviceTierSelectionSource).trim().toLowerCase()
+      : 'unknown';
     if (timestamp === null || !requestNumber) return null;
     return {
       timestamp,
@@ -715,6 +718,7 @@ function normalizeCapturedRecentLogs(root) {
       servedServiceTier: row.servedServiceTier ?? null,
       requestedServiceTierSource: String(row.requestedServiceTierSource || ''),
       servedServiceTierSource: String(row.servedServiceTierSource || ''),
+      serviceTierSelectionSource,
       requestNumber,
       success: row.success !== false,
     };

@@ -1,0 +1,136 @@
+name: Temporary SimCore 06600 terminal state patch
+
+on:
+  push:
+    branches:
+      - state/simcore-06600-terminal-closure-v2
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-simcore-06600-terminal-state-patch
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: state/simcore-06600-terminal-closure-v2
+          fetch-depth: 0
+
+      - name: Apply bounded CURRENT_DEVELOPMENT terminal-state patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('docs/CURRENT_DEVELOPMENT.md')
+          text = p.read_text(encoding='utf-8')
+
+          old_checkpoint = '- Major update checkpoint: `M2-2`'
+          new_checkpoint = '- Major update checkpoint: `M2-3`'
+          if text.count(old_checkpoint) != 1:
+              raise SystemExit(f'checkpoint occurrence mismatch: {text.count(old_checkpoint)}')
+          text = text.replace(old_checkpoint, new_checkpoint, 1)
+
+          old_live = '''<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+          ## Current Release Live Gate
+
+          - Release transaction: `simcore-v0.65.0-new-05`
+          - Production commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
+          - Validation status: `PENDING_REAL_LONG_CHAT`
+          - Current priority / live gate: `06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT`
+          - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
+
+          This block is machine-managed by `release-state-converge` from immutable publication evidence.
+          <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->'''
+
+          new_live = '''<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
+          ## Current Release Terminal State
+
+          - Release transaction: `simcore-v0.65.0-new-05`
+          - Production commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
+          - Validation status: `LIVE_PASS`
+          - Current priority: `06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_IMPLEMENTATION`
+          - Terminal disposition: `LIVE_PASS`
+          - R lifecycle: `REAL_RELEASE_LIVE_PASS`
+
+          This block is the terminal PR3 state backed by accepted human evidence and production reobservation.
+          <!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->'''
+
+          if text.count(old_live) != 1:
+              raise SystemExit(f'live block occurrence mismatch: {text.count(old_live)}')
+          text = text.replace(old_live, new_live, 1)
+
+          old_guide = '''The machine-managed blocks above are authoritative for current production identity, validation status, and the active live gate. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
+
+          Runtime changes remain frozen while the active product live gate is pending. M2-3 remains blocked until the active product gate closes. Provider cache remains `UNVERIFIED` unless direct evidence changes it. R2.1 delegated operation is the proven pre-live release operating mode; R2.2 changes only state-expression and blocker-incident closure semantics and does not replace the required product live evidence.'''
+
+          new_guide = '''The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
+
+          The predecessor product live gate is closed with accepted human evidence. Runtime work may proceed only within the currently authorized frozen scope. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains separate from the active runtime work item.'''
+
+          if text.count(old_guide) != 1:
+              raise SystemExit(f'guide occurrence mismatch: {text.count(old_guide)}')
+          text = text.replace(old_guide, new_guide, 1)
+
+          marker = 'Current promoted next action:\n\n```text\n'
+          if text.count(marker) != 1:
+              raise SystemExit(f'quick-resume marker mismatch: {text.count(marker)}')
+          head = text[:text.index(marker)]
+          tail = '''Current promoted next action:
+
+          ```text
+          Implement the frozen M2-4 Session / Runtime Mirror Boundary Completion on a dedicated runtime work branch.
+          Keep the runtime change equivalence-first and separately attributable by Slice A / B / C / D.
+          Do not fold release-system follow-up or unrelated WATCH items into the runtime checkpoint.
+          ```
+
+          Current success condition:
+
+          ```text
+          predecessor HUMAN_EVIDENCE / PR3 terminal closure = LIVE_PASS
+          durable major checkpoint = M2-3
+          current priority = M2-4 implementation
+          production remains the machine snapshot above until a normal approved release transaction publishes a candidate
+          latest.js == install.js remains mandatory
+
+          implementation
+          → Slice A differential/static proof
+          → Slice B proof
+          → Slice C zero-runtime-caller Recovery proof with facade retained
+          → Slice D full mirror observation/interpretation differential matrix
+          → combined candidate regression
+          → normal exact release transaction
+          → release-simcore publication
+          → real long-chat validation
+
+          observed anomaly
+          → preserve evidence immediately
+          → classify WATCH / DEFER / FIX / BLOCKER
+          → unresolved FIX or BLOCKER stops advancement
+          ```
+          '''
+          text = head + tail
+          p.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Commit bounded patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/CURRENT_DEVELOPMENT.md
+          if git diff --cached --quiet; then
+            echo 'No CURRENT_DEVELOPMENT patch required.'
+          else
+            git commit -m 'state(simcore): render v0.65 terminal live-pass state'
+            git push origin HEAD:state/simcore-06600-terminal-closure-v2
+          fi

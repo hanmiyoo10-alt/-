@@ -29,6 +29,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'e13-stage-handoff-wake-simplification-contract.cjs',
   'e14-ancestry-convergence-contract.cjs',
   'e14-governance-alignment-contract.cjs',
+  'e15-release-handoff-hygiene-contract.cjs',
   'pr-lifecycle-closure-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([

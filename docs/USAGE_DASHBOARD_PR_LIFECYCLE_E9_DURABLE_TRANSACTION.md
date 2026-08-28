@@ -55,17 +55,20 @@ A normal E9 release uses one owner-authored issue:
 [usage-dashboard-release] 3.0.0-alpha.5.N
 ```
 
-with strict fields:
+with strict fields. Under the later E15 handoff-hygiene baseline, the request also carries one canonical explicit classification line so the existing repository control plane can label the lane without manual repair:
 
 ```text
+Plugin: usage-dashboard
 release_version: 3.0.0-alpha.5.N
 release_spec: .github/usage-dashboard/releases/5.N.json
 source_branch: release/usage-dashboard-...
 source_sha: <40-hex exact SHA>
 feature_issue: #<number>
-release_generation: E9
+release_generation: E13
 pr_number: PENDING
 ```
+
+`Plugin: usage-dashboard` is classification metadata, not release authority. The durable transaction generation remains E13; E14/E15 are orthogonal candidate-DAG and handoff-hygiene baselines.
 
 A source repair changes `source_sha` on the same issue. Attempt identity is `release_version + source_sha`; duplicate wake-ups converge on the same semantic attempt.
 
@@ -96,13 +99,21 @@ The readiness gate performs cheap deterministic checks for source/release namesp
 
 ## E9-D — one exact-SHA validation authority
 
-The deterministic PR includes:
+The deterministic PR carries stable authority locators rather than creation-time moving SHA copies:
 
 ```text
+Candidate authority: current PR head
+Source authority: durable release request `source_sha`
+Frozen-main authority: candidate trailer + E11 receipt
+Validation authority: E9 exact-SHA receipt
+Merge authority: fresh E11 receipt + expected-head merge
+
 Usage-Dashboard-Release-Request: #<request-issue>
 ```
 
-The request records `pr_number`; the reconciler binds PR base/repository/branch/head to the current candidate and dispatches the exact-SHA validator. Full registered Usage Dashboard regression remains authoritative.
+The request records `pr_number`; the reconciler binds PR base/repository/branch/head to the current candidate and dispatches the exact-SHA validator. The E15 handoff contract validates the locator-only PR body before authoritative full registered Usage Dashboard regression proceeds. No PR-body synchronization writer is needed after restage.
+
+Full registered Usage Dashboard regression remains authoritative.
 
 Merge invariant:
 

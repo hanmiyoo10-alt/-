@@ -13,6 +13,7 @@ const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 const release = loadCurrentRelease();
 
 const body = [
+  'Plugin: usage-dashboard',
   `release_version: ${release.productVersion}`,
   `release_spec: ${release.specPath}`,
   'source_branch: release/usage-dashboard-e11-fixture',

@@ -63,7 +63,7 @@ Keep this maintenance deliberately small:
 
 ## Non-goals
 
-- no E15;
+- no E15 durable transaction generation;
 - no new request field;
 - no request-state change;
 - no new reducer/wake/proof workflow;
@@ -77,8 +77,8 @@ Keep this maintenance deliberately small:
 
 Only promote the durable transaction generation beyond E13 when a concrete operational requirement needs machine-readable provenance or new transaction semantics. Naming symmetry alone is insufficient evidence.
 
-E15 remains HOLD under feedback #632 until repeated live evidence demonstrates a new material release-control problem.
+The E15 handoff hygiene baseline authorized by #738 is orthogonal to these two axes: it standardizes first-write request metadata and stable PR presentation while keeping `release_generation: E13`, the E14 candidate DAG baseline, and E11 merge readiness unchanged.
 
 ## Bottom line
 
-**E13 names the durable transaction generation. E14 names the candidate DAG baseline. Keep the axes explicit instead of manufacturing a new state machine for naming symmetry.**
+**E13 names the durable transaction generation. E14 names the candidate DAG baseline. E15 may add orthogonal handoff hygiene without manufacturing a new state machine.**

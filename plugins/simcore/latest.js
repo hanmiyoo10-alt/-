@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.10
+//@version 0.64.11
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -29,6 +29,15 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.11 Bounded Telemetry Capsule Compaction:
+// - Repairs real v0.64.10 long-chat capsules of 44,660 / 40,291 / 59,965 chars that exceeded the frozen 16,384-character durable handoff cap before Host-local setItem
+// - Keeps rich same-generation prompt/topology observers and adds bounded reload-only exports: prompt <=64 line summaries, topology <=64 signatures, system0 <=8 head + 8 tail hashes
+// - Keeps prompt/topology/trajectory component budgets 4,096 / 6,144 / 2,048 chars, 2,048 envelope reserve, and the authoritative whole-capsule 16,384-char hard cap
+// - Makes reload precision explicit as EXACT_IDENTITY / LINE_BOUND / COMPLETE_PREFIX / PREFIX_FLOOR / BOUNDED and never renders a floor as false exactness
+// - Skips cache-trajectory mutation once on a first-post-reload topology PREFIX_FLOOR, then returns to the existing exact same-generation path
+// - Preserves MEMORY -> SESSION -> HOST_LOCAL, one Host-local key, 10-minute TTL, exact location, consume-before-adopt, output failure isolation, and provider cache UNVERIFIED
+// - M2-3 remains frozen until 06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT closes with HUMAN_EVIDENCE
 //
 // v0.64.10 Host-Local One-Shot Telemetry Handoff:
 // - Follows confirmed v0.64.9 live evidence where both WINDOW.sessionStorage and GLOBAL_THIS.sessionStorage throw ACCESS_ERROR and therefore cannot provide the pre-refresh durable telemetry sidecar
@@ -6074,7 +6083,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.64.10';
+const HOST_COMPAT_VERSION = '0.64.11';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -6200,7 +6209,7 @@ function publishPrepared(root, windowLike, capsule, prepared) {
 
 function publish(root, windowLike, capsule) {
   if (!capsule) return false;
-  const prepared = serializeCapsule(capsule);
+  const prepared = capsule?.__simcorePreparedSerialized || serializeCapsule(capsule);
   const base = publishPrepared(root, windowLike, capsule, prepared);
   lastWriteProbe = Object.freeze({ ...base, hostLocal: 'UNOBSERVED', hostElapsedMs: 0, retainedBodies: false });
   return base.memory === 'WRITTEN' || base.session === 'WRITTEN';
@@ -6240,7 +6249,7 @@ async function getHostLocalTelemetryStoreOnce(hostApi) {
 
 async function publishWithHostLocal(root, windowLike, hostApi, capsule) {
   if (!capsule) return false;
-  const prepared = serializeCapsule(capsule);
+  const prepared = capsule?.__simcorePreparedSerialized || serializeCapsule(capsule);
   const base = publishPrepared(root, windowLike, capsule, prepared);
   let hostLocal = 'UNAVAILABLE';
   let hostElapsedMs = 0;
@@ -7084,7 +7093,7 @@ function trajectory(probe) {
 function continuity(probe) {
   if (!probe) return 'FRESH · no compatible handoff';
   if (!probe.accepted) return `FRESH · ${probe.reason || 'no-compatible-handoff'}`;
-  return `ADOPTED · via ${probe.transport || 'memory'}${probe.transport === 'session' && probe.sessionRoot ? ` · root ${probe.sessionRoot}` : ''} · from ${probe.sourceVersion || '?'} · age ${cadence(probe.ageMs)} · topology ${probe.topology ? 'RESTORED' : 'FRESH'} · runtime-prefix ${probe.runtimePrefix ? 'RESTORED' : 'FRESH'} · trajectory ${probe.trajectory ? 'RESTORED' : 'FRESH'}`;
+  return `ADOPTED · via ${probe.transport || 'memory'}${probe.transport === 'session' && probe.sessionRoot ? ` · root ${probe.sessionRoot}` : ''} · from ${probe.sourceVersion || '?'} · age ${cadence(probe.ageMs)} · topology ${probe.topology ? 'RESTORED' : 'FRESH'} · runtime-prefix ${probe.runtimePrefix ? 'RESTORED' : 'FRESH'} · trajectory ${probe.trajectory ? 'RESTORED' : 'FRESH'}${probe.handoffPrecision ? ` · handoff prompt ${probe.handoffPrecision.prompt || 'FRESH'} · topology ${probe.handoffPrecision.topology || 'FRESH'}` : ''}`;
 }
 function fingerprintChars(value) {
   const match = /^(\d+):/.exec(String(value || ''));
@@ -7101,6 +7110,228 @@ function representation(probe) {
 }
 module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, cacheEffect, hostPrefixAttribution, hostPrefixDelta, historyMutation, historyAlignment, historyStabilization, representationCorrelation, mutationAttribution, reconcileFrontier, rebuildAttribution, repeatedBreak, frontierMovement, exposure, runtimeIdentity, simcoreContribution, trajectory, continuity, representation };
 });
+
+// v0.64.11 bounded handoff adapters: rich observer state remains owned by the existing modules.
+(() => {
+  const PROMPT_LINES = 64;
+  const TOPO_SIGS = 64;
+  const SYS_EDGES = 8;
+  const KEY_MAX = 512;
+  const PROMPT_BUDGET = 4096;
+  const TOPO_BUDGET = 6144;
+  const TRAJ_BUDGET = 2048;
+  const WHOLE_BUDGET = 16384;
+  const fnv = (value) => {
+    const text = String(value == null ? '' : value);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(16).padStart(8, '0');
+  };
+  const msgText = (m) => {
+    const c = m?.content;
+    if (typeof c === 'string') return c;
+    try { return JSON.stringify(c == null ? '' : c); } catch (_) { return String(c == null ? '' : c); }
+  };
+  const relative = (index, first, baseline, stable, floor) => {
+    if (!Number.isInteger(index) || index < 0) return 'ABSENT';
+    if (baseline) return 'BASELINE';
+    if (floor) return 'WITHIN_OR_AFTER_BOUNDED_PREFIX';
+    if (stable || first == null) return 'WITHIN_COMMON_PREFIX';
+    if (index < first) return 'WITHIN_COMMON_PREFIX';
+    if (index === first) return 'AT_PREFIX_BREAK';
+    return 'AFTER_PREFIX_BREAK';
+  };
+  const compactSystem0 = (message) => {
+    if (String(message?.role || '') !== 'system') return null;
+    const text = msgText(message);
+    const block = 512;
+    const totalBlocks = Math.ceil(text.length / block);
+    const headBlocks = [];
+    const tailBlocks = [];
+    for (let i = 0; i < Math.min(SYS_EDGES, totalBlocks); i++) headBlocks.push(fnv(text.slice(i * block, Math.min(text.length, (i + 1) * block))));
+    for (let i = 0; i < Math.min(SYS_EDGES, totalBlocks); i++) {
+      const end = text.length - (i * block);
+      tailBlocks.push(fnv(text.slice(Math.max(0, end - block), end)));
+    }
+    return Object.freeze({ version: 2, chars: text.length, blockChars: block, totalBlocks, headBlocks: Object.freeze(headBlocks), tailBlocks: Object.freeze(tailBlocks) });
+  };
+  const compactPrompt = (key, text, identity) => {
+    const value = String(text || '');
+    const lines = value ? value.split('\n') : [''];
+    const summaries = lines.slice(0, PROMPT_LINES).map((line) => Object.freeze([line.length, fnv(line)]));
+    return Object.freeze({
+      version: 2, handoffDisposition: key && key.length <= KEY_MAX ? 'OK' : 'IDENTITY_UNREPRESENTABLE', key,
+      sketch: Object.freeze({ version: 2, chars: value.length, fullHash: fnv(value), lineCount: lines.length, retainedLineCount: summaries.length, lines: Object.freeze(summaries) }),
+      identity: identity || null, identityMode: identity?.source || null,
+      precision: lines.length <= PROMPT_LINES ? 'LINE_BOUND' : 'PREFIX_FLOOR',
+    });
+  };
+  const promptFromHandoff = (saved, current, base) => {
+    const sketch = saved?.sketch;
+    const value = String(current || '');
+    if (!sketch || Number(sketch.version) !== 2) return base;
+    const stable = Number(sketch.chars || 0) === value.length && String(sketch.fullHash || '') === fnv(value);
+    if (stable) return Object.freeze({ ...base, baseline: false, stable: true, previousChars: Number(sketch.chars || 0), currentChars: value.length, stablePrefixChars: value.length, stablePrefixPercent: 100, stablePrefixLines: Number(sketch.lineCount || 0), firstChangedLine: null, changedLineSlots: 0, reason: 'stable', continuitySource: 'HANDOFF_COMPACT_V2', precision: 'EXACT_IDENTITY' });
+    const prior = Array.isArray(sketch.lines) ? sketch.lines : [];
+    const now = value ? value.split('\n') : [''];
+    let equalLines = 0, chars = 0, mismatch = false;
+    const lim = Math.min(prior.length, now.length);
+    while (equalLines < lim) {
+      const row = prior[equalLines], line = now[equalLines];
+      if (!Array.isArray(row) || Number(row[0]) !== line.length || String(row[1] || '') !== fnv(line)) { mismatch = true; break; }
+      chars += line.length;
+      if (equalLines < Number(sketch.lineCount || 0) - 1 && equalLines < now.length - 1) chars += 1;
+      equalLines += 1;
+    }
+    const precision = mismatch ? 'LINE_BOUND' : 'PREFIX_FLOOR';
+    return Object.freeze({ ...base, baseline: false, stable: false, previousChars: Number(sketch.chars || 0), currentChars: value.length, stablePrefixChars: chars, stablePrefixPercent: (chars / Math.max(Number(sketch.chars || 0), value.length, 1)) * 100, stablePrefixLines: equalLines, firstChangedLine: mismatch ? equalLines + 1 : null, firstChangedLineStatus: mismatch ? 'KNOWN_LINE' : 'UNRESOLVED_AFTER_RETAINED_PREFIX', changedLineSlots: null, reason: 'other', continuitySource: 'HANDOFF_COMPACT_V2', precision });
+  };
+
+  const cacheRules = SimCore.require('runtime-cache');
+  const createPrompt = cacheRules.createRuntimePromptCacheTracker;
+  cacheRules.createRuntimePromptCacheTracker = (contract = null) => {
+    const inner = createPrompt(contract);
+    let compact = null;
+    let imported = null;
+    return Object.freeze({
+      ...inner,
+      observe(key, currentText, extra = null) {
+        const base = inner.observe(key, currentText, extra);
+        const probe = imported && imported.key === String(key || '') ? promptFromHandoff(imported, currentText, base) : base;
+        imported = null;
+        compact = compactPrompt(String(key || ''), currentText, probe.identity || base.identity || null);
+        return probe;
+      },
+      exportHandoffState() { return compact || Object.freeze({ handoffDisposition: 'INELIGIBLE' }); },
+      importHandoffState(state) {
+        if (!state || Number(state.version) !== 2 || state.handoffDisposition !== 'OK' || typeof state.key !== 'string' || !state.key || state.key.length > KEY_MAX || !state.sketch) return false;
+        imported = state;
+        return true;
+      },
+    });
+  };
+
+  const topoRules = SimCore.require('runtime-topology');
+  const createTopo = topoRules.createRequestTopologyTracker;
+  topoRules.createRequestTopologyTracker = () => {
+    const inner = createTopo();
+    let compact = null;
+    let imported = null;
+    const makeCompact = (key, messages, probe) => {
+      const list = Array.isArray(messages) ? messages : [];
+      const sigs = list.slice(0, TOPO_SIGS).map((m) => topoRules.messageSignature(m));
+      const valid = sigs.every((s) => s && String(s.role || '').length <= 24 && String(s.kind || '').length <= 24 && /^[0-9a-f]{8}$/i.test(String(s.hash || '')));
+      const tuples = sigs.map((s) => Object.freeze([String(s.role || ''), String(s.kind || ''), Number(s.chars || 0), String(s.hash || '')]));
+      return Object.freeze({
+        version: 3, handoffDisposition: key && key.length <= KEY_MAX && valid ? 'OK' : 'IDENTITY_UNREPRESENTABLE', key,
+        precision: list.length <= TOPO_SIGS ? 'COMPLETE_PREFIX' : 'PREFIX_FLOOR',
+        previous: Object.freeze({ at: Number(probe?.at || Date.now()), totalMessages: list.length, totalChars: Number(probe?.totalChars || 0), currentUserIndex: Number(probe?.currentUserIndex ?? -1), runtimeIndex: Number(probe?.runtimeIndex ?? -1), leadingSystemMessages: Number(probe?.leadingSystemMessages || 0), requestFingerprint: String(probe?.requestFingerprint || ''), familyId: String(probe?.familyId || ''), signatures: Object.freeze(tuples), system0Sketch: compactSystem0(list[0]) }),
+      });
+    };
+    const fromImported = (saved, messages, base) => {
+      const prior = saved?.previous;
+      if (!prior || !Array.isArray(prior.signatures)) return base;
+      const list = Array.isArray(messages) ? messages : [];
+      const current = list.map((m) => topoRules.messageSignature(m));
+      const previous = prior.signatures.map((r) => ({ role: String(r?.[0] || ''), kind: String(r?.[1] || ''), chars: Number(r?.[2] || 0), hash: String(r?.[3] || '') }));
+      const same = (a,b) => !!a && !!b && a.role === b.role && a.kind === b.kind && a.chars === b.chars && a.hash === b.hash;
+      let commonMessages = 0, commonChars = 0;
+      const lim = Math.min(previous.length, current.length);
+      while (commonMessages < lim && same(previous[commonMessages], current[commonMessages])) { commonChars += current[commonMessages].chars; commonMessages += 1; }
+      const totalPrevious = Math.max(previous.length, Number(prior.totalMessages || 0));
+      const mismatch = commonMessages < lim;
+      const floor = !mismatch && totalPrevious > previous.length;
+      const first = mismatch || (!floor && totalPrevious !== current.length) ? commonMessages : null;
+      const stable = !floor && first == null && totalPrevious === current.length;
+      const attribution = floor ? { owner: 'UNRESOLVED', zone: 'UNRESOLVED_AFTER_RETAINED_PREFIX' } : topoRules.breakAttribution(first, Number(base.currentUserIndex), Number(base.runtimeIndex), Number(base.leadingSystemMessages), Number(prior.leadingSystemMessages || 0), false, stable);
+      let hostPrefixProbe = base.hostPrefixProbe;
+      const prior0 = prior.signatures[0];
+      const current0 = current[0];
+      if (prior.system0Sketch && prior0 && current0 && !(String(prior0[0]) === current0.role && String(prior0[1]) === current0.kind && Number(prior0[2]) === current0.chars && String(prior0[3]) === current0.hash)) {
+        const nowSketch = compactSystem0(list[0]);
+        const oldSketch = prior.system0Sketch;
+        let head = 0, tail = 0;
+        while (head < Math.min(oldSketch.headBlocks?.length || 0, nowSketch?.headBlocks?.length || 0) && String(oldSketch.headBlocks[head]) === String(nowSketch.headBlocks[head])) head += 1;
+        while (tail < Math.min(oldSketch.tailBlocks?.length || 0, nowSketch?.tailBlocks?.length || 0) && String(oldSketch.tailBlocks[tail]) === String(nowSketch.tailBlocks[tail])) tail += 1;
+        const block = 512, minChars = Math.min(Number(oldSketch.chars || 0), Number(nowSketch?.chars || 0));
+        const hchars = Math.min(minChars, head * block), tchars = Math.min(Math.max(0, minChars - hchars), tail * block);
+        const edgesMatch = head === (oldSketch.headBlocks?.length || 0) && tail === (oldSketch.tailBlocks?.length || 0);
+        hostPrefixProbe = Object.freeze({ ...base.hostPrefixProbe, status: edgesMatch ? 'INTERIOR_CHANGED_UNLOCALIZED' : 'DELTA_LOCALIZED', shape: edgesMatch ? 'INTERIOR_CHANGED_UNLOCALIZED' : 'BOUNDED_EDGE_CHANGE', confidence: 'BOUNDED', precision: 'BOUNDED', commonHeadChars: hchars, commonTailChars: tchars, previousChangedChars: Math.max(0, Number(oldSketch.chars || 0) - hchars - tchars), currentChangedChars: Math.max(0, Number(nowSketch?.chars || 0) - hchars - tchars), deltaChars: Number(nowSketch?.chars || 0) - Number(oldSketch.chars || 0) });
+      }
+      const precision = floor ? 'PREFIX_FLOOR' : 'COMPLETE_PREFIX';
+      return Object.freeze({ ...base, baseline: false, stable, previousMessages: totalPrevious, previousChars: Number(prior.totalChars || 0), commonMessages, commonChars, commonRatio: Number(base.totalChars || 0) > 0 ? Math.max(0, Math.min(100, (commonChars / Number(base.totalChars || 1)) * 100)) : 100, firstChangeIndex: first, firstChangeStatus: floor ? 'UNRESOLVED_AFTER_RETAINED_PREFIX' : (first == null ? 'NONE' : 'KNOWN'), previousRole: first == null ? null : (previous[first]?.role || 'END'), currentRole: first == null ? null : (current[first]?.role || 'END'), mutationShape: floor ? 'UNRESOLVED_AFTER_RETAINED_PREFIX' : (first == null ? 'NONE' : 'SAME_SLOT_CHANGED'), precision, breakOwner: attribution.owner, breakZone: attribution.zone, currentUserPosition: relative(Number(base.currentUserIndex), first, false, stable, floor), runtimePosition: relative(Number(base.runtimeIndex), first, false, stable, floor), previousFamilyId: String(prior.familyId || ''), hostPrefixProbe });
+    };
+    return Object.freeze({
+      ...inner,
+      observe(key, messages, extra = null) {
+        const base = inner.observe(key, messages, extra);
+        const probe = imported && imported.key === String(key || '') ? fromImported(imported, messages, base) : base;
+        imported = null;
+        compact = makeCompact(String(key || ''), messages, probe);
+        return probe;
+      },
+      exportHandoffState() { return compact || Object.freeze({ handoffDisposition: 'INELIGIBLE' }); },
+      importHandoffState(state) {
+        if (!state || Number(state.version) !== 3 || state.handoffDisposition !== 'OK' || typeof state.key !== 'string' || !state.key || state.key.length > KEY_MAX || !state.previous) return false;
+        imported = state;
+        return true;
+      },
+    });
+  };
+
+  const candidateRules = SimCore.require('runtime-cache-candidates');
+  const createCandidates = candidateRules.createCacheCandidateTracker;
+  candidateRules.createCacheCandidateTracker = () => {
+    const inner = createCandidates();
+    return Object.freeze({
+      ...inner,
+      observe(key, topology, extra = null) {
+        if (topology?.precision === 'PREFIX_FLOOR') {
+          const state = inner.exportState()?.state || null;
+          if (state && String(state.key || '') === String(key || '') && String(state.familyId || '') === String(topology?.familyId || 'none')) {
+            return Object.freeze({ status: state.status, familyId: state.familyId, familyReset: false, attempts: Number(state.attempts || 0), distinct: Number(state.distinct || 0), distinctObservation: false, lastObservation: 'SKIPPED_BOUNDED_REOBSERVE', window: 3, stableFloorChars: state.stableFloorChars, stableFloorMessages: state.stableFloorMessages, movingFrontierChars: Number(state.movingFrontierChars || 0), movingFrontierMessages: Number(state.movingFrontierMessages || 0), frontierStreak: Number(state.frontierStreak || 0), divergenceCount: Number(state.divergenceCount || 0), regressionStreak: Number(state.regressionStreak || 0), cadenceEmaMs: state.cadenceEmaMs, boundedReobserveSkipped: true });
+          }
+        }
+        return inner.observe(key, topology, extra);
+      },
+    });
+  };
+
+  const telemetry = SimCore.require('runtime-telemetry');
+  let compaction = null;
+  const baseDiagnostics = telemetry.diagnostics;
+  const measure = (name, value, budget) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || String(value.handoffDisposition || 'OK') !== 'OK') return Object.freeze({ name, disposition: String(value?.handoffDisposition || 'INELIGIBLE'), chars: 0, budget });
+    try { const chars = JSON.stringify(value).length; return Object.freeze({ name, disposition: chars > budget ? 'COMPONENT_OVERSIZE' : 'OK', chars, budget }); }
+    catch (_) { return Object.freeze({ name, disposition: 'FAILED', chars: 0, budget }); }
+  };
+  telemetry.captureCompact = (input) => {
+    const prompt = measure('prompt', input?.runtimePromptCache, PROMPT_BUDGET);
+    const topology = measure('topology', input?.requestTopology, TOPO_BUDGET);
+    const trajectory = measure('trajectory', input?.cacheCandidates, TRAJ_BUDGET);
+    const components = Object.freeze({ prompt, topology, trajectory });
+    const failed = [prompt, topology, trajectory].find((x) => x.disposition !== 'OK');
+    const precision = Object.freeze({ prompt: String(input?.runtimePromptCache?.precision || 'FRESH'), topology: String(input?.requestTopology?.precision || 'FRESH') });
+    const locationKey = String(input?.locationKey || '');
+    if (!locationKey || failed) {
+      compaction = Object.freeze({ format: 'COMPACT_V2', status: 'COMPACTION_FAILED', reason: !locationKey ? 'IDENTITY_UNREPRESENTABLE' : failed.disposition, wholeChars: 0, maxChars: WHOLE_BUDGET, components, precision });
+      return null;
+    }
+    const capsule = { schema: 1, sourceVersion: String(input?.sourceVersion || ''), locationKey, capturedAt: Number(input?.capturedAt || Date.now()), runtimePromptCache: input.runtimePromptCache, requestTopology: input.requestTopology, cacheCandidates: input.cacheCandidates, handoff: Object.freeze({ format: 'COMPACT_V2', precision }) };
+    let encoded;
+    try { encoded = JSON.stringify(capsule); } catch (_) { encoded = null; }
+    const chars = encoded == null ? 0 : encoded.length;
+    if (encoded == null || chars > WHOLE_BUDGET) {
+      compaction = Object.freeze({ format: 'COMPACT_V2', status: 'COMPACTION_FAILED', reason: encoded == null ? 'FAILED' : 'WHOLE_CAPSULE_OVERSIZE', wholeChars: chars, maxChars: WHOLE_BUDGET, components, precision });
+      return null;
+    }
+    Object.defineProperty(capsule, '__simcorePreparedSerialized', { value: Object.freeze({ status: 'OK', encoded, chars }), enumerable: false, configurable: false, writable: false });
+    Object.freeze(capsule);
+    compaction = Object.freeze({ format: 'COMPACT_V2', status: 'OK', reason: 'OK', wholeChars: chars, maxChars: WHOLE_BUDGET, components, precision });
+    return capsule;
+  };
+  telemetry.diagnostics = () => Object.freeze({ ...baseDiagnostics(), compaction, componentBudgets: Object.freeze({ prompt: PROMPT_BUDGET, topology: TOPO_BUDGET, trajectory: TRAJ_BUDGET, reserve: 2048 }) });
+})();
 
 (async () => {
   const kernel = SimCore.require('kernel');
@@ -7184,15 +7415,20 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       const locationKey = String(coreKey || coreLocationKey || '');
       if (!locationKey) return null;
       const startedAt = perfNow();
-      const capsule = runtimeTelemetryRules.capture({
+      const capsule = runtimeTelemetryRules.captureCompact({
         sourceVersion: SIMCORE_RUNTIME_VERSION,
         locationKey,
         capturedAt: Date.now(),
-        runtimePromptCache: runtimePromptCache.exportState(),
-        requestTopology: requestTopology.exportState(),
+        runtimePromptCache: runtimePromptCache.exportHandoffState(),
+        requestTopology: requestTopology.exportHandoffState(),
         cacheCandidates: cacheCandidates.exportState(),
       });
-      if (!capsule) return null;
+      if (!capsule) {
+        const compact = runtimeTelemetryRules.diagnostics().compaction || null;
+        const probe = Object.freeze({ trigger: normalizedTrigger, memory: 'COMPACTION_FAILED', session: 'NOT_ATTEMPTED', sessionRoot: 'NONE', fallbackFrom: null, attempted: '', surface: runtimeTelemetryRules.diagnostics().surface || null, hostLocal: 'NOT_ATTEMPTED', hostElapsedMs: 0, host: runtimeTelemetryRules.diagnostics().host || null, serialization: 'COMPACTION_FAILED', serializedChars: Number(compact?.wholeChars || 0), compaction: compact, elapsedMs: perfMs(startedAt), retainedBodies: false });
+        lastTelemetryCheckpointProbe = probe;
+        return probe;
+      }
       await runtimeTelemetryRules.publishWithHostLocal(globalThis, typeof window !== 'undefined' ? window : null, Risuai, capsule);
       const write = runtimeTelemetryRules.diagnostics().write || null;
       const probe = Object.freeze({
@@ -7208,6 +7444,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         host: runtimeTelemetryRules.diagnostics().host || null,
         serialization: write?.serialization || 'UNKNOWN',
         serializedChars: Number(write?.serializedChars || 0),
+        compaction: runtimeTelemetryRules.diagnostics().compaction || null,
         elapsedMs: perfMs(startedAt),
         retainedBodies: false,
       });
@@ -7751,8 +7988,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         let restoredTopology = false;
         let restoredTrajectory = false;
         if (adoption.accepted && adoption.capsule) {
-          restoredRuntimePrefix = runtimePromptCache.importState(adoption.capsule.runtimePromptCache);
-          restoredTopology = requestTopology.importState(adoption.capsule.requestTopology);
+          restoredRuntimePrefix = runtimePromptCache.importHandoffState(adoption.capsule.runtimePromptCache);
+          restoredTopology = requestTopology.importHandoffState(adoption.capsule.requestTopology);
           restoredTrajectory = cacheCandidates.importState(adoption.capsule.cacheCandidates);
         }
         lastTelemetryContinuityProbe = Object.freeze({
@@ -7761,6 +7998,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
           transport: adoption.transport || null, fallbackFrom: adoption.fallbackFrom || null, sessionRoot: adoption.sessionRoot || null,
           claim: runtimeTelemetryRules.diagnostics().claim,
           runtimePrefix: restoredRuntimePrefix, topology: restoredTopology, trajectory: restoredTrajectory,
+          handoffPrecision: adoption.capsule?.handoff?.precision || null,
         });
         pendingTelemetryHandoff = null;
       }
@@ -8405,7 +8643,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       ? 'n/a'
       : (cacheProbe.baseline
         ? 'BASELINE'
-        : `${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${cacheProbe.reason || 'other'}`);
+        : ((cacheProbe.precision === 'PREFIX_FLOOR' || cacheProbe.precision === 'LINE_BOUND')
+          ? `>=${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · HANDOFF_${cacheProbe.precision}`
+          : `${Number(cacheProbe.stablePrefixPercent || 0).toFixed(1)}% · ${cacheProbe.reason || 'other'}`));
     const lines = [
       '=== SimCore Last Turn Diagnostic ===',
       'Diagnostic format: raw-lineage-v2',
@@ -8475,6 +8715,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Cache cadence: ${probeFresh && topologyProbe ? `previous request +${runtimeProbeRules.cadence(topologyProbe.cadenceMs)} · signature ${topologyProbe.signatureKind || 'n/a'} · raw bodies ${topologyProbe.retainedBodies ? 'RETAINED' : 'NOT RETAINED'}` : 'n/a'}`,
       `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,
       `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
+      `Telemetry capsule: ${lastTelemetryCheckpointProbe?.compaction ? `${lastTelemetryCheckpointProbe.compaction.format || 'COMPACT_V2'} · ${Number(lastTelemetryCheckpointProbe.compaction.wholeChars || 0).toLocaleString('en-US')}/16,384 chars · prompt ${Number(lastTelemetryCheckpointProbe.compaction.components?.prompt?.chars || 0).toLocaleString('en-US')}/4,096 · topology ${Number(lastTelemetryCheckpointProbe.compaction.components?.topology?.chars || 0).toLocaleString('en-US')}/6,144 · trajectory ${Number(lastTelemetryCheckpointProbe.compaction.components?.trajectory?.chars || 0).toLocaleString('en-US')}/2,048 · prompt precision ${lastTelemetryCheckpointProbe.compaction.precision?.prompt || 'FRESH'} · topology precision ${lastTelemetryCheckpointProbe.compaction.precision?.topology || 'FRESH'} · ${lastTelemetryCheckpointProbe.compaction.status || 'UNKNOWN'}` : 'n/a'}`,
+      `Handoff precision: ${lastTelemetryContinuityProbe?.handoffPrecision ? `prompt ${lastTelemetryContinuityProbe.handoffPrecision.prompt || 'FRESH'} · topology ${lastTelemetryContinuityProbe.handoffPrecision.topology || 'FRESH'}` : 'n/a'}`,
       `Session surface: ${lastTelemetryCheckpointProbe?.surface ? `WINDOW ${lastTelemetryCheckpointProbe.surface.window || 'UNOBSERVED'} · GLOBAL_THIS ${lastTelemetryCheckpointProbe.surface.globalThis || 'UNOBSERVED'} · relation ${lastTelemetryCheckpointProbe.surface.relation || 'NONE'}` : 'n/a'}`,
       `Host-local transport: ${lastTelemetryCheckpointProbe?.host ? `API ${lastTelemetryCheckpointProbe.host.api || 'UNOBSERVED'} · store ${lastTelemetryCheckpointProbe.host.store || 'UNOBSERVED'} · clear ${lastTelemetryCheckpointProbe.host.clear || 'UNKNOWN'} · boot ${lastTelemetryCheckpointProbe.host.boot || 'UNOBSERVED'}` : 'n/a'}`,
       `Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `MEMORY ${lastTelemetryCheckpointProbe.memory || 'UNAVAILABLE'} · SESSION ${lastTelemetryCheckpointProbe.session || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.session === 'WRITTEN' ? ` via ${lastTelemetryCheckpointProbe.sessionRoot || 'NONE'}` : (lastTelemetryCheckpointProbe.sessionRoot && lastTelemetryCheckpointProbe.sessionRoot !== 'NONE' ? ` · root ${lastTelemetryCheckpointProbe.sessionRoot}` : '')}${lastTelemetryCheckpointProbe.fallbackFrom ? ` · fallback ${lastTelemetryCheckpointProbe.fallbackFrom}` : ''}${lastTelemetryCheckpointProbe.attempted && lastTelemetryCheckpointProbe.session === 'FAILED' ? ` · attempted ${lastTelemetryCheckpointProbe.attempted}` : ''} · HOST_LOCAL ${lastTelemetryCheckpointProbe.hostLocal || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.serialization && lastTelemetryCheckpointProbe.serialization !== 'OK' ? ` · serialization ${lastTelemetryCheckpointProbe.serialization}` : ''} · ${Number(lastTelemetryCheckpointProbe.serializedChars || 0)} chars${lastTelemetryCheckpointProbe.hostElapsedMs > 0 ? ` · host ${diagnosticFormatMs(lastTelemetryCheckpointProbe.hostElapsedMs)}` : ''} · ${diagnosticFormatMs(lastTelemetryCheckpointProbe.elapsedMs)} total · trigger ${lastTelemetryCheckpointProbe.trigger || 'UNKNOWN'}` : 'n/a'}`,
@@ -8693,19 +8935,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.64.10',
-    name: 'Host-Local One-Shot Telemetry Handoff',
-    scenario: '06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT',
+    version: '0.64.11',
+    name: 'Bounded Telemetry Capsule Compaction',
+    scenario: '06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT',
     summary: Object.freeze([
-      '브라우저 sessionStorage를 쓸 수 없을 때 Host 로컬 저장소를 telemetry handoff 대체 경로로 사용',
-      '저장 내용은 10분 TTL / location 일치 / 16KB 이하의 메타데이터-only capsule으로 제한',
-      '같은 location의 capsule은 안전하게 지운 뒤에만 한 번 채택',
-      'SESSION 또는 HOST_LOCAL이 실제 WRITTEN일 때만 새로고침 실험 진행',
+      '같은 generation의 정밀 관측은 유지하고 새로고침 handoff만 bounded compact metadata로 분리',
+      'prompt 4KB / topology 6KB / trajectory 2KB component budget과 전체 16KB hard cap을 동시에 유지',
+      'LINE_BOUND / PREFIX_FLOOR 결과는 >= / BOUNDED로 표시해 false exactness를 금지',
+      'COMPACT_V2가 16KB 이하이고 HOST_LOCAL WRITTEN일 때만 새로고침 실험 진행',
     ]),
     recent: Object.freeze([
+      Object.freeze({ version: '0.64.11', name: 'Bounded Telemetry Capsule Compaction', bullets: Object.freeze(['reload handoff export를 bounded compact shape로 분리', '첫 bounded reobserve에서 false cache regression 방지']) }),
       Object.freeze({ version: '0.64.10', name: 'Host-Local One-Shot Telemetry Handoff', bullets: Object.freeze(['sessionStorage 불가 시 Host 로컬 one-shot fallback', 'matching location은 consume-before-adopt']) }),
       Object.freeze({ version: '0.64.9', name: 'Session Transport Root Resolution', bullets: Object.freeze(['WINDOW / GLOBAL_THIS sessionStorage surface를 분리 진단', '실제 checkpoint/claim root를 표시']) }),
-      Object.freeze({ version: '0.64.8', name: 'Output-Complete Telemetry Checkpoint Repair', bullets: Object.freeze(['정상 출력 완료 뒤 telemetry checkpoint 추가', 'checkpoint 결과를 Last Turn Diagnostic에 표시']) }),
     ]),
   });
 
@@ -8719,9 +8961,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
 <div style="font-weight:700;margin:8px 0 5px">이번 버전 실험</div>
 <div><code>${escapeHtml(card.scenario)}</code></div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>업데이트 뒤 새로고침 없이 자연 요청 1회 후 진단 확인</li><li><b>SESSION WRITTEN 또는 HOST_LOCAL WRITTEN</b>이면 pre-refresh 진단 전체 복사 후 같은 탭 새로고침</li><li>첫 post-refresh 자연 요청 후 진단 전체 복사</li><li>재생성/손수정 없이 자연 요청 1회 더 하고 두 번째 post-refresh 진단 전체 복사</li></ol>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>업데이트 뒤 새로고침 없이 자연 요청 1회 후 진단 확인</li><li><b>Telemetry capsule COMPACT_V2 · 16,384 chars 이하 + HOST_LOCAL WRITTEN</b>이면 pre-refresh 진단 전체 복사 후 같은 탭 새로고침</li><li>첫 post-refresh 자연 요청 후 ADOPTED / handoff precision 진단 전체 복사</li><li>재생성/손수정 없이 자연 요청 1회 더 하고 exact same-generation 관측 복귀 여부와 함께 두 번째 post-refresh 진단 전체 복사</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>HOST_LOCAL UNAVAILABLE / FAILED / OVERSIZE, 공통 serialization 실패 또는 예상 밖 semantic/runtime 이상이면 <b>새로고침하지 말고 현재 진단 전체를 먼저 보존</b></div>
+<div>COMPACTION_FAILED / component oversize / HOST_LOCAL UNAVAILABLE·FAILED·OVERSIZE / 전체 16KB 초과 또는 예상 밖 semantic/runtime 이상이면 <b>새로고침하지 말고 현재 진단 전체를 먼저 보존</b></div>
 <div style="font-weight:700;margin:10px 0 5px">진단 캡처</div>
 <div><b>REQUIRED</b> · pre-refresh / first post-refresh / second post-refresh</div>
 <div><b>IMMEDIATE</b> · visible semantic anomaly, unexpected warnings/compatibility, checkpoint/continuity phase contradiction</div>

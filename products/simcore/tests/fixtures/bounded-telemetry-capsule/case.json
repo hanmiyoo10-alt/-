@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "bounded-telemetry-capsule-v06411",
+  "suite": "bounded-telemetry-capsule",
+  "input": {
+    "maxSerializedChars": 16384,
+    "promptBudget": 4096,
+    "topologyBudget": 6144,
+    "trajectoryBudget": 2048,
+    "maxPromptLines": 64,
+    "maxTopologySignatures": 64,
+    "maxSystemHeadBlocks": 8,
+    "maxSystemTailBlocks": 8,
+    "minRuntimePromptChars": 45000,
+    "minSystem0Chars": 350000,
+    "minStressMessages": 65
+  },
+  "expected": {
+    "firstReloadPromptPrecision": ["LINE_BOUND", "PREFIX_FLOOR", "EXACT_IDENTITY"],
+    "firstReloadTopologyPrecision": "PREFIX_FLOOR",
+    "trajectoryGuard": "SKIPPED_BOUNDED_REOBSERVE",
+    "secondRequestRichPrecision": true,
+    "hostLocalWrite": "WRITTEN"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06411_BOUNDED_TELEMETRY_CAPSULE_COMPACTION_ACTIVATION.md"
+  }
+}

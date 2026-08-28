@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "r2-4-preflight-compression",
+  "suite": "preflight-compression",
+  "input": {
+    "intentId": "simcore-v0.0.2-intent-01",
+    "targetVersion": "0.0.2",
+    "releaseName": "R2.4 Dry Qualification Fixture",
+    "primaryGoalId": "R2_4_PR1_DRY_FIXTURE",
+    "liveScenarioId": "R2_4_PR1_DRY_FIXTURE_LIVE"
+  },
+  "expected": {
+    "authority": "EPHEMERAL_QUALIFICATION_ONLY",
+    "productionMutation": "NONE",
+    "candidateDisposition": "WOULD_CREATE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

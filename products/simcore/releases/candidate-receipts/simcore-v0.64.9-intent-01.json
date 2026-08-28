@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.64.9-intent-01",
+  "releaseId": "simcore-v0.64.9-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "f5e29464452728f859a1a6a8191a846468353531",
+  "sourceCommit": "437ef403978bea05933ef8d239372edbd88c4d9a",
+  "candidateCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "candidateReleaseBlob": "7d2731d256b8aa18598c389fd919550cf3bbf146",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.64.9-intent-01",
+  "builderPath": "products/simcore/tooling/build-06409-session-transport-root-resolution.py",
+  "builderSha256": "620288d6d833b5bfc6833f0e996bda3af8c2dc3b2464772e0751448980a139b2",
+  "verifierCommit": "437ef403978bea05933ef8d239372edbd88c4d9a",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "f278d713013a43e99697c8f8c72dfe2c3024c638defa924aa5ea06d321246523",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

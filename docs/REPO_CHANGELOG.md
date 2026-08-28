@@ -659,3 +659,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/eff3d371cd5869234dff99c0e104a4ee9b8c2410)
 - Event ID: `cce79e69df686249d76991c4171e94499f24407e8fac139621589deb50ee0ccb`
 <!-- canonical-main-doc-promoted:cce79e69df686249d76991c4171e94499f24407e8fac139621589deb50ee0ccb -->
+
+### 2026-08-28 — canonical-main: seal A2 closure queue read-back consistency
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `83fbdd0c2812c6ef1a722ed44db80d1bbe3fa94b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/83fbdd0c2812c6ef1a722ed44db80d1bbe3fa94b)
+- Event ID: `3800472800382b0724b3767bcbb269ef0728a9129441f96e0199d93988fced74`
+<!-- canonical-main-doc-promoted:3800472800382b0724b3767bcbb269ef0728a9129441f96e0199d93988fced74 -->

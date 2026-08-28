@@ -29,6 +29,15 @@ assert.equal(policy.authority.queueAuthorizesProduction, false);
 assert.equal(policy.authority.queueAuthorizesRelease, false);
 assert.equal(policy.authority.repositoryEvidenceWins, true);
 
+assert.deepEqual(policy.queueProjection.liveHealthAuthorities, ['direct-main', 'issue-485']);
+assert.equal(policy.queueProjection.liveHealthMode, 'pointer-only');
+assert.equal(policy.queueProjection.duplicateLiveMainSha, false);
+assert.equal(policy.queueProjection.duplicateRequiredState, false);
+assert.equal(policy.queueProjection.duplicateProductionState, false);
+assert.equal(policy.queueProjection.duplicateNativeProtectionState, false);
+assert.equal(policy.queueProjection.allowHistoricalSynchronizationSha, true);
+assert.equal(policy.queueProjection.historicalSynchronizationShaMustBeLabeled, true);
+
 for (const marker of Object.values(policy.markers)) {
   assert.ok(readme.includes(marker) || template.includes(marker));
 }
@@ -41,6 +50,12 @@ for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', '
 assert.ok(readme.includes('one active implementation owner'));
 assert.ok(readme.includes('do not silently widen'));
 assert.ok(readme.includes('Conversation memory is context only'));
+assert.match(readme, /## Work queue live-health contract/);
+assert.match(readme, /`#465` is coordination only/);
+assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-health pointer/);
+assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
+assert.match(readme, /explicitly historical synchronization\/packet evidence/);
+assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
 assert.match(readme, /## Normal canonical-main startup/);
 assert.match(readme, /exactly two required reads/);
 assert.match(readme, /1\. read direct current `main` authority/);

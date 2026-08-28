@@ -635,3 +635,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/46f27592d977fd28995c3cfe6e3ec488379310a5)
 - Event ID: `382beab7accc2a50211f8d425796f80b2dd848ed97578ac6a937c6fc7037888f`
 <!-- canonical-main-doc-promoted:382beab7accc2a50211f8d425796f80b2dd848ed97578ac6a937c6fc7037888f -->
+
+### 2026-08-28 — canonical-main: compose automatic post-merge proof bundle
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d14bb3ac0ce00caaff251e28f8d2fff0a423e88e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d14bb3ac0ce00caaff251e28f8d2fff0a423e88e)
+- Event ID: `18d1a49158fd46fb2765ff8f2fd42fc745349712585af96a290b4688c99e2309`
+<!-- canonical-main-doc-promoted:18d1a49158fd46fb2765ff8f2fd42fc745349712585af96a290b4688c99e2309 -->

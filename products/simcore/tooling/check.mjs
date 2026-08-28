@@ -42,9 +42,15 @@ function run(command, args, timeout = 120000, extra = {}) {
   return { status: r.status, signal: r.signal || null, error: r.error || null, stdout: bounded(r.stdout), stderr: bounded(r.stderr) };
 }
 function gate(id, planned) { return { id, planned, status: planned ? 'PENDING' : 'NOT_APPLICABLE', reasonCode: null }; }
+function scopePaths(scope) {
+  return (scope?.paths || []).map((row) => typeof row === 'string' ? row : row?.path).filter(Boolean);
+}
+function hasCandidateRequest(scope) {
+  return scopePaths(scope).some((p) => /^products\/simcore\/releases\/candidate-requests\/[^/]+\.json$/.test(String(p)));
+}
 
 function plannedGates(profile, scope) {
-  const ids = ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
+  const ids = ['GATE_CI_SELF','GATE_PR1_DRY','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
   const plan = Object.fromEntries(ids.map((id) => [id, false]));
   if (['MAIN_HEALTH','CANDIDATE_SHADOW','CANDIDATE_REQUIRED'].includes(profile)) {
     for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT']) plan[id] = true;
@@ -58,6 +64,7 @@ function plannedGates(profile, scope) {
   if (labels.has('STATE_SYNC')) for (const id of ['GATE_STATIC','GATE_STATE']) plan[id] = true;
   if (labels.has('SHARED_MAIN_COORDINATION')) for (const id of ['GATE_STATIC','GATE_COORDINATION']) plan[id] = true;
   if (labels.has('LEGACY_VERIFICATION')) for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_LEGACY_COMPAT']) plan[id] = true;
+  if (hasCandidateRequest(scope)) plan.GATE_PR1_DRY = true;
   return plan;
 }
 
@@ -78,6 +85,20 @@ function stateCheck(args) {
   ], 120000);
 }
 
+function pr1DryCheck(args, productionCommit) {
+  if (!args['pr-base-commit'] || !args['pr-head-commit']) {
+    return { status: 2, signal: null, error: null, stdout: '', stderr: 'PR1_DRY_PR_IDENTITY_MISSING' };
+  }
+  return run(process.execPath, [
+    'products/simcore/tooling/ci/pr1-dry-qualification.mjs',
+    '--root', '.',
+    '--base-commit', args['pr-base-commit'],
+    '--head-commit', args['pr-head-commit'],
+    '--production-commit', productionCommit,
+    '--report', '.simcore-ci/pr1-dry-qualification.json',
+  ], 360000);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.profile === 'CANDIDATE_REQUIRED' && !CANDIDATE_REQUIRED_AUTHORITIES.has(args['candidate-required-authority'])) {
@@ -88,6 +109,7 @@ function main() {
   let scope = { schemaVersion:1, labels:[], unrelated:false, docOnly:false };
   if (args['scope-file']) scope = JSON.parse(fs.readFileSync(inside(args['scope-file']), 'utf8'));
   if (args.profile !== 'PR_MAIN') scope = { schemaVersion:1, labels:['FULL_BASELINE'],unrelated:false,docOnly:false };
+  const identity = JSON.parse(fs.readFileSync(inside(args['production-identity']), 'utf8'));
 
   const plan = plannedGates(args.profile, scope);
   const gates = Object.fromEntries(Object.entries(plan).map(([id, p]) => [id, gate(id, p)]));
@@ -104,6 +126,10 @@ function main() {
   if (plan.GATE_CI_SELF) {
     const r = run(process.execPath, ['products/simcore/tooling/ci/self-test.mjs'], 120000);
     setGate('GATE_CI_SELF', resultClass(r, 'CI_SELF_TEST_FAIL', 'CI_SELF_TEST_ERROR'), r);
+  }
+  if (plan.GATE_PR1_DRY) {
+    const r = pr1DryCheck(args, identity.resolvedCommit);
+    setGate('GATE_PR1_DRY', resultClass(r, 'PR1_DRY_QUALIFICATION_FAIL', 'PR1_DRY_QUALIFICATION_ERROR'), r);
   }
   if (plan.GATE_STATIC) {
     let classification;
@@ -150,7 +176,6 @@ function main() {
   const conclusion = infra ? 'INFRA_ERROR' : failed ? 'FAIL' : noop ? 'NOOP' : 'PASS';
   if (noop) reasonCodes.push(scope.docOnly ? 'NOOP_SIMCORE_DOC_ONLY' : 'NOOP_UNRELATED');
 
-  const identity = JSON.parse(fs.readFileSync(inside(args['production-identity']), 'utf8'));
   const report = {
     schemaVersion:1,
     profile:args.profile,

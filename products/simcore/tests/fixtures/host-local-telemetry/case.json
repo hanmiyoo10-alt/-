@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "host-local-telemetry-v06410",
+  "suite": "host-local-telemetry",
+  "input": {
+    "hostLocalKey": "__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__",
+    "sessionKey": "__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__",
+    "maxSerializedChars": 16384,
+    "maxAgeMs": 600000,
+    "requiredCases": [
+      "host-local-bounded-source-surface",
+      "session-written-host-local-not-needed",
+      "session-unavailable-host-local-one-write",
+      "session-failed-host-local-one-write",
+      "host-api-absent-fail-open",
+      "host-acquire-failed-bounded",
+      "host-methods-incomplete",
+      "host-real-write-failed-no-retry",
+      "host-oversize-no-write",
+      "host-acquire-once-read-once",
+      "foreign-location-non-destructive",
+      "matching-remove-consume-host-adopt",
+      "matching-empty-write-consume",
+      "consume-failed-no-adopt",
+      "stale-matching-consumed-rejected",
+      "malformed-matching-consumed-rejected",
+      "incompatible-matching-consumed-rejected",
+      "memory-beats-consumed-host-local",
+      "session-beats-consumed-host-local",
+      "first-request-host-claim-before-observer-adoption",
+      "authoritative-output-awaits-host-checkpoint-after-success",
+      "bounded-host-diagnostics-provider-unverified",
+      "host-local-no-new-top-level-ui"
+    ]
+  },
+  "expected": {
+    "topLevelRegisterButtonCount": 1,
+    "topLevelRegisterSettingCount": 1
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06410_HOST_LOCAL_ONE_SHOT_TELEMETRY_HANDOFF_ACTIVATION.md"
+  }
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TaskBridge ChatGPT Signal</string>
+    <string name="accessibility_description">ChatGPT의 생성 중지 컨트롤 상태만 관찰해 TaskBridge에 로컬 완료 신호를 보냅니다. 응답 본문은 저장하거나 전송하지 않습니다.</string>
+</resources>

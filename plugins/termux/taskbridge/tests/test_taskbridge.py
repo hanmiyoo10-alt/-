@@ -66,10 +66,12 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(final["remote_state"], "UNKNOWN")
 
     @patch("runtime.notifier.notify")
-    @patch("runtime.chatgpt_notification.snapshot")
+    @patch("runtime.chatgpt_notification.list_notifications")
     @patch("runtime.chatgpt_notification.available", return_value=True)
-    def test_chatgpt_notification_is_candidate_signal_without_calibration(self, _available, snapshot, notify):
-        snapshot.side_effect = [{"baseline"}, {"baseline", "new"}]
+    def test_chatgpt_notification_is_candidate_signal_without_calibration(self, _available, list_notifications, notify):
+        baseline = {"packageName": "com.openai.chatgpt", "id": 1, "key": "base", "when": 1, "title": "a", "content": "a"}
+        new = {"packageName": "com.openai.chatgpt", "id": 2, "key": "new", "when": 2, "title": "b", "content": "b"}
+        list_notifications.side_effect = [[baseline], [baseline, new]]
         job = self.store.create_job(
             ["com.openai.chatgpt", "30"],
             adapter="chatgpt_notification",
@@ -85,13 +87,15 @@ class StoreTests(unittest.TestCase):
         notify.assert_called_once()
 
     @patch("runtime.notifier.notify")
-    @patch("runtime.chatgpt_notification.snapshot")
+    @patch("runtime.chatgpt_notification.list_notifications")
     @patch("runtime.chatgpt_notification.available", return_value=True)
-    def test_chatgpt_notification_is_high_after_three_local_confirmations(self, _available, snapshot, notify):
+    def test_chatgpt_notification_is_high_after_three_local_confirmations(self, _available, list_notifications, notify):
         package = "com.openai.chatgpt"
         for job_id in ("job_a", "job_b", "job_c"):
             chatgpt_calibration.record_confirmation(self.store, package, job_id)
-        snapshot.side_effect = [{"baseline"}, {"baseline", "new"}]
+        baseline = {"packageName": package, "id": 1, "key": "base", "when": 1, "title": "a", "content": "a"}
+        new = {"packageName": package, "id": 2, "key": "new", "when": 2, "title": "b", "content": "b"}
+        list_notifications.side_effect = [[baseline], [baseline, new]]
         job = self.store.create_job(
             [package, "30"],
             adapter="chatgpt_notification",

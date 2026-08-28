@@ -2,15 +2,15 @@
   "schema_version": 2,
   "name": "SimCore Contracts v2",
   "production_baseline": {
-    "version": "0.64.0",
-    "release_name": "M2-2 Representation Ownership Split",
-    "release_commit": "d0407c5cd7441a978f815db068344219f8c15027",
-    "release_blob": "6d7ed75b14ad042cc8bfab1be16fc3c97069f5bb"
+    "version": "0.65.0",
+    "release_name": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence",
+    "release_commit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+    "release_blob": "1b38e2b2874f2581edae8f1080edc39558febefa"
   },
   "major_update": {
     "milestone": "2.0M",
     "phase": "M2",
-    "status": "M2_2_RELEASED_PENDING_LIVE_VALIDATION",
+    "status": "M2_3_LIVE_PASS_M2_4_IMPLEMENTATION_AUTHORIZED",
     "m2_runtime_move_gate": "V0_63_55_REAL_LONG_CHAT_REPRESENTATION_FAST_RECONCILE_VALIDATED",
     "runtime_refactor_authorized": true,
     "authorization_evidence": {
@@ -29,7 +29,7 @@
       "fresh_chars": 3714,
       "delta_chars": -1
     },
-    "checkpoint": "M2-2",
+    "checkpoint": "M2-3",
     "m2_1_release": {
       "version": "0.63.56",
       "release_commit": "222d6bd0c589c9dd4c469979daa42cefbd512a3e",
@@ -45,6 +45,15 @@
       "static_validation": "PASS",
       "live_validation": "PENDING",
       "rollback_parent": "0.63.59"
+    },
+    "m2_3_release": {
+      "version": "0.65.0",
+      "release_commit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+      "release_blob": "1b38e2b2874f2581edae8f1080edc39558febefa",
+      "scope": "Edit Reconcile ownership extraction plus runtime identity convergence",
+      "static_validation": "PASS",
+      "live_validation": "LIVE_PASS",
+      "rollback_parent": "0.64.11"
     }
   },
   "global_rules": [
@@ -282,7 +291,7 @@
     "recovery": {
       "physical": "required",
       "layer": "application",
-      "status": "m2_1_compatibility_facade",
+      "status": "m2_4_candidate_zero_runtime_callers_pending_publication",
       "owns": "compatibility facade over output-compat and bootstrap-migration during staged M2 migration",
       "excludes": [
         "manual edit reconcile ownership",
@@ -299,8 +308,8 @@
         "bootstrap-migration"
       ],
       "m2_target": [
-        "output-compat",
-        "bootstrap-migration"
+        "retain_compatibility_facade_with_zero_runtime_callers_in_m2_4_candidate",
+        "physical_deletion_deferred_to_later_validated_debt_retirement"
       ]
     },
     "prompt": {
@@ -322,7 +331,7 @@
     "session": {
       "physical": "required",
       "layer": "application",
-      "status": "orchestrator_reduce_in_m2",
+      "status": "m2_4_candidate_orchestrator_reduced_pending_publication",
       "owns": "session state holder and current request/output/persistence orchestration",
       "excludes": [
         "representation classification ownership"
@@ -338,12 +347,16 @@
         "structure",
         "recovery",
         "edit-reconcile",
+        "output-compat",
+        "bootstrap-migration",
+        "output-finalize",
         "recurrence",
         "prompt"
       ],
       "m2_target": [
-        "edit_reconcile_extraction_completed_in_m2_3_candidate",
-        "move_bootstrap_migration_coordination_when_mechanical"
+        "edit_reconcile_extraction_completed_in_m2_3_live",
+        "recovery_direct_owner_migration_materialized_in_m2_4_candidate",
+        "output_finalization_extraction_materialized_in_m2_4_candidate"
       ]
     },
     "ops": {
@@ -434,17 +447,21 @@
     "runtime-mirror": {
       "physical": "required",
       "layer": "runtime",
-      "status": "narrowed_m2_2",
-      "owns": "fresh-chat read plus strict identity/location/staleness mirror guard and mirror write scheduling",
+      "status": "m2_4_candidate_observe_guard_transport_pending_publication",
+      "owns": "fresh-chat read plus exact base/opaque-candidate observation, strict identity/location/staleness guard and mirror write scheduling",
       "excludes": [
         "raw Fresh retention",
         "semantic state mutation",
+        "compatibility candidate meaning/policy interpretation",
         "representation taxonomy ownership",
         "bounded representation provenance ownership"
       ],
-      "allowed_dependencies": [],
+      "allowed_dependencies": [
+        "output-compat"
+      ],
       "m2_target": [
         "representation_provenance_move_completed_in_m2_2",
+        "compatibility_interpretation_moved_to_output_compat_in_m2_4_candidate",
         "keep_host_read_and_mirror_write_here"
       ]
     },
@@ -471,8 +488,8 @@
     "representation": {
       "physical": "required",
       "layer": "representation",
-      "status": "m2_2_physical_pending_live_validation",
-      "owns": "exact fingerprint identity, CANONICAL/HOST_RAW/FRESH_CHAT relations, bounded provenance and exact carryover classification",
+      "status": "m2_4_candidate_accepted_canonical_equivalence_pending_publication",
+      "owns": "exact fingerprint identity, CANONICAL/HOST_RAW/FRESH_CHAT relations, bounded provenance and accepted canonical-equivalence exact carryover classification",
       "excludes": [
         "raw response body persistence",
         "semantic envelope repair",
@@ -489,9 +506,9 @@
       "principle": "Fresh is identity evidence, not a body source."
     },
     "edit-reconcile": {
-      "physical": "planned",
+      "physical": "required",
       "layer": "application",
-      "status": "m2_3_candidate_physical_pending_publication",
+      "status": "m2_3_required_live_pass_m2_4_direct_owner_candidate",
       "owns": "single edit reconciliation decision tree and fallback coordination",
       "excludes": [
         "representation taxonomy ownership",
@@ -500,18 +517,39 @@
       ],
       "allowed_dependencies": [
         "kernel",
-        "store",
-        "representation",
+        "time",
         "output-compat",
-        "bootstrap-migration"
+        "bootstrap-migration",
+        "output-finalize"
+      ]
+    },
+    "output-finalize": {
+      "physical": "planned",
+      "layer": "application",
+      "status": "m2_4_candidate_physical_pending_publication",
+      "owns": "deterministic prepared-output to committed-state/content transition composition",
+      "excludes": [
+        "storage I/O",
+        "host I/O",
+        "output compatibility candidate policy",
+        "manual edit attribution",
+        "diagnostic rendering"
+      ],
+      "allowed_dependencies": [
+        "kernel",
+        "time",
+        "frame",
+        "reaction",
+        "structure"
       ]
     },
     "output-compat": {
       "physical": "required",
       "layer": "application",
-      "status": "m2_1_physical_pending_live_validation",
-      "owns": "output envelope compatibility/canonicalization and bounded Fresh-confirmation candidate metadata",
+      "status": "m2_4_candidate_fresh_plan_interpretation_pending_publication",
+      "owns": "output envelope compatibility/canonicalization and bounded Fresh-confirmation candidate planning/interpretation metadata",
       "excludes": [
+        "host Fresh reads",
         "manual edit classification",
         "history bootstrap",
         "persistent raw body"
@@ -575,7 +613,9 @@
       "TAIL_AFTER_CURRENT_USER remains unchanged"
     ],
     "completed_checkpoints": [
-      "M2-1: Recovery mechanically split into output-compat + bootstrap-migration behind compatibility facade"
+      "M2-1: Recovery mechanically split into output-compat + bootstrap-migration behind compatibility facade",
+      "M2-2: Representation ownership split released and preserved as the exact-carryover identity/provenance authority",
+      "M2-3: Edit Reconcile ownership extraction + runtime identity convergence released and accepted LIVE_PASS"
     ]
   }
 }

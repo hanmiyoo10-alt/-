@@ -316,7 +316,7 @@ jobs:
           assert p['releaseAuthority']=='RS2_4_PERMANENT'
           assert p['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
           assert p['lifecycleState']=='LIVE_PENDING'
-          assert p['disposition'] in ['POST_PUBLISH_PAYLOAD_READY','ADMIN_STATE_ALREADY_SYNCED']
+          assert p['disposition'] in ['LIVE_PENDING_PAYLOAD_READY','ALREADY_CONVERGED']
           allowed=set(p['persistentPayloadAllowlist'])
           changed=set(p['changedPaths'])
           assert changed <= allowed

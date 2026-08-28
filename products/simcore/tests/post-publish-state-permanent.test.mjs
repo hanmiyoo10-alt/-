@@ -10,6 +10,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../../..');
 const POST = path.join(REPO, 'products/simcore/tooling/post-publish-state.mjs');
 const CONVERGE = path.join(REPO, 'products/simcore/tooling/release-state-converge.mjs');
+const RECOVERY_WORKFLOW = path.join(REPO, '.github/workflows/simcore-release-state-sync.yml');
 
 function sh(cwd, command, args, check = true) {
   const r = spawnSync(command, args, { cwd, encoding:'utf8', maxBuffer:1024*1024 });
@@ -65,7 +66,7 @@ function testP1BoundedLivePending(base) {
   const root=path.join(base,'p1'); fs.mkdirSync(root); const f=initFixture(root);
   runPost(root);
   const report=readJson(root,'.simcore-release/post-publish-report.json');
-  if(report.tool!=='release-state-converge'||report.releaseAuthority!=='RS2_4_PERMANENT'||report.productionMutation!=='ALREADY_PUBLISHED_UPSTREAM'||report.mainMutation!=='LOCAL_PAYLOAD_PENDING_GATEWAY'||report.lifecycleState!=='LIVE_PENDING'||report.rLifecycleState!=='REAL_RELEASE_LIVE_PENDING') throw new Error(`P1 report ${JSON.stringify(report)}`);
+  if(report.tool!=='release-state-converge'||report.releaseAuthority!=='RS2_4_PERMANENT'||report.productionMutation!=='ALREADY_PUBLISHED_UPSTREAM'||report.mainMutation!=='LOCAL_PAYLOAD_PENDING_GATEWAY'||report.lifecycleState!=='LIVE_PENDING'||report.rLifecycleState!=='REAL_RELEASE_LIVE_PENDING'||report.disposition!=='LIVE_PENDING_PAYLOAD_READY') throw new Error(`P1 report ${JSON.stringify(report)}`);
   const expected=['product-manifest.json','docs/CURRENT_DEVELOPMENT.md','docs/SIMCORE_GUIDELINES.md',`products/simcore/releases/records/${f.input.releaseId}.json`,`products/simcore/releases/state-receipts/${f.input.releaseId}.json`];
   if(JSON.stringify(report.changedPaths)!==JSON.stringify(expected)) throw new Error(`P1 paths ${JSON.stringify(report.changedPaths)}`);
   const m=readJson(root,'product-manifest.json');
@@ -161,6 +162,14 @@ function testDReleaseMarkerModeMismatch(base) {
   const r=runPost(root,false);
   if(r.status===0||!r.stderr.includes('LIVE_PENDING_DOC_MARKER_INVALID')) throw new Error(`D marker mismatch ${r.stderr}`);
 }
+function testRecoveryDispositionParityStatic() {
+  const workflow=fs.readFileSync(RECOVERY_WORKFLOW,'utf8');
+  const expected="assert p['disposition'] in ['LIVE_PENDING_PAYLOAD_READY','ALREADY_CONVERGED']";
+  if(!workflow.includes(expected)) throw new Error('D recovery workflow current disposition set missing');
+  for(const legacy of ['POST_PUBLISH_PAYLOAD_READY','ADMIN_STATE_ALREADY_SYNCED']) {
+    if(workflow.includes(legacy)) throw new Error(`D recovery workflow legacy disposition survived: ${legacy}`);
+  }
+}
 function testSharedOwnerBoundary() {
   const adapter=fs.readFileSync(POST,'utf8');
   const owner=fs.readFileSync(CONVERGE,'utf8');
@@ -180,8 +189,9 @@ function main() {
     testDRequiredLiveGate(base);
     testDReceiptConflict(base);
     testDReleaseMarkerModeMismatch(base);
+    testRecoveryDispositionParityStatic();
     testSharedOwnerBoundary();
-    console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5 + LIVE_PASS_TRANSITION');
+    console.log('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5 + LIVE_PASS_TRANSITION + RECOVERY_DISPOSITION_PARITY');
   } finally { fs.rmSync(base,{recursive:true,force:true}); }
 }
 

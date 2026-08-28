@@ -143,6 +143,22 @@ class StoreTests(unittest.TestCase):
         self.assertTrue(data["added"])
         self.assertEqual(self.store.events(job["job_id"])[-1]["event_type"], "CHATGPT_COMPLETION_CONFIRMED")
 
+    def test_ensure_daemon_prefers_lean_coordinator(self):
+        root = Path(self.tmp.name)
+        script = root / "taskbridge.py"
+        coordinator = root / "coordinator.py"
+        script.write_text("# test\n")
+        coordinator.write_text("# test\n")
+
+        with patch("runtime.pid_alive", side_effect=[False, True]), patch("runtime.launch_detached", return_value=4321) as launch:
+            pid = taskbridge.ensure_daemon(self.store, script)
+
+        self.assertEqual(pid, 4321)
+        command = launch.call_args.args[0]
+        self.assertEqual(Path(command[1]).name, "coordinator.py")
+        self.assertIn("--taskbridge-script", command)
+        self.assertNotIn("_daemon", command)
+
 
 if __name__ == "__main__":
     unittest.main()

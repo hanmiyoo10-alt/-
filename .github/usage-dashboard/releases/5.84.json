@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "releaseTitle": "Service Tier Selection-Source Fidelity",
+  "productVersion": "3.0.0-alpha.5.84",
+  "engineVersion": "1.6.25",
+  "managerVersion": "1.3.0",
+  "cliVersion": "0.13.2",
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.83 — Exact Final HTTP Status Fidelity`",
+  "materializer": "plugins/usage-dashboard/tools/release_service_tier_selection_source_584.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
+  "workflows": {
+    "stage": "usage-dashboard-e7-candidate-ready.yml",
+    "validation": "usage-dashboard-e9-candidate-validation.yml",
+    "mergeGuard": "usage-dashboard-e11-merge-ready.yml",
+    "promotion": "usage-dashboard-e5-exact-byte-promotion.yml"
+  },
+  "engine": {
+    "sourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+    "buildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs"
+  },
+  "newTests": [
+    "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs"
+  ],
+  "highlights": [
+    "요청/실제 Service Tier를 기존 source-backed 규칙 그대로 보존",
+    "source가 제공할 때만 `요청 지정` / `플랜 기본` selection-source 표시",
+    "missing/null tier와 selection source는 UNKNOWN으로 유지하고 STANDARD를 합성하지 않음"
+  ],
+  "diagnosticHints": [
+    "자연 발생 요청에서 selection-source chip이 source-backed 행에만 표시되는지 확인",
+    "selection source가 없는 행에는 chip이 없고 missing served tier가 STANDARD로 바뀌지 않는지 확인",
+    "requested/served mismatch 문구와 DevPass/Credits scope가 기존대로 유지되는지 확인",
+    "업데이트 내역/진단 가이드 복사가 동작하고 추가 refresh·CLI·network 작업이 없는지 확인"
+  ]
+}

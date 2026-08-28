@@ -8,23 +8,18 @@ const {discoverTests} = require('./registry.cjs');
 
 const root = 'plugins/usage-dashboard';
 const src = `${root}/src`;
+const release = assertCurrentReleaseArtifacts();
 const core = fs.readFileSync(`${src}/00-runtime-core.part.js`, 'utf8');
 const context = fs.readFileSync(`${src}/50-dashboard-context.part.js`, 'utf8');
 const markup = fs.readFileSync(`${src}/54-dashboard-markup.part.js`, 'utf8');
 const settings = fs.readFileSync(`${src}/60-settings-runtime.part.js`, 'utf8');
 const latest = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const sourceManifest = JSON.parse(fs.readFileSync(`${src}/manifest.json`, 'utf8'));
-const spec = JSON.parse(fs.readFileSync('.github/usage-dashboard/releases/5.83.json', 'utf8'));
-const release = assertCurrentReleaseArtifacts();
+const spec = JSON.parse(fs.readFileSync(release.specPath, 'utf8'));
 
-if (release.productVersion !== '3.0.0-alpha.5.83') {
-  console.log(`P49 Release Notes & Diagnostic Guidance: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.83`);
-  process.exit(0);
-}
-
-assert.equal(spec.productVersion, '3.0.0-alpha.5.83');
-assert.equal(spec.engineVersion, '1.6.24');
-assert.equal(spec.managerVersion, '1.3.0');
+assert.equal(spec.productVersion, release.productVersion);
+assert.equal(spec.engineVersion, release.engineVersion);
+assert.equal(spec.managerVersion, release.managerVersion);
 assert.deepEqual(spec.contracts, {snapshot:1,recentRequest:1});
 assert.equal(typeof spec.releaseTitle, 'string');
 assert.ok(spec.releaseTitle.trim());
@@ -38,9 +33,9 @@ for (const key of ['highlights','diagnosticHints']) {
 }
 
 assert.ok(core.includes('const RELEASE_NOTES = Object.freeze({'), 'P49 static RELEASE_NOTES constant missing');
-assert.ok(core.includes(`title: ${JSON.stringify(spec.releaseTitle)}`), 'P49 release title must be materialized from spec');
+assert.ok(core.includes(`title: ${JSON.stringify(spec.releaseTitle)}`), 'P49 release title must be materialized from current spec');
 for (const item of [...spec.highlights, ...spec.diagnosticHints]) {
-  assert.ok(core.includes(JSON.stringify(item)), `P49 generated release metadata missing spec item: ${item}`);
+  assert.ok(core.includes(JSON.stringify(item)), `P49 generated release metadata missing current spec item: ${item}`);
 }
 
 assert.ok(context.startsWith('\n  function settingsHtml() {'), 'P49 dashboard/context module marker must remain first');
@@ -90,17 +85,16 @@ for (const forbidden of ['accountId','organizationId','projectId','apiKey','auth
 }
 
 assert.equal(sourceManifest.parts.length, 24, 'P49 module count must remain 24');
-assert.equal(sourceManifest.version, '3.0.0-alpha.5.83', 'P49 source manifest must track 5.83');
+assert.equal(sourceManifest.version, release.productVersion, 'P49 source manifest must track current product version');
 assert.ok(latest.includes('id="release-notes-panel"'), 'P49 built Plugin release notes panel missing');
 assert.ok(latest.includes('진단 제출 가이드 복사'), 'P49 built Plugin copy action missing');
-assert.ok(latest.includes('HTTP final status fidelity:'), 'P49 paired release must retain primary HTTP feature');
 
 for (const existing of ['id="copy-diag"', 'id="export-json"']) {
   assert.ok(latest.includes(existing), `P49 existing Diagnostics control must remain: ${existing}`);
 }
 
 const suite = discoverTests();
-assert.ok(suite.regressions.includes('p48-exact-final-http-status.cjs'), 'P49 paired release must retain P48');
+assert.ok(suite.regressions.includes('p48-exact-final-http-status.cjs'), 'P49 must retain P48 HTTP-status regression');
 assert.ok(suite.regressions.includes('p49-release-notes-diagnostic-guidance.cjs'), 'P49 registry must include P49');
 
-console.log('P49 Release Notes & Diagnostic Guidance: OK · spec-backed static notes · module boundary preserved · DOM-only toggle · static DOM clipboard handoff · zero refresh/network/timer/persistence ownership · module count 24');
+console.log(`P49 Release Notes & Diagnostic Guidance: OK · current spec ${release.productVersion} · spec-backed static notes · DOM-only toggle · zero refresh/network/timer/persistence ownership · module count 24`);

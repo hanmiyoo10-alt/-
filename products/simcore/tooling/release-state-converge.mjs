@@ -8,6 +8,8 @@ import { run as syncRun } from './sync-state.mjs';
 
 const LIVE_BEGIN = '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->';
 const LIVE_END = '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->';
+const RELEASE_BEGIN_RE = /<!-- SIMCORE_RELEASE_STATE:([^:]+):BEGIN -->/g;
+const RELEASE_END_RE = /<!-- SIMCORE_RELEASE_STATE:([^:]+):END -->/g;
 const SNAPSHOT_END = '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->';
 const HEX40 = /^[0-9a-f]{40}$/;
 const SAFE_GATE = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -39,7 +41,7 @@ function sha256(bytes) { return crypto.createHash('sha256').update(bytes).digest
 function gitBlobSha1(bytes) { return crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex'); }
 function hashOrMissing(file) { return fs.existsSync(file) ? sha256(fs.readFileSync(file)) : null; }
 function writeJsonAtomic(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive:true });
   const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
   const tmp = `${file}.simcore-state-converge-${process.pid}.tmp`;
   fs.writeFileSync(tmp, bytes);
@@ -56,7 +58,7 @@ function sourceIdentity(bytes, version) {
   const v = text.match(/^\/\/@version\s+([^\r\n]+)$/m)?.[1]?.trim() || '';
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const n = text.match(new RegExp(`^// v${escaped}\\s+(.+?):\\s*$`, 'm'))?.[1]?.trim() || '';
-  return { version: v, releaseName: n };
+  return { version:v, releaseName:n };
 }
 function validatePublicationInput(input) {
   if (!input || input.schemaVersion !== 1 || input.product !== 'SimCore') fail('STATE_CONVERGE_INPUT_INVALID', 'envelope');
@@ -89,9 +91,9 @@ function liveBlock(input) {
     '',
     `- Release transaction: \`${input.releaseId}\``,
     `- Production commit: \`${input.productionCommit}\``,
-    `- Validation status: \`PENDING_REAL_LONG_CHAT\``,
+    '- Validation status: `PENDING_REAL_LONG_CHAT`',
     `- Current priority / live gate: \`${input.liveScenarioId}\``,
-    `- R lifecycle: \`REAL_RELEASE_LIVE_PENDING\``,
+    '- R lifecycle: `REAL_RELEASE_LIVE_PENDING`',
     '',
     'This block is machine-managed by `release-state-converge` from immutable publication evidence.',
     LIVE_END,
@@ -100,13 +102,14 @@ function liveBlock(input) {
 function renderLiveBlock(file, input) {
   let text = fs.readFileSync(file, 'utf8');
   const expected = liveBlock(input);
-  const bc = text.split(LIVE_BEGIN).length - 1;
-  const ec = text.split(LIVE_END).length - 1;
-  if (bc !== ec || bc > 1) fail('LIVE_PENDING_DOC_MARKER_INVALID');
-  if (bc === 1) {
-    const start = text.indexOf(LIVE_BEGIN), end = text.indexOf(LIVE_END, start);
-    if (end < start) fail('LIVE_PENDING_DOC_MARKER_INVALID');
-    const finish = end + LIVE_END.length;
+  const begins = [...text.matchAll(RELEASE_BEGIN_RE)];
+  const ends = [...text.matchAll(RELEASE_END_RE)];
+  if (begins.length !== ends.length || begins.length > 1) fail('LIVE_PENDING_DOC_MARKER_INVALID');
+  if (begins.length === 1) {
+    const begin = begins[0], end = ends[0];
+    if (begin[1] !== end[1] || end.index < begin.index) fail('LIVE_PENDING_DOC_MARKER_INVALID');
+    const start = begin.index;
+    const finish = end.index + end[0].length;
     text = `${text.slice(0,start)}${expected}${text.slice(finish)}`;
   } else {
     const anchor = text.indexOf(SNAPSHOT_END);

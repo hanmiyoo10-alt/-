@@ -47,6 +47,37 @@
       : '—';
   }
 
+  function requestHttpStatusMetadata(row) {
+    const raw = recentRequestValue(row, ['httpStatusCode','http_status_code'], null);
+    const source = String(recentRequestValue(row, ['httpStatusSource','http_status_source'], '') || '');
+    const fidelity = String(recentRequestValue(row, ['httpStatusFidelity','http_status_fidelity'], 'unknown') || 'unknown');
+    const explicit = typeof raw === 'number'
+      && Number.isInteger(raw)
+      && raw >= 100
+      && raw <= 599
+      && source === 'errorDetails.statusCode'
+      && fidelity === 'explicit';
+    return {
+      httpStatusCode: explicit ? raw : null,
+      httpStatusSource: explicit ? 'errorDetails.statusCode' : '',
+      httpStatusFidelity: explicit ? 'explicit' : 'unknown'
+    };
+  }
+
+  function requestHttpStatusText(row) {
+    const http = requestHttpStatusMetadata(row);
+    return requestOutcomeCategory(row) === 'error' && http.httpStatusFidelity === 'explicit'
+      ? `HTTP ${http.httpStatusCode}`
+      : '';
+  }
+
+  function requestHttpStatusStats(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const errorRows = list.filter(row => requestOutcomeCategory(row) === 'error');
+    const exact = errorRows.filter(row => requestHttpStatusMetadata(row).httpStatusFidelity === 'explicit').length;
+    return {errorRows:errorRows.length, exact, unknown:errorRows.length - exact, source:'errorDetails.statusCode'};
+  }
+
   function requestCacheSignal(row) {
     const explicit = recentRequestValue(row, ['cacheHit','cache_hit','cached','isCached','is_cached','cache.hit'], null);
     const text = typeof explicit === 'string' ? explicit.trim().toLowerCase() : '';

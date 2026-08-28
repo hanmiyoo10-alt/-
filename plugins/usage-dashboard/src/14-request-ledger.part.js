@@ -36,6 +36,7 @@
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
       const duration = requestDurationMetadata(row);
+      const httpStatus = requestHttpStatusMetadata(row);
       const requestedTierField = recentRequestField(row, [
         'requestedServiceTier','requested_service_tier','requestServiceTier','request_service_tier',
         'requestedTier','requested_tier','metadata.requestedServiceTier','metadata.requested_service_tier',
@@ -79,6 +80,9 @@
         durationMs:duration.durationMs,
         durationSource:duration.durationSource,
         durationFidelity:duration.durationFidelity,
+        httpStatusCode:httpStatus.httpStatusCode,
+        httpStatusSource:httpStatus.httpStatusSource,
+        httpStatusFidelity:httpStatus.httpStatusFidelity,
         cachedInputTokens:cacheMetrics.cachedInputTokens,
         cacheReadInputTokens:cacheMetrics.cacheReadInputTokens,
         cacheCreationInputTokens:cacheMetrics.cacheCreationInputTokens,
@@ -239,6 +243,9 @@
         const incomingDuration = requestDurationMetadata(row);
         const currentDuration = requestDurationMetadata(current || {});
         const duration = incomingDuration.durationFidelity === 'explicit' ? incomingDuration : currentDuration;
+        const incomingHttpStatus = requestHttpStatusMetadata(row);
+        const currentHttpStatus = requestHttpStatusMetadata(current || {});
+        const httpStatus = incomingHttpStatus.httpStatusFidelity === 'explicit' ? incomingHttpStatus : currentHttpStatus;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
         byKey.set(key, {
           ...(current || {}),
@@ -250,6 +257,9 @@
           durationMs:duration.durationMs,
           durationSource:duration.durationSource,
           durationFidelity:duration.durationFidelity,
+          httpStatusCode:httpStatus.httpStatusCode,
+          httpStatusSource:httpStatus.httpStatusSource,
+          httpStatusFidelity:httpStatus.httpStatusFidelity,
           cacheHit:typeof row.cacheHit === 'boolean' ? row.cacheHit : (typeof current?.cacheHit === 'boolean' ? current.cacheHit : null),
           cachedInputTokens:num(row.cachedInputTokens) ? Number(row.cachedInputTokens) : (num(current?.cachedInputTokens) ? Number(current.cachedInputTokens) : null),
           cacheReadInputTokens:num(row.cacheReadInputTokens) ? Number(row.cacheReadInputTokens) : (num(current?.cacheReadInputTokens) ? Number(current.cacheReadInputTokens) : null),
@@ -453,7 +463,8 @@
         const cacheText = requestCacheDetailText(row) || '캐시 정보 없음';
         const tierText = requestServiceTierText(row);
         const durationText = `Duration ${requestDurationText(row)}`;
-        const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+        const httpStatusText = requestHttpStatusText(row);
+        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
@@ -496,7 +507,8 @@
       const cacheText = requestCacheDetailText(row);
       const tierText = requestServiceTierText(row);
       const durationText = `Duration ${requestDurationText(row)}`;
-      const usageText = [resultText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
+      const httpStatusText = requestHttpStatusText(row);
+      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);

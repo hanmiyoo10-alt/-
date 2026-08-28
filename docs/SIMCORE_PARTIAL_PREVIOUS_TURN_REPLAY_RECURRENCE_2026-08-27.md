@@ -204,3 +204,194 @@ Prefer evidence that distinguishes long-chat generation/context-selection behavi
 - `docs/SIMCORE_ANOMALY_WATCH.md`
 - `docs/SIMCORE_LIVE_06407_VALIDATION_2026-08-27.md`
 - `release-simcore/plugins/simcore/latest.js`
+
+---
+
+## 10. Additional natural recurrence specimen — v0.64.11 runtime / @2240 → @2241
+
+Date observed: 2026-08-28
+Production authority: `v0.64.11 — Bounded Telemetry Capsule Compaction`
+Diagnostic runtime generation: `mtcs4wi0-lrlsg6`
+Diagnostic header: `Version: 0.64.10` due already-preserved stale `SIMCORE_RUNTIME_VERSION` identity defect
+Natural request: user `@2240` → assistant `@2241`
+
+### 10.1 Immediate preceding response frame
+
+Before @2240, the operator rerolled the anomalous @2238 generation and obtained a healthy replacement @2239. That rerolled response answered a broad **2031 annual total-activity summary** request and was organized around these major categories:
+
+```text
+가수·앨범 활동
+배우 활동
+예능 활동
+엠버서더 활동
+시상식 수상 성과
+기타 개인 활동·화제성
+```
+
+The rerolled @2239 therefore established a broad annual-career-summary response frame immediately before the next natural request.
+
+### 10.2 Current natural input is materially narrower
+
+User @2240 asked specifically for **platform-by-platform 2031 metrics** and named only these requested domains:
+
+```text
+유튜브
+인스타그램
+COSMIC 소통 앱
+틱톡
+주식
+```
+
+The requested comparison contract was also explicit:
+
+```text
+2030.12.31 baseline
+→ 2031.12.31 cumulative value
+→ increase amount
+→ increase rate
+→ platform-specific records / first-most / buzz
+```
+
+The user did **not** ask @2240 for another general music/acting/variety/ambassador annual summary.
+
+### 10.3 Output begins correctly, then replays the preceding response frame
+
+Assistant @2241 initially follows the current input and provides sections for:
+
+```text
+유튜브
+인스타그램
+COSMIC 공식 소통 앱
+틱톡
+CSW ENT 주식 성장률
+```
+
+This portion is responsive to @2240.
+
+After completing the requested platform/stock sections, however, the output continues with unrelated broad annual-career sections:
+
+```text
+🎤 [가수·앨범 활동]
+🎬 [배우 활동]
+📺 [예능 활동]
+👔 [엠버서더 및 기타 개인 활동]
+```
+
+Those categories directly mirror the immediately preceding @2239 annual-activity-summary frame rather than the narrower @2240 platform-only request.
+
+The replay is semantic/frame-level rather than byte-identical: the output does not simply paste @2239 verbatim, but it reintroduces the preceding turn's category structure and corresponding career content after the current requested task has already been answered.
+
+Bounded observable shape:
+
+```text
+new natural input @2240 = platform-only annual metrics
+output @2241 prefix = current task answered correctly
+output @2241 suffix = preceding @2239 broad annual-career frame reintroduced
+```
+
+This is a strong `PARTIAL_PREVIOUS_TURN_REPLAY` specimen.
+
+### 10.4 Current-turn instruction-following defects inside the requested platform section
+
+The semantic replay is the primary classification. Independently, the requested platform comparison was not executed uniformly for every requested metric.
+
+Examples directly visible in @2241:
+
+- YouTube average likes: baseline/final values are given, but increase amount/rate are not explicitly calculated.
+- Instagram posts/reels/average likes: baseline/final or added counts are shown, but not every requested increase rate is supplied.
+- TikTok total likes: `160억 → 190억` is shown without explicit `+30억 / +18.75%` comparison.
+- COSMIC attendance says `2,405일 → 2,770일`, a +365-day difference, while prose also says `신혼여행 2주 휴식기` and elsewhere describes uninterrupted attendance; those claims cannot all be simultaneously interpreted as an exact 365-day attendance increase without qualification.
+- Stock price `10,000원 → 1,850,000원` is a final price of 185× the listing price; `+18,400%` is the percentage increase, while prose calling it simply `184배` is an imprecise ratio statement unless explicitly referring to increase-over-baseline rather than final/base ratio.
+
+These are response-quality/instruction-precision observations. They should not be conflated with the replay family's root cause, but they strengthen the conclusion that @2241 is not a clean exact execution of the current input.
+
+### 10.5 Diagnostic state
+
+The current @2240→@2241 diagnostic itself is locally healthy:
+
+```text
+Stability: PASS
+binding BOUND
+out COMMITTED
+mirror COMMITTED
+Warnings: 0
+Compatibility diagnostics: 0
+Preamble provenance: THOUGHTS_COMPAT · STRIPPED
+CANONICAL↔FRESH Δchars +0 · EXACT
+```
+
+Telemetry also remains healthy:
+
+```text
+Telemetry capsule: COMPACT_V2 · 4,610/16,384 chars · OK
+HOST_LOCAL WRITTEN · 4610 chars
+```
+
+This means the semantic replay occurred **despite** healthy local representation, mirror, envelope compatibility, warning, and telemetry signals.
+
+Other observations:
+
+```text
+Template recurrence: REPEATED · family C
+Recurrence history match: MATCH · user @2022 · assistant @2023 · distance 218
+Representation correlation: CANONICAL@2227,FRESH_CHAT@2227 · ledger 7
+Mutation attribution: AMBIGUOUS_HISTORY_MATCH · MEDIUM
+```
+
+Do not treat these fields as proof of replay cause. `Template recurrence` concerns request-template recurrence, and the history/representation correlations do not establish that SimCore injected the immediately preceding response frame into generation.
+
+### 10.6 Relationship to the earlier @2238 anomaly
+
+The operator clarified the physical action sequence:
+
+```text
+@2238 first generation
+→ unresolved envelope / output mismatch anomaly
+
+operator reroll of same @2238 request
+→ healthy replacement @2239
+
+new natural request @2240
+→ @2241 partial previous-turn semantic/frame replay
+```
+
+Therefore the healthy @2239 is a same-input reroll control for the @2238 representation anomaly. It is also the immediately preceding semantic frame whose categories are partially replayed in @2241.
+
+Do not misread the later exact @2239 representation as spontaneous convergence; the reroll is a material operator action.
+
+### 10.7 Updated family posture
+
+This specimen is independent from the v0.64.7 natural recurrence because it occurs in a different production/runtime episode and on a new natural user request.
+
+It adds another strong natural specimen to the already-confirmed family:
+
+```text
+family: PARTIAL_PREVIOUS_TURN_REPLAY
+natural recurrence: CONFIRMED previously
+new v0.64.11-compatible natural specimen: YES
+independent natural specimens: >= 3
+symptom confidence: HIGH
+current specimen reroll-clear control: NOT YET PROVIDED
+root cause: UNPROVEN
+provider/model cause: UNPROVEN
+SimCore mutation cause: UNPROVEN
+M2-3 attribution: NOT APPLICABLE (M2-3 not yet released)
+M2-3 blocker: NO at current evidence level
+runtime FIX authority: NONE
+```
+
+Unlike the earlier family exemplar, the current specimen does not require a same-input reroll result to recognize the symptom: the input/output semantic comparison already directly shows a narrower current task followed by reintroduction of the immediately preceding broad response frame. A reroll of @2240 would be useful as a paired control, but is not required to preserve this natural recurrence evidence.
+
+### 10.8 v0.65.0 regression relevance
+
+The planned v0.65.0 combined identity + M2-3 release must not absorb this anomaly as an assumed M2-3 defect because the specimen predates M2-3.
+
+Use it instead as a frozen semantic regression observation:
+
+```text
+current user intent must remain primary
+prior-turn semantic frame must not be treated as current-task authority
+healthy Warnings/representation telemetry does not imply semantic non-replay
+```
+
+Any future fix requires narrower cause attribution than symptom recurrence alone.

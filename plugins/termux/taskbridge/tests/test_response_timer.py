@@ -46,7 +46,7 @@ class ResponseTimerTests(unittest.TestCase):
             data = response_timer.start(self.store, self.package)
         return observer, data
 
-    def test_start_binds_active_observer_and_starts_at_zero(self):
+    def test_start_binds_active_observer_and_starts_at_zero_with_manual_fallback_button(self):
         observer = self.make_active_observer()
         with patch("response_timer._notification_available", return_value=True), patch(
             "response_timer._daemon_alive", return_value=True
@@ -56,10 +56,15 @@ class ResponseTimerTests(unittest.TestCase):
         self.assertEqual(data["state"], "ACTIVE")
         self.assertEqual(data["observer_job_id"], observer["job_id"])
         self.assertEqual(data["elapsed_seconds"], 0)
-        self.assertEqual(data["mode"], "explicit_start_auto_high_completion")
+        self.assertEqual(data["mode"], "explicit_start_auto_high_completion_manual_foreground_fallback")
+        self.assertEqual(data["foreground_completion_fallback"], "notification_action_button")
         self.assertEqual(notify.call_args.args[1], "응답 시작 · 0초")
         self.assertTrue(notify.call_args.kwargs["ongoing"])
         self.assertFalse(notify.call_args.kwargs["sound"])
+        self.assertEqual(notify.call_args.kwargs["button1_text"], "완료")
+        action = notify.call_args.kwargs["button1_action"]
+        self.assertIn("complete-manual", action)
+        self.assertIn(data["session_id"], action)
 
     def test_duplicate_active_timer_is_rejected(self):
         self.start_timer()
@@ -81,6 +86,7 @@ class ResponseTimerTests(unittest.TestCase):
         self.assertEqual(current["elapsed_seconds"], 3)
         self.assertEqual(notify.call_args.args[1], "응답 중 · 3초")
         self.assertTrue(notify.call_args.kwargs["ongoing"])
+        self.assertEqual(notify.call_args.kwargs["button1_text"], "완료")
 
     def test_high_calibrated_completion_stops_timer(self):
         observer, data = self.start_timer()
@@ -163,6 +169,49 @@ class ResponseTimerTests(unittest.TestCase):
         self.assertEqual(data["state"], "STOPPED")
         self.assertFalse(notify.call_args.kwargs["ongoing"])
         self.assertFalse(notify.call_args.kwargs["sound"])
+
+    def test_stale_tick_write_cannot_resurrect_manual_stop(self):
+        self.start_timer()
+        stale, stale_raw = response_timer._load_record(self.store)
+        self.assertEqual(stale["state"], "ACTIVE")
+
+        with patch("response_timer._notify", return_value=True):
+            stopped = response_timer.stop(self.store)
+        self.assertEqual(stopped["state"], "STOPPED")
+
+        stale["elapsed_seconds"] = int(stale.get("elapsed_seconds") or 0) + 1
+        rejected = response_timer._save_cas(self.store, stale, stale_raw)
+        self.assertIsNone(rejected)
+        self.assertEqual(response_timer.status(self.store)["state"], "STOPPED")
+
+    def test_manual_completion_button_marks_user_confirmed_completion(self):
+        _observer, data = self.start_timer()
+        with patch("response_timer._notify", return_value=True) as notify:
+            final = response_timer.manual_complete(self.store, data["session_id"])
+        self.assertEqual(final["state"], "COMPLETED")
+        self.assertEqual(final["completion_signal_confidence"], "USER_CONFIRMED")
+        self.assertEqual(final["completion_semantic"], "manual_foreground_completion")
+        self.assertEqual(final["completion_source"], "notification_action_button")
+        self.assertIn("수동 확인", notify.call_args.args[1])
+        self.assertFalse(notify.call_args.kwargs["ongoing"])
+        self.assertFalse(notify.call_args.kwargs["sound"])
+
+    def test_stale_notification_button_cannot_complete_newer_session(self):
+        _observer, first = self.start_timer()
+        with patch("response_timer._notification_available", return_value=True), patch(
+            "response_timer._daemon_alive", return_value=True
+        ), patch("response_timer._notify", return_value=True):
+            response_timer.stop(self.store)
+            second = response_timer.start(self.store, self.package)
+            result = response_timer.manual_complete(self.store, first["session_id"])
+        self.assertEqual(result["state"], "ACTIVE")
+        self.assertEqual(result["session_id"], second["session_id"])
+
+    def test_store_compare_and_set_meta_rejects_stale_expected_value(self):
+        self.store.set_meta("cas_test", "a")
+        self.assertTrue(self.store.compare_and_set_meta("cas_test", "a", "b"))
+        self.assertFalse(self.store.compare_and_set_meta("cas_test", "a", "c"))
+        self.assertEqual(self.store.get_meta("cas_test"), "b")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ const baseSha = '3'.repeat(40);
 const currentMainSha = '4'.repeat(40);
 
 const body = [
+  'Plugin: usage-dashboard',
   `release_version: ${release.productVersion}`,
   `release_spec: ${release.specPath}`,
   'source_branch: release/usage-dashboard-e12-fixture',

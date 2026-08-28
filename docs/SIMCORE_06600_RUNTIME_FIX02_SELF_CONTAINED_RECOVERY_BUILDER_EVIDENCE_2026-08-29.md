@@ -4,7 +4,7 @@ Date: 2026-08-29 KST
 
 Status:
 
-`DESIGN FROZEN · FIX02 IMPLEMENTATION PENDING · PRODUCTION UNCHANGED`
+`DESIGN FROZEN · FIX02 IMPLEMENTED · PERMANENT PR CI PENDING · PRODUCTION UNCHANGED`
 
 Classification:
 
@@ -24,7 +24,11 @@ Durable prerequisite evidence:
 
 ## FIX02 design
 
-FIX02 must be one self-contained builder file. It must not import, execute, or read a sibling v0.66 builder.
+FIX02 is one self-contained builder file. It does not import, execute, or read a sibling v0.66 builder.
+
+Implementation:
+
+`products/simcore/tooling/build-06600-m2-4-session-runtime-mirror-boundary-completion-fix02.py`
 
 Instead it uses the immutable failed candidate as the exact M2-4 runtime provenance:
 
@@ -37,20 +41,21 @@ raw SHA-256         = af3659eade34b199d8972cf04cafe2595198c075b5131275603fc28570
 raw bytes           = 563052
 ```
 
-The builder must:
+The builder:
 
-1. resolve the exact failed candidate object, fetching only its immutable candidate ref locally if the object is absent;
-2. prove the candidate parent is exact production `P`;
-3. prove latest/install Git blobs, raw bytes and SHA-256 match the frozen failed-candidate identity;
-4. read those exact candidate runtime bytes;
-5. isolate only the `session` module;
-6. prove Session already has no `require('./recovery')` or `recovery.` runtime caller;
-7. remove exactly one line matching the stale shorthand export `recovery,` from Session and nothing else;
-8. prove the standalone `recovery` compatibility facade remains present;
-9. write byte-identical `plugins/simcore/latest.js` and `plugins/simcore/install.js`;
-10. run Node syntax checks;
-11. run `scripts/simcore-06406-closure-completion-gate-test.mjs` directly against both generated runtime files, because this exact adapter exposed the permanent blocker;
-12. leave all release-system, repository-system and production refs untouched.
+1. resolves the exact failed candidate object, fetching only its candidate ref locally if the object is absent;
+2. proves the candidate parent is exact production `P`;
+3. proves latest/install Git blobs, raw bytes and SHA-256 match the frozen failed-candidate identity;
+4. reads those exact candidate runtime bytes;
+5. isolates only the `session` module;
+6. proves Session already has no `require('./recovery')` or `recovery.` runtime caller;
+7. removes exactly one line matching the stale shorthand export `recovery,` from Session and nothing else;
+8. proves the standalone `recovery` compatibility facade remains present;
+9. writes byte-identical `plugins/simcore/latest.js` and `plugins/simcore/install.js`;
+10. enforces a bounded output delta of at most 32 bytes from failed candidate C;
+11. runs Node syntax checks;
+12. runs `scripts/simcore-06406-closure-completion-gate-test.mjs` directly against both generated runtime files, because this exact adapter exposed the permanent blocker;
+13. leaves all release-system, repository-system and production refs untouched.
 
 ## Mutation budget
 
@@ -63,6 +68,18 @@ latest.js == install.js: required
 ```
 
 The new candidate itself will still be materialized from production `P` by the generic candidate controller. The failed candidate is only a frozen byte source/provenance anchor inside FIX02, not a publication authority.
+
+## Validation boundary
+
+The implementation is not accepted merely because the builder file exists. It must pass permanent SimCore PR `Verify` and `Required`, then a fresh PR1 dry must execute this builder through the generic single-file candidate materializer.
+
+The decisive repair proof is therefore:
+
+```text
+FIX02 permanent PR CI PASS
++ intent-04 PR1 dry PASS
++ materialized candidate full gates PASS
+```
 
 ## Release transaction rule
 

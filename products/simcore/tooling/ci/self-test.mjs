@@ -184,15 +184,17 @@ ok('permanent-release-controller-boundary', () => {
 
 ok('permanent-release-pr-adapter-boundary', () => {
   const workflow=fs.readFileSync('.github/workflows/simcore-release-pr-activation.yml','utf8');
+  const envelope=fs.readFileSync('products/simcore/tooling/release-approval-envelope.mjs','utf8');
   for(const token of [
     'pull_request:',
     'types: [closed]',
     "products/simcore/releases/activations/**",
     'contents: read',
     'actions: write',
+    'products/simcore/tooling/release-approval-envelope.mjs',
+    'SIMCORE_EXACT_APPROVAL_BOUNDARY_PASS',
     'gh workflow run simcore-release-permanent.yml',
     'gh run watch',
-    'RS2_4_RELEASE',
     'SimCore permanent release activation:',
   ]) expect(workflow.includes(token),`release adapter required token missing: ${token}`);
   for(const token of [
@@ -203,7 +205,12 @@ ok('permanent-release-pr-adapter-boundary', () => {
     '--force',
     'force-with-lease',
     '+refs/heads/release-simcore',
-  ]) expect(!workflow.includes(token),`release adapter forbidden token: ${token}`);
+    'PR_TITLE',
+    'SIMCORE_RELEASE_APPROVAL_TITLE_INVALID',
+    'release-approval-resolve.mjs',
+  ]) expect(!workflow.includes(token),`release adapter forbidden/duplicated token: ${token}`);
+  for(const token of ['RS2_4_RELEASE','APPROVAL_ENVELOPE_VALIDATION_ONLY']) expect(envelope.includes(token),`shared approval owner required token missing: ${token}`);
+  for(const token of ['release-publish.mjs','repo-main-write.py','gh workflow run','git push','force-with-lease']) expect(!envelope.includes(token),`shared approval owner gained forbidden authority: ${token}`);
   expect(!/uses:\s+actions\/checkout@(?![0-9a-f]{40}\b)/.test(workflow),'release adapter checkout action is not pinned');
 });
 

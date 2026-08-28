@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "scope": "R_V2_5_APPROVAL_BOUNDARY_CONVERGENCE",
+  "status": "IMPLEMENTED_LOCALLY_CI_PENDING_FIRST_USE_PENDING",
+  "date": "2026-08-28",
+  "name": "Approval Boundary Convergence",
+  "predecessor": {
+    "version": "R2.4",
+    "status": "KEEP_FIRST_GENUINE_RELEASE_OPERATIONALLY_PROVEN",
+    "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_DESIGN.md",
+    "feedback": "docs/SIMCORE_RELEASE_SYSTEM_V2_4_V06411_OPERATIONAL_FEEDBACK_2026-08-28.md"
+  },
+  "design": "docs/SIMCORE_RELEASE_SYSTEM_V2_5_APPROVAL_BOUNDARY_CONVERGENCE_DESIGN.md",
+  "worksheet": "docs/SIMCORE_RELEASE_SYSTEM_V2_5_IMPLEMENTATION_WORKSHEET_2026-08-28.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_5_IMPLEMENTATION_EVIDENCE_2026-08-28.md",
+  "systemDisposition": "STABILIZE",
+  "objective": {
+    "preserveR24": true,
+    "preserveR21DelegatedOperator": true,
+    "preserveRs24PermanentPublisher": true,
+    "sharedApprovalSemanticOwners": 1,
+    "operatorSelectedApprovalOutputPaths": 0,
+    "prTitleAuthorizationFacts": 0,
+    "steadyStatePrsToLivePending": 2,
+    "steadyStatePrsThroughTerminalClosure": 3,
+    "userManualPreLiveGithubActions": 0,
+    "newPublisher": 0,
+    "newCleanPathPr": 0,
+    "newRequiredJob": 0,
+    "newPolling": 0,
+    "runtimeMutation": "NONE",
+    "releaseSimcoreMutation": "NONE"
+  },
+  "units": [
+    {
+      "id": "R2_5_A_SHARED_APPROVAL_ENVELOPE_VALIDATOR",
+      "classification": "FIX",
+      "status": "IMPLEMENTED_CI_PENDING",
+      "owner": "products/simcore/tooling/release-approval-envelope.mjs"
+    },
+    {
+      "id": "R2_5_B_CANONICAL_PACKAGE_MATERIALIZATION",
+      "classification": "SIMPLIFY",
+      "status": "IMPLEMENTED_CI_PENDING",
+      "owner": "products/simcore/tooling/release-approval-package.mjs"
+    },
+    {
+      "id": "R2_5_C_PR2_ACTIVATION_EQUIVALENT_PREFLIGHT",
+      "classification": "FIX",
+      "status": "IMPLEMENTED_CI_PENDING",
+      "gate": "GATE_PR2_PREFLIGHT",
+      "owner": "products/simcore/tooling/ci/pr2-approval-qualification.mjs"
+    },
+    {
+      "id": "R2_5_D_PR_TITLE_PRESENTATION_ONLY",
+      "classification": "SIMPLIFY",
+      "status": "IMPLEMENTED_CI_PENDING"
+    },
+    {
+      "id": "R2_5_E_POSTMERGE_SHARED_VALIDATOR_REUSE",
+      "classification": "STABILIZE",
+      "status": "IMPLEMENTED_CI_PENDING",
+      "owner": ".github/workflows/simcore-release-pr-activation.yml"
+    }
+  ],
+  "localQualification": {
+    "approvalBoundaryConvergenceAssertions": 7,
+    "approvalBoundaryConvergenceResult": "PASS",
+    "releaseApprovalAssertions": 16,
+    "releaseApprovalResult": "PASS",
+    "nodeSyntax": "PASS",
+    "workflowYamlParse": "PASS"
+  },
+  "ciQualification": {
+    "status": "PENDING",
+    "pr": null,
+    "runId": null,
+    "verifyJobId": null,
+    "requiredJobId": null,
+    "qualifiedHead": null
+  },
+  "firstUseProof": {
+    "status": "PENDING_NEXT_GENUINE_SIMCORE_RUNTIME_RELEASE",
+    "targetPrsToLivePending": 2,
+    "targetApprovalTitlePathRecoveryPrs": 0,
+    "targetUserManualPreLiveGithubActions": 0,
+    "publisherCount": 1
+  },
+  "preservedSafety": {
+    "genericCandidateDurableAuthority": true,
+    "exactApprovalRetained": true,
+    "postmergeActivationRetained": true,
+    "candidateRequiredRetained": true,
+    "singlePublisher": true,
+    "fastForwardOnlyProduction": true,
+    "appendOnlyRecovery": true,
+    "humanLivePassRequired": true,
+    "releaseSimcoreRuntimeAuthority": true,
+    "mainDesignEvidenceAdminAuthority": true
+  },
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

@@ -48,9 +48,12 @@ function scopePaths(scope) {
 function hasCandidateRequest(scope) {
   return scopePaths(scope).some((p) => /^products\/simcore\/releases\/candidate-requests\/[^/]+\.json$/.test(String(p)));
 }
+function hasApprovalAuthorization(scope) {
+  return scopePaths(scope).some((p) => /^products\/simcore\/releases\/approvals\/[^/]+\.json$/.test(String(p)));
+}
 
 function plannedGates(profile, scope) {
-  const ids = ['GATE_CI_SELF','GATE_PR1_DRY','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
+  const ids = ['GATE_CI_SELF','GATE_PR1_DRY','GATE_PR2_PREFLIGHT','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
   const plan = Object.fromEntries(ids.map((id) => [id, false]));
   if (['MAIN_HEALTH','CANDIDATE_SHADOW','CANDIDATE_REQUIRED'].includes(profile)) {
     for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT']) plan[id] = true;
@@ -65,6 +68,7 @@ function plannedGates(profile, scope) {
   if (labels.has('SHARED_MAIN_COORDINATION')) for (const id of ['GATE_STATIC','GATE_COORDINATION']) plan[id] = true;
   if (labels.has('LEGACY_VERIFICATION')) for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_LEGACY_COMPAT']) plan[id] = true;
   if (hasCandidateRequest(scope)) plan.GATE_PR1_DRY = true;
+  if (hasApprovalAuthorization(scope)) plan.GATE_PR2_PREFLIGHT = true;
   return plan;
 }
 
@@ -99,6 +103,20 @@ function pr1DryCheck(args, productionCommit) {
   ], 360000);
 }
 
+function pr2ApprovalCheck(args, productionCommit) {
+  if (!args['pr-base-commit'] || !args['pr-head-commit']) {
+    return { status: 2, signal: null, error: null, stdout: '', stderr: 'PR2_APPROVAL_PR_IDENTITY_MISSING' };
+  }
+  return run(process.execPath, [
+    'products/simcore/tooling/ci/pr2-approval-qualification.mjs',
+    '--root', '.',
+    '--base-commit', args['pr-base-commit'],
+    '--head-commit', args['pr-head-commit'],
+    '--production-commit', productionCommit,
+    '--report', '.simcore-ci/pr2-approval-qualification.json',
+  ], 120000);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.profile === 'CANDIDATE_REQUIRED' && !CANDIDATE_REQUIRED_AUTHORITIES.has(args['candidate-required-authority'])) {
@@ -130,6 +148,10 @@ function main() {
   if (plan.GATE_PR1_DRY) {
     const r = pr1DryCheck(args, identity.resolvedCommit);
     setGate('GATE_PR1_DRY', resultClass(r, 'PR1_DRY_QUALIFICATION_FAIL', 'PR1_DRY_QUALIFICATION_ERROR'), r);
+  }
+  if (plan.GATE_PR2_PREFLIGHT) {
+    const r = pr2ApprovalCheck(args, identity.resolvedCommit);
+    setGate('GATE_PR2_PREFLIGHT', resultClass(r, 'PR2_APPROVAL_PREFLIGHT_FAIL', 'PR2_APPROVAL_PREFLIGHT_ERROR'), r);
   }
   if (plan.GATE_STATIC) {
     let classification;

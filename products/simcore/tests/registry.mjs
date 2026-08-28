@@ -17,7 +17,8 @@ export const registry = Object.freeze([
   { id: 'release-spec-contract', module: './suites/release-spec-contract.test.mjs', fixtureDir: 'release-spec-contract', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'closure-integrity', module: './suites/closure-integrity.test.mjs', fixtureDir: 'closure-integrity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'stability-seal', module: './suites/stability-seal.test.mjs', fixtureDir: 'stability-seal', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'release-approval', module: './suites/release-approval.test.mjs', fixtureDir: 'release-approval', coverage: 'EXECUTABLE', required: true, goldenGate: true }
+  { id: 'release-approval', module: './suites/release-approval.test.mjs', fixtureDir: 'release-approval', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'approval-boundary-convergence', module: './suites/approval-boundary-convergence.test.mjs', fixtureDir: 'approval-boundary-convergence', coverage: 'EXECUTABLE', required: true, goldenGate: true }
 ]);
 
 export const packAliases = Object.freeze({

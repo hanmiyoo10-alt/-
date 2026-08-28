@@ -57,7 +57,7 @@ async function withBridge(options, task) {
     const call = bridge.ledger().find((row) => row.type === 'start');
     assert.equal(call.launcher, 'npx');
     assert.ok(!call.rawArgs.includes('--prefer-offline'));
-    assert.deepEqual(call.rawArgs.slice(0, 2), ['--yes','@llmgateway/cli@1.9.0']);
+    assert.deepEqual(call.rawArgs.slice(0, 2), ['--yes','@llmgateway/cli@1.10.0']);
   });
 
   console.log('usage-dashboard CLI launcher behavior: OK · actual Engine process preserves managed/direct/npx authority and rollback');

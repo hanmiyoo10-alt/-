@@ -58,7 +58,7 @@ async function startBridge(options = {}) {
 
   if (options.managed === true) {
     const cliRoot = path.join(home, '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
-    const versionRoot = path.join(cliRoot, '1.9.0');
+    const versionRoot = path.join(cliRoot, '1.10.0');
     const entry = options.managedEntryOutside === true
       ? path.join(fixtureRoot, 'fixture-managed-outside.cjs')
       : path.join(versionRoot, 'fixture-managed.cjs');
@@ -72,12 +72,12 @@ async function startBridge(options = {}) {
       format:1,
       state:'ready',
       package:'@llmgateway/cli',
-      version:'1.9.0',
+      version:'1.10.0',
       entry,
     }));
     fs.writeFileSync(path.join(cliRoot, 'managed-cli-state.json'), JSON.stringify({
       state:'ready',
-      version:'1.9.0',
+      version:'1.10.0',
       provisioning:'ok',
     }));
   }

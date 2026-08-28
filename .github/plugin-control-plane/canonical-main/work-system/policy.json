@@ -66,6 +66,40 @@
     "allowHistoricalSynchronizationSha": true,
     "historicalSynchronizationShaMustBeLabeled": true
   },
+  "readRouting": {
+    "version": 1,
+    "baseReads": ["direct-main", "issue-485"],
+    "intents": {
+      "STATUS_SESSION": {
+        "add": [],
+        "stopAfterReads": true
+      },
+      "EXECUTION": {
+        "add": ["issue-465", "active-packet"],
+        "requiresPacketBootstrapBeforeMutation": true
+      },
+      "MEMORY_CONTEXT": {
+        "add": ["issue-462"]
+      },
+      "IDEA_DESIGN_CONTEXT": {
+        "add": ["issue-464"]
+      },
+      "AUDIT_CONTEXT": {
+        "add": ["issue-293"]
+      },
+      "DESIGN_AUTHORITY_CONTEXT": {
+        "add": ["relevant-design-authority"]
+      }
+    },
+    "rules": {
+      "routineDurableScan": false,
+      "mainOpsMismatchDisposition": "SETTLING_OR_STALE",
+      "greenByAbsence": false,
+      "readPlanGrantsMutationAuthority": false,
+      "stopAfterBaseReadsWhenNoAdditionalIntent": true,
+      "noTimestampRefreshForReadOnlyOrientation": true
+    }
+  },
   "parallelism": {
     "requireDisjointWriteScopes": true,
     "oneActiveOwnerPerPacket": true,

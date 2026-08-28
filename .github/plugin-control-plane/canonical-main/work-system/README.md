@@ -149,6 +149,25 @@ The repository shared interaction contract at `.github/plugin-control-plane/cano
 
 This fast path ends as soon as repository work is requested. Execution still follows the packet bootstrap below, including repository common rules, the shared interaction contract, the packet itself, and every packet-named project/domain authority. The two-read protocol never authorizes a write, merge, release, protection change, or project/runtime action.
 
+## Intent-aware read routing
+
+The machine-readable routing contract lives in `work-system/policy.json` under `readRouting`. It is a deterministic read plan, not a new truth owner.
+
+Every route starts with the same ordered base reads: `direct-main`, then `issue-485`.
+
+- `STATUS_SESSION` adds nothing. Its exact route is only `direct-main + issue-485`, and when no additional intent exists the reader stops after those two reads.
+- `EXECUTION` adds only `issue-465 + active-packet`, then escalates to the existing worker/packet bootstrap before any mutation.
+- `MEMORY_CONTEXT` adds only `issue-462`.
+- `IDEA_DESIGN_CONTEXT` adds only `issue-464` when idea/design identity, lifecycle, overlap, or priority is actually needed.
+- `AUDIT_CONTEXT` adds only `issue-293`.
+- `DESIGN_AUTHORITY_CONTEXT` adds only the relevant design authority named by the question or active packet; it does not imply a scan of all durable surfaces.
+
+When more than one intent is genuinely present, combine the base reads with only the additions for those intents using a stable union. Never add unrelated durable surfaces “just in case.” Routine orientation MUST NOT scan `#462`, `#464`, and `#293` by default.
+
+If direct current `main` and #485 disagree, the routing disposition is `SETTLING_OR_STALE`; missing agreement never becomes green-by-absence. A read plan never grants write, merge, release, production, or protection authority.
+
+For a pure `STATUS_SESSION`, unchanged evidence is a read-only no-op: do not rewrite #465 or durable surfaces merely to refresh timestamps. Repository execution still follows the full packet bootstrap and all packet-named authorities.
+
 ## Worker / chat bootstrap
 
 Before acting on a packet, a worker or chat must:

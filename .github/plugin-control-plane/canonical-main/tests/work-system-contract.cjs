@@ -68,6 +68,41 @@ assert.equal(policy.queueProjection.duplicateNativeProtectionState, false);
 assert.equal(policy.queueProjection.allowHistoricalSynchronizationSha, true);
 assert.equal(policy.queueProjection.historicalSynchronizationShaMustBeLabeled, true);
 
+assert.equal(policy.readRouting.version, 1);
+assert.deepEqual(policy.readRouting.baseReads, ['direct-main', 'issue-485']);
+assert.deepEqual(policy.readRouting.intents.STATUS_SESSION, {add: [], stopAfterReads: true});
+assert.deepEqual(policy.readRouting.intents.EXECUTION, {
+  add: ['issue-465', 'active-packet'],
+  requiresPacketBootstrapBeforeMutation: true,
+});
+assert.deepEqual(policy.readRouting.intents.MEMORY_CONTEXT.add, ['issue-462']);
+assert.deepEqual(policy.readRouting.intents.IDEA_DESIGN_CONTEXT.add, ['issue-464']);
+assert.deepEqual(policy.readRouting.intents.AUDIT_CONTEXT.add, ['issue-293']);
+assert.deepEqual(policy.readRouting.intents.DESIGN_AUTHORITY_CONTEXT.add, ['relevant-design-authority']);
+assert.deepEqual(policy.readRouting.rules, {
+  routineDurableScan: false,
+  mainOpsMismatchDisposition: 'SETTLING_OR_STALE',
+  greenByAbsence: false,
+  readPlanGrantsMutationAuthority: false,
+  stopAfterBaseReadsWhenNoAdditionalIntent: true,
+  noTimestampRefreshForReadOnlyOrientation: true,
+});
+const routeFor = (...names) => [...new Set([
+  ...policy.readRouting.baseReads,
+  ...names.flatMap((name) => policy.readRouting.intents[name].add),
+])];
+assert.deepEqual(routeFor('STATUS_SESSION'), ['direct-main', 'issue-485']);
+assert.deepEqual(routeFor('EXECUTION'), ['direct-main', 'issue-485', 'issue-465', 'active-packet']);
+assert.deepEqual(routeFor('MEMORY_CONTEXT'), ['direct-main', 'issue-485', 'issue-462']);
+assert.deepEqual(routeFor('IDEA_DESIGN_CONTEXT'), ['direct-main', 'issue-485', 'issue-464']);
+assert.deepEqual(routeFor('AUDIT_CONTEXT'), ['direct-main', 'issue-485', 'issue-293']);
+assert.deepEqual(routeFor('DESIGN_AUTHORITY_CONTEXT'), ['direct-main', 'issue-485', 'relevant-design-authority']);
+assert.deepEqual(routeFor('MEMORY_CONTEXT', 'AUDIT_CONTEXT'), ['direct-main', 'issue-485', 'issue-462', 'issue-293']);
+for (const durable of ['issue-462', 'issue-464', 'issue-293']) {
+  assert.equal(routeFor('STATUS_SESSION').includes(durable), false);
+  assert.equal(routeFor('EXECUTION').includes(durable), false);
+}
+
 for (const marker of Object.values(policy.markers)) {
   assert.ok(readme.includes(marker) || template.includes(marker));
 }
@@ -120,6 +155,18 @@ assert.match(readme, /read `#293` only when raw audit or conversation provenance
 assert.match(readme, /direct current `main` does not match the `MAIN` SHA rendered by `#485`/);
 assert.match(readme, /This fast path ends as soon as repository work is requested/);
 assert.match(readme, /The two-read protocol never authorizes a write, merge, release, protection change, or project\/runtime action/);
+assert.match(readme, /## Intent-aware read routing/);
+assert.match(readme, /`STATUS_SESSION` adds nothing/);
+assert.match(readme, /`EXECUTION` adds only `issue-465 \+ active-packet`/);
+assert.match(readme, /`MEMORY_CONTEXT` adds only `issue-462`/);
+assert.match(readme, /`IDEA_DESIGN_CONTEXT` adds only `issue-464`/);
+assert.match(readme, /`AUDIT_CONTEXT` adds only `issue-293`/);
+assert.match(readme, /`DESIGN_AUTHORITY_CONTEXT` adds only the relevant design authority/);
+assert.match(readme, /Routine orientation MUST NOT scan `#462`, `#464`, and `#293` by default/);
+assert.match(readme, /routing disposition is `SETTLING_OR_STALE`/);
+assert.match(readme, /A read plan never grants write, merge, release, production, or protection authority/);
+assert.match(readme, /unchanged evidence is a read-only no-op/);
+assert.match(readme, /do not rewrite #465 or durable surfaces merely to refresh timestamps/);
 assert.ok(workflow.includes('work-system-contract.cjs'));
 
 console.log('work-system-contract: ok');

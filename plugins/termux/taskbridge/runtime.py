@@ -10,6 +10,7 @@ from pathlib import Path
 
 from adapters import chatgpt_notification
 from adapters import shell as shell_adapter
+import chatgpt_calibration
 import notifier
 from store import Store, utc_ts
 
@@ -172,6 +173,14 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
         read_errors = 0
         new_fingerprints = current - baseline
         if new_fingerprints:
+            calibration = chatgpt_calibration.status(store, package)
+            trusted = bool(calibration["trusted"])
+            confidence = "HIGH" if trusted else "MEDIUM"
+            semantic = (
+                "locally_calibrated_response_completion_signal"
+                if trusted
+                else "candidate_only_not_response_completion_proof"
+            )
             observer_path.write_text(
                 json.dumps(
                     {
@@ -179,7 +188,10 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
                         "baseline_count": len(baseline),
                         "observed_count": len(current),
                         "new_count": len(new_fingerprints),
-                        "semantic": "new-notification-candidate-only",
+                        "semantic": semantic,
+                        "calibration_count": calibration["confirmed_count"],
+                        "calibration_threshold": calibration["threshold"],
+                        "calibration_scope": calibration["scope"],
                     },
                     indent=2,
                 )
@@ -191,18 +203,25 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
                 detail={
                     "package": package,
                     "new_count": len(new_fingerprints),
-                    "semantic": "candidate_only_not_response_completion_proof",
+                    "semantic": semantic,
+                    "calibration_count": calibration["confirmed_count"],
+                    "calibration_threshold": calibration["threshold"],
+                    "calibration_scope": calibration["scope"],
                 },
                 local_state="STOPPED",
                 remote_state="ANDROID_NOTIFICATION",
-                signal_confidence="MEDIUM",
+                signal_confidence=confidence,
                 desired_action="NONE",
                 last_seen=utc_ts(),
                 worker_pid=None,
             )
             notifier.notify(
-                "ChatGPT 알림 감지",
-                f"{job_id} · 새 ChatGPT 알림 {len(new_fingerprints)}개",
+                "ChatGPT 응답 완료 감지" if trusted else "ChatGPT 알림 감지",
+                (
+                    f"{job_id} · 로컬 검증 {calibration['confirmed_count']}/{calibration['threshold']}"
+                    if trusted
+                    else f"{job_id} · 새 ChatGPT 알림 {len(new_fingerprints)}개"
+                ),
                 notification_id=f"taskbridge-{job_id}",
             )
             return 0

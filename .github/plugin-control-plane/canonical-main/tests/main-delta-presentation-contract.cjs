@@ -13,6 +13,7 @@ const {
   renderMainDeltaMarkdown,
   summarizeCommitNoise,
 } = require('../main-delta-presentation.cjs');
+const {isRepositoryNextAction} = require('../domains/next-action.cjs');
 
 function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -66,7 +67,8 @@ try {
   const routineOnly = buildMainDeltaPresentation({ base, head: routineHead, cwd });
   assert.equal(routineOnly.riskLevel, 'LOW');
   assert.equal(routineOnly.actionRequired, false);
-  assert.equal(routineOnly.actionCode, 'NO_IMMEDIATE_ACTION');
+  assert.equal(routineOnly.actionCode, 'NONE');
+  assert.equal(isRepositoryNextAction(routineOnly.actionCode), true);
   assert.equal(routineOnly.commitCount, 1);
   assert.equal(routineOnly.meaningfulCommitCount, 0);
   assert.equal(routineOnly.routineGeneratedDocCommitCount, 1);
@@ -82,7 +84,7 @@ try {
   assert.equal(docsOnly.state, 'OK');
   assert.equal(docsOnly.riskLevel, 'LOW');
   assert.equal(docsOnly.actionRequired, false);
-  assert.equal(docsOnly.actionCode, 'NO_IMMEDIATE_ACTION');
+  assert.equal(docsOnly.actionCode, 'NONE');
   assert.equal(docsOnly.meaningfulCommitCount, 1);
   assert.equal(docsOnly.routineGeneratedDocCommitCount, 1);
   assert.equal(docsOnly.claimsCurrentHealth, false);
@@ -98,14 +100,16 @@ try {
   const product = buildMainDeltaPresentation({ base, head: productHead, cwd });
   assert.equal(product.riskLevel, 'MEDIUM');
   assert.equal(product.actionRequired, true);
-  assert.equal(product.actionCode, 'REVIEW_PRODUCT_OR_RUNTIME_CHANGE');
+  assert.equal(product.actionCode, 'REVIEW_CHANGED_PRODUCT_RUNTIME_PATHS');
+  assert.equal(isRepositoryNextAction(product.actionCode), true);
   assert(product.riskDrivers.includes('plugins/example/index.js'));
   assert.equal(product.routineGeneratedDocCommitCount, 1, 'routine docs must not erase a later product action');
 
   const governance = buildMainDeltaPresentation({ base, head: governanceHead, cwd });
   assert.equal(governance.riskLevel, 'HIGH');
   assert.equal(governance.actionRequired, true);
-  assert.equal(governance.actionCode, 'REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE');
+  assert.equal(governance.actionCode, 'REVIEW_CHANGED_GOVERNANCE_PATHS');
+  assert.equal(isRepositoryNextAction(governance.actionCode), true);
   assert(governance.riskDrivers.includes('.github/workflows/example.yml'));
   assert.equal(governance.commitCount, 4);
   assert.equal(governance.meaningfulCommitCount, 3);
@@ -117,7 +121,7 @@ try {
   assert.match(markdown, /Last-Seen Main Delta Brief/);
   assert.match(markdown, /4 total commit\(s\) \(3 meaningful \+ 1 routine generated-doc\)/);
   assert.match(markdown, /Risk: \*\*HIGH\*\*/);
-  assert.match(markdown, /REVIEW_GOVERNANCE_OR_AUTOMATION_CHANGE/);
+  assert.match(markdown, /REVIEW_CHANGED_GOVERNANCE_PATHS/);
   assert.match(markdown, /Current health: not evaluated by U-02/);
   assert.match(markdown, /READY_AFTER_USER_VISIBLE_DELIVERY/);
   assert.match(markdown, /routine generated-documentation promotion commit\(s\) compacted/);
@@ -131,8 +135,14 @@ try {
   assert.equal(empty.fileCount, 0);
   assert.equal(empty.riskLevel, 'NONE');
   assert.equal(empty.actionRequired, false);
-  assert.equal(empty.actionCode, 'NO_ACTION_REQUIRED');
+  assert.equal(empty.actionCode, 'NONE');
+  assert.equal(isRepositoryNextAction(empty.actionCode), true);
   assert.deepEqual(empty.surfaces, []);
+
+  for (const presentation of [routineOnly, docsOnly, product, governance, empty]) {
+    assert.equal(typeof presentation.actionCode, 'string');
+    assert.equal(isRepositoryNextAction(presentation.actionCode), true, `delta action must be repository-defined: ${presentation.actionCode}`);
+  }
 
   assert.throws(
     () => buildMainDeltaPresentation({ base: governanceHead, head: base, cwd }),

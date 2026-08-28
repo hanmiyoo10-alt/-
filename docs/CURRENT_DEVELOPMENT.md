@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.64.11`
-- Release: `Bounded Telemetry Capsule Compaction`
+- Version: `0.65.0`
+- Release: `M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence`
 - Release branch: `release-simcore`
-- Release commit: `7765ad75359f8d9736a7dea65141e4e45b713c10`
-- Release blob: `cb2fe57da379f9b552f05d0f33eae9cffe498e52`
+- Release commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
+- Release blob: `1b38e2b2874f2581edae8f1080edc39558febefa`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -33,10 +33,10 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
 ## Current Release Live Gate
 
-- Release transaction: `simcore-v0.64.11-new-01`
-- Production commit: `7765ad75359f8d9736a7dea65141e4e45b713c10`
+- Release transaction: `simcore-v0.65.0-new-05`
+- Production commit: `c6659296c68b4322d0ed43f7d8a3339e57f1cbf1`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT`
+- Current priority / live gate: `06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT`
 - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
 This block is machine-managed by `release-state-converge` from immutable publication evidence.

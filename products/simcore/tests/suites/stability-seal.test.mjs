@@ -164,7 +164,7 @@ export async function runSuite() {
 
   const policyDoc = fs.readFileSync('docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_POLICY.md', 'utf8');
   for (const token of [
-    'LIVE_PENDING is not a terminal work-item state',
+    '`LIVE_PENDING` is not a terminal work-item state',
     'HUMAN_EVIDENCE accepted',
     'terminal closure PR / PR3 merged',
     'Repository labels are convenience metadata only',

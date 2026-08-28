@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.65.0-intent-01",
+  "releaseId": "simcore-v0.65.0-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.65.0",
+  "releaseName": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "builderPath": "products/simcore/tooling/build-06500-m2-3-edit-reconcile-identity-convergence.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "06500_M2_3_EDIT_RECONCILE_OWNERSHIP_EXTRACTION",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06500_COMBINED_IDENTITY_M2_3_RELEASE_DECISION_2026-08-28.md",
+    "docs/SIMCORE_06500_IMPLEMENTATION_ACTIVATION_OWNERSHIP_SCOPE_2026-08-28.md",
+    "docs/SIMCORE_06500_M2_3_IDENTITY_CONVERGENCE_IMPLEMENTATION_EVIDENCE.md"
+  ]
+}

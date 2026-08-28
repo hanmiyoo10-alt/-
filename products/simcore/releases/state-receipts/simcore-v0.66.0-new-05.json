@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.66.0-new-05",
+  "publisherRunId": "33206537749",
+  "productionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "previousProductionCommit": "c6659296c68b4322d0ed43f7d8a3339e57f1cbf1",
+  "productionBlob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
+  "liveScenarioId": "06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT",
+  "validationStatus": "PENDING_REAL_LONG_CHAT",
+  "lifecycleState": "REAL_RELEASE_LIVE_PENDING",
+  "releaseRecordPath": "products/simcore/releases/records/simcore-v0.66.0-new-05.json",
+  "productionMutation": "ALREADY_PUBLISHED_UPSTREAM",
+  "releaseAuthority": "RS2_4_PERMANENT",
+  "result": "PASS"
+}

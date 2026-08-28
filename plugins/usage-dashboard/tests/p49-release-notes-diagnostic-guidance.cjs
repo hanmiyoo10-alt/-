@@ -43,6 +43,7 @@ for (const item of [...spec.highlights, ...spec.diagnosticHints]) {
   assert.ok(core.includes(JSON.stringify(item)), `P49 generated release metadata missing spec item: ${item}`);
 }
 
+assert.ok(context.startsWith('\n  function settingsHtml() {'), 'P49 dashboard/context module marker must remain first');
 assert.ok(context.includes('function releaseNotesPanelHtml()'), 'P49 release notes HTML helper missing');
 assert.ok(context.includes('function releaseDiagnosticGuideText()'), 'P49 diagnostic guide text helper missing');
 for (const marker of [
@@ -52,6 +53,7 @@ for (const marker of [
   '문제/관찰 한 줄: [직접 작성]',
   '재현 행동: [직접 작성]',
   'Runtime Diagnostics > 전체 Diagnostics 복사를 함께 첨부',
+  'data-release-guide="${esc(releaseDiagnosticGuideText())}"',
 ]) assert.ok(context.includes(marker), `P49 guidance marker missing: ${marker}`);
 
 for (const marker of [
@@ -74,8 +76,9 @@ for (const marker of [
   "button.setAttribute('aria-expanded', expanded ? 'false' : 'true')",
   'panel.hidden = expanded',
   'navigator?.clipboard?.writeText',
-  'releaseDiagnosticGuideText()',
+  "button.getAttribute('data-release-guide')",
 ]) assert.ok(handlers.includes(marker), `P49 handler contract missing: ${marker}`);
+assert.equal(handlers.includes('releaseDiagnosticGuideText()'), false, 'P49 handler must consume static DOM handoff rather than owning release metadata composition');
 
 for (const forbidden of [
   'persist(', 'enqueueRefresh(', 'scheduleRefresh(', 'schedulePanelRender(', 'store.setItem(', 'store.removeItem(',
@@ -100,4 +103,4 @@ const suite = discoverTests();
 assert.ok(suite.regressions.includes('p48-exact-final-http-status.cjs'), 'P49 paired release must retain P48');
 assert.ok(suite.regressions.includes('p49-release-notes-diagnostic-guidance.cjs'), 'P49 registry must include P49');
 
-console.log('P49 Release Notes & Diagnostic Guidance: OK · spec-backed static notes · DOM-only toggle · static clipboard handoff · zero refresh/network/timer/persistence ownership · module count 24');
+console.log('P49 Release Notes & Diagnostic Guidance: OK · spec-backed static notes · module boundary preserved · DOM-only toggle · static DOM clipboard handoff · zero refresh/network/timer/persistence ownership · module count 24');

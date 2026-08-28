@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.64.11-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "ae4dfb0da6bfbb5a3980ae0281bc8dae8fb89025",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.64.11-new-01.json",
+  "releaseSpecSha256": "96a61156ee959b9ebe26b44687f947c17ae2514a86b1a3fed8f3fc2aeef7dab8",
+  "productionCommit": "7765ad75359f8d9736a7dea65141e4e45b713c10",
+  "previousProductionCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+  "productionBlob": "cb2fe57da379f9b552f05d0f33eae9cffe498e52",
+  "version": "0.64.11",
+  "releaseName": "Bounded Telemetry Capsule Compaction",
+  "verificationReportSha256": "abde949707aa94d66e9c3aec2d0b0b970852e4614639278d900233f3073f2d16",
+  "verifierCommit": "fca7747617f8fb2c60ad8e80b2994910b55dd227",
+  "publisherRunId": "33160920813",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

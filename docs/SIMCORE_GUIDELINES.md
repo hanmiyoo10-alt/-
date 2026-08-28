@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.64.10 — Host-Local One-Shot Telemetry Handoff
-Release commit: e43ace74241984f21f69299eff690d0c4f483381
+SimCore v0.64.11 — Bounded Telemetry Capsule Compaction
+Release commit: 7765ad75359f8d9736a7dea65141e4e45b713c10
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

@@ -26,6 +26,7 @@
 - [PocketRisu runit service](server-phone/server-service/README.md)
 - [DB/save optimization](server-phone/db-save-optimization/README.md)
 - [local-usage / bridge](server-phone/local-usage-bridge/README.md)
+- [large-doc backend adapter](server-phone/large-doc-backend-adapter/README.md)
 - [safe updater](server-phone/safe-updater/README.md)
 
 ## 📱 양쪽/공통

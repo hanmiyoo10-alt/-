@@ -690,3 +690,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c8778d868443c7bb99e4c6936183a74dd220ccc3)
 - Event ID: `6843851761f87c347b78800aaafb98f512befc789e7b651dbb84ee27d56941c3`
 <!-- canonical-main-doc-promoted:6843851761f87c347b78800aaafb98f512befc789e7b651dbb84ee27d56941c3 -->
+
+### 2026-08-29 — feat(usage-dashboard): 5.85 LLM Gateway CLI 1.10.0 (#767)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3834c9f339afd43752e1617a7e901d9e8a53260c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3834c9f339afd43752e1617a7e901d9e8a53260c)
+- Event ID: `603fa0217808d475f2b028a30d084001d897ea75407eec4484ace8ad5d743fe6`
+<!-- canonical-main-doc-promoted:603fa0217808d475f2b028a30d084001d897ea75407eec4484ace8ad5d743fe6 -->

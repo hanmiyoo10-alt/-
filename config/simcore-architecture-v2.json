@@ -489,9 +489,9 @@
       "principle": "Fresh is identity evidence, not a body source."
     },
     "edit-reconcile": {
-      "physical": "required",
+      "physical": "planned",
       "layer": "application",
-      "status": "m2_3_physical_pending_live_validation",
+      "status": "m2_3_candidate_physical_pending_publication",
       "owns": "single edit reconciliation decision tree and fallback coordination",
       "excludes": [
         "representation taxonomy ownership",

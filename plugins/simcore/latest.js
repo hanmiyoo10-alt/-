@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.11
+//@version 0.65.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -23,12 +23,21 @@
 // - Reaction: reaction parser, per-family historical maxima, normalization
 // - Structure: validation/integrity/state-commit safety (judge; does not repair)
 // - Representation: bounded CANONICAL/HOST_RAW/FRESH_CHAT identity + provenance classification only; memory-only, no raw bodies or chat writes
+// - Edit Reconcile: previous-assistant reconcile decision tree + manual rebuild fallback coordination; application-only, no host reads
 // - Output Compat: output envelope compatibility/canonicalization + bounded Fresh-confirmation metadata
 // - Bootstrap Migration: history bootstrap + legacy migration/repair coordination
 // - Recovery: M2 compatibility facade preserving the v0.63.55 public recovery API
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.65.0 M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence:
+// - Converges userscript metadata, SIMCORE_RUNTIME_VERSION and HOST_COMPAT_VERSION on one v0.65.0 release identity so bounded Host-local telemetry capsules are stamped with the installed runtime version
+// - Physically extracts the existing previous-assistant edit reconciliation decision tree from the outer runtime shell + Session into one application-level Edit Reconcile module without changing its frozen decisions
+// - Preserves SAME_FAST / SAME_HOST_FAST, snapshot exact carryover, REPRESENTATION_FAST_RECONCILED, USER_EDIT_CANDIDATE and MANUAL_EDIT_REBUILT behavior; Representation remains provenance/taxonomy authority and Runtime Mirror remains transport-only
+// - Adds permanent build assertions for metadata/runtime/host identity equality plus physical ownership/delegate markers; latest.js and install.js remain byte-identical
+// - Keeps telemetry capsule schema/budgets, Host-local mailbox/TTL/location/consume semantics, Deferred Mirror gates, persistent schema, output semantics, provider-cache policy and all unrelated domain owners frozen
+// - Live acceptance is ordered: Stage A proves v0.65.0 Host-local reload continuity first; only then may Stage B claim M2-3 behavioral equivalence
 //
 // v0.64.11 Bounded Telemetry Capsule Compaction:
 // - Repairs real v0.64.10 long-chat capsules of 44,660 / 40,291 / 59,965 chars that exceeded the frozen 16,384-character durable handoff cap before Host-local setItem
@@ -661,7 +670,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.64.10';
+const SIMCORE_RUNTIME_VERSION = '0.65.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4352,6 +4361,335 @@ function renderRuntimePrompt(state) {
 module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts, compileRuntimePrompt, renderRuntimePrompt };
 });
 
+SimCore.define("edit-reconcile", function (require, module, exports) {
+async function reconcileSessionEditedOutput(session, outIndex, content, perfDetail = null, deps = {}) {
+  const { kernel, time, recovery, finalizePreparedOutput, sessionNow, sessionElapsed } = deps;
+
+    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
+    if (detail) {
+      detail.path = 'unknown';
+      detail.fingerprintMs = 0;
+      detail.compatibilityMs = 0;
+      detail.compatibilitySource = '';
+      detail.savedOutLoadMs = 0;
+      detail.sendLoadMs = 0;
+      detail.prepareMs = 0;
+      detail.finalizeMs = 0;
+      detail.clockRepairMs = 0;
+      detail.stateSyncMs = 0;
+      detail.outSerializeMs = 0;
+      detail.outSetMs = 0;
+      detail.outPruneMs = 0;
+      detail.didSave = false;
+    }
+    if (!Number.isInteger(outIndex) || outIndex < 0) {
+      if (detail) detail.path = 'no-output';
+      return { changed: false, reason: 'no-output' };
+    }
+
+    let t = sessionNow();
+    const actualFingerprint = kernel.fingerprintText(content);
+    if (detail) detail.fingerprintMs = sessionElapsed(t);
+
+    // Stable fast paths: PocketRisu may retain either the canonical handler result or the raw
+    // model output passed into the handler. Both are generation-time fingerprints, so neither
+    // representation is a manual edit. A true edit matches neither and falls through to snapshots.
+    if (session.current?.outputFingerprint
+        && session.current.outputFingerprint === actualFingerprint
+        && session.trustedOutputFingerprint === actualFingerprint) {
+      const airtimeSeeded = session.seedBroadcastAirtimeFromVisible(content);
+      const narrativeSeeded = session.seedNarrativeTimestampFromVisible(content);
+      const seeded = airtimeSeeded || narrativeSeeded;
+      if (detail) { detail.path = airtimeSeeded ? 'same-fast+airtime-seed' : (narrativeSeeded ? 'same-fast+narrative-seed' : 'same-fast'); detail.compatibilitySource = 'canonical'; }
+      return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-fast+airtime-seed' : 'same-fast+narrative-seed') : 'same-fast' };
+    }
+    if (session.current?.hostOutputFingerprint
+        && session.current.hostOutputFingerprint === actualFingerprint
+        && session.trustedHostOutputFingerprint === actualFingerprint) {
+      const airtimeSeeded = session.seedBroadcastAirtimeFromVisible(content);
+      const narrativeSeeded = session.seedNarrativeTimestampFromVisible(content);
+      const seeded = airtimeSeeded || narrativeSeeded;
+      if (detail) { detail.path = airtimeSeeded ? 'same-host-fast+airtime-seed' : (narrativeSeeded ? 'same-host-fast+narrative-seed' : 'same-host-fast'); detail.compatibilitySource = 'host-raw'; }
+      return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-host-fast+airtime-seed' : 'same-host-fast+narrative-seed') : 'same-host-fast' };
+    }
+
+    t = sessionNow();
+    const savedOut = await session.store.load('out', outIndex);
+    if (detail) detail.savedOutLoadMs = sessionElapsed(t);
+    if (!savedOut) {
+      if (detail) detail.path = 'no-snapshot';
+      return { changed: false, reason: 'no-snapshot' };
+    }
+
+    // Reload-safe direct match against either representation already persisted by v0.62.9+.
+    // Keep legacy clock/state migration semantics intact: only skip the old recovery branch when
+    // this snapshot is already on the current repaired state contract.
+    const savedFastSafe = Number(savedOut.stateVersion || 0) >= kernel.STATE_VERSION
+      && Number(savedOut.clockRepairVersion || 0) >= time.CLOCK_REPAIR_VERSION;
+    if (savedFastSafe && (savedOut.outputFingerprint === actualFingerprint || savedOut.hostOutputFingerprint === actualFingerprint)) {
+      t = sessionNow();
+      const same = kernel.reconcileState(savedOut);
+      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      session.current = same;
+      session.currentOutputIndex = outIndex;
+      session.trustedOutputFingerprint = same.outputFingerprint || null;
+      session.trustedHostOutputFingerprint = same.hostOutputFingerprint || null;
+      session.loadedFromLegacySnapshot = false;
+      const airtimeSeeded = session.seedBroadcastAirtimeFromVisible(content);
+      const narrativeSeeded = session.seedNarrativeTimestampFromVisible(content);
+      const hostMatch = savedOut.hostOutputFingerprint === actualFingerprint;
+      if (detail) {
+        detail.path = airtimeSeeded
+          ? (hostMatch ? 'same-host-snapshot+airtime-seed' : 'same-snapshot+airtime-seed')
+          : (narrativeSeeded ? (hostMatch ? 'same-host-snapshot+narrative-seed' : 'same-snapshot+narrative-seed') : (hostMatch ? 'same-host-snapshot' : 'same-snapshot'));
+        detail.compatibilitySource = hostMatch ? 'host-raw' : 'canonical';
+      }
+      return { changed: false, reason: detail?.path || (hostMatch ? 'same-host-snapshot' : 'same-snapshot') };
+    }
+
+    t = sessionNow();
+    const sendForEnvelope = await session.store.load('send', outIndex - 1);
+    if (detail) detail.sendLoadMs = sessionElapsed(t);
+    if (sendForEnvelope?.pending?.active) {
+      t = sessionNow();
+      const prepared = recovery.prepareOutput(content, sendForEnvelope.pending);
+      if (detail) detail.prepareMs += sessionElapsed(t);
+
+      // Legacy migration/compatibility check: deterministically replay the normal finalize step
+      // in memory. If the raw PocketRisu representation resolves to the fingerprint already
+      // committed for this output, it was not a user edit. Do not rewrite snapshots or prune.
+      if (prepared.envelope.resolved && savedOut.outputFingerprint) {
+        t = sessionNow();
+        const compatibilityResult = finalizePreparedOutput(sendForEnvelope, prepared, outIndex);
+        const compatibleFingerprint = kernel.fingerprintText(compatibilityResult.content);
+        if (detail) detail.compatibilityMs += sessionElapsed(t);
+        if (compatibleFingerprint === savedOut.outputFingerprint) {
+          const same = kernel.reconcileState(savedOut);
+          same.hostOutputFingerprint = actualFingerprint;
+          // Preserve legacy clock-repair semantics even though the output itself is proven equivalent.
+          t = sessionNow();
+          const clockRepaired = await recovery.repairLegacyClockState(session.store, outIndex, compatibilityResult.content, same);
+          if (detail) detail.clockRepairMs += sessionElapsed(t);
+          session.current = same;
+          session.currentOutputIndex = outIndex;
+          session.trustedOutputFingerprint = same.outputFingerprint || null;
+          session.trustedHostOutputFingerprint = actualFingerprint;
+          session.loadedFromLegacySnapshot = false;
+          if (detail) {
+            detail.path = clockRepaired ? 'host-compatible-clock-repaired' : 'host-compatible';
+            detail.compatibilitySource = 'replayed-canonical';
+          }
+          return { changed: !!clockRepaired, reason: clockRepaired ? 'host-compatible-clock-repaired' : 'host-compatible' };
+        }
+      }
+
+      if (prepared.envelope.repaired && prepared.envelope.resolved) {
+        t = sessionNow();
+        const repairedResult = finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
+        if (detail) detail.finalizeMs += sessionElapsed(t);
+        t = sessionNow();
+        await recovery.repairLegacyClockState(session.store, outIndex, prepared.content, repairedResult.state);
+        if (detail) detail.clockRepairMs += sessionElapsed(t);
+        t = sessionNow();
+        repairedResult.state.outputFingerprint = kernel.fingerprintText(repairedResult.content);
+        repairedResult.state.hostOutputFingerprint = actualFingerprint;
+        repairedResult.state.envelopeRepairVersion = 1;
+        repairedResult.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
+        if (detail) detail.stateSyncMs += sessionElapsed(t);
+        const saveMetric = {};
+        await session.store.save('out', outIndex, repairedResult.state, detail ? { metric: saveMetric } : {});
+        if (detail) {
+          detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
+          detail.outSetMs += Number(saveMetric.setMs || 0);
+          detail.outPruneMs += Number(saveMetric.pruneMs || 0);
+          detail.didSave = true;
+          detail.path = 'duplicate-envelope-state-repaired';
+        }
+        session.current = repairedResult.state;
+        session.currentOutputIndex = outIndex;
+        session.trustedOutputFingerprint = repairedResult.state.outputFingerprint || null;
+        session.trustedHostOutputFingerprint = actualFingerprint;
+        session.loadedFromLegacySnapshot = false;
+        return { changed: true, reason: 'duplicate-envelope-state-repaired', mode: repairedResult.mode, revision: repairedResult.state.manualEditRevision };
+      }
+    }
+
+    if (!savedOut.outputFingerprint) {
+      t = sessionNow();
+      const baseline = kernel.reconcileState(savedOut);
+      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      t = sessionNow();
+      const repaired = await recovery.repairLegacyClockState(session.store, outIndex, content, baseline);
+      if (detail) detail.clockRepairMs += sessionElapsed(t);
+      t = sessionNow();
+      const clockChanged = time.applyWorldYear(baseline, time.timestampYear(kernel.stripControlTags(content)));
+      const narrativeClockChanged = time.syncNarrativeTimestamp(baseline, kernel.stripControlTags(content), baseline.lastMode);
+      baseline.outputFingerprint = actualFingerprint;
+      baseline.hostOutputFingerprint = actualFingerprint;
+      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      const saveMetric = {};
+      await session.store.save('out', outIndex, baseline, detail ? { metric: saveMetric } : {});
+      if (detail) {
+        detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
+        detail.outSetMs += Number(saveMetric.setMs || 0);
+        detail.outPruneMs += Number(saveMetric.pruneMs || 0);
+        detail.didSave = true;
+        detail.path = repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'baseline-created');
+      }
+      session.current = baseline;
+      session.currentOutputIndex = outIndex;
+      session.trustedOutputFingerprint = baseline.outputFingerprint || null;
+      session.trustedHostOutputFingerprint = baseline.hostOutputFingerprint || null;
+      session.loadedFromLegacySnapshot = false;
+      return { changed: repaired || clockChanged || narrativeClockChanged, reason: repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'baseline-created') };
+    }
+
+    if (savedOut.outputFingerprint === actualFingerprint) {
+      t = sessionNow();
+      const same = kernel.reconcileState(savedOut);
+      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      t = sessionNow();
+      const repaired = await recovery.repairLegacyClockState(session.store, outIndex, content, same);
+      if (detail) detail.clockRepairMs += sessionElapsed(t);
+      t = sessionNow();
+      const clockChanged = time.applyWorldYear(same, time.timestampYear(kernel.stripControlTags(content)));
+      const narrativeClockChanged = time.syncNarrativeTimestamp(same, kernel.stripControlTags(content), same.lastMode);
+      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      if (repaired || clockChanged || narrativeClockChanged) {
+        const saveMetric = {};
+        await session.store.save('out', outIndex, same, detail ? { metric: saveMetric } : {});
+        if (detail) {
+          detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
+          detail.outSetMs += Number(saveMetric.setMs || 0);
+          detail.outPruneMs += Number(saveMetric.pruneMs || 0);
+          detail.didSave = true;
+        }
+      }
+      if (detail) detail.path = repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'same');
+      session.current = same;
+      session.currentOutputIndex = outIndex;
+      session.trustedOutputFingerprint = same.outputFingerprint || null;
+      session.trustedHostOutputFingerprint = same.hostOutputFingerprint || null;
+      session.loadedFromLegacySnapshot = false;
+      return { changed: repaired || clockChanged || narrativeClockChanged, reason: repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'same') };
+    }
+
+    if (!sendForEnvelope) {
+      if (detail) detail.path = 'no-send-snapshot';
+      return { changed: false, reason: 'no-send-snapshot' };
+    }
+    t = sessionNow();
+    const prepared = recovery.prepareOutput(content, sendForEnvelope.pending);
+    if (detail) detail.prepareMs += sessionElapsed(t);
+    t = sessionNow();
+    const result = finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
+    if (detail) detail.finalizeMs += sessionElapsed(t);
+    t = sessionNow();
+    await recovery.repairLegacyClockState(session.store, outIndex, result.content, result.state);
+    if (detail) detail.clockRepairMs += sessionElapsed(t);
+    t = sessionNow();
+    result.state.outputFingerprint = kernel.fingerprintText(result.content);
+    result.state.hostOutputFingerprint = actualFingerprint;
+    result.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
+    if (detail) detail.stateSyncMs += sessionElapsed(t);
+    const saveMetric = {};
+    await session.store.save('out', outIndex, result.state, detail ? { metric: saveMetric } : {});
+    if (detail) {
+      detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
+      detail.outSetMs += Number(saveMetric.setMs || 0);
+      detail.outPruneMs += Number(saveMetric.pruneMs || 0);
+      detail.didSave = true;
+      detail.path = 'manual-edit-rebuilt';
+    }
+    session.current = result.state;
+    session.currentOutputIndex = outIndex;
+    session.trustedOutputFingerprint = result.state.outputFingerprint || null;
+    session.trustedHostOutputFingerprint = actualFingerprint;
+    session.loadedFromLegacySnapshot = false;
+    return { changed: true, mode: result.mode || result.state.lastMode, revision: result.state.manualEditRevision };
+  
+}
+
+async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, deps = {}) {
+  const { coreRules, textMessageContent, representationRegistry, representationRules, coreLocationKey, SIMCORE_LOG_PREFIX, reconcileSession } = deps;
+
+    const msgs = chat?.message || [];
+    let lastAssistant = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i]?.role === 'char' || msgs[i]?.role === 'assistant') { lastAssistant = i; break; }
+    }
+    if (lastAssistant < 0) {
+      if (perfDetail) perfDetail.path = 'no-assistant';
+      return;
+    }
+    const visibleContent = textMessageContent(msgs[lastAssistant]);
+    const visibleFingerprint = coreRules.fingerprintText(visibleContent);
+    const priorProvenance = representationRegistry.latest(lastAssistant, coreLocationKey);
+    const relation = representationRules.inspectCarryover(visibleFingerprint, priorProvenance);
+    const { priorCanonical, priorFresh, priorHostRaw, priorMatch, priorRepresentation, currentMatch } = relation;
+    if (perfDetail) {
+      perfDetail.editPriorRepresentation = priorRepresentation;
+      perfDetail.editPriorMatch = priorMatch || 'n/a';
+      perfDetail.editPriorCanonical = priorCanonical || 'n/a';
+      perfDetail.editPriorFresh = priorFresh || 'n/a';
+      perfDetail.editCurrentFingerprint = visibleFingerprint || 'n/a';
+      perfDetail.editCurrentMatch = currentMatch;
+      perfDetail.editDeltaCanonical = relation.deltaCanonical;
+      perfDetail.editDeltaFresh = relation.deltaFresh;
+      perfDetail.editOrigin = 'PENDING';
+      perfDetail.editDeltaShape = 'UNCLASSIFIED';
+    }
+    // v0.63.55: the Deferred Mirror already observed the host-visible previous assistant.
+    // If that exact Fresh representation carries into the next request, it is a proven
+    // representation alias for this slot/location, not a third unknown body. Keep the
+    // canonical state untouched and skip the expensive snapshot/manual-edit rebuild.
+    const representationFastEligible = !!(
+      priorProvenance
+      && priorRepresentation === 'OUTPUT_MISMATCH'
+      && currentMatch === 'FRESH_CHAT'
+      && !!priorCanonical
+      && !!priorFresh
+      && priorCanonical !== priorFresh
+      && visibleFingerprint === priorFresh
+      && Number(cs.currentOutputIndex) === lastAssistant
+      && String(cs.current?.outputFingerprint || '') === priorCanonical
+      && String(cs.trustedOutputFingerprint || '') === priorCanonical
+    );
+    let r;
+    if (representationFastEligible) {
+      if (perfDetail) {
+        perfDetail.path = 'representation-fast-reconciled';
+        perfDetail.compatibilitySource = 'fresh-exact-carryover';
+      }
+      r = {
+        changed: false,
+        reason: 'representation-fast-reconciled',
+        representationFastReconciled: true,
+      };
+    } else {
+      r = await reconcileSession(lastAssistant, visibleContent, perfDetail);
+    }
+    if (perfDetail) {
+      let editOrigin = 'NONE';
+      let deltaShape = relation.deltaShape;
+      if (r.representationFastReconciled) {
+        editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
+      } else if (r.changed) {
+        if (!priorProvenance) editOrigin = 'UNKNOWN';
+        else if (priorRepresentation === 'OUTPUT_MISMATCH' && currentMatch === 'FRESH_CHAT') editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
+        else if (priorRepresentation === 'EXACT') editOrigin = 'USER_EDIT_CANDIDATE';
+        else editOrigin = 'AMBIGUOUS_CHANGE';
+      }
+      perfDetail.editOrigin = editOrigin;
+      perfDetail.editDeltaShape = deltaShape;
+    }
+    if (r.changed) console.log(SIMCORE_LOG_PREFIX + ' manual edit reconciled:', lastAssistant, r.mode, r.revision);
+  
+}
+
+module.exports = { reconcileSessionEditedOutput, reconcileVisiblePreviousAssistant };
+});
+
 SimCore.define("session", function (require, module, exports) {
 const { SnapshotStore } = require('./store');
 const kernel = require('./kernel');
@@ -4362,6 +4700,7 @@ const community = require('./community');
 const reaction = require('./reaction');
 const structure = require('./structure');
 const recovery = require('./recovery');
+const editReconcile = require('./edit-reconcile');
 const recurrence = require('./recurrence');
 const prompt = require('./prompt');
 
@@ -5035,248 +5374,9 @@ class CoreRulesetSession {
   }
 
   async reconcileEditedOutput(outIndex, content, perfDetail = null) {
-    const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
-    if (detail) {
-      detail.path = 'unknown';
-      detail.fingerprintMs = 0;
-      detail.compatibilityMs = 0;
-      detail.compatibilitySource = '';
-      detail.savedOutLoadMs = 0;
-      detail.sendLoadMs = 0;
-      detail.prepareMs = 0;
-      detail.finalizeMs = 0;
-      detail.clockRepairMs = 0;
-      detail.stateSyncMs = 0;
-      detail.outSerializeMs = 0;
-      detail.outSetMs = 0;
-      detail.outPruneMs = 0;
-      detail.didSave = false;
-    }
-    if (!Number.isInteger(outIndex) || outIndex < 0) {
-      if (detail) detail.path = 'no-output';
-      return { changed: false, reason: 'no-output' };
-    }
-
-    let t = sessionNow();
-    const actualFingerprint = kernel.fingerprintText(content);
-    if (detail) detail.fingerprintMs = sessionElapsed(t);
-
-    // Stable fast paths: PocketRisu may retain either the canonical handler result or the raw
-    // model output passed into the handler. Both are generation-time fingerprints, so neither
-    // representation is a manual edit. A true edit matches neither and falls through to snapshots.
-    if (this.current?.outputFingerprint
-        && this.current.outputFingerprint === actualFingerprint
-        && this.trustedOutputFingerprint === actualFingerprint) {
-      const airtimeSeeded = this.seedBroadcastAirtimeFromVisible(content);
-      const narrativeSeeded = this.seedNarrativeTimestampFromVisible(content);
-      const seeded = airtimeSeeded || narrativeSeeded;
-      if (detail) { detail.path = airtimeSeeded ? 'same-fast+airtime-seed' : (narrativeSeeded ? 'same-fast+narrative-seed' : 'same-fast'); detail.compatibilitySource = 'canonical'; }
-      return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-fast+airtime-seed' : 'same-fast+narrative-seed') : 'same-fast' };
-    }
-    if (this.current?.hostOutputFingerprint
-        && this.current.hostOutputFingerprint === actualFingerprint
-        && this.trustedHostOutputFingerprint === actualFingerprint) {
-      const airtimeSeeded = this.seedBroadcastAirtimeFromVisible(content);
-      const narrativeSeeded = this.seedNarrativeTimestampFromVisible(content);
-      const seeded = airtimeSeeded || narrativeSeeded;
-      if (detail) { detail.path = airtimeSeeded ? 'same-host-fast+airtime-seed' : (narrativeSeeded ? 'same-host-fast+narrative-seed' : 'same-host-fast'); detail.compatibilitySource = 'host-raw'; }
-      return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-host-fast+airtime-seed' : 'same-host-fast+narrative-seed') : 'same-host-fast' };
-    }
-
-    t = sessionNow();
-    const savedOut = await this.store.load('out', outIndex);
-    if (detail) detail.savedOutLoadMs = sessionElapsed(t);
-    if (!savedOut) {
-      if (detail) detail.path = 'no-snapshot';
-      return { changed: false, reason: 'no-snapshot' };
-    }
-
-    // Reload-safe direct match against either representation already persisted by v0.62.9+.
-    // Keep legacy clock/state migration semantics intact: only skip the old recovery branch when
-    // this snapshot is already on the current repaired state contract.
-    const savedFastSafe = Number(savedOut.stateVersion || 0) >= kernel.STATE_VERSION
-      && Number(savedOut.clockRepairVersion || 0) >= time.CLOCK_REPAIR_VERSION;
-    if (savedFastSafe && (savedOut.outputFingerprint === actualFingerprint || savedOut.hostOutputFingerprint === actualFingerprint)) {
-      t = sessionNow();
-      const same = kernel.reconcileState(savedOut);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      this.current = same;
-      this.currentOutputIndex = outIndex;
-      this.trustedOutputFingerprint = same.outputFingerprint || null;
-      this.trustedHostOutputFingerprint = same.hostOutputFingerprint || null;
-      this.loadedFromLegacySnapshot = false;
-      const airtimeSeeded = this.seedBroadcastAirtimeFromVisible(content);
-      const narrativeSeeded = this.seedNarrativeTimestampFromVisible(content);
-      const hostMatch = savedOut.hostOutputFingerprint === actualFingerprint;
-      if (detail) {
-        detail.path = airtimeSeeded
-          ? (hostMatch ? 'same-host-snapshot+airtime-seed' : 'same-snapshot+airtime-seed')
-          : (narrativeSeeded ? (hostMatch ? 'same-host-snapshot+narrative-seed' : 'same-snapshot+narrative-seed') : (hostMatch ? 'same-host-snapshot' : 'same-snapshot'));
-        detail.compatibilitySource = hostMatch ? 'host-raw' : 'canonical';
-      }
-      return { changed: false, reason: detail?.path || (hostMatch ? 'same-host-snapshot' : 'same-snapshot') };
-    }
-
-    t = sessionNow();
-    const sendForEnvelope = await this.store.load('send', outIndex - 1);
-    if (detail) detail.sendLoadMs = sessionElapsed(t);
-    if (sendForEnvelope?.pending?.active) {
-      t = sessionNow();
-      const prepared = recovery.prepareOutput(content, sendForEnvelope.pending);
-      if (detail) detail.prepareMs += sessionElapsed(t);
-
-      // Legacy migration/compatibility check: deterministically replay the normal finalize step
-      // in memory. If the raw PocketRisu representation resolves to the fingerprint already
-      // committed for this output, it was not a user edit. Do not rewrite snapshots or prune.
-      if (prepared.envelope.resolved && savedOut.outputFingerprint) {
-        t = sessionNow();
-        const compatibilityResult = finalizePreparedOutput(sendForEnvelope, prepared, outIndex);
-        const compatibleFingerprint = kernel.fingerprintText(compatibilityResult.content);
-        if (detail) detail.compatibilityMs += sessionElapsed(t);
-        if (compatibleFingerprint === savedOut.outputFingerprint) {
-          const same = kernel.reconcileState(savedOut);
-          same.hostOutputFingerprint = actualFingerprint;
-          // Preserve legacy clock-repair semantics even though the output itself is proven equivalent.
-          t = sessionNow();
-          const clockRepaired = await recovery.repairLegacyClockState(this.store, outIndex, compatibilityResult.content, same);
-          if (detail) detail.clockRepairMs += sessionElapsed(t);
-          this.current = same;
-          this.currentOutputIndex = outIndex;
-          this.trustedOutputFingerprint = same.outputFingerprint || null;
-          this.trustedHostOutputFingerprint = actualFingerprint;
-          this.loadedFromLegacySnapshot = false;
-          if (detail) {
-            detail.path = clockRepaired ? 'host-compatible-clock-repaired' : 'host-compatible';
-            detail.compatibilitySource = 'replayed-canonical';
-          }
-          return { changed: !!clockRepaired, reason: clockRepaired ? 'host-compatible-clock-repaired' : 'host-compatible' };
-        }
-      }
-
-      if (prepared.envelope.repaired && prepared.envelope.resolved) {
-        t = sessionNow();
-        const repairedResult = finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
-        if (detail) detail.finalizeMs += sessionElapsed(t);
-        t = sessionNow();
-        await recovery.repairLegacyClockState(this.store, outIndex, prepared.content, repairedResult.state);
-        if (detail) detail.clockRepairMs += sessionElapsed(t);
-        t = sessionNow();
-        repairedResult.state.outputFingerprint = kernel.fingerprintText(repairedResult.content);
-        repairedResult.state.hostOutputFingerprint = actualFingerprint;
-        repairedResult.state.envelopeRepairVersion = 1;
-        repairedResult.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
-        if (detail) detail.stateSyncMs += sessionElapsed(t);
-        const saveMetric = {};
-        await this.store.save('out', outIndex, repairedResult.state, detail ? { metric: saveMetric } : {});
-        if (detail) {
-          detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
-          detail.outSetMs += Number(saveMetric.setMs || 0);
-          detail.outPruneMs += Number(saveMetric.pruneMs || 0);
-          detail.didSave = true;
-          detail.path = 'duplicate-envelope-state-repaired';
-        }
-        this.current = repairedResult.state;
-        this.currentOutputIndex = outIndex;
-        this.trustedOutputFingerprint = repairedResult.state.outputFingerprint || null;
-        this.trustedHostOutputFingerprint = actualFingerprint;
-        this.loadedFromLegacySnapshot = false;
-        return { changed: true, reason: 'duplicate-envelope-state-repaired', mode: repairedResult.mode, revision: repairedResult.state.manualEditRevision };
-      }
-    }
-
-    if (!savedOut.outputFingerprint) {
-      t = sessionNow();
-      const baseline = kernel.reconcileState(savedOut);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      t = sessionNow();
-      const repaired = await recovery.repairLegacyClockState(this.store, outIndex, content, baseline);
-      if (detail) detail.clockRepairMs += sessionElapsed(t);
-      t = sessionNow();
-      const clockChanged = time.applyWorldYear(baseline, time.timestampYear(kernel.stripControlTags(content)));
-      const narrativeClockChanged = time.syncNarrativeTimestamp(baseline, kernel.stripControlTags(content), baseline.lastMode);
-      baseline.outputFingerprint = actualFingerprint;
-      baseline.hostOutputFingerprint = actualFingerprint;
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      const saveMetric = {};
-      await this.store.save('out', outIndex, baseline, detail ? { metric: saveMetric } : {});
-      if (detail) {
-        detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
-        detail.outSetMs += Number(saveMetric.setMs || 0);
-        detail.outPruneMs += Number(saveMetric.pruneMs || 0);
-        detail.didSave = true;
-        detail.path = repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'baseline-created');
-      }
-      this.current = baseline;
-      this.currentOutputIndex = outIndex;
-      this.trustedOutputFingerprint = baseline.outputFingerprint || null;
-      this.trustedHostOutputFingerprint = baseline.hostOutputFingerprint || null;
-      this.loadedFromLegacySnapshot = false;
-      return { changed: repaired || clockChanged || narrativeClockChanged, reason: repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'baseline-created') };
-    }
-
-    if (savedOut.outputFingerprint === actualFingerprint) {
-      t = sessionNow();
-      const same = kernel.reconcileState(savedOut);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      t = sessionNow();
-      const repaired = await recovery.repairLegacyClockState(this.store, outIndex, content, same);
-      if (detail) detail.clockRepairMs += sessionElapsed(t);
-      t = sessionNow();
-      const clockChanged = time.applyWorldYear(same, time.timestampYear(kernel.stripControlTags(content)));
-      const narrativeClockChanged = time.syncNarrativeTimestamp(same, kernel.stripControlTags(content), same.lastMode);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      if (repaired || clockChanged || narrativeClockChanged) {
-        const saveMetric = {};
-        await this.store.save('out', outIndex, same, detail ? { metric: saveMetric } : {});
-        if (detail) {
-          detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
-          detail.outSetMs += Number(saveMetric.setMs || 0);
-          detail.outPruneMs += Number(saveMetric.pruneMs || 0);
-          detail.didSave = true;
-        }
-      }
-      if (detail) detail.path = repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'same');
-      this.current = same;
-      this.currentOutputIndex = outIndex;
-      this.trustedOutputFingerprint = same.outputFingerprint || null;
-      this.trustedHostOutputFingerprint = same.hostOutputFingerprint || null;
-      this.loadedFromLegacySnapshot = false;
-      return { changed: repaired || clockChanged || narrativeClockChanged, reason: repaired ? 'clock-repaired' : ((clockChanged || narrativeClockChanged) ? 'clock-synced' : 'same') };
-    }
-
-    if (!sendForEnvelope) {
-      if (detail) detail.path = 'no-send-snapshot';
-      return { changed: false, reason: 'no-send-snapshot' };
-    }
-    t = sessionNow();
-    const prepared = recovery.prepareOutput(content, sendForEnvelope.pending);
-    if (detail) detail.prepareMs += sessionElapsed(t);
-    t = sessionNow();
-    const result = finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
-    if (detail) detail.finalizeMs += sessionElapsed(t);
-    t = sessionNow();
-    await recovery.repairLegacyClockState(this.store, outIndex, result.content, result.state);
-    if (detail) detail.clockRepairMs += sessionElapsed(t);
-    t = sessionNow();
-    result.state.outputFingerprint = kernel.fingerprintText(result.content);
-    result.state.hostOutputFingerprint = actualFingerprint;
-    result.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
-    if (detail) detail.stateSyncMs += sessionElapsed(t);
-    const saveMetric = {};
-    await this.store.save('out', outIndex, result.state, detail ? { metric: saveMetric } : {});
-    if (detail) {
-      detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
-      detail.outSetMs += Number(saveMetric.setMs || 0);
-      detail.outPruneMs += Number(saveMetric.pruneMs || 0);
-      detail.didSave = true;
-      detail.path = 'manual-edit-rebuilt';
-    }
-    this.current = result.state;
-    this.currentOutputIndex = outIndex;
-    this.trustedOutputFingerprint = result.state.outputFingerprint || null;
-    this.trustedHostOutputFingerprint = actualFingerprint;
-    this.loadedFromLegacySnapshot = false;
-    return { changed: true, mode: result.mode || result.state.lastMode, revision: result.state.manualEditRevision };
+    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail, {
+      kernel, time, recovery, finalizePreparedOutput, sessionNow, sessionElapsed,
+    });
   }
 
   storageDiagnostics() { return this.store.keyScanStats(); }
@@ -6083,7 +6183,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.64.11';
+const HOST_COMPAT_VERSION = '0.65.0';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -7348,6 +7448,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   const runtimeTelemetryRules = SimCore.require('runtime-telemetry');
   const runtimeSessionRules = SimCore.require('runtime-session');
   const representationRules = SimCore.require('representation');
+  const editReconcileRules = SimCore.require('edit-reconcile');
   const runtimeMirrorRules = SimCore.require('runtime-mirror');
   const runtimeHooks = SimCore.require('runtime-hooks');
   const runtimeProbeRules = SimCore.require('runtime-probe');
@@ -7771,77 +7872,11 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   async function reconcileManualEdit(cs, chat, perfDetail = null) {
-    const msgs = chat?.message || [];
-    let lastAssistant = -1;
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i]?.role === 'char' || msgs[i]?.role === 'assistant') { lastAssistant = i; break; }
-    }
-    if (lastAssistant < 0) {
-      if (perfDetail) perfDetail.path = 'no-assistant';
-      return;
-    }
-    const visibleContent = textMessageContent(msgs[lastAssistant]);
-    const visibleFingerprint = coreRules.fingerprintText(visibleContent);
-    const priorProvenance = representationRegistry.latest(lastAssistant, coreLocationKey);
-    const relation = representationRules.inspectCarryover(visibleFingerprint, priorProvenance);
-    const { priorCanonical, priorFresh, priorHostRaw, priorMatch, priorRepresentation, currentMatch } = relation;
-    if (perfDetail) {
-      perfDetail.editPriorRepresentation = priorRepresentation;
-      perfDetail.editPriorMatch = priorMatch || 'n/a';
-      perfDetail.editPriorCanonical = priorCanonical || 'n/a';
-      perfDetail.editPriorFresh = priorFresh || 'n/a';
-      perfDetail.editCurrentFingerprint = visibleFingerprint || 'n/a';
-      perfDetail.editCurrentMatch = currentMatch;
-      perfDetail.editDeltaCanonical = relation.deltaCanonical;
-      perfDetail.editDeltaFresh = relation.deltaFresh;
-      perfDetail.editOrigin = 'PENDING';
-      perfDetail.editDeltaShape = 'UNCLASSIFIED';
-    }
-    // v0.63.55: the Deferred Mirror already observed the host-visible previous assistant.
-    // If that exact Fresh representation carries into the next request, it is a proven
-    // representation alias for this slot/location, not a third unknown body. Keep the
-    // canonical state untouched and skip the expensive snapshot/manual-edit rebuild.
-    const representationFastEligible = !!(
-      priorProvenance
-      && priorRepresentation === 'OUTPUT_MISMATCH'
-      && currentMatch === 'FRESH_CHAT'
-      && !!priorCanonical
-      && !!priorFresh
-      && priorCanonical !== priorFresh
-      && visibleFingerprint === priorFresh
-      && Number(cs.currentOutputIndex) === lastAssistant
-      && String(cs.current?.outputFingerprint || '') === priorCanonical
-      && String(cs.trustedOutputFingerprint || '') === priorCanonical
-    );
-    let r;
-    if (representationFastEligible) {
-      if (perfDetail) {
-        perfDetail.path = 'representation-fast-reconciled';
-        perfDetail.compatibilitySource = 'fresh-exact-carryover';
-      }
-      r = {
-        changed: false,
-        reason: 'representation-fast-reconciled',
-        representationFastReconciled: true,
-      };
-    } else {
-      r = await cs.reconcileEditedOutput(lastAssistant, visibleContent, perfDetail);
-    }
-    if (perfDetail) {
-      let editOrigin = 'NONE';
-      let deltaShape = relation.deltaShape;
-      if (r.representationFastReconciled) {
-        editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
-      } else if (r.changed) {
-        if (!priorProvenance) editOrigin = 'UNKNOWN';
-        else if (priorRepresentation === 'OUTPUT_MISMATCH' && currentMatch === 'FRESH_CHAT') editOrigin = 'REPRESENTATION_DRIFT_CORRELATED';
-        else if (priorRepresentation === 'EXACT') editOrigin = 'USER_EDIT_CANDIDATE';
-        else editOrigin = 'AMBIGUOUS_CHANGE';
-      }
-      perfDetail.editOrigin = editOrigin;
-      perfDetail.editDeltaShape = deltaShape;
-    }
-    if (r.changed) console.log(SIMCORE_LOG_PREFIX + ' manual edit reconciled:', lastAssistant, r.mode, r.revision);
+    return editReconcileRules.reconcileVisiblePreviousAssistant(cs, chat, perfDetail, {
+      coreRules, textMessageContent, representationRegistry, representationRules,
+      coreLocationKey, SIMCORE_LOG_PREFIX,
+      reconcileSession: (outIndex, content, detail) => cs.reconcileEditedOutput(outIndex, content, detail),
+    });
   }
 
   async function prepareCoreRequest(messages, chaIdx, chatIdx, chat, sendIndex, perf = null) {
@@ -8935,19 +8970,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.64.11',
-    name: 'Bounded Telemetry Capsule Compaction',
-    scenario: '06411_BOUNDED_CAPSULE_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT',
+    version: '0.65.0',
+    name: 'M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence',
+    scenario: '06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT',
     summary: Object.freeze([
-      '같은 generation의 정밀 관측은 유지하고 새로고침 handoff만 bounded compact metadata로 분리',
-      'prompt 4KB / topology 6KB / trajectory 2KB component budget과 전체 16KB hard cap을 동시에 유지',
-      'LINE_BOUND / PREFIX_FLOOR 결과는 >= / BOUNDED로 표시해 false exactness를 금지',
-      'COMPACT_V2가 16KB 이하이고 HOST_LOCAL WRITTEN일 때만 새로고침 실험 진행',
+      'Stage A — Runtime Identity Convergence: Version 0.65.0 + COMPACT_V2 + HOST_LOCAL WRITTEN 확인 뒤 같은 탭 새로고침',
+      'Stage A — 첫 post-refresh 자연 요청에서 ADOPTED via host-local 확인 후 자연 요청 1회 더 해 clean continuation 확인',
+      'Stage B — Stage A PASS 뒤에만 SAME_FAST / REPRESENTATION_FAST_RECONCILED / genuine hand-edit MANUAL_EDIT_REBUILT controls 진행',
+      'Stage A blocker가 보이면 Stage B acceptance를 중지하고 현재 진단을 먼저 보존',
     ]),
     recent: Object.freeze([
-      Object.freeze({ version: '0.64.11', name: 'Bounded Telemetry Capsule Compaction', bullets: Object.freeze(['reload handoff export를 bounded compact shape로 분리', '첫 bounded reobserve에서 false cache regression 방지']) }),
+      Object.freeze({ version: '0.65.0', name: 'M2-3 + Runtime Identity Convergence', bullets: Object.freeze(['edit reconcile ownership을 한 application service로 기계적 추출', 'metadata/runtime/host version identity를 0.65.0으로 수렴']) }),
+      Object.freeze({ version: '0.64.11', name: 'Bounded Telemetry Capsule Compaction', bullets: Object.freeze(['reload handoff export를 bounded compact shape로 분리', '전체 16KB hard cap 유지']) }),
       Object.freeze({ version: '0.64.10', name: 'Host-Local One-Shot Telemetry Handoff', bullets: Object.freeze(['sessionStorage 불가 시 Host 로컬 one-shot fallback', 'matching location은 consume-before-adopt']) }),
-      Object.freeze({ version: '0.64.9', name: 'Session Transport Root Resolution', bullets: Object.freeze(['WINDOW / GLOBAL_THIS sessionStorage surface를 분리 진단', '실제 checkpoint/claim root를 표시']) }),
     ]),
   });
 
@@ -8959,15 +8994,13 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <div style="font-weight:800;margin-bottom:6px">📦 업데이트 내역 · v${escapeHtml(card.version)}</div>
 <div style="color:#9fb3d7;margin-bottom:8px">${escapeHtml(card.name)}</div>
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
-<div style="font-weight:700;margin:8px 0 5px">이번 버전 실험</div>
-<div><code>${escapeHtml(card.scenario)}</code></div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>업데이트 뒤 새로고침 없이 자연 요청 1회 후 진단 확인</li><li><b>Telemetry capsule COMPACT_V2 · 16,384 chars 이하 + HOST_LOCAL WRITTEN</b>이면 pre-refresh 진단 전체 복사 후 같은 탭 새로고침</li><li>첫 post-refresh 자연 요청 후 ADOPTED / handoff precision 진단 전체 복사</li><li>재생성/손수정 없이 자연 요청 1회 더 하고 exact same-generation 관측 복귀 여부와 함께 두 번째 post-refresh 진단 전체 복사</li></ol>
+<div style="font-weight:700;margin:8px 0 5px">Stage A — Reload continuity</div>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 요청 1회 후 <b>Version 0.65.0 · COMPACT_V2 · 16,384 chars 이하 · HOST_LOCAL WRITTEN</b> 확인 및 진단 전체 복사</li><li>같은 탭 새로고침 후 첫 자연 요청에서 <b>ADOPTED · via host-local</b> 확인 및 진단 전체 복사</li><li>자연 요청 1회 더 하고 repeated adoption/reset 없이 fresh bounded checkpoint가 다시 쓰이는지 확인</li></ol>
+<div style="font-weight:700;margin:8px 0 5px">Stage B — M2-3 controls</div>
+<ol start="4" style="margin:7px 0 10px 18px;padding:0"><li>normal exact carryover → SAME_FAST · Edit origin NONE</li><li>자연스럽게 가능한 prior OUTPUT_MISMATCH + exact Fresh carryover → REPRESENTATION_FAST_RECONCILED · snapshot UNCHANGED</li><li>genuine hand edit → USER_EDIT_CANDIDATE → MANUAL_EDIT_REBUILT</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>COMPACTION_FAILED / component oversize / HOST_LOCAL UNAVAILABLE·FAILED·OVERSIZE / 전체 16KB 초과 또는 예상 밖 semantic/runtime 이상이면 <b>새로고침하지 말고 현재 진단 전체를 먼저 보존</b></div>
-<div style="font-weight:700;margin:10px 0 5px">진단 캡처</div>
-<div><b>REQUIRED</b> · pre-refresh / first post-refresh / second post-refresh</div>
-<div><b>IMMEDIATE</b> · visible semantic anomaly, unexpected warnings/compatibility, checkpoint/continuity phase contradiction</div>
-<div><b>CONTROL</b> · 원본 진단 보존 뒤에만 retry/reroll, 손수정, 자연 follow-up</div>
+<div>Stage A에서 identity split / COMPACTION_FAILED / HOST_LOCAL failure / adoption contradiction 또는 예상 밖 semantic/runtime 이상이면 <b>Stage B로 진행하지 말고 현재 진단을 먼저 보존</b></div>
+<div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code></div>
 <div style="font-weight:700;margin:10px 0 5px">최근 업데이트</div>
 <ul style="margin:0 0 0 18px;padding:0">${recent}</ul>
 <div style="margin-top:10px;color:#9fb3d7">이 카드는 운영 가이드이며 release PASS/FAIL authority가 아닙니다.</div>

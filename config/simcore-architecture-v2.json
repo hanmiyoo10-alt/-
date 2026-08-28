@@ -337,11 +337,12 @@
         "reaction",
         "structure",
         "recovery",
+        "edit-reconcile",
         "recurrence",
         "prompt"
       ],
       "m2_target": [
-        "extract_edit_reconcile_after_live_gate",
+        "edit_reconcile_extraction_completed_in_m2_3_candidate",
         "move_bootstrap_migration_coordination_when_mechanical"
       ]
     },
@@ -488,9 +489,9 @@
       "principle": "Fresh is identity evidence, not a body source."
     },
     "edit-reconcile": {
-      "physical": "planned",
+      "physical": "required",
       "layer": "application",
-      "status": "m2_next_after_representation_live_gate",
+      "status": "m2_3_physical_pending_live_validation",
       "owns": "single edit reconciliation decision tree and fallback coordination",
       "excludes": [
         "representation taxonomy ownership",

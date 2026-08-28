@@ -19,6 +19,9 @@ function write(root, rel, value) {
   const text = typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`;
   fs.writeFileSync(target, text, 'utf8');
 }
+function removeTree(target) {
+  fs.rmSync(target, { recursive:true, force:true, maxRetries:4, retryDelay:25 });
+}
 function expectCode(fn, code) {
   let got = null;
   try { fn(); } catch (error) { got = error?.code || null; }
@@ -91,7 +94,7 @@ function makeScenario(fixture, { wrongSpecPath = false, thirdFile = false } = {}
 
   return { root, bare, production, candidate, base, head, specPath, ...objects };
 }
-function cleanup(s) { fs.rmSync(s.root,{recursive:true,force:true}); fs.rmSync(s.bare,{recursive:true,force:true}); }
+function cleanup(s) { removeTree(s.root); removeTree(s.bare); }
 
 export async function runSuite({ fixtures }) {
   const fixture = fixtures[0].input;
@@ -159,7 +162,7 @@ export async function runSuite({ fixtures }) {
     assert(fs.existsSync(path.join(packageRoot,first.specPath)),'spec output missing');
     expectCode(() => materializeApprovalPackage({root:packageRoot,candidateReceiptPath:objects.receiptPath,specShadowPath:objects.shadowPath}), 'APPROVAL_PACKAGE_OUTPUT_EXISTS');
     pass('r25-canonical-package-and-no-overwrite');
-  } finally { fs.rmSync(packageRoot,{recursive:true,force:true}); }
+  } finally { removeTree(packageRoot); }
 
   const envelopeTool=fs.readFileSync('products/simcore/tooling/release-approval-envelope.mjs','utf8');
   const packageTool=fs.readFileSync('products/simcore/tooling/release-approval-package.mjs','utf8');

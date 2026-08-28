@@ -595,3 +595,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/832afcc3d6964676c9f0f315b88b30e93b4007d5)
 - Event ID: `aabd9f639d349a673ad790fc6154f8cdef99028b7450d837fae87932638143d7`
 <!-- canonical-main-doc-promoted:aabd9f639d349a673ad790fc6154f8cdef99028b7450d837fae87932638143d7 -->
+
+### 2026-08-28 — canonical-main: add deterministic circuit-breaker accounting
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `119a6859121cafa4b92e59d5f45900beac524a30`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/119a6859121cafa4b92e59d5f45900beac524a30)
+- Event ID: `a02e66f1b973e5cb46b091295edaee876d3989f625e41ae221b7102a78c67f4c`
+<!-- canonical-main-doc-promoted:a02e66f1b973e5cb46b091295edaee876d3989f625e41ae221b7102a78c67f4c -->

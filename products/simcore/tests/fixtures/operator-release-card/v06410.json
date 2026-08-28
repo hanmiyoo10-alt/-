@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "operator-release-card-v06410",
+  "suite": "operator-release-card",
+  "input": {
+    "cases": [
+      "exact-button-label",
+      "panel-only-collapsed",
+      "no-new-top-level-ui-registration",
+      "version-name-one-scenario",
+      "plain-summary-bounds",
+      "numbered-steps-stop-and-capture-guidance",
+      "recent-version-ledger",
+      "explicit-non-authority",
+      "static-pure-no-side-effects",
+      "local-toggle-only"
+    ]
+  },
+  "expected": {
+    "topLevelRegisterButtonCount": 1,
+    "topLevelRegisterSettingCount": 1,
+    "minSummaryBullets": 3,
+    "maxSummaryBullets": 6,
+    "recentVersions": ["0.64.10", "0.64.9", "0.64.8"],
+    "forbiddenTokens": [".setItem(", ".removeItem(", "localStorage", "IndexedDB", "fetch(", "XMLHttpRequest", "setInterval(", "setTimeout(", "Risuai.setDatabase", "runtimeTelemetryRules.publish(", "checkpointRuntimeTelemetry("]
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "source": "docs/SIMCORE_06410_HOST_LOCAL_ONE_SHOT_TELEMETRY_HANDOFF_ACTIVATION.md"
+  }
+}

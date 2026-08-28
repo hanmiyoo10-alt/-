@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.64.9
+//@version 0.64.10
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -29,6 +29,16 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.64.10 Host-Local One-Shot Telemetry Handoff:
+// - Follows confirmed v0.64.9 live evidence where both WINDOW.sessionStorage and GLOBAL_THIS.sessionStorage throw ACCESS_ERROR and therefore cannot provide the pre-refresh durable telemetry sidecar
+// - Preserves MEMORY -> browser SESSION priority and adds exactly one lowest-priority HOST_LOCAL fallback through the authorized Host local plugin-storage API only when the common metadata-only capsule is valid and browser SESSION did not write
+// - Uses one SimCore-owned Host-local pending mailbox, one runtime-scoped lazy Host store acquisition, one boot mailbox read, consume-before-adopt for matching locations, and non-destructive FOREIGN_LOCATION handling; no retry, polling, queue, key enumeration or second Host-local key is added
+// - Keeps the existing schema-1 capsule, exact location guard, 10-minute age bound, 16,384-character serialized cap and provider cache UNVERIFIED contract; raw user/assistant/prompt bodies and Core semantic state are never persisted
+// - Authoritative OUTPUT_COMMIT awaits at most one Host-local write after Core output success so the copied diagnostic reports actual durability before refresh; any Host-local failure remains telemetry-only and cannot downgrade the committed output
+// - Last Turn Diagnostic adds bounded Host-local acquisition/clear/boot/write attribution and Host write timing while preserving v0.64.9 Session surface diagnostics and existing Core semantic owners
+// - Updates the existing collapsed 업데이트 내역 card to the 0.64.10/0.64.9/0.64.8 ledger without adding a top-level UI part or rendering-time storage/network/timer operation
+// - M2-3 ownership extraction remains frozen until 06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT closes with human evidence
 //
 // v0.64.9 Session Transport Root Resolution:
 // - Repairs the confirmed v0.64.8 live-gate pre-refresh failure by resolving the existing telemetry session sidecar across exactly two bounded browser-local roots: WINDOW then GLOBAL_THIS
@@ -642,7 +652,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.64.9';
+const SIMCORE_RUNTIME_VERSION = '0.64.10';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6063,11 +6073,18 @@ module.exports = { createCacheCandidateTracker };
 SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
+const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
+const HOST_COMPAT_VERSION = '0.64.10';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
+const MAX_SERIALIZED_CHARS = 16384;
 let lastWriteProbe = null;
 let lastClaimProbe = null;
 let lastSurfaceProbe = null;
+let lastHostProbe = Object.freeze({ api: 'UNOBSERVED', store: 'UNOBSERVED', clear: 'UNKNOWN', boot: 'UNOBSERVED', acquireAttempts: 0, readAttempts: 0 });
+let hostStorePromise = null;
+let hostReadAttempted = false;
+let hostClaimResult = null;
 
 function capture(input) {
   const locationKey = String(input?.locationKey || '');
@@ -6119,11 +6136,7 @@ function resolveSessionCandidates(root, windowLike) {
     relation = 'SINGLE_CANDIDATE';
     first = Object.freeze({ label: 'GLOBAL_THIS', storage: globalSurface.storage });
   }
-  const surface = Object.freeze({
-    window: windowSurface.status,
-    globalThis: globalSurface.status,
-    relation,
-  });
+  const surface = Object.freeze({ window: windowSurface.status, globalThis: globalSurface.status, relation });
   lastSurfaceProbe = surface;
   return Object.freeze({ surface, first, second });
 }
@@ -6132,14 +6145,23 @@ function surfaceDiagnostics() {
   return lastSurfaceProbe || Object.freeze({ window: 'UNOBSERVED', globalThis: 'UNOBSERVED', relation: 'NONE' });
 }
 
-function publish(root, windowLike, capsule) {
-  if (!capsule) return false;
+function serializeCapsule(capsule) {
+  if (!capsule) return Object.freeze({ status: 'EMPTY', encoded: null, chars: 0 });
+  try {
+    const encoded = JSON.stringify(capsule);
+    const chars = encoded.length;
+    return Object.freeze({ status: chars > MAX_SERIALIZED_CHARS ? 'OVERSIZE' : 'OK', encoded, chars });
+  } catch (_) {
+    return Object.freeze({ status: 'FAILED', encoded: null, chars: 0 });
+  }
+}
+
+function publishPrepared(root, windowLike, capsule, prepared) {
   let memory = 'UNAVAILABLE';
   let session = 'UNAVAILABLE';
   let sessionRoot = 'NONE';
   let fallbackFrom = null;
   let attempted = '';
-  let serializedChars = 0;
   if (root) {
     try { root[KEY] = capsule; memory = 'WRITTEN'; }
     catch (_) { memory = 'FAILED'; }
@@ -6148,55 +6170,105 @@ function publish(root, windowLike, capsule) {
   const resolved = resolveSessionCandidates(root, windowLike);
   const first = resolved.first;
   const second = resolved.second;
-  if (first) {
-    let encoded = null;
+  if (prepared.status === 'OVERSIZE') {
+    session = first ? 'OVERSIZE' : 'UNAVAILABLE';
+    if (first) { try { first.storage.removeItem(SESSION_KEY); } catch (_) {} }
+    if (second) { try { second.storage.removeItem(SESSION_KEY); } catch (_) {} }
+  } else if (prepared.status === 'FAILED') {
+    session = first ? 'FAILED' : 'UNAVAILABLE';
+  } else if (prepared.status === 'OK' && first) {
+    attempted = first.label;
     try {
-      encoded = JSON.stringify(capsule);
-      serializedChars = encoded.length;
+      first.storage.setItem(SESSION_KEY, prepared.encoded);
+      session = 'WRITTEN';
+      sessionRoot = first.label;
     } catch (_) {
       session = 'FAILED';
-    }
-    if (encoded != null) {
-      if (serializedChars > MAX_SESSION_CHARS) {
-        session = 'OVERSIZE';
-        try { first.storage.removeItem(SESSION_KEY); } catch (_) {}
-        if (second) { try { second.storage.removeItem(SESSION_KEY); } catch (_) {} }
-      } else {
-        attempted = first.label;
+      fallbackFrom = `${first.label}_FAILED`;
+      if (second) {
+        attempted = `${first.label},${second.label}`;
         try {
-          first.storage.setItem(SESSION_KEY, encoded);
+          second.storage.setItem(SESSION_KEY, prepared.encoded);
           session = 'WRITTEN';
-          sessionRoot = first.label;
-        } catch (_) {
-          session = 'FAILED';
-          fallbackFrom = `${first.label}_FAILED`;
-          if (second) {
-            attempted = `${first.label},${second.label}`;
-            try {
-              second.storage.setItem(SESSION_KEY, encoded);
-              session = 'WRITTEN';
-              sessionRoot = second.label;
-            } catch (_) {
-              session = 'FAILED';
-            }
-          }
-        }
+          sessionRoot = second.label;
+        } catch (_) { session = 'FAILED'; }
       }
     }
   }
+  return Object.freeze({ memory, session, sessionRoot, fallbackFrom, attempted, serializedChars: prepared.chars, serialization: prepared.status, surface: resolved.surface });
+}
 
+function publish(root, windowLike, capsule) {
+  if (!capsule) return false;
+  const prepared = serializeCapsule(capsule);
+  const base = publishPrepared(root, windowLike, capsule, prepared);
+  lastWriteProbe = Object.freeze({ ...base, hostLocal: 'UNOBSERVED', hostElapsedMs: 0, retainedBodies: false });
+  return base.memory === 'WRITTEN' || base.session === 'WRITTEN';
+}
+
+function updateHostProbe(patch) {
+  lastHostProbe = Object.freeze({ ...lastHostProbe, ...patch });
+  if (lastClaimProbe) lastClaimProbe = Object.freeze({ ...lastClaimProbe, hostLocal: lastHostProbe.boot });
+  return lastHostProbe;
+}
+
+async function getHostLocalTelemetryStoreOnce(hostApi) {
+  if (hostStorePromise) return hostStorePromise;
+  hostStorePromise = (async () => {
+    updateHostProbe({ acquireAttempts: 1 });
+    if (!hostApi || typeof hostApi.getLocalPluginStorage !== 'function') {
+      updateHostProbe({ api: 'ABSENT', store: 'API_ABSENT', clear: 'UNKNOWN' });
+      return Object.freeze({ status: 'API_ABSENT', store: null, clear: 'UNKNOWN' });
+    }
+    updateHostProbe({ api: 'PRESENT' });
+    let store = null;
+    try { store = await hostApi.getLocalPluginStorage(); }
+    catch (_) {
+      updateHostProbe({ store: 'ACQUIRE_FAILED', clear: 'UNKNOWN' });
+      return Object.freeze({ status: 'ACQUIRE_FAILED', store: null, clear: 'UNKNOWN' });
+    }
+    if (!store || typeof store.getItem !== 'function' || typeof store.setItem !== 'function') {
+      updateHostProbe({ store: 'METHODS_INCOMPLETE', clear: 'UNKNOWN' });
+      return Object.freeze({ status: 'METHODS_INCOMPLETE', store: null, clear: 'UNKNOWN' });
+    }
+    const clear = typeof store.removeItem === 'function' ? 'REMOVE' : 'EMPTY_WRITE';
+    updateHostProbe({ store: 'USABLE', clear });
+    return Object.freeze({ status: 'USABLE', store, clear });
+  })();
+  return hostStorePromise;
+}
+
+async function publishWithHostLocal(root, windowLike, hostApi, capsule) {
+  if (!capsule) return false;
+  const prepared = serializeCapsule(capsule);
+  const base = publishPrepared(root, windowLike, capsule, prepared);
+  let hostLocal = 'UNAVAILABLE';
+  let hostElapsedMs = 0;
+  if (base.session === 'WRITTEN') {
+    hostLocal = 'NOT_NEEDED';
+  } else if (prepared.status === 'OVERSIZE') {
+    hostLocal = 'OVERSIZE';
+  } else if (prepared.status === 'OK') {
+    const startedAt = Date.now();
+    const acquired = await getHostLocalTelemetryStoreOnce(hostApi);
+    if (acquired.status === 'USABLE') {
+      try {
+        await acquired.store.setItem(HOST_LOCAL_KEY, prepared.encoded);
+        hostLocal = 'WRITTEN';
+      } catch (_) { hostLocal = 'FAILED'; }
+    } else {
+      hostLocal = 'UNAVAILABLE';
+    }
+    hostElapsedMs = Math.max(0, Date.now() - startedAt);
+  }
   lastWriteProbe = Object.freeze({
-    memory,
-    session,
-    sessionRoot,
-    fallbackFrom,
-    attempted,
-    serializedChars,
-    maxSessionChars: MAX_SESSION_CHARS,
-    surface: resolved.surface,
+    ...base,
+    hostLocal,
+    hostElapsedMs,
+    host: lastHostProbe,
     retainedBodies: false,
   });
-  return memory === 'WRITTEN' || session === 'WRITTEN';
+  return base.memory === 'WRITTEN' || base.session === 'WRITTEN' || hostLocal === 'WRITTEN';
 }
 
 function takeMemory(root) {
@@ -6232,14 +6304,13 @@ function claim(root, windowLike) {
   lastClaimProbe = Object.freeze({
     memory: memory.status,
     session: summaryStatus,
-    sessionRoots: Object.freeze({
-      first: first ? `${first.root}:${firstStatus}` : null,
-      second: second ? `${second.root}:${secondStatus}` : null,
-    }),
+    sessionRoots: Object.freeze({ first: first ? `${first.root}:${firstStatus}` : null, second: second ? `${second.root}:${secondStatus}` : null }),
     sessionChars: Number(first?.serializedChars || 0) + Number(second?.serializedChars || 0),
     surface: resolved.surface,
+    hostLocal: lastHostProbe.boot,
     memoryValidation: 'PENDING',
     sessionValidation: 'PENDING',
+    hostValidation: 'PENDING',
     selected: 'NONE',
     selectedRoot: 'NONE',
     retainedBodies: false,
@@ -6252,6 +6323,80 @@ function claim(root, windowLike) {
     sessionRoot: first?.root || null,
     sessionCandidates: second ? Object.freeze([first, second]) : (first ? Object.freeze([first]) : Object.freeze([])),
   });
+}
+
+function hostExportShape(value) {
+  return value == null || (typeof value === 'object' && !Array.isArray(value));
+}
+
+function classifyConsumedHostCapsule(capsule, now) {
+  if (!capsule || typeof capsule !== 'object' || Array.isArray(capsule)) return 'MALFORMED';
+  if (Number(capsule.schema) !== 1) return 'INCOMPATIBLE';
+  if (String(capsule.sourceVersion || '') !== HOST_COMPAT_VERSION) return 'INCOMPATIBLE';
+  const capturedAt = Number(capsule.capturedAt || 0);
+  const ageMs = Math.max(0, Number(now) - capturedAt);
+  if (!Number.isFinite(capturedAt) || capturedAt <= 0 || !Number.isFinite(ageMs) || ageMs > MAX_AGE_MS) return 'STALE';
+  if (!hostExportShape(capsule.runtimePromptCache) || !hostExportShape(capsule.requestTopology) || !hostExportShape(capsule.cacheCandidates)) return 'MALFORMED';
+  return 'CONSUMED';
+}
+
+async function claimHostLocalOnce(hostApi, locationKey, now = Date.now()) {
+  if (hostReadAttempted) return hostClaimResult;
+  hostReadAttempted = true;
+  updateHostProbe({ readAttempts: 1 });
+  const acquired = await getHostLocalTelemetryStoreOnce(hostApi);
+  if (acquired.status !== 'USABLE') {
+    hostClaimResult = Object.freeze({ status: 'UNAVAILABLE', capsule: null, serializedChars: 0 });
+    updateHostProbe({ boot: 'UNAVAILABLE' });
+    return hostClaimResult;
+  }
+  let raw = null;
+  try { raw = await acquired.store.getItem(HOST_LOCAL_KEY); }
+  catch (_) {
+    hostClaimResult = Object.freeze({ status: 'READ_FAILED', capsule: null, serializedChars: 0 });
+    updateHostProbe({ boot: 'READ_FAILED' });
+    return hostClaimResult;
+  }
+  if (raw == null || String(raw) === '') {
+    hostClaimResult = Object.freeze({ status: 'EMPTY', capsule: null, serializedChars: 0 });
+    updateHostProbe({ boot: 'EMPTY' });
+    return hostClaimResult;
+  }
+  const serializedChars = String(raw).length;
+  if (serializedChars > MAX_SERIALIZED_CHARS) {
+    hostClaimResult = Object.freeze({ status: 'MALFORMED', capsule: null, serializedChars });
+    updateHostProbe({ boot: 'MALFORMED' });
+    return hostClaimResult;
+  }
+  let capsule = null;
+  try { capsule = JSON.parse(String(raw)); }
+  catch (_) {
+    hostClaimResult = Object.freeze({ status: 'MALFORMED', capsule: null, serializedChars });
+    updateHostProbe({ boot: 'MALFORMED' });
+    return hostClaimResult;
+  }
+  if (!capsule || typeof capsule !== 'object' || Array.isArray(capsule)) {
+    hostClaimResult = Object.freeze({ status: 'MALFORMED', capsule: null, serializedChars });
+    updateHostProbe({ boot: 'MALFORMED' });
+    return hostClaimResult;
+  }
+  if (String(capsule.locationKey || '') !== String(locationKey || '')) {
+    hostClaimResult = Object.freeze({ status: 'FOREIGN_LOCATION', capsule: null, serializedChars });
+    updateHostProbe({ boot: 'FOREIGN_LOCATION' });
+    return hostClaimResult;
+  }
+  try {
+    if (typeof acquired.store.removeItem === 'function') await acquired.store.removeItem(HOST_LOCAL_KEY);
+    else await acquired.store.setItem(HOST_LOCAL_KEY, '');
+  } catch (_) {
+    hostClaimResult = Object.freeze({ status: 'CONSUME_FAILED', capsule: null, serializedChars });
+    updateHostProbe({ boot: 'CONSUME_FAILED' });
+    return hostClaimResult;
+  }
+  const status = classifyConsumedHostCapsule(capsule, now);
+  hostClaimResult = Object.freeze({ status, capsule: status === 'CONSUMED' ? capsule : null, serializedChars });
+  updateHostProbe({ boot: status });
+  return hostClaimResult;
 }
 
 function validateCapsule(capsule, locationKey, now) {
@@ -6277,7 +6422,13 @@ function sessionReason(entry, validation) {
   return validation?.reason || 'no-compatible-handoff';
 }
 
-function validate(claimed, locationKey, now = Date.now()) {
+function hostReason(hostClaim, validation) {
+  if (!hostClaim) return 'no-compatible-handoff';
+  if (hostClaim.status !== 'CONSUMED') return `host-local-${String(hostClaim.status || 'unavailable').toLowerCase()}`;
+  return validation?.reason || 'no-compatible-handoff';
+}
+
+function validate(claimed, locationKey, now = Date.now(), hostClaim = null) {
   if (!claimed || Number(claimed.claimSchema) !== 1) {
     const legacy = validateCapsule(claimed, locationKey, now);
     return { ...legacy, transport: legacy.accepted ? 'memory' : null, fallbackFrom: null, sessionRoot: null };
@@ -6290,30 +6441,49 @@ function validate(claimed, locationKey, now = Date.now()) {
   const secondEntry = candidates[1] || null;
   const firstValidation = validateCapsule(firstEntry?.capsule || null, locationKey, now);
   const secondValidation = validateCapsule(secondEntry?.capsule || null, locationKey, now);
+  const hostValidation = validateCapsule(hostClaim?.status === 'CONSUMED' ? hostClaim.capsule : null, locationKey, now);
 
   if (memory.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: 'exact', sessionValidation: (firstEntry || secondEntry) ? 'standby' : 'empty', selected: 'memory', selectedRoot: 'NONE' });
+    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: 'exact', sessionValidation: (firstEntry || secondEntry) ? 'standby' : 'empty', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'memory', selectedRoot: 'NONE' });
     return { ...memory, transport: 'memory', fallbackFrom: null, sessionRoot: null };
   }
   if (firstValidation.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', selected: 'session', selectedRoot: firstEntry.root });
+    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'session', selectedRoot: firstEntry.root });
     return { ...firstValidation, transport: 'session', fallbackFrom: memory.reason, sessionRoot: firstEntry.root };
   }
   if (secondValidation.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', selected: 'session', selectedRoot: secondEntry.root });
+    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'session', selectedRoot: secondEntry.root });
     return { ...secondValidation, transport: 'session', fallbackFrom: sessionReason(firstEntry, firstValidation), sessionRoot: secondEntry.root };
+  }
+  if (hostValidation.accepted) {
+    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), hostValidation: 'exact', selected: 'host-local', selectedRoot: 'NONE' });
+    return { ...hostValidation, transport: 'host-local', fallbackFrom: secondEntry ? sessionReason(secondEntry, secondValidation) : (firstEntry ? sessionReason(firstEntry, firstValidation) : memory.reason), sessionRoot: null };
   }
   const firstReason = sessionReason(firstEntry, firstValidation);
   const secondReason = sessionReason(secondEntry, secondValidation);
-  lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), selected: 'NONE', selectedRoot: 'NONE' });
-  const primary = claimed.memory ? memory : (firstEntry ? { ...firstValidation, reason: firstReason } : { ...secondValidation, reason: secondReason });
-  return { ...primary, transport: null, fallbackFrom: claimed.memory ? (secondEntry ? secondReason : firstReason) : null, sessionRoot: null };
+  const hostFailure = hostReason(hostClaim, hostValidation);
+  lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), hostValidation: hostClaim ? validationClass(hostValidation) : 'empty', selected: 'NONE', selectedRoot: 'NONE' });
+  const primary = claimed.memory
+    ? memory
+    : (firstEntry ? { ...firstValidation, reason: firstReason }
+      : (secondEntry ? { ...secondValidation, reason: secondReason }
+        : { ...hostValidation, reason: hostFailure }));
+  return { ...primary, transport: null, fallbackFrom: claimed.memory ? (hostClaim ? hostFailure : (secondEntry ? secondReason : firstReason)) : null, sessionRoot: null };
 }
 
 function diagnostics() {
-  return Object.freeze({ write: lastWriteProbe, claim: lastClaimProbe, surface: surfaceDiagnostics(), sessionKey: SESSION_KEY, maxSessionChars: MAX_SESSION_CHARS });
+  return Object.freeze({
+    write: lastWriteProbe,
+    claim: lastClaimProbe,
+    surface: surfaceDiagnostics(),
+    host: lastHostProbe,
+    sessionKey: SESSION_KEY,
+    hostLocalKey: HOST_LOCAL_KEY,
+    maxSessionChars: MAX_SESSION_CHARS,
+    maxSerializedChars: MAX_SERIALIZED_CHARS,
+  });
 }
-module.exports = { capture, publish, claim, validate, diagnostics };
+module.exports = { capture, publish, publishWithHostLocal, claim, claimHostLocalOnce, validate, diagnostics };
 });
 
 SimCore.define("runtime-session", function (require, module, exports) {
@@ -7008,7 +7178,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   let pendingTelemetryHandoff = runtimeTelemetryRules.claim(globalThis, typeof window !== 'undefined' ? window : null);
   let telemetryAdoptionAttempted = false;
 
-  function checkpointRuntimeTelemetry(trigger) {
+  async function checkpointRuntimeTelemetry(trigger) {
     const normalizedTrigger = trigger === 'UNLOAD' ? 'UNLOAD' : 'OUTPUT_COMMIT';
     try {
       const locationKey = String(coreKey || coreLocationKey || '');
@@ -7023,7 +7193,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         cacheCandidates: cacheCandidates.exportState(),
       });
       if (!capsule) return null;
-      runtimeTelemetryRules.publish(globalThis, typeof window !== 'undefined' ? window : null, capsule);
+      await runtimeTelemetryRules.publishWithHostLocal(globalThis, typeof window !== 'undefined' ? window : null, Risuai, capsule);
       const write = runtimeTelemetryRules.diagnostics().write || null;
       const probe = Object.freeze({
         trigger: normalizedTrigger,
@@ -7033,6 +7203,10 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         fallbackFrom: write?.fallbackFrom || null,
         attempted: write?.attempted || '',
         surface: write?.surface || runtimeTelemetryRules.diagnostics().surface || null,
+        hostLocal: write?.hostLocal || 'UNAVAILABLE',
+        hostElapsedMs: Number(write?.hostElapsedMs || 0),
+        host: runtimeTelemetryRules.diagnostics().host || null,
+        serialization: write?.serialization || 'UNKNOWN',
         serializedChars: Number(write?.serializedChars || 0),
         elapsedMs: perfMs(startedAt),
         retainedBodies: false,
@@ -7048,6 +7222,10 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         fallbackFrom: null,
         attempted: '',
         surface: runtimeTelemetryRules.diagnostics().surface || null,
+        hostLocal: 'FAILED',
+        hostElapsedMs: 0,
+        host: runtimeTelemetryRules.diagnostics().host || null,
+        serialization: 'FAILED',
         serializedChars: 0,
         elapsedMs: 0,
         retainedBodies: false,
@@ -7567,7 +7745,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       const runtimePromptKey = String(coreKey || coreLocationKey || '');
       if (!telemetryAdoptionAttempted) {
         telemetryAdoptionAttempted = true;
-        const adoption = runtimeTelemetryRules.validate(pendingTelemetryHandoff, runtimePromptKey, Date.now());
+        const hostLocalClaim = await runtimeTelemetryRules.claimHostLocalOnce(Risuai, runtimePromptKey, Date.now());
+        const adoption = runtimeTelemetryRules.validate(pendingTelemetryHandoff, runtimePromptKey, Date.now(), hostLocalClaim);
         let restoredRuntimePrefix = false;
         let restoredTopology = false;
         let restoredTrajectory = false;
@@ -7745,7 +7924,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       return content;
     }
     if (runtimeIsCurrent() && String(coreKey || coreLocationKey || '')) {
-      checkpointRuntimeTelemetry('OUTPUT_COMMIT');
+      await checkpointRuntimeTelemetry('OUTPUT_COMMIT');
     }
     markDiagnosticRequestProbe(outIndex - 1, { outIndex, outputStatus: 'COMMITTED', outputAt: Date.now() });
 
@@ -8297,7 +8476,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Cache trajectory: ${probeFresh ? runtimeProbeRules.trajectory(trajectoryProbe) : 'n/a'}`,
       `Telemetry continuity: ${runtimeProbeRules.continuity(lastTelemetryContinuityProbe)}`,
       `Session surface: ${lastTelemetryCheckpointProbe?.surface ? `WINDOW ${lastTelemetryCheckpointProbe.surface.window || 'UNOBSERVED'} · GLOBAL_THIS ${lastTelemetryCheckpointProbe.surface.globalThis || 'UNOBSERVED'} · relation ${lastTelemetryCheckpointProbe.surface.relation || 'NONE'}` : 'n/a'}`,
-      `Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `MEMORY ${lastTelemetryCheckpointProbe.memory || 'UNAVAILABLE'} · SESSION ${lastTelemetryCheckpointProbe.session || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.session === 'WRITTEN' ? ` via ${lastTelemetryCheckpointProbe.sessionRoot || 'NONE'}` : (lastTelemetryCheckpointProbe.sessionRoot && lastTelemetryCheckpointProbe.sessionRoot !== 'NONE' ? ` · root ${lastTelemetryCheckpointProbe.sessionRoot}` : '')}${lastTelemetryCheckpointProbe.fallbackFrom ? ` · fallback ${lastTelemetryCheckpointProbe.fallbackFrom}` : ''}${lastTelemetryCheckpointProbe.attempted && lastTelemetryCheckpointProbe.session === 'FAILED' ? ` · attempted ${lastTelemetryCheckpointProbe.attempted}` : ''} · ${Number(lastTelemetryCheckpointProbe.serializedChars || 0)} chars · ${diagnosticFormatMs(lastTelemetryCheckpointProbe.elapsedMs)} · trigger ${lastTelemetryCheckpointProbe.trigger || 'UNKNOWN'}` : 'n/a'}`,
+      `Host-local transport: ${lastTelemetryCheckpointProbe?.host ? `API ${lastTelemetryCheckpointProbe.host.api || 'UNOBSERVED'} · store ${lastTelemetryCheckpointProbe.host.store || 'UNOBSERVED'} · clear ${lastTelemetryCheckpointProbe.host.clear || 'UNKNOWN'} · boot ${lastTelemetryCheckpointProbe.host.boot || 'UNOBSERVED'}` : 'n/a'}`,
+      `Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `MEMORY ${lastTelemetryCheckpointProbe.memory || 'UNAVAILABLE'} · SESSION ${lastTelemetryCheckpointProbe.session || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.session === 'WRITTEN' ? ` via ${lastTelemetryCheckpointProbe.sessionRoot || 'NONE'}` : (lastTelemetryCheckpointProbe.sessionRoot && lastTelemetryCheckpointProbe.sessionRoot !== 'NONE' ? ` · root ${lastTelemetryCheckpointProbe.sessionRoot}` : '')}${lastTelemetryCheckpointProbe.fallbackFrom ? ` · fallback ${lastTelemetryCheckpointProbe.fallbackFrom}` : ''}${lastTelemetryCheckpointProbe.attempted && lastTelemetryCheckpointProbe.session === 'FAILED' ? ` · attempted ${lastTelemetryCheckpointProbe.attempted}` : ''} · HOST_LOCAL ${lastTelemetryCheckpointProbe.hostLocal || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.serialization && lastTelemetryCheckpointProbe.serialization !== 'OK' ? ` · serialization ${lastTelemetryCheckpointProbe.serialization}` : ''} · ${Number(lastTelemetryCheckpointProbe.serializedChars || 0)} chars${lastTelemetryCheckpointProbe.hostElapsedMs > 0 ? ` · host ${diagnosticFormatMs(lastTelemetryCheckpointProbe.hostElapsedMs)}` : ''} · ${diagnosticFormatMs(lastTelemetryCheckpointProbe.elapsedMs)} total · trigger ${lastTelemetryCheckpointProbe.trigger || 'UNKNOWN'}` : 'n/a'}`,
       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Broadcast lifecycle: ${probeFresh && budget ? `${budget.broadcastSessionState || 'CLOSED'} · mode ${budget.mode || 'n/a'}` : 'n/a'}`,
@@ -8513,19 +8693,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.64.9',
-    name: 'Session Transport Root Resolution',
-    scenario: '06409_SESSION_ROOT_RELOAD_CONTINUITY_REAL_LONG_CHAT',
+    version: '0.64.10',
+    name: 'Host-Local One-Shot Telemetry Handoff',
+    scenario: '06410_HOST_LOCAL_RELOAD_CONTINUITY_REAL_LONG_CHAT',
     summary: Object.freeze([
-      'sessionStorage를 WINDOW / GLOBAL_THIS 두 경로에서 구분해서 확인',
-      '실제 체크포인트는 사용 가능한 경로에 쓰고 필요할 때 한 번만 대체 경로 시도',
-      '진단에 Session surface / 실제 저장 root / memory 상태를 함께 표시',
-      '세션 저장이 확인된 경우에만 새로고침 실험 진행',
+      '브라우저 sessionStorage를 쓸 수 없을 때 Host 로컬 저장소를 telemetry handoff 대체 경로로 사용',
+      '저장 내용은 10분 TTL / location 일치 / 16KB 이하의 메타데이터-only capsule으로 제한',
+      '같은 location의 capsule은 안전하게 지운 뒤에만 한 번 채택',
+      'SESSION 또는 HOST_LOCAL이 실제 WRITTEN일 때만 새로고침 실험 진행',
     ]),
     recent: Object.freeze([
-      Object.freeze({ version: '0.64.9', name: 'Session Transport Root Resolution', bullets: Object.freeze(['두 sessionStorage root를 bounded하게 구분', '실제 checkpoint/claim root를 진단에 표시']) }),
+      Object.freeze({ version: '0.64.10', name: 'Host-Local One-Shot Telemetry Handoff', bullets: Object.freeze(['sessionStorage 불가 시 Host 로컬 one-shot fallback', 'matching location은 consume-before-adopt']) }),
+      Object.freeze({ version: '0.64.9', name: 'Session Transport Root Resolution', bullets: Object.freeze(['WINDOW / GLOBAL_THIS sessionStorage surface를 분리 진단', '실제 checkpoint/claim root를 표시']) }),
       Object.freeze({ version: '0.64.8', name: 'Output-Complete Telemetry Checkpoint Repair', bullets: Object.freeze(['정상 출력 완료 뒤 telemetry checkpoint 추가', 'checkpoint 결과를 Last Turn Diagnostic에 표시']) }),
-      Object.freeze({ version: '0.64.7', name: 'Cross-Reload Cache Observer Continuity', bullets: Object.freeze(['reload 경계를 위한 memory + session telemetry handoff 도입', 'provider cache는 계속 UNVERIFIED']) }),
     ]),
   });
 
@@ -8539,9 +8719,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
 <div style="font-weight:700;margin:8px 0 5px">이번 버전 실험</div>
 <div><code>${escapeHtml(card.scenario)}</code></div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>업데이트 뒤 새로고침 없이 자연 요청 1회 후 진단 확인</li><li><b>SESSION WRITTEN via WINDOW 또는 GLOBAL_THIS</b>면 pre-refresh 진단 전체 복사 후 같은 탭 새로고침</li><li>첫 post-refresh 자연 요청 후 진단 전체 복사</li><li>재생성/손수정 없이 자연 요청 1회 더 하고 두 번째 post-refresh 진단 전체 복사</li></ol>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>업데이트 뒤 새로고침 없이 자연 요청 1회 후 진단 확인</li><li><b>SESSION WRITTEN 또는 HOST_LOCAL WRITTEN</b>이면 pre-refresh 진단 전체 복사 후 같은 탭 새로고침</li><li>첫 post-refresh 자연 요청 후 진단 전체 복사</li><li>재생성/손수정 없이 자연 요청 1회 더 하고 두 번째 post-refresh 진단 전체 복사</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>SESSION UNAVAILABLE / FAILED / OVERSIZE 또는 예상 밖 semantic/runtime 이상이면 <b>새로고침하지 말고 현재 진단 전체를 먼저 보존</b></div>
+<div>HOST_LOCAL UNAVAILABLE / FAILED / OVERSIZE, 공통 serialization 실패 또는 예상 밖 semantic/runtime 이상이면 <b>새로고침하지 말고 현재 진단 전체를 먼저 보존</b></div>
 <div style="font-weight:700;margin:10px 0 5px">진단 캡처</div>
 <div><b>REQUIRED</b> · pre-refresh / first post-refresh / second post-refresh</div>
 <div><b>IMMEDIATE</b> · visible semantic anomaly, unexpected warnings/compatibility, checkpoint/continuity phase contradiction</div>
@@ -8551,6 +8731,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <div style="margin-top:10px;color:#9fb3d7">이 카드는 운영 가이드이며 release PASS/FAIL authority가 아닙니다.</div>
 </section>`;
   }
+
 
   async function openPanel() {
     try {
@@ -8866,7 +9047,7 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   await Risuai.onUnload(async () => {
     runtimeDisposed = true;
     runtimeEpoch += 1;
-    checkpointRuntimeTelemetry('UNLOAD');
+    await checkpointRuntimeTelemetry('UNLOAD');
     await runtimeHooks.remove(Risuai, beforeRequestHandler, outputHandler);
     for (const part of simcoreUiParts.splice(0)) {
       if (!part?.id) continue;

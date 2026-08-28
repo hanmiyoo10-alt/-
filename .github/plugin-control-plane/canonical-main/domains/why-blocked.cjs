@@ -1,5 +1,7 @@
 'use strict';
 
+const {isRepositoryNextAction, nextActionForBlock} = require('./next-action.cjs');
+
 const SCOPE_LABEL_RE = /^(?:scope|plugin|product):[A-Za-z0-9._-]+$/;
 const FORBIDDEN_ACTION_RE = /(?:BYPASS|DISABLE|SKIP|FORCE[_ -]?PUSH)/i;
 
@@ -34,7 +36,9 @@ function issueNumber(row) {
 function explanation({blockingClass, reasonCode, evidence, nextAction, owner}) {
   const boundedEvidence = [...new Set((evidence || []).filter(Boolean).map(String))].slice(0, 4);
   const action = String(nextAction || '').trim();
-  if (!action || FORBIDDEN_ACTION_RE.test(action)) throw new Error('why-blocked next action violates legal-action contract');
+  if (!action || FORBIDDEN_ACTION_RE.test(action) || !isRepositoryNextAction(action)) {
+    throw new Error('why-blocked next action violates repository-defined legal-action contract');
+  }
   return Object.freeze({
     schemaVersion: 1,
     mode: 'CANONICAL_MAIN_WHY_BLOCKED',
@@ -60,13 +64,14 @@ function notBlocked() {
   });
 }
 
-function incidentExplanation(row, blockingClass, fallbackReason, actionPrefix) {
+function incidentExplanation(row, blockingClass, fallbackReason) {
   const number = issueNumber(row);
+  const reasonCode = reasonCodeFromIncident(row, fallbackReason);
   return explanation({
     blockingClass,
-    reasonCode: reasonCodeFromIncident(row, fallbackReason),
+    reasonCode,
     evidence: [number ? `issue:#${number}` : null, row?.severity ? `severity:${row.severity}` : null],
-    nextAction: `${actionPrefix}${number ? ` #${number}` : ''}`,
+    nextAction: nextActionForBlock({blockingClass, reasonCode}),
     owner: ownerFromIssue(row?.issue),
   });
 }
@@ -92,22 +97,24 @@ function explainBlocked(snapshot) {
     .filter((row) => row?.severity === 'P0' || row?.severity === 'P1')
     .slice()
     .sort(incidentSort);
-  if (active[0]) return incidentExplanation(active[0], 'INCIDENT', 'INCIDENT', 'REVIEW_INCIDENT');
+  if (active[0]) return incidentExplanation(active[0], 'INCIDENT', 'INCIDENT');
 
   const attention = (snapshot?.incidents?.attention || [])
     .filter((row) => row?.reasonCode !== 'CONVERGENCE_STALE' || issueNumber(row) > 0)
     .slice()
     .sort(incidentSort);
-  if (attention[0]) return incidentExplanation(attention[0], 'ATTENTION', 'ATTENTION', 'REVIEW_ATTENTION');
+  if (attention[0]) return incidentExplanation(attention[0], 'ATTENTION', 'ATTENTION');
 
   if (snapshot?.convergence?.state === 'SETTLING') {
     const waiting = [...new Set(snapshot.convergence.waitingFor || [])].sort().map((id) => `observation:${id}`);
     const stale = snapshot.convergence.stale === true;
+    const blockingClass = stale ? 'STALE_CONVERGENCE' : 'SETTLING';
+    const reasonCode = stale ? 'CONVERGENCE_STALE' : 'EVIDENCE_SETTLING';
     return explanation({
-      blockingClass: stale ? 'STALE_CONVERGENCE' : 'SETTLING',
-      reasonCode: stale ? 'CONVERGENCE_STALE' : 'EVIDENCE_SETTLING',
+      blockingClass,
+      reasonCode,
       evidence: waiting.length ? waiting : ['convergence:waiting'],
-      nextAction: stale ? 'REVIEW_STALE_EVIDENCE' : 'WAIT_FOR_CURRENT_EVIDENCE',
+      nextAction: nextActionForBlock({blockingClass, reasonCode}),
       owner: 'scope:repo',
     });
   }
@@ -117,7 +124,7 @@ function explainBlocked(snapshot) {
       blockingClass: 'UNKNOWN',
       reasonCode: 'EVIDENCE_UNKNOWN',
       evidence: unknownEvidenceIds(snapshot),
-      nextAction: 'REVIEW_UNKNOWN_EVIDENCE',
+      nextAction: nextActionForBlock({blockingClass: 'UNKNOWN', reasonCode: 'EVIDENCE_UNKNOWN'}),
       owner: 'scope:repo',
     });
   }

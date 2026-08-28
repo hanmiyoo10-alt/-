@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.65.0
+//@version 0.66.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -11,7 +11,7 @@
 // Internal modules (single installable plugin; ownership frozen by Contracts v1):
 // - Contracts: module responsibility/non-goal registry only; no runtime policy
 // - Kernel: state schema + shared primitives/normalization glue
-// - Store: snapshot persistence/retention only
+// - Store: snapshot persistence/retention + deferred retention housekeeping mechanics only
 // - Lifecycle: mode/broadcast/episode request preparation
 // - Time: timestamp syntax + narrative/broadcast clock primitives + world-year/age synchronization
 // - Frame: visible response-frame parsing + backward floor + same-title Chapter hold
@@ -24,12 +24,21 @@
 // - Structure: validation/integrity/state-commit safety (judge; does not repair)
 // - Representation: bounded CANONICAL/HOST_RAW/FRESH_CHAT identity + provenance classification only; memory-only, no raw bodies or chat writes
 // - Edit Reconcile: previous-assistant reconcile decision tree + manual rebuild fallback coordination; application-only, no host reads
+// - Output Finalize: deterministic prepared-output → committed state/content transition composition; application-only, no I/O
 // - Output Compat: output envelope compatibility/canonicalization + bounded Fresh-confirmation metadata
 // - Bootstrap Migration: history bootstrap + legacy migration/repair coordination
 // - Recovery: M2 compatibility facade preserving the v0.63.55 public recovery API
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.66.0 M2-4 Session / Runtime Mirror Boundary Completion:
+// - Physically extracts deterministic output finalization from Session into one application-level Output Finalize service while preserving Frame/Time/Structure/Reaction ordering and receipts
+// - Moves deferred retention cadence/running bookkeeping from Session into Store housekeeping without changing index-17/%17 cadence, 750 ms deferral, failure isolation or output-critical awaits
+// - Migrates Session/Edit Reconcile runtime calls from the Recovery compatibility facade to Output Compat / Bootstrap Migration / Output Finalize physical owners while retaining the Recovery shim
+// - Splits Deferred Mirror compatibility ownership into Output Compat candidate-plan/interpretation policy, Runtime Mirror one-read exact observation/guards/transport, and Representation accepted canonical-equivalence provenance
+// - Preserves FRESH_CONFIRMED_SUFFIX / BOUNDARY_CONFIRMED_SUFFIX / SAFE_BOUNDARY_CONFIRMED external meanings, SAME_FAST / REPRESENTATION_FAST_RECONCILED / MANUAL_EDIT_REBUILT controls, persistent schema, provider-cache UNVERIFIED policy and all unrelated domain semantics
+// - Keeps latest.js and install.js byte-identical and requires real long-chat human evidence after release publication
 //
 // v0.65.0 M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence:
 // - Converges userscript metadata, SIMCORE_RUNTIME_VERSION and HOST_COMPAT_VERSION on one v0.65.0 release identity so bounded Host-local telemetry capsules are stamped with the installed runtime version
@@ -670,7 +679,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.65.0';
+const SIMCORE_RUNTIME_VERSION = '0.66.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -695,7 +704,7 @@ const MODULE_CONTRACT_VERSION = 2;
 const MODULE_CONTRACTS = Object.freeze({
   contracts: Object.freeze({ owns: 'module responsibility metadata', excludes: 'runtime policy or state mutation' }),
   kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
-  store: Object.freeze({ owns: 'snapshot persistence and retention', excludes: 'semantic state decisions or prompt wording' }),
+  store: Object.freeze({ owns: 'snapshot persistence, retention and deferred retention housekeeping mechanics', excludes: 'semantic state decisions or prompt wording' }),
   lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
   time: Object.freeze({ owns: 'timestamp syntax, deterministic calendar transitions, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
   frame: Object.freeze({ owns: 'visible response-frame parsing and deterministic Volume/Chapter/Chatindex sequencing', excludes: 'semantic title interpretation, narrative progression decisions, host/storage I/O' }),
@@ -706,11 +715,12 @@ const MODULE_CONTRACTS = Object.freeze({
   community: Object.freeze({ owns: 'COMMUNITY parsing and platform taxonomy', excludes: 'reaction-number mutation or prose generation' }),
   reaction: Object.freeze({ owns: 'reaction parsing, per-family floors and deterministic normalization', excludes: 'community prose or platform selection' }),
   structure: Object.freeze({ owns: 'output validation and integrity judgement', excludes: 'repair or semantic rewriting' }),
-  'output-compat': Object.freeze({ owns: 'output envelope compatibility/canonicalization and Fresh-confirmation candidate metadata', excludes: 'history bootstrap, manual edit attribution, persistent raw body' }),
+  'output-compat': Object.freeze({ owns: 'output envelope compatibility/canonicalization plus bounded Fresh candidate planning and compatibility interpretation', excludes: 'host Fresh reads, history bootstrap, manual edit attribution, persistent raw body' }),
   'bootstrap-migration': Object.freeze({ owns: 'history bootstrap and legacy migration/repair coordination', excludes: 'ordinary output compatibility or manual edit attribution' }),
-  recovery: Object.freeze({ owns: 'M2 compatibility facade over output-compat + bootstrap-migration', excludes: 'new policy ownership; facade may shrink after callers migrate' }),
+  'output-finalize': Object.freeze({ owns: 'deterministic prepared-output to committed-state/content transition composition', excludes: 'storage I/O, host I/O, envelope candidate policy or edit attribution' }),
+  recovery: Object.freeze({ owns: 'deprecated M2 compatibility facade over output-compat + bootstrap-migration with zero runtime callers', excludes: 'new policy ownership' }),
   prompt: Object.freeze({ owns: 'runtime prompt serialization', excludes: 'persistent semantic state ownership, host/storage I/O, creative decisions' }),
-  session: Object.freeze({ owns: 'pipeline orchestration and commit sequencing', excludes: 'prompt wording ownership or creative/semantic decisions' }),
+  session: Object.freeze({ owns: 'per-chat application identity/current-state holder plus bounded persistence sequencing', excludes: 'output-finalization policy, retention housekeeping mechanics, prompt wording ownership or creative/semantic decisions' }),
   ops: Object.freeze({ owns: 'performance and diagnostic formatting', excludes: 'generation/state policy' }),
 });
 module.exports = { MODULE_CONTRACT_VERSION, MODULE_CONTRACTS };
@@ -726,6 +736,8 @@ class SnapshotStore {
     this.p = prefix;
     this.keepN = keepN;
     this.lastKeyScan = null;
+    this.deferredPruneIndex = -1;
+    this.deferredPruneRunning = false;
   }
   _recordKeyScan(op, startedAt, keys, currentChatKeys = null, matchingKeys = null) {
     const total = Array.isArray(keys) ? keys.length : 0;
@@ -846,6 +858,31 @@ class SnapshotStore {
     this._recordKeyScan('clock-anchors', scanStarted, keys, currentChatKeys, matching);
     return rows;
   }
+  scheduleDeferredPrune(outIndex) {
+    // Retention is housekeeping, not part of the user-visible output commit. Run it only
+    // periodically and after the output promise can resolve. 17 is coprime with the usual
+    // user/assistant index step of 2, so long chats still hit the cadence after reloads.
+    if (!Number.isInteger(outIndex) || outIndex < 17 || (outIndex % 17) !== 0) return false;
+    if (this.deferredPruneIndex === outIndex || this.deferredPruneRunning) return false;
+    this.deferredPruneIndex = outIndex;
+
+    const run = async () => {
+      if (this.deferredPruneRunning) return;
+      this.deferredPruneRunning = true;
+      try { await this.prune(); }
+      catch (e) { /* retention failure must never affect committed output/state */ }
+      finally { this.deferredPruneRunning = false; }
+    };
+
+    if (typeof setTimeout === 'function') {
+      const timer = setTimeout(run, 750);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+    } else {
+      Promise.resolve().then(run);
+    }
+    return true;
+  }
+
   async prune() { return this._prune(); }
   async _prune() {
     const re = new RegExp(`^${escapeRe(this.p)}:(pre|send|out|turn):(\\d+)$`);
@@ -3906,12 +3943,178 @@ function prepareOutput(content, pending) {
   return { content: text, envelope };
 }
 
+
+function buildFreshObservationPlan(freshEnvelopeConfirmation = null, safeEnvelopeBoundaryConfirmation = null) {
+  const fresh = freshEnvelopeConfirmation && typeof freshEnvelopeConfirmation === 'object'
+    ? freshEnvelopeConfirmation : null;
+  const safe = safeEnvelopeBoundaryConfirmation && typeof safeEnvelopeBoundaryConfirmation === 'object'
+    ? safeEnvelopeBoundaryConfirmation : null;
+  const candidates = [];
+  const meanings = {};
+  const add = (kind, fingerprint, metadata = null) => {
+    const fp = String(fingerprint || '');
+    if (!fp) return null;
+    const id = `C${candidates.length}`;
+    candidates.push(Object.freeze({ candidateId: id, fingerprint: fp }));
+    meanings[id] = Object.freeze({ kind, ...(metadata || {}) });
+    return id;
+  };
+
+  const freshEligible = fresh?.status === 'PENDING' && fresh?.confirmation === 'FRESH_EXACT';
+  if (freshEligible) {
+    add('FRESH_PRIMARY', fresh.candidateFingerprint, {
+      source: String(fresh.source || 'HOST_RAW_SUFFIX'),
+      candidateChars: Number(fresh.candidateChars || 0),
+    });
+    const boundaries = Array.isArray(fresh.boundaryCandidates) ? fresh.boundaryCandidates : [];
+    for (const row of boundaries) {
+      add('FRESH_BOUNDARY', row?.fingerprint, {
+        source: String(fresh.source || 'HOST_RAW_SUFFIX'),
+        chars: Number(row?.chars || 0),
+        deltaChars: Number(row?.deltaChars || 0),
+        boundaryKind: String(row?.kind || 'CRLF_ONLY'),
+      });
+    }
+  }
+
+  const safeEligible = safe?.status === 'PENDING' && safe?.confirmation === 'FRESH_EXACT';
+  if (safeEligible) {
+    const boundaries = Array.isArray(safe.boundaryCandidates) ? safe.boundaryCandidates : [];
+    for (const row of boundaries) {
+      add('SAFE_BOUNDARY', row?.fingerprint, {
+        source: String(safe.source || 'CANONICAL_BOUNDARY'),
+        chars: Number(row?.chars || 0),
+        deltaChars: Number(row?.deltaChars || 0),
+        boundaryKind: String(row?.kind || 'STRUCTURAL_LF'),
+      });
+    }
+  }
+
+  return Object.freeze({
+    schema: 1,
+    observation: Object.freeze({
+      schema: 1,
+      candidates: Object.freeze(candidates),
+    }),
+    meanings: Object.freeze(meanings),
+    telemetrySeed: Object.freeze({
+      freshEnvelopeCandidateChars: fresh ? Number(fresh.candidateChars || 0) : 0,
+      safeEnvelopeCanonicalChars: safe ? Number(safe.canonicalChars || 0) : 0,
+      freshConfirmationPresent: !!fresh,
+      safeConfirmationPresent: !!safe,
+    }),
+  });
+}
+
+function interpretFreshObservation(plan, receipt) {
+  const p = plan && Number(plan.schema) === 1 ? plan : buildFreshObservationPlan();
+  const r = receipt && Number(receipt.schema) === 1 ? receipt : null;
+  if (!r) {
+    return Object.freeze({
+      acceptedCanonicalEquivalent: false,
+      fingerprintMatch: 'MISMATCH',
+      freshEnvelopeRecovery: p.telemetrySeed.freshConfirmationPresent ? 'FRESH_MISMATCH' : 'NOT_APPLICABLE',
+      freshEnvelopeSource: null,
+      freshEnvelopePolicy: null,
+      freshEnvelopeCandidateChars: Number(p.telemetrySeed.freshEnvelopeCandidateChars || 0),
+      freshEnvelopeBoundaryChars: 0,
+      freshEnvelopeBoundaryDelta: 0,
+      freshEnvelopeBoundaryKind: null,
+      freshEnvelopePersistent: 'NONE',
+      safeEnvelopeReconcile: p.telemetrySeed.safeConfirmationPresent ? 'REJECTED' : 'NOT_APPLICABLE',
+      safeEnvelopeSource: null,
+      safeEnvelopePolicy: null,
+      safeEnvelopeCanonicalChars: Number(p.telemetrySeed.safeEnvelopeCanonicalChars || 0),
+      safeEnvelopeBoundaryChars: 0,
+      safeEnvelopeBoundaryDelta: 0,
+      safeEnvelopeBoundaryKind: null,
+      safeEnvelopePersistent: 'NONE',
+    });
+  }
+
+  const baseMatch = String(r.baseMatch || 'MISMATCH');
+  if (baseMatch === 'CANONICAL' || baseMatch === 'HOST_RAW') {
+    return Object.freeze({
+      acceptedCanonicalEquivalent: false,
+      fingerprintMatch: baseMatch,
+      freshEnvelopeRecovery: 'NOT_APPLICABLE',
+      freshEnvelopeSource: null,
+      freshEnvelopePolicy: null,
+      freshEnvelopeCandidateChars: Number(p.telemetrySeed.freshEnvelopeCandidateChars || 0),
+      freshEnvelopeBoundaryChars: 0,
+      freshEnvelopeBoundaryDelta: 0,
+      freshEnvelopeBoundaryKind: null,
+      freshEnvelopePersistent: 'NONE',
+      safeEnvelopeReconcile: 'NOT_APPLICABLE',
+      safeEnvelopeSource: null,
+      safeEnvelopePolicy: null,
+      safeEnvelopeCanonicalChars: Number(p.telemetrySeed.safeEnvelopeCanonicalChars || 0),
+      safeEnvelopeBoundaryChars: 0,
+      safeEnvelopeBoundaryDelta: 0,
+      safeEnvelopeBoundaryKind: null,
+      safeEnvelopePersistent: 'NONE',
+    });
+  }
+
+  const matchedIds = Array.isArray(r.matchedCandidateIds) ? r.matchedCandidateIds.map(String) : [];
+  const matched = matchedIds
+    .map((id) => ({ id, meaning: p.meanings?.[id] || null }))
+    .filter((row) => row.meaning);
+  const primary = matched.filter((row) => row.meaning.kind === 'FRESH_PRIMARY');
+  const freshBoundary = matched.filter((row) => row.meaning.kind === 'FRESH_BOUNDARY');
+  const safeBoundary = matched.filter((row) => row.meaning.kind === 'SAFE_BOUNDARY');
+
+  // Preserve v0.65 priority: primary Fresh candidate, then Fresh boundary, then one unique Safe boundary.
+  let accepted = null;
+  if (primary.length === 1) accepted = primary[0];
+  else if (primary.length === 0 && freshBoundary.length === 1) accepted = freshBoundary[0];
+  else if (primary.length === 0 && freshBoundary.length === 0 && safeBoundary.length === 1) accepted = safeBoundary[0];
+
+  const kind = accepted?.meaning?.kind || null;
+  const freshAccepted = kind === 'FRESH_PRIMARY' || kind === 'FRESH_BOUNDARY';
+  const safeAccepted = kind === 'SAFE_BOUNDARY';
+  const policy = kind === 'FRESH_PRIMARY'
+    ? 'FRESH_CONFIRMED_SUFFIX'
+    : (kind === 'FRESH_BOUNDARY'
+      ? 'BOUNDARY_CONFIRMED_SUFFIX'
+      : (kind === 'SAFE_BOUNDARY' ? 'SAFE_BOUNDARY_CONFIRMED' : 'MISMATCH'));
+  const freshMeta = freshAccepted ? accepted.meaning : null;
+  const safeMeta = safeAccepted ? accepted.meaning : null;
+
+  return Object.freeze({
+    acceptedCanonicalEquivalent: !!accepted,
+    acceptedCandidateId: accepted?.id || null,
+    fingerprintMatch: policy,
+    freshEnvelopeRecovery: freshAccepted
+      ? 'RECOVERED'
+      : (p.telemetrySeed.freshConfirmationPresent ? 'FRESH_MISMATCH' : 'NOT_APPLICABLE'),
+    freshEnvelopeSource: freshAccepted ? String(freshMeta.source || 'HOST_RAW_SUFFIX') : null,
+    freshEnvelopePolicy: freshAccepted ? (kind === 'FRESH_BOUNDARY' ? 'BOUNDARY_CONFIRMED_SUFFIX' : 'FRESH_CONFIRMED_SUFFIX') : null,
+    freshEnvelopeCandidateChars: Number(p.telemetrySeed.freshEnvelopeCandidateChars || 0),
+    freshEnvelopeBoundaryChars: kind === 'FRESH_BOUNDARY' ? Number(freshMeta.chars || 0) : 0,
+    freshEnvelopeBoundaryDelta: kind === 'FRESH_BOUNDARY' ? Number(freshMeta.deltaChars || 0) : 0,
+    freshEnvelopeBoundaryKind: kind === 'FRESH_BOUNDARY' ? String(freshMeta.boundaryKind || 'CRLF_ONLY') : null,
+    freshEnvelopePersistent: 'NONE',
+    safeEnvelopeReconcile: safeAccepted
+      ? 'CONFIRMED'
+      : (p.telemetrySeed.safeConfirmationPresent ? 'REJECTED' : 'NOT_APPLICABLE'),
+    safeEnvelopeSource: safeAccepted ? String(safeMeta.source || 'CANONICAL_BOUNDARY') : null,
+    safeEnvelopePolicy: safeAccepted ? 'SAFE_BOUNDARY_CONFIRMED' : null,
+    safeEnvelopeCanonicalChars: Number(p.telemetrySeed.safeEnvelopeCanonicalChars || 0),
+    safeEnvelopeBoundaryChars: safeAccepted ? Number(safeMeta.chars || 0) : 0,
+    safeEnvelopeBoundaryDelta: safeAccepted ? Number(safeMeta.deltaChars || 0) : 0,
+    safeEnvelopeBoundaryKind: safeAccepted ? String(safeMeta.boundaryKind || 'STRUCTURAL_LF') : null,
+    safeEnvelopePersistent: 'NONE',
+  });
+}
 module.exports = {
   classifyPreamble,
   buildSafeEnvelopeBoundaryConfirmation,
   canonicalizeResponseEnvelope,
   normalizeTailPlacement,
   prepareOutput,
+  buildFreshObservationPlan,
+  interpretFreshObservation,
 };
 });
 
@@ -4362,8 +4565,18 @@ module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntim
 });
 
 SimCore.define("edit-reconcile", function (require, module, exports) {
-async function reconcileSessionEditedOutput(session, outIndex, content, perfDetail = null, deps = {}) {
-  const { kernel, time, recovery, finalizePreparedOutput, sessionNow, sessionElapsed } = deps;
+const kernel = require('./kernel');
+const time = require('./time');
+const outputCompat = require('./output-compat');
+const bootstrapMigration = require('./bootstrap-migration');
+const outputFinalize = require('./output-finalize');
+
+function reconcileNow() {
+  return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+}
+function reconcileElapsed(start) { return Math.max(0, reconcileNow() - start); }
+
+async function reconcileSessionEditedOutput(session, outIndex, content, perfDetail = null) {
 
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
@@ -4387,9 +4600,9 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       return { changed: false, reason: 'no-output' };
     }
 
-    let t = sessionNow();
+    let t = reconcileNow();
     const actualFingerprint = kernel.fingerprintText(content);
-    if (detail) detail.fingerprintMs = sessionElapsed(t);
+    if (detail) detail.fingerprintMs = reconcileElapsed(t);
 
     // Stable fast paths: PocketRisu may retain either the canonical handler result or the raw
     // model output passed into the handler. Both are generation-time fingerprints, so neither
@@ -4413,9 +4626,9 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       return { changed: false, reason: seeded ? (airtimeSeeded ? 'same-host-fast+airtime-seed' : 'same-host-fast+narrative-seed') : 'same-host-fast' };
     }
 
-    t = sessionNow();
+    t = reconcileNow();
     const savedOut = await session.store.load('out', outIndex);
-    if (detail) detail.savedOutLoadMs = sessionElapsed(t);
+    if (detail) detail.savedOutLoadMs = reconcileElapsed(t);
     if (!savedOut) {
       if (detail) detail.path = 'no-snapshot';
       return { changed: false, reason: 'no-snapshot' };
@@ -4427,9 +4640,9 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
     const savedFastSafe = Number(savedOut.stateVersion || 0) >= kernel.STATE_VERSION
       && Number(savedOut.clockRepairVersion || 0) >= time.CLOCK_REPAIR_VERSION;
     if (savedFastSafe && (savedOut.outputFingerprint === actualFingerprint || savedOut.hostOutputFingerprint === actualFingerprint)) {
-      t = sessionNow();
+      t = reconcileNow();
       const same = kernel.reconcileState(savedOut);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      if (detail) detail.stateSyncMs += reconcileElapsed(t);
       session.current = same;
       session.currentOutputIndex = outIndex;
       session.trustedOutputFingerprint = same.outputFingerprint || null;
@@ -4447,29 +4660,29 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       return { changed: false, reason: detail?.path || (hostMatch ? 'same-host-snapshot' : 'same-snapshot') };
     }
 
-    t = sessionNow();
+    t = reconcileNow();
     const sendForEnvelope = await session.store.load('send', outIndex - 1);
-    if (detail) detail.sendLoadMs = sessionElapsed(t);
+    if (detail) detail.sendLoadMs = reconcileElapsed(t);
     if (sendForEnvelope?.pending?.active) {
-      t = sessionNow();
-      const prepared = recovery.prepareOutput(content, sendForEnvelope.pending);
-      if (detail) detail.prepareMs += sessionElapsed(t);
+      t = reconcileNow();
+      const prepared = outputCompat.prepareOutput(content, sendForEnvelope.pending);
+      if (detail) detail.prepareMs += reconcileElapsed(t);
 
       // Legacy migration/compatibility check: deterministically replay the normal finalize step
       // in memory. If the raw PocketRisu representation resolves to the fingerprint already
       // committed for this output, it was not a user edit. Do not rewrite snapshots or prune.
       if (prepared.envelope.resolved && savedOut.outputFingerprint) {
-        t = sessionNow();
-        const compatibilityResult = finalizePreparedOutput(sendForEnvelope, prepared, outIndex);
+        t = reconcileNow();
+        const compatibilityResult = outputFinalize.finalizePreparedOutput(sendForEnvelope, prepared, outIndex);
         const compatibleFingerprint = kernel.fingerprintText(compatibilityResult.content);
-        if (detail) detail.compatibilityMs += sessionElapsed(t);
+        if (detail) detail.compatibilityMs += reconcileElapsed(t);
         if (compatibleFingerprint === savedOut.outputFingerprint) {
           const same = kernel.reconcileState(savedOut);
           same.hostOutputFingerprint = actualFingerprint;
           // Preserve legacy clock-repair semantics even though the output itself is proven equivalent.
-          t = sessionNow();
-          const clockRepaired = await recovery.repairLegacyClockState(session.store, outIndex, compatibilityResult.content, same);
-          if (detail) detail.clockRepairMs += sessionElapsed(t);
+          t = reconcileNow();
+          const clockRepaired = await bootstrapMigration.repairLegacyClockState(session.store, outIndex, compatibilityResult.content, same);
+          if (detail) detail.clockRepairMs += reconcileElapsed(t);
           session.current = same;
           session.currentOutputIndex = outIndex;
           session.trustedOutputFingerprint = same.outputFingerprint || null;
@@ -4484,18 +4697,18 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       }
 
       if (prepared.envelope.repaired && prepared.envelope.resolved) {
-        t = sessionNow();
-        const repairedResult = finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
-        if (detail) detail.finalizeMs += sessionElapsed(t);
-        t = sessionNow();
-        await recovery.repairLegacyClockState(session.store, outIndex, prepared.content, repairedResult.state);
-        if (detail) detail.clockRepairMs += sessionElapsed(t);
-        t = sessionNow();
+        t = reconcileNow();
+        const repairedResult = outputFinalize.finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
+        if (detail) detail.finalizeMs += reconcileElapsed(t);
+        t = reconcileNow();
+        await bootstrapMigration.repairLegacyClockState(session.store, outIndex, prepared.content, repairedResult.state);
+        if (detail) detail.clockRepairMs += reconcileElapsed(t);
+        t = reconcileNow();
         repairedResult.state.outputFingerprint = kernel.fingerprintText(repairedResult.content);
         repairedResult.state.hostOutputFingerprint = actualFingerprint;
         repairedResult.state.envelopeRepairVersion = 1;
         repairedResult.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
-        if (detail) detail.stateSyncMs += sessionElapsed(t);
+        if (detail) detail.stateSyncMs += reconcileElapsed(t);
         const saveMetric = {};
         await session.store.save('out', outIndex, repairedResult.state, detail ? { metric: saveMetric } : {});
         if (detail) {
@@ -4515,18 +4728,18 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
     }
 
     if (!savedOut.outputFingerprint) {
-      t = sessionNow();
+      t = reconcileNow();
       const baseline = kernel.reconcileState(savedOut);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      t = sessionNow();
-      const repaired = await recovery.repairLegacyClockState(session.store, outIndex, content, baseline);
-      if (detail) detail.clockRepairMs += sessionElapsed(t);
-      t = sessionNow();
+      if (detail) detail.stateSyncMs += reconcileElapsed(t);
+      t = reconcileNow();
+      const repaired = await bootstrapMigration.repairLegacyClockState(session.store, outIndex, content, baseline);
+      if (detail) detail.clockRepairMs += reconcileElapsed(t);
+      t = reconcileNow();
       const clockChanged = time.applyWorldYear(baseline, time.timestampYear(kernel.stripControlTags(content)));
       const narrativeClockChanged = time.syncNarrativeTimestamp(baseline, kernel.stripControlTags(content), baseline.lastMode);
       baseline.outputFingerprint = actualFingerprint;
       baseline.hostOutputFingerprint = actualFingerprint;
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      if (detail) detail.stateSyncMs += reconcileElapsed(t);
       const saveMetric = {};
       await session.store.save('out', outIndex, baseline, detail ? { metric: saveMetric } : {});
       if (detail) {
@@ -4545,16 +4758,16 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
     }
 
     if (savedOut.outputFingerprint === actualFingerprint) {
-      t = sessionNow();
+      t = reconcileNow();
       const same = kernel.reconcileState(savedOut);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
-      t = sessionNow();
-      const repaired = await recovery.repairLegacyClockState(session.store, outIndex, content, same);
-      if (detail) detail.clockRepairMs += sessionElapsed(t);
-      t = sessionNow();
+      if (detail) detail.stateSyncMs += reconcileElapsed(t);
+      t = reconcileNow();
+      const repaired = await bootstrapMigration.repairLegacyClockState(session.store, outIndex, content, same);
+      if (detail) detail.clockRepairMs += reconcileElapsed(t);
+      t = reconcileNow();
       const clockChanged = time.applyWorldYear(same, time.timestampYear(kernel.stripControlTags(content)));
       const narrativeClockChanged = time.syncNarrativeTimestamp(same, kernel.stripControlTags(content), same.lastMode);
-      if (detail) detail.stateSyncMs += sessionElapsed(t);
+      if (detail) detail.stateSyncMs += reconcileElapsed(t);
       if (repaired || clockChanged || narrativeClockChanged) {
         const saveMetric = {};
         await session.store.save('out', outIndex, same, detail ? { metric: saveMetric } : {});
@@ -4578,20 +4791,20 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       if (detail) detail.path = 'no-send-snapshot';
       return { changed: false, reason: 'no-send-snapshot' };
     }
-    t = sessionNow();
-    const prepared = recovery.prepareOutput(content, sendForEnvelope.pending);
-    if (detail) detail.prepareMs += sessionElapsed(t);
-    t = sessionNow();
-    const result = finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
-    if (detail) detail.finalizeMs += sessionElapsed(t);
-    t = sessionNow();
-    await recovery.repairLegacyClockState(session.store, outIndex, result.content, result.state);
-    if (detail) detail.clockRepairMs += sessionElapsed(t);
-    t = sessionNow();
+    t = reconcileNow();
+    const prepared = outputCompat.prepareOutput(content, sendForEnvelope.pending);
+    if (detail) detail.prepareMs += reconcileElapsed(t);
+    t = reconcileNow();
+    const result = outputFinalize.finalizePreparedOutput(sendForEnvelope, prepared, outIndex, { normalizeReactions: false });
+    if (detail) detail.finalizeMs += reconcileElapsed(t);
+    t = reconcileNow();
+    await bootstrapMigration.repairLegacyClockState(session.store, outIndex, result.content, result.state);
+    if (detail) detail.clockRepairMs += reconcileElapsed(t);
+    t = reconcileNow();
     result.state.outputFingerprint = kernel.fingerprintText(result.content);
     result.state.hostOutputFingerprint = actualFingerprint;
     result.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
-    if (detail) detail.stateSyncMs += sessionElapsed(t);
+    if (detail) detail.stateSyncMs += reconcileElapsed(t);
     const saveMetric = {};
     await session.store.save('out', outIndex, result.state, detail ? { metric: saveMetric } : {});
     if (detail) {
@@ -4690,72 +4903,12 @@ async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, de
 module.exports = { reconcileSessionEditedOutput, reconcileVisiblePreviousAssistant };
 });
 
-SimCore.define("session", function (require, module, exports) {
-const { SnapshotStore } = require('./store');
+SimCore.define("output-finalize", function (require, module, exports) {
 const kernel = require('./kernel');
-const lifecycle = require('./lifecycle');
 const time = require('./time');
 const frame = require('./frame');
-const community = require('./community');
 const reaction = require('./reaction');
 const structure = require('./structure');
-const recovery = require('./recovery');
-const editReconcile = require('./edit-reconcile');
-const recurrence = require('./recurrence');
-const prompt = require('./prompt');
-
-function sessionNow() {
-  return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
-}
-function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
-
-const renderRuntimePrompt = prompt.renderRuntimePrompt;
-const compileRuntimePromptParts = prompt.compileRuntimePromptParts;
-
-function inspectPreviousBEndOutput(historyMessages, sendIndex) {
-  const rows = Array.isArray(historyMessages) ? historyMessages : [];
-  const currentSendIndex = Number(sendIndex);
-  const outIndex = Number.isInteger(currentSendIndex) ? currentSendIndex - 1 : -1;
-  const unavailable = (reason) => Object.freeze({
-    available: false,
-    outIndex,
-    closureComplete: false,
-    terminalExplicit: false,
-    terminalTimestamp: null,
-    structureClean: false,
-    issueCount: 0,
-    reason,
-  });
-  if (!Number.isInteger(currentSendIndex) || currentSendIndex < 1 || outIndex < 0 || outIndex >= rows.length) {
-    return unavailable('previous-output-index-unavailable');
-  }
-  const row = rows[outIndex];
-  if (row?.role !== 'assistant' && row?.role !== 'char') return unavailable('previous-output-not-assistant');
-  const raw = kernel.textOfMessage(row);
-  if (!raw) return unavailable('previous-output-empty');
-  const canonicalized = time.canonicalizeTimestampSyntax(raw);
-  const content = canonicalized.content;
-  const pending = Object.freeze({ active: true, mode: 'B_END' });
-  const integrity = structure.responseEnvelopeIntegrity(content, pending);
-  const issues = structure.validateStructure(content, pending);
-  const terminal = time.narrativeTimestampSequence(content);
-  const terminalExplicit = !!(terminal
-    && terminal.sceneCount > 0
-    && terminal.tailStatus === 'MONOTONIC'
-    && terminal.candidate);
-  const structureClean = !!integrity?.safe && issues.length === 0;
-  const closureComplete = terminalExplicit && structureClean;
-  return Object.freeze({
-    available: true,
-    outIndex,
-    closureComplete,
-    terminalExplicit,
-    terminalTimestamp: terminalExplicit ? terminal.candidate : null,
-    structureClean,
-    issueCount: issues.length,
-    reason: closureComplete ? 'complete' : (!terminalExplicit ? 'terminal-invalid' : 'structure-not-clean'),
-  });
-}
 
 function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   const state = kernel.reconcileState(kernel.clone(baseState));
@@ -4899,6 +5052,78 @@ function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
   };
 }
 
+module.exports = { finalizePreparedOutput };
+});
+
+SimCore.define("session", function (require, module, exports) {
+const { SnapshotStore } = require('./store');
+const kernel = require('./kernel');
+const lifecycle = require('./lifecycle');
+const time = require('./time');
+const frame = require('./frame');
+const community = require('./community');
+const reaction = require('./reaction');
+const structure = require('./structure');
+const outputCompat = require('./output-compat');
+const bootstrapMigration = require('./bootstrap-migration');
+const outputFinalize = require('./output-finalize');
+const editReconcile = require('./edit-reconcile');
+const recurrence = require('./recurrence');
+const prompt = require('./prompt');
+
+function sessionNow() {
+  return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+}
+function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
+
+const renderRuntimePrompt = prompt.renderRuntimePrompt;
+const compileRuntimePromptParts = prompt.compileRuntimePromptParts;
+
+function inspectPreviousBEndOutput(historyMessages, sendIndex) {
+  const rows = Array.isArray(historyMessages) ? historyMessages : [];
+  const currentSendIndex = Number(sendIndex);
+  const outIndex = Number.isInteger(currentSendIndex) ? currentSendIndex - 1 : -1;
+  const unavailable = (reason) => Object.freeze({
+    available: false,
+    outIndex,
+    closureComplete: false,
+    terminalExplicit: false,
+    terminalTimestamp: null,
+    structureClean: false,
+    issueCount: 0,
+    reason,
+  });
+  if (!Number.isInteger(currentSendIndex) || currentSendIndex < 1 || outIndex < 0 || outIndex >= rows.length) {
+    return unavailable('previous-output-index-unavailable');
+  }
+  const row = rows[outIndex];
+  if (row?.role !== 'assistant' && row?.role !== 'char') return unavailable('previous-output-not-assistant');
+  const raw = kernel.textOfMessage(row);
+  if (!raw) return unavailable('previous-output-empty');
+  const canonicalized = time.canonicalizeTimestampSyntax(raw);
+  const content = canonicalized.content;
+  const pending = Object.freeze({ active: true, mode: 'B_END' });
+  const integrity = structure.responseEnvelopeIntegrity(content, pending);
+  const issues = structure.validateStructure(content, pending);
+  const terminal = time.narrativeTimestampSequence(content);
+  const terminalExplicit = !!(terminal
+    && terminal.sceneCount > 0
+    && terminal.tailStatus === 'MONOTONIC'
+    && terminal.candidate);
+  const structureClean = !!integrity?.safe && issues.length === 0;
+  const closureComplete = terminalExplicit && structureClean;
+  return Object.freeze({
+    available: true,
+    outIndex,
+    closureComplete,
+    terminalExplicit,
+    terminalTimestamp: terminalExplicit ? terminal.candidate : null,
+    structureClean,
+    issueCount: issues.length,
+    reason: closureComplete ? 'complete' : (!terminalExplicit ? 'terminal-invalid' : 'structure-not-clean'),
+  });
+}
+
 class CoreRulesetSession {
   constructor(backend, opts = {}) {
     this.store = new SnapshotStore(backend, opts.prefix || `sim:core:${opts.chatId || 'chat'}`, opts.keepN || 80);
@@ -4910,8 +5135,6 @@ class CoreRulesetSession {
     this.trustedHostOutputFingerprint = null;
     this.currentOutputIndex = -1;
     this.lastPreparedSendIndex = -1;
-    this.deferredPruneIndex = -1;
-    this.deferredPruneRunning = false;
     this.communityAliasRepairStats = null;
     this.templateRecurrenceBootstrapStats = null;
     this.narrativeClockMigrationStats = null;
@@ -5007,7 +5230,7 @@ class CoreRulesetSession {
         const rawFound = found.state && typeof found.state === 'object' ? kernel.clone(found.state) : found.state;
         this.loadedFromLegacySnapshot = Number(rawFound?.stateVersion || 0) < kernel.STATE_VERSION;
         this.current = kernel.reconcileState(found.state);
-        const globalRepair = await recovery.repairLatestGlobalFloorContamination(this.store, this.current, found.index, rawFound);
+        const globalRepair = await bootstrapMigration.repairLatestGlobalFloorContamination(this.store, this.current, found.index, rawFound);
         this.current = globalRepair.state;
         if (!this.current.historyBootstrapped) {
           this.current.historyBootstrapped = true;
@@ -5063,7 +5286,7 @@ class CoreRulesetSession {
     if (!this.needsHistoryBootstrap || this.current?.historyBootstrapped) {
       return { changed: false, stats: this.current?.historyBootstrapStats || null };
     }
-    const r = recovery.bootstrapFromHistory(this.current || kernel.initialState(), messages, lastCompletedOutIndex);
+    const r = bootstrapMigration.bootstrapFromHistory(this.current || kernel.initialState(), messages, lastCompletedOutIndex);
     this.current = r.state;
     this.needsHistoryBootstrap = false;
     if (lastCompletedOutIndex >= 0) {
@@ -5255,31 +5478,6 @@ class CoreRulesetSession {
     return kernel.reconcileState((await this.store.load('send', expectedSendIndex)) || this.current || kernel.initialState());
   }
 
-  scheduleDeferredPrune(outIndex) {
-    // Retention is housekeeping, not part of the user-visible output commit. Run it only
-    // periodically and after the output promise can resolve. 17 is coprime with the usual
-    // user/assistant index step of 2, so long chats still hit the cadence after reloads.
-    if (!Number.isInteger(outIndex) || outIndex < 17 || (outIndex % 17) !== 0) return false;
-    if (this.deferredPruneIndex === outIndex || this.deferredPruneRunning) return false;
-    this.deferredPruneIndex = outIndex;
-
-    const run = async () => {
-      if (this.deferredPruneRunning) return;
-      this.deferredPruneRunning = true;
-      try { await this.store.prune(); }
-      catch (e) { /* retention failure must never affect committed output/state */ }
-      finally { this.deferredPruneRunning = false; }
-    };
-
-    if (typeof setTimeout === 'function') {
-      const timer = setTimeout(run, 750);
-      if (timer && typeof timer.unref === 'function') timer.unref();
-    } else {
-      Promise.resolve().then(run);
-    }
-    return true;
-  }
-
   async processOutput(outIndex, content, perfDetail = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
@@ -5307,7 +5505,7 @@ class CoreRulesetSession {
     }
 
     t = sessionNow();
-    const prepared = recovery.prepareOutput(content, base.pending); // exactly one strip/envelope/tail pass
+    const prepared = outputCompat.prepareOutput(content, base.pending); // exactly one strip/envelope/tail pass
     if (detail) detail.prepareMs = sessionElapsed(t);
 
     t = sessionNow();
@@ -5315,8 +5513,8 @@ class CoreRulesetSession {
     if (detail) detail.validateMs = sessionElapsed(t);
 
     t = sessionNow();
-    const result = finalizePreparedOutput(base, prepared, outIndex);
-    const safeEnvelopeBoundaryConfirmation = recovery.buildSafeEnvelopeBoundaryConfirmation(
+    const result = outputFinalize.finalizePreparedOutput(base, prepared, outIndex);
+    const safeEnvelopeBoundaryConfirmation = outputCompat.buildSafeEnvelopeBoundaryConfirmation(
       result.content, prepared.envelope, issues, result.stateCommit,
     );
     // PocketRisu can persist either the raw handler input or the canonical handler result.
@@ -5339,8 +5537,8 @@ class CoreRulesetSession {
     this.currentOutputIndex = outIndex;
     this.trustedOutputFingerprint = result.state.outputFingerprint || null;
     this.trustedHostOutputFingerprint = result.state.hostOutputFingerprint || null;
-    if (detail) detail.pruneDeferred = this.scheduleDeferredPrune(outIndex);
-    else this.scheduleDeferredPrune(outIndex);
+    if (detail) detail.pruneDeferred = this.store.scheduleDeferredPrune(outIndex);
+    else this.store.scheduleDeferredPrune(outIndex);
     result.issues = issues;
     result.envelopeDiagnostics = prepared.envelope.diagnostics || [];
     result.preambleProvenance = prepared.envelope.preambleProvenance || null;
@@ -5374,9 +5572,7 @@ class CoreRulesetSession {
   }
 
   async reconcileEditedOutput(outIndex, content, perfDetail = null) {
-    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail, {
-      kernel, time, recovery, finalizePreparedOutput, sessionNow, sessionElapsed,
-    });
+    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail);
   }
 
   storageDiagnostics() { return this.store.keyScanStats(); }
@@ -5396,7 +5592,6 @@ module.exports = {
   validateStructure: structure.validateStructure,
   communityBlocks: community.communityBlocks,
   prepareTurn: lifecycle.prepareTurn,
-  recovery,
 };
 });
 
@@ -6183,7 +6378,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.65.0';
+const HOST_COMPAT_VERSION = '0.66.0';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -6671,13 +6866,6 @@ module.exports = { createSessionRuntime };
 });
 
 SimCore.define("representation", function (require, module, exports) {
-const EXACT_PRIOR_MATCHES = Object.freeze([
-  'CANONICAL',
-  'FRESH_CONFIRMED_SUFFIX',
-  'BOUNDARY_CONFIRMED_SUFFIX',
-  'SAFE_BOUNDARY_CONFIRMED',
-]);
-
 function fingerprintChars(value) {
   const match = String(value || '').match(/^(\d+):/);
   return match ? Number(match[1]) : null;
@@ -6686,7 +6874,7 @@ function fingerprintChars(value) {
 function priorRepresentation(row) {
   if (!row) return 'UNAVAILABLE';
   const match = String(row.fingerprintMatch || '');
-  if (EXACT_PRIOR_MATCHES.includes(match)) return 'EXACT';
+  if (row.acceptedCanonicalEquivalent === true || match === 'CANONICAL') return 'EXACT';
   if (match === 'HOST_RAW') return 'HOST_RAW_MATCH';
   return 'OUTPUT_MISMATCH';
 }
@@ -6737,6 +6925,7 @@ function createRegistry(limit = 16) {
       locationKey: String(probe.locationKey || ''),
       status: String(probe.status || 'n/a'),
       fingerprintMatch: String(probe.fingerprintMatch || 'n/a'),
+      acceptedCanonicalEquivalent: probe.acceptedCanonicalEquivalent === true,
       canonicalFingerprint: String(probe.canonicalFingerprintFull || ''),
       hostRawFingerprint: String(probe.hostRawFingerprintFull || ''),
       freshFingerprint: String(probe.freshFingerprintFull || ''),
@@ -6768,6 +6957,7 @@ module.exports = { createRegistry, inspectCarryover, fingerprintChars };
 });
 
 SimCore.define("runtime-mirror", function (require, module, exports) {
+const outputCompat = require('./output-compat');
 function createMirrorRuntime(deps) {
   const { coreRules, host, perfNow, perfMs, textMessageContent, diagnosticLocationKey, getCoreSession, runtimeIsCurrent, getRuntimeEpoch, rememberRepresentation } = deps;
   let sequence = 0;
@@ -6792,7 +6982,7 @@ function createMirrorRuntime(deps) {
     };
   }
 
-  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null, freshEnvelopeConfirmation = null, safeEnvelopeBoundaryConfirmation = null) {
+  async function mirror(chaIdx, chatIdx, chatArg = null, perfDetail = null, mirrorSnapshot = null, shouldApply = null, observationPlan = null) {
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     if (detail) {
       detail.chatLoadMs = 0;
@@ -6826,71 +7016,78 @@ function createMirrorRuntime(deps) {
         const actualFingerprint = coreRules.fingerprintText(textMessageContent(message));
         const canonical = String(snapshot.outputFingerprint || '');
         const hostRaw = String(snapshot.hostOutputFingerprint || '');
-        const confirmation = freshEnvelopeConfirmation && typeof freshEnvelopeConfirmation === 'object' ? freshEnvelopeConfirmation : null;
-        const candidateFingerprint = String(confirmation?.candidateFingerprint || '');
-        const boundaryCandidates = Array.isArray(confirmation?.boundaryCandidates) ? confirmation.boundaryCandidates : [];
-        const normalMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
-        const exactFreshConfirmed = normalMatch === 'MISMATCH'
-          && confirmation?.status === 'PENDING'
-          && confirmation?.confirmation === 'FRESH_EXACT'
-          && !!candidateFingerprint
-          && actualFingerprint === candidateFingerprint;
-        const boundaryMatch = !exactFreshConfirmed && normalMatch === 'MISMATCH'
-          && confirmation?.status === 'PENDING'
-          && confirmation?.confirmation === 'FRESH_EXACT'
-          ? boundaryCandidates.find((row) => String(row?.fingerprint || '') === actualFingerprint) || null
-          : null;
-        const freshConfirmed = exactFreshConfirmed || !!boundaryMatch;
-        const recoveryPolicy = boundaryMatch ? 'BOUNDARY_CONFIRMED_SUFFIX' : (exactFreshConfirmed ? 'FRESH_CONFIRMED_SUFFIX' : null);
-        const safeConfirmation = safeEnvelopeBoundaryConfirmation && typeof safeEnvelopeBoundaryConfirmation === 'object'
-          ? safeEnvelopeBoundaryConfirmation : null;
-        const safeCandidates = Array.isArray(safeConfirmation?.boundaryCandidates) ? safeConfirmation.boundaryCandidates : [];
-        const safeMatches = !freshConfirmed && normalMatch === 'MISMATCH'
-          && safeConfirmation?.status === 'PENDING'
-          && safeConfirmation?.confirmation === 'FRESH_EXACT'
-          ? safeCandidates.filter((row) => String(row?.fingerprint || '') === actualFingerprint)
-          : [];
-        const safeBoundaryMatch = safeMatches.length === 1 ? safeMatches[0] : null;
-        const safeBoundaryConfirmed = !!safeBoundaryMatch;
-        const representationConfirmed = freshConfirmed || safeBoundaryConfirmed;
-        const fingerprintMatch = safeBoundaryConfirmed ? 'SAFE_BOUNDARY_CONFIRMED' : (recoveryPolicy || normalMatch);
+        const baseMatch = actualFingerprint === canonical ? 'CANONICAL' : (actualFingerprint === hostRaw ? 'HOST_RAW' : 'MISMATCH');
+        const candidates = Array.isArray(observationPlan?.observation?.candidates)
+          ? observationPlan.observation.candidates : [];
+        const matchedCandidateIds = [];
+        for (const row of candidates) {
+          if (actualFingerprint === String(row?.fingerprint || '')) matchedCandidateIds.push(String(row?.candidateId || ''));
+        }
+        const receipt = Object.freeze({
+          schema: 1,
+          outIndex: expectedOutIndex,
+          locationKey: String(snapshot.locationKey || ''),
+          freshFingerprint: String(actualFingerprint || ''),
+          baseMatch,
+          matchedCandidateIds: Object.freeze(matchedCandidateIds),
+          candidateMatchCount: matchedCandidateIds.length,
+        });
+        let interpretation;
+        try {
+          interpretation = outputCompat.interpretFreshObservation(observationPlan, receipt);
+        } catch (_) {
+          interpretation = null;
+        }
+        const acceptedCanonicalEquivalent = interpretation?.acceptedCanonicalEquivalent === true;
+        const fingerprintMatch = String(interpretation?.fingerprintMatch || baseMatch || 'MISMATCH');
+
         if (detail) {
-          detail.canonicalFingerprint = (representationConfirmed ? actualFingerprint : canonical).slice(0, 12);
+          detail.canonicalFingerprint = (acceptedCanonicalEquivalent ? actualFingerprint : canonical).slice(0, 12);
           detail.hostRawFingerprint = hostRaw.slice(0, 12);
           detail.freshFingerprint = String(actualFingerprint || '').slice(0, 12);
-          detail.canonicalFingerprintFull = representationConfirmed ? String(actualFingerprint || '') : canonical;
+          detail.canonicalFingerprintFull = acceptedCanonicalEquivalent ? String(actualFingerprint || '') : canonical;
           detail.hostRawFingerprintFull = hostRaw;
           detail.freshFingerprintFull = String(actualFingerprint || '');
           detail.fingerprintMatch = fingerprintMatch;
-          detail.freshEnvelopeRecovery = freshConfirmed ? 'RECOVERED' : (confirmation ? 'FRESH_MISMATCH' : 'NOT_APPLICABLE');
-          detail.freshEnvelopeSource = freshConfirmed ? String(confirmation.source || 'HOST_RAW_SUFFIX') : null;
-          detail.freshEnvelopePolicy = recoveryPolicy;
-          detail.freshEnvelopeCandidateChars = confirmation ? Number(confirmation.candidateChars || 0) : 0;
-          detail.freshEnvelopeBoundaryChars = boundaryMatch ? Number(boundaryMatch.chars || 0) : 0;
-          detail.freshEnvelopeBoundaryDelta = boundaryMatch ? Number(boundaryMatch.deltaChars || 0) : 0;
-          detail.freshEnvelopeBoundaryKind = boundaryMatch ? String(boundaryMatch.kind || 'CRLF_ONLY') : null;
+          detail.acceptedCanonicalEquivalent = acceptedCanonicalEquivalent;
+          detail.observationBaseMatch = baseMatch;
+          detail.observationCandidateMatches = matchedCandidateIds.length;
+          detail.freshEnvelopeRecovery = interpretation?.freshEnvelopeRecovery || (observationPlan?.telemetrySeed?.freshConfirmationPresent ? 'FRESH_MISMATCH' : 'NOT_APPLICABLE');
+          detail.freshEnvelopeSource = interpretation?.freshEnvelopeSource || null;
+          detail.freshEnvelopePolicy = interpretation?.freshEnvelopePolicy || null;
+          detail.freshEnvelopeCandidateChars = Number(interpretation?.freshEnvelopeCandidateChars || observationPlan?.telemetrySeed?.freshEnvelopeCandidateChars || 0);
+          detail.freshEnvelopeBoundaryChars = Number(interpretation?.freshEnvelopeBoundaryChars || 0);
+          detail.freshEnvelopeBoundaryDelta = Number(interpretation?.freshEnvelopeBoundaryDelta || 0);
+          detail.freshEnvelopeBoundaryKind = interpretation?.freshEnvelopeBoundaryKind || null;
           detail.freshEnvelopePersistent = 'NONE';
-          detail.safeEnvelopeReconcile = safeBoundaryConfirmed ? 'CONFIRMED' : (safeConfirmation && normalMatch === 'MISMATCH' ? 'REJECTED' : 'NOT_APPLICABLE');
-          detail.safeEnvelopeSource = safeBoundaryConfirmed ? String(safeConfirmation.source || 'CANONICAL_BOUNDARY') : null;
-          detail.safeEnvelopePolicy = safeBoundaryConfirmed ? 'SAFE_BOUNDARY_CONFIRMED' : null;
-          detail.safeEnvelopeCanonicalChars = safeConfirmation ? Number(safeConfirmation.canonicalChars || 0) : 0;
-          detail.safeEnvelopeBoundaryChars = safeBoundaryMatch ? Number(safeBoundaryMatch.chars || 0) : 0;
-          detail.safeEnvelopeBoundaryDelta = safeBoundaryMatch ? Number(safeBoundaryMatch.deltaChars || 0) : 0;
-          detail.safeEnvelopeBoundaryKind = safeBoundaryMatch ? String(safeBoundaryMatch.kind || 'STRUCTURAL_LF') : null;
+          detail.safeEnvelopeReconcile = interpretation?.safeEnvelopeReconcile || (observationPlan?.telemetrySeed?.safeConfirmationPresent ? 'REJECTED' : 'NOT_APPLICABLE');
+          detail.safeEnvelopeSource = interpretation?.safeEnvelopeSource || null;
+          detail.safeEnvelopePolicy = interpretation?.safeEnvelopePolicy || null;
+          detail.safeEnvelopeCanonicalChars = Number(interpretation?.safeEnvelopeCanonicalChars || observationPlan?.telemetrySeed?.safeEnvelopeCanonicalChars || 0);
+          detail.safeEnvelopeBoundaryChars = Number(interpretation?.safeEnvelopeBoundaryChars || 0);
+          detail.safeEnvelopeBoundaryDelta = Number(interpretation?.safeEnvelopeBoundaryDelta || 0);
+          detail.safeEnvelopeBoundaryKind = interpretation?.safeEnvelopeBoundaryKind || null;
           detail.safeEnvelopePersistent = 'NONE';
         }
-        if (representationConfirmed) {
-          snapshot.outputFingerprint = actualFingerprint;
-          const liveSession = getCoreSession();
-          if (liveSession?.current && Number(liveSession.currentOutputIndex) === expectedOutIndex) {
-            liveSession.current.outputFingerprint = actualFingerprint;
-            liveSession.trustedOutputFingerprint = actualFingerprint;
-            snapshot.portableState = liveSession.portableState();
-          }
-        }
-        if ((canonical || hostRaw) && normalMatch === 'MISMATCH' && !representationConfirmed) {
+
+        if (baseMatch === 'MISMATCH' && !acceptedCanonicalEquivalent) {
           if (detail) detail.status = 'OUTPUT_MISMATCH';
           return false;
+        }
+        // Interpretation cannot authorize stale work. Re-check before any trusted-identity mutation.
+        if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
+        if (acceptedCanonicalEquivalent) {
+          snapshot.outputFingerprint = actualFingerprint;
+          const liveSession = getCoreSession();
+          if (!liveSession?.current
+              || Number(liveSession.currentOutputIndex) !== expectedOutIndex
+              || String(snapshot.locationKey || '') !== diagnosticLocationKey(chaIdx, chatIdx, chat)) {
+            if (detail) detail.status = 'SESSION_IDENTITY_MISMATCH';
+            return false;
+          }
+          liveSession.current.outputFingerprint = actualFingerprint;
+          liveSession.trustedOutputFingerprint = actualFingerprint;
+          snapshot.portableState = liveSession.portableState();
         }
       }
       if (!guard()) { if (detail) detail.status = 'GUARD_DROPPED'; return false; }
@@ -6920,6 +7117,10 @@ function createMirrorRuntime(deps) {
   function schedule(chaIdx, chatIdx, chat, outIndex, state, freshEnvelopeConfirmation = null, safeEnvelopeBoundaryConfirmation = null) {
     const snapshot = capture(chaIdx, chatIdx, chat, outIndex, state);
     if (!snapshot) return false;
+    const observationPlan = outputCompat.buildFreshObservationPlan(
+      freshEnvelopeConfirmation,
+      safeEnvelopeBoundaryConfirmation,
+    );
     const epoch = getRuntimeEpoch();
     const locationKey = String(snapshot.locationKey || '');
     const currentSequence = ++sequence;
@@ -6937,7 +7138,7 @@ function createMirrorRuntime(deps) {
       freshEnvelopeRecovery: freshEnvelopeConfirmation ? 'PENDING' : 'NOT_APPLICABLE',
       freshEnvelopeSource: null,
       freshEnvelopePolicy: null,
-      freshEnvelopeCandidateChars: Number(freshEnvelopeConfirmation?.candidateChars || 0),
+      freshEnvelopeCandidateChars: Number(observationPlan?.telemetrySeed?.freshEnvelopeCandidateChars || 0),
       freshEnvelopeBoundaryChars: 0,
       freshEnvelopeBoundaryDelta: 0,
       freshEnvelopeBoundaryKind: null,
@@ -6945,11 +7146,14 @@ function createMirrorRuntime(deps) {
       safeEnvelopeReconcile: 'NOT_APPLICABLE',
       safeEnvelopeSource: null,
       safeEnvelopePolicy: null,
-      safeEnvelopeCanonicalChars: Number(safeEnvelopeBoundaryConfirmation?.canonicalChars || 0),
+      safeEnvelopeCanonicalChars: Number(observationPlan?.telemetrySeed?.safeEnvelopeCanonicalChars || 0),
       safeEnvelopeBoundaryChars: 0,
       safeEnvelopeBoundaryDelta: 0,
       safeEnvelopeBoundaryKind: null,
       safeEnvelopePersistent: 'NONE',
+      acceptedCanonicalEquivalent: false,
+      observationBaseMatch: 'PENDING',
+      observationCandidateMatches: 0,
     };
     lastProbe = probe;
     const shouldApply = () => runtimeIsCurrent(epoch) && latestByLocation.get(locationKey) === currentSequence;
@@ -6963,7 +7167,7 @@ function createMirrorRuntime(deps) {
       probe.startedAt = Date.now();
       const detail = {};
       const started = perfNow();
-      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply, freshEnvelopeConfirmation, safeEnvelopeBoundaryConfirmation);
+      const ok = await mirror(chaIdx, chatIdx, null, detail, snapshot, shouldApply, observationPlan);
       probe.totalMs = perfMs(started);
       probe.chatLoadMs = Number(detail.chatLoadMs || 0);
       probe.prepareMs = Number(detail.prepareMs || 0);
@@ -6991,6 +7195,9 @@ function createMirrorRuntime(deps) {
       probe.safeEnvelopeBoundaryDelta = detail.safeEnvelopeBoundaryDelta ?? probe.safeEnvelopeBoundaryDelta;
       probe.safeEnvelopeBoundaryKind = detail.safeEnvelopeBoundaryKind ?? probe.safeEnvelopeBoundaryKind;
       probe.safeEnvelopePersistent = detail.safeEnvelopePersistent ?? probe.safeEnvelopePersistent;
+      probe.acceptedCanonicalEquivalent = detail.acceptedCanonicalEquivalent === true;
+      probe.observationBaseMatch = detail.observationBaseMatch ?? probe.observationBaseMatch;
+      probe.observationCandidateMatches = detail.observationCandidateMatches ?? probe.observationCandidateMatches;
       if (!runtimeIsCurrent(epoch)) probe.status = 'STALE_DROPPED';
       else if (latestByLocation.get(locationKey) !== currentSequence) probe.status = 'SUPERSEDED';
       else probe.status = detail.status || (ok ? 'COMMITTED' : 'SKIPPED');
@@ -8970,19 +9177,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.65.0',
-    name: 'M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence',
-    scenario: '06500_IDENTITY_RELOAD_THEN_M2_3_EDIT_RECONCILE_REAL_LONG_CHAT',
+    version: '0.66.0',
+    name: 'M2-4 Session / Runtime Mirror Boundary Completion',
+    scenario: '06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT',
     summary: Object.freeze([
-      'Stage A — Runtime Identity Convergence: Version 0.65.0 + COMPACT_V2 + HOST_LOCAL WRITTEN 확인 뒤 같은 탭 새로고침',
-      'Stage A — 첫 post-refresh 자연 요청에서 ADOPTED via host-local 확인 후 자연 요청 1회 더 해 clean continuation 확인',
-      'Stage B — Stage A PASS 뒤에만 SAME_FAST / REPRESENTATION_FAST_RECONCILED / genuine hand-edit MANUAL_EDIT_REBUILT controls 진행',
-      'Stage A blocker가 보이면 Stage B acceptance를 중지하고 현재 진단을 먼저 보존',
+      'M2-4 — output-finalize / Store housekeeping / Recovery direct-owner / Runtime Mirror observation boundaries를 동작 변경 없이 정리',
+      '자연 A/C/B 요청에서 output commit · Deferred Mirror · Frame/Time/COMMUNITY/Reaction 회귀가 없는지 확인',
+      'Representation fast reconcile과 genuine hand edit controls를 다시 확인',
+      '이상 징후는 현재 진단을 먼저 보존하고 WATCH / DEFER / FIX / BLOCKER로 분류',
     ]),
     recent: Object.freeze([
-      Object.freeze({ version: '0.65.0', name: 'M2-3 + Runtime Identity Convergence', bullets: Object.freeze(['edit reconcile ownership을 한 application service로 기계적 추출', 'metadata/runtime/host version identity를 0.65.0으로 수렴']) }),
-      Object.freeze({ version: '0.64.11', name: 'Bounded Telemetry Capsule Compaction', bullets: Object.freeze(['reload handoff export를 bounded compact shape로 분리', '전체 16KB hard cap 유지']) }),
-      Object.freeze({ version: '0.64.10', name: 'Host-Local One-Shot Telemetry Handoff', bullets: Object.freeze(['sessionStorage 불가 시 Host 로컬 one-shot fallback', 'matching location은 consume-before-adopt']) }),
+      Object.freeze({ version: '0.66.0', name: 'M2-4 Boundary Completion', bullets: Object.freeze(['Session finalization/housekeeping ownership 축소', 'Mirror Observe→Interpret→Apply→Record 경계 완성']) }),
+      Object.freeze({ version: '0.65.0', name: 'M2-3 + Runtime Identity Convergence', bullets: Object.freeze(['Edit Reconcile application service 추출', 'metadata/runtime/host identity 0.65.0 수렴']) }),
+      Object.freeze({ version: '0.64.11', name: 'Bounded Telemetry Capsule Compaction', bullets: Object.freeze(['reload handoff bounded compact shape', 'whole capsule 16KB hard cap']) }),
     ]),
   });
 
@@ -8994,12 +9201,10 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <div style="font-weight:800;margin-bottom:6px">📦 업데이트 내역 · v${escapeHtml(card.version)}</div>
 <div style="color:#9fb3d7;margin-bottom:8px">${escapeHtml(card.name)}</div>
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
-<div style="font-weight:700;margin:8px 0 5px">Stage A — Reload continuity</div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 요청 1회 후 <b>Version 0.65.0 · COMPACT_V2 · 16,384 chars 이하 · HOST_LOCAL WRITTEN</b> 확인 및 진단 전체 복사</li><li>같은 탭 새로고침 후 첫 자연 요청에서 <b>ADOPTED · via host-local</b> 확인 및 진단 전체 복사</li><li>자연 요청 1회 더 하고 repeated adoption/reset 없이 fresh bounded checkpoint가 다시 쓰이는지 확인</li></ol>
-<div style="font-weight:700;margin:8px 0 5px">Stage B — M2-3 controls</div>
-<ol start="4" style="margin:7px 0 10px 18px;padding:0"><li>normal exact carryover → SAME_FAST · Edit origin NONE</li><li>자연스럽게 가능한 prior OUTPUT_MISMATCH + exact Fresh carryover → REPRESENTATION_FAST_RECONCILED · snapshot UNCHANGED</li><li>genuine hand edit → USER_EDIT_CANDIDATE → MANUAL_EDIT_REBUILT</li></ol>
+<div style="font-weight:700;margin:8px 0 5px">실전 확인</div>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 A/C/B 요청에서 Version 0.66.0 · Runtime ACTIVE · output COMMITTED 확인</li><li>ordinary exact carryover → SAME_FAST · Edit origin NONE 확인</li><li>자연스럽게 가능한 prior OUTPUT_MISMATCH + exact Fresh carryover → REPRESENTATION_FAST_RECONCILED · snapshot UNCHANGED 확인</li><li>genuine hand edit → USER_EDIT_CANDIDATE → MANUAL_EDIT_REBUILT 확인</li><li>Deferred Mirror의 CANONICAL/HOST_RAW/confirmed-boundary 의미와 stale/superseded guard가 이전과 동일한지 확인</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>Stage A에서 identity split / COMPACTION_FAILED / HOST_LOCAL failure / adoption contradiction 또는 예상 밖 semantic/runtime 이상이면 <b>Stage B로 진행하지 말고 현재 진단을 먼저 보존</b></div>
+<div>예상 밖 semantic/runtime 이상, unsafe mirror write, repeated adoption/reset, identity split 또는 구조 회귀가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
 <div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code></div>
 <div style="font-weight:700;margin:10px 0 5px">최근 업데이트</div>
 <ul style="margin:0 0 0 18px;padding:0">${recent}</ul>

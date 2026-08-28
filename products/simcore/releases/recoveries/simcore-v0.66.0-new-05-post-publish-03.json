@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.66.0-new-05",
+  "publisherRunId": "33206537749",
+  "productionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "productionBlob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
+  "authorityConfirmation": "RS2_4_POST_PUBLISH_RECOVERY",
+  "failureCode": "POST_PUBLISH_STATE_RECEIPT_DURABILITY_GAP"
+}

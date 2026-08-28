@@ -15,6 +15,18 @@ Its purpose is to let multiple chats or workers make progress independently with
 
 Repository, Git, CI, release, and project authorities remain above all of these coordination surfaces.
 
+## Work queue live-health contract
+
+`#465` is coordination only. Its normal human-facing body MUST use pointer-only live-health semantics:
+
+- `LIVE HEALTH: direct main + #485` is the only current-health pointer;
+- the queue may show active packet, next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- it MUST NOT duplicate a current `main` SHA, Required state/run, production identity state, or native-protection state as live truth;
+- when an exact SHA is required as packet evidence, it may appear only as explicitly historical synchronization/packet evidence and must never be presented as current health;
+- if a reader needs current health, read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence.
+
+This prevents a stale coordination queue from competing with the direct repository authority and the #485 derived operator projection.
+
 ## Live issue markers
 
 - Idea inventory: `<!-- canonical-main-idea-inventory:v1 -->`

@@ -62,6 +62,12 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
         timeout_seconds = float(job["command"][1]) if len(job.get("command", [])) > 1 else 1800.0
     except (TypeError, ValueError):
         timeout_seconds = 1800.0
+    try:
+        poll_interval_seconds = float(job["command"][2]) if len(job.get("command", [])) > 2 else float(interval)
+    except (TypeError, ValueError):
+        poll_interval_seconds = float(interval)
+    if poll_interval_seconds <= 0:
+        poll_interval_seconds = float(interval)
 
     if not chatgpt_notification.available():
         store.transition(
@@ -113,7 +119,11 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
         job_id,
         "ACTIVE" if job["logical_state"] == "CREATED" else "RECONNECTED",
         event_type="CHATGPT_OBSERVER_STARTED",
-        detail={"package": package, "timeout_seconds": timeout_seconds},
+        detail={
+            "package": package,
+            "timeout_seconds": timeout_seconds,
+            "poll_interval_seconds": poll_interval_seconds,
+        },
         worker_pid=os.getpid(),
         local_state="OBSERVING",
         remote_state="ANDROID_NOTIFICATION",
@@ -167,7 +177,7 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
                         last_seen=utc_ts(),
                     )
                 return 0
-            time.sleep(max(0.5, interval))
+            time.sleep(max(0.5, poll_interval_seconds))
             continue
 
         read_errors = 0
@@ -233,7 +243,7 @@ def _run_chatgpt_notification_worker(store: Store, job_id: str, interval: float 
             remote_state="ANDROID_NOTIFICATION",
             signal_confidence="MEDIUM",
         )
-        time.sleep(max(0.5, interval))
+        time.sleep(max(0.5, poll_interval_seconds))
 
 
 def run_worker(store: Store, job_id: str, heartbeat_interval: float = 5.0) -> int:

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.64.10-intent-05",
+  "releaseId": "simcore-v0.64.10-new-05",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "1c1037e44d6b3e903b3d622b579095b1f315758e",
+  "sourceCommit": "dc55434f501e571c1c38976f43f6f4ac51c2b76a",
+  "candidateCommit": "e43ace74241984f21f69299eff690d0c4f483381",
+  "candidateReleaseBlob": "b7d76bd03a435356eeea6948968b0d33ac564ae7",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.64.10-intent-05",
+  "builderPath": "products/simcore/tooling/build-06410-host-local-one-shot-telemetry-handoff-recovery-04.py",
+  "builderSha256": "3367ed27120582e6f56375c87c22e80721a710ead45a7f61b6f5f8de10d7f11b",
+  "verifierCommit": "dc55434f501e571c1c38976f43f6f4ac51c2b76a",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "e3ee73cdc19567ea7e294786a007a0eb690eafdc24ff9e8a0b1eafc47baa89d3",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

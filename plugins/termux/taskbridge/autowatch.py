@@ -117,7 +117,7 @@ def disable(store: Any) -> dict[str, Any]:
     return status(store)
 
 
-def arm_if_needed(store: Any, now: float | None = None) -> dict[str, Any] | None:
+def arm_if_needed(store: Any, now: float | None = None, *, force: bool = False) -> dict[str, Any] | None:
     data = config(store)
     if not data["enabled"]:
         return None
@@ -136,7 +136,7 @@ def arm_if_needed(store: Any, now: float | None = None) -> dict[str, Any] | None
         if latest.get("logical_state") != "COMPLETED":
             cooldown = RETRY_SECONDS
 
-    if now - last_reference < cooldown:
+    if not force and now - last_reference < cooldown:
         return None
 
     job = store.create_job(
@@ -152,6 +152,7 @@ def arm_if_needed(store: Any, now: float | None = None) -> dict[str, Any] | None
             "poll_interval_seconds": data["poll_interval_seconds"],
             "timeout_seconds": 0,
             "mode": "automatic_rearm",
+            "forced": bool(force),
         },
     )
     store.request(job["job_id"], "RUN")

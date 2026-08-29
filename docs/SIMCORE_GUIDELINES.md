@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.68.0 — Community Parent-Local Alias Classification Repair
-Release commit: 6b31a5265f67daf5a90222d6c08bb85f3abde538
+SimCore v0.69.0 — M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion
+Release commit: 31b4c5075659a55861731c6fd73f999402321e94
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

@@ -73,22 +73,33 @@ export async function runSuite(){
   const identity=exactIdentity(record);
   const evidence=baseEvidence(record,receipt);
 
-  // Keep the positive fixture independent from the repository's current terminal state.
-  // repo-main-write verifies the staged post-projection payload, so using live repository
-  // manifest/CURRENT_DEVELOPMENT state here would make the pre-terminal positive fixture
-  // flip after a valid projection and block its own write.
-  const manifest={
+  // Simulate a repository whose current production has legitimately advanced beyond
+  // this historical v0.68 terminal fixture. The fixture must bind every production
+  // identity surface to the historical record instead of inheriting current repo state.
+  const repositoryManifestWithMovedProduction={
     ...repositoryManifest,
+    release_commit:'ffffffffffffffffffffffffffffffffffffffff',
+    release_blob:'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+  };
+  const manifest={
+    ...repositoryManifestWithMovedProduction,
+    release_branch:'release-simcore',
+    release_commit:record.productionCommit,
+    release_blob:record.productionBlob,
     validation_status:'PENDING_REAL_LONG_CHAT',
     current_priority:receipt.liveScenarioId,
     major_update_checkpoint:evidence.checkpoint,
   };
   const development=`# Synthetic SimCore Current Development\n\n${pendingBlock(evidence)}\n`;
 
+  equal(repositoryManifestWithMovedProduction.release_commit,'ffffffffffffffffffffffffffffffffffffffff','fixture simulates repository production movement');
+  equal(manifest.release_branch,'release-simcore','positive fixture pins release branch');
+  equal(manifest.release_commit,record.productionCommit,'positive fixture pins historical production commit');
+  equal(manifest.release_blob,record.productionBlob,'positive fixture pins historical production blob');
   equal(manifest.validation_status,'PENDING_REAL_LONG_CHAT','positive fixture pins pre-terminal manifest state');
   equal(manifest.current_priority,receipt.liveScenarioId,'positive fixture pins live scenario priority');
   assert(development.includes('SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN'),'positive fixture pins pending development block');
-  pass(assertions,'R2.8-positive-fixture-state-independent');
+  pass(assertions,'R2.8-positive-fixture-state-and-production-independent');
 
   const eligible=resolve({evidence,record,receipt,manifest,identity,development});
   equal(eligible.disposition,'ELIGIBLE_TO_PROJECT','valid human evidence projects');
@@ -133,6 +144,10 @@ export async function runSuite(){
   const movedIdentity={...identity,resolvedCommit:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'};
   equal(resolve({evidence,record,receipt,manifest,identity:movedIdentity,development}).disposition,'BLOCKED_PRODUCTION_MOVED','production movement blocks');
   pass(assertions,'R2.8-production-moved-block');
+
+  const movedManifest={...manifest,release_commit:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'};
+  equal(resolve({evidence,record,receipt,manifest:movedManifest,identity,development}).disposition,'BLOCKED_PRODUCTION_MOVED','manifest production movement blocks');
+  pass(assertions,'R2.8-manifest-production-moved-block');
 
   const regressedEvidence={...evidence,checkpoint:'M2-4'};
   equal(resolve({evidence:regressedEvidence,record,receipt,manifest,identity,development}).disposition,'BLOCKED_CHECKPOINT_REGRESSION','checkpoint regression blocks');

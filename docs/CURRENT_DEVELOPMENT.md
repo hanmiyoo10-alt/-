@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.68.0`
-- Release: `Community Parent-Local Alias Classification Repair`
+- Version: `0.69.0`
+- Release: `M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion`
 - Release branch: `release-simcore`
-- Release commit: `6b31a5265f67daf5a90222d6c08bb85f3abde538`
-- Release blob: `5094755266444de311ec9cc8ffc7a4dd658e65b1`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `31b4c5075659a55861731c6fd73f999402321e94`
+- Release blob: `86954f4d7ff7dec9119e2a8c047bfbfa6f801d56`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-5`

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.69.0-new-01",
+  "publisherRunId": "33271301422",
+  "productionCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "productionBlob": "86954f4d7ff7dec9119e2a8c047bfbfa6f801d56",
+  "authorityConfirmation": "RS2_4_POST_PUBLISH_RECOVERY",
+  "failureCode": "POST_PUBLISH_MAIN_GATE_R2_8_FIXTURE_PRODUCTION_IDENTITY_BLOCKER"
+}

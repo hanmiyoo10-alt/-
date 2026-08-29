@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "releaseTitle": "Managed CLI Engine/Manager Pin Parity Repair",
+  "productVersion": "3.0.0-alpha.5.86",
+  "engineVersion": "1.6.26",
+  "managerVersion": "1.3.1",
+  "cliVersion": "0.13.2",
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.83 — Exact Final HTTP Status Fidelity`",
+  "materializer": "plugins/usage-dashboard/tools/release_managed_cli_pin_parity_586.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
+  "workflows": {
+    "stage": "usage-dashboard-e7-candidate-ready.yml",
+    "validation": "usage-dashboard-e9-candidate-validation.yml",
+    "mergeGuard": "usage-dashboard-e11-merge-ready.yml",
+    "promotion": "usage-dashboard-e5-exact-byte-promotion.yml"
+  },
+  "engine": {
+    "sourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+    "buildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs"
+  },
+  "newTests": [
+    "plugins/usage-dashboard/tests/p52-managed-cli-engine-manager-pin-parity.cjs"
+  ],
+  "highlights": [
+    "Bridge Manager의 관리형 LLM Gateway CLI target을 Engine과 동일한 1.10.0으로 정렬",
+    "Engine 1.6.26과 기존 managed-direct → direct → npx fallback 순서는 그대로 유지",
+    "기존 1.9.0 managed descriptor/runtime은 1.10.0 target에서 stale로 처리되어 정상 provisioning 경로로 복구"
+  ],
+  "diagnosticHints": [
+    "업데이트 후 Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok인지 확인",
+    "정상 acceptance capture에서 managed-direct가 사용되고 direct ENOENT/npx-fallback이 0인지 확인",
+    "Organizations/DevPass/Credits/Request Ledger와 source-truth 규칙이 기존과 동일한지 확인",
+    "provisioning 실패 시 수동 CLI 설치를 요구하지 말고 diagnostics 증거만 수집"
+  ]
+}

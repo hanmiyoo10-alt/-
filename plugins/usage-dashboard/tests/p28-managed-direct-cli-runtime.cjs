@@ -33,7 +33,10 @@ assert.match(engine, /DEVPASS_BRIDGE_MANAGED_CLI \|\| '1'/);
 
 assert.match(manager, /DEVPASS_BRIDGE_MANAGED_CLI \|\| '1'/);
 assert.match(manager, /const MANAGED_CLI_PACKAGE = '@llmgateway\/cli';/);
-assert.match(manager, /const MANAGED_CLI_VERSION = '1\.9\.0';/);
+const engineCliVersion = engine.match(/const CLI_VERSION = process\.env\.LLMGATEWAY_CLI_VERSION \|\| '([^']+)';/)?.[1] || '';
+const managerCliVersion = manager.match(/const MANAGED_CLI_VERSION = '([^']+)';/)?.[1] || '';
+assert.ok(engineCliVersion, 'Engine managed CLI version must remain explicit');
+assert.equal(managerCliVersion, engineCliVersion, 'Manager managed CLI version must track the Engine managed CLI target');
 assert.match(manager, /const MANAGED_CLI_RETRY_MS = 30 \* 60 \* 1000;/);
 assert.ok(manager.includes("spawn('npm', ['install','--ignore-scripts','--no-audit','--no-fund','--package-lock=true']"));
 assert.ok(manager.includes("path.join(MANAGED_CLI_ROOT, `cli-next-${process.pid}-${Date.now()}`)"));
@@ -58,4 +61,4 @@ assert.ok(!workflowCaller.includes('publish: true'));
 assert.ok(workflowCaller.includes('contents: read'));
 assert.ok(!workflowCaller.includes(currentRelease.productVersion));
 
-console.log('P28 Managed Direct CLI Runtime: OK · provisioning invariants retained; managed/direct/npx behavior delegated to black-box Engine harness');
+console.log('P28 Managed Direct CLI Runtime: OK · provisioning invariants + Engine/Manager managed pin parity retained; managed/direct/npx behavior delegated to black-box Engine harness');

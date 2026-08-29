@@ -11,7 +11,7 @@ const workspacePath = `${root}/src/62-diagnostics-workspace.part.js`;
 const instantPath = `${root}/src/63-diagnostics-instant-mode.part.js`;
 const release = assertCurrentReleaseArtifacts();
 assert.match(release.productVersion, /^3\.0\.0-alpha\.5\.\d+$/, 'P36 must run against the current alpha.5 release authority');
-assert.equal(release.managerVersion, '1.3.0');
+assert.match(release.managerVersion, /^1\.3\.\d+$/, 'P36 must accept the current 1.3.x Manager authority; exact release identity is owned by the current-release contract');
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 

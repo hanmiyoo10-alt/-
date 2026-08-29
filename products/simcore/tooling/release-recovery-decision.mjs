@@ -20,7 +20,7 @@ function parseArgs(argv) {
     if(!arg.startsWith('--')||i+1>=argv.length) fail('R2_7_RECOVERY_DECISION_ARGS_INVALID',arg);
     out[arg.slice(2)]=argv[++i];
   }
-  for(const key of ['root','phase','frozen-verifier','current-control-plane','expected-production','observed-production','publication-state','report']) if(!out[key]) fail('R2_7_RECOVERY_DECISION_ARGS_INVALID',key);
+  for(const key of ['root','phase','frozen-verifier','current-control-plane','expected-production','candidate-production','observed-production','publication-state','report']) if(!out[key]) fail('R2_7_RECOVERY_DECISION_ARGS_INVALID',key);
   return out;
 }
 function validateSha(name,value){if(!SHA40.test(value||'')) fail('R2_7_RECOVERY_DECISION_INPUT_INVALID',name);}
@@ -28,17 +28,27 @@ function validateSha(name,value){if(!SHA40.test(value||'')) fail('R2_7_RECOVERY_
 export function decide(input) {
   if(!PHASES.has(input.phase)) fail('R2_7_RECOVERY_DECISION_INPUT_INVALID','phase');
   if(!PUBLICATION.has(input.publicationState)) fail('R2_7_RECOVERY_DECISION_INPUT_INVALID','publicationState');
-  for(const [name,value] of [['frozenVerifier',input.frozenVerifier],['currentControlPlane',input.currentControlPlane],['expectedProduction',input.expectedProduction],['observedProduction',input.observedProduction]]) validateSha(name,value);
+  for(const [name,value] of [
+    ['frozenVerifier',input.frozenVerifier],
+    ['currentControlPlane',input.currentControlPlane],
+    ['expectedProduction',input.expectedProduction],
+    ['candidateProduction',input.candidateProduction],
+    ['observedProduction',input.observedProduction],
+  ]) validateSha(name,value);
+
+  const observedIsParent=input.observedProduction===input.expectedProduction;
+  const observedIsCandidate=input.observedProduction===input.candidateProduction;
+  const effectivePublicationState=observedIsCandidate?'PUBLISHED':observedIsParent?'UNPUBLISHED':input.publicationState;
 
   let disposition;
   let nextAction;
-  if(input.observedProduction!==input.expectedProduction) {
+  if(!observedIsParent&&!observedIsCandidate) {
     disposition='BLOCKED_IDENTITY_MOVED';
     nextAction='STOP_AND_REOBSERVE_PRODUCTION_AUTHORITY';
   } else if(input.phase==='HUMAN_EVIDENCE') {
     disposition='MANUAL_EVIDENCE_REQUIRED';
     nextAction='CONTINUE_THROUGH_EXISTING_HUMAN_EVIDENCE_PATH';
-  } else if(input.publicationState==='PUBLISHED'||input.phase==='POST_PUBLICATION') {
+  } else if(effectivePublicationState==='PUBLISHED'||input.phase==='POST_PUBLICATION') {
     disposition='RECOVERY_REQUEST_REQUIRED';
     nextAction='USE_EXISTING_APPEND_ONLY_PERMANENT_RECOVERY_PATH';
   } else if(input.currentControlPlane!==input.frozenVerifier) {
@@ -52,13 +62,15 @@ export function decide(input) {
     schemaVersion:1,
     tool:'release-recovery-decision',
     phase:input.phase,
-    publicationState:input.publicationState,
+    requestedPublicationState:input.publicationState,
+    effectivePublicationState,
     frozenVerifier:input.frozenVerifier,
     currentControlPlane:input.currentControlPlane,
     expectedProduction:input.expectedProduction,
+    candidateProduction:input.candidateProduction,
     observedProduction:input.observedProduction,
     controlPlaneChanged:input.currentControlPlane!==input.frozenVerifier,
-    productionMoved:input.observedProduction!==input.expectedProduction,
+    productionMovedUnexpectedly:!observedIsParent&&!observedIsCandidate,
     disposition,
     nextAction,
     authorityMutation:'NONE',
@@ -73,6 +85,7 @@ export function run(argv=process.argv.slice(2)) {
     frozenVerifier:a['frozen-verifier'],
     currentControlPlane:a['current-control-plane'],
     expectedProduction:a['expected-production'],
+    candidateProduction:a['candidate-production'],
     observedProduction:a['observed-production'],
     publicationState:a['publication-state'],
   });

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "authority": "SHADOW_ONLY",
+  "intentId": "simcore-v0.69.0-intent-01",
+  "releaseId": "simcore-v0.69.0-new-01",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.69.0-intent-01.json",
+  "derivedSpec": {
+    "schemaVersion": 1,
+    "releaseId": "simcore-v0.69.0-new-01",
+    "product": "SimCore",
+    "version": "0.69.0",
+    "releaseName": "M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion",
+    "releaseMode": "NEW_VERSION",
+    "candidateCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+    "expectedProductionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+    "candidateReleaseBlob": "86954f4d7ff7dec9119e2a8c047bfbfa6f801d56",
+    "primaryGoalId": "06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION",
+    "changeClass": "RUNTIME_FEATURE",
+    "evidenceRefs": [
+      "docs/SIMCORE_06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_DESIGN_2026-08-30.md",
+      "docs/SIMCORE_06900_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+      "docs/SIMCORE_06900_STATE_RECONCILE_LAYER_CONVERGENCE_2026-08-30.md",
+      "docs/SIMCORE_06900_CANDIDATE_ARCH_CONTRACT_DUAL_LANE_BLOCKER_2026-08-30.md",
+      "docs/SIMCORE_06900_M2_6_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+      "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_01_RELOAD_VERSION_BRIDGE_2026-08-30.md",
+      "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_02_OPERATOR_CARD_VERSION_BRIDGE_2026-08-30.md",
+      "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_03_HOST_LOCAL_TELEMETRY_VERSION_BRIDGE_2026-08-30.md",
+      "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_04_BOUNDED_TELEMETRY_VERSION_BRIDGE_2026-08-30.md"
+    ],
+    "liveGate": {
+      "required": true,
+      "scenarioId": "06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT",
+      "closeAuthority": "HUMAN_EVIDENCE"
+    }
+  }
+}

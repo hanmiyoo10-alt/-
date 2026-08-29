@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.69.0-intent-01",
+  "releaseId": "simcore-v0.69.0-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+  "sourceCommit": "a42450c8de0c59cae7c4683e50124e7da61b290c",
+  "candidateCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "candidateReleaseBlob": "86954f4d7ff7dec9119e2a8c047bfbfa6f801d56",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.69.0-intent-01",
+  "builderPath": "products/simcore/tooling/build-06900-state-reconcile-kernel-inversion.py",
+  "builderSha256": "7c3771b9303e62cd3cefa37fdc227ab0f3eae3b5084f37a8192142daef625c24",
+  "verifierCommit": "a42450c8de0c59cae7c4683e50124e7da61b290c",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "47ad4aa360de379f1882a76649248a0c5b344d5d6190e1230afd43091bf7d032",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

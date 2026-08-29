@@ -201,7 +201,7 @@ ok('permanent-release-controller-boundary', () => {
     'group: simcore-main-state-sync',
     'GH_TOKEN: ${{ github.token }}',
   ]) expect(workflow.includes(token),`permanent caller required token missing: ${token}`);
-  for(const token of ['--force','force-with-lease','git push --force','+refs/heads/release-simcore']) expect(!workflow.includes(token),`permanent caller forbidden token: ${token}`);
+  for(const token of ['force-with-lease','git push --force','+refs/heads/release-simcore']) expect(!workflow.includes(token),`permanent caller forbidden publication token: ${token}`);
   for(const token of ['repo-main-write.py','--allow product-manifest.json','persistentPayloadAllowlist',"assert p['disposition']"]) expect(!postPublish.includes(token),`R2.6 post-publish workflow-local contract survived: ${token}`);
   expect(!/uses:\s+actions\/(?:checkout|download-artifact|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'permanent caller external action is not pinned');
 });

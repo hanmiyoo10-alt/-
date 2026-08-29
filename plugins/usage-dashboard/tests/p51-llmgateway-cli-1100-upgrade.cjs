@@ -52,13 +52,13 @@ assert.equal((cliRuntime.match(/@llmgateway\/cli@\$\{CLI_VERSION\}/g) || []).len
 assert.equal(cliRuntime.includes('npm install -g'), false, 'P51 Engine runtime must not add global npm mutation');
 assert.equal(cliRuntime.includes('npm update'), false, 'P51 Engine runtime must not add ad-hoc update mutation');
 
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.85';"), 'P51 Manager product identity must track 5.85');
+assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`), 'P51 Manager product identity must match the exact historical release under test');
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.26';"), 'P51 Manager bundled Engine version must track 1.6.26');
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.85');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.85');
+assert.equal(manifest.productVersion, release.productVersion);
+assert.equal(manifest.components.plugin.version, release.productVersion);
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.26');
 assert.equal(manifest.components.bridgeManager.version, '1.3.0');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.85');
+assert.equal(manifest.components.bridgeManager.productVersion, release.productVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 const engineSha = crypto.createHash('sha256').update(fs.readFileSync(`${root}/runtime/bridge-engine.mjs`)).digest('hex');

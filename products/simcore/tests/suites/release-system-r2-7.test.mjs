@@ -59,14 +59,26 @@ export async function runSuite(){
     equal(proof.operationallyProven,true,'first-use proof derivation');
     equal(proof.releaseAuthority,'RS2_4_PERMANENT','first-use proof authority');
     equal(proof.authorityMutation,'NONE','proof authority mutation');
-    const proofRoot=path.join(tempRoot,'proof');
-    writeJson(path.join(proofRoot,'records',`${record.releaseId}.json`),record);
-    const receiptCopy={...receipt,releaseRecordPath:`products/simcore/releases/records/${record.releaseId}.json`};
-    writeJson(path.join(proofRoot,'receipts',`${record.releaseId}.json`),receiptCopy);
     const proofTool=path.join(REPO,'products/simcore/tooling/release-operational-proof.mjs');
+
+    const proofRoot=path.join(tempRoot,'proof-negative');
+    writeJson(path.join(proofRoot,'records',`${record.releaseId}.json`),record);
+    writeJson(path.join(proofRoot,'receipts',`${record.releaseId}.json`),receipt);
     const proofRun=spawnSync(process.execPath,[proofTool,'--root',proofRoot,'--record',`records/${record.releaseId}.json`,'--receipt',`receipts/${record.releaseId}.json`,'--report','reports/proof.json'],{cwd:tempCwd,encoding:'utf8'});
     assert(proofRun.status!==0,'copied receipt with mismatched canonical record path must fail closed');
     pass(assertions,'R2.7-A-operational-proof-fail-closed');
+
+    const proofPositiveRoot=path.join(tempRoot,'proof-positive');
+    const recordRel=`products/simcore/releases/records/${record.releaseId}.json`;
+    const receiptRel=`products/simcore/releases/state-receipts/${record.releaseId}.json`;
+    writeJson(path.join(proofPositiveRoot,recordRel),record);
+    writeJson(path.join(proofPositiveRoot,receiptRel),receipt);
+    const proofPositive=spawnSync(process.execPath,[proofTool,'--root',proofPositiveRoot,'--record',recordRel,'--receipt',receiptRel,'--report','reports/proof.json'],{cwd:tempCwd,encoding:'utf8'});
+    equal(proofPositive.status,0,`operational proof cross-root exit ${proofPositive.stderr}`);
+    const proofReport=JSON.parse(fs.readFileSync(path.join(proofPositiveRoot,'reports/proof.json'),'utf8'));
+    equal(proofReport.operationallyProven,true,'operational proof CLI derivation');
+    assert(!fs.existsSync(path.join(tempCwd,'reports/proof.json')),'proof report escaped into cwd');
+    pass(assertions,'R2.7-A-operational-proof-cross-root-pass');
 
     const recoverySource=fs.readFileSync(decisionTool,'utf8');
     const proofSource=fs.readFileSync(proofTool,'utf8');
@@ -88,6 +100,8 @@ export async function runSuite(){
     const publisher=permanent.indexOf('release-publish.mjs');
     assert(preplay>=0&&publisher>preplay,'R2.6 preplay-before-publish safety moved');
     equal((permanent.match(/release-publish\.mjs/g)||[]).length,1,'publisher count in permanent workflow');
+    for(const token of ['Derive bounded recovery guidance on failure','release-recovery-decision.mjs','FROZEN_VERIFIER','CURRENT_CONTROL_PLANE','OBSERVED_PRODUCTION','continue-on-error: true']) assert(permanent.includes(token),`R2.7 workflow routing token missing: ${token}`);
+    pass(assertions,'R2.7-D-thin-permanent-recovery-routing');
     pass(assertions,'R2.7-preserves-r2-6-safety-wall');
   } finally {
     fs.rmSync(tempRoot,{recursive:true,force:true});

@@ -86,6 +86,7 @@ function completeGateCoherent(status){
     status.activationFieldSemantics==='DOCUMENTARY_FIRST_USE_GATE_CONSUMED'&&
     status.activationGate===CONSUMED_GATE&&
     status.operationallyProven===true&&
+    status?.implementation?.durableProjection?.status===COMPLETE_STATUS&&
     storedProofCoherent(status);
 }
 
@@ -133,6 +134,7 @@ export function projectRSystemStatus({status,proof,record,isImplementationAncest
   projected.activationGate=CONSUMED_GATE;
   projected.operationallyProven=true;
   projected.implementation.operationalActivationProof=candidate;
+  projected.implementation.durableProjection.status=COMPLETE_STATUS;
 
   return {
     disposition:'PROJECT',

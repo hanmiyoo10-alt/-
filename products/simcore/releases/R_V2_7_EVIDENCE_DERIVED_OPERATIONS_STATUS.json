@@ -81,7 +81,7 @@
       "result": "PASS"
     },
     "durableProjection": {
-      "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING",
+      "status": "OPERATIONALLY_PROVEN_FIRST_USE_COMPLETE",
       "regressionSuite": "release-system-r2-7-status-projection",
       "qualificationHead": "262990c594a0a83f3d6b7d5593c8598ae24c198e",
       "qualificationRun": 33258748655,

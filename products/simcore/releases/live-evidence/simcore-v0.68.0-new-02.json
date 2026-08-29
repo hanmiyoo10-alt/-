@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.68.0-new-02",
+  "productionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+  "productionBlob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
+  "liveScenarioId": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT",
+  "decision": "LIVE_PASS",
+  "checkpoint": "M2-5",
+  "nextPriority": "POST_06800_ARCHITECTURE_AUTHORITY_PROJECTION_CONVERGENCE",
+  "humanEvidence": [
+    "docs/SIMCORE_LIVE_06800_RELEASE_CLOSE_2026-08-30.md",
+    "docs/SIMCORE_LIVE_06800_STAGE_A_AND_EDIT_POSITIVE_CONTROL_2026-08-30.md",
+    "docs/SIMCORE_06800_THOUGHTS_UNRESOLVED_KNOWLEDGE_QUARANTINE_WATCH_2026-08-30.md"
+  ],
+  "authorityConfirmation": "HUMAN_EVIDENCE"
+}

@@ -36,7 +36,7 @@ This block is machine-managed from verified declared release state. It does not 
 - Release transaction: `simcore-v0.67.0-new-02`
 - Production commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`
 - Validation status: `LIVE_PASS`
-- Current priority: `06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW`
+- Current priority: `06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION`
 - Terminal disposition: `LIVE_PASS`
 - R lifecycle: `REAL_RELEASE_LIVE_PASS`
 
@@ -51,7 +51,7 @@ This block is the terminal administrative state backed by accepted real long-cha
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The current product live gate is closed with accepted human evidence and the durable major checkpoint is M2-5. The selected next product design is Community Parent-Local Alias Classification Repair. Exact deployed-production source re-audit confirms the repair boundary and bounded classifier-migration assumptions. The immediate product action is implementation-authorization review only; next runtime implementation is not authorized by terminal closure itself. Provider cache remains `UNVERIFIED`. R2.6 activation/status convergence and unrelated WATCH items remain separate non-runtime/investigation lanes.
+The current product live gate is closed with accepted human evidence and the durable major checkpoint is M2-5. The selected Community Parent-Local Alias Classification Repair design has passed exact deployed-source re-audit and explicit implementation authorization. The immediate product action is a dedicated runtime work branch constrained to the frozen Community classifier and bounded migration envelope. Provider cache remains `UNVERIFIED`. R2.6 activation/status convergence and unrelated WATCH items remain separate non-runtime/investigation lanes.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1177,9 +1177,9 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Re-read exact terminal v0.67.0 production source against the frozen v0.68.0 Community Parent-Local Alias Classification Repair design.
-Confirm the Community classifier root-cause boundary, classifier v2→v3 migration assumptions, and no newly promoted blocker.
-Keep v0.68 runtime implementation blocked until a separate implementation-authorization decision is recorded.
+Start the dedicated v0.68.0 runtime work branch from exact live-complete v0.67.0 production bytes.
+Implement only the frozen Community parent/local descriptor repair, classifier v2→v3 transition, and bounded migration behavior.
+Preserve Structure as judge-only and retain all required negative controls and unrelated regressions.
 Keep R2.6 control-plane convergence and unrelated WATCH items in separate lanes.
 ```
 
@@ -1188,16 +1188,16 @@ Current success condition:
 ```text
 v0.67.0 real long-chat evidence = LIVE_PASS
 durable major checkpoint = M2-5
-current product priority = 06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW
+current product priority = 06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION
 next proposed version = v0.68.0 Community Parent-Local Alias Classification Repair
+implementation authorization = YES
 production remains v0.67.0 until a normal approved release transaction publishes a candidate
 latest.js == install.js remains mandatory
 
 product runtime work
-→ exact terminal v0.67 source re-audit
-→ confirm frozen v0.68 repair boundary and migration assumptions
-→ explicit v0.68 implementation authorization
-→ dedicated runtime work branch only after authorization
+→ dedicated v0.68 runtime branch from exact deployed v0.67 bytes
+→ implement frozen Community classifier repair and bounded v2→v3 migration only
+→ static/differential proof and permanent CI before release transaction
 
 release-system work
 → remain non-runtime and separately attributable

@@ -2,7 +2,7 @@
 
 Date: 2026-08-29 KST
 
-Status: **IMPLEMENTATION IN PROGRESS · AUTHORIZED RUNTIME MINI**
+Status: **IMPLEMENTATION VERIFIED · PERMANENT CI QUALIFIED · RELEASE NOT YET REQUESTED**
 
 Design authority: `docs/SIMCORE_06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_DESIGN_2026-08-29.md`
 
@@ -108,6 +108,22 @@ second migration call idempotently skips
 12 assistant / 48 message caps unchanged
 ```
 
+## Implementation qualification
+
+Passing permanent implementation qualification:
+
+```text
+PR                    #839
+qualified branch head 9071b0cd2423040078eff2baf2fc3cf78d3dd6b3
+SimCore CI             33255060865 (#2841)
+Verify                 99107223450 PASS
+Required               99107271555 PASS
+```
+
+The proposed permanent verifier completed successfully after the trusted predecessor verifier. The run therefore exercised the real v0.68 builder against exact deployed v0.67 source copies and then exercised the generated v0.68 classifier/migration regression.
+
+This qualification authorizes merge of the implementation only. It does not itself publish production or substitute for Candidate Required, exact approval, Permanent publication, or HUMAN_EVIDENCE.
+
 ## Frozen exclusions
 
 ```text
@@ -166,7 +182,7 @@ Existing actions pinned to revisions targeting Node 20 are being forced by GitHu
 ## Release path after implementation qualification
 
 ```text
-permanent PR CI PASS
+final exact-head permanent PR CI PASS
 -> merge implementation to main
 -> append-only v0.68 candidate request using exact builder
 -> immutable candidate + Candidate Required PASS

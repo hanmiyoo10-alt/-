@@ -30,17 +30,18 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
-## Current Release Live Gate
+<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
+## Current Release Terminal State
 
 - Release transaction: `simcore-v0.67.0-new-02`
 - Production commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`
-- Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT`
-- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
+- Validation status: `LIVE_PASS`
+- Current priority: `06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW`
+- Terminal disposition: `LIVE_PASS`
+- R lifecycle: `REAL_RELEASE_LIVE_PASS`
 
-This block is machine-managed by `release-state-converge` from immutable publication evidence.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
+This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
 
 ---
 
@@ -50,7 +51,7 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The current product live gate is closed with accepted human evidence. The durable major checkpoint has advanced through the completed M2-4 boundary. The immediate product action is transition-debt review and design selection only; no next runtime implementation is authorized until its separate frozen design and activation decision exists. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains a separate non-runtime lane.
+The current product live gate is closed with accepted human evidence and the durable major checkpoint is M2-5. The selected next product design is Community Parent-Local Alias Classification Repair. Exact deployed-production source re-audit confirms the repair boundary and bounded classifier-migration assumptions. The immediate product action is implementation-authorization review only; next runtime implementation is not authorized by terminal closure itself. Provider cache remains `UNVERIFIED`. R2.6 activation/status convergence and unrelated WATCH items remain separate non-runtime/investigation lanes.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1176,30 +1177,32 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Review post-release M2-5 transition debt against the current production source and living architecture authority.
-Keep product runtime implementation blocked until architecture-contract convergence, exact source re-audit, and explicit implementation authorization are complete.
-Keep release-system stabilization and unrelated WATCH items in separate lanes.
+Re-read exact terminal v0.67.0 production source against the frozen v0.68.0 Community Parent-Local Alias Classification Repair design.
+Confirm the Community classifier root-cause boundary, classifier v2→v3 migration assumptions, and no newly promoted blocker.
+Keep v0.68 runtime implementation blocked until a separate implementation-authorization decision is recorded.
+Keep R2.6 control-plane convergence and unrelated WATCH items in separate lanes.
 ```
 
 Current success condition:
 
 ```text
-accepted real long-chat evidence = LIVE_PASS
-durable major checkpoint = M2-4
-current product priority = M2_5_POST_06600_TRANSITION_DEBT_REVIEW
-production remains the machine snapshot above until a normal approved release transaction publishes a candidate
+v0.67.0 real long-chat evidence = LIVE_PASS
+durable major checkpoint = M2-5
+current product priority = 06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW
+next proposed version = v0.68.0 Community Parent-Local Alias Classification Repair
+production remains v0.67.0 until a normal approved release transaction publishes a candidate
 latest.js == install.js remains mandatory
 
 product runtime work
-→ converge living architecture authority first
-→ exact current-production source re-audit
-→ explicit implementation authorization
+→ exact terminal v0.67 source re-audit
+→ confirm frozen v0.68 repair boundary and migration assumptions
+→ explicit v0.68 implementation authorization
 → dedicated runtime work branch only after authorization
 
 release-system work
 → remain non-runtime and separately attributable
+→ close R2.6 activation/status truth separately
 → preserve the single publisher and existing main-write authority
-→ static / CI proof before any operational activation
 
 observed anomaly
 → preserve evidence immediately

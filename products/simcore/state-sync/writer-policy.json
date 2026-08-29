@@ -1,5 +1,5 @@
 {
-  "policyVersion": 1,
+  "policyVersion": 2,
   "cutoverState": "CANONICAL_ACTIVE",
   "surfaces": {
     "legacyScript": "scripts/simcore-sync-memory.py",
@@ -13,5 +13,20 @@
     "documentOwner": "sync-state",
     "mainIntegration": "repo-main-write.py",
     "directMainPushForbidden": true
+  },
+  "postPublishState": {
+    "exactPaths": [
+      "product-manifest.json",
+      "docs/CURRENT_DEVELOPMENT.md",
+      "docs/SIMCORE_GUIDELINES.md"
+    ],
+    "prefixPaths": [
+      "products/simcore/releases/records/",
+      "products/simcore/releases/state-receipts/"
+    ],
+    "mainGateway": "scripts/repo-main-write.py",
+    "requiredWorkflow": "simcore-ci.yml",
+    "requiredProfile": "MAIN_HEALTH",
+    "requiredJob": "Required"
   }
 }

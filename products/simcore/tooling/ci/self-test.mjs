@@ -29,6 +29,10 @@ ok('release-system-classification', () => {
     'products/simcore/tooling/release-authority.mjs',
     'products/simcore/tooling/release-publish.mjs',
     'products/simcore/tooling/post-publish-state.mjs',
+    'products/simcore/tooling/release-state-converge.mjs',
+    'products/simcore/tooling/release-state-preplay.mjs',
+    'products/simcore/tooling/release-state-main-gate.mjs',
+    'products/simcore/tooling/release-state-reobserve.mjs',
     'products/simcore/tests/release-controller-qualification.test.mjs',
     'products/simcore/tests/post-publish-state-permanent.test.mjs',
     'products/simcore/tests/release-declaration-transition.test.mjs',
@@ -44,6 +48,10 @@ ok('state-sync-classification', () => {
     'products/simcore/tooling/declare-production.mjs',
     'products/simcore/tooling/post-publish-state-shadow.mjs',
     'products/simcore/tooling/post-publish-state.mjs',
+    'products/simcore/tooling/release-state-converge.mjs',
+    'products/simcore/tooling/release-state-preplay.mjs',
+    'products/simcore/tooling/release-state-main-gate.mjs',
+    'products/simcore/tooling/release-state-reobserve.mjs',
     'products/simcore/tests/post-publish-state-shadow.test.mjs',
     'products/simcore/tests/post-publish-state-permanent.test.mjs',
     'products/simcore/tests/release-declaration-transition.test.mjs',
@@ -55,6 +63,10 @@ ok('state-sync-classification', () => {
     const r = classifyPaths([p]);
     expect(r.labels.includes('STATE_SYNC'), `${p}: ${JSON.stringify(r)}`);
   }
+});
+ok('r2-6-main-gate-coordination-classification', () => {
+  const r = classifyPaths(['products/simcore/tooling/release-state-main-gate.mjs']);
+  for (const id of ['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION']) expect(r.labels.includes(id), JSON.stringify(r));
 });
 ok('permanent-release-coordination-classification', () => {
   const r = classifyPaths(['.github/workflows/simcore-release-permanent.yml']);
@@ -95,10 +107,13 @@ ok('workflow-read-only-trust-boundary', () => {
 
 ok('automated-state-writer-bot-provenance', () => {
   const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
+  const gate = fs.readFileSync('products/simcore/tooling/release-state-main-gate.mjs', 'utf8');
   const names = [...workflow.matchAll(/git config user\.name '([^']+)'/g)].map((m) => m[1]);
   const emails = [...workflow.matchAll(/git config user\.email '([^']+)'/g)].map((m) => m[1]);
-  expect(names.length === 2 && names.every((x) => x === 'github-actions[bot]'), `unexpected automated writer names: ${JSON.stringify(names)}`);
-  expect(emails.length === 2 && emails.every((x) => x === '41898282+github-actions[bot]@users.noreply.github.com'), `unexpected automated writer email identities: ${JSON.stringify(emails)}`);
+  expect(names.length === 1 && names[0] === 'github-actions[bot]', `unexpected workflow-local writer names: ${JSON.stringify(names)}`);
+  expect(emails.length === 1 && emails[0] === '41898282+github-actions[bot]@users.noreply.github.com', `unexpected workflow-local writer email identities: ${JSON.stringify(emails)}`);
+  expect(gate.includes("['config','user.name','github-actions[bot]']"), 'R2.6 shared main-gate bot name missing');
+  expect(gate.includes("['config','user.email','41898282+github-actions[bot]@users.noreply.github.com']"), 'R2.6 shared main-gate bot email missing');
 });
 
 ok('admin-state-writer-boundary', () => {
@@ -116,23 +131,26 @@ ok('admin-state-writer-boundary', () => {
 
 ok('permanent-post-publish-recovery-boundary', () => {
   const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
+  expect(workflow.includes('types: [opened, synchronize, closed]'), 'post-publish recovery trigger surface missing');
+  const start = workflow.indexOf('\n  permanent-recovery:');
+  expect(start >= 0, 'permanent recovery job missing');
+  const recovery = workflow.slice(start);
   for (const token of [
-    'types: [opened, synchronize, closed]',
     'Recover Permanent Published State',
     'products/simcore/releases/recoveries/*.json',
     'RS2_4_POST_PUBLISH_RECOVERY',
     'simcore-permanent-publication-${{ steps.recovery.outputs.publisher_run_id }}',
     'run-id: ${{ steps.recovery.outputs.publisher_run_id }}',
     'post-publish-state.mjs',
-    'ALREADY_PUBLISHED_UPSTREAM',
-    '--required-profile MAIN_HEALTH',
-    '--required-job Required',
-    'PENDING_REAL_LONG_CHAT',
-    'LIVE_PENDING',
-  ]) expect(workflow.includes(token), `post-publish recovery token missing: ${token}`);
-  for (const token of ['release-publish.mjs','--mode publish','git push --force','force-with-lease','+refs/heads/release-simcore']) {
-    expect(!workflow.includes(token), `post-publish recovery forbidden token: ${token}`);
-  }
+    '--mode RECOVERY',
+    'release-state-main-gate.mjs',
+    'release-state-reobserve.mjs',
+    'products/simcore/state-sync/writer-policy.json',
+  ]) expect(recovery.includes(token), `post-publish recovery token missing: ${token}`);
+  for (const token of [
+    'release-publish.mjs','--mode publish','git push --force','force-with-lease','+refs/heads/release-simcore',
+    '--allow product-manifest.json','persistentPayloadAllowlist',"assert p['disposition']",'durable-receipt.json',
+  ]) expect(!recovery.includes(token), `post-publish recovery legacy/forbidden token survived: ${token}`);
 });
 
 ok('release-shadow-read-only-boundary', () => {
@@ -164,21 +182,27 @@ ok('permanent-release-controller-boundary', () => {
   expect(start >= 0 && end > start,'post-publish state job boundary missing');
   const postPublish=workflow.slice(start,end);
   expect(/permissions:\s*\n\s*contents:\s*write\s*\n\s*actions:\s*write/.test(postPublish),'post-publish state job must be able to dispatch gated MAIN_HEALTH');
+  const preplay=workflow.indexOf('release-state-preplay.mjs');
+  const publish=workflow.indexOf('release-publish.mjs');
+  expect(preplay >= 0 && publish > preplay, 'R2.6 preplay must run before publisher');
+  expect((workflow.match(/release-publish\.mjs/g) || []).length === 1, 'permanent publisher call count changed');
   for(const token of [
     'authority_confirmation',
     'RS2_4_RELEASE',
     'uses: ./.github/workflows/simcore-release-required.yml',
+    'release-state-preplay.mjs',
     'release-publish.mjs',
     '--mode publish',
     'post-publish-state.mjs',
-    'repo-main-write.py',
-    '--required-profile MAIN_HEALTH',
-    '--required-job Required',
-    'PENDING_REAL_LONG_CHAT',
+    '--mode PERMANENT',
+    'release-state-main-gate.mjs',
+    'release-state-reobserve.mjs',
+    'products/simcore/state-sync/writer-policy.json',
     'group: simcore-main-state-sync',
     'GH_TOKEN: ${{ github.token }}',
   ]) expect(workflow.includes(token),`permanent caller required token missing: ${token}`);
-  for(const token of ['--force','force-with-lease','git push --force','+refs/heads/release-simcore']) expect(!workflow.includes(token),`permanent caller forbidden token: ${token}`);
+  for(const token of ['force-with-lease','git push --force','+refs/heads/release-simcore']) expect(!workflow.includes(token),`permanent caller forbidden publication token: ${token}`);
+  for(const token of ['repo-main-write.py','--allow product-manifest.json','persistentPayloadAllowlist',"assert p['disposition']"]) expect(!postPublish.includes(token),`R2.6 post-publish workflow-local contract survived: ${token}`);
   expect(!/uses:\s+actions\/(?:checkout|download-artifact|upload-artifact)@(?![0-9a-f]{40}\b)/.test(workflow),'permanent caller external action is not pinned');
 });
 
@@ -245,8 +269,8 @@ ok('post-publish-state-shadow-deterministic-tests', () => {
 
 ok('post-publish-state-permanent-deterministic-tests', () => {
   const r=spawnSync(process.execPath,['products/simcore/tests/post-publish-state-permanent.test.mjs'],{encoding:'utf8',timeout:180000,maxBuffer:1024*1024});
-  expect(r.status===0,`RS2-4E permanent state tests failed: ${r.stderr || r.stdout}`);
-  expect(String(r.stdout).includes('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5'),'RS2-4E permanent state pass marker missing');
+  expect(r.status===0,`R2.6 permanent state tests failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_6_POST_PUBLISH_BOUNDARY_TEST_PASS'),'R2.6 permanent state pass marker missing');
 });
 
 ok('release-declaration-transition-deterministic-tests', () => {

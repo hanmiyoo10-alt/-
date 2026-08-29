@@ -301,7 +301,7 @@ jobs:
           {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$EXPECTED_C","latest":{"path":".simcore-release/observed/latest.js","blob":"$L"},"install":{"path":".simcore-release/observed/install.js","blob":"$I"}}
           EOF
 
-      - name: Rebuild bounded LIVE_PENDING administrative payload
+      - name: Materialize shared recovery state envelope
         shell: bash
         run: |
           set -euo pipefail
@@ -309,87 +309,39 @@ jobs:
             --root . \
             --input .simcore-release/handoff/post-publish-input.json \
             --production-identity .simcore-release/observed/identity.json \
-            --report .simcore-release/post-publish-state-recovery-report.json
-          python3 - <<'PY'
-          import json
-          p=json.load(open('.simcore-release/post-publish-state-recovery-report.json'))
-          assert p['releaseAuthority']=='RS2_4_PERMANENT'
-          assert p['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
-          assert p['lifecycleState']=='LIVE_PENDING'
-          assert p['disposition'] in ['LIVE_PENDING_PAYLOAD_READY','ALREADY_CONVERGED']
-          allowed=set(p['persistentPayloadAllowlist'])
-          changed=set(p['changedPaths'])
-          assert changed <= allowed
-          print('RS2_4_POST_PUBLISH_RECOVERY_PAYLOAD_PASS')
-          PY
+            --mode RECOVERY \
+            --report .simcore-release/post-publish-state-envelope.json
           git diff --check
 
-      - name: Commit and gate recovered main state
+      - name: Commit and gate owner-declared recovered state
         shell: bash
         env:
           RELEASE_ID: ${{ steps.recovery.outputs.release_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          RECORD="products/simcore/releases/records/${RELEASE_ID}.json"
-          RECEIPT="products/simcore/releases/state-receipts/${RELEASE_ID}.json"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add product-manifest.json docs/CURRENT_DEVELOPMENT.md docs/SIMCORE_GUIDELINES.md "$RECORD" "$RECEIPT"
-          if git diff --cached --quiet; then
-            echo 'POST_PUBLISH_RECOVERY_ALREADY_DURABLE'
-          else
-            git commit -m "state(simcore): recover ${RELEASE_ID} live pending"
-            PAYLOAD_COMMIT="$(git rev-parse HEAD)"
-            python3 scripts/repo-main-write.py --commit "$PAYLOAD_COMMIT" \
-              --allow product-manifest.json \
-              --allow docs/CURRENT_DEVELOPMENT.md \
-              --allow docs/SIMCORE_GUIDELINES.md \
-              --allow "$RECORD" \
-              --allow "$RECEIPT" \
-              --required-workflow simcore-ci.yml \
-              --required-profile MAIN_HEALTH \
-              --required-job Required \
-              --staging-prefix simcore-rs2-4-post-publish-recovery
-          fi
+          node products/simcore/tooling/release-state-main-gate.mjs \
+            --root . \
+            --envelope .simcore-release/post-publish-state-envelope.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --message "state(simcore): recover ${RELEASE_ID} live pending" \
+            --staging-prefix simcore-rs2-6-post-publish-recovery \
+            --report .simcore-release/main-gate-report.json
 
-      - name: Reobserve durable main truth
+      - name: Reobserve durable main truth through shared verifier
         shell: bash
         env:
-          RELEASE_ID: ${{ steps.recovery.outputs.release_id }}
           EXPECTED_C: ${{ steps.recovery.outputs.production_commit }}
-          EXPECTED_BLOB: ${{ steps.recovery.outputs.production_blob }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin main release-simcore
           test "$(git rev-parse origin/release-simcore)" = "$EXPECTED_C"
-          git show origin/main:product-manifest.json > .simcore-release/durable-manifest.json
-          git show "origin/main:products/simcore/releases/records/${RELEASE_ID}.json" > .simcore-release/durable-record.json
-          git show "origin/main:products/simcore/releases/state-receipts/${RELEASE_ID}.json" > .simcore-release/durable-receipt.json
-          python3 - <<'PY'
-          import json, os
-          m=json.load(open('.simcore-release/durable-manifest.json'))
-          r=json.load(open('.simcore-release/durable-record.json'))
-          q=json.load(open('.simcore-release/durable-receipt.json'))
-          h=json.load(open('.simcore-release/handoff/post-publish-input.json'))
-          assert m['release_commit']==os.environ['EXPECTED_C']
-          assert m['release_blob']==os.environ['EXPECTED_BLOB']
-          assert m['validation_status']=='PENDING_REAL_LONG_CHAT'
-          assert r['releaseState']=='LIVE_PENDING'
-          assert r['productionTruth']=='PUBLISHED_IDENTITY_VERIFIED'
-          assert r['stateSyncStatus']=='PASS'
-          assert q['schemaVersion']==1 and q['product']=='SimCore'
-          assert q['releaseId']==os.environ['RELEASE_ID']
-          assert q['publisherRunId']==h['publisherRunId']
-          assert q['productionCommit']==os.environ['EXPECTED_C']
-          assert q['previousProductionCommit']==h['previousProductionCommit']
-          assert q['productionBlob']==os.environ['EXPECTED_BLOB']
-          assert q['liveScenarioId']==h['liveScenarioId']
-          assert q['validationStatus']=='PENDING_REAL_LONG_CHAT'
-          assert q['lifecycleState']=='REAL_RELEASE_LIVE_PENDING'
-          assert q['releaseRecordPath']==f"products/simcore/releases/records/{os.environ['RELEASE_ID']}.json"
-          assert q['productionMutation']=='ALREADY_PUBLISHED_UPSTREAM'
-          assert q['releaseAuthority']=='RS2_4_PERMANENT'
-          assert q['result']=='PASS'
-          print('RS2_4_POST_PUBLISH_RECOVERY_DURABLE_MAIN_PASS')
-          PY
+          LANDED_MAIN="$(git rev-parse origin/main)"
+          git reset --hard "$LANDED_MAIN"
+          node products/simcore/tooling/release-state-reobserve.mjs \
+            --root . \
+            --envelope .simcore-release/post-publish-state-envelope.json \
+            --handoff .simcore-release/handoff/post-publish-input.json \
+            --production-identity .simcore-release/observed/identity.json \
+            --landed-main-commit "$LANDED_MAIN" \
+            --report .simcore-release/durable-reobserve-report.json

@@ -38,10 +38,12 @@ export async function runSuite(){
   pending.activationGate='FIRST_GENUINE_R2_7_OPERATIONAL_CONFIRMATION_PENDING';
   delete pending.operationallyProven;
   pending.implementation.operationalActivationProof='PENDING_FIRST_GENUINE_R2_7_RELEASE';
+  pending.implementation.durableProjection.status='IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING';
 
   const projected=projectRSystemStatus({status:pending,proof,record,isImplementationAncestor:true});
   equal(projected.disposition,'PROJECT','first eligible proof projects');
   equal(projected.projectedStatus.status,'OPERATIONALLY_PROVEN_FIRST_USE_COMPLETE','projected status');
+  equal(projected.projectedStatus.implementation.durableProjection.status,'OPERATIONALLY_PROVEN_FIRST_USE_COMPLETE','nested projection lifecycle');
   equal(projected.projectedStatus.activationAuthorized,true,'documentary activation');
   equal(projected.projectedStatus.activationGate,'CONSUMED_BY_FIRST_GENUINE_R2_7_RELEASE','consumed gate');
   equal(projected.projectedStatus.operationallyProven,true,'operational proof projection');
@@ -56,6 +58,15 @@ export async function runSuite(){
   equal(again.disposition,'NO_OP_ALREADY_DURABLE','same proof idempotent');
   equal(again.mainMutation,'NONE','same proof no main mutation');
   pass(assertions,'R2.7-status-projection-idempotent');
+
+  let staleNestedContradiction=false;
+  try {
+    const staleNested=clone(projected.projectedStatus);
+    staleNested.implementation.durableProjection.status='IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING';
+    projectRSystemStatus({status:staleNested,proof,record,isImplementationAncestor:true});
+  } catch(e) { staleNestedContradiction=e.code==='R2_7_STATUS_PROJECTION_CONTRADICTION'; }
+  assert(staleNestedContradiction,'consumed gate with stale nested lifecycle must fail closed');
+  pass(assertions,'R2.7-status-projection-nested-convergence');
 
   const laterRecord=clone(record);
   laterRecord.releaseId='simcore-v0.69.0-new-01';

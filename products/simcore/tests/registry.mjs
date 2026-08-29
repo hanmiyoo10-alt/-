@@ -4,6 +4,7 @@ export const registry = Object.freeze([
   { id: 'community-reaction', module: './suites/community-reaction.test.mjs', fixtureDir: 'community-reaction', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'community-parent-local-alias', module: './suites/community-parent-local-alias-v06800.test.mjs', fixtureDir: 'community-parent-local-alias', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'builder-v06800', module: './suites/builder-v06800.test.mjs', fixtureDir: 'builder-v06800', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'builder-v06900', module: './suites/builder-v06900.test.mjs', fixtureDir: 'builder-v06900', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'summary-scope', module: './suites/summary-scope.test.mjs', fixtureDir: 'summary-scope', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'narrative-clock', module: './suites/narrative-clock.test.mjs', fixtureDir: 'narrative-clock', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'frame', module: './suites/frame.test.mjs', fixtureDir: 'frame', coverage: 'EXECUTABLE', required: true, goldenGate: true },

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.66.0
+//@version 0.67.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -27,10 +27,16 @@
 // - Output Finalize: deterministic prepared-output → committed state/content transition composition; application-only, no I/O
 // - Output Compat: output envelope compatibility/canonicalization + bounded Fresh-confirmation metadata
 // - Bootstrap Migration: history bootstrap + legacy migration/repair coordination
-// - Recovery: M2 compatibility facade preserving the v0.63.55 public recovery API
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.67.0 M2-5 Recovery Transition Debt Retirement:
+// - Removes the zero-runtime-caller Recovery compatibility facade after v0.66 live acceptance and exact source/seam re-audit
+// - Keeps Output Compat, Bootstrap Migration, Output Finalize, Edit Reconcile and Representation as the same physical owners; no replacement barrel is introduced
+// - Changes only release identity, current module inventory/contract metadata, operator guidance and the standalone Recovery module registration; all other runtime behavior remains byte-identical
+// - Preserves SAME_FAST / REPRESENTATION_FAST_RECONCILED / USER_EDIT_CANDIDATE / MANUAL_EDIT_REBUILT, Deferred Mirror fail-closed guards, reload telemetry, persistent schema and all domain semantics
+// - Keeps latest.js and install.js byte-identical and requires real long-chat ordinary continuity plus same-tab reload/bootstrap evidence after publication
 //
 // v0.66.0 M2-4 Session / Runtime Mirror Boundary Completion:
 // - Physically extracts deterministic output finalization from Session into one application-level Output Finalize service while preserving Frame/Time/Structure/Reaction ordering and receipts
@@ -679,7 +685,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.66.0';
+const SIMCORE_RUNTIME_VERSION = '0.67.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -718,7 +724,6 @@ const MODULE_CONTRACTS = Object.freeze({
   'output-compat': Object.freeze({ owns: 'output envelope compatibility/canonicalization plus bounded Fresh candidate planning and compatibility interpretation', excludes: 'host Fresh reads, history bootstrap, manual edit attribution, persistent raw body' }),
   'bootstrap-migration': Object.freeze({ owns: 'history bootstrap and legacy migration/repair coordination', excludes: 'ordinary output compatibility or manual edit attribution' }),
   'output-finalize': Object.freeze({ owns: 'deterministic prepared-output to committed-state/content transition composition', excludes: 'storage I/O, host I/O, envelope candidate policy or edit attribution' }),
-  recovery: Object.freeze({ owns: 'deprecated M2 compatibility facade over output-compat + bootstrap-migration with zero runtime callers', excludes: 'new policy ownership' }),
   prompt: Object.freeze({ owns: 'runtime prompt serialization', excludes: 'persistent semantic state ownership, host/storage I/O, creative decisions' }),
   session: Object.freeze({ owns: 'per-chat application identity/current-state holder plus bounded persistence sequencing', excludes: 'output-finalization policy, retention housekeeping mechanics, prompt wording ownership or creative/semantic decisions' }),
   ops: Object.freeze({ owns: 'performance and diagnostic formatting', excludes: 'generation/state policy' }),
@@ -4282,23 +4287,6 @@ module.exports = {
 };
 });
 
-SimCore.define("recovery", function (require, module, exports) {
-const outputCompat = require('./output-compat');
-const bootstrapMigration = require('./bootstrap-migration');
-
-module.exports = {
-  classifyPreamble: outputCompat.classifyPreamble,
-  buildSafeEnvelopeBoundaryConfirmation: outputCompat.buildSafeEnvelopeBoundaryConfirmation,
-  canonicalizeResponseEnvelope: outputCompat.canonicalizeResponseEnvelope,
-  normalizeTailPlacement: outputCompat.normalizeTailPlacement,
-  prepareOutput: outputCompat.prepareOutput,
-  bootstrapFromHistory: bootstrapMigration.bootstrapFromHistory,
-  repairLegacyAgeClock: bootstrapMigration.repairLegacyAgeClock,
-  repairLegacyClockState: bootstrapMigration.repairLegacyClockState,
-  repairLatestGlobalFloorContamination: bootstrapMigration.repairLatestGlobalFloorContamination,
-};
-});
-
 SimCore.define("prompt", function (require, module, exports) {
 const kernel = require('./kernel');
 const lifecycle = require('./lifecycle');
@@ -6378,7 +6366,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.66.0';
+const HOST_COMPAT_VERSION = '0.67.0';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9177,19 +9165,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.66.0',
-    name: 'M2-4 Session / Runtime Mirror Boundary Completion',
-    scenario: '06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT',
+    version: '0.67.0',
+    name: 'M2-5 Recovery Transition Debt Retirement',
+    scenario: '06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT',
     summary: Object.freeze([
-      'M2-4 — output-finalize / Store housekeeping / Recovery direct-owner / Runtime Mirror observation boundaries를 동작 변경 없이 정리',
-      '자연 A/C/B 요청에서 output commit · Deferred Mirror · Frame/Time/COMMUNITY/Reaction 회귀가 없는지 확인',
-      'Representation fast reconcile과 genuine hand edit controls를 다시 확인',
+      'M2-5 - runtime caller가 0인 Recovery compatibility facade를 제거하고 direct physical owner 경계를 최종화',
+      'Output Compat / Bootstrap Migration / Output Finalize / Edit Reconcile / Representation 동작은 v0.66과 동일하게 유지',
+      '자연 A/C 요청과 same-tab reload/continuation에서 boot, commit, bootstrap 경로 회귀가 없는지 확인',
       '이상 징후는 현재 진단을 먼저 보존하고 WATCH / DEFER / FIX / BLOCKER로 분류',
     ]),
     recent: Object.freeze([
+      Object.freeze({ version: '0.67.0', name: 'M2-5 Recovery Debt Retirement', bullets: Object.freeze(['zero-caller Recovery facade physical retirement', 'direct owner topology retained']) }),
       Object.freeze({ version: '0.66.0', name: 'M2-4 Boundary Completion', bullets: Object.freeze(['Session finalization/housekeeping ownership 축소', 'Mirror Observe→Interpret→Apply→Record 경계 완성']) }),
-      Object.freeze({ version: '0.65.0', name: 'M2-3 + Runtime Identity Convergence', bullets: Object.freeze(['Edit Reconcile application service 추출', 'metadata/runtime/host identity 0.65.0 수렴']) }),
-      Object.freeze({ version: '0.64.11', name: 'Bounded Telemetry Capsule Compaction', bullets: Object.freeze(['reload handoff bounded compact shape', 'whole capsule 16KB hard cap']) }),
+      Object.freeze({ version: '0.65.0', name: 'M2-3 + Runtime Identity Convergence', bullets: Object.freeze(['Edit Reconcile application service 추출', 'metadata/runtime/host identity convergence']) }),
     ]),
   });
 
@@ -9202,9 +9190,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <div style="color:#9fb3d7;margin-bottom:8px">${escapeHtml(card.name)}</div>
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
 <div style="font-weight:700;margin:8px 0 5px">실전 확인</div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 A/C/B 요청에서 Version 0.66.0 · Runtime ACTIVE · output COMMITTED 확인</li><li>ordinary exact carryover → SAME_FAST · Edit origin NONE 확인</li><li>자연스럽게 가능한 prior OUTPUT_MISMATCH + exact Fresh carryover → REPRESENTATION_FAST_RECONCILED · snapshot UNCHANGED 확인</li><li>genuine hand edit → USER_EDIT_CANDIDATE → MANUAL_EDIT_REBUILT 확인</li><li>Deferred Mirror의 CANONICAL/HOST_RAW/confirmed-boundary 의미와 stale/superseded guard가 이전과 동일한지 확인</li></ol>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 A/C 요청에서 Version 0.67.0 · Runtime ACTIVE · output COMMITTED 확인</li><li>ordinary exact carryover → SAME_FAST · Edit origin NONE · snapshot UNCHANGED 확인</li><li>same-tab refresh 뒤 Host-local handoff가 기존 identity/TTL 규칙대로 ADOPTED 또는 truthful fail-closed 되는지 확인</li><li>다음 same-generation 요청이 missing-module/bootstrap 오류 없이 정상 continuation 되는지 확인</li><li>자연스럽게 representation mismatch 또는 genuine edit가 나오면 기존 M2 control 의미가 그대로인지 증거 보존</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>예상 밖 semantic/runtime 이상, unsafe mirror write, repeated adoption/reset, identity split 또는 구조 회귀가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
+<div>missing Recovery/module 초기화 오류, bootstrap/load/reload 회귀, Output Compat 의미 변화, unsafe mirror apply 또는 예상 밖 state/schema 변화가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
 <div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code></div>
 <div style="font-weight:700;margin:10px 0 5px">최근 업데이트</div>
 <ul style="margin:0 0 0 18px;padding:0">${recent}</ul>

@@ -41,6 +41,7 @@
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const REQUIRED_BRIDGE_VERSION = '1.6.26';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.1';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -2828,7 +2829,7 @@ async function importLegacyTodayBaselines() {
     if (bridgeDiag?.compatible !== true) blockers.push(`bridge compatibility ${bridgeDiag?.compatible === false ? 'no' : 'unknown'}`);
     if (String(bridgeDiag?.version || '') !== REQUIRED_BRIDGE_VERSION) blockers.push(`engine ${bridgeDiag?.version || '—'}`);
     if (!runtimeBridge?.managerInstalled) blockers.push('manager absent');
-    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
+    if (String(runtimeBridge?.managerVersion || '') !== REQUIRED_BRIDGE_MANAGER_VERSION) blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);
     const managerProduct = String(state.bridgeManagerRuntime?.productVersion || '');
     const managerSync = String(state.bridgeManagerSyncedProductVersion || '');
     if (managerProduct && managerProduct !== VERSION) blockers.push(`manager product ${managerProduct}`);

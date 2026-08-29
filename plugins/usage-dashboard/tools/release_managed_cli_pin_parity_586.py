@@ -12,6 +12,7 @@ TOOLS = ROOT / 'tools'
 SPEC = Path('.github/usage-dashboard/releases/5.86.json')
 
 CORE = SRC / '00-runtime-core.part.js'
+DIAGNOSTICS = SRC / '40-diagnostics.part.js'
 ENGINE_CORE = RUNTIME_SRC / '00-core.part.mjs'
 ENGINE = RUNTIME / 'bridge-engine.mjs'
 MANAGER = RUNTIME / 'bridge-manager.cjs'
@@ -103,9 +104,23 @@ def release_notes_constant(title, highlights, hints) -> str:
 def apply_product_identity_and_release_notes(title, highlights, hints) -> None:
     replace_once_or_target(CORE, '//@version 3.0.0-alpha.5.85', '//@version 3.0.0-alpha.5.86', '5.86 plugin header version')
     replace_once_or_target(CORE, "  const VERSION = '3.0.0-alpha.5.85';", "  const VERSION = '3.0.0-alpha.5.86';", '5.86 plugin runtime version')
+    replace_once_or_target(
+        CORE,
+        "  const REQUIRED_BRIDGE_VERSION = '1.6.26';",
+        "  const REQUIRED_BRIDGE_VERSION = '1.6.26';\n  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.1';",
+        '5.86 plugin Manager requirement',
+    )
+    replace_once_or_target(
+        DIAGNOSTICS,
+        "    if (String(runtimeBridge?.managerVersion || '') !== '1.3.0') blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);",
+        "    if (String(runtimeBridge?.managerVersion || '') !== REQUIRED_BRIDGE_MANAGER_VERSION) blockers.push(`manager ${runtimeBridge?.managerVersion || '—'}`);",
+        '5.86 stable readiness Manager requirement',
+    )
     core_text = CORE.read_text(encoding='utf-8')
     if "  const REQUIRED_BRIDGE_VERSION = '1.6.26';" not in core_text:
         raise SystemExit('5.86 plugin Engine requirement must remain 1.6.26')
+    if "  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.1';" not in core_text:
+        raise SystemExit('5.86 plugin Manager requirement must be 1.3.1')
 
     engine_core = ENGINE_CORE.read_text(encoding='utf-8')
     if "const VERSION = '1.6.26';" not in engine_core:

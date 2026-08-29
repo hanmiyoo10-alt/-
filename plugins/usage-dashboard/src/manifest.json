@@ -5,13 +5,13 @@
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "be74847269245d7a80bfb65234edbe88272f582bc8a9d78880680679c6970952",
+  "artifactSha256": "399373bdfcaaf9aff085320aa5ca09ba1b4f1c475b58a2e9d132ffed2f4bc65d",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 14656,
-      "sha256": "7ecc4ef16c9202858895cdb73ac9dc656df60fa4328b083d53a17efcd3b997d6"
+      "bytes": 14707,
+      "sha256": "049b1705003fbcb2a1e8531553875c3432791ae8466e86a5849bc1ba04c3c69a"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -82,8 +82,8 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 47004,
-      "sha256": "d9686112f21ff9a82f2a55a0d82dd30a19df35252ec5088e0046833fc382232a"
+      "bytes": 47028,
+      "sha256": "02a6e0ca13a15522f222cbc61992b38b0147c5a89a5bdfafde1f839db6184358"
     },
     {
       "file": "50-dashboard-context.part.js",

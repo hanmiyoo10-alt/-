@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.67.0-intent-01",
+  "releaseId": "simcore-v0.67.0-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.67.0",
+  "releaseName": "M2-5 Recovery Transition Debt Retirement",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "builderPath": "products/simcore/tooling/build-06700-m2-5-recovery-transition-debt-retirement.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_DESIGN_2026-08-29.md",
+    "docs/SIMCORE_POST_06600_ARCH_CONTRACT_CONVERGENCE_EVIDENCE_2026-08-29.md",
+    "docs/SIMCORE_06700_M2_5_IMPLEMENTATION_ACTIVATION_2026-08-29.md",
+    "docs/SIMCORE_06700_M2_5_IMPLEMENTATION_EVIDENCE_2026-08-29.md"
+  ]
+}

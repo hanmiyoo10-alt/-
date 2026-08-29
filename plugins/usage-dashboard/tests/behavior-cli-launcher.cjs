@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const {startBridge} = require('./harness/bridge-process.cjs');
+const {startBridge,managedCliVersion} = require('./harness/bridge-process.cjs');
 
 async function withBridge(options, task) {
   const bridge = await startBridge(options);
@@ -57,10 +57,10 @@ async function withBridge(options, task) {
     const call = bridge.ledger().find((row) => row.type === 'start');
     assert.equal(call.launcher, 'npx');
     assert.ok(!call.rawArgs.includes('--prefer-offline'));
-    assert.deepEqual(call.rawArgs.slice(0, 2), ['--yes','@llmgateway/cli@1.10.0']);
+    assert.deepEqual(call.rawArgs.slice(0, 2), ['--yes',`@llmgateway/cli@${managedCliVersion}`]);
   });
 
-  console.log('usage-dashboard CLI launcher behavior: OK · actual Engine process preserves managed/direct/npx authority and rollback');
+  console.log(`usage-dashboard CLI launcher behavior: OK · actual Engine process preserves managed/direct/npx authority and rollback · CLI ${managedCliVersion}`);
 })().catch((error) => {
   console.error(error);
   process.exit(1);

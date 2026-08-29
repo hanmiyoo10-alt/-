@@ -98,6 +98,7 @@ export function projectRSystemStatus({status,proof,record,isImplementationAncest
     if(!completeGateCoherent(status))fail('R2_7_STATUS_PROJECTION_CONTRADICTION','consumed gate is incoherent');
     const stored=status.implementation.operationalActivationProof;
     const same=stable(stored)===stable(candidate);
+    if(stored.releaseId===candidate.releaseId&&!same)fail('R2_7_STATUS_PROJECTION_CONTRADICTION','stored first-use proof differs from canonical proof');
     return {
       disposition:same?'NO_OP_ALREADY_DURABLE':'NO_OP_GATE_ALREADY_CONSUMED',
       projectedStatus:structuredClone(status),

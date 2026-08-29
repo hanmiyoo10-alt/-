@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "transitionId": "06700-live-pass-to-06800-preimplementation-review",
+  "expectedProductionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+  "expected": {
+    "validation_status": "PENDING_REAL_LONG_CHAT",
+    "current_priority": "06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT"
+  },
+  "set": {
+    "validation_status": "LIVE_PASS",
+    "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_PREIMPLEMENTATION_REAUDIT"
+  },
+  "evidence": [
+    "docs/SIMCORE_LIVE_06700_RELEASE_CLOSE_2026-08-29.md",
+    "docs/SIMCORE_LIVE_06700_STAGE_A_WARM_CONTINUITY_AND_CROSS_VERSION_BOOT_NEGATIVE_CONTROL_2026-08-29.md",
+    "docs/SIMCORE_06800_COMMUNITY_PARENT_LOCAL_ALIAS_ROOT_CAUSE_2026-08-29.md",
+    "docs/SIMCORE_06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_DESIGN_2026-08-29.md"
+  ],
+  "documentReplacements": []
+}

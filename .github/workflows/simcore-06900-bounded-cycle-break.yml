@@ -1,0 +1,195 @@
+name: SimCore v0.69 Bounded Post-Publish Cycle Break
+
+on:
+  push:
+    branches:
+      - 'recovery/simcore-06900-bounded-cycle-break'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: simcore-06900-bounded-cycle-break
+  cancel-in-progress: false
+
+jobs:
+  cycle-break:
+    if: github.ref == 'refs/heads/recovery/simcore-06900-bounded-cycle-break'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_PRODUCTION_COMMIT: 31b4c5075659a55861731c6fd73f999402321e94
+      EXPECTED_PRODUCTION_BLOB: 86954f4d7ff7dec9119e2a8c047bfbfa6f801d56
+      EXPECTED_VERSION: 0.69.0
+      FIXTURE_PATH: products/simcore/tests/suites/release-system-r2-8-terminal-convergence.test.mjs
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout ephemeral recovery transport
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: recovery/simcore-06900-bounded-cycle-break
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+          cache: ''
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.x'
+          cache: ''
+
+      - name: Freeze main and reobserve exact production
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main release-simcore
+          BASE="$(git rev-parse origin/main)"
+          P="$(git rev-parse origin/release-simcore)"
+          test "$P" = "$EXPECTED_PRODUCTION_COMMIT"
+          L="$(git rev-parse "$P:plugins/simcore/latest.js")"
+          I="$(git rev-parse "$P:plugins/simcore/install.js")"
+          test "$L" = "$EXPECTED_PRODUCTION_BLOB"
+          test "$I" = "$EXPECTED_PRODUCTION_BLOB"
+          mkdir -p /tmp/simcore-06900
+          git show "$P:plugins/simcore/latest.js" > /tmp/simcore-06900/latest.js
+          git show "$P:plugins/simcore/install.js" > /tmp/simcore-06900/install.js
+          node --check /tmp/simcore-06900/latest.js
+          node --check /tmp/simcore-06900/install.js
+          cmp -s /tmp/simcore-06900/latest.js /tmp/simcore-06900/install.js
+          VERSION="$(sed -n 's#^//@version[[:space:]]*##p' /tmp/simcore-06900/latest.js | head -n 1)"
+          test "$VERSION" = "$EXPECTED_VERSION"
+          RELEASE_NAME="$(VERSION="$VERSION" python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          text=Path('/tmp/simcore-06900/latest.js').read_text(encoding='utf-8')
+          m=re.search(r'^// v'+re.escape(os.environ['VERSION'])+r'\s+(.+?):\s*$',text,re.M)
+          if not m: raise SystemExit('release name not found')
+          print(m.group(1).strip())
+          PY
+          )"
+          git show "$GITHUB_SHA:$FIXTURE_PATH" > /tmp/simcore-06900/fixed-fixture.mjs
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "production_commit=$P" >> "$GITHUB_OUTPUT"
+          echo "production_blob=$L" >> "$GITHUB_OUTPUT"
+          echo "V06900_CYCLE_BREAK_IDENTITY_PASS base=$BASE production=$P blob=$L"
+
+      - name: Construct exact four-file candidate from frozen main
+        id: payload
+        shell: bash
+        env:
+          BASE: ${{ steps.identity.outputs.base }}
+          RELEASE_NAME: ${{ steps.identity.outputs.release_name }}
+          RELEASE_COMMIT: ${{ steps.identity.outputs.production_commit }}
+          RELEASE_BLOB: ${{ steps.identity.outputs.production_blob }}
+          VERSION: ${{ env.EXPECTED_VERSION }}
+        run: |
+          set -euo pipefail
+          git checkout --detach "$BASE"
+          git reset --hard "$BASE"
+          cp /tmp/simcore-06900/fixed-fixture.mjs "$FIXTURE_PATH"
+
+          mkdir -p .simcore-state-sync
+          cp /tmp/simcore-06900/latest.js .simcore-state-sync/latest.js
+          cp /tmp/simcore-06900/install.js .simcore-state-sync/install.js
+          cat > .simcore-state-sync/identity.json <<EOF
+          {"schemaVersion":1,"product":"SimCore","resolvedBranch":"release-simcore","resolvedCommit":"$RELEASE_COMMIT","latest":{"path":".simcore-state-sync/latest.js","blob":"$RELEASE_BLOB"},"install":{"path":".simcore-state-sync/install.js","blob":"$RELEASE_BLOB"}}
+          EOF
+
+          python3 scripts/simcore-sync-memory.py --manifest-only
+          if test -f products/simcore/state-sync/active-admin-transition.json; then
+            echo 'V06900_CYCLE_BREAK_ACTIVE_ADMIN_TRANSITION_FORBIDDEN' >&2
+            exit 2
+          fi
+          node products/simcore/tooling/sync-state.mjs \
+            --write \
+            --root . \
+            --manifest product-manifest.json \
+            --production-identity .simcore-state-sync/identity.json \
+            --targets products/simcore/state-sync/target-registry.json \
+            --probes products/simcore/state-sync/current-claim-probes.json \
+            --writer-policy products/simcore/state-sync/writer-policy.json \
+            --report .simcore-state-sync/write-report.json
+          rm -rf .simcore-state-sync
+          git diff --check
+
+          mapfile -t CHANGED < <(git diff --name-only | sort)
+          mapfile -t EXPECTED < <(printf '%s\n' \
+            'docs/CURRENT_DEVELOPMENT.md' \
+            'docs/SIMCORE_GUIDELINES.md' \
+            'product-manifest.json' \
+            'products/simcore/tests/suites/release-system-r2-8-terminal-convergence.test.mjs' | sort)
+          test "${#CHANGED[@]}" -eq 4
+          test "${CHANGED[*]}" = "${EXPECTED[*]}"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            products/simcore/tests/suites/release-system-r2-8-terminal-convergence.test.mjs \
+            product-manifest.json \
+            docs/CURRENT_DEVELOPMENT.md \
+            docs/SIMCORE_GUIDELINES.md
+          git diff --cached --check
+          git commit -m 'fix(simcore): converge v0.69 post-publish bootstrap state'
+          PAYLOAD="$(git rev-parse HEAD)"
+          test "$(git rev-parse "$PAYLOAD^1")" = "$BASE"
+          mapfile -t COMMITTED < <(git diff-tree --no-commit-id --name-only -r "$PAYLOAD" | sort)
+          test "${COMMITTED[*]}" = "${EXPECTED[*]}"
+          echo "commit=$PAYLOAD" >> "$GITHUB_OUTPUT"
+          echo "V06900_CYCLE_BREAK_PAYLOAD_READY commit=$PAYLOAD base=$BASE"
+
+      - name: Gate and land only through canonical main gateway
+        shell: bash
+        env:
+          PAYLOAD: ${{ steps.payload.outputs.commit }}
+        run: |
+          set -euo pipefail
+          python3 scripts/repo-main-write.py \
+            --commit "$PAYLOAD" \
+            --allow products/simcore/tests/suites/release-system-r2-8-terminal-convergence.test.mjs \
+            --allow product-manifest.json \
+            --allow docs/CURRENT_DEVELOPMENT.md \
+            --allow docs/SIMCORE_GUIDELINES.md \
+            --attempts 1 \
+            --required-workflow simcore-ci.yml \
+            --required-profile MAIN_HEALTH \
+            --required-job Required \
+            --staging-prefix simcore-06900-cycle-break
+
+      - name: Reobserve durable main and unchanged production
+        shell: bash
+        env:
+          BASE: ${{ steps.identity.outputs.base }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main release-simcore
+          P="$(git rev-parse origin/release-simcore)"
+          M="$(git rev-parse origin/main)"
+          test "$P" = "$EXPECTED_PRODUCTION_COMMIT"
+          test "$(git rev-parse "$P:plugins/simcore/latest.js")" = "$EXPECTED_PRODUCTION_BLOB"
+          test "$(git rev-parse "$P:plugins/simcore/install.js")" = "$EXPECTED_PRODUCTION_BLOB"
+          mapfile -t LANDED < <(git diff --name-only "$BASE" "$M" | sort)
+          mapfile -t EXPECTED < <(printf '%s\n' \
+            'docs/CURRENT_DEVELOPMENT.md' \
+            'docs/SIMCORE_GUIDELINES.md' \
+            'product-manifest.json' \
+            'products/simcore/tests/suites/release-system-r2-8-terminal-convergence.test.mjs' | sort)
+          test "${LANDED[*]}" = "${EXPECTED[*]}"
+          if git cat-file -e "origin/main:.github/workflows/simcore-06900-bounded-cycle-break.yml" 2>/dev/null; then
+            echo 'V06900_CYCLE_BREAK_TRANSPORT_LEAKED_TO_MAIN' >&2
+            exit 2
+          fi
+          git show origin/main:product-manifest.json > /tmp/simcore-06900/landed-manifest.json
+          python3 - <<'PY'
+          import json, os
+          m=json.load(open('/tmp/simcore-06900/landed-manifest.json'))
+          assert m['production_version'] == os.environ['EXPECTED_VERSION']
+          assert m['release_commit'] == os.environ['EXPECTED_PRODUCTION_COMMIT']
+          assert m['release_blob'] == os.environ['EXPECTED_PRODUCTION_BLOB']
+          print('V06900_CYCLE_BREAK_DURABLE_MAIN_PASS')
+          PY
+          echo "V06900_CYCLE_BREAK_COMPLETE main=$M production=$P"

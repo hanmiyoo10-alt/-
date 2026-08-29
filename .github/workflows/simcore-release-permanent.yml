@@ -270,6 +270,38 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Derive bounded recovery guidance on failure
+        if: ${{ failure() }}
+        continue-on-error: true
+        shell: bash
+        env:
+          FROZEN_VERIFIER: ${{ needs.resolve.outputs.verifier_commit }}
+          EXPECTED_PRODUCTION: ${{ needs.resolve.outputs.expected_production_commit }}
+          CANDIDATE_COMMIT: ${{ needs.resolve.outputs.candidate_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main release-simcore
+          CURRENT_CONTROL_PLANE="$(git rev-parse origin/main)"
+          OBSERVED_PRODUCTION="$(git rev-parse origin/release-simcore)"
+          if test "$OBSERVED_PRODUCTION" = "$CANDIDATE_COMMIT"; then
+            PHASE=POST_PUBLICATION
+            PUBLICATION_STATE=PUBLISHED
+          else
+            PHASE=PRE_PUBLICATION
+            PUBLICATION_STATE=UNPUBLISHED
+          fi
+          node products/simcore/tooling/release-recovery-decision.mjs \
+            --root . \
+            --phase "$PHASE" \
+            --frozen-verifier "$FROZEN_VERIFIER" \
+            --current-control-plane "$CURRENT_CONTROL_PLANE" \
+            --expected-production "$EXPECTED_PRODUCTION" \
+            --candidate-production "$CANDIDATE_COMMIT" \
+            --observed-production "$OBSERVED_PRODUCTION" \
+            --publication-state "$PUBLICATION_STATE" \
+            --report .simcore-release/r2-7-recovery-guidance.json
+          cat .simcore-release/r2-7-recovery-guidance.json
+
   post-publish-state:
     name: Declare Published State
     needs: [resolve, publish]

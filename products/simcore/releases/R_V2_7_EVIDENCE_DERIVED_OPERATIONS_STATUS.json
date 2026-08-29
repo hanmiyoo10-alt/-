@@ -10,6 +10,8 @@
   "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_EVIDENCE_DERIVED_OPERATIONS_DESIGN.md",
   "implementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_IMPLEMENTATION_AUTHORIZATION_2026-08-29.md",
   "implementationClosureAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_IMPLEMENTATION_CLOSURE_2026-08-29.md",
+  "durableProjectionDesignAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_DURABLE_OPERATIONAL_STATUS_PROJECTION_DESIGN.md",
+  "durableProjectionImplementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_DURABLE_OPERATIONAL_STATUS_PROJECTION_IMPLEMENTATION_AUTHORIZATION_2026-08-29.md",
   "primaryEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_V06700_FIRST_USE_OPERATIONAL_FEEDBACK_2026-08-29.md",
   "scorecardEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_FIRST_USE_SCORECARD_2026-08-29.md",
   "predecessorConvergence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_FIRST_USE_ACTIVATION_CONVERGENCE_2026-08-29.md",
@@ -19,6 +21,12 @@
   "implementationVerified": true,
   "activationAuthorized": false,
   "activationGate": "FIRST_GENUINE_R2_7_OPERATIONAL_CONFIRMATION_PENDING",
+  "operationalProofPolicy": {
+    "mode": "FIRST_GENUINE_RELEASE_AFTER_IMPLEMENTATION",
+    "implementationAncestor": "f01483956a8f3117852c501b17a366d77eefa1d8",
+    "verifierRelationship": "DESCENDANT_OR_EQUAL",
+    "consumeOnce": true
+  },
   "principles": [
     "KEEP_THE_SAFETY_WALL",
     "DERIVE_STATUS_FROM_PROOF",
@@ -47,6 +55,8 @@
     "rootPathContract": "products/simcore/tooling/root-path.mjs",
     "recoveryDecision": "products/simcore/tooling/release-recovery-decision.mjs",
     "operationalProof": "products/simcore/tooling/release-operational-proof.mjs",
+    "rSystemStatusProjection": "products/simcore/tooling/release-rsystem-status-project.mjs",
+    "rSystemStatusProjectionWorkflow": ".github/workflows/simcore-r2-7-status-projection.yml",
     "permanentWorkflow": ".github/workflows/simcore-release-permanent.yml",
     "existingRecoveryDestination": ".github/workflows/simcore-release-state-sync.yml",
     "regressionSuite": "products/simcore/tests/suites/release-system-r2-7.test.mjs"
@@ -58,7 +68,14 @@
     "qualificationRun": 33251682349,
     "verifyJob": 99098343831,
     "requiredJob": 99098399663,
-    "operationalActivationProof": "PENDING_FIRST_GENUINE_R2_7_RELEASE"
+    "operationalActivationProof": "PENDING_FIRST_GENUINE_R2_7_RELEASE",
+    "durableProjection": {
+      "status": "IMPLEMENTATION_IN_PROGRESS",
+      "regressionSuite": "release-system-r2-7-status-projection",
+      "qualificationRun": null,
+      "verifyJob": null,
+      "requiredJob": null
+    }
   },
   "deferred": [
     "FULL_PREDECESSOR_ROOT_HELPER_MECHANICAL_MIGRATION"

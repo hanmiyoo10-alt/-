@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "builder-v06800.batch-a",
+  "suite": "builder-v06800",
+  "input": {
+    "sourceVersion": "0.67.0",
+    "targetVersion": "0.68.0"
+  },
+  "expected": {
+    "buildMarker": "06800_BUILD_PASS",
+    "latestEqualsInstall": true
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

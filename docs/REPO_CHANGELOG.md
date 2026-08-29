@@ -763,6 +763,13 @@
 - Event ID: `4fb04a16dd9f9af85c0b9fa2682314e45ae180c894cbf26ff559819e667968e0`
 <!-- canonical-main-doc-promoted:4fb04a16dd9f9af85c0b9fa2682314e45ae180c894cbf26ff559819e667968e0 -->
 
+### 2026-08-29 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `fe08ea721f1e6396f0661f8c6570cc75dad557a1342843e9483ee3d5a8d95e3c`
+<!-- canonical-main-doc-promoted:fe08ea721f1e6396f0661f8c6570cc75dad557a1342843e9483ee3d5a8d95e3c -->
+
 ### 2026-08-29 — release(usage-dashboard): 3.0.0-alpha.5.87 stable contract Manager authority (#845)
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

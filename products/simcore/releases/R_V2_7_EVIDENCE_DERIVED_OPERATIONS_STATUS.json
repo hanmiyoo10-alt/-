@@ -4,7 +4,7 @@
   "systemVersion": "R2.7",
   "name": "Evidence-Derived Operations",
   "date": "2026-08-29",
-  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING",
+  "status": "OPERATIONALLY_PROVEN_FIRST_USE_COMPLETE",
   "disposition": "SIMPLIFY_AUTOMATE",
   "predecessor": "R2.6_POST_PUBLISH_BOUNDARY_CONVERGENCE",
   "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_EVIDENCE_DERIVED_OPERATIONS_DESIGN.md",
@@ -20,8 +20,8 @@
   "designFrozen": true,
   "implementationAuthorized": true,
   "implementationVerified": true,
-  "activationAuthorized": false,
-  "activationGate": "FIRST_GENUINE_R2_7_OPERATIONAL_CONFIRMATION_PENDING",
+  "activationAuthorized": true,
+  "activationGate": "CONSUMED_BY_FIRST_GENUINE_R2_7_RELEASE",
   "operationalProofPolicy": {
     "mode": "FIRST_GENUINE_RELEASE_AFTER_IMPLEMENTATION",
     "implementationAncestor": "f01483956a8f3117852c501b17a366d77eefa1d8",
@@ -69,7 +69,17 @@
     "qualificationRun": 33251682349,
     "verifyJob": 99098343831,
     "requiredJob": 99098399663,
-    "operationalActivationProof": "PENDING_FIRST_GENUINE_R2_7_RELEASE",
+    "operationalActivationProof": {
+      "releaseId": "simcore-v0.68.0-new-02",
+      "publisherRunId": "33255998343",
+      "releaseRecord": "products/simcore/releases/records/simcore-v0.68.0-new-02.json",
+      "stateReceipt": "products/simcore/releases/state-receipts/simcore-v0.68.0-new-02.json",
+      "productionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+      "previousProductionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+      "productionBlob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
+      "verifierCommit": "88b932f8ecfc89df4be53a4a92d61cfa11d9e0e3",
+      "result": "PASS"
+    },
     "durableProjection": {
       "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING",
       "regressionSuite": "release-system-r2-7-status-projection",
@@ -86,5 +96,7 @@
     "GITHUB_ACTIONS_NODE20_ACTION_RUNTIME_DEPRECATION_NONBLOCKING"
   ],
   "runtimeMutation": "NONE",
-  "releaseSimcoreMutation": "NONE"
+  "releaseSimcoreMutation": "NONE",
+  "activationFieldSemantics": "DOCUMENTARY_FIRST_USE_GATE_CONSUMED",
+  "operationallyProven": true
 }

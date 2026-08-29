@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "r2-8-human-evidence-terminal-convergence-contract",
+  "suite": "release-system-r2-8-terminal-convergence",
+  "input": {
+    "systemVersion": "R2.8",
+    "authorityConfirmation": "HUMAN_EVIDENCE",
+    "syntheticCurrentCheckpoint": "M2-5"
+  },
+  "expected": {
+    "publisherCount": 1,
+    "mainWriterCount": 1,
+    "runtimeMutation": "NONE",
+    "releaseSimcoreMutation": "NONE",
+    "dispositions": [
+      "ELIGIBLE_TO_PROJECT",
+      "ALREADY_DURABLE",
+      "BLOCKED_PRODUCTION_MOVED",
+      "BLOCKED_RELEASE_BINDING_MISMATCH",
+      "BLOCKED_LIVE_GATE_MISMATCH",
+      "BLOCKED_CURRENT_STATE_CONTRADICTION",
+      "BLOCKED_CHECKPOINT_REGRESSION",
+      "BLOCKED_EVIDENCE_INVALID"
+    ]
+  },
+  "historicalPredecessors": [
+    {
+      "releaseId": "simcore-v0.66.0-new-05",
+      "transitionId": "06600-terminal-projection-v2",
+      "fromValidation": "PENDING_REAL_LONG_CHAT",
+      "toValidation": "LIVE_PASS",
+      "nextPriority": "M2_5_POST_06600_TRANSITION_DEBT_REVIEW"
+    },
+    {
+      "releaseId": "simcore-v0.67.0-new-02",
+      "transitionId": "06700-terminal-projection-to-06800-authorization-review",
+      "fromValidation": "LIVE_PASS",
+      "toValidation": "LIVE_PASS",
+      "nextPriority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW"
+    }
+  ],
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE",
+    "historicalExamplesAreReadOnly": true
+  }
+}

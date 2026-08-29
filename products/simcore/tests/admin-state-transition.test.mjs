@@ -38,6 +38,7 @@ function baseManifest(overrides = {}) {
     release_blob: '34da01aa131f760b92d65d961a7843e9cc0d37d6',
     validation_status: 'PENDING_REAL_LONG_CHAT',
     current_priority: '06403_B_END_DIAGNOSTIC_BUILDER_LIVE_VALIDATION',
+    major_update_checkpoint: 'M2-3',
     ...overrides,
   };
 }
@@ -50,10 +51,12 @@ function transition(overrides = {}) {
     expected: {
       validation_status: 'PENDING_REAL_LONG_CHAT',
       current_priority: '06403_B_END_DIAGNOSTIC_BUILDER_LIVE_VALIDATION',
+      major_update_checkpoint: 'M2-3',
     },
     set: {
       validation_status: 'LIVE_PASS',
       current_priority: 'RS2_4E_REAL_RELEASE_READY_QUALIFICATION',
+      major_update_checkpoint: 'M2-4',
     },
     evidence: ['docs/SIMCORE_LIVE_06406_VALIDATION.md'],
     documentReplacements: [
@@ -91,6 +94,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg); }
   const doc = fs.readFileSync(path.join(root, 'docs/CURRENT_DEVELOPMENT.md'), 'utf8');
   assert(m.validation_status === 'LIVE_PASS', 'validation not transitioned');
   assert(m.current_priority === 'RS2_4E_REAL_RELEASE_READY_QUALIFICATION', 'priority not transitioned');
+  assert(m.major_update_checkpoint === 'M2-4', 'checkpoint not transitioned');
   assert(m.release_commit === P && m.production_version === '0.64.6', 'production identity mutated');
   assert(doc.includes(NEW_VERDICT) && doc.includes(NEW_LEDGER), 'document transition missing');
   const second = run(root, ['--write']);
@@ -106,6 +110,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg); }
   const m = readJson(root, 'product-manifest.json');
   const doc = fs.readFileSync(path.join(root, 'docs/CURRENT_DEVELOPMENT.md'), 'utf8');
   assert(m.current_priority === 'RS2_4E_REAL_RELEASE_READY_QUALIFICATION', 'partial manifest recovery failed');
+  assert(m.major_update_checkpoint === 'M2-4', 'partial checkpoint recovery failed');
   assert(doc.includes(NEW_LEDGER), 'partial document recovery failed');
   fs.rmSync(root, { recursive: true, force: true });
 }

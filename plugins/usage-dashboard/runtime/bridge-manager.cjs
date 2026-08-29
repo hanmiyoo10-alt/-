@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.3.2';
-const PRODUCT_VERSION = '3.0.0-alpha.5.88';
+const MANAGER_VERSION = '1.3.3';
+const PRODUCT_VERSION = '3.0.0-alpha.5.89';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -477,11 +477,11 @@ async function waitForEngineDown(pid, timeoutMs = 6000) {
   }
   return false;
 }
-async function startManagedCandidate(candidate) {
+async function startManagedCandidate(candidate, expectedVersion = '') {
   writeEngineService(candidate, false);
   try { fs.unlinkSync(path.join(ENGINE_SERVICE_DIR, 'down')); } catch (_) {}
   try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
-  return waitForManagedEngine(candidate);
+  return waitForManagedEngine(candidate, expectedVersion);
 }
 const BRIDGE_PROBE_PATH = '/__local_usage_runtime_probe__';
 async function bridgeAuthProbe(timeoutMs = 1500) {
@@ -549,7 +549,7 @@ async function bridgeReachable(timeoutMs = 700) {
     req.on('error', () => finish(false)); req.end();
   });
 }
-async function waitForManagedEngine(expected, timeoutMs = 12000) {
+async function waitForManagedEngine(expected, expectedVersion = '', timeoutMs = 12000) {
   const started = Date.now();
   let lastError = '';
   while (Date.now() - started < timeoutMs) {
@@ -559,6 +559,12 @@ async function waitForManagedEngine(expected, timeoutMs = 12000) {
     if (service.running && service.pid && (pid === service.pid || (!pid && processVerified))) {
       try {
         const identity = await bridgeIdentity();
+        const liveVersion = String(identity?.bridgeVersion || '');
+        if (expectedVersion && liveVersion !== expectedVersion) {
+          lastError = `managed engine version mismatch: expected ${expectedVersion}, got ${liveVersion || 'unknown'}`;
+          await sleep(350);
+          continue;
+        }
         return {ok:true,service,pid:service.pid,identity,bridgeVersion:identity.bridgeVersion,ownership:pid === service.pid ? 'proc-net' : 'service-process'};
       } catch (e) { lastError = e?.message || String(e); }
     }
@@ -577,7 +583,7 @@ async function engineRuntimeStatus() {
   const bundleReady = bundledEngineReady();
   const descriptorBundled = Boolean(descriptor && path.resolve(String(descriptor.script || '')) === path.resolve(BUNDLED_ENGINE_FILE));
   const serviceEnvironmentReady = engineServiceEnvironmentReady();
-  const engineBundled = Boolean(managed && descriptorBundled && bundleReady && serviceEnvironmentReady);
+  const engineBundled = Boolean(managed && descriptorBundled && bundleReady && serviceEnvironmentReady && String(identity?.bridgeVersion || '') === BUNDLED_ENGINE_VERSION);
   const candidate = managed ? {safe:true,reason:'managed-service'} : discoverEngineCandidate();
   const fallbackNeedsProbe = candidate?.reason === 'canonical-pidfile';
   const candidateSafe = typeof candidate?.safe === 'boolean' ? (candidate.safe && (!fallbackNeedsProbe || Boolean(identity))) : null;
@@ -670,7 +676,7 @@ async function syncBundledEngine() {
     try { execFileSync('sv', ['up', ENGINE_SERVICE_DIR], {stdio:'ignore',timeout:3000}); } catch (_) {}
     return {ok:false,synced:false,state:'stop-timeout',retryable:true,error:'managed engine did not stop cleanly for bundle sync'};
   }
-  const verified = await startManagedCandidate(next);
+  const verified = await startManagedCandidate(next, BUNDLED_ENGINE_VERSION);
   if (verified.ok) {
     const nextDescriptor = {
       ...descriptor,

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.67.0",
-  "release_name": "M2-5 Recovery Transition Debt Retirement",
+  "production_version": "0.68.0",
+  "release_name": "Community Parent-Local Alias Classification Repair",
   "release_branch": "release-simcore",
-  "release_commit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
-  "release_blob": "24c57d86b3533a89e675c5b598b0c4a3a4fef6fe",
+  "release_commit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+  "release_blob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION",
+  "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -32,7 +32,7 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "validation_status": "LIVE_PASS",
+  "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
   "major_update_checkpoint": "M2-5",

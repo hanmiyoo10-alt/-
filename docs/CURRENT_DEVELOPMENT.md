@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.67.0`
-- Release: `M2-5 Recovery Transition Debt Retirement`
+- Version: `0.68.0`
+- Release: `Community Parent-Local Alias Classification Repair`
 - Release branch: `release-simcore`
-- Release commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`
-- Release blob: `24c57d86b3533a89e675c5b598b0c4a3a4fef6fe`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `6b31a5265f67daf5a90222d6c08bb85f3abde538`
+- Release blob: `5094755266444de311ec9cc8ffc7a4dd658e65b1`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-5`
@@ -30,18 +30,17 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
-- Release transaction: `simcore-v0.67.0-new-02`
-- Production commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`
-- Validation status: `LIVE_PASS`
-- Current priority: `06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Release transaction: `simcore-v0.68.0-new-02`
+- Production commit: `6b31a5265f67daf5a90222d6c08bb85f3abde538`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

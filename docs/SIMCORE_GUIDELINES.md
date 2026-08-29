@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.67.0 — M2-5 Recovery Transition Debt Retirement
-Release commit: 01a4204981191968ba22ba6ad161c1053d6bc7d0
+SimCore v0.68.0 — Community Parent-Local Alias Classification Repair
+Release commit: 6b31a5265f67daf5a90222d6c08bb85f3abde538
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

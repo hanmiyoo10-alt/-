@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.86
+//@version 3.0.0-alpha.5.87
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.86';
+  const VERSION = '3.0.0-alpha.5.87';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed CLI Engine/Manager Pin Parity Repair",
+    title: "Stable Contract Manager Authority Single Source Repair",
     highlights: Object.freeze([
-    "Bridge Manager의 관리형 LLM Gateway CLI target을 Engine과 동일한 1.10.0으로 정렬",
-    "Engine 1.6.26과 기존 managed-direct → direct → npx fallback 순서는 그대로 유지",
-    "기존 1.9.0 managed descriptor/runtime은 1.10.0 target에서 stale로 처리되어 정상 provisioning 경로로 복구"
+    "Runtime Diagnostics의 Stable contract Manager 버전이 readiness와 동일한 REQUIRED_BRIDGE_MANAGER_VERSION authority를 사용하도록 단일소스화",
+    "Engine 1.6.26과 Manager semantic 1.3.1, managed CLI 1.10.0 동작은 그대로 유지",
+    "Manager artifact는 현재 Product 5.87 sync identity만 갱신하고 provisioning/fallback 동작은 변경하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok인지 확인",
-    "정상 acceptance capture에서 managed-direct가 사용되고 direct ENOENT/npx-fallback이 0인지 확인",
-    "Organizations/DevPass/Credits/Request Ledger와 source-truth 규칙이 기존과 동일한지 확인",
-    "provisioning 실패 시 수동 CLI 설치를 요구하지 말고 diagnostics 증거만 수집"
+    "전체 Diagnostics에서 Stable contract의 manager가 1.3.1로 표시되고 Bridge manager v1.3.1과 일치하는지 확인",
+    "READY / Health ok / active errors 0 / failures 0가 유지되는지 확인",
+    "Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok이고 정상 작업이 managed-direct를 유지하는지 확인",
+    "DevPass/Credits/Request Ledger와 기존 source-truth 표시가 5.86과 동일하게 유지되는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -2916,7 +2916,7 @@ async function importLegacyTodayBaselines() {
       `Adapter: devpass-bridge-v1.6.x + local-json-v1`,
       `Schema: snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION}`,
       `Stable readiness: ${stableReadiness.ready ? 'READY' : 'BLOCKED'} · updater ${stableReadiness.updaterCompatible ? 'compatible' : 'incompatible'} · blockers ${stableReadiness.blockers.join(', ') || 'none'} · local recoveries ${Number(localRuntimeErrors.recoveredCount || 0)}`,
-      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager 1.3.0 · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
+      `Stable contract: engine ${REQUIRED_BRIDGE_VERSION} · manager ${REQUIRED_BRIDGE_MANAGER_VERSION} · snapshot v${SNAPSHOT_SCHEMA_VERSION} · recent-request v${RECENT_REQUEST_SCHEMA_VERSION} · state v3`,
       `Health: ${h.status || '—'}`,
       `Bridge detail: ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · required >=${REQUIRED_BRIDGE_VERSION} · compatible ${bridgeDiag.compatible === null ? 'unknown' : bridgeDiag.compatible ? 'yes' : 'no'} · snapshot ${bridgeDiag.fetchedAt ? age(bridgeDiag.fetchedAt) : '—'}`,
       `Bridge modules: ${bridgeDiag.moduleCount ?? '—'} · stale ${bridgeDiag.staleModules ?? '—'} · errors ${bridgeDiag.errorModules ?? '—'}`,

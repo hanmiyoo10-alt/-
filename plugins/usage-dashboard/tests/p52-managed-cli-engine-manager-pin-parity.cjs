@@ -9,6 +9,8 @@ const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs')
 const {discoverTests} = require('./registry.cjs');
 
 const root = 'plugins/usage-dashboard';
+const pluginCore = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
+const diagnostics = fs.readFileSync(`${root}/src/40-diagnostics.part.js`, 'utf8');
 const engineCore = fs.readFileSync(`${root}/runtime-src/bridge-engine/00-core.part.mjs`, 'utf8');
 const cliRuntime = fs.readFileSync(`${root}/runtime-src/bridge-engine/30-cli-runtime.part.mjs`, 'utf8');
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
@@ -62,6 +64,9 @@ assert.equal((cliRuntime.match(/async function runCliProcess\(/g) || []).length,
 assert.ok(manager.includes("const MANAGER_VERSION = '1.3.1';"), 'P52 Manager version must advance to 1.3.1');
 assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.86';"), 'P52 Manager product identity must track 5.86');
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.26';"), 'P52 Manager bundled Engine version must remain 1.6.26');
+assert.ok(pluginCore.includes("const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.1';"), 'P52 plugin readiness requirement must track Manager 1.3.1');
+assert.ok(diagnostics.includes("String(runtimeBridge?.managerVersion || '') !== REQUIRED_BRIDGE_MANAGER_VERSION"), 'P52 stable readiness must use the shared Manager requirement');
+assert.equal(diagnostics.includes("managerVersion || '') !== '1.3.0'"), false, 'P52 stable readiness must not retain the stale Manager 1.3.0 literal');
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.86');
 assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.86');
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.26');
@@ -84,6 +89,7 @@ execFileSync(process.execPath, [`${root}/tools/build_bridge_engine.cjs`, '--chec
 
 for (const name of [
   'behavior-cli-launcher.cjs',
+  'behavior-runtime-recovery.cjs',
   'p27-npx-cache-first-launcher.cjs',
   'p28-managed-direct-cli-runtime.cjs',
   'p50-service-tier-selection-source-fidelity.cjs',
@@ -100,4 +106,4 @@ for (const name of [
   'p52-managed-cli-engine-manager-pin-parity.cjs',
 ]) assert.ok(suite.regressions.includes(name), `P52 registry must include ${name}`);
 
-console.log('P52 Managed CLI Engine/Manager Pin Parity: OK · Engine/Manager target 1.10.0 · Engine 1.6.26 byte-identical · Manager 1.3.1 · provisioning/fallback ownership preserved · contracts 1/1');
+console.log('P52 Managed CLI Engine/Manager Pin Parity: OK · Engine/Manager target 1.10.0 · Manager readiness identity 1.3.1 · Engine 1.6.26 byte-identical · provisioning/fallback ownership preserved · contracts 1/1');

@@ -54,10 +54,11 @@ function validatePolicy(policy) {
   if (!p || p.mainGateway !== 'scripts/repo-main-write.py' || p.requiredWorkflow !== 'simcore-ci.yml' || p.requiredProfile !== 'MAIN_HEALTH' || p.requiredJob !== 'Required') fail('R2_6_STATE_PAYLOAD_POLICY_FAIL', 'postPublishState contract');
 }
 
-export function validateEnvelopePolicy(envelope, policy) {
+export function validateEnvelopePolicy(envelope, policy, { allowSimulation = false } = {}) {
   validatePostPublishStateEnvelope(envelope);
   validatePolicy(policy);
-  if (!['PERMANENT','RECOVERY'].includes(envelope.mode)) fail('R2_6_STATE_ENVELOPE_INVALID', `main gate mode ${envelope.mode}`);
+  const allowedModes = allowSimulation ? ['PERMANENT','RECOVERY','PREPUBLICATION_SIMULATION'] : ['PERMANENT','RECOVERY'];
+  if (!allowedModes.includes(envelope.mode)) fail('R2_6_STATE_ENVELOPE_INVALID', `main gate mode ${envelope.mode}`);
   const manifestPaths = envelope.persistentPayloadManifest.map((row) => row.path);
   for (const rel of manifestPaths) if (!policyAllows(policy, rel)) fail('R2_6_STATE_PAYLOAD_POLICY_FAIL', rel);
   for (const rel of envelope.changedPaths) if (!manifestPaths.includes(rel) || !policyAllows(policy, rel)) fail('R2_6_STATE_PAYLOAD_POLICY_FAIL', rel);

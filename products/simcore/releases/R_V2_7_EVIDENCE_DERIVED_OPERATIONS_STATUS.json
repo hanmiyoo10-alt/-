@@ -12,6 +12,7 @@
   "implementationClosureAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_IMPLEMENTATION_CLOSURE_2026-08-29.md",
   "durableProjectionDesignAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_DURABLE_OPERATIONAL_STATUS_PROJECTION_DESIGN.md",
   "durableProjectionImplementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_DURABLE_OPERATIONAL_STATUS_PROJECTION_IMPLEMENTATION_AUTHORIZATION_2026-08-29.md",
+  "durableProjectionImplementationClosureAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_DURABLE_OPERATIONAL_STATUS_PROJECTION_IMPLEMENTATION_CLOSURE_2026-08-29.md",
   "primaryEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_V06700_FIRST_USE_OPERATIONAL_FEEDBACK_2026-08-29.md",
   "scorecardEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_FIRST_USE_SCORECARD_2026-08-29.md",
   "predecessorConvergence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_FIRST_USE_ACTIVATION_CONVERGENCE_2026-08-29.md",
@@ -70,11 +71,12 @@
     "requiredJob": 99098399663,
     "operationalActivationProof": "PENDING_FIRST_GENUINE_R2_7_RELEASE",
     "durableProjection": {
-      "status": "IMPLEMENTATION_IN_PROGRESS",
+      "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING",
       "regressionSuite": "release-system-r2-7-status-projection",
-      "qualificationRun": null,
-      "verifyJob": null,
-      "requiredJob": null
+      "qualificationHead": "262990c594a0a83f3d6b7d5593c8598ae24c198e",
+      "qualificationRun": 33258748655,
+      "verifyJob": 99116919706,
+      "requiredJob": 99116983078
     }
   },
   "deferred": [

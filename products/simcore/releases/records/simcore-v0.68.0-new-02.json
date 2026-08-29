@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.68.0-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "75e7ced5b545c4966dadd4ea3f786dd710de884c",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.68.0-new-02.json",
+  "releaseSpecSha256": "e0089fb72e58fd7bb39fcfa23d5a8d9c81b18ae32c66d82425a54f80787dff58",
+  "productionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+  "previousProductionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+  "productionBlob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
+  "version": "0.68.0",
+  "releaseName": "Community Parent-Local Alias Classification Repair",
+  "verificationReportSha256": "1ef760290289f7dd2ace0a4e0666dc7ad4c77e064147e44950a54e97053aa7e7",
+  "verifierCommit": "88b932f8ecfc89df4be53a4a92d61cfa11d9e0e3",
+  "publisherRunId": "33255998343",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

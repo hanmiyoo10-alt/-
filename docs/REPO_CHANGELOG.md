@@ -733,3 +733,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
 - Event ID: `5293384e75e26d1b5b0b80b082f6c2bd456c6a1f7ceb940daf61a22b6714559a`
 <!-- canonical-main-doc-promoted:5293384e75e26d1b5b0b80b082f6c2bd456c6a1f7ceb940daf61a22b6714559a -->
+
+### 2026-08-29 — materialize: Usage Dashboard 3.0.0-alpha.5.86 from source 020543fc6a32fe4271ede32b99172482add68ed6 (#828)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ae023caba0fe710dd05b4a5b9bad89de635662ef`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ae023caba0fe710dd05b4a5b9bad89de635662ef)
+- Event ID: `2d3a81cf7f36decaa0931f6d4850a9fc847c64b719eb308514e82892231b3c32`
+<!-- canonical-main-doc-promoted:2d3a81cf7f36decaa0931f6d4850a9fc847c64b719eb308514e82892231b3c32 -->

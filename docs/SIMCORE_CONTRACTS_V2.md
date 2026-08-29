@@ -1,6 +1,6 @@
-# SimCore 2.0M Major — Contracts v2
+# SimCore 2.0M Major - Contracts v2
 
-> Current production authority: `v0.66.0 — M2-4 Session / Runtime Mirror Boundary Completion`
+> Current production authority: `v0.66.0 - M2-4 Session / Runtime Mirror Boundary Completion`
 >
 > Production release: `release-simcore@4b6ae1a4c63f6be658c6163168cc46a1adef60aa`
 >
@@ -10,9 +10,9 @@
 >
 > Durable checkpoint: **M2-4**
 >
-> Current architecture state: **M2-5 transition-debt review; no v0.67 runtime implementation authorized by this document alone.**
+> Current architecture state: **v0.67.0 M2-5 Recovery retirement implementation materialized on the dedicated work branch; publication and live acceptance pending.**
 
-This document is the living human-readable authority for the SimCore Contracts v2 architecture. Historical M0/M1 intent remains preserved in `docs/SIMCORE_2M_ARCHITECTURE_AUDIT.md` and the versioned M2 activation/evidence documents. Where those historical planning documents use future-tense wording for M2-2, M2-3, or M2-4, the current production state recorded here is authoritative.
+This document is the living human-readable authority for the SimCore Contracts v2 architecture. Historical M0/M1/M2 evidence remains historical and is not rewritten to pretend retired seams never existed.
 
 Machine-readable authority:
 
@@ -22,15 +22,13 @@ Permanent drift guard:
 
 `python3 scripts/simcore-architecture-check.py`
 
-The CI workflow materializes `release-simcore/plugins/simcore/latest.js` and `install.js` and checks this contract against actual production source. The old `main/plugins/simcore` source mirror is not production authority.
+Production runtime authority remains `release-simcore`. The old `main/plugins/simcore` source mirror is not production authority.
 
 ---
 
 ## 1. Core architectural decision
 
 The 2.0M Major is a staged mechanical ownership refactor, not a whole-system rewrite.
-
-The stable rule remains:
 
 ```text
 preserve proven domain behavior
@@ -49,12 +47,13 @@ M2-3  v0.65.0   Edit Reconcile extraction + runtime identity convergence
 M2-4  v0.66.0   Session / Runtime Mirror boundary completion
 ```
 
-Current review:
+Current implementation checkpoint:
 
 ```text
-M2-5+
-transition-debt retirement only after exact-production zero-consumer/equivalence proof
+M2-5  v0.67.0   retire the zero-runtime-caller Recovery compatibility facade only
 ```
+
+M2-5 does not authorize unrelated Session cleanup, WATCH fixes, domain behavior changes or a replacement barrel module.
 
 ---
 
@@ -77,7 +76,7 @@ Representation
 Application
   prompt / session / edit-reconcile
   output-compat / bootstrap-migration / output-finalize
-  recovery compatibility facade (deprecated, zero runtime callers in v0.66)
+  recovery compatibility facade: v0.66 production only, retiring at v0.67
         ↓
 Observability
   ops
@@ -88,26 +87,26 @@ Runtime
   runtime-telemetry / runtime-probe / runtime-contracts
 ```
 
-Dependency rules:
+Dependency rules remain:
 
 1. Foundation depends only on Foundation except explicitly recorded transition exceptions.
 2. Domain depends only on Foundation/Domain.
-3. Validation may compose Foundation/Domain/Validation but remains judge-only.
-4. Representation depends only on Foundation/Representation and remains memory-only.
+3. Validation remains judge-only.
+4. Representation remains memory-only identity/provenance authority.
 5. Application may compose lower layers and Application services, but may not call Runtime directly.
-6. Runtime may consume lower layers through explicit interfaces/adapters; Core must never depend upward on Runtime.
+6. Runtime may consume lower layers through explicit adapters; Core must never depend upward on Runtime.
 7. Store owns persistence mechanics, not semantic decisions.
-8. Observability renders bounded structured facts; it does not mutate business state to simplify diagnostics.
+8. Observability renders bounded facts and does not mutate business state to simplify diagnostics.
 9. No circular imports.
-10. Raw Fresh/response bodies are not retained merely for representation/provenance convenience.
+10. Raw Fresh/response bodies are not retained for provenance convenience.
 
-Known Foundation transition debt remains limited to the exact current Kernel edges declared in the machine contract. Exceptions may shrink when source edges disappear and may not expand silently.
+Known Kernel transition exceptions may shrink when source edges disappear and may not expand silently.
 
 ---
 
 ## 3. Stable owners to preserve
 
-These remain coherent current owners and are not M2-5 rewrite targets:
+M2-5 does not rewrite these owners:
 
 ```text
 store
@@ -131,79 +130,42 @@ runtime-telemetry
 runtime-session
 runtime-hooks
 runtime-probe
+lifecycle
+representation
+edit-reconcile
+output-compat
+bootstrap-migration
+output-finalize
+runtime-mirror
 ```
 
-`lifecycle` remains the current request-domain preparation coordinator plus Broadcast lifecycle owner. A speculative Turn Pipeline is not authorized merely for aesthetic modularity.
+A speculative Turn Pipeline, State extraction or replacement compatibility barrel remains unauthorized.
 
 ---
 
-## 4. Representation contract — current since M2-2, narrowed through M2-4
+## 4. Representation and Edit Reconcile
 
-Representation owns:
-
-```text
-exact fingerprint identity
-CANONICAL / HOST_RAW / FRESH_CHAT relation taxonomy
-bounded provenance ledger/metadata
-exact carryover classification
-accepted canonical-equivalence identity facts
-```
-
-Representation does not own:
-
-```text
-raw response-body persistence
-semantic envelope parsing or prose repair
-chat writes
-persistent Core state
-history mutation
-provider cache
-network
-timers
-```
+Representation owns exact fingerprint identity, CANONICAL/HOST_RAW/FRESH_CHAT relations, bounded provenance and accepted canonical-equivalence facts.
 
 Canonical invariant:
 
 > **Fresh is identity evidence, not a body source.**
 
-M2-4 removed Output Compat policy-label interpretation from Representation's identity authority. Output Compat owns compatibility meaning; Representation owns the resulting identity relation/provenance.
-
----
-
-## 5. Edit Reconcile contract — current since M2-3
-
-`edit-reconcile` is the single application service for previous-assistant reconciliation.
-
-It owns the current decision tree for:
+Edit Reconcile remains the single application service for previous-assistant reconciliation and preserves:
 
 ```text
 SAME_FAST
 SAME_HOST_FAST
-snapshot exact carryover
-representation exact carryover
-USER_EDIT_CANDIDATE
 REPRESENTATION_DRIFT_CORRELATED
-AMBIGUOUS_CHANGE
-manual rebuild fallback coordination
-bounded reconcile receipts
-```
-
-It does not own:
-
-```text
-representation taxonomy/provenance storage
-host Fresh reads
-Deferred Mirror transport
-provider cache claims
-diagnostic rendering
+REPRESENTATION_FAST_RECONCILED
+USER_EDIT_CANDIDATE
+MANUAL_EDIT_REBUILT
 ```
 
 Frozen positive controls:
 
 ```text
-Prior EXACT
-current != canonical
-current != Fresh
+Prior EXACT + genuine visible edit
 → USER_EDIT_CANDIDATE
 → MANUAL_EDIT_REBUILT
 → snapshot UPDATED
@@ -212,54 +174,37 @@ current != Fresh
 and:
 
 ```text
-Prior OUTPUT_MISMATCH
-current == prior Fresh EXACT
-same trusted slot/location/canonical identity
+Prior OUTPUT_MISMATCH + current exact prior Fresh
 → REPRESENTATION_DRIFT_CORRELATED
 → REPRESENTATION_FAST_RECONCILED
 → snapshot UNCHANGED
 ```
 
-M2-4 migrated Edit Reconcile's surviving physical-owner dependencies directly to `output-compat`, `bootstrap-migration`, and `output-finalize`. It does not require Recovery at runtime.
+Neither module has a runtime Recovery dependency in v0.66 production.
 
 ---
 
-## 6. Output Compat / Bootstrap Migration / Recovery transition state
+## 5. Output Compat / Bootstrap Migration / Output Finalize
 
 ### Output Compat
 
-Current physical owner since M2-1, expanded mechanically in M2-4.
-
-Owns:
-
-```text
-preamble compatibility classification
-response-envelope compatibility/canonicalization
-bounded Fresh candidate-plan construction
-compatibility candidate meaning/interpretation
-safe structural-boundary compatibility metadata
-```
-
-Does not own host Fresh reads, history bootstrap, manual-edit attribution, or persistent raw bodies.
+Owns output envelope compatibility/canonicalization, bounded Fresh candidate planning and compatibility interpretation. It does not own the host Fresh read.
 
 ### Bootstrap Migration
 
-Current physical owner since M2-1.
+Owns history bootstrap and legacy migration/repair coordination. It does not own ordinary output compatibility or manual-edit attribution.
 
-Owns:
+### Output Finalize
 
-```text
-history bootstrap
-legacy clock/age repair
-legacy contamination repair
-cold/migration coordination
-```
+Owns deterministic prepared-output to committed-state/content transition composition. It does not own Store I/O, host I/O, compatibility candidate policy or manual-edit attribution.
 
-It does not own ordinary output compatibility or manual-edit attribution.
+These three physical owners remain present and behavior-equivalent through M2-5.
 
-### Recovery compatibility facade
+---
 
-Current v0.66 production truth:
+## 6. Recovery transition contract
+
+Exact v0.66 production truth:
 
 ```text
 physical module: PRESENT
@@ -267,137 +212,61 @@ own policy: NONE
 own state: NONE
 own I/O: NONE
 runtime callers: ZERO
-implementation: forwarding compatibility facade over output-compat + bootstrap-migration
+implementation: forwarding facade over output-compat + bootstrap-migration
 status: DEPRECATED TRANSITION SHIM
 ```
 
-M2-4 deliberately retained this facade after migrating runtime consumers to physical owners. Physical deletion is therefore a valid M2-5 candidate, but deletion is **not** authorized merely because this document says it is deprecated.
+The separate M2-5 activation closed the deletion prerequisites through exact production/seam re-audit and permanent architecture validation.
 
-Required deletion gate:
+Version-bound architecture rule:
 
 ```text
-exact current production re-audit
-+ zero runtime require('./recovery')
-+ zero runtime recovery.* consumer
-+ no intentional dynamic/public consumer
-+ no permanent test/tool requiring Recovery as the target seam
-+ architecture/dependency legality
-+ differential compatibility/bootstrap equivalence
-→ separate M2-5 runtime implementation may be authorized
+source version < 0.67.0
+→ Recovery is REQUIRED
+
+source version >= 0.67.0
+→ Recovery must be ABSENT
 ```
 
-If a real consumer is found, fail closed and re-design instead of deleting the facade for cleanliness.
+This is represented as `physical: retiring` plus `retire_at_version: 0.67.0` in the machine contract and enforced by the architecture checker.
+
+Target v0.67 shape:
+
+```text
+Recovery physical module = ABSENT
+runtime require('./recovery') = 0
+runtime recovery.* consumer = 0
+replacement barrel = NONE
+```
+
+Historical documents and old release notes may still mention Recovery because they are evidence, not current physical inventory.
 
 ---
 
-## 7. Output Finalize contract — current since M2-4
+## 7. Session and Runtime Mirror
 
-`output-finalize` is a physical application owner in v0.66 production.
+Session remains the per-chat application identity/current-state holder plus bounded request/output/persistence coordinator. It already delegates directly to `edit-reconcile`, `output-compat`, `bootstrap-migration` and `output-finalize`; its stale Recovery allowed-dependency declaration is retired in the M2-5 candidate contract.
 
-It owns deterministic prepared-output to committed-state/content transition composition, including the existing ordering of Frame/Time/Reaction/Structure-derived commit decisions and bounded finalization receipts.
+Runtime Mirror remains the owner of one bounded Fresh observation, exact fingerprint facts, runtime/location/sequence guards and safe mirror transport. Output Compat interprets compatibility meaning. Representation records accepted canonical-equivalence provenance.
 
-It does not own:
-
-```text
-Store I/O
-host I/O
-Session identity
-Output Compat candidate policy
-manual edit attribution
-diagnostic rendering
-```
-
-M2-4 extraction was mechanical. Future releases must not use the extraction as permission to reorder finalization semantics without a separately promoted defect/design.
+M2-5 does not change this transaction.
 
 ---
 
-## 8. Session contract — current post-M2-4
+## 8. Frozen semantic safety invariants
 
-Session remains a real stateful application orchestrator, not a pass-through shell.
-
-Current ownership:
-
-```text
-per-chat application identity/current state
-trusted output identity anchors
-bounded init/bootstrap lifecycle identity
-request/output/persistence sequencing
-physical-owner delegation
-```
-
-No longer physically owns:
-
-```text
-Edit Reconcile decision tree
-Output Finalize transaction
-Store deferred-prune running/dedupe mechanics
-Recovery-facade runtime routing
-```
-
-Session may still coordinate when lower-owner operations run. Coordination is not ownership of their policy.
-
----
-
-## 9. Runtime Mirror contract — current post-M2-4
-
-Runtime Mirror owns runtime facts and transport:
-
-```text
-one bounded Fresh host observation
-Fresh exact fingerprint comparison
-exact base/opaque-candidate observation facts
-runtime epoch/currentness
-location identity
-schedule sequence / expected output slot
-strict stale/superseded/session guards
-safe mirror write
-bounded runtime timing/status
-```
-
-Runtime Mirror does not own:
-
-```text
-raw Fresh retention
-compatibility candidate meaning
-Representation taxonomy/provenance
-persistent Core state policy
-```
-
-M2-4 transaction:
-
-```text
-Output Compat builds candidate observation plan
-→ Runtime Mirror reads Fresh at most once and returns exact-match facts
-→ Output Compat interprets compatibility meaning
-→ Runtime Mirror rechecks identity/location/sequence guards
-→ safe transport if still current
-→ Representation records accepted canonical-equivalence provenance
-```
-
-Ambiguous candidate matches and interpreter failures remain fail-closed.
-
----
-
-## 10. Structure and semantic safety invariants
-
-Structure remains a judge, not a repair engine.
-
-Frozen through M2 mechanical work unless separately promoted:
+Frozen unless separately promoted:
 
 ```text
 Broadcast lifecycle / Broadcast End Authority
-Frame semantics
-Continuity semantics
-Evidence
-Lineage
-Handoff
-Recurrence
+Frame / Time / Continuity
+Evidence / Lineage / Handoff / Recurrence
+Summary Scope
 Reaction semantics
-Structure acceptance / COMMUNITY quarantine
+Structure judge-only acceptance / COMMUNITY quarantine
 TAIL_AFTER_CURRENT_USER
 History stabilization = OBSERVE_ONLY
 Host Prefix Attribution
-cache trajectory observation policy
 provider cache = UNVERIFIED
 persistent Core schema
 network/timer/provider-routing policy
@@ -405,61 +274,34 @@ Deferred Mirror strict identity/location/staleness gates
 Fresh/raw-body non-retention
 ```
 
-A WATCH, DEFER or quality investigation does not automatically modify these contracts.
+A WATCH or DEFER item does not automatically modify these contracts.
 
 ---
 
-## 11. Current M2 checkpoint ledger
-
-### M2-1 — v0.63.56
+## 9. Current M2 checkpoint ledger
 
 ```text
-Recovery split into output-compat + bootstrap-migration
-compatibility facade retained
+M2-1 v0.63.56  completed
+M2-2 v0.64.0   completed
+M2-3 v0.65.0   LIVE_PASS
+M2-4 v0.66.0   LIVE_PASS
+M2-5 v0.67.0   IMPLEMENTATION MATERIALIZED / PUBLICATION PENDING
 ```
 
-### M2-2 — v0.64.0
+M2-5 runtime mutation envelope is deliberately narrow:
 
 ```text
-Representation physical ownership extracted
-Fresh identity/provenance authority separated from Runtime Mirror
+0.66.0 → 0.67.0 release identity
++ current release note/operator card
++ current runtime module-contract Recovery row removal
++ exact standalone Recovery module removal
 ```
 
-### M2-3 — v0.65.0
-
-```text
-Edit Reconcile physically extracted
-runtime identity converged
-real long-chat LIVE_PASS
-```
-
-### M2-4 — v0.66.0
-
-```text
-Output Finalize physically extracted
-Store retention-housekeeping mechanics moved to Store
-runtime Recovery callers migrated to physical owners
-Runtime Mirror observation separated from Output Compat interpretation
-Representation accepted-canonical-equivalence relation decoupled from compatibility labels
-real long-chat LIVE_PASS
-```
-
-### M2-5+ — current review lane
-
-Allowed only as separately evidenced debt retirement.
-
-First selected design candidate:
-
-```text
-v0.67.0
-Recovery Transition Debt Retirement
-```
-
-This remains implementation-blocked until the post-v0.66 contract convergence and exact-production audit are durably closed.
+All surviving physical module bodies must remain byte-identical except `runtime-telemetry`, whose only authorized change is `HOST_COMPAT_VERSION 0.66.0 → 0.67.0`, and `contracts`, whose only authorized change is removing the Recovery row.
 
 ---
 
-## 12. CI architecture drift guard
+## 10. CI architecture drift guard
 
 Machine-readable contract:
 
@@ -473,43 +315,56 @@ Workflow:
 
 `.github/workflows/simcore-architecture-contracts.yml`
 
-The permanent workflow checks the architecture contract against **materialized `release-simcore` production latest/install**, not the historical `main/plugins/simcore` mirror.
-
 The checker enforces:
 
 ```text
-all physical production modules declared
+all current physical modules declared
 all required modules present
+retiring modules required before retire_at_version
+retiring modules forbidden at/after retire_at_version
 no deferred module appears before promotion
 no undeclared direct require edge
 layer-direction rules
-transition exceptions cannot expand silently
-stale transition exceptions must be removed when their source edge disappears
+stale transition exceptions removed
 Core → Runtime direct dependency forbidden
 no duplicate module definitions
-no dependency cycles
-latest/install production graph parity
+latest/install graph parity
 ```
 
-The checker is a drift guard, not permission to widen architecture. Passing it means the declared dependency contract matches the inspected source under those rules; it does not prove runtime/live correctness by itself.
+The production workflow continues to materialize exact current `release-simcore` source. Therefore while production remains v0.66, Recovery must still be physically present for the architecture workflow to pass. The v0.67 candidate lane proves the inverse after materialization.
 
 ---
 
-## 13. Relationship to deferred/WATCH work
+## 11. Version-sensitive permanent regression bridges
 
-The post-v0.66 review preserves separate lanes for:
+M2-5 preserves the behavior of the v0.66 release-sensitive suites but changes release identity and operator guidance.
+
+The permanent registry routes through v0.67 bridges for:
 
 ```text
-PARTIAL_PREVIOUS_TURN_REPLAY recurrence
+reload-cache-continuity
+bounded-telemetry-capsule
+host-local-telemetry
+operator-release-card
+```
+
+The first two normalize only the release envelope and reuse frozen v0.66 behavior. Host-local explicitly proves v0.67 metadata/runtime/HOST identity equality, exact v0.67 capsule acceptance, v0.66 rejection and Recovery physical absence. Operator-card coverage validates the v0.67 M2-5 card and no-side-effect/non-authority constraints.
+
+---
+
+## 12. Deferred/WATCH separation
+
+Still excluded from M2-5 runtime scope:
+
+```text
+PARTIAL_PREVIOUS_TURN_REPLAY
 COMMUNITY platform-family diversity recurrence
-genuine-edit multi-tens-of-seconds latency WATCH
+genuine-edit rebuild latency WATCH
 B_START closure-expression wording WATCH
 PRE_SIMCORE cache/history observations
 provider-cache investigation
-rare compatibility-path natural validation
+rare compatibility-path behavior changes
 ```
-
-These are not bundled into M2-5 Recovery retirement without a separate owner, cause and repair contract.
 
 Current triage authority:
 
@@ -517,21 +372,19 @@ Current triage authority:
 
 ---
 
-## 14. Current authorization boundary
-
-This Contracts v2 convergence is non-runtime architecture administration.
-
-It does not mutate `release-simcore` and does not itself implement v0.67.
-
-The next authorization decision is bounded:
+## 13. Current advancement boundary
 
 ```text
-post-v0.66 Contracts/config convergence passes permanent architecture CI
-+
-exact production source re-audit confirms Recovery zero-consumer/deprecated-shim shape
-+
-no newly discovered blocker requires preserving Recovery
-→ v0.67 M2-5 implementation may be authorized on a fresh runtime work branch
+DONE  design/evidence and implementation authorization on main
+DONE  dedicated v0.67 runtime work branch
+DONE  deterministic deletion-only builder materialized in repository
+DONE  architecture candidate contract and version-bound retirement guard
+DONE  v0.67 release-sensitive regression bridges
+NEXT  product PR permanent Architecture Contracts + SimCore Verify + Required
+THEN  append-only exact candidate/release transaction
+THEN  release-simcore publication
+THEN  real long-chat ordinary continuity + same-tab reload/bootstrap validation
+THEN  final main durable state synchronization
 ```
 
-Implementation, candidate/release publication, real long-chat validation and terminal main synchronization remain separate workflow stages.
+No product release is complete until the published v0.67 artifact and real long-chat evidence close the frozen live gate.

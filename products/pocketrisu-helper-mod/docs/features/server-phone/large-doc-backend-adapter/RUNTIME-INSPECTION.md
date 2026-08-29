@@ -88,7 +88,18 @@ Deployment boundary decision:
 
 A depth-2 scan for currently eligible large-doc suffixes (`.txt`, `.md`, `.log`, `.json`) returned `0` files.
 
-This makes a new dedicated child workspace under shared Documents a low-blast-radius default candidate. However, one path-display discrepancy was observed during inspection: `realpath` resolved the plural `Documents` target while `ls -ld` output appeared to end in singular `Document`. Treat this as unresolved path/symlink presentation until `readlink/stat` confirms the exact target; do not create the workspace before that check.
+This makes a new dedicated child workspace under shared Documents a low-blast-radius default candidate.
+
+### Shared Documents path identity anomaly
+
+Follow-up identity inspection confirmed:
+
+- shell variable: `/data/data/com.termux/files/home/storage/shared/Documents`
+- `readlink -f` target: `/storage/emulated/0/Documents`
+- `stat` successfully resolved the plural path and reported it as a directory (`inode=7462` at inspection time)
+- parent glob `"$HOME/storage/shared"/Document*` nevertheless displayed a singular terminal path ending in `/storage/shared/Document`
+
+The path is therefore accessible and resolves consistently when addressed as plural `Documents`, but the parent-directory display is not yet internally consistent. Do **not** create the production workspace until the actual directory entry / symlink spelling is inspected byte-for-byte. This is an inspection anomaly only; no runtime failure has been attributed to it.
 
 ## Interpretation
 

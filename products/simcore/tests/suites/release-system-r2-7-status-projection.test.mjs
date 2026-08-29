@@ -94,7 +94,8 @@ export async function runSuite(){
   pass(assertions,'R2.7-status-projection-ancestry-gate');
 
   const source=fs.readFileSync(path.join(REPO,'products/simcore/tooling/release-rsystem-status-project.mjs'),'utf8');
-  for(const token of ['release-publish.mjs','repo-main-write.py','git push','gh workflow run','setInterval(','setTimeout(','api.github.com']) assert(!source.includes(token),`projection owner gained forbidden authority: ${token}`);
+  for(const token of ['release-publish.mjs','scripts/repo-main-write.py',"spawnSync('python3'",'git push','gh workflow run','setInterval(','setTimeout(','api.github.com']) assert(!source.includes(token),`projection owner gained forbidden authority primitive: ${token}`);
+  assert(source.includes("eq(status.preservedAuthorities?.mainGateway,'repo-main-write.py'"),'projection owner must verify the existing main authority name without invoking it');
   pass(assertions,'R2.7-status-projection-owner-pure');
 
   const workflow=fs.readFileSync(path.join(REPO,'.github/workflows/simcore-r2-7-status-projection.yml'),'utf8');

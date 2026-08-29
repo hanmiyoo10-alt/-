@@ -806,6 +806,13 @@
 - Event ID: `f2ac273188176a0306a9dfc9e0050cd5249d05bbae8fa27749f308755abefe51`
 <!-- canonical-main-doc-promoted:f2ac273188176a0306a9dfc9e0050cd5249d05bbae8fa27749f308755abefe51 -->
 
+### 2026-08-29 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `5331b8dc7d43dcb87899ca161392575a5be850e7cfe0cba6ac29a0c3737c8e05`
+<!-- canonical-main-doc-promoted:5331b8dc7d43dcb87899ca161392575a5be850e7cfe0cba6ac29a0c3737c8e05 -->
+
 ### 2026-08-30 — Merge pull request #856 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.88
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

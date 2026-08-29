@@ -1,15 +1,13 @@
 {
   "schemaVersion": 1,
   "product": "SimCore",
-  "transitionId": "06700-live-pass-to-06800-preimplementation-review",
+  "transitionId": "06700-terminal-projection-to-06800-authorization-review",
   "expectedProductionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
   "expected": {
-    "validation_status": "PENDING_REAL_LONG_CHAT",
-    "current_priority": "06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT"
+    "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_PREIMPLEMENTATION_REAUDIT"
   },
   "set": {
-    "validation_status": "LIVE_PASS",
-    "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_PREIMPLEMENTATION_REAUDIT"
+    "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW"
   },
   "evidence": [
     "docs/SIMCORE_LIVE_06700_RELEASE_CLOSE_2026-08-29.md",
@@ -17,5 +15,30 @@
     "docs/SIMCORE_06800_COMMUNITY_PARENT_LOCAL_ALIAS_ROOT_CAUSE_2026-08-29.md",
     "docs/SIMCORE_06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_DESIGN_2026-08-29.md"
   ],
-  "documentReplacements": []
+  "documentReplacements": [
+    {
+      "id": "06700-live-pending-to-live-pass",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->\n## Current Release Live Gate\n\n- Release transaction: `simcore-v0.67.0-new-02`\n- Production commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`\n- Validation status: `PENDING_REAL_LONG_CHAT`\n- Current priority / live gate: `06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT`\n- R lifecycle: `REAL_RELEASE_LIVE_PENDING`\n\nThis block is machine-managed by `release-state-converge` from immutable publication evidence.\n<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->",
+      "to": "<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->\n## Current Release Terminal State\n\n- Release transaction: `simcore-v0.67.0-new-02`\n- Production commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`\n- Validation status: `LIVE_PASS`\n- Current priority: `06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW`\n- Terminal disposition: `LIVE_PASS`\n- R lifecycle: `REAL_RELEASE_LIVE_PASS`\n\nThis block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.\n<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->"
+    },
+    {
+      "id": "06700-current-operational-state",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "The current product live gate is closed with accepted human evidence. The durable major checkpoint has advanced through the completed M2-4 boundary. The immediate product action is transition-debt review and design selection only; no next runtime implementation is authorized until its separate frozen design and activation decision exists. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains a separate non-runtime lane.",
+      "to": "The v0.67.0 M2-5 product live gate is closed with accepted human evidence and the durable major checkpoint is M2-5. The selected next product design is v0.68.0 Community Parent-Local Alias Classification Repair. The immediate product action is exact final v0.67 source re-audit and implementation-authorization review only; v0.68 runtime implementation is not authorized by terminal closure itself. Provider cache remains `UNVERIFIED`. R2.6 activation/status convergence and unrelated WATCH items remain separate non-runtime/investigation lanes."
+    },
+    {
+      "id": "06700-quick-resume-next-action",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "Review post-release M2-5 transition debt against the current production source and living architecture authority.\nKeep product runtime implementation blocked until architecture-contract convergence, exact source re-audit, and explicit implementation authorization are complete.\nKeep release-system stabilization and unrelated WATCH items in separate lanes.",
+      "to": "Re-read exact terminal v0.67.0 production source against the frozen v0.68.0 Community Parent-Local Alias Classification Repair design.\nConfirm the Community classifier root-cause boundary, classifier v2→v3 migration assumptions, and no newly promoted blocker.\nKeep v0.68 runtime implementation blocked until a separate implementation-authorization decision is recorded.\nKeep R2.6 control-plane convergence and unrelated WATCH items in separate lanes."
+    },
+    {
+      "id": "06700-quick-resume-success-condition",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "accepted real long-chat evidence = LIVE_PASS\ndurable major checkpoint = M2-4\ncurrent product priority = M2_5_POST_06600_TRANSITION_DEBT_REVIEW\nproduction remains the machine snapshot above until a normal approved release transaction publishes a candidate\nlatest.js == install.js remains mandatory\n\nproduct runtime work\n→ converge living architecture authority first\n→ exact current-production source re-audit\n→ explicit implementation authorization\n→ dedicated runtime work branch only after authorization\n\nrelease-system work\n→ remain non-runtime and separately attributable\n→ preserve the single publisher and existing main-write authority\n→ static / CI proof before any operational activation",
+      "to": "v0.67.0 real long-chat evidence = LIVE_PASS\ndurable major checkpoint = M2-5\ncurrent product priority = 06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW\nnext proposed version = v0.68.0 Community Parent-Local Alias Classification Repair\nproduction remains v0.67.0 until a normal approved release transaction publishes a candidate\nlatest.js == install.js remains mandatory\n\nproduct runtime work\n→ exact terminal v0.67 source re-audit\n→ confirm frozen v0.68 repair boundary and migration assumptions\n→ explicit v0.68 implementation authorization\n→ dedicated runtime work branch only after authorization\n\nrelease-system work\n→ remain non-runtime and separately attributable\n→ close R2.6 activation/status truth separately\n→ preserve the single publisher and existing main-write authority"
+    }
+  ]
 }

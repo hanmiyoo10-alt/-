@@ -81,4 +81,28 @@ release-simcore impact = NONE
 
 This is repository write identity hygiene only and does not change the projection design or authority model.
 
+### FIX · RESOLVED · LIFECYCLE_REGRESSION — predecessor test hardcoded activation false
+
+The predecessor `release-system-r2-7` suite encoded the implementation-close snapshot `activationAuthorized = false` as a permanent assertion. A correct documentary first-use projection would therefore make the predecessor regression reject the intended next lifecycle state.
+
+Resolution:
+
+```text
+pending state
+→ require pending gate + pending proof marker
+
+consumed state
+→ require proven status + consumed documentary gate + immutable PASS proof
+```
+
+The regression remains fail-closed for incoherent states but no longer mistakes a frozen historical snapshot for a permanent semantic invariant.
+
+Classification:
+
+```text
+R2_7_ACTIVATION_REGRESSION_LIFECYCLE_AWARENESS = FIX / RESOLVED
+runtime impact = NONE
+release-simcore impact = NONE
+```
+
 Any new anomaly must be classified immediately as WATCH / DEFER / FIX / BLOCKER before continuing.

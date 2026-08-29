@@ -1,32 +1,28 @@
 # SimCore v0.67.0 prepublication state-preplay missing sync-write-report blocker
 
 Date: 2026-08-29
-Status: BLOCKER REPAIRED IN CONTROL PLANE · PUBLICATION RECOVERY PENDING · PRODUCTION UNCHANGED
+Status: BLOCKER RESOLVED · FRESH PERMANENT RETRY PASS · v0.67.0 PUBLISHED · REAL LONG-CHAT PENDING
 
-## Context
+## Candidate and approval identity
 
-The exact v0.67.0 candidate was already materialized and approved:
+The exact v0.67.0 candidate remained unchanged through recovery:
 
 - release id: `simcore-v0.67.0-new-02`
 - candidate ref: `candidate/simcore/simcore-v0.67.0-intent-02`
 - candidate commit: `01a4204981191968ba22ba6ad161c1053d6bc7d0`
 - candidate release blob: `24c57d86b3533a89e675c5b598b0c4a3a4fef6fe`
-- expected production commit: `4b6ae1a4c63f6be658c6163168cc46a1adef60aa`
+- previous production commit: `4b6ae1a4c63f6be658c6163168cc46a1adef60aa`
 - exact approval merge: `cb16eecb5ff152972a1472844689ad5efc8354e6`
 
-The approval activation boundary resolved successfully and dispatched permanent release run `33248665243`.
+## Initial failure
 
-## Permanent release result
+Initial permanent release run:
 
-The permanent release passed all candidate authorization and verification stages:
+```text
+33248665243
+```
 
-- Resolve Permanent Authorization: PASS
-- Candidate Required / Verify: PASS
-- Candidate Required / Required: PASS
-
-Publication then failed in `Publish Exact Candidate` before the production mutation step.
-
-Failing step:
+Candidate authorization and Required verification passed, but publication failed before mutation at:
 
 ```text
 Preplay post-publish state before publication
@@ -39,35 +35,20 @@ ENOENT ENOENT: no such file or directory, open '/home/runner/work/-/-/.simcore-r
 Process completed with exit code 2.
 ```
 
-The following publication steps were therefore skipped:
-
-```text
-Publish through permanent controller
-Build immutable post-publish handoff
-Upload publication transaction handoff
-Declare Published State
-```
+Publication, handoff construction and declaration were skipped. `release-simcore` therefore remained at v0.66 during the incident.
 
 ## Root cause
 
-The permanent workflow intentionally runs prepublication simulation in a detached worktree:
+The permanent workflow runs prepublication simulation with different process and synthetic roots:
 
 ```text
 process cwd = GitHub Actions workspace
 --root      = /tmp/simcore-r2-6-preplay
 ```
 
-`release-state-converge.mjs` correctly passed root-relative state paths to `sync-state.mjs`, including:
+`release-state-converge.mjs` correctly passed root-relative report paths to `sync-state.mjs`, but `sync-state.mjs` resolved `--report` through process cwd rather than declared `--root`.
 
-```text
-.simcore-release/state-converge/sync-write-report.json
-.simcore-release/state-converge/sync-check-report.json
-.simcore-release/state-converge/sync-final-check-report.json
-```
-
-But `sync-state.mjs` resolved `--report` using `path.resolve(args.report)`, which bound the report to process cwd instead of declared `--root`. Its prior tests invoked preplay with `cwd == root`, so the mismatch was not exercised.
-
-Result:
+Old regression coverage accidentally used `cwd == root`, hiding the real workflow topology.
 
 ```text
 real workflow: cwd != root
@@ -77,7 +58,7 @@ real workflow: cwd != root
 → preplay failed before publisher
 ```
 
-Classification of root cause:
+Classification:
 
 ```text
 CROSS_ROOT_REPORT_BINDING_DEFECT
@@ -107,13 +88,13 @@ Merged main commit:
 
 Repair:
 
-1. `sync-state.mjs` now resolves `--report` under declared `--root` through the bounded path resolver.
+1. `sync-state.mjs` resolves `--report` below declared `--root` through the bounded resolver.
 2. report parent directories are created before write.
-3. CLI failure reports use the same root binding.
-4. `post-publish-state-permanent.test.mjs` now intentionally executes preplay with `cwd != root`.
-5. the regression asserts all three state-converge reports exist under the declared root and do not escape into cwd.
+3. CLI failure reports follow the same root binding.
+4. `post-publish-state-permanent.test.mjs` intentionally executes preplay with `cwd != root`.
+5. the regression requires all three state-converge reports to stay below declared root and rejects cwd escape.
 
-PR qualification:
+Qualification:
 
 ```text
 SimCore CI / Verify   PASS
@@ -122,68 +103,117 @@ trusted self-change lane PASS
 proposed permanent verifier PASS
 ```
 
-No runtime plugin file or candidate byte was changed by this repair.
+No SimCore runtime file or candidate byte changed in the repair.
 
-## Safety / authority observation
+## Bounded recovery path
 
-The initial failure happened before publication. At blocker discovery, `release-simcore` remained at the expected v0.66 production commit:
+The failed permanent run itself was not rerun because its successful Resolve job had already frozen the old verifier identity.
 
-```text
-4b6ae1a4c63f6be658c6163168cc46a1adef60aa
-```
-
-No production mutation was observed.
-
-The approved v0.67 candidate remains immutable and independently verified. This packet does **not** establish a Recovery-retirement runtime defect.
-
-## Recovery decision
-
-Do **not** use `rerun failed jobs` on permanent run `33248665243`.
-
-Reason: the already-successful Resolve job exported the old `verifier_commit`; re-running only failed/dependent jobs would preserve that old control-plane identity and the Publish job would check out the pre-fix verifier commit.
-
-The bounded existing activation adapter is safe to re-run instead:
+Instead, the existing exact-approval activation adapter was rerun at:
 
 ```text
 Exact Approval Activation / Dispatch Permanent Caller
 ```
 
-That job:
+It revalidated the original approval, immutable candidate and unchanged production parent, then dispatched a fresh Permanent Release from repaired current `main`.
 
-1. revalidates the immutable exact approval at its original approval merge;
-2. rechecks candidate ref and currently observed production parent;
-3. reads current `main` as `DISPATCH_HEAD`;
-4. dispatches a **fresh** `SimCore Permanent Release` with `--ref main`;
-5. therefore produces a new permanent run whose Resolve job computes the repaired current-main verifier commit.
+This was not a new release intent, candidate rebuild or publication bypass.
 
-This is not a new release intent, not a candidate rebuild, and not a publication bypass. It is a bounded retry of the existing exact approval through the existing permanent authority.
+## Fresh permanent retry
 
-## Classification
+Fresh permanent release run:
+
+```text
+33249672791
+```
+
+Result:
+
+```text
+Resolve Permanent Authorization       PASS
+Candidate Required / Verify           PASS
+Candidate Required / Required         PASS
+Preplay post-publish state            PASS
+Publish through permanent controller  PASS
+Build immutable post-publish handoff  PASS
+Upload publication handoff            PASS
+Declare Published State               PASS
+Permanent Release Required            PASS
+```
+
+The exact regression point that failed in the first run, `Preplay post-publish state before publication`, passed under the repaired control plane.
+
+## Independent production readback
+
+After the successful fresh permanent run, `release-simcore` independently resolved to:
+
+```text
+commit 01a4204981191968ba22ba6ad161c1053d6bc7d0
+parent 4b6ae1a4c63f6be658c6163168cc46a1adef60aa
+```
+
+The production tree independently resolves both files to the same exact blob:
+
+```text
+plugins/simcore/latest.js
+= 24c57d86b3533a89e675c5b598b0c4a3a4fef6fe
+
+plugins/simcore/install.js
+= 24c57d86b3533a89e675c5b598b0c4a3a4fef6fe
+
+size = 562,962 bytes each
+```
+
+The published source reports userscript version `0.67.0`. The candidate's frozen build verification already established metadata/runtime/HOST convergence and physical Recovery-module absence.
+
+## Durable main readback
+
+`product-manifest.json` now declares:
+
+```text
+production_version      0.67.0
+release_commit          01a4204981191968ba22ba6ad161c1053d6bc7d0
+release_blob            24c57d86b3533a89e675c5b598b0c4a3a4fef6fe
+validation_status       PENDING_REAL_LONG_CHAT
+current_priority        06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT
+major_update_checkpoint M2-4
+```
+
+Durable state receipt:
+
+```text
+publisherRunId      33249672791
+productionCommit    01a4204981191968ba22ba6ad161c1053d6bc7d0
+previousProduction  4b6ae1a4c63f6be658c6163168cc46a1adef60aa
+productionBlob      24c57d86b3533a89e675c5b598b0c4a3a4fef6fe
+validationStatus    PENDING_REAL_LONG_CHAT
+lifecycleState      REAL_RELEASE_LIVE_PENDING
+releaseAuthority    RS2_4_PERMANENT
+result              PASS
+```
+
+The machine-managed state therefore correctly stops at real long-chat pending. M2-5 is not yet declared live-complete.
+
+## Final blocker classification
 
 ```text
 06700_PREPUBLICATION_STATE_PREPLAY_MISSING_SYNC_WRITE_REPORT
-= BLOCKER / RELEASE SYSTEM
+= BLOCKER RESOLVED
 = ROOT CAUSE PROVEN
 = CONTROL-PLANE FIX MERGED
-= CROSS-ROOT REGRESSION ADDED
-= CANDIDATE AUTHORIZATION PASS
-= CANDIDATE REQUIRED PASS
-= EXACT CANDIDATE STILL VALID
-= INITIAL PRODUCTION MUTATION NONE
-= PUBLICATION RECOVERY PENDING
+= CROSS-ROOT REGRESSION PASS
+= FRESH PERMANENT RETRY PASS
+= RELEASE-SIMCORE EXACT v0.67.0
+= CANDIDATE COMMIT UNCHANGED
+= CANDIDATE BLOB UNCHANGED
+= LATEST_INSTALL IDENTICAL
+= NO NEW RELEASE INTENT REQUIRED
 = M2-5 RUNTIME CORRECTNESS DEFECT NOT ESTABLISHED
+= REAL LONG-CHAT PENDING
 ```
 
-## Next bounded action
+## Next gate
 
-Re-run the failed `Dispatch Permanent Caller` job from Exact Approval Activation so it creates a fresh permanent run on repaired `main`.
+The next and only product gate is real long-chat validation of v0.67.0 M2-5 Recovery Transition Debt Retirement.
 
-After that fresh run:
-
-1. prepublication preplay must PASS;
-2. publication must use only Permanent Release authority;
-3. `release-simcore` must resolve exactly to candidate `01a4204981191968ba22ba6ad161c1053d6bc7d0`;
-4. both production files must resolve to blob `24c57d86b3533a89e675c5b598b0c4a3a4fef6fe` and remain identical;
-5. only then may v0.67.0 enter real long-chat validation.
-
-This blocker remains separate from v0.67 M2-5 runtime feature work.
+The live packet must prove ordinary continuity and same-tab reload/bootstrap continuity without a Recovery-related missing-reference/runtime fault. Only accepted human evidence may advance the machine-managed state from `PENDING_REAL_LONG_CHAT` / M2-4 to the durable M2-5 live-complete checkpoint through the normal convergence path.

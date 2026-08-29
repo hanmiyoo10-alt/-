@@ -10,6 +10,9 @@ const root = path.resolve('plugins/usage-dashboard');
 const enginePath = path.join(root, 'runtime', 'bridge-engine.mjs');
 const fakeCliPath = path.join(root, 'tests', 'harness', 'fake-cli.cjs');
 const clockPreloadPath = path.join(root, 'tests', 'harness', 'controlled-clock.mjs');
+const engineSource = fs.readFileSync(enginePath, 'utf8');
+const managedCliVersion = /const CLI_VERSION = process\.env\.LLMGATEWAY_CLI_VERSION \|\| '([^']+)';/.exec(engineSource)?.[1] || '';
+if (!managedCliVersion) throw new Error('behavior harness could not resolve Engine managed CLI version');
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,7 +61,7 @@ async function startBridge(options = {}) {
 
   if (options.managed === true) {
     const cliRoot = path.join(home, '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
-    const versionRoot = path.join(cliRoot, '1.10.0');
+    const versionRoot = path.join(cliRoot, managedCliVersion);
     const entry = options.managedEntryOutside === true
       ? path.join(fixtureRoot, 'fixture-managed-outside.cjs')
       : path.join(versionRoot, 'fixture-managed.cjs');
@@ -72,12 +75,12 @@ async function startBridge(options = {}) {
       format:1,
       state:'ready',
       package:'@llmgateway/cli',
-      version:'1.10.0',
+      version:managedCliVersion,
       entry,
     }));
     fs.writeFileSync(path.join(cliRoot, 'managed-cli-state.json'), JSON.stringify({
       state:'ready',
-      version:'1.10.0',
+      version:managedCliVersion,
       provisioning:'ok',
     }));
   }
@@ -186,4 +189,4 @@ async function startBridge(options = {}) {
   return api;
 }
 
-module.exports = {startBridge};
+module.exports = {startBridge,managedCliVersion};

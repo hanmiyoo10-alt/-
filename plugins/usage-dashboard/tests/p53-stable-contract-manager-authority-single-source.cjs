@@ -55,15 +55,15 @@ assert.doesNotMatch(
 );
 
 assert.ok(manager.includes("const MANAGER_VERSION = '1.3.1';"), 'P53 Manager semantic version must remain 1.3.1');
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.87';"), 'P53 Manager Product sync identity must advance to 5.87');
+assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`), 'P53 Manager Product sync identity must track the current release authority');
 assert.ok(manager.includes("const MANAGED_CLI_VERSION = '1.10.0';"), 'P53 Manager managed CLI pin must remain 1.10.0');
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.26';"), 'P53 Manager bundled Engine version must remain 1.6.26');
 
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.87');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.87');
+assert.equal(manifest.productVersion, release.productVersion);
+assert.equal(manifest.components.plugin.version, release.productVersion);
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.26');
 assert.equal(manifest.components.bridgeManager.version, '1.3.1');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.87');
+assert.equal(manifest.components.bridgeManager.productVersion, release.productVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 const engineBytes = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`);

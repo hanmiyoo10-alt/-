@@ -2,6 +2,13 @@ import fs from 'node:fs';
 import { assert, equal } from '../../tooling/assertions.mjs';
 
 function count(text, token) { return text.split(token).length - 1; }
+function between(text, startToken, endToken = null) {
+  const start=text.indexOf(startToken);
+  assert(start>=0,`workflow section missing: ${startToken}`);
+  const end=endToken ? text.indexOf(endToken,start+startToken.length) : text.length;
+  assert(endToken===null||end>start,`workflow section end missing: ${endToken}`);
+  return text.slice(start,end);
+}
 
 export async function runSuite() {
   const assertions=[];
@@ -49,12 +56,15 @@ export async function runSuite() {
   equal(count(permanent,'release-publish.mjs'),1,'single permanent publisher call');
   for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','--mode PERMANENT']) assert(permanent.includes(token),`permanent workflow shared boundary missing: ${token}`);
   for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','--mode RECOVERY']) assert(recovery.includes(token),`recovery workflow shared boundary missing: ${token}`);
-  for(const workflow of [permanent,recovery]) {
+  const permanentPost=between(permanent,'\n  post-publish-state:','\n  required:');
+  const recoveryPost=between(recovery,'\n  permanent-recovery:');
+  for(const workflow of [permanentPost,recoveryPost]) {
     for(const legacy of [
       'persistentPayloadAllowlist',
       "assert p['disposition']",
       '--allow product-manifest.json',
       'RECEIPT="products/simcore/releases/state-receipts/${RELEASE_ID}.json"',
+      'durable-receipt.json',
     ]) assert(!workflow.includes(legacy),`workflow-local post-publish contract survived: ${legacy}`);
   }
   pass('R2.6-E-thin-permanent-recovery-orchestration');

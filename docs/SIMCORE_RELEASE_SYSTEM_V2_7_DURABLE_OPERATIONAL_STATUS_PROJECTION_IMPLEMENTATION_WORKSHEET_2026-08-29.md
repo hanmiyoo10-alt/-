@@ -185,4 +185,47 @@ release-simcore impact = NONE
 
 No qualification evidence produced before this correction is eligible for implementation closure.
 
+### FIX · RESOLVED · TEST_BOUNDARY_FALSE_POSITIVE — authority name mistaken for authority primitive
+
+Second corrected-head CI:
+
+```text
+head            dbaf64e46f56c0d6e3abeaa43ff624bb5617794c
+SimCore CI       33258625622
+Verify job       99116700224
+trusted lane     PASS
+GATE_CI_SELF     PASS
+GATE_STATIC      PASS
+GATE_ARCH        PASS
+GATE_STATE       PASS
+GATE_COORDINATION PASS
+GATE_REGRESSION  FAIL
+stderr           projection owner gained forbidden authority: repo-main-write.py
+```
+
+The new regression incorrectly treated any occurrence of the string `repo-main-write.py` inside the pure projection owner as write authority. The owner does not invoke the gateway. It reads the living status and verifies that the preserved main authority name remains exactly `repo-main-write.py`, which is itself a required safety check.
+
+Resolution:
+
+```text
+forbid executable authority primitives:
+  scripts/repo-main-write.py invocation
+  python gateway spawn
+  git push
+  workflow dispatch
+  polling/network mutation
+
+allow and require documentary verification:
+  preservedAuthorities.mainGateway == repo-main-write.py
+```
+
+Classification:
+
+```text
+R2_7_STATUS_PROJECTION_AUTHORITY_NAME_FALSE_POSITIVE = FIX / RESOLVED
+projection authority = unchanged / documentary only
+runtime impact = NONE
+release-simcore impact = NONE
+```
+
 Any new anomaly must be classified immediately as WATCH / DEFER / FIX / BLOCKER before continuing.

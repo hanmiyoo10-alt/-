@@ -51,7 +51,13 @@ export function run(argv=process.argv.slice(2)){
   const a=parseArgs(argv);const root=resolveRoot(a.root);
   const recordPath=resolveUnderRoot(root,a.record,{kind:'RECORD'});
   const receiptPath=resolveUnderRoot(root,a.receipt,{kind:'RECEIPT'});
-  const result=deriveOperationalProof(readJson(recordPath,'record'),readJson(receiptPath,'receipt'));
+  const record=readJson(recordPath,'record');
+  const receipt=readJson(receiptPath,'receipt');
+  const result=deriveOperationalProof(record,receipt);
+  const expectedRecord=`products/simcore/releases/records/${result.releaseId}.json`;
+  const expectedReceipt=`products/simcore/releases/state-receipts/${result.releaseId}.json`;
+  eq(a.record,expectedRecord,'record input path binding');
+  eq(a.receipt,expectedReceipt,'receipt input path binding');
   result.releaseRecord=a.record;result.stateReceipt=a.receipt;
   const report=ensureParentUnderRoot(root,a.report,{kind:'REPORT'});
   fs.writeFileSync(report,`${JSON.stringify(result,null,2)}\n`,'utf8');

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "r2-6-post-publish-boundary-contract",
+  "suite": "release-system-r2-6",
+  "input": {
+    "systemVersion": "R2.6"
+  },
+  "expected": {
+    "semanticOwnerCount": 1,
+    "publisherCount": 1,
+    "activationAuthorized": false
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

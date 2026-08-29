@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.88
+//@version 3.0.0-alpha.5.89
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.88';
+  const VERSION = '3.0.0-alpha.5.89';
   const RELEASE_NOTES = Object.freeze({
-    title: "LLM Gateway CLI 1.14.0 Managed Runtime Upgrade",
+    title: "Physical Engine Convergence Repair",
     highlights: Object.freeze([
-    "managed @llmgateway/cli target을 1.10.0에서 upstream stable 1.14.0으로 올리고 Engine/Manager pin authority를 함께 정렬",
-    "Engine 1.6.27 · Manager 1.3.2로 component identity를 전진시키되 managed-direct → direct → npx fallback과 provisioning ownership은 유지",
-    "Organizations/DevPass/Credits/Request Ledger의 기존 source-truth, I/O, refresh, contract 1/1 의미는 변경하지 않음"
+    "5.88 실기에서 남아 있던 Engine 1.6.26 / managed CLI 1.10.0 런타임을 목표 Engine 1.6.27로 확실히 수렴시키는 Manager/Plugin 복구",
+    "Manager가 bundled 상태와 재시작 성공을 디스크 경로가 아니라 live Engine version까지 포함해 검증하도록 강화",
+    "Engine 바이트·데이터 I/O·source-truth·launcher 순서·contract 1/1은 그대로 유지"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.88 · Engine 1.6.27 · Manager 1.3.2 · Stable contract manager 1.3.2가 일치하는지 확인",
+    "업데이트 후 Product 5.89 · Engine 1.6.27 · Manager 1.3.3이 일치하는지 확인",
     "Bridge CLI runtime이 managed · ready · v1.14.0 · provisioning ok인지 확인",
-    "정상 acceptance capture에서 managed-direct가 사용되고 direct/npx-fallback/direct ENOENT가 0인지 확인",
-    "Organizations/DevPass/Credits/Request Ledger와 UNKNOWN/source-truth 규칙이 5.87과 동일하게 유지되는지 확인"
+    "Stable readiness READY · Health ok · active errors 0 · failures 0인지 확인",
+    "정상 acceptance capture에서 managed-direct가 유지되고 Organizations/DevPass/Credits/Request Ledger 의미가 5.88과 동일한지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const REQUIRED_BRIDGE_VERSION = '1.6.27';
-  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.2';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.3';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -2464,15 +2464,42 @@ async function importLegacyTodayBaselines() {
 }
 
   async function syncBridgeEngineBundleIfNeeded(status) {
-  if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;
+  if (!status?.connected || status.engineManaged !== true) return status;
   if (String(status.productVersion || '') !== VERSION) return status;
-  const runningEngineVersion = String(status.engineVersion || '');
-  const bundledEngineVersion = String(status.engineBundleVersion || '');
-  if (status.engineBundled === true && bundledEngineVersion && runningEngineVersion === bundledEngineVersion) {
+  let liveStatus = status;
+  let runningEngineVersion = String(liveStatus.engineVersion || '');
+  let bundledEngineVersion = String(liveStatus.engineBundleVersion || '');
+  const isCurrentBundledEngine = value => value?.engineBundled === true
+    && String(value.engineBundleVersion || '') === REQUIRED_BRIDGE_VERSION
+    && String(value.engineVersion || '') === REQUIRED_BRIDGE_VERSION;
+  if (isCurrentBundledEngine(liveStatus)) {
     state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
-    return status;
+    return liveStatus;
   }
-  // Live bundle state wins over a persisted attempt marker; retry while the manager still reports adopted.
+  // A live version mismatch is authoritative. Refresh Manager capability once before declaring convergence unavailable.
+  if (liveStatus.engineBundleAvailable !== true) {
+    state.bridgeManagerLastProbeAt = 0;
+    const fresh = await fetchBridgeManagerStatus(true);
+    if (fresh?.connected && fresh.engineManaged === true && String(fresh.productVersion || '') === VERSION) {
+      liveStatus = fresh;
+      runningEngineVersion = String(liveStatus.engineVersion || '');
+      bundledEngineVersion = String(liveStatus.engineBundleVersion || '');
+      if (isCurrentBundledEngine(liveStatus)) {
+        state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+        return liveStatus;
+      }
+    }
+  }
+  if (liveStatus.engineBundleAvailable !== true) {
+    return {...liveStatus,engineBundleSyncState:'capability-missing',engineBundleSyncError:`bundle capability unavailable for live engine ${runningEngineVersion || 'unknown'} -> required ${REQUIRED_BRIDGE_VERSION}`};
+  }
+  if (!bundledEngineVersion) {
+    return {...liveStatus,engineBundleSyncState:'target-missing',engineBundleSyncError:`bundle target missing for live engine ${runningEngineVersion || 'unknown'} -> required ${REQUIRED_BRIDGE_VERSION}`};
+  }
+  if (bundledEngineVersion !== REQUIRED_BRIDGE_VERSION) {
+    return {...liveStatus,engineBundleSyncState:'target-mismatch',engineBundleSyncError:`bundle target ${bundledEngineVersion} does not match required ${REQUIRED_BRIDGE_VERSION}`};
+  }
+  // Live bundle state wins over a persisted attempt marker; retry until the exact required Engine is running.
   state.bridgeEngineBundleSyncAttemptedVersion = '';
   try {
     const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
@@ -2480,7 +2507,7 @@ async function importLegacyTodayBaselines() {
     const payload = JSON.parse(text);
     if (!res.ok) {
       state.bridgeManagerLastProbeAt = 0;
-      return {...status,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
+      return {...liveStatus,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
     }
     state.bridgeManagerLastProbeAt = 0;
     let fresh = await fetchBridgeManagerStatus(true);
@@ -2492,13 +2519,13 @@ async function importLegacyTodayBaselines() {
     if (reconciled) state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
     else state.bridgeManagerLastProbeAt = 0;
     return {
-      ...(fresh?.connected ? fresh : status),
+      ...(fresh?.connected ? fresh : liveStatus),
       engineBundleSyncState:String(payload?.state || (payload?.synced ? 'bundled' : 'current')),
       engineBundleSyncError:reconciled ? '' : 'engine restart pending'
     };
   } catch (e) {
     state.bridgeManagerLastProbeAt = 0;
-    return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
+    return {...liveStatus,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
   }
 }
   async function refresh(reason = 'manual', silent = false) {

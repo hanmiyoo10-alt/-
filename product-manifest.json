@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION_AUTHORIZATION_REVIEW",
+  "current_priority": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

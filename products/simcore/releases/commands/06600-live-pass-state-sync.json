@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "v0.66.0 M2-4 real-long-chat acceptance closure and post-v0.66 M2-5 transition-debt review entry",
+  "expectedProductionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "registeredTransition": "products/simcore/state-sync/active-admin-transition.json",
+  "mergeThisCommandPayload": false
+}

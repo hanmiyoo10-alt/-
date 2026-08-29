@@ -30,17 +30,18 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
-## Current Release Live Gate
+<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
+## Current Release Terminal State
 
 - Release transaction: `simcore-v0.66.0-new-05`
 - Production commit: `4b6ae1a4c63f6be658c6163168cc46a1adef60aa`
-- Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT`
-- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
+- Validation status: `LIVE_PASS`
+- Current priority: `M2_5_POST_06600_TRANSITION_DEBT_REVIEW`
+- Terminal disposition: `LIVE_PASS`
+- R lifecycle: `REAL_RELEASE_LIVE_PASS`
 
-This block is machine-managed by `release-state-converge` from immutable publication evidence.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
+This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
 
 ---
 
@@ -50,7 +51,7 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The predecessor product live gate is closed with accepted human evidence. Runtime work may proceed only within the currently authorized frozen scope. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains separate from the active runtime work item.
+The current product live gate is closed with accepted human evidence. The durable major checkpoint has advanced through the completed M2-4 boundary. The immediate product action is transition-debt review and design selection only; no next runtime implementation is authorized until its separate frozen design and activation decision exists. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains a separate non-runtime lane.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1166,39 +1167,40 @@ When continuing development in a new conversation:
 ```text
 1. Read Current Production Snapshot.
 2. Read Current Operational State.
-3. Read Immediate Next Release.
-4. Check whether a newer production diagnostic changes the evidence.
+3. Read the current priority from the manifest and terminal release-state block.
+4. Check whether newer production diagnostics change the evidence.
 5. Check Hard Freeze before editing code.
-6. Implement only the promoted Immediate Next scope.
-7. After release, update this file again.
+6. Perform only the promoted review, design, or separately authorized implementation scope.
+7. After any release or administrative convergence, update this file again.
 ```
 
 Current promoted next action:
 
 ```text
-Implement the frozen M2-4 Session / Runtime Mirror Boundary Completion on a dedicated runtime work branch.
-Keep the runtime change equivalence-first and separately attributable by Slice A / B / C / D.
-Do not fold release-system follow-up or unrelated WATCH items into the runtime checkpoint.
+Review post-release M2-5 transition debt against the current production source and living architecture authority.
+Keep product runtime implementation blocked until architecture-contract convergence, exact source re-audit, and explicit implementation authorization are complete.
+Keep release-system stabilization and unrelated WATCH items in separate lanes.
 ```
 
 Current success condition:
 
 ```text
-predecessor HUMAN_EVIDENCE / PR3 terminal closure = LIVE_PASS
-durable major checkpoint = M2-3
-current priority = M2-4 implementation
+accepted real long-chat evidence = LIVE_PASS
+durable major checkpoint = M2-4
+current product priority = M2_5_POST_06600_TRANSITION_DEBT_REVIEW
 production remains the machine snapshot above until a normal approved release transaction publishes a candidate
 latest.js == install.js remains mandatory
 
-implementation
-→ Slice A differential/static proof
-→ Slice B proof
-→ Slice C zero-runtime-caller Recovery proof with facade retained
-→ Slice D full mirror observation/interpretation differential matrix
-→ combined candidate regression
-→ normal exact release transaction
-→ release-simcore publication
-→ real long-chat validation
+product runtime work
+→ converge living architecture authority first
+→ exact current-production source re-audit
+→ explicit implementation authorization
+→ dedicated runtime work branch only after authorization
+
+release-system work
+→ remain non-runtime and separately attributable
+→ preserve the single publisher and existing main-write authority
+→ static / CI proof before any operational activation
 
 observed anomaly
 → preserve evidence immediately

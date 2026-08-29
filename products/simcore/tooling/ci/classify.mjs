@@ -33,6 +33,7 @@ const exact=Object.freeze({
   'products/simcore/tooling/release-operational-proof.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/admin-state-transition.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/build-06407-reload-cache-continuity.py':['CI_SELF','HARNESS'],
+  'products/simcore/tooling/build-06800-community-parent-local-alias-classification-repair.py':['CI_SELF','HARNESS'],
   'products/simcore/tests/release-shadow.test.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tests/release-controller-qualification.test.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tests/post-publish-state-shadow.test.mjs':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],

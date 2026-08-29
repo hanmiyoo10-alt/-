@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "community-parent-local-alias.batch-a",
+  "suite": "community-parent-local-alias",
+  "input": {
+    "systemVersion": "0.68.0"
+  },
+  "expected": {
+    "targetKey": "맘카페",
+    "targetGroup": "학부모/지역",
+    "classifierVersion": 3
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

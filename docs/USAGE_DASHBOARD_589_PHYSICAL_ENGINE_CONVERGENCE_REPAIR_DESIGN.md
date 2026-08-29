@@ -90,6 +90,12 @@ It does not require the live Engine `/health` version to equal `BUNDLED_ENGINE_V
 - no bootstrap change;
 - no release-pipeline topology change.
 
+## Trusted-stage implementation correction
+
+The first E7 materialization attempt (`33261585245`) failed before candidate publication because the 5.89 materializer and P55 regression still assumed the bundle reconciliation function lived in `00-runtime-core.part.js`. Current modular ownership places `syncBridgeEngineBundleIfNeeded()` in `20-bridge-io.part.js`, while refresh lives in a different part.
+
+The implementation correction keeps Product/release identity changes in `00-runtime-core.part.js`, but binds convergence editing, validation, and P55 assertions to `20-bridge-io.part.js`. This is a materialization ownership correction only: the runtime design, target tuple, Engine-byte preservation requirement, data semantics, and release authority are unchanged.
+
 ## Physical acceptance
 
 After production promotion, pressing `+` must be sufficient. No shell action is allowed.

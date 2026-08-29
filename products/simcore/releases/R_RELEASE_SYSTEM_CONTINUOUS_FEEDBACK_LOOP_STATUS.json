@@ -15,17 +15,22 @@
     "runtimeRelease": "0.66.0",
     "releaseId": "simcore-v0.66.0-new-05",
     "activeSystem": "R2.5_APPROVAL_BOUNDARY_CONVERGENCE_PLUS_RS2_4_PERMANENT",
-    "evaluatedThrough": "DURABLE_LIVE_PENDING_PRE_HUMAN_EVIDENCE",
+    "evaluatedThrough": "HUMAN_EVIDENCE_ACCEPTED_TERMINAL_ADMIN_REVERTED",
     "feedback": "docs/SIMCORE_RELEASE_SYSTEM_V2_5_V06600_PRELIVE_OPERATIONAL_FEEDBACK_2026-08-29.md",
     "provisionalDisposition": "STABILIZE",
     "approvalBoundaryFirstRealUse": "PASS",
     "primaryFollowUp": "R2_5_PREPUBLICATION_POST_PUBLISH_REPLAY_GAP",
     "secondaryFollowUps": [
       "R2_5_POST_PUBLISH_PAYLOAD_OWNER_WRITER_PARITY_GAP",
-      "R2_5_POST_PUBLISH_REPAIR_TRUST_BOOTSTRAP_CYCLE"
+      "R2_5_POST_PUBLISH_REPAIR_TRUST_BOOTSTRAP_CYCLE",
+      "TERMINAL_CLOSURE_AUTOMATED_REVERT_ROOT_CAUSE"
     ],
     "candidateNextTheme": "POST_PUBLISH_BOUNDARY_CONVERGENCE",
-    "formalSuccessorDesignAuthorized": false,
+    "formalSuccessorDesignAuthorized": true,
+    "formalSuccessor": "R2.6_POST_PUBLISH_BOUNDARY_CONVERGENCE",
+    "successorDesign": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_POST_PUBLISH_BOUNDARY_CONVERGENCE_DESIGN.md",
+    "successorDesignStatus": "DESIGN_FROZEN_IMPLEMENTATION_BLOCKED_PENDING_TERMINAL_CONTROL_PLANE_RESOLUTION",
+    "successorImplementationAuthorized": false,
     "terminalRetrospectivePending": true
   },
   "loop": [

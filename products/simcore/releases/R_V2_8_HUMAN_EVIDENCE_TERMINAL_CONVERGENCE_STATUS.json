@@ -50,12 +50,16 @@
     "machineMayInferHumanFields": false
   },
   "qualification": {
-    "branchHeadBeforeEvidenceSeal": "fb93a097696cfefb2f53b6fc3d6ac64a52e11c91",
-    "run": 33260746077,
-    "verifyJob": 99122142296,
-    "requiredJob": 99122200855,
+    "implementationHead": "fb93a097696cfefb2f53b6fc3d6ac64a52e11c91",
+    "implementationRun": 33260746077,
+    "implementationVerifyJob": 99122142296,
+    "implementationRequiredJob": 99122200855,
+    "evidenceSealedHead": "6a731f92a79351449dbfa105177c5d45bac27555",
+    "evidenceSealedRun": 33260860787,
+    "evidenceSealedVerifyJob": 99122472546,
+    "evidenceSealedRequiredJob": 99122534573,
     "result": "PASS",
-    "exactHeadQualification": "PENDING_AFTER_STATUS_SEAL"
+    "mergeExactHeadPolicy": "PR_HEAD_MUST_HAVE_SIMCORE_VERIFY_AND_REQUIRED_SUCCESS_BEFORE_MERGE"
   },
   "currentProductGate": {
     "releaseId": "simcore-v0.68.0-new-02",

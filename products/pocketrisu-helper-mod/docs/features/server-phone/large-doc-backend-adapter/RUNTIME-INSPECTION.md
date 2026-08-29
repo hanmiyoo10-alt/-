@@ -62,6 +62,22 @@ Repository source inspection confirms `plugins/termux/large-doc-editor/server.py
 
 No third-party Python package requirement was found in these two backend files.
 
+### Server-phone deployment prerequisites
+
+Runtime inspection confirmed:
+
+- `python3` exists at `/data/data/com.termux/files/usr/bin/python3`;
+- observed version: `Python 3.14.6`;
+- `$HOME/PocketRisu` exists;
+- `$HOME/storage/shared` exists;
+- `$HOME/storage/shared/Documents` exists.
+
+Deployment boundary decision:
+
+- do **not** use `$HOME/PocketRisu` as the editable large-doc workspace; it is application source/runtime state and would create an unnecessarily large accidental-edit blast radius;
+- keep runtime code location and editable workspace location separate;
+- prefer a dedicated subdirectory below shared `Documents` as the eventual workspace, subject to a read/write/access inspection before creation or service installation.
+
 ## Interpretation
 
 Current evidence supports: **large-doc is not presently deployed/registered as a server-phone runtime service**.

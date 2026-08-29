@@ -2,7 +2,7 @@
 
 Date: 2026-08-29
 
-Status: **STAGE B PASS · DIRECT LIVE PROVEN · POST-REBUILD EXACT RECOVERY · 40.224S EDIT-REBUILD LATENCY WATCH · NO RUNTIME CHANGE**
+Status: **STAGE B PASS · DIRECT LIVE PROVEN · POST-REBUILD EXACT RECOVERY · 40.224S EDIT-REBUILD LATENCY WATCH · STAGE D STALE-REFRESH NEGATIVE CONTROL DIRECT · NO RUNTIME CHANGE**
 
 Production/live-gate authority:
 
@@ -250,20 +250,54 @@ Classification:
 = NOT RARE MIRROR-CANDIDATE PROOF
 ```
 
-## 7. Reload / Stage D note
+## 7. Stage D refresh boundary — stale checkpoint negative control
 
-The new generation's first supplied packet @2350 -> @2351 reported:
+Operator clarification after the diagnostic review establishes that the first supplied packet in this generation, @2350 -> @2351, was taken **immediately after an intentional same-tab refresh**. The assistant output itself was not the trigger for the generation change; the operator refresh was.
+
+Ordered boundary:
+
+```text
+older v0.66.0 generation mtde1oph-ivsjxp
+last supplied checkpoint @2348 -> @2349
+
+operator same-tab refresh
+
+new runtime boot 2026-08-29T05:23:58.694Z
+generation mtdxquzq-i5ii0z
+first natural request @2350 -> @2351
+```
+
+The first post-refresh packet reports:
 
 ```text
 Telemetry continuity FRESH · host-local-stale
 Host-local boot STALE
 Prior representation UNAVAILABLE
-COLD_INIT
+Session load COLD_INIT
+COMPACT_V2 3826/16384 OK
+HOST_LOCAL WRITTEN
 ```
 
-This is not Stage D compatible-adoption PASS. It means the checkpoint available at boot was outside the compatible adoption window. The new generation then wrote fresh current-version Host-local checkpoints (`3826`, `3806`, `4203` chars), so a future intentionally ordered same-tab refresh can still exercise Stage D correctly.
+This is therefore direct live evidence of the **stale-checkpoint rejection branch at a real refresh boundary**.
 
-Do not infer a Stage D failure from this stale boot episode.
+Bounded interpretation:
+
+```text
+06600_STAGE_D_STALE_REFRESH_NEGATIVE_CONTROL
+= PASS / DIRECT FAIL-CLOSED EVIDENCE
+= SAME-TAB REFRESH OPERATOR CONFIRMED
+= STALE HOST-LOCAL CHECKPOINT NOT ADOPTED
+= FRESH RUNTIME STATE STARTED
+= PRIOR REPRESENTATION UNAVAILABLE AS EXPECTED
+= NEW CURRENT-VERSION CHECKPOINT WRITTEN
+= NO STATE CORRUPTION OBSERVED
+```
+
+It is **not** the required Stage D compatible-adoption positive control, because the available Host-local checkpoint was stale rather than eligible. The prior supplied checkpoint was many hours earlier, so this refresh did not satisfy the intended fresh-checkpoint ordering for compatible adoption.
+
+The new generation subsequently wrote fresh current-version Host-local checkpoints (`3826`, `3806`, `4203` chars). Therefore a later intentionally ordered refresh performed while one of those checkpoints remains within the compatibility/TTL window can still close the positive Stage D gate.
+
+Do not classify this real refresh as a Stage D failure. It proves the negative safety branch and leaves the compatible-adoption branch pending.
 
 ## 8. Live-gate disposition after this evidence
 
@@ -273,8 +307,9 @@ Stage A ordinary Session/finalization continuity        PASS
 Stage B genuine visible edit positive control           PASS
 Stage C ordinary exact/safe Deferred Mirror branch      PASS
   + natural THOUGHTS compat strip exact-output bonus    PASS
+Stage D stale-refresh fail-closed negative control      PASS / BONUS DIRECT
 Stage D compatible same-tab reload adoption             PENDING
 Stage E B lifecycle / COMMUNITY coverage                PENDING / natural coverage
 ```
 
-The v0.66.0 real-long-chat gate remains open. Stage B is now closed; Stage D remains the important required direct regression control.
+The v0.66.0 real-long-chat gate remains open. Stage B is closed; the compatible-adoption Stage D positive control remains the important required direct regression control.

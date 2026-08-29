@@ -4,19 +4,21 @@
   "systemVersion": "R2.7",
   "name": "Evidence-Derived Operations",
   "date": "2026-08-29",
-  "status": "IMPLEMENTATION_AUTHORIZED",
+  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_ACTIVATION_PENDING",
   "disposition": "SIMPLIFY_AUTOMATE",
   "predecessor": "R2.6_POST_PUBLISH_BOUNDARY_CONVERGENCE",
   "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_EVIDENCE_DERIVED_OPERATIONS_DESIGN.md",
   "implementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_IMPLEMENTATION_AUTHORIZATION_2026-08-29.md",
+  "implementationClosureAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_7_IMPLEMENTATION_CLOSURE_2026-08-29.md",
   "primaryEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_V06700_FIRST_USE_OPERATIONAL_FEEDBACK_2026-08-29.md",
   "scorecardEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_FIRST_USE_SCORECARD_2026-08-29.md",
   "predecessorConvergence": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_FIRST_USE_ACTIVATION_CONVERGENCE_2026-08-29.md",
   "designAuthorized": true,
   "designFrozen": true,
   "implementationAuthorized": true,
-  "implementationVerified": false,
+  "implementationVerified": true,
   "activationAuthorized": false,
+  "activationGate": "FIRST_GENUINE_R2_7_OPERATIONAL_CONFIRMATION_PENDING",
   "principles": [
     "KEEP_THE_SAFETY_WALL",
     "DERIVE_STATUS_FROM_PROOF",
@@ -41,11 +43,29 @@
     "backgroundPollingOrRetry": 0,
     "newCleanPathPrs": 0
   },
-  "plannedOwners": {
+  "implementedOwners": {
     "rootPathContract": "products/simcore/tooling/root-path.mjs",
     "recoveryDecision": "products/simcore/tooling/release-recovery-decision.mjs",
-    "operationalProof": "products/simcore/tooling/release-operational-proof.mjs"
+    "operationalProof": "products/simcore/tooling/release-operational-proof.mjs",
+    "permanentWorkflow": ".github/workflows/simcore-release-permanent.yml",
+    "existingRecoveryDestination": ".github/workflows/simcore-release-state-sync.yml",
+    "regressionSuite": "products/simcore/tests/suites/release-system-r2-7.test.mjs"
   },
+  "implementation": {
+    "regressionSuite": "release-system-r2-7",
+    "permanentCi": "PASS",
+    "qualificationBranchHead": "78b415d7f432cbe33f93dda67d03a3f2bfdac33b",
+    "qualificationRun": 33251682349,
+    "verifyJob": 99098343831,
+    "requiredJob": 99098399663,
+    "operationalActivationProof": "PENDING_FIRST_GENUINE_R2_7_RELEASE"
+  },
+  "deferred": [
+    "FULL_PREDECESSOR_ROOT_HELPER_MECHANICAL_MIGRATION"
+  ],
+  "watch": [
+    "GITHUB_ACTIONS_NODE20_ACTION_RUNTIME_DEPRECATION_NONBLOCKING"
+  ],
   "runtimeMutation": "NONE",
   "releaseSimcoreMutation": "NONE"
 }

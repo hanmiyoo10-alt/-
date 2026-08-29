@@ -31,13 +31,13 @@ Target release tuple:
 
 ## Upstream review
 
-The upstream `v1.10.0..v1.14.0` range is broad and includes changes in DevPass, usage reporting, caching, routing, APIs, models, and UI. Current upstream CLI documentation continues to expose the account command family used by this project:
+The upstream `v1.10.0..v1.14.0` range is broad and includes changes in DevPass, usage reporting, caching, routing, APIs, models, and UI. Current upstream CLI documentation continues to expose `orgs`, `credits`, and `usage` commands. The Local Usage Dashboard, however, does not treat that upstream command list as permission to change its existing source topology:
 
-- `orgs`
-- `credits`
-- `usage`
+- account discovery/capture retains the existing `orgs list --json` CLI session;
+- credits bootstrap retains the existing `credits --json` CLI call;
+- usage/activity remains on the existing capture/API source path and 5.88 must not introduce a new `usage` CLI invocation.
 
-The Dashboard therefore treats this as a pinned managed-runtime dependency upgrade. It does not adopt new upstream semantics merely because they exist. Any real command/output incompatibility must fail closed and be repaired only at the affected source-backed boundary.
+The Dashboard therefore treats this as a pinned managed-runtime dependency upgrade. It does not adopt new upstream semantics or commands merely because they exist. Any real command/output incompatibility must fail closed and be repaired only at the affected source-backed boundary.
 
 ## Ownership
 
@@ -65,7 +65,7 @@ The Plugin requirements advance with them so 5.87's single-source Stable-contrac
 8. Preserve the existing managed version-root, descriptor/state exact-version checks, provisioning retry/timeout, and launcher order `managed-direct -> direct -> npx-fallback`.
 9. Keep bootstrap byte-identical.
 10. Keep snapshot/recent-request contracts at `1/1`.
-11. Add P54 regression for Engine/Manager pin parity, component identities, account command-family preservation, generated Engine parity, provisioning ownership, launcher order, manifest/hash integrity, and bootstrap byte identity.
+11. Add P54 regression for Engine/Manager pin parity, component identities, existing `orgs`/`credits` CLI calls, no new `usage` CLI call, existing 24h capture path, generated Engine parity, provisioning ownership, launcher order, manifest/hash integrity, and bootstrap byte identity.
 12. Run the complete exact-SHA regression registry before merge and monotonic promotion.
 
 ## Non-goals

@@ -131,11 +131,11 @@ ok('admin-state-writer-boundary', () => {
 
 ok('permanent-post-publish-recovery-boundary', () => {
   const workflow = fs.readFileSync('.github/workflows/simcore-release-state-sync.yml', 'utf8');
+  expect(workflow.includes('types: [opened, synchronize, closed]'), 'post-publish recovery trigger surface missing');
   const start = workflow.indexOf('\n  permanent-recovery:');
   expect(start >= 0, 'permanent recovery job missing');
   const recovery = workflow.slice(start);
   for (const token of [
-    'types: [opened, synchronize, closed]',
     'Recover Permanent Published State',
     'products/simcore/releases/recoveries/*.json',
     'RS2_4_POST_PUBLISH_RECOVERY',

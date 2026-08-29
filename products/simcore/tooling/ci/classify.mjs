@@ -12,6 +12,7 @@ const exact=Object.freeze({
   '.github/workflows/simcore-release-required.yml':['CI_SELF','HARNESS'],
   '.github/workflows/simcore-release-pr-activation.yml':['CI_SELF','HARNESS'],
   '.github/workflows/product-simcore-candidate-materialize.yml':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
+  '.github/workflows/simcore-r2-7-status-projection.yml':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
   'products/simcore/tooling/check.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tooling/test.mjs':['CI_SELF','HARNESS'],
   'products/simcore/tooling/release-shadow.mjs':['CI_SELF','HARNESS'],
@@ -31,6 +32,7 @@ const exact=Object.freeze({
   'products/simcore/tooling/root-path.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/release-recovery-decision.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/release-operational-proof.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
+  'products/simcore/tooling/release-rsystem-status-project.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/admin-state-transition.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/build-06407-reload-cache-continuity.py':['CI_SELF','HARNESS'],
   'products/simcore/tooling/build-06800-community-parent-local-alias-classification-repair.py':['CI_SELF','HARNESS'],
@@ -68,7 +70,7 @@ export function classifyPath(input){
   if(/^products\/simcore\/tooling\/test-[^/]+\.mjs$/.test(p))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/state-sync/'))out.add('STATE_SYNC');
   const permanentWorkflowSet=new Set(permanentReleaseWorkflows);
-  if(p.startsWith('.github/workflows/simcore-')&&!['.github/workflows/simcore-ci.yml','.github/workflows/simcore-release.yml','.github/workflows/simcore-release-state-sync.yml',...permanentWorkflowSet].includes(p))out.add('LEGACY_VERIFICATION');
+  if(p.startsWith('.github/workflows/simcore-')&&!['.github/workflows/simcore-ci.yml','.github/workflows/simcore-release.yml','.github/workflows/simcore-release-state-sync.yml','.github/workflows/simcore-r2-7-status-projection.yml',...permanentWorkflowSet].includes(p))out.add('LEGACY_VERIFICATION');
   if(/^scripts\/simcore-0.*(?:\.py|-test\.mjs)$/.test(p)||/^scripts\/simcore-m2-.*\.py$/.test(p))out.add('LEGACY_VERIFICATION');
   if(p.startsWith('docs/SIMCORE_RELEASE_SYSTEM_V2_')||p.startsWith('docs/SIMCORE_')){const higher=['STATE_SYNC','ARCH_CONTRACT'].some((x)=>out.has(x));if(!higher)out.add('SIMCORE_DOC_ONLY');}
   return [...out].sort((a,b)=>LABELS.indexOf(a)-LABELS.indexOf(b));

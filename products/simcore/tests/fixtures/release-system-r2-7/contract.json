@@ -1,13 +1,23 @@
 {
   "schemaVersion": 1,
-  "system": "R2.7",
-  "name": "Evidence-Derived Operations",
-  "expectedDispositions": [
-    "SAFE_TO_RERUN_FAILED_JOB",
-    "FRESH_PERMANENT_DISPATCH_REQUIRED",
-    "RECOVERY_REQUEST_REQUIRED",
-    "MANUAL_EVIDENCE_REQUIRED",
-    "BLOCKED_IDENTITY_MOVED"
-  ],
-  "authorityMutation": "NONE"
+  "id": "r2-7-evidence-derived-operations-contract",
+  "suite": "release-system-r2-7",
+  "input": {
+    "systemVersion": "R2.7"
+  },
+  "expected": {
+    "publisherCount": 1,
+    "authorityMutation": "NONE",
+    "dispositions": [
+      "SAFE_TO_RERUN_FAILED_JOB",
+      "FRESH_PERMANENT_DISPATCH_REQUIRED",
+      "RECOVERY_REQUEST_REQUIRED",
+      "MANUAL_EVIDENCE_REQUIRED",
+      "BLOCKED_IDENTITY_MOVED"
+    ]
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
 }

@@ -140,7 +140,7 @@ export async function runSuite(){
   assert(adminSource.includes('ADMIN_TRANSITION_IDENTITY_MUTATION'),'admin transition identity guard missing');
   pass(assertions,'R2.8-existing-admin-engine-reused');
 
-  const workflow=fs.readFileSync(path.join(REPO,'.github/workflows/simcore-r2-8-terminal-convergence.yml'),'utf8');
+  const workflow=fs.readFileSync(path.join(REPO,'.github/workflows/product-simcore-terminal-convergence-r2-8.yml'),'utf8');
   for(const token of [
     "products/simcore/releases/live-evidence/*.json",
     'release-terminal-transition.mjs',

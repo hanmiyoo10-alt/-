@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "id": "release-system-r2-7-status-projection-contract",
   "suite": "release-system-r2-7-status-projection",
   "input": {
@@ -12,8 +13,7 @@
     "preImplementationDisposition": "NO_PROJECTION_NOT_ELIGIBLE"
   },
   "meta": {
-    "runtimeMutation": "NONE",
-    "releaseSimcoreMutation": "NONE",
-    "humanEvidenceMutation": "NONE"
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
   }
 }

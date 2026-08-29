@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "architecture-contract-select-v06900",
+  "suite": "architecture-contract-select-v06900",
+  "input": {"versions":["0.68.0","0.69.0"]},
+  "expected": {"currentContract":"config/simcore-architecture-v2.json","candidateContract":"config/simcore-architecture-v06900-candidate.json","failClosedOnVersionMismatch":true},
+  "meta": {"goldenGate":true,"coverageExpectation":"EXECUTABLE"}
+}

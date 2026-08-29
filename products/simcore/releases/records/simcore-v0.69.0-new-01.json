@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.69.0-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "0d920a90e770eaf831c63fbe10ed7a7ef27c8361",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.69.0-new-01.json",
+  "releaseSpecSha256": "ffe51181d5d38bd6787a53e1ccb0194c206b849fcad7609845fa40f6cde1c66e",
+  "productionCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "previousProductionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+  "productionBlob": "86954f4d7ff7dec9119e2a8c047bfbfa6f801d56",
+  "version": "0.69.0",
+  "releaseName": "M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion",
+  "verificationReportSha256": "6e589ec0727d263650ba5b722179697938d6fff542d809e3214d18270f8dadf5",
+  "verifierCommit": "0579ff865678f7c20006ae2c0a4675acb6c5e4e6",
+  "publisherRunId": "33271301422",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

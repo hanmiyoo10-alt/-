@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.67.0-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "aae942ef3bd7038832540b2ab6059c05348266bf",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.67.0-new-02.json",
+  "releaseSpecSha256": "5449ac19497405e46c34af0e7e6b83904678bf8ad26f519fd079289e600bb76f",
+  "productionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+  "previousProductionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "productionBlob": "24c57d86b3533a89e675c5b598b0c4a3a4fef6fe",
+  "version": "0.67.0",
+  "releaseName": "M2-5 Recovery Transition Debt Retirement",
+  "verificationReportSha256": "1dc4bd7f202a2bfeca06d7cea81af94a5c27aa15c46cb41529e0cce77c2d04cf",
+  "verifierCommit": "4ad49c8700a3511adb426417f3119c15a17c6af0",
+  "publisherRunId": "33249672791",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

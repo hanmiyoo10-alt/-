@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.69.0-intent-01",
+  "releaseId": "simcore-v0.69.0-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.69.0",
+  "releaseName": "M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+  "builderPath": "products/simcore/tooling/build-06900-state-reconcile-kernel-inversion.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_DESIGN_2026-08-30.md",
+    "docs/SIMCORE_06900_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+    "docs/SIMCORE_06900_STATE_RECONCILE_LAYER_CONVERGENCE_2026-08-30.md",
+    "docs/SIMCORE_06900_CANDIDATE_ARCH_CONTRACT_DUAL_LANE_BLOCKER_2026-08-30.md",
+    "docs/SIMCORE_06900_M2_6_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+    "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_01_RELOAD_VERSION_BRIDGE_2026-08-30.md",
+    "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_02_OPERATOR_CARD_VERSION_BRIDGE_2026-08-30.md",
+    "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_03_HOST_LOCAL_TELEMETRY_VERSION_BRIDGE_2026-08-30.md",
+    "docs/SIMCORE_06900_IMPLEMENTATION_CI_FAILURE_04_BOUNDED_TELEMETRY_VERSION_BRIDGE_2026-08-30.md"
+  ]
+}

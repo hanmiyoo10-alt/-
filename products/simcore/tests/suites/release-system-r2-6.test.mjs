@@ -71,12 +71,32 @@ export async function runSuite() {
 
   const status=JSON.parse(fs.readFileSync('products/simcore/releases/R_V2_6_POST_PUBLISH_BOUNDARY_CONVERGENCE_STATUS.json','utf8'));
   equal(status.implementationAuthorized,true,'R2.6 implementation authorization');
-  equal(status.activationAuthorized,false,'R2.6 activation must remain separately gated');
+  equal(status.activationAuthorized,true,'R2.6 documentary first-use gate consumed');
+  equal(status.activationFieldSemantics,'DOCUMENTARY_FIRST_USE_GATE_CONSUMED','R2.6 activation field semantics');
+  equal(status.operationallyProven,true,'R2.6 operational proof state');
+  const proof=status.implementation?.operationalActivationProof;
+  assert(proof&&typeof proof==='object','R2.6 operational proof missing');
+  equal(proof.releaseId,'simcore-v0.67.0-new-02','R2.6 first-use release id');
+  equal(proof.publisherRunId,'33249672791','R2.6 first-use publisher run');
+  const record=JSON.parse(fs.readFileSync(proof.releaseRecord,'utf8'));
+  const receipt=JSON.parse(fs.readFileSync(proof.stateReceipt,'utf8'));
+  equal(record.releaseId,proof.releaseId,'R2.6 proof record release');
+  equal(record.publisherRunId,proof.publisherRunId,'R2.6 proof record publisher');
+  equal(record.productionCommit,proof.productionCommit,'R2.6 proof record commit');
+  equal(record.productionBlob,proof.productionBlob,'R2.6 proof record blob');
+  equal(record.releaseState,'LIVE_PENDING','R2.6 proof record lifecycle');
+  equal(record.stateSyncStatus,'PASS','R2.6 proof record state sync');
+  equal(receipt.releaseId,proof.releaseId,'R2.6 proof receipt release');
+  equal(receipt.publisherRunId,proof.publisherRunId,'R2.6 proof receipt publisher');
+  equal(receipt.productionCommit,proof.productionCommit,'R2.6 proof receipt commit');
+  equal(receipt.productionBlob,proof.productionBlob,'R2.6 proof receipt blob');
+  equal(receipt.releaseAuthority,'RS2_4_PERMANENT','R2.6 proof publisher authority');
+  equal(receipt.result,'PASS','R2.6 proof receipt result');
   equal(status.preservedAuthorities.productionPublisherCount,1,'publisher count changed');
   equal(status.preservedAuthorities.mainGateway,'repo-main-write.py','main writer authority changed');
   equal(status.runtimeMutation,'NONE','runtime mutation forbidden');
   equal(status.releaseSimcoreMutation,'NONE','release-simcore mutation forbidden');
-  pass('R2.6-authority-and-activation-boundary-preserved');
+  pass('R2.6-authority-and-first-use-proof-converged');
 
   return {coverage:'EXECUTABLE',status:'PASS',assertions};
 }

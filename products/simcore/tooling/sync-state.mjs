@@ -187,7 +187,11 @@ function atomicReplace(target) {
   if (sha256(fs.readFileSync(target.file))!==target.beforeHash) { fs.rmSync(tmp,{force:true}); die('TARGET_CHANGED_DURING_RUN',target.path); }
   fs.renameSync(tmp,target.file); return {path:target.path,beforeHash:target.beforeHash,afterHash:sha256(next)};
 }
-function writeReport(reportPath, report) { if (!reportPath) return; fs.writeFileSync(reportPath, JSON.stringify(report,null,2)+'\n','utf8'); }
+function writeReport(reportPath, report) {
+  if (!reportPath) return;
+  fs.mkdirSync(path.dirname(reportPath), { recursive:true });
+  fs.writeFileSync(reportPath, JSON.stringify(report,null,2)+'\n','utf8');
+}
 
 export function run(argv=process.argv.slice(2)) {
   const args=parseArgs(argv); const root=path.resolve(args.root);
@@ -216,14 +220,21 @@ export function run(argv=process.argv.slice(2)) {
   }
   if (!fs.readFileSync(manifestPath).equals(manifestBefore)) die('MANIFEST_MUTATION_DETECTED','sync-state mutated manifest');
   const report={schemaVersion:1,tool:'sync-state',mode,result:summary.result,exitCode:summary.exitCode,source:{status:source.status,identity:source.identity,findings:source.findings},registry:{version:registry.registryVersion,status:'VALID'},writerPolicy:writer.status,targets:targets.map(boundedTarget),findings:summary.findings,counts:summary.counts,writes:applied};
-  writeReport(args.report?path.resolve(args.report):null,report); return report;
+  writeReport(args.report?resolveUnder(root,args.report,'REPORT'):null,report); return report;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   try { const r=run(); console.log(JSON.stringify(r,null,2)); process.exitCode=r.exitCode; }
   catch (e) {
     const result={schemaVersion:1,tool:'sync-state',result:'CHECK_BLOCKED',exitCode:2,findings:[...(e.findings||[]),{code:e.syncCode||'HARNESS_ERROR',severity:'BLOCKER'}]};
-    try { const ix=process.argv.indexOf('--report'); if (ix>=0 && process.argv[ix+1]) writeReport(path.resolve(process.argv[ix+1]),result); } catch {}
+    try {
+      const reportIx=process.argv.indexOf('--report');
+      const rootIx=process.argv.indexOf('--root');
+      if (reportIx>=0 && process.argv[reportIx+1] && rootIx>=0 && process.argv[rootIx+1]) {
+        const reportRoot=path.resolve(process.argv[rootIx+1]);
+        writeReport(resolveUnder(reportRoot,process.argv[reportIx+1],'REPORT'),result);
+      }
+    } catch {}
     console.error(`${e.syncCode||'HARNESS_ERROR'}: ${e.message}`); process.exitCode=2;
   }
 }

@@ -62,16 +62,16 @@ assert.ok(managedIndex >= 0 && directIndex > managedIndex && npxIndex > directIn
 assert.equal((cliRuntime.match(/async function runCliProcess\(/g) || []).length, 1, 'P52 must retain one Engine CLI launcher authority');
 
 assert.ok(manager.includes("const MANAGER_VERSION = '1.3.1';"), 'P52 Manager version must advance to 1.3.1');
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.86';"), 'P52 Manager product identity must track 5.86');
+assert.ok(manager.includes(`const PRODUCT_VERSION = '${release.productVersion}';`), 'P52 Manager product identity must track the current release authority');
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.26';"), 'P52 Manager bundled Engine version must remain 1.6.26');
 assert.ok(pluginCore.includes("const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.1';"), 'P52 plugin readiness requirement must track Manager 1.3.1');
 assert.ok(diagnostics.includes("String(runtimeBridge?.managerVersion || '') !== REQUIRED_BRIDGE_MANAGER_VERSION"), 'P52 stable readiness must use the shared Manager requirement');
 assert.equal(diagnostics.includes("managerVersion || '') !== '1.3.0'"), false, 'P52 stable readiness must not retain the stale Manager 1.3.0 literal');
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.86');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.86');
+assert.equal(manifest.productVersion, release.productVersion);
+assert.equal(manifest.components.plugin.version, release.productVersion);
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.26');
 assert.equal(manifest.components.bridgeManager.version, '1.3.1');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.86');
+assert.equal(manifest.components.bridgeManager.productVersion, release.productVersion);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
 const engineBytes = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`);

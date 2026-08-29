@@ -30,18 +30,17 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
-- Release transaction: `simcore-v0.68.0-new-02`
-- Production commit: `6b31a5265f67daf5a90222d6c08bb85f3abde538`
-- Validation status: `LIVE_PASS`
-- Current priority: `POST_06800_ARCHITECTURE_AUTHORITY_PROJECTION_CONVERGENCE`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Release transaction: `simcore-v0.69.0-new-01`
+- Production commit: `31b4c5075659a55861731c6fd73f999402321e94`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

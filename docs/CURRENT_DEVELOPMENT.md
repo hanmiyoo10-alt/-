@@ -25,23 +25,22 @@
 - Declared validation status: `LIVE_PASS`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
-- Major update checkpoint: `M2-4`
+- Major update checkpoint: `M2-3`
 
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
 - Release transaction: `simcore-v0.66.0-new-05`
 - Production commit: `4b6ae1a4c63f6be658c6163168cc46a1adef60aa`
-- Validation status: `LIVE_PASS`
-- Current priority: `M2_5_POST_06600_TRANSITION_DEBT_REVIEW`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `06600_M2_4_SESSION_RUNTIME_MIRROR_BOUNDARY_COMPLETION_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 
@@ -51,7 +50,7 @@ This block is the terminal administrative state backed by accepted real long-cha
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The v0.66.0 M2-4 product live gate is closed with accepted human evidence. The durable checkpoint is now M2-4. The immediate next action is a post-v0.66 transition-debt review/design-selection pass only; no M2-5 runtime implementation is authorized until a separate frozen design and activation decision exists. Provider cache remains `UNVERIFIED`. The `MANUAL_EDIT_REBUILT 40.224 s` genuine-edit specimen remains a separate high-severity performance WATCH and must not be silently folded into the next architecture checkpoint.
+The predecessor product live gate is closed with accepted human evidence. Runtime work may proceed only within the currently authorized frozen scope. Provider cache remains `UNVERIFIED` unless direct evidence changes it. Release-system follow-up remains separate from the active runtime work item.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1135,45 +1134,6 @@ production blob 8c42851df34831465403d12fc57c7499923bdbc6
 
 Real long-chat activation remains the current validation target.
 
-## M2-4 / v0.66.0 — Session / Runtime Mirror Boundary Completion
-
-Completed the equivalence-first M2-4 ownership checkpoint and closed it with real long-chat evidence.
-
-```text
-Slice A output-finalize ownership extraction                  COMPLETE
-Slice B Store retention-housekeeping ownership               COMPLETE
-Slice C runtime Recovery caller migration                    COMPLETE
-Slice D Runtime Mirror observe / Output Compat interpret     COMPLETE
-Stage A ordinary Session/finalization live                    PASS
-Stage B genuine edit regression                               PASS
-Stage C ordinary Deferred Mirror                              PASS
-Stage D reload adoption regression                            PASS
-Stage E natural B                                             UNEXERCISED BY CONTRACT
-Stage E B_START/B_CONTINUE/B_END static differential          PASS
-```
-
-Production identity:
-
-```text
-Version 0.66.0
-release-simcore 4b6ae1a4c63f6be658c6163168cc46a1adef60aa
-blob f0da13d4c47fd98e9065d7dbf253a3296151ee16
-validation LIVE_PASS
-checkpoint M2-4
-```
-
-Preserved follow-up:
-
-```text
-MANUAL_EDIT_REBUILT 40.224 s
-= WATCH
-= high-severity performance evidence
-= correctness PASS
-= repeat comparable multi-tens-of-seconds case -> FIX investigation
-```
-
-M2-5+ may now review remaining transition debt, but no runtime implementation is authorized merely by M2-4 closure.
-
 ## Repository Product Root Isolation — Phase 1
 
 The repository now has explicit product ownership roots while preserving compatibility runtime paths:
@@ -1206,39 +1166,39 @@ When continuing development in a new conversation:
 ```text
 1. Read Current Production Snapshot.
 2. Read Current Operational State.
-3. Read the current priority from product-manifest / terminal release block.
-4. Check whether newer production diagnostics change the evidence.
+3. Read Immediate Next Release.
+4. Check whether a newer production diagnostic changes the evidence.
 5. Check Hard Freeze before editing code.
-6. Perform only the promoted review/design-selection scope.
-7. Freeze and authorize a separate implementation item before runtime mutation.
+6. Implement only the promoted Immediate Next scope.
+7. After release, update this file again.
 ```
 
 Current promoted next action:
 
 ```text
-Review post-v0.66 M2-5+ transition debt against current v0.66.0 production source.
-Inventory only remaining transition artifacts and physical ownership debt, including the retained Recovery compatibility facade and any Session migration/diagnostic receipt residue.
-Classify each candidate as KEEP / DEFER / RETIRE-CANDIDATE / NEEDS-EVIDENCE.
-Preserve the 40.224 s genuine-edit latency WATCH separately.
-Do not implement M2-5 runtime changes until a separate design is frozen and explicitly authorized.
+Implement the frozen M2-4 Session / Runtime Mirror Boundary Completion on a dedicated runtime work branch.
+Keep the runtime change equivalence-first and separately attributable by Slice A / B / C / D.
+Do not fold release-system follow-up or unrelated WATCH items into the runtime checkpoint.
 ```
 
 Current success condition:
 
 ```text
-v0.66.0 real long-chat gate = LIVE_PASS
-durable major checkpoint = M2-4
-current priority = M2_5_POST_06600_TRANSITION_DEBT_REVIEW
-production remains v0.66.0 at release-simcore 4b6ae1a4c63f6be658c6163168cc46a1adef60aa
-production blob remains f0da13d4c47fd98e9065d7dbf253a3296151ee16
+predecessor HUMAN_EVIDENCE / PR3 terminal closure = LIVE_PASS
+durable major checkpoint = M2-3
+current priority = M2-4 implementation
+production remains the machine snapshot above until a normal approved release transaction publishes a candidate
 latest.js == install.js remains mandatory
 
-review
-→ current-source ownership inventory
-→ remaining transition debt classification
-→ decide whether an M2-5 runtime release is justified
-→ if justified, create a separate frozen activation design
-→ only then authorize implementation on a dedicated work branch
+implementation
+→ Slice A differential/static proof
+→ Slice B proof
+→ Slice C zero-runtime-caller Recovery proof with facade retained
+→ Slice D full mirror observation/interpretation differential matrix
+→ combined candidate regression
+→ normal exact release transaction
+→ release-simcore publication
+→ real long-chat validation
 
 observed anomaly
 → preserve evidence immediately

@@ -35,6 +35,6 @@
   "validation_status": "LIVE_PASS",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
-  "major_update_checkpoint": "M2-4",
+  "major_update_checkpoint": "M2-3",
   "managed_by": ".github/workflows/simcore-release-state-sync.yml"
 }

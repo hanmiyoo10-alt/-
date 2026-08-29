@@ -125,7 +125,43 @@ release/repository-system redesign          NO
 
 ## Validation anomaly ledger
 
-No implementation anomaly classified yet. Any CI/live anomaly discovered after this point must be appended here as `WATCH / DEFER / FIX / BLOCKER` before continuing.
+### FIX · RESOLVED · TEST FIXTURE CONTRACT ONLY — new v0.68 suite fixture ownership
+
+First implementation CI:
+
+```text
+PR                  #839
+run                 33254941222 (#2836)
+Verify              99106887285 FAIL
+GATE_CI_SELF        PASS
+GATE_STATIC         PASS
+GATE_ARCH           PASS
+GATE_REGRESSION     INFRA_ERROR / HARNESS_ERROR
+stderr              FIXTURE_SCHEMA_INVALID: community-reaction.batch-a suite mismatch
+```
+
+Root cause: the two new suite IDs (`community-parent-local-alias`, `builder-v06800`) temporarily reused the existing `community-reaction` fixture directory. The permanent harness validates that each loaded fixture envelope's `suite` field matches the registered suite ID, so semantic regression execution correctly failed before the builder/runtime tests ran.
+
+Resolution:
+
+```text
+products/simcore/tests/fixtures/community-parent-local-alias/contract.json
+products/simcore/tests/fixtures/builder-v06800/contract.json
+```
+
+Each new suite now owns a schema-1 fixture envelope with its exact suite ID, and registry fixtureDir values point only to those owned directories.
+
+Classification:
+
+```text
+06800_NEW_SUITE_FIXTURE_MISMATCH = FIX / RESOLVED / TEST CONTRACT ONLY
+RUNTIME_MUTATION                  = NONE FROM THIS FIX
+RELEASE_SIMCORE_MUTATION          = NONE
+```
+
+### WATCH · NONBLOCKING — GitHub Actions Node runtime deprecation
+
+Existing actions pinned to revisions targeting Node 20 are being forced by GitHub Actions to Node 24. This is a separate platform/dependency maintenance concern and is intentionally not mixed into the v0.68 runtime repair transaction.
 
 ## Release path after implementation qualification
 

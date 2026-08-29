@@ -12,6 +12,7 @@ TOOLS = ROOT / 'tools'
 SPEC = Path('.github/usage-dashboard/releases/5.89.json')
 
 CORE = SRC / '00-runtime-core.part.js'
+BRIDGE_IO = SRC / '20-bridge-io.part.js'
 ENGINE_CORE = RUNTIME_SRC / '00-core.part.mjs'
 ENGINE = RUNTIME / 'bridge-engine.mjs'
 MANAGER = RUNTIME / 'bridge-manager.cjs'
@@ -143,11 +144,10 @@ def apply_identity_and_release_notes(title, highlights, hints) -> None:
 
 
 def patch_plugin_convergence() -> None:
-    text = CORE.read_text(encoding='utf-8')
+    text = BRIDGE_IO.read_text(encoding='utf-8')
     start_marker = '  async function syncBridgeEngineBundleIfNeeded(status) {'
-    end_marker = '  async function refresh('
     start = text.find(start_marker)
-    end = text.find(end_marker, start)
+    end = len(text)
     if start < 0 or end <= start:
         raise SystemExit('5.89 plugin bundle convergence function boundary missing')
     block = text[start:end]
@@ -216,8 +216,8 @@ def patch_plugin_convergence() -> None:
             if block.count(old) != 1:
                 raise SystemExit(f'5.89 plugin convergence replacement missing: {old}')
             block = block.replace(old, new, 1)
-        text = text[:start] + block + text[end:]
-        CORE.write_text(text, encoding='utf-8')
+        text = text[:start] + block
+        BRIDGE_IO.write_text(text, encoding='utf-8')
 
 
 def patch_manager_convergence() -> None:
@@ -317,6 +317,7 @@ def sync_manifest_hashes() -> None:
 
 def validate_target() -> None:
     core = CORE.read_text(encoding='utf-8')
+    bridge_io = BRIDGE_IO.read_text(encoding='utf-8')
     engine_core = ENGINE_CORE.read_text(encoding='utf-8')
     manager = MANAGER.read_text(encoding='utf-8')
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
@@ -326,7 +327,7 @@ def validate_target() -> None:
         raise SystemExit('5.89 Plugin Engine requirement changed')
     if f"const REQUIRED_BRIDGE_MANAGER_VERSION = '{TARGET_MANAGER}';" not in core:
         raise SystemExit('5.89 Plugin Manager requirement missing')
-    if "engineBundleSyncState:'capability-missing'" not in core or "fetchBridgeManagerStatus(true)" not in core:
+    if "engineBundleSyncState:'capability-missing'" not in bridge_io or "fetchBridgeManagerStatus(true)" not in bridge_io:
         raise SystemExit('5.89 Plugin explicit bundle convergence repair missing')
     if f"const VERSION = '{TARGET_ENGINE}';" not in engine_core:
         raise SystemExit('5.89 Engine source version changed')

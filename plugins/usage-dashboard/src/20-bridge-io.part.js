@@ -136,15 +136,42 @@
 }
 
   async function syncBridgeEngineBundleIfNeeded(status) {
-  if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;
+  if (!status?.connected || status.engineManaged !== true) return status;
   if (String(status.productVersion || '') !== VERSION) return status;
-  const runningEngineVersion = String(status.engineVersion || '');
-  const bundledEngineVersion = String(status.engineBundleVersion || '');
-  if (status.engineBundled === true && bundledEngineVersion && runningEngineVersion === bundledEngineVersion) {
+  let liveStatus = status;
+  let runningEngineVersion = String(liveStatus.engineVersion || '');
+  let bundledEngineVersion = String(liveStatus.engineBundleVersion || '');
+  const isCurrentBundledEngine = value => value?.engineBundled === true
+    && String(value.engineBundleVersion || '') === REQUIRED_BRIDGE_VERSION
+    && String(value.engineVersion || '') === REQUIRED_BRIDGE_VERSION;
+  if (isCurrentBundledEngine(liveStatus)) {
     state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
-    return status;
+    return liveStatus;
   }
-  // Live bundle state wins over a persisted attempt marker; retry while the manager still reports adopted.
+  // A live version mismatch is authoritative. Refresh Manager capability once before declaring convergence unavailable.
+  if (liveStatus.engineBundleAvailable !== true) {
+    state.bridgeManagerLastProbeAt = 0;
+    const fresh = await fetchBridgeManagerStatus(true);
+    if (fresh?.connected && fresh.engineManaged === true && String(fresh.productVersion || '') === VERSION) {
+      liveStatus = fresh;
+      runningEngineVersion = String(liveStatus.engineVersion || '');
+      bundledEngineVersion = String(liveStatus.engineBundleVersion || '');
+      if (isCurrentBundledEngine(liveStatus)) {
+        state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
+        return liveStatus;
+      }
+    }
+  }
+  if (liveStatus.engineBundleAvailable !== true) {
+    return {...liveStatus,engineBundleSyncState:'capability-missing',engineBundleSyncError:`bundle capability unavailable for live engine ${runningEngineVersion || 'unknown'} -> required ${REQUIRED_BRIDGE_VERSION}`};
+  }
+  if (!bundledEngineVersion) {
+    return {...liveStatus,engineBundleSyncState:'target-missing',engineBundleSyncError:`bundle target missing for live engine ${runningEngineVersion || 'unknown'} -> required ${REQUIRED_BRIDGE_VERSION}`};
+  }
+  if (bundledEngineVersion !== REQUIRED_BRIDGE_VERSION) {
+    return {...liveStatus,engineBundleSyncState:'target-mismatch',engineBundleSyncError:`bundle target ${bundledEngineVersion} does not match required ${REQUIRED_BRIDGE_VERSION}`};
+  }
+  // Live bundle state wins over a persisted attempt marker; retry until the exact required Engine is running.
   state.bridgeEngineBundleSyncAttemptedVersion = '';
   try {
     const res = await Risuai.nativeFetch(`${BRIDGE_MANAGER_BASE}/engine/sync`, {method:'POST',headers:{...bridgeManagerAuthHeaders(),'Content-Type':'application/json'},body:'{}'});
@@ -152,7 +179,7 @@
     const payload = JSON.parse(text);
     if (!res.ok) {
       state.bridgeManagerLastProbeAt = 0;
-      return {...status,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
+      return {...liveStatus,engineBundleSyncState:String(payload?.state || 'failed'),engineBundleSyncError:String(payload?.error || `HTTP ${res.status}`)};
     }
     state.bridgeManagerLastProbeAt = 0;
     let fresh = await fetchBridgeManagerStatus(true);
@@ -164,12 +191,12 @@
     if (reconciled) state.bridgeEngineBundleSyncAttemptedVersion = VERSION;
     else state.bridgeManagerLastProbeAt = 0;
     return {
-      ...(fresh?.connected ? fresh : status),
+      ...(fresh?.connected ? fresh : liveStatus),
       engineBundleSyncState:String(payload?.state || (payload?.synced ? 'bundled' : 'current')),
       engineBundleSyncError:reconciled ? '' : 'engine restart pending'
     };
   } catch (e) {
     state.bridgeManagerLastProbeAt = 0;
-    return {...status,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
+    return {...liveStatus,engineBundleSyncState:'probe-error',engineBundleSyncError:e?.message || String(e)};
   }
 }

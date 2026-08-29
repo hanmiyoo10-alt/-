@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "systemVersion": "R2.8",
+  "name": "Human-Evidence Terminal Convergence",
+  "date": "2026-08-30",
+  "status": "IMPLEMENTED_CI_QUALIFIED_OPERATIONAL_FIRST_USE_PENDING",
+  "disposition": "STABILITY_SIMPLICITY_BOUNDED_AUTOMATION",
+  "predecessor": "R2.7_EVIDENCE_DERIVED_OPERATIONS",
+  "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_8_HUMAN_EVIDENCE_TERMINAL_CONVERGENCE_DESIGN.md",
+  "implementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_8_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_8_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+  "designFrozen": true,
+  "implementationAuthorized": true,
+  "implementationVerified": true,
+  "operationallyProven": false,
+  "operationalActivationGate": "FIRST_GENUINE_POST_IMPLEMENTATION_HUMAN_EVIDENCE_TERMINAL_CLOSE_PENDING",
+  "principles": [
+    "KEEP_HUMAN_AUTHORITY_HUMAN",
+    "AUTOMATE_BOOKKEEPING_AFTER_AUTHORITY",
+    "DERIVE_TERMINAL_TRANSITION_FROM_ACCEPTED_EVIDENCE",
+    "REUSE_EXISTING_STATE_ENGINE",
+    "REUSE_EXISTING_MAIN_GATEWAY",
+    "DELETE_ONE_SHOT_TRANSPORT_NOT_SAFETY"
+  ],
+  "preservedAuthorities": {
+    "productionPublisherCount": 1,
+    "productionPublisher": "RS2_4_PERMANENT",
+    "mainWriterCount": 1,
+    "mainWriter": "repo-main-write.py",
+    "humanLivePassRequired": true,
+    "automaticLivePassDecision": false,
+    "automaticCheckpointSelection": false,
+    "automaticPrioritySelection": false,
+    "backgroundPollingOrRetry": false,
+    "predecessorTerminalFallbackRetained": true
+  },
+  "implementedOwners": {
+    "terminalResolver": "products/simcore/tooling/release-terminal-transition.mjs",
+    "terminalAdapter": ".github/workflows/product-simcore-terminal-convergence-r2-8.yml",
+    "existingAdminEngine": "products/simcore/tooling/admin-state-transition.mjs",
+    "existingStateRenderer": "products/simcore/tooling/sync-state.mjs",
+    "mainGateway": "scripts/repo-main-write.py",
+    "regressionSuite": "release-system-r2-8-terminal-convergence"
+  },
+  "evidenceEnvelope": {
+    "pathPattern": "products/simcore/releases/live-evidence/<releaseId>.json",
+    "authorityConfirmation": "HUMAN_EVIDENCE",
+    "decision": "LIVE_PASS",
+    "machineMayInferHumanFields": false
+  },
+  "qualification": {
+    "branchHeadBeforeEvidenceSeal": "fb93a097696cfefb2f53b6fc3d6ac64a52e11c91",
+    "run": 33260746077,
+    "verifyJob": 99122142296,
+    "requiredJob": 99122200855,
+    "result": "PASS",
+    "exactHeadQualification": "PENDING_AFTER_STATUS_SEAL"
+  },
+  "currentProductGate": {
+    "releaseId": "simcore-v0.68.0-new-02",
+    "validationStatus": "PENDING_REAL_LONG_CHAT",
+    "separateFromR2_8Implementation": true
+  },
+  "deferred": [
+    "RETIRE_PREDECESSOR_ACTIVE_ADMIN_TRANSITION_AFTER_GENUINE_R2_8_FIRST_USE",
+    "RETIRE_PREDECESSOR_DURABLE_MEMORY_SYNC_COMMAND_AFTER_GENUINE_R2_8_FIRST_USE",
+    "FULL_PREDECESSOR_ROOT_HELPER_MECHANICAL_MIGRATION"
+  ],
+  "watch": [
+    "GITHUB_ACTIONS_NODE20_ACTION_RUNTIME_DEPRECATION_NONBLOCKING"
+  ],
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

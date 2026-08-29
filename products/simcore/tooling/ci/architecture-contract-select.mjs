@@ -24,12 +24,15 @@ export function declaredPluginVersion(sourcePath) {
 }
 
 export function candidateContractPath(version) {
-  if (!VERSION_RE.test(String(version || ''))) {
+  const value = String(version || '');
+  if (!VERSION_RE.test(value)) {
     const error = new Error(`candidate contract version invalid: ${version}`);
     error.code = 'ARCH_CONTRACT_SOURCE_VERSION_INVALID';
     throw error;
   }
-  return `config/simcore-architecture-v${String(version).replaceAll('.', '')}-candidate.json`;
+  const [major, minor, patch] = value.split('.');
+  const releaseId = `${major}${minor.padStart(2, '0')}${patch.padStart(2, '0')}`;
+  return `config/simcore-architecture-v${releaseId}-candidate.json`;
 }
 
 export function selectArchitectureContract({ root = '.', source, mirrorSource }) {

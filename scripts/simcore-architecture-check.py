@@ -19,6 +19,7 @@ DEFINE_RE = re.compile(
     r'SimCore\.define\("([^"]+)"\s*,\s*function\s*\(require,\s*module,\s*exports\)\s*\{'
 )
 REQUIRE_RE = re.compile(r"""require\(['"]\./([^'"]+)['"]\)""")
+SOURCE_VERSION_RE = re.compile(r"^//@version\s+([^\s]+)\s*$", re.MULTILINE)
 
 SNAPSHOT_MAX_MODULES = 256
 SNAPSHOT_MAX_EDGES = 2048
@@ -45,6 +46,25 @@ def extract_modules(source: str) -> Tuple[Dict[str, List[str]], List[str]]:
         modules[name] = deps
 
     return modules, sorted(set(duplicates))
+
+
+def parse_release_version(value: object) -> Tuple[int, int, int] | None:
+    text = str(value or "")
+    parts = text.split(".")
+    if len(parts) != 3 or any(not part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)  # type: ignore[return-value]
+
+
+def extract_source_version(source: str) -> Tuple[str, Tuple[int, int, int] | None]:
+    match = SOURCE_VERSION_RE.search(source)
+    text = match.group(1) if match else ""
+    return text, parse_release_version(text)
+
+
+def retirement_target(spec: dict) -> Tuple[str, Tuple[int, int, int] | None]:
+    text = str(spec.get("retire_at_version") or "")
+    return text, parse_release_version(text)
 
 
 def classify_edge(name: str, dep: str, contract: dict) -> str:
@@ -75,6 +95,7 @@ def classify_edge(name: str, dep: str, contract: dict) -> str:
 def analyze_source(path: Path, contract: dict) -> dict:
     source = path.read_text(encoding="utf-8")
     actual, duplicates = extract_modules(source)
+    source_version_text, source_version = extract_source_version(source)
     failures: List[str] = []
     notices: List[str] = []
 
@@ -82,6 +103,12 @@ def analyze_source(path: Path, contract: dict) -> dict:
     known_modules = set(declared)
     layer_policy = contract["layer_dependency_policy"]
     runtime_authorized = bool(contract["major_update"].get("runtime_refactor_authorized"))
+
+    if source_version is None:
+        failures.append(
+            f"{path}: source //@version must be exact numeric x.y.z for architecture retirement checks; "
+            f"observed={source_version_text or 'MISSING'}"
+        )
 
     if duplicates:
         failures.append(f"{path}: duplicate SimCore module definition(s): {duplicates}")
@@ -102,6 +129,18 @@ def analyze_source(path: Path, contract: dict) -> dict:
                 f"{path}: planned M2 module {name!r} appeared while "
                 "runtime_refactor_authorized=false"
             )
+        if physical == "retiring":
+            target_text, target_version = retirement_target(spec)
+            if target_version is None:
+                failures.append(
+                    f"{path}: retiring module {name!r} requires exact retire_at_version x.y.z; "
+                    f"observed={target_text or 'MISSING'}"
+                )
+            elif source_version is not None and source_version >= target_version:
+                failures.append(
+                    f"{path}: retiring module {name!r} must be absent at/after "
+                    f"v{target_text}; source is v{source_version_text}"
+                )
 
         allowed = set(spec.get("allowed_dependencies", []))
         exceptions = set(spec.get("transition_exceptions", []))
@@ -151,6 +190,20 @@ def analyze_source(path: Path, contract: dict) -> dict:
         for name, spec in declared.items()
         if spec.get("physical") == "required"
     }
+    if source_version is not None:
+        for name, spec in declared.items():
+            if spec.get("physical") != "retiring":
+                continue
+            target_text, target_version = retirement_target(spec)
+            if target_version is None:
+                continue
+            if source_version < target_version:
+                required.add(name)
+                notices.append(
+                    f"{path}: retirement staged {name} present before v{target_text}; "
+                    f"source v{source_version_text}"
+                )
+
     missing = sorted(required - set(actual))
     if missing:
         failures.append(f"{path}: missing required module definition(s): {missing}")

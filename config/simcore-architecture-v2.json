@@ -11,7 +11,7 @@
   "major_update": {
     "milestone": "2.0M",
     "phase": "M2",
-    "status": "M2_4_LIVE_PASS_M2_5_TRANSITION_DEBT_REVIEW",
+    "status": "M2_4_LIVE_PASS_M2_5_IMPLEMENTATION_MATERIALIZED_PENDING_PUBLICATION",
     "m2_runtime_move_gate": "V0_63_55_REAL_LONG_CHAT_REPRESENTATION_FAST_RECONCILE_VALIDATED",
     "runtime_refactor_authorized": true,
     "checkpoint": "M2-4",
@@ -40,6 +40,13 @@
       "scope": "Session / Runtime Mirror Boundary Completion",
       "static_validation": "PASS",
       "live_validation": "LIVE_PASS"
+    },
+    "m2_5_candidate": {
+      "version": "0.67.0",
+      "scope": "Recovery Transition Debt Retirement",
+      "implementation_authorized": true,
+      "publication": "PENDING",
+      "live_validation": "PENDING"
     }
   },
   "global_rules": [
@@ -86,9 +93,9 @@
     "lifecycle": {"physical":"required","layer":"domain","status":"current_request_domain_coordinator","owns":"broadcast lifecycle plus current cross-domain request preparation coordination","allowed_dependencies":["kernel","time","recurrence","lineage","handoff"]},
     "reaction": {"physical":"required","layer":"domain","status":"current","owns":"reaction parsing historical floors and deterministic normalization","allowed_dependencies":["community"]},
     "structure": {"physical":"required","layer":"validation","status":"current_judge_only","owns":"frame/envelope/COMMUNITY/Knowledge integrity and state-commit safety","allowed_dependencies":["kernel","community","reaction","lifecycle","time"]},
-    "recovery": {"physical":"required","layer":"application","status":"deprecated_zero_runtime_callers_m2_5_retirement_candidate","owns":"compatibility facade over output-compat and bootstrap-migration retained after M2-4","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","output-compat","bootstrap-migration"],"m2_target":["zero_runtime_callers_proven_in_v0_66_production","physical_deletion_requires_separate_m2_5_release"]},
+    "recovery": {"physical":"retiring","retire_at_version":"0.67.0","layer":"application","status":"m2_5_retiring_at_0_67_zero_runtime_callers_proven","owns":"pre-v0.67 compatibility facade over output-compat and bootstrap-migration; absent at and after v0.67","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","output-compat","bootstrap-migration"],"m2_target":["v0_66_requires_physical_facade_for_exact_production_truth","v0_67_requires_physical_absence","no_replacement_barrel"]},
     "prompt": {"physical":"required","layer":"application","status":"current","owns":"runtime prompt compilation and serialization","allowed_dependencies":["kernel","lifecycle","time","recurrence"]},
-    "session": {"physical":"required","layer":"application","status":"current_m2_4_narrowed_state_holder_orchestrator","owns":"session state holder plus bounded request/output/persistence sequencing","allowed_dependencies":["store","kernel","lifecycle","time","frame","community","reaction","structure","recovery","edit-reconcile","output-compat","bootstrap-migration","output-finalize","recurrence","prompt"],"m2_target":["edit_reconcile_extraction_completed_m2_3","recovery_runtime_callers_migrated_m2_4","output_finalization_extracted_m2_4","store_housekeeping_ownership_completed_m2_4"]},
+    "session": {"physical":"required","layer":"application","status":"current_m2_4_narrowed_state_holder_orchestrator","owns":"session state holder plus bounded request/output/persistence sequencing","allowed_dependencies":["store","kernel","lifecycle","time","frame","community","reaction","structure","edit-reconcile","output-compat","bootstrap-migration","output-finalize","recurrence","prompt"],"m2_target":["edit_reconcile_extraction_completed_m2_3","recovery_runtime_callers_migrated_m2_4","recovery_dependency_declaration_retired_m2_5_candidate","output_finalization_extracted_m2_4","store_housekeeping_ownership_completed_m2_4"]},
     "ops": {"physical":"required","layer":"observability","status":"current_narrow","owns":"performance helpers and core diagnostic formatting","allowed_dependencies":[]},
     "runtime-contracts": {"physical":"required","layer":"runtime","status":"current","owns":"runtime cache/placement ownership declarations","allowed_dependencies":[]},
     "runtime-host": {"physical":"required","layer":"runtime","status":"current","owns":"host API adapter","allowed_dependencies":[]},
@@ -114,7 +121,7 @@
       "M2-2 representation ownership extraction",
       "M2-3 edit-reconcile extraction and runtime identity convergence",
       "M2-4 session/runtime-mirror boundary completion",
-      "M2-5+ retire transition code only after exact source zero-consumer proof"
+      "M2-5 Recovery facade retirement after exact zero-consumer proof"
     ],
     "positive_controls": [
       "genuine user edit stays USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT",
@@ -130,6 +137,6 @@
       "M2-3: Edit Reconcile extraction + runtime identity convergence released and accepted LIVE_PASS",
       "M2-4: Session / Runtime Mirror Boundary Completion released and accepted LIVE_PASS"
     ],
-    "next_review": "M2-5 Recovery facade retirement only after separate exact-production re-audit and implementation authorization"
+    "next_review": "M2-5 candidate publication and real-long-chat acceptance; Recovery must be absent at v0.67 while v0.66 production remains exactly represented"
   }
 }

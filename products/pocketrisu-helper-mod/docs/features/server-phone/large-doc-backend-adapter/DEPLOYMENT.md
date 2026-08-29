@@ -47,6 +47,61 @@ Do not deploy repository documentation, tests, CI files, development helpers, sc
 
 If another runtime dependency is later proven necessary, add it explicitly to the deployment manifest rather than recursively copying the source tree.
 
+## Device-role deployment profiles
+
+The backend is **server-role software**, not a package that every phone should install.
+
+### Server phone
+
+Install the full server-role runtime only on the phone designated as the PocketRisu server:
+
+- PocketRisu server runtime;
+- large-doc minimal runtime allowlist;
+- dedicated runit service;
+- fixed localhost listener (`127.0.0.1:8765`);
+- fixed server-side workspace;
+- future PocketRisu server-side adapter.
+
+Only one active server phone is expected in normal operation unless a separate multi-server design is explicitly introduced later.
+
+### Main phone
+
+Do **not** install the large-doc backend runtime on the main phone.
+
+The main phone remains a client/access device:
+
+- Firefox/PocketRisu UI;
+- existing SSH/core access path where needed;
+- main-phone notification relay only;
+- no large-doc Python service;
+- no server-phone runit service mirror.
+
+### Other ordinary phones
+
+Do not install the backend by default.
+
+An additional phone should normally use PocketRisu as a client through the established server access path. It receives no large-doc runtime files merely because it can open PocketRisu.
+
+### Replacement/new server phone
+
+If the server role moves to another phone, use a repo-owned bootstrap/install flow to reproduce the server-role installation from canonical source.
+
+The bootstrap should:
+
+1. inspect prerequisites and fail closed on unexpected existing state;
+2. create/validate the dedicated workspace without overwriting user documents;
+3. install only the explicit runtime allowlist;
+4. install/enable the dedicated runit service;
+5. verify localhost listener and backend API behavior;
+6. install/validate the PocketRisu adapter side separately;
+7. never copy secrets, DB state, or user workspace data implicitly unless a distinct migration step explicitly requests them.
+
+A device becomes a server only by running this server-role bootstrap/deployment path. Client phones never silently promote themselves into backend hosts.
+
+### Test phone / temporary dev deployment
+
+A temporary test deployment may use the same minimal runtime on another phone, but it is explicitly non-canonical and should be removable without affecting the real server phone. Any behavior discovered there must be committed back to repository source before it becomes durable.
+
 ## Repo-driven deployment
 
 Normal operation should be repo-driven:

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.67.0-intent-02",
+  "releaseId": "simcore-v0.67.0-new-02",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "sourceCommit": "42e065b463bbb7100882883fb5c925826ea3b5ae",
+  "candidateCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+  "candidateReleaseBlob": "24c57d86b3533a89e675c5b598b0c4a3a4fef6fe",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.67.0-intent-02",
+  "builderPath": "products/simcore/tooling/build-06700-m2-5-recovery-transition-debt-retirement-fix01.py",
+  "builderSha256": "5a20db4547a12171f71441f2850092f0a7195f72f3585f0b2a0dd3536400859f",
+  "verifierCommit": "42e065b463bbb7100882883fb5c925826ea3b5ae",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "c1bc8e6ff39b76151ed3d8f53f83734d84c7a3ff2b456c010b9f5db4a571923e",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

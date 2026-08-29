@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.66.0",
-  "release_name": "M2-4 Session / Runtime Mirror Boundary Completion",
+  "production_version": "0.67.0",
+  "release_name": "M2-5 Recovery Transition Debt Retirement",
   "release_branch": "release-simcore",
-  "release_commit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
-  "release_blob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
+  "release_commit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+  "release_blob": "24c57d86b3533a89e675c5b598b0c4a3a4fef6fe",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "M2_5_POST_06600_TRANSITION_DEBT_REVIEW",
+  "current_priority": "06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -32,7 +32,7 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "validation_status": "LIVE_PASS",
+  "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
   "major_update_checkpoint": "M2-4",

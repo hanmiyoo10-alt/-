@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.66.0 — M2-4 Session / Runtime Mirror Boundary Completion
-Release commit: 4b6ae1a4c63f6be658c6163168cc46a1adef60aa
+SimCore v0.67.0 — M2-5 Recovery Transition Debt Retirement
+Release commit: 01a4204981191968ba22ba6ad161c1053d6bc7d0
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

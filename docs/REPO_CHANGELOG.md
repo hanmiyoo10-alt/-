@@ -741,6 +741,13 @@
 - Event ID: `5cac583c08250fa0eaeadcc13ec1aeb3ba008bfad80c6437e876471db70948c8`
 <!-- canonical-main-doc-promoted:5cac583c08250fa0eaeadcc13ec1aeb3ba008bfad80c6437e876471db70948c8 -->
 
+### 2026-08-29 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `cb543f9311f5ad6510ad12debb926487c380e39cc54b02b895646499468c5370`
+<!-- canonical-main-doc-promoted:cb543f9311f5ad6510ad12debb926487c380e39cc54b02b895646499468c5370 -->
+
 ### 2026-08-29 — materialize: Usage Dashboard 3.0.0-alpha.5.86 from source 020543fc6a32fe4271ede32b99172482add68ed6 (#828)
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

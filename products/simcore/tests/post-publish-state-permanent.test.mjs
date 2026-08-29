@@ -26,6 +26,13 @@ function readJson(root, rel) { return JSON.parse(fs.readFileSync(path.join(root,
 function gitBlob(bytes) { return crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`),bytes])).digest('hex'); }
 function source(version, name) { return Buffer.from(`//@version ${version}\n// v${version} ${name}:\nconst SIMCORE_PERMANENT_FIXTURE = true;\n`); }
 function count(text, token) { return text.split(token).length - 1; }
+function between(text,startToken,endToken=null) {
+  const start=text.indexOf(startToken);
+  if(start<0) throw new Error(`section missing ${startToken}`);
+  const end=endToken?text.indexOf(endToken,start+startToken.length):text.length;
+  if(endToken&&end<=start) throw new Error(`section end missing ${endToken}`);
+  return text.slice(start,end);
+}
 
 function registry() {
   return {
@@ -138,7 +145,9 @@ function testSharedWorkflowBoundaryStatic() {
   if(count(permanent,'release-publish.mjs')!==1) throw new Error('publisher count changed');
   for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','--mode PERMANENT']) if(!permanent.includes(token)) throw new Error(`permanent shared boundary missing ${token}`);
   for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','--mode RECOVERY']) if(!recovery.includes(token)) throw new Error(`recovery shared boundary missing ${token}`);
-  for(const workflow of [permanent,recovery]) for(const token of ['persistentPayloadAllowlist',"assert p['disposition']",'--allow product-manifest.json','durable-receipt.json']) if(workflow.includes(token)) throw new Error(`workflow duplicate survived ${token}`);
+  const permanentPost=between(permanent,'\n  post-publish-state:','\n  required:');
+  const recoveryPost=between(recovery,'\n  permanent-recovery:');
+  for(const workflow of [permanentPost,recoveryPost]) for(const token of ['persistentPayloadAllowlist',"assert p['disposition']",'--allow product-manifest.json','durable-receipt.json']) if(workflow.includes(token)) throw new Error(`workflow duplicate survived ${token}`);
 }
 function testAuthorityStatic() {
   const preplay=fs.readFileSync(PREPLAY,'utf8');

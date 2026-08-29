@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { equal, assert } from '../../tooling/assertions.mjs';
-import { selectArchitectureContract } from '../../tooling/ci/architecture-contract-select.mjs';
+import { candidateContractPath, selectArchitectureContract } from '../../tooling/ci/architecture-contract-select.mjs';
 
 function write(root, rel, text) {
   const file = path.join(root, rel);
@@ -16,6 +16,11 @@ export async function runSuite() {
   const pass = (id) => assertions.push({ id, status: 'PASS' });
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'simcore-arch-select-'));
   try {
+    equal(candidateContractPath('0.69.0'), 'config/simcore-architecture-v06900-candidate.json', 'v0.69 canonical release id');
+    equal(candidateContractPath('0.64.11'), 'config/simcore-architecture-v06411-candidate.json', 'two-digit patch release id');
+    equal(candidateContractPath('1.2.3'), 'config/simcore-architecture-v10203-candidate.json', 'generic zero-padded release id');
+    pass('V06900-arch-select-release-id-canonicalization');
+
     write(root, 'config/simcore-architecture-v2.json', '{}\n');
     write(root, 'config/simcore-architecture-v06900-candidate.json', '{}\n');
 

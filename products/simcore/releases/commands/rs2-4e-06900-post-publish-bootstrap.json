@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "v0.69.0 published production bootstrap before R2.8 terminal-fixture production-identity fix qualification and permanent post-publish recovery",
+  "expectedProductionCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "expectedProductionBlob": "86954f4d7ff7dec9119e2a8c047bfbfa6f801d56",
+  "sourceFailure": "POST_PUBLISH_RECOVERY_TRUSTED_CI_BOOTSTRAP_CYCLE",
+  "mergeThisCommandPayload": false
+}

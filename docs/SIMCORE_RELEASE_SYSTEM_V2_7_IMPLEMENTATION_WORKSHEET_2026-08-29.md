@@ -41,7 +41,7 @@ background polling/retry        NONE
 - pure recovery classifier with bounded dispositions;
 - permanent failure diagnostic that detects stale frozen verifier after Resolve;
 - published failures route diagnostically to the existing read-only/append-only recovery authority;
-- operational proof validator derives truth from record/receipt evidence;
+- operational proof validator derives truth from record/receipt evidence and canonical evidence paths;
 - no new required job;
 - permanent CI classification and regression coverage;
 - implementation closure only after exact latest head Verify + Required PASS.
@@ -71,6 +71,41 @@ Classification:
 
 ```text
 R2_7_FIXTURE_ENVELOPE_MISMATCH = FIX / RESOLVED
+RUNTIME_MUTATION = NONE
+RELEASE_SIMCORE_MUTATION = NONE
+```
+
+### FIX · RESOLVED · EVIDENCE BINDING — canonical operational proof input paths
+
+Second implementation CI:
+
+```text
+run        33251579986 (#2707)
+GATE_CI_SELF        PASS
+GATE_STATIC         PASS
+GATE_ARCH           PASS
+GATE_REGRESSION     FAIL / PERMANENT_REGRESSION_FAIL
+GATE_STATE          PASS
+GATE_COORDINATION   PASS
+stderr              copied receipt with mismatched canonical record path must fail closed
+```
+
+Root cause: `release-operational-proof.mjs` validated the receipt's declared canonical `releaseRecordPath`, but the CLI did not require the caller-provided `--record` and `--receipt` paths themselves to be the canonical release evidence locations. Therefore an equivalent copy of valid evidence could be accepted from a noncanonical caller path.
+
+Resolution: after semantic record/receipt validation, bind CLI inputs exactly to:
+
+```text
+products/simcore/releases/records/<releaseId>.json
+products/simcore/releases/state-receipts/<releaseId>.json
+```
+
+The existing negative cross-root regression now protects this boundary. The change adds no write, publication, retry, or HUMAN_EVIDENCE authority.
+
+Classification:
+
+```text
+R2_7_OPERATIONAL_PROOF_CALLER_PATH_BINDING = FIX / RESOLVED
+AUTHORITY_MUTATION = NONE
 RUNTIME_MUTATION = NONE
 RELEASE_SIMCORE_MUTATION = NONE
 ```

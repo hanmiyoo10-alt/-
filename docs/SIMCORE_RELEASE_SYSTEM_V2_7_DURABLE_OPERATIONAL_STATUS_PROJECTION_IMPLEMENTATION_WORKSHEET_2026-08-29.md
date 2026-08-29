@@ -105,4 +105,84 @@ runtime impact = NONE
 release-simcore impact = NONE
 ```
 
+### FIX · RESOLVED · CI_SELF_CLASSIFICATION — active projection workflow mistaken for legacy
+
+First implementation PR CI:
+
+```text
+PR            #851
+head          28f2b9582f563486e1de81bb07fc55bc0036c7d5
+SimCore CI     33258343151
+Verify job     99115856783
+trusted lane   PASS
+GATE_STATIC    PASS
+GATE_ARCH      PASS
+GATE_STATE     PASS
+GATE_COORDINATION PASS
+GATE_CI_SELF   FAIL
+```
+
+The self-test enumerates every `simcore-*.yml` workflow and requires each to be either a known current/permanent workflow or present in the legacy migration map. The new active R2.7 projection workflow was correctly classified by `classify.mjs`, but had not yet been added to the self-test's current-workflow exemption set.
+
+Resolution: preserve the legacy map unchanged and add only `simcore-r2-7-status-projection.yml` to the self-test's current/permanent workflow set.
+
+Classification:
+
+```text
+R2_7_STATUS_PROJECTION_ACTIVE_WORKFLOW_SELFTEST_CLASSIFICATION = FIX / RESOLVED
+new authority = NONE
+runtime impact = NONE
+release-simcore impact = NONE
+```
+
+### FIX · RESOLVED · FIXTURE_CONTRACT — new suite fixture envelope incomplete
+
+The same first CI reported:
+
+```text
+GATE_REGRESSION = INFRA_ERROR / HARNESS_ERROR
+stderr = FIXTURE_SCHEMA_INVALID: fixture envelope
+```
+
+Root cause: the first version of the new fixture omitted the common harness `schemaVersion` and standard regression metadata shape.
+
+Resolution: conform the fixture to the same `schemaVersion / id / suite / input / expected / meta` envelope used by permanent release-system suites.
+
+Classification:
+
+```text
+R2_7_STATUS_PROJECTION_FIXTURE_ENVELOPE = FIX / RESOLVED
+semantic impact = NONE
+runtime impact = NONE
+release-simcore impact = NONE
+```
+
+### BLOCKER · RESOLVED BEFORE QUALIFICATION · EDIT_HYGIENE — partial-read self-test overwrite
+
+While correcting the self-test classification, a bounded line-range read was momentarily treated as if it represented the complete `self-test.mjs` file and a shortened replacement commit was created on the work branch.
+
+This was detected immediately before any successful qualification, merge, main mutation, or deployment step.
+
+Resolution:
+
+```text
+re-read canonical main self-test in complete line ranges
+→ restore the complete original file
+→ apply exactly one semantic delta:
+   add simcore-r2-7-status-projection.yml to the current/permanent workflow exemption set
+→ rerun permanent CI from the corrected branch head
+```
+
+Classification:
+
+```text
+R2_7_SELF_TEST_PARTIAL_READ_OVERWRITE = BLOCKER / RESOLVED_BEFORE_QUALIFICATION
+production impact = NONE
+main impact = NONE
+runtime impact = NONE
+release-simcore impact = NONE
+```
+
+No qualification evidence produced before this correction is eligible for implementation closure.
+
 Any new anomaly must be classified immediately as WATCH / DEFER / FIX / BLOCKER before continuing.

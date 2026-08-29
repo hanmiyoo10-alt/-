@@ -25,7 +25,7 @@
 - Declared validation status: `LIVE_PASS`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
-- Major update checkpoint: `M2-4`
+- Major update checkpoint: `M2-5`
 
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->

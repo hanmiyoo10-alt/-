@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "Apply registered identity-free v0.66 terminal projection v2 after permanent CI qualification",
+  "expectedProductionCommit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
+  "registeredTransition": "products/simcore/state-sync/active-admin-transition.json",
+  "mergeThisCommandPayload": false
+}

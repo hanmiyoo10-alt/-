@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "systemVersion": "R2.6",
+  "name": "Post-Publish Boundary Convergence",
+  "date": "2026-08-29",
+  "status": "DESIGN_FROZEN_IMPLEMENTATION_BLOCKED_PENDING_V06600_TERMINAL_REVIEW",
+  "disposition": "STABILIZE",
+  "predecessor": "R2.5_APPROVAL_BOUNDARY_CONVERGENCE",
+  "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_POST_PUBLISH_BOUNDARY_CONVERGENCE_DESIGN.md",
+  "primaryEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_5_V06600_PRELIVE_OPERATIONAL_FEEDBACK_2026-08-29.md",
+  "designAuthorized": true,
+  "designFrozen": true,
+  "implementationAuthorized": false,
+  "implementationUnlock": [
+    "V06600_HUMAN_EVIDENCE_REVIEW_COMPLETE",
+    "V06600_TERMINAL_RELEASE_SYSTEM_RETROSPECTIVE_RECORDED",
+    "NO_NEW_EVIDENCE_INVALIDATES_R2_6_DESIGN"
+  ],
+  "principles": [
+    "PREPLAY_BEFORE_PUBLISH",
+    "ONE_POST_PUBLISH_STATE_ENVELOPE",
+    "DERIVE_WRITES_FROM_OWNER_OUTPUT",
+    "ONE_SHARED_MAIN_COMMIT_GATE_ADAPTER",
+    "ONE_SHARED_DURABLE_REOBSERVER",
+    "SAME_OWNER_SEMANTICS_FOR_PERMANENT_AND_RECOVERY",
+    "NO_NEW_AUTHORITY"
+  ],
+  "preservedAuthorities": {
+    "productionPublisherCount": 1,
+    "productionPublisher": "RS2_4_PERMANENT",
+    "mainGateway": "repo-main-write.py",
+    "humanLivePassRequired": true,
+    "trustedPredecessorSemantics": "UNCHANGED",
+    "appendOnlyRecovery": true,
+    "latestEqualsInstall": true
+  },
+  "cleanPathTargets": {
+    "prsToLivePending": 2,
+    "prsThroughTerminalClosure": 3,
+    "userManualPreLiveGithubOperations": 0,
+    "newRequiredJobs": 0,
+    "newLifecycleStates": 0,
+    "newPublishers": 0,
+    "backgroundPollingOrRetry": 0
+  },
+  "plannedOwners": {
+    "stateSemanticOwner": "release-state-converge.mjs_or_bounded_single_owner_wrapper",
+    "prepublicationGate": "GATE_POST_PUBLISH_PREPLAY_INSIDE_EXISTING_PERMANENT_TRANSACTION",
+    "mainGateAdapter": "release-state-main-gate.mjs_DIRECTIONAL",
+    "durableReobserver": "release-state-reobserve.mjs_DIRECTIONAL"
+  },
+  "deferred": [
+    "FULLY_AUTOMATED_TRUSTED_REPAIR_QUALIFICATION_PROFILE",
+    "HISTORICAL_V06500_STATE_RECEIPT_BACKFILL"
+  ],
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE"
+}

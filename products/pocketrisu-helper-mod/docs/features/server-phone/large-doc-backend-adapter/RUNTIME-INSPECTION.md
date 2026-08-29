@@ -88,18 +88,22 @@ Deployment boundary decision:
 
 A depth-2 scan for currently eligible large-doc suffixes (`.txt`, `.md`, `.log`, `.json`) returned `0` files.
 
-This makes a new dedicated child workspace under shared Documents a low-blast-radius default candidate.
+### Shared Documents path identity — resolved
 
-### Shared Documents path identity anomaly
+A follow-up inspection resolved the earlier singular/plural display discrepancy.
 
-Follow-up identity inspection confirmed:
+- Python `os.scandir($HOME/storage/shared)` returned exactly one matching real directory entry: `Documents`.
+- Exact UTF-8 bytes for that entry were `446f63756d656e7473` (`Documents`).
+- The entry is not a symlink.
+- `$HOME/storage/shared/Document` (singular) does not exist; `ls` returned `No such file or directory`.
+- `$HOME/storage/shared/Documents` exists as a directory and resolves to `/storage/emulated/0/Documents`.
+- `realpath` output for the nonexistent singular final component is not existence evidence; the actual directory-entry scan is authoritative here.
 
-- shell variable: `/data/data/com.termux/files/home/storage/shared/Documents`
-- `readlink -f` target: `/storage/emulated/0/Documents`
-- `stat` successfully resolved the plural path and reported it as a directory (`inode=7462` at inspection time)
-- parent glob `"$HOME/storage/shared"/Document*` nevertheless displayed a singular terminal path ending in `/storage/shared/Document`
+Therefore the workspace parent is now fixed as:
 
-The path is therefore accessible and resolves consistently when addressed as plural `Documents`, but the parent-directory display is not yet internally consistent. Do **not** create the production workspace until the actual directory entry / symlink spelling is inspected byte-for-byte. This is an inspection anomaly only; no runtime failure has been attributed to it.
+`$HOME/storage/shared/Documents`
+
+The earlier singular `Document` rendering is treated as a shell/display artifact and is no longer a deployment blocker.
 
 ## Interpretation
 
@@ -115,9 +119,11 @@ The next deployment decision must explicitly choose:
 4. localhost-only `127.0.0.1:8765` with no main-phone SSH forward;
 5. read-only PocketRisu adapter proof before enabling write/save.
 
+Workspace parent decision is now resolved to `$HOME/storage/shared/Documents`; use a dedicated child directory rather than the parent itself.
+
 ## Safety boundary
 
-- No runtime files modified.
+- No runtime files modified yet.
 - No services restarted.
 - No new port exposed.
 - No Android notification created.

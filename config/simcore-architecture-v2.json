@@ -2,19 +2,19 @@
   "schema_version": 2,
   "name": "SimCore Contracts v2",
   "production_baseline": {
-    "version": "0.66.0",
-    "release_name": "M2-4 Session / Runtime Mirror Boundary Completion",
-    "release_commit": "4b6ae1a4c63f6be658c6163168cc46a1adef60aa",
-    "release_blob": "f0da13d4c47fd98e9065d7dbf253a3296151ee16",
+    "version": "0.68.0",
+    "release_name": "Community Parent-Local Alias Classification Repair",
+    "release_commit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+    "release_blob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
     "validation_status": "LIVE_PASS"
   },
   "major_update": {
     "milestone": "2.0M",
     "phase": "M2",
-    "status": "M2_4_LIVE_PASS_M2_5_IMPLEMENTATION_MATERIALIZED_PENDING_PUBLICATION",
+    "status": "M2_5_LIVE_PASS_POST_M2_5_REVIEW_COMPLETE_M2_6_DESIGN_FROZEN",
     "m2_runtime_move_gate": "V0_63_55_REAL_LONG_CHAT_REPRESENTATION_FAST_RECONCILE_VALIDATED",
-    "runtime_refactor_authorized": true,
-    "checkpoint": "M2-4",
+    "runtime_refactor_authorized": false,
+    "checkpoint": "M2-5",
     "m2_1_release": {
       "version": "0.63.56",
       "scope": "mechanical recovery boundary split only",
@@ -41,12 +41,29 @@
       "static_validation": "PASS",
       "live_validation": "LIVE_PASS"
     },
-    "m2_5_candidate": {
+    "m2_5_release": {
       "version": "0.67.0",
+      "release_commit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+      "release_blob": "24c57d86b3533a89e675c5b598b0c4a3a4fef6fe",
       "scope": "Recovery Transition Debt Retirement",
-      "implementation_authorized": true,
-      "publication": "PENDING",
-      "live_validation": "PENDING"
+      "static_validation": "PASS",
+      "live_validation": "LIVE_PASS"
+    },
+    "post_m2_5_release": {
+      "version": "0.68.0",
+      "release_commit": "6b31a5265f67daf5a90222d6c08bb85f3abde538",
+      "release_blob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
+      "scope": "Community Parent-Local Alias Classification Repair",
+      "checkpoint": "M2-5",
+      "static_validation": "PASS",
+      "live_validation": "LIVE_PASS"
+    },
+    "next_selected_release": {
+      "version": "0.69.0",
+      "checkpoint": "M2-6",
+      "scope": "State Reconcile Ownership Extraction + Kernel Dependency Inversion",
+      "design_frozen": true,
+      "implementation_authorized": false
     }
   },
   "global_rules": [
@@ -82,8 +99,8 @@
   "modules": {
     "contracts": {"physical":"required","layer":"foundation","status":"current","owns":"architecture responsibility metadata","allowed_dependencies":[]},
     "store": {"physical":"required","layer":"foundation","status":"current_m2_4_housekeeping_owner","owns":"snapshot persistence, retention and deferred retention housekeeping mechanics","allowed_dependencies":[]},
-    "kernel": {"physical":"required","layer":"foundation","status":"transition_debt","owns":"current state schema plus shared primitives/normalization glue","allowed_dependencies":[],"transition_exceptions":["community","recurrence","lineage","handoff"],"transition_note":"M0-known inverted dependency debt; no new upward edge may be added."},
-    "community": {"physical":"required","layer":"domain","status":"current","owns":"COMMUNITY parsing and platform taxonomy","allowed_dependencies":[]},
+    "kernel": {"physical":"required","layer":"foundation","status":"transition_debt_selected_for_m2_6","owns":"current state schema plus shared primitives/normalization glue","allowed_dependencies":[],"transition_exceptions":["community","recurrence","lineage","handoff"],"transition_note":"Exact v0.68 production debt selected for M2-6; may not expand before extraction."},
+    "community": {"physical":"required","layer":"domain","status":"current_v3_parent_local_alias_repair","owns":"COMMUNITY parsing and platform taxonomy","allowed_dependencies":[]},
     "recurrence": {"physical":"required","layer":"domain","status":"current","owns":"bounded repeated request-template state","allowed_dependencies":[]},
     "lineage": {"physical":"required","layer":"domain","status":"current","owns":"request root parent depth source-chain state","allowed_dependencies":[]},
     "handoff": {"physical":"required","layer":"domain","status":"current","owns":"short-C source reuse and parent-shift observation","allowed_dependencies":[]},
@@ -93,9 +110,9 @@
     "lifecycle": {"physical":"required","layer":"domain","status":"current_request_domain_coordinator","owns":"broadcast lifecycle plus current cross-domain request preparation coordination","allowed_dependencies":["kernel","time","recurrence","lineage","handoff"]},
     "reaction": {"physical":"required","layer":"domain","status":"current","owns":"reaction parsing historical floors and deterministic normalization","allowed_dependencies":["community"]},
     "structure": {"physical":"required","layer":"validation","status":"current_judge_only","owns":"frame/envelope/COMMUNITY/Knowledge integrity and state-commit safety","allowed_dependencies":["kernel","community","reaction","lifecycle","time"]},
-    "recovery": {"physical":"retiring","retire_at_version":"0.67.0","layer":"application","status":"m2_5_retiring_at_0_67_zero_runtime_callers_proven","owns":"pre-v0.67 compatibility facade over output-compat and bootstrap-migration; absent at and after v0.67","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","output-compat","bootstrap-migration"],"m2_target":["v0_66_requires_physical_facade_for_exact_production_truth","v0_67_requires_physical_absence","no_replacement_barrel"]},
+    "recovery": {"physical":"retired","layer":"application","status":"retired_at_v0_67_zero_runtime_callers_proven","owns":"historical pre-v0.67 compatibility facade only; physically absent from current production","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","output-compat","bootstrap-migration"]},
     "prompt": {"physical":"required","layer":"application","status":"current","owns":"runtime prompt compilation and serialization","allowed_dependencies":["kernel","lifecycle","time","recurrence"]},
-    "session": {"physical":"required","layer":"application","status":"current_m2_4_narrowed_state_holder_orchestrator","owns":"session state holder plus bounded request/output/persistence sequencing","allowed_dependencies":["store","kernel","lifecycle","time","frame","community","reaction","structure","edit-reconcile","output-compat","bootstrap-migration","output-finalize","recurrence","prompt"],"m2_target":["edit_reconcile_extraction_completed_m2_3","recovery_runtime_callers_migrated_m2_4","recovery_dependency_declaration_retired_m2_5_candidate","output_finalization_extracted_m2_4","store_housekeeping_ownership_completed_m2_4"]},
+    "session": {"physical":"required","layer":"application","status":"current_m2_5_recovery_retired_state_holder_orchestrator","owns":"session state holder plus bounded request/output/persistence sequencing","allowed_dependencies":["store","kernel","lifecycle","time","frame","community","reaction","structure","edit-reconcile","output-compat","bootstrap-migration","output-finalize","recurrence","prompt"],"m2_target":["edit_reconcile_extraction_completed_m2_3","recovery_runtime_callers_migrated_m2_4","recovery_facade_retired_m2_5","output_finalization_extracted_m2_4","store_housekeeping_ownership_completed_m2_4","state_reconcile_consumer_switch_selected_for_m2_6"]},
     "ops": {"physical":"required","layer":"observability","status":"current_narrow","owns":"performance helpers and core diagnostic formatting","allowed_dependencies":[]},
     "runtime-contracts": {"physical":"required","layer":"runtime","status":"current","owns":"runtime cache/placement ownership declarations","allowed_dependencies":[]},
     "runtime-host": {"physical":"required","layer":"runtime","status":"current","owns":"host API adapter","allowed_dependencies":[]},
@@ -112,7 +129,7 @@
     "output-finalize": {"physical":"required","layer":"application","status":"current_m2_4_physical_owner","owns":"deterministic prepared-output to committed-state/content transition composition","allowed_dependencies":["kernel","time","frame","reaction","structure"]},
     "output-compat": {"physical":"required","layer":"application","status":"current_m2_4_envelope_and_fresh_candidate_interpretation","owns":"output envelope compatibility/canonicalization and bounded Fresh-confirmation candidate planning/interpretation metadata","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","representation"]},
     "bootstrap-migration": {"physical":"required","layer":"application","status":"current_m2_1_physical_owner","owns":"history bootstrap and legacy migration/repair coordination","allowed_dependencies":["kernel","store","lifecycle","time","community","reaction","structure","output-compat"]},
-    "state": {"physical":"deferred","layer":"foundation","status":"candidate_after_dependency_inversion_review","owns":"possible pure state schema/reconciliation seam","allowed_dependencies":[]}
+    "state": {"physical":"deferred","layer":"foundation","status":"generic_state_module_remains_deferred","owns":"possible pure state schema seam; not the selected M2-6 application state-reconcile owner","allowed_dependencies":[]}
   },
   "transition_policy": {
     "no_big_bang_refactor": true,
@@ -135,8 +152,10 @@
       "M2-1: Recovery mechanically split into output-compat + bootstrap-migration behind compatibility facade",
       "M2-2: Representation ownership split released",
       "M2-3: Edit Reconcile extraction + runtime identity convergence released and accepted LIVE_PASS",
-      "M2-4: Session / Runtime Mirror Boundary Completion released and accepted LIVE_PASS"
+      "M2-4: Session / Runtime Mirror Boundary Completion released and accepted LIVE_PASS",
+      "M2-5: Recovery facade retired in v0.67 and accepted LIVE_PASS"
     ],
-    "next_review": "M2-5 candidate publication and real-long-chat acceptance; Recovery must be absent at v0.67 while v0.66 production remains exactly represented"
+    "post_m2_5_review": "One additional structural checkpoint selected: M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion. No automatic M2-7.",
+    "next_review": "v0.69 implementation authorization after post-v0.68 architecture authority projection convergence"
   }
 }

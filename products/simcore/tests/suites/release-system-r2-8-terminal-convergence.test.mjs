@@ -37,6 +37,21 @@ function baseEvidence(record,receipt){
     authorityConfirmation:'HUMAN_EVIDENCE',
   };
 }
+function pendingBlock(evidence){
+  return [
+    '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->',
+    '## Current Release Live Gate',
+    '',
+    `- Release transaction: \`${evidence.releaseId}\``,
+    `- Production commit: \`${evidence.productionCommit}\``,
+    '- Validation status: `PENDING_REAL_LONG_CHAT`',
+    `- Current priority / live gate: \`${evidence.liveScenarioId}\``,
+    '- R lifecycle: `REAL_RELEASE_LIVE_PENDING`',
+    '',
+    'This block is machine-managed by `release-state-converge` from immutable publication evidence.',
+    '<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->',
+  ].join('\n');
+}
 function resolve({evidence,record,receipt,manifest,identity,development}){
   return resolveTerminalTransition({
     evidence,
@@ -54,10 +69,26 @@ export async function runSuite(){
   const assertions=[];
   const record=readJson(`products/simcore/releases/records/${RELEASE_ID}.json`);
   const receipt=readJson(`products/simcore/releases/state-receipts/${RELEASE_ID}.json`);
-  const manifest=readJson('product-manifest.json');
-  const development=fs.readFileSync(path.join(REPO,'docs/CURRENT_DEVELOPMENT.md'),'utf8');
+  const repositoryManifest=readJson('product-manifest.json');
   const identity=exactIdentity(record);
   const evidence=baseEvidence(record,receipt);
+
+  // Keep the positive fixture independent from the repository's current terminal state.
+  // repo-main-write verifies the staged post-projection payload, so using live repository
+  // manifest/CURRENT_DEVELOPMENT state here would make the pre-terminal positive fixture
+  // flip after a valid projection and block its own write.
+  const manifest={
+    ...repositoryManifest,
+    validation_status:'PENDING_REAL_LONG_CHAT',
+    current_priority:receipt.liveScenarioId,
+    major_update_checkpoint:evidence.checkpoint,
+  };
+  const development=`# Synthetic SimCore Current Development\n\n${pendingBlock(evidence)}\n`;
+
+  equal(manifest.validation_status,'PENDING_REAL_LONG_CHAT','positive fixture pins pre-terminal manifest state');
+  equal(manifest.current_priority,receipt.liveScenarioId,'positive fixture pins live scenario priority');
+  assert(development.includes('SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN'),'positive fixture pins pending development block');
+  pass(assertions,'R2.8-positive-fixture-state-independent');
 
   const eligible=resolve({evidence,record,receipt,manifest,identity,development});
   equal(eligible.disposition,'ELIGIBLE_TO_PROJECT','valid human evidence projects');
@@ -69,7 +100,7 @@ export async function runSuite(){
   equal(eligible.transition.expectedProductionCommit,record.productionCommit,'production CAS binding');
   equal(eligible.transition.evidence[0],HUMAN_DOC,'human evidence binding');
   const replacement=eligible.transition.documentReplacements[0];
-  assert(development.includes(replacement.from),'pending live block must be exact current state');
+  assert(development.includes(replacement.from),'pending live block must be exact synthetic state');
   assert(replacement.to.includes('REAL_RELEASE_LIVE_PASS'),'terminal live block lifecycle');
   pass(assertions,'R2.8-valid-human-evidence-eligible');
 

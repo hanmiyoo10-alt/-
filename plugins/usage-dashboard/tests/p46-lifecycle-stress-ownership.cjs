@@ -14,7 +14,7 @@ const refresh = fs.readFileSync(`${root}/src/30-refresh-runtime.part.js`, 'utf8'
 const release = assertCurrentReleaseArtifacts();
 
 assert.ok(release.productVersion.startsWith('3.0.0-alpha.'), 'P46 audit must read the current release dynamically');
-assert.equal(release.managerVersion, '1.3.0');
+assert.match(release.managerVersion, /^1\.3\.\d+$/, 'P46 must accept the current 1.3.x Manager authority; exact release identity is owned by the current-release contract');
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 

@@ -13,6 +13,7 @@ const RELEASE_END_RE = /<!-- SIMCORE_RELEASE_STATE:([^:]+):END -->/g;
 const SNAPSHOT_END = '<!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->';
 const HEX40 = /^[0-9a-f]{40}$/;
 const SAFE_GATE = /^[A-Za-z0-9_.:-]{1,128}$/;
+const MODES = new Set(['PERMANENT', 'RECOVERY', 'PREPUBLICATION_SIMULATION']);
 
 function fail(code, detail = '') {
   const e = new Error(detail ? `${code}: ${detail}` : code);
@@ -69,6 +70,11 @@ function validatePublicationInput(input) {
   if (!SAFE_GATE.test(input.liveScenarioId) || input.liveScenarioId === 'UNASSIGNED') fail('LIVE_PENDING_GATE_REQUIRED', input.liveScenarioId || 'missing');
   if (input.publisherRunId.length > 128 || /[\r\n\0]/.test(input.publisherRunId)) fail('STATE_CONVERGE_INPUT_INVALID', 'publisherRunId');
 }
+function resolveMode(value) {
+  const mode = value || 'PERMANENT';
+  if (!MODES.has(mode)) fail('R2_6_STATE_ENVELOPE_INVALID', `mode=${mode}`);
+  return mode;
+}
 function verifyObservedProduction(root, input, identityPath) {
   const identity = JSON.parse(fs.readFileSync(identityPath, 'utf8'));
   if (!identity || identity.schemaVersion !== 1 || identity.product !== 'SimCore' || identity.resolvedBranch !== 'release-simcore') fail('PUBLISHED_IDENTITY_NOT_OBSERVED', 'identity envelope');
@@ -91,9 +97,9 @@ function liveBlock(input) {
     '',
     `- Release transaction: \`${input.releaseId}\``,
     `- Production commit: \`${input.productionCommit}\``,
-    `- Validation status: \`PENDING_REAL_LONG_CHAT\``,
+    '- Validation status: `PENDING_REAL_LONG_CHAT`',
     `- Current priority / live gate: \`${input.liveScenarioId}\``,
-    `- R lifecycle: \`REAL_RELEASE_LIVE_PENDING\``,
+    '- R lifecycle: `REAL_RELEASE_LIVE_PENDING`',
     '',
     'This block is machine-managed by `release-state-converge` from immutable publication evidence.',
     LIVE_END,
@@ -119,7 +125,7 @@ function renderLiveBlock(file, input) {
   }
   writeTextAtomic(file, text);
 }
-function expectedReceipt(input, recordRel) {
+function expectedReceipt(input, recordRel, productionMutation) {
   return {
     schemaVersion:1,
     product:'SimCore',
@@ -132,7 +138,7 @@ function expectedReceipt(input, recordRel) {
     validationStatus:'PENDING_REAL_LONG_CHAT',
     lifecycleState:'REAL_RELEASE_LIVE_PENDING',
     releaseRecordPath:recordRel,
-    productionMutation:'ALREADY_PUBLISHED_UPSTREAM',
+    productionMutation,
     releaseAuthority:'RS2_4_PERMANENT',
     result:'PASS',
   };
@@ -147,10 +153,38 @@ function persistReceipt(file, expected) {
   }
   writeJsonAtomic(file, expected);
 }
+function persistentManifest(root, paths) {
+  return paths.map((rel) => {
+    const file = under(root, rel);
+    if (!fs.existsSync(file)) fail('R2_6_STATE_ENVELOPE_INVALID', `persistent member missing ${rel}`);
+    return { path: rel, required: true, sha256: sha256(fs.readFileSync(file)) };
+  });
+}
+
+export function validatePostPublishStateEnvelope(envelope) {
+  if (!envelope || envelope.schemaVersion !== 1 || envelope.envelopeKind !== 'PostPublishStateEnvelope') fail('R2_6_STATE_ENVELOPE_INVALID', 'schema');
+  if (!MODES.has(envelope.mode)) fail('R2_6_STATE_ENVELOPE_INVALID', 'mode');
+  for (const k of ['releaseId','releaseAuthority','productionCommit','previousProductionCommit','productionBlob','version','releaseName','publisherRunId','liveScenarioId','validationStatus','lifecycleState','rLifecycleState','disposition','stateReceiptPath','releaseRecordPath','productionMutation','mainMutation']) {
+    if (typeof envelope[k] !== 'string' || !envelope[k]) fail('R2_6_STATE_ENVELOPE_INVALID', k);
+  }
+  if (envelope.releaseAuthority !== 'RS2_4_PERMANENT') fail('R2_6_STATE_ENVELOPE_INVALID', 'releaseAuthority');
+  for (const k of ['productionCommit','previousProductionCommit','productionBlob']) if (!HEX40.test(envelope[k])) fail('R2_6_STATE_ENVELOPE_INVALID', k);
+  if (envelope.validationStatus !== 'PENDING_REAL_LONG_CHAT' || envelope.lifecycleState !== 'LIVE_PENDING' || envelope.rLifecycleState !== 'REAL_RELEASE_LIVE_PENDING') fail('R2_6_STATE_ENVELOPE_INVALID', 'lifecycle');
+  if (!Array.isArray(envelope.persistentPayloadManifest) || envelope.persistentPayloadManifest.length === 0) fail('R2_6_STATE_ENVELOPE_INVALID', 'persistentPayloadManifest');
+  const seen = new Set();
+  for (const row of envelope.persistentPayloadManifest) {
+    if (!row || typeof row.path !== 'string' || row.required !== true || !/^[0-9a-f]{64}$/.test(row.sha256 || '') || seen.has(row.path)) fail('R2_6_STATE_ENVELOPE_INVALID', 'persistent member');
+    seen.add(row.path);
+  }
+  if (!Array.isArray(envelope.changedPaths) || envelope.changedPaths.some((p) => typeof p !== 'string' || !seen.has(p)) || new Set(envelope.changedPaths).size !== envelope.changedPaths.length) fail('R2_6_STATE_ENVELOPE_INVALID', 'changedPaths');
+  if (!envelope.expectedDurableClaims || typeof envelope.expectedDurableClaims !== 'object') fail('R2_6_STATE_ENVELOPE_INVALID', 'expectedDurableClaims');
+  return envelope;
+}
 
 export function run(argv = process.argv.slice(2)) {
   const a = parseArgs(argv);
   for (const k of ['root','input','production-identity','report']) if (!a[k]) fail('STATE_CONVERGE_ARGS_INVALID', k);
+  const mode = resolveMode(a.mode);
   const root = path.resolve(a.root);
   const manifestRel = a.manifest || 'product-manifest.json';
   const targetsRel = a.targets || 'products/simcore/state-sync/target-registry.json';
@@ -198,9 +232,9 @@ export function run(argv = process.argv.slice(2)) {
   ];
   if (a.probes !== 'NONE' && fs.existsSync(under(root, probesRel))) syncBase.push('--probes', probesRel);
   const writeResult = syncRun(['--write', ...syncBase, '--report', writeReportRel]);
-  if (writeResult.exitCode !== 0) fail('STATE_SYNC_RENDER_FAILED', writeResult.result);
+  if (writeResult.exitCode !== 0) fail(mode === 'PREPUBLICATION_SIMULATION' ? 'R2_6_PREPLAY_STATE_RENDER_FAIL' : 'STATE_SYNC_RENDER_FAILED', writeResult.result);
   const checkResult = syncRun(['--check', ...syncBase, '--report', checkReportRel]);
-  if (checkResult.exitCode !== 0) fail('MAIN_STATE_REPLAY_DRIFT', checkResult.result);
+  if (checkResult.exitCode !== 0) fail(mode === 'PREPUBLICATION_SIMULATION' ? 'R2_6_PREPLAY_STATE_RENDER_FAIL' : 'MAIN_STATE_REPLAY_DRIFT', checkResult.result);
 
   const recordPath = under(root, recordRel);
   const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
@@ -212,33 +246,68 @@ export function run(argv = process.argv.slice(2)) {
   writeJsonAtomic(recordPath, record);
 
   renderLiveBlock(under(root, developmentRel), input);
-  const receipt = expectedReceipt(input, recordRel);
+  const productionMutation = mode === 'PREPUBLICATION_SIMULATION' ? 'NONE' : 'ALREADY_PUBLISHED_UPSTREAM';
+  const receipt = expectedReceipt(input, recordRel, productionMutation);
   persistReceipt(under(root, receiptRel), receipt);
 
   const finalCheck = syncRun(['--check', ...syncBase, '--report', finalCheckReportRel]);
-  if (finalCheck.exitCode !== 0) fail('MAIN_STATE_REPLAY_DRIFT', finalCheck.result);
+  if (finalCheck.exitCode !== 0) fail(mode === 'PREPUBLICATION_SIMULATION' ? 'R2_6_PREPLAY_STATE_RENDER_FAIL' : 'MAIN_STATE_REPLAY_DRIFT', finalCheck.result);
 
   const after = Object.fromEntries(managed.map((rel) => [rel, hashOrMissing(under(root, rel))]));
   const changedPaths = managed.filter((rel) => before[rel] !== after[rel]);
   const already = changedPaths.length === 0;
+  const payloadManifest = persistentManifest(root, managed);
+  const expectedDurableClaims = {
+    releaseId: input.releaseId,
+    releaseAuthority: 'RS2_4_PERMANENT',
+    productionCommit: input.productionCommit,
+    previousProductionCommit: input.previousProductionCommit,
+    productionBlob: input.productionBlob,
+    version: input.version,
+    releaseName: input.releaseName,
+    publisherRunId: input.publisherRunId,
+    liveScenarioId: input.liveScenarioId,
+    validationStatus: 'PENDING_REAL_LONG_CHAT',
+    lifecycleState: 'LIVE_PENDING',
+    rLifecycleState: 'REAL_RELEASE_LIVE_PENDING',
+    receiptResult: 'PASS',
+    currentPriority: input.liveScenarioId,
+  };
+  const disposition = mode === 'PREPUBLICATION_SIMULATION'
+    ? (already ? 'PREPLAY_ALREADY_EQUIVALENT' : 'PREPLAY_PASS')
+    : (already ? 'ALREADY_CONVERGED' : 'LIVE_PENDING_PAYLOAD_READY');
   const result = {
     schemaVersion:1,
+    envelopeKind:'PostPublishStateEnvelope',
     tool:'release-state-converge',
-    releaseAuthority:'RS2_4_PERMANENT',
-    productionMutation:'ALREADY_PUBLISHED_UPSTREAM',
-    mainMutation:already ? 'NONE' : 'LOCAL_PAYLOAD_PENDING_GATEWAY',
+    mode,
     releaseId:input.releaseId,
+    releaseAuthority:'RS2_4_PERMANENT',
+    productionCommit:input.productionCommit,
+    previousProductionCommit:input.previousProductionCommit,
+    productionBlob:input.productionBlob,
+    version:input.version,
+    releaseName:input.releaseName,
+    publisherRunId:input.publisherRunId,
+    liveScenarioId:input.liveScenarioId,
+    validationStatus:'PENDING_REAL_LONG_CHAT',
+    lifecycleState:'LIVE_PENDING',
+    rLifecycleState:'REAL_RELEASE_LIVE_PENDING',
+    disposition,
+    persistentPayloadManifest:payloadManifest,
+    changedPaths,
+    stateReceiptPath:receiptRel,
+    releaseRecordPath:recordRel,
+    expectedDurableClaims,
+    productionMutation,
+    mainMutation:mode === 'PREPUBLICATION_SIMULATION' ? 'SIMULATION_ONLY' : (already ? 'NONE' : 'LOCAL_PAYLOAD_PENDING_GATEWAY'),
     production:observed,
     declaration:declaration.status,
     stateSync:finalCheck.result,
     currentPriority:input.liveScenarioId,
-    lifecycleState:'LIVE_PENDING',
-    rLifecycleState:'REAL_RELEASE_LIVE_PENDING',
-    stateReceiptPath:receiptRel,
-    disposition:already ? 'ALREADY_CONVERGED' : 'LIVE_PENDING_PAYLOAD_READY',
     persistentPayloadAllowlist:managed,
-    changedPaths,
   };
+  validatePostPublishStateEnvelope(result);
   writeJsonAtomic(reportPath, result);
   return result;
 }

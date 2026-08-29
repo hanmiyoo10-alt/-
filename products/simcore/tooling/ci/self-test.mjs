@@ -269,8 +269,8 @@ ok('post-publish-state-shadow-deterministic-tests', () => {
 
 ok('post-publish-state-permanent-deterministic-tests', () => {
   const r=spawnSync(process.execPath,['products/simcore/tests/post-publish-state-permanent.test.mjs'],{encoding:'utf8',timeout:180000,maxBuffer:1024*1024});
-  expect(r.status===0,`RS2-4E permanent state tests failed: ${r.stderr || r.stdout}`);
-  expect(String(r.stdout).includes('RS2_4E_POST_PUBLISH_STATE_PERMANENT_TEST_PASS P1-P5'),'RS2-4E permanent state pass marker missing');
+  expect(r.status===0,`R2.6 permanent state tests failed: ${r.stderr || r.stdout}`);
+  expect(String(r.stdout).includes('RS2_6_POST_PUBLISH_BOUNDARY_TEST_PASS'),'R2.6 permanent state pass marker missing');
 });
 
 ok('release-declaration-transition-deterministic-tests', () => {

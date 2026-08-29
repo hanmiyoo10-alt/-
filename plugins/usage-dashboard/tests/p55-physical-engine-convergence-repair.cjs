@@ -10,6 +10,7 @@ const {discoverTests} = require('./registry.cjs');
 
 const root = 'plugins/usage-dashboard';
 const pluginCore = fs.readFileSync(`${root}/src/00-runtime-core.part.js`, 'utf8');
+const pluginBridgeIo = fs.readFileSync(`${root}/src/20-bridge-io.part.js`, 'utf8');
 const engineCore = fs.readFileSync(`${root}/runtime-src/bridge-engine/00-core.part.mjs`, 'utf8');
 const engineBytes = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`);
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
@@ -59,9 +60,9 @@ for (const marker of [
   "const rollback = await startManagedCandidate(previous);",
 ]) assert.ok(manager.includes(marker), `P55 Manager exact-version convergence marker missing: ${marker}`);
 
-// Plugin reconciliation must not silently hide a live Engine mismatch behind bundleAvailable.
+// Plugin reconciliation must follow current modular ownership and must not silently hide a live Engine mismatch behind bundleAvailable.
 assert.equal(
-  pluginCore.includes("if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;"),
+  pluginBridgeIo.includes("if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;"),
   false,
   'P55 old silent bundleAvailable top-level gate must be removed',
 );
@@ -74,12 +75,12 @@ for (const marker of [
   "engineBundleSyncState:'target-missing'",
   "engineBundleSyncState:'target-mismatch'",
   "retry until the exact required Engine is running",
-]) assert.ok(pluginCore.includes(marker), `P55 Plugin convergence marker missing: ${marker}`);
+]) assert.ok(pluginBridgeIo.includes(marker), `P55 Plugin convergence marker missing: ${marker}`);
 
-const syncStart = pluginCore.indexOf('async function syncBridgeEngineBundleIfNeeded(status)');
-const syncEnd = pluginCore.indexOf('async function refresh(', syncStart);
+const syncStart = pluginBridgeIo.indexOf('async function syncBridgeEngineBundleIfNeeded(status)');
+const syncEnd = pluginBridgeIo.length;
 assert.ok(syncStart >= 0 && syncEnd > syncStart, 'P55 Plugin bundle sync boundary missing');
-const syncBlock = pluginCore.slice(syncStart, syncEnd);
+const syncBlock = pluginBridgeIo.slice(syncStart, syncEnd);
 assert.ok(syncBlock.indexOf('fetchBridgeManagerStatus(true)') < syncBlock.indexOf("engineBundleSyncState:'capability-missing'"),
   'P55 must force one fresh Manager probe before declaring bundle capability missing');
 assert.ok(syncBlock.includes('/engine/sync'), 'P55 must retain canonical Manager engine sync endpoint');

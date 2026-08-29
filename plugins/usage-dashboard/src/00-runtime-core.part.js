@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.85
+//@version 3.0.0-alpha.5.86
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.85';
+  const VERSION = '3.0.0-alpha.5.86';
   const RELEASE_NOTES = Object.freeze({
-    title: "LLM Gateway CLI 1.10.0 Managed Runtime Upgrade",
+    title: "Managed CLI Engine/Manager Pin Parity Repair",
     highlights: Object.freeze([
-    "관리형 LLM Gateway CLI 고정 버전을 1.9.0에서 1.10.0으로 업데이트",
-    "managed-direct → direct → npx fallback 런처 순서와 기존 캡처 경로는 그대로 유지",
-    "데이터 의미·UNKNOWN 규칙·요청 identity·refresh 동작은 변경하지 않음"
+    "Bridge Manager의 관리형 LLM Gateway CLI target을 Engine과 동일한 1.10.0으로 정렬",
+    "Engine 1.6.26과 기존 managed-direct → direct → npx fallback 순서는 그대로 유지",
+    "기존 1.9.0 managed descriptor/runtime은 1.10.0 target에서 stale로 처리되어 정상 provisioning 경로로 복구"
     ]),
     diagnosticHints: Object.freeze([
-    "Managed CLI가 준비된 환경에서 diagnostics version이 1.10.0인지 확인",
-    "일반 새로고침에서 DevPass/Credits/Request Ledger가 기존처럼 source-backed로 채워지는지 확인",
-    "active errors/failures가 0이고 CLI/network/refresh 소유권이 늘지 않았는지 확인",
-    "managed provisioning 실패 시 우회하거나 추정하지 말고 diagnostics 증거만 수집"
+    "업데이트 후 Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok인지 확인",
+    "정상 acceptance capture에서 managed-direct가 사용되고 direct ENOENT/npx-fallback이 0인지 확인",
+    "Organizations/DevPass/Credits/Request Ledger와 source-truth 규칙이 기존과 동일한지 확인",
+    "provisioning 실패 시 수동 CLI 설치를 요구하지 말고 diagnostics 증거만 수집"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,6 +41,7 @@
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
   const REQUIRED_BRIDGE_VERSION = '1.6.26';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.1';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;

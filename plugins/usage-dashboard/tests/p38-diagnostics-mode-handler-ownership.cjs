@@ -18,7 +18,7 @@ const latestPath = `${root}/latest.js`;
 const release = assertCurrentReleaseArtifacts();
 const lineage = /^3\.0\.0-alpha\.5\.(\d+)$/.exec(release.productVersion);
 assert.ok(lineage && Number(lineage[1]) >= 74, 'P38 applies to alpha.5 build 74 and later');
-assert.equal(release.managerVersion, '1.3.0');
+assert.match(release.managerVersion, /^1\.3\.\d+$/, 'P38 must accept the current 1.3.x Manager authority; exact release identity is owned by the current-release contract');
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 

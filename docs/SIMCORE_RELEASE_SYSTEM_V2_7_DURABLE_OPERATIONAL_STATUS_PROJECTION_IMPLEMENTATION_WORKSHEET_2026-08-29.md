@@ -58,6 +58,27 @@ The gateway-generated status commit is not in the workflow path filter, preventi
 
 ## Validation ledger
 
-No anomalies yet.
+### FIX · RESOLVED · REPO_WRITE_IDENTITY — stale GitHub contents blob SHA
 
-Any discovered anomaly must be classified immediately as WATCH / DEFER / FIX / BLOCKER before continuing.
+The first attempt to update the R2.7 living status on the implementation branch used a blob SHA observed from the predecessor/main state rather than the exact current branch blob identity. GitHub correctly rejected the contents write with HTTP 409.
+
+Resolution:
+
+```text
+re-read exact implementation-branch status blob
+→ bind update to branch blob SHA
+→ continue without semantic changes
+```
+
+Classification:
+
+```text
+R2_7_STATUS_PROJECTION_REPO_WRITE_IDENTITY = FIX / RESOLVED
+semantic impact = NONE
+runtime impact = NONE
+release-simcore impact = NONE
+```
+
+This is repository write identity hygiene only and does not change the projection design or authority model.
+
+Any new anomaly must be classified immediately as WATCH / DEFER / FIX / BLOCKER before continuing.

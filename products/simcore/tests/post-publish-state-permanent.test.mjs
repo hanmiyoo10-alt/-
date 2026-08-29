@@ -110,10 +110,14 @@ function testPermanentEnvelope(base) {
 }
 function testPrepublicationSimulation(base) {
   const root=path.join(base,'preplay'); fs.mkdirSync(root); const f=initFixture(root);
-  const r=sh(root,process.execPath,[PREPLAY,'--root','.', '--input','.input.json','--production-identity','.identity.json','--writer-policy','products/simcore/state-sync/writer-policy.json','--probes','NONE','--report','.simcore-release/preplay-report.json']);
+  const r=sh(base,process.execPath,[PREPLAY,'--root',root,'--input','.input.json','--production-identity','.identity.json','--writer-policy','products/simcore/state-sync/writer-policy.json','--probes','NONE','--report','.simcore-release/preplay-report.json']);
   if(r.status!==0) throw new Error(`preplay failed ${r.stderr}`);
   const p=readJson(root,'.simcore-release/preplay-report.json');
   if(p.result!=='RS2_6_POST_PUBLISH_PREPLAY_PASS'||p.productionMutation!=='NONE'||p.publicationDispatch!=='BLOCKED_UNTIL_PREPLAY_PASS') throw new Error(`preplay report ${JSON.stringify(p)}`);
+  for(const rel of ['.simcore-release/state-converge/sync-write-report.json','.simcore-release/state-converge/sync-check-report.json','.simcore-release/state-converge/sync-final-check-report.json']) {
+    if(!fs.existsSync(path.join(root,rel))) throw new Error(`cross-root preplay report missing ${rel}`);
+    if(fs.existsSync(path.join(base,rel))) throw new Error(`cross-root preplay report escaped declared root ${rel}`);
+  }
   const receipt=readJson(root,`products/simcore/releases/state-receipts/${f.input.releaseId}.json`);
   if(receipt.productionMutation!=='NONE') throw new Error('preplay receipt acquired publication truth');
 }
@@ -169,7 +173,7 @@ function main() {
     testMarkerMismatch(base);
     testSharedWorkflowBoundaryStatic();
     testAuthorityStatic();
-    console.log('RS2_6_POST_PUBLISH_BOUNDARY_TEST_PASS ENVELOPE + PREPLAY + SHARED_GATE + SHARED_REOBSERVE + RECOVERY_PARITY');
+    console.log('RS2_6_POST_PUBLISH_BOUNDARY_TEST_PASS ENVELOPE + PREPLAY_CROSS_ROOT + SHARED_GATE + SHARED_REOBSERVE + RECOVERY_PARITY');
   } finally { fs.rmSync(base,{recursive:true,force:true}); }
 }
 

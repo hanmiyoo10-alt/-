@@ -1,8 +1,8 @@
-# SimCore v0.67.0 Stage A warm continuity + cross-version Host-local negative control
+# SimCore v0.67.0 Stage A warm continuity + refresh-boundary Host-local negative control
 
 Date: 2026-08-29 KST
 
-Status: **STAGE A PASS · TWO NATURAL A TURNS · CROSS-VERSION HOST-LOCAL INCOMPATIBLE FAIL-CLOSED OBSERVED · STAGE B RELOAD ADOPTION STILL PENDING**
+Status: **STAGE A PASS · TWO NATURAL A TURNS · ACTUAL POST-REFRESH HOST-LOCAL INCOMPATIBLE FAIL-CLOSED OBSERVED · STAGE B SATISFIED BY SAFE FAIL-CLOSED RELOAD PATH**
 
 ## Scope
 
@@ -31,9 +31,18 @@ hook cleanup: NAMED
 
 This matches the published v0.67 line.
 
-## Packet 0 — stale diagnostic excluded from current-turn correctness
+## Operator clarification — first visible turn was post-refresh
 
-The first supplied diagnostic reports:
+The operator clarified after the initial evidence review:
+
+```text
+@2400 → @2401
+= first natural request after an actual same-tab refresh
+```
+
+This changes the interpretation of the first supplied STALE diagnostic.
+
+The diagnostic still cannot be used as a current-turn request correctness specimen because it reports:
 
 ```text
 Probe context: STALE
@@ -45,9 +54,9 @@ Runtime status: n/a
 Stability: NOT_EXERCISED
 ```
 
-Therefore it is not used as a current-turn correctness specimen.
+However, because @2400→@2401 is now operator-confirmed as the first natural post-refresh turn, its boot/telemetry fields are direct reload-boundary evidence rather than incidental boot context.
 
-However, it contains valid boot/telemetry evidence:
+Observed:
 
 ```text
 Telemetry continuity: FRESH · host-local-incompatible
@@ -59,22 +68,26 @@ HOST_LOCAL WRITTEN
 Interpretation:
 
 ```text
-pre-v0.67 / incompatible host-local checkpoint encountered at v0.67 boot
-→ adoption refused
-→ no unsafe carryover
-→ fresh current-version checkpoint written
+actual same-tab refresh
+→ available Host-local checkpoint rejected as incompatible
+→ no unsafe adoption
+→ fresh v0.67 checkpoint written
+→ next same-generation natural request can be evaluated for ordinary continuation
 ```
 
 Classification:
 
 ```text
-06700_CROSS_VERSION_HOST_LOCAL_INCOMPATIBLE_NEGATIVE_CONTROL
+06700_REFRESH_BOUNDARY_HOST_LOCAL_INCOMPATIBLE_NEGATIVE_CONTROL
 = PASS
+= DIRECT OPERATOR-CONFIRMED REFRESH EVIDENCE
 = FAIL_CLOSED
-= NOT A STAGE B POSITIVE ADOPTION
+= SAFE RELOAD OUTCOME
 ```
 
-## Stage A specimen 1 — @2402 → @2403
+This is not a positive `ADOPTED via host-local` specimen. It is instead the truthful safe fail-closed branch explicitly allowed by the frozen Stage B design.
+
+## Stage A specimen 1 / Stage B continuation control — @2402 → @2403
 
 Observed:
 
@@ -146,6 +159,8 @@ HOST_LOCAL WRITTEN
 ```
 
 No missing Recovery reference, bootstrap fault, output-owner fault or mirror fault is present.
+
+Because this is the next natural request in the same generation after the operator-confirmed refresh-boundary turn, it also satisfies the Stage B requirement that the next same-generation request continue normally after a truthful safe fail-closed reload result.
 
 ## Stage A specimen 2 — @2404 → @2405
 
@@ -266,44 +281,71 @@ Classification:
 = DIRECT LIVE PROVEN
 ```
 
+## Stage B verdict after operator clarification
+
+Frozen Stage B accepts either:
+
+```text
+compatible Host-local adoption
+OR
+truthful safe cold/fail-closed result
+```
+
+provided the next same-generation request continues normally and no missing-module/bootstrap initialization fault appears.
+
+Observed ordered sequence:
+
+```text
+same-tab refresh confirmed by operator
+→ first natural post-refresh turn @2400→@2401
+→ Host-local INCOMPATIBLE / FRESH fail-closed
+→ fresh v0.67 HOST_LOCAL WRITTEN
+→ next natural request @2402→@2403 in same generation
+→ LOCATION_REUSE
+→ SAME_FAST
+→ Prior EXACT
+→ FRESH_EXACT_CARRYOVER
+→ output EXACT
+→ mirror COMMITTED
+→ warnings 0
+→ no Recovery/bootstrap fault
+```
+
+Therefore:
+
+```text
+06700_STAGE_B_RELOAD_BOOTSTRAP_SAFE_FAIL_CLOSED
+= PASS
+= DIRECT LIVE PROVEN
+= POSITIVE ADOPTION NOT REQUIRED BY FROZEN CONTRACT
+```
+
+A later natural `ADOPTED via host-local` v0.67→v0.67 specimen remains welcome bonus evidence, not a release blocker.
+
 ## Current live matrix
 
 ```text
 Stage A ordinary warm continuity                 PASS
-Cross-version Host-local incompatible negative   PASS / bonus
-Stage B same-tab reload/bootstrap positive       PENDING
+Stage B reload/bootstrap safe fail-closed        PASS
+Host-local positive adoption                     BONUS / NOT REQUIRED
 Stage C natural M2 positive-control sampling     OPPORTUNISTIC
 Stage D natural domain coverage                  OPPORTUNISTIC
 ```
 
 ## Next bounded action
 
-The current v0.67 generation has written fresh current-version Host-local checkpoints repeatedly.
+No additional forced reload is required to satisfy M2-5's frozen live contract.
 
-Perform an intentional same-tab refresh while the checkpoint is still within the normal compatibility TTL, then capture:
-
-1. first natural request after refresh + diagnostic;
-2. second natural request in the same new generation + diagnostic.
-
-Expected positive path when eligible:
+Continue ordinary long-chat use. Preserve any naturally occurring:
 
 ```text
-new runtime generation
-Telemetry continuity ADOPTED via host-local
-from 0.67.0
-boot CONSUMED
-bounded precision truthful
-new HOST_LOCAL WRITTEN
+v0.67 → v0.67 Host-local ADOPTED specimen
+representation fast reconcile
+genuine visible edit control
+THOUGHTS / COMMUNITY / B lifecycle coverage
+existing deferred WATCH recurrence
 ```
 
-Then on the second request:
+as bonus evidence.
 
-```text
-LOCATION_REUSE
-ordinary SAME_FAST / exact carryover when eligible
-output COMMITTED
-mirror COMMITTED
-no bootstrap or missing-module fault
-```
-
-If the checkpoint is instead stale/incompatible, record the truthful fail-closed result and restage a fresh checkpoint before attempting the positive adoption proof. Do not fake eligibility.
+Do not manufacture rare branches solely to increase coverage.

@@ -22,7 +22,8 @@ export const registry = Object.freeze([
   { id: 'release-approval', module: './suites/release-approval.test.mjs', fixtureDir: 'release-approval', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'release-system-r2-6', module: './suites/release-system-r2-6.test.mjs', fixtureDir: 'release-system-r2-6', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'release-system-r2-7', module: './suites/release-system-r2-7.test.mjs', fixtureDir: 'release-system-r2-7', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'release-system-r2-7-status-projection', module: './suites/release-system-r2-7-status-projection.test.mjs', fixtureDir: 'release-system-r2-7-status-projection', coverage: 'EXECUTABLE', required: true, goldenGate: true }
+  { id: 'release-system-r2-7-status-projection', module: './suites/release-system-r2-7-status-projection.test.mjs', fixtureDir: 'release-system-r2-7-status-projection', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'release-system-r2-8-terminal-convergence', module: './suites/release-system-r2-8-terminal-convergence.test.mjs', fixtureDir: 'release-system-r2-8-terminal-convergence', coverage: 'EXECUTABLE', required: true, goldenGate: true }
 ]);
 
 export const packAliases = Object.freeze({

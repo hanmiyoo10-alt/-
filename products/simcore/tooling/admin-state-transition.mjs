@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ALLOWED_FIELDS = new Set(['validation_status', 'current_priority']);
+const ALLOWED_FIELDS = new Set(['validation_status', 'current_priority', 'major_update_checkpoint']);
 const ALLOWED_DOCUMENT_PATHS = new Set(['docs/CURRENT_DEVELOPMENT.md']);
 const IDENTITY_FIELDS = ['production_version', 'release_name', 'release_branch', 'release_commit', 'release_blob'];
 const TOP_LEVEL_KEYS = new Set([

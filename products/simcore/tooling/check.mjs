@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { selectArchitectureContract } from './ci/architecture-contract-select.mjs';
 
 const ROOT = process.cwd();
 const PROFILES = new Set(['PR_MAIN', 'MAIN_HEALTH', 'CANDIDATE_SHADOW', 'CANDIDATE_REQUIRED']);
@@ -143,9 +144,15 @@ function main() {
     }
     setGate('GATE_STATIC', classification);
   }
+  let architectureContract = null;
   if (plan.GATE_ARCH) {
-    const r = run('python3', ['scripts/simcore-architecture-check.py','--source',sourcePath,'--source',mirrorPath], 120000);
-    setGate('GATE_ARCH', resultClass(r, 'ARCH_CONTRACT_FAIL', 'ARCH_GATE_ERROR'), r);
+    try {
+      architectureContract = selectArchitectureContract({ root: ROOT, source: sourcePath, mirrorSource: mirrorPath });
+      const r = run('python3', ['scripts/simcore-architecture-check.py','--contract',architectureContract.contract,'--source',sourcePath,'--source',mirrorPath], 120000);
+      setGate('GATE_ARCH', resultClass(r, 'ARCH_CONTRACT_FAIL', 'ARCH_GATE_ERROR'), r);
+    } catch (error) {
+      setGate('GATE_ARCH', { status:'INFRA_ERROR', reasonCode:error?.code || 'ARCH_CONTRACT_SELECT_ERROR' }, { status:2, signal:null, error:null, stdout:'', stderr:String(error?.message || error) });
+    }
   }
   if (plan.GATE_REGRESSION) {
     const r = run(process.execPath, ['products/simcore/tooling/test.mjs','--source',sourcePath,'--suite','batch-a','--report','.simcore-ci/regression.json'], 240000);
@@ -190,6 +197,7 @@ function main() {
     prHeadCommit:args['pr-head-commit'] || null,
     scopeLabels:scope.labels || [],
     gates:Object.values(gates),
+    architectureContract:architectureContract ? { version:architectureContract.version, path:architectureContract.contract, transitional:architectureContract.transitional } : null,
     stateCheck:gates.GATE_STATE.status === 'NOT_APPLICABLE' ? 'NOT_APPLICABLE' : gates.GATE_STATE.status,
     observationIds:[...new Set(observations)],
     sourceDigests:{ latestSha256:sha256(sourceBytes), installSha256:sha256(mirrorBytes), bytes:sourceBytes.length },

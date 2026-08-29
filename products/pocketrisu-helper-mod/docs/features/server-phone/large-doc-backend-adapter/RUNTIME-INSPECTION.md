@@ -78,6 +78,18 @@ Deployment boundary decision:
 - keep runtime code location and editable workspace location separate;
 - prefer a dedicated subdirectory below shared `Documents` as the eventual workspace, subject to a read/write/access inspection before creation or service installation.
 
+### Shared Documents access check
+
+`$HOME/storage/shared/Documents` resolved to `/storage/emulated/0/Documents` and passed all three shell permission checks:
+
+- readable: YES
+- writable: YES
+- traversable: YES
+
+A depth-2 scan for currently eligible large-doc suffixes (`.txt`, `.md`, `.log`, `.json`) returned `0` files.
+
+This makes a new dedicated child workspace under shared Documents a low-blast-radius default candidate. However, one path-display discrepancy was observed during inspection: `realpath` resolved the plural `Documents` target while `ls -ld` output appeared to end in singular `Document`. Treat this as unresolved path/symlink presentation until `readlink/stat` confirms the exact target; do not create the workspace before that check.
+
 ## Interpretation
 
 Current evidence supports: **large-doc is not presently deployed/registered as a server-phone runtime service**.

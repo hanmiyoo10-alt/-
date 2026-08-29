@@ -757,3 +757,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/11bb826830505ff6d0c1fdb16f918dd70e12f459)
 - Event ID: `365017e2cd883f5a624a106f74d856c3ba0a3fd3778dff525c3964c735f1f6a8`
 <!-- canonical-main-doc-promoted:365017e2cd883f5a624a106f74d856c3ba0a3fd3778dff525c3964c735f1f6a8 -->
+
+### 2026-08-30 — Merge pull request #865 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.89
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `33431e64444f71f9f9a9131d8e720d9c41b0edca`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/33431e64444f71f9f9a9131d8e720d9c41b0edca)
+- Event ID: `c08034ab83c68411711bb568bd9973974eb4836475b93899f5fc30e0e345ad81`
+<!-- canonical-main-doc-promoted:c08034ab83c68411711bb568bd9973974eb4836475b93899f5fc30e0e345ad81 -->

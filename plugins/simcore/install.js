@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.67.0
+//@version 0.68.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.68.0 Community Parent-Local Alias Classification Repair:
+// - Repairs the recurrent Community classifier miss for parent/local descriptors that appear after a bounded platform-header separator
+// - Keeps exact PLATFORM_FAMILIES authoritative and adds descriptor evidence only when one descriptor contains both a strong parent/audience token and a community-shaped token
+// - Advances COMMUNITY_CLASSIFIER_VERSION from 2 to 3 so the existing bounded 12-assistant / 48-message migration can reconstruct recent reaction maxima under canonical key 맘카페
+// - Keeps Structure judge semantics, Reaction grammar, persistent schema, provider/cache policy and all unrelated runtime owners unchanged
+// - Keeps latest.js and install.js byte-identical and uses deterministic classifier/migration regression as authority for the nondeterministic target label, with ordinary real long-chat continuity after publication
 //
 // v0.67.0 M2-5 Recovery Transition Debt Retirement:
 // - Removes the zero-runtime-caller Recovery compatibility facade after v0.66 live acceptance and exact source/seam re-audit
@@ -685,7 +692,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.67.0';
+const SIMCORE_RUNTIME_VERSION = '0.68.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -911,7 +918,7 @@ module.exports = { SnapshotStore };
 
 SimCore.define("community", function (require, module, exports) {
 const COMMUNITY_RE = /<COMMUNITY(?:\s[^>]*)?>[\s\S]*?<\/COMMUNITY>/gi;
-const COMMUNITY_CLASSIFIER_VERSION = 2;
+const COMMUNITY_CLASSIFIER_VERSION = 3;
 const ALIAS_BACKFILL_ASSISTANT_LIMIT = 12;
 const ALIAS_BACKFILL_MESSAGE_LIMIT = 48;
 
@@ -939,16 +946,21 @@ function parentLocalAliasInfo(shown) {
   // Keep it deliberately narrow: require both a parent/local identity and a community-shaped signal.
   const text = String(shown || '').trim();
   if (!text) return null;
-  const namePart = text.split(/[\/|｜]/, 1)[0].trim();
+  const segments = text.split(/[\/|｜]/).map((part) => part.trim()).filter(Boolean);
+  const namePart = segments[0] || '';
+  const descriptorParts = segments.slice(1);
   const compactName = namePart.replace(/\s+/g, '');
 
   const regionalMom = /^[가-힣A-Za-z0-9]{1,16}맘(?:$|[\s_\-–—])/i.test(namePart);
   const regionalParentWord = /^[가-힣A-Za-z0-9]{1,16}(?:엄마들?|어머님들?|학부모들?)$/i.test(compactName);
   const explicitParentWord = /(?:^|[\s_\-–—])(?:맘|엄마들?|어머님들?|학부모들?|육아맘)(?:$|[\s_\-–—])/i.test(namePart);
   const attachedMomCommunity = /(?:^|[가-힣A-Za-z0-9])맘(?:모여라|모임|소통|수다|커뮤니티|게시판|정보방|사랑방|놀이터|라운지|톡|방)(?:$|[^가-힣])/i.test(namePart);
-  const communitySignal = /(?:모여라|모임|카페|소통|수다|커뮤니티|게시판|자유게시판|정보방|사랑방|놀이터|라운지|톡|방)/i.test(text);
+  const communityShapeRe = /(?:모여라|모임|카페|소통|수다(?:방)?|커뮤니티|게시판|자유게시판|정보방|사랑방|놀이터|라운지|톡|방)/i;
+  const descriptorParentRe = /(?:^|[^가-힣A-Za-z0-9])(?:예비맘|육아맘|엄마들?|어머님들?|학부모들?|맘들?)(?:$|[^가-힣A-Za-z0-9])/i;
+  const descriptorParentCommunity = descriptorParts.some((descriptor) => descriptorParentRe.test(descriptor) && communityShapeRe.test(descriptor));
+  const communitySignal = communityShapeRe.test(text);
 
-  if ((regionalMom || regionalParentWord || explicitParentWord || attachedMomCommunity) && communitySignal) {
+  if ((regionalMom || regionalParentWord || explicitParentWord || attachedMomCommunity || descriptorParentCommunity) && communitySignal) {
     return { shown, key: '맘카페', group: '학부모/지역', source: 'alias-parent-local' };
   }
   return null;
@@ -6366,7 +6378,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.67.0';
+const HOST_COMPAT_VERSION = '0.68.0';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9165,19 +9177,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.67.0',
-    name: 'M2-5 Recovery Transition Debt Retirement',
-    scenario: '06700_M2_5_RECOVERY_TRANSITION_DEBT_RETIREMENT_REAL_LONG_CHAT',
+    version: '0.68.0',
+    name: 'Community Parent-Local Alias Classification Repair',
+    scenario: '06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT',
     summary: Object.freeze([
-      'M2-5 - runtime caller가 0인 Recovery compatibility facade를 제거하고 direct physical owner 경계를 최종화',
-      'Output Compat / Bootstrap Migration / Output Finalize / Edit Reconcile / Representation 동작은 v0.66과 동일하게 유지',
-      '자연 A/C 요청과 same-tab reload/continuation에서 boot, commit, bootstrap 경로 회귀가 없는지 확인',
+      'Community - separator 뒤 parent/local descriptor를 bounded evidence로 판정해 recurrent platform-family miss를 수리',
+      'exact PLATFORM_FAMILIES와 Structure diversity 규칙은 그대로 유지하고 classifier만 좁게 보강',
+      'classifier v2→v3 기존 bounded migration으로 최근 alias reaction_max를 canonical 맘카페 key에 복원',
       '이상 징후는 현재 진단을 먼저 보존하고 WATCH / DEFER / FIX / BLOCKER로 분류',
     ]),
     recent: Object.freeze([
+      Object.freeze({ version: '0.68.0', name: 'Community Parent-Local Alias Repair', bullets: Object.freeze(['descriptor-aware bounded parent/local alias classification', 'classifier v3 bounded reaction-max backfill']) }),
       Object.freeze({ version: '0.67.0', name: 'M2-5 Recovery Debt Retirement', bullets: Object.freeze(['zero-caller Recovery facade physical retirement', 'direct owner topology retained']) }),
       Object.freeze({ version: '0.66.0', name: 'M2-4 Boundary Completion', bullets: Object.freeze(['Session finalization/housekeeping ownership 축소', 'Mirror Observe→Interpret→Apply→Record 경계 완성']) }),
-      Object.freeze({ version: '0.65.0', name: 'M2-3 + Runtime Identity Convergence', bullets: Object.freeze(['Edit Reconcile application service 추출', 'metadata/runtime/host identity convergence']) }),
     ]),
   });
 
@@ -9190,9 +9202,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <div style="color:#9fb3d7;margin-bottom:8px">${escapeHtml(card.name)}</div>
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
 <div style="font-weight:700;margin:8px 0 5px">실전 확인</div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 A/C 요청에서 Version 0.67.0 · Runtime ACTIVE · output COMMITTED 확인</li><li>ordinary exact carryover → SAME_FAST · Edit origin NONE · snapshot UNCHANGED 확인</li><li>same-tab refresh 뒤 Host-local handoff가 기존 identity/TTL 규칙대로 ADOPTED 또는 truthful fail-closed 되는지 확인</li><li>다음 same-generation 요청이 missing-module/bootstrap 오류 없이 정상 continuation 되는지 확인</li><li>자연스럽게 representation mismatch 또는 genuine edit가 나오면 기존 M2 control 의미가 그대로인지 증거 보존</li></ol>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 Mode C/COMMUNITY 요청에서 Version 0.68.0 · Runtime ACTIVE · output COMMITTED 확인</li><li>Structure/Frame continuity와 mirror commit이 기존 안전 규칙대로 유지되는지 확인</li><li>자연 출력에 맘스홀릭 / 예비맘·육아 수다방이 나오면 unknown-platform/diversity warning이 사라졌는지 증거 보존</li><li>pre-v3 state에서 migration receipt가 보이면 classifierVersion 3과 bounded scan을 확인</li><li>target label을 얻기 위한 반복 생성은 하지 말고 deterministic regression을 exact branch authority로 사용</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>missing Recovery/module 초기화 오류, bootstrap/load/reload 회귀, Output Compat 의미 변화, unsafe mirror apply 또는 예상 밖 state/schema 변화가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
+<div>exact-family precedence 변화, false-positive parent/local 분류, Structure diversity 완화, reaction grammar 변화, migration bound/schema 변화 또는 예상 밖 state 손상이 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
 <div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code></div>
 <div style="font-weight:700;margin:10px 0 5px">최근 업데이트</div>
 <ul style="margin:0 0 0 18px;padding:0">${recent}</ul>
@@ -9417,7 +9429,7 @@ ${lastPerf ? `<details class="card"><summary>beforeRequest performance · ${last
 <tr><td>Session load</td><td>${lastPerf.sessionLoadMs.toFixed(1)} ms</td></tr>
 <tr><td>Prompt scan</td><td>${lastPerf.promptScanMs.toFixed(1)} ms (${lastPerf.promptScannedMessages}/${lastPerf.promptTotalMessages} msgs, ${Number(lastPerf.promptScannedChars || 0).toLocaleString('en-US')} chars)</td></tr>
 <tr><td>History bootstrap</td><td>${lastPerf.bootstrapMs.toFixed(1)} ms</td></tr>
-<tr><td>Community alias repair</td><td>${Number(lastPerf.aliasRepairMs || 0).toFixed(1)} ms${lastPerf.aliasRepair?.skipped ? ' (already v2)' : ` (${Number(lastPerf.aliasRepair?.assistantScanned || 0)} assistant, ${Number(lastPerf.aliasRepair?.aliasSections || 0)} alias)`}</td></tr>
+<tr><td>Community alias repair</td><td>${Number(lastPerf.aliasRepairMs || 0).toFixed(1)} ms${lastPerf.aliasRepair?.skipped ? ' (already v3)' : ` (${Number(lastPerf.aliasRepair?.assistantScanned || 0)} assistant, ${Number(lastPerf.aliasRepair?.aliasSections || 0)} alias)`}</td></tr>
 <tr><td>Edit reconcile</td><td>${lastPerf.editReconcileMs.toFixed(1)} ms${lastPerf.editDetail?.path ? ` (${escapeHtml(lastPerf.editDetail.path)})` : ''}</td></tr>
 ${lastPerf.editDetail ? `<tr><td>&nbsp;&nbsp;Fingerprint</td><td>${Number(lastPerf.editDetail.fingerprintMs || 0).toFixed(1)} ms</td></tr>
 <tr><td>&nbsp;&nbsp;Host compatibility</td><td>${Number(lastPerf.editDetail.compatibilityMs || 0).toFixed(1)} ms${lastPerf.editDetail.compatibilitySource ? ` (${escapeHtml(lastPerf.editDetail.compatibilitySource)})` : ''}</td></tr>

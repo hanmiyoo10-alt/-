@@ -96,6 +96,12 @@ The first E7 materialization attempt (`33261585245`) failed before candidate pub
 
 The implementation correction keeps Product/release identity changes in `00-runtime-core.part.js`, but binds convergence editing, validation, and P55 assertions to `20-bridge-io.part.js`. This is a materialization ownership correction only: the runtime design, target tuple, Engine-byte preservation requirement, data semantics, and release authority are unchanged.
 
+## Exact-SHA regression correction
+
+The first exact-SHA full-registry attempt on candidate `0f46c07d605c00695cf5bfd17bc10406f91589a3` reached the evergreen P5 bundled-Engine regression and failed because P5 still required the old implementation string `runningEngineVersion === bundledEngineVersion`.
+
+That assertion encoded the pre-5.89 implementation rather than the bundled-Engine safety contract. 5.89 deliberately strengthens the contract: both the reported bundle target and the live Engine version must equal `REQUIRED_BRIDGE_VERSION`. P5 is therefore updated to assert those two required-version equalities instead of the obsolete variable-to-variable expression. No production runtime byte is changed by this regression correction.
+
 ## Physical acceptance
 
 After production promotion, pressing `+` must be sufficient. No shell action is allowed.

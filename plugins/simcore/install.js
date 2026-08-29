@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.68.0
+//@version 0.69.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,13 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.69.0 M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion:
+// - Extracts portable-state initial assembly and cross-domain reconciliation composition from Kernel into one physical Domain integration owner, State Reconcile
+// - Removes Kernel's four upward dependencies on Community, Recurrence, Lineage and Handoff while preserving every existing state value, deletion rule, ordering rule and migration seed
+// - Switches Lifecycle, Bootstrap Migration, Prompt, Edit Reconcile, Output Finalize and Session from kernel.initialState/reconcileState to the new owner without changing their other Kernel helper usage
+// - Keeps STATE_VERSION 5, CORE_STATE_VERSION 10, Community classifier v3 migration behavior, persistent schema, SnapshotStore/mirror shape and every unrelated semantic owner unchanged
+// - Requires deep v0.68→v0.69 state/session equivalence, zero Kernel transition exceptions, latest/install identity and real long-chat warm + persisted-state + Community continuity before terminal LIVE_PASS
 //
 // v0.68.0 Community Parent-Local Alias Classification Repair:
 // - Repairs the recurrent Community classifier miss for parent/local descriptors that appear after a bounded platform-header separator
@@ -692,7 +699,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.68.0';
+const SIMCORE_RUNTIME_VERSION = '0.69.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -716,7 +723,8 @@ SimCore.define("contracts", function (require, module, exports) {
 const MODULE_CONTRACT_VERSION = 2;
 const MODULE_CONTRACTS = Object.freeze({
   contracts: Object.freeze({ owns: 'module responsibility metadata', excludes: 'runtime policy or state mutation' }),
-  kernel: Object.freeze({ owns: 'state schema and shared primitives/normalization glue', excludes: 'mode policy, prompt wording, output repair' }),
+  kernel: Object.freeze({ owns: 'shared state-version constants and cross-cutting primitives', excludes: 'cross-domain state reconciliation, mode policy, prompt wording, output repair' }),
+  'state-reconcile': Object.freeze({ owns: 'portable-state initial assembly and cross-domain reconciliation composition', excludes: 'domain normalizer semantics, persistence I/O, prompt wording or creative decisions' }),
   store: Object.freeze({ owns: 'snapshot persistence, retention and deferred retention housekeeping mechanics', excludes: 'semantic state decisions or prompt wording' }),
   lifecycle: Object.freeze({ owns: 'mode/broadcast/episode request preparation', excludes: 'timestamp math, output repair, prompt serialization' }),
   time: Object.freeze({ owns: 'timestamp syntax, deterministic calendar transitions, narrative/broadcast clocks, world-year and age-offset primitives', excludes: 'scene meaning or mode classification' }),
@@ -1910,10 +1918,6 @@ module.exports = {
 });
 
 SimCore.define("kernel", function (require, module, exports) {
-const { normalizePlatformMaxMap } = require('./community');
-const recurrence = require('./recurrence');
-const lineage = require('./lineage');
-const handoff = require('./handoff');
 
 const STATE_VERSION = 5;
 const CORE_STATE_VERSION = 10;
@@ -1934,82 +1938,6 @@ function fingerprintText(content) {
     h = Math.imul(h, 16777619);
   }
   return `${text.length}:${(h >>> 0).toString(16)}`;
-}
-
-function initialState() {
-  return {
-    stateVersion: STATE_VERSION,
-    coreStateVersion: CORE_STATE_VERSION,
-    historyBootstrapped: false,
-    historyBootstrappedAt: -1,
-    historyBootstrapStats: null,
-    templateRecurrenceVersion: 0,
-    templateRegistry: [],
-    requestLineageVersion: 1,
-    requestLineage: lineage.normalizeLineage(null),
-    communitySourceHandoffVersion: 2,
-    communitySourceRegistry: [],
-    broadcastLocked: false,
-    broadcastAirtime: null,
-    broadcastAirtimeStart: null,
-    episodeNo: 0,
-    community: { activationCount: 0, platformMax: {}, lastNormalization: [], classifierVersion: 2 },
-    worldYear: null,
-    koreanAgeOffset: 0,
-    narrativeTimestamp: null,
-    narrativeClockVersion: 2,
-    clockRepairVersion: 0,
-    lastMode: 'A',
-    pending: null,
-  };
-}
-
-function reconcileState(raw) {
-  const source = raw && typeof raw === 'object' ? raw : initialState();
-  const s = source;
-  const legacyYear = s.worldYear ?? s.narrativeYear;
-  const hadTemplateRecurrenceVersion = Object.prototype.hasOwnProperty.call(s, 'templateRecurrenceVersion');
-
-  s.stateVersion = STATE_VERSION;
-  s.coreStateVersion = CORE_STATE_VERSION;
-  s.historyBootstrapped = !!s.historyBootstrapped;
-  s.historyBootstrappedAt = Number.isInteger(Number(s.historyBootstrappedAt)) ? Number(s.historyBootstrappedAt) : -1;
-  s.historyBootstrapStats = s.historyBootstrapStats && typeof s.historyBootstrapStats === 'object' ? s.historyBootstrapStats : null;
-  s.templateRecurrenceVersion = hadTemplateRecurrenceVersion ? Math.max(0, Math.round(Number(s.templateRecurrenceVersion) || 0)) : 0;
-  s.templateRegistry = recurrence.normalizeRegistry(s.templateRegistry);
-  s.requestLineageVersion = Math.max(1, Math.round(Number(s.requestLineageVersion) || 0));
-  s.requestLineage = lineage.normalizeLineage(s.requestLineage);
-  s.communitySourceHandoffVersion = Math.max(0, Math.round(Number(s.communitySourceHandoffVersion) || 0));
-  s.communitySourceRegistry = handoff.normalizeRegistry(s.communitySourceRegistry);
-  s.broadcastLocked = !!s.broadcastLocked;
-  s.broadcastAirtime = typeof s.broadcastAirtime === 'string' && s.broadcastAirtime.trim() ? s.broadcastAirtime.trim() : null;
-  s.broadcastAirtimeStart = typeof s.broadcastAirtimeStart === 'string' && s.broadcastAirtimeStart.trim() ? s.broadcastAirtimeStart.trim() : null;
-  s.episodeNo = Math.max(0, Math.round(Number(s.episodeNo) || 0));
-  s.community = s.community && typeof s.community === 'object' ? s.community : {};
-  s.community.activationCount = Math.max(0, Math.round(Number(s.community.activationCount) || 0));
-  s.community.platformMax = normalizePlatformMaxMap(s.community.platformMax);
-  s.community.lastNormalization = Array.isArray(s.community.lastNormalization) ? s.community.lastNormalization.slice(-12) : [];
-  s.community.classifierVersion = Math.max(0, Math.round(Number(s.community.classifierVersion) || 0));
-  // v0.61.4 migration: the cross-platform global reaction floor was a short-lived bug.
-  // Reaction authority is platformMax only; remove the stale global field from portable state/mirrors.
-  delete s.community.globalReactionMax;
-  s.worldYear = legacyYear != null && Number.isFinite(Number(legacyYear)) ? Number(legacyYear) : null;
-  s.koreanAgeOffset = Math.max(0, Math.round(Number(s.koreanAgeOffset) || 0));
-  s.narrativeTimestamp = typeof s.narrativeTimestamp === 'string' && s.narrativeTimestamp.trim() ? s.narrativeTimestamp.trim() : null;
-  s.narrativeClockVersion = Math.max(1, Math.round(Number(s.narrativeClockVersion) || 0));
-  s.clockRepairVersion = Math.max(0, Math.round(Number(s.clockRepairVersion) || 0));
-  s.lastMode = typeof s.lastMode === 'string' ? s.lastMode : 'A';
-  s.pending = s.pending && typeof s.pending === 'object' ? s.pending : null;
-
-  // v0.60 -> v0.61 migration: worldYear replaces narrativeYear as the sole persisted year field.
-  delete s.narrativeYear;
-  // Older builds carried content memory. Keep mirrors/snapshots tiny.
-  delete s.currentEpisodeSegments;
-  delete s.lastCompletedEpisode;
-  delete s.exposed;
-  delete s.community.recent;
-  delete s.community.commenters;
-  return s;
 }
 
 function textOfMessage(m) {
@@ -2153,8 +2081,6 @@ module.exports = {
   KNOWLEDGE_RE,
   clone,
   fingerprintText,
-  initialState,
-  reconcileState,
   textOfMessage,
   latestUserIndex,
   latestUserText,
@@ -2163,6 +2089,93 @@ module.exports = {
   regexCount,
   scanKnowledgeBlocks,
 };
+});
+
+SimCore.define("state-reconcile", function (require, module, exports) {
+const kernel = require('./kernel');
+const { normalizePlatformMaxMap } = require('./community');
+const recurrence = require('./recurrence');
+const lineage = require('./lineage');
+const handoff = require('./handoff');
+const { STATE_VERSION, CORE_STATE_VERSION } = kernel;
+
+function initialState() {
+  return {
+    stateVersion: STATE_VERSION,
+    coreStateVersion: CORE_STATE_VERSION,
+    historyBootstrapped: false,
+    historyBootstrappedAt: -1,
+    historyBootstrapStats: null,
+    templateRecurrenceVersion: 0,
+    templateRegistry: [],
+    requestLineageVersion: 1,
+    requestLineage: lineage.normalizeLineage(null),
+    communitySourceHandoffVersion: 2,
+    communitySourceRegistry: [],
+    broadcastLocked: false,
+    broadcastAirtime: null,
+    broadcastAirtimeStart: null,
+    episodeNo: 0,
+    community: { activationCount: 0, platformMax: {}, lastNormalization: [], classifierVersion: 2 },
+    worldYear: null,
+    koreanAgeOffset: 0,
+    narrativeTimestamp: null,
+    narrativeClockVersion: 2,
+    clockRepairVersion: 0,
+    lastMode: 'A',
+    pending: null,
+  };
+}
+
+function reconcileState(raw) {
+  const source = raw && typeof raw === 'object' ? raw : initialState();
+  const s = source;
+  const legacyYear = s.worldYear ?? s.narrativeYear;
+  const hadTemplateRecurrenceVersion = Object.prototype.hasOwnProperty.call(s, 'templateRecurrenceVersion');
+
+  s.stateVersion = STATE_VERSION;
+  s.coreStateVersion = CORE_STATE_VERSION;
+  s.historyBootstrapped = !!s.historyBootstrapped;
+  s.historyBootstrappedAt = Number.isInteger(Number(s.historyBootstrappedAt)) ? Number(s.historyBootstrappedAt) : -1;
+  s.historyBootstrapStats = s.historyBootstrapStats && typeof s.historyBootstrapStats === 'object' ? s.historyBootstrapStats : null;
+  s.templateRecurrenceVersion = hadTemplateRecurrenceVersion ? Math.max(0, Math.round(Number(s.templateRecurrenceVersion) || 0)) : 0;
+  s.templateRegistry = recurrence.normalizeRegistry(s.templateRegistry);
+  s.requestLineageVersion = Math.max(1, Math.round(Number(s.requestLineageVersion) || 0));
+  s.requestLineage = lineage.normalizeLineage(s.requestLineage);
+  s.communitySourceHandoffVersion = Math.max(0, Math.round(Number(s.communitySourceHandoffVersion) || 0));
+  s.communitySourceRegistry = handoff.normalizeRegistry(s.communitySourceRegistry);
+  s.broadcastLocked = !!s.broadcastLocked;
+  s.broadcastAirtime = typeof s.broadcastAirtime === 'string' && s.broadcastAirtime.trim() ? s.broadcastAirtime.trim() : null;
+  s.broadcastAirtimeStart = typeof s.broadcastAirtimeStart === 'string' && s.broadcastAirtimeStart.trim() ? s.broadcastAirtimeStart.trim() : null;
+  s.episodeNo = Math.max(0, Math.round(Number(s.episodeNo) || 0));
+  s.community = s.community && typeof s.community === 'object' ? s.community : {};
+  s.community.activationCount = Math.max(0, Math.round(Number(s.community.activationCount) || 0));
+  s.community.platformMax = normalizePlatformMaxMap(s.community.platformMax);
+  s.community.lastNormalization = Array.isArray(s.community.lastNormalization) ? s.community.lastNormalization.slice(-12) : [];
+  s.community.classifierVersion = Math.max(0, Math.round(Number(s.community.classifierVersion) || 0));
+  // v0.61.4 migration: the cross-platform global reaction floor was a short-lived bug.
+  // Reaction authority is platformMax only; remove the stale global field from portable state/mirrors.
+  delete s.community.globalReactionMax;
+  s.worldYear = legacyYear != null && Number.isFinite(Number(legacyYear)) ? Number(legacyYear) : null;
+  s.koreanAgeOffset = Math.max(0, Math.round(Number(s.koreanAgeOffset) || 0));
+  s.narrativeTimestamp = typeof s.narrativeTimestamp === 'string' && s.narrativeTimestamp.trim() ? s.narrativeTimestamp.trim() : null;
+  s.narrativeClockVersion = Math.max(1, Math.round(Number(s.narrativeClockVersion) || 0));
+  s.clockRepairVersion = Math.max(0, Math.round(Number(s.clockRepairVersion) || 0));
+  s.lastMode = typeof s.lastMode === 'string' ? s.lastMode : 'A';
+  s.pending = s.pending && typeof s.pending === 'object' ? s.pending : null;
+
+  // v0.60 -> v0.61 migration: worldYear replaces narrativeYear as the sole persisted year field.
+  delete s.narrativeYear;
+  // Older builds carried content memory. Keep mirrors/snapshots tiny.
+  delete s.currentEpisodeSegments;
+  delete s.lastCompletedEpisode;
+  delete s.exposed;
+  delete s.community.recent;
+  delete s.community.commenters;
+  return s;
+}
+
+module.exports = { initialState, reconcileState };
 });
 
 SimCore.define("time", function (require, module, exports) {
@@ -2684,6 +2697,7 @@ module.exports = {
 
 SimCore.define("lifecycle", function (require, module, exports) {
 const kernel = require('./kernel');
+const stateReconcile = require('./state-reconcile');
 const time = require('./time');
 const recurrence = require('./recurrence');
 const lineage = require('./lineage');
@@ -2826,7 +2840,7 @@ function derivePostBEndClockEligibility(mode, previousMode, state, requestLineag
 }
 
 function prepareTurn(baseState, userText, promptProbe, sendIndex, previousOutputFacts = null) {
-  const state = kernel.reconcileState(kernel.clone(baseState));
+  const state = stateReconcile.reconcileState(kernel.clone(baseState));
   const probe = promptProbe && typeof promptProbe === 'object' && promptProbe.__simcorePromptProbe
     ? promptProbe
     : { active: false, config: {} };
@@ -4137,6 +4151,7 @@ module.exports = {
 
 SimCore.define("bootstrap-migration", function (require, module, exports) {
 const kernel = require('./kernel');
+const stateReconcile = require('./state-reconcile');
 const lifecycle = require('./lifecycle');
 const time = require('./time');
 const community = require('./community');
@@ -4145,7 +4160,7 @@ const outputCompat = require('./output-compat');
 const prepareOutput = outputCompat.prepareOutput;
 
 function bootstrapFromHistory(baseState, messages, endIndex = -1) {
-  const state = kernel.reconcileState(kernel.clone(baseState || kernel.initialState()));
+  const state = stateReconcile.reconcileState(kernel.clone(baseState || stateReconcile.initialState()));
   if (state.historyBootstrapped) return { state, changed: false, stats: state.historyBootstrapStats };
 
   state.broadcastLocked = false;
@@ -4269,8 +4284,8 @@ async function repairLatestGlobalFloorContamination(store, current, outIndex, ra
 
   const preRaw = await store.load('pre', outIndex - 1);
   if (!preRaw) return { changed: false, state: current };
-  const pre = kernel.reconcileState(kernel.clone(preRaw));
-  const next = kernel.reconcileState(kernel.clone(current));
+  const pre = stateReconcile.reconcileState(kernel.clone(preRaw));
+  const next = stateReconcile.reconcileState(kernel.clone(current));
   let changed = false;
   for (const ev of events) {
     const key = String(ev?.platform || '');
@@ -4301,6 +4316,7 @@ module.exports = {
 
 SimCore.define("prompt", function (require, module, exports) {
 const kernel = require('./kernel');
+const stateReconcile = require('./state-reconcile');
 const lifecycle = require('./lifecycle');
 const time = require('./time');
 const recurrence = require('./recurrence');
@@ -4524,7 +4540,7 @@ function compileFooter(communityExpected) {
 }
 
 function compileRuntimePromptParts(state) {
-  const s = kernel.reconcileState(state);
+  const s = stateReconcile.reconcileState(state);
   const p = s.pending;
   if (!p?.active) {
     return Object.freeze({
@@ -4566,6 +4582,7 @@ module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntim
 
 SimCore.define("edit-reconcile", function (require, module, exports) {
 const kernel = require('./kernel');
+const stateReconcile = require('./state-reconcile');
 const time = require('./time');
 const outputCompat = require('./output-compat');
 const bootstrapMigration = require('./bootstrap-migration');
@@ -4641,7 +4658,7 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       && Number(savedOut.clockRepairVersion || 0) >= time.CLOCK_REPAIR_VERSION;
     if (savedFastSafe && (savedOut.outputFingerprint === actualFingerprint || savedOut.hostOutputFingerprint === actualFingerprint)) {
       t = reconcileNow();
-      const same = kernel.reconcileState(savedOut);
+      const same = stateReconcile.reconcileState(savedOut);
       if (detail) detail.stateSyncMs += reconcileElapsed(t);
       session.current = same;
       session.currentOutputIndex = outIndex;
@@ -4677,7 +4694,7 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
         const compatibleFingerprint = kernel.fingerprintText(compatibilityResult.content);
         if (detail) detail.compatibilityMs += reconcileElapsed(t);
         if (compatibleFingerprint === savedOut.outputFingerprint) {
-          const same = kernel.reconcileState(savedOut);
+          const same = stateReconcile.reconcileState(savedOut);
           same.hostOutputFingerprint = actualFingerprint;
           // Preserve legacy clock-repair semantics even though the output itself is proven equivalent.
           t = reconcileNow();
@@ -4729,7 +4746,7 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
 
     if (!savedOut.outputFingerprint) {
       t = reconcileNow();
-      const baseline = kernel.reconcileState(savedOut);
+      const baseline = stateReconcile.reconcileState(savedOut);
       if (detail) detail.stateSyncMs += reconcileElapsed(t);
       t = reconcileNow();
       const repaired = await bootstrapMigration.repairLegacyClockState(session.store, outIndex, content, baseline);
@@ -4759,7 +4776,7 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
 
     if (savedOut.outputFingerprint === actualFingerprint) {
       t = reconcileNow();
-      const same = kernel.reconcileState(savedOut);
+      const same = stateReconcile.reconcileState(savedOut);
       if (detail) detail.stateSyncMs += reconcileElapsed(t);
       t = reconcileNow();
       const repaired = await bootstrapMigration.repairLegacyClockState(session.store, outIndex, content, same);
@@ -4905,13 +4922,14 @@ module.exports = { reconcileSessionEditedOutput, reconcileVisiblePreviousAssista
 
 SimCore.define("output-finalize", function (require, module, exports) {
 const kernel = require('./kernel');
+const stateReconcile = require('./state-reconcile');
 const time = require('./time');
 const frame = require('./frame');
 const reaction = require('./reaction');
 const structure = require('./structure');
 
 function finalizePreparedOutput(baseState, prepared, outIndex, opts = {}) {
-  const state = kernel.reconcileState(kernel.clone(baseState));
+  const state = stateReconcile.reconcileState(kernel.clone(baseState));
   const p = state.pending;
   if (!p?.active) {
     state.pending = null;
@@ -5058,6 +5076,7 @@ module.exports = { finalizePreparedOutput };
 SimCore.define("session", function (require, module, exports) {
 const { SnapshotStore } = require('./store');
 const kernel = require('./kernel');
+const stateReconcile = require('./state-reconcile');
 const lifecycle = require('./lifecycle');
 const time = require('./time');
 const frame = require('./frame');
@@ -5141,7 +5160,7 @@ class CoreRulesetSession {
   }
 
   async migrateNarrativeCurrentTimeFloorIfNeeded(latestOutIndex = -1) {
-    const state = kernel.reconcileState(this.current || kernel.initialState());
+    const state = stateReconcile.reconcileState(this.current || stateReconcile.initialState());
     const fromVersion = Math.max(1, Number(state.narrativeClockVersion || 1));
     if (fromVersion >= time.NARRATIVE_CLOCK_VERSION) {
       this.current = state;
@@ -5210,7 +5229,7 @@ class CoreRulesetSession {
 
     if (mirrorFastSafe) {
       this.loadedFromLegacySnapshot = false;
-      this.current = kernel.reconcileState(parsedMirror);
+      this.current = stateReconcile.reconcileState(parsedMirror);
       if (!this.current.historyBootstrapped) {
         this.current.historyBootstrapped = true;
         this.current.historyBootstrapStats = { source: 'verified-mirror' };
@@ -5229,7 +5248,7 @@ class CoreRulesetSession {
       if (found) {
         const rawFound = found.state && typeof found.state === 'object' ? kernel.clone(found.state) : found.state;
         this.loadedFromLegacySnapshot = Number(rawFound?.stateVersion || 0) < kernel.STATE_VERSION;
-        this.current = kernel.reconcileState(found.state);
+        this.current = stateReconcile.reconcileState(found.state);
         const globalRepair = await bootstrapMigration.repairLatestGlobalFloorContamination(this.store, this.current, found.index, rawFound);
         this.current = globalRepair.state;
         if (!this.current.historyBootstrapped) {
@@ -5253,7 +5272,7 @@ class CoreRulesetSession {
     if (parsedMirror) {
       try {
         this.loadedFromLegacySnapshot = Number(parsedMirror?.stateVersion || 0) < kernel.STATE_VERSION;
-        this.current = kernel.reconcileState(parsedMirror);
+        this.current = stateReconcile.reconcileState(parsedMirror);
         if (!this.current.historyBootstrapped) {
           this.current.historyBootstrapped = true;
           this.current.historyBootstrapStats = { source: 'existing-mirror' };
@@ -5271,7 +5290,7 @@ class CoreRulesetSession {
         return this.current;
       } catch { /* broken mirror -> fresh */ }
     }
-    this.current = kernel.initialState();
+    this.current = stateReconcile.initialState();
     this.initSource = 'fresh';
     this.needsHistoryBootstrap = true;
     this.loadedFromLegacySnapshot = false;
@@ -5286,7 +5305,7 @@ class CoreRulesetSession {
     if (!this.needsHistoryBootstrap || this.current?.historyBootstrapped) {
       return { changed: false, stats: this.current?.historyBootstrapStats || null };
     }
-    const r = bootstrapMigration.bootstrapFromHistory(this.current || kernel.initialState(), messages, lastCompletedOutIndex);
+    const r = bootstrapMigration.bootstrapFromHistory(this.current || stateReconcile.initialState(), messages, lastCompletedOutIndex);
     this.current = r.state;
     this.needsHistoryBootstrap = false;
     if (lastCompletedOutIndex >= 0) {
@@ -5302,7 +5321,7 @@ class CoreRulesetSession {
   }
 
   migrateCommunityClassifierIfNeeded(messages, lastCompletedOutIndex = -1) {
-    const state = kernel.reconcileState(this.current || kernel.initialState());
+    const state = stateReconcile.reconcileState(this.current || stateReconcile.initialState());
     const currentVersion = Math.max(0, Number(state.community?.classifierVersion || 0));
     if (currentVersion >= community.COMMUNITY_CLASSIFIER_VERSION) {
       this.current = state;
@@ -5403,7 +5422,7 @@ class CoreRulesetSession {
     let t = sessionNow();
     const existingPre = mustRestorePre ? await this.store.load('pre', sendIndex) : null;
     if (detail) { detail.preLoadMs = sessionElapsed(t); detail.existingPre = !!existingPre; }
-    const base = existingPre || this.current || kernel.initialState();
+    const base = existingPre || this.current || stateReconcile.initialState();
     if (detail) detail.previousMode = base?.lastMode || null;
 
     if (promptProbe?.active && recurrence.needsBootstrap(base)) {
@@ -5471,11 +5490,11 @@ class CoreRulesetSession {
 
     if (memoryFastSafe) {
       if (perfDetail) perfDetail.stateLoadSource = 'memory-fast';
-      return kernel.reconcileState(this.current);
+      return stateReconcile.reconcileState(this.current);
     }
 
     if (perfDetail) perfDetail.stateLoadSource = 'storage-fallback';
-    return kernel.reconcileState((await this.store.load('send', expectedSendIndex)) || this.current || kernel.initialState());
+    return stateReconcile.reconcileState((await this.store.load('send', expectedSendIndex)) || this.current || stateReconcile.initialState());
   }
 
   async processOutput(outIndex, content, perfDetail = null) {
@@ -5578,7 +5597,7 @@ class CoreRulesetSession {
   storageDiagnostics() { return this.store.keyScanStats(); }
   communityAliasDiagnostics() { return this.communityAliasRepairStats; }
   templateRecurrenceDiagnostics() { return this.templateRecurrenceBootstrapStats; }
-  portableState() { return JSON.stringify(kernel.reconcileState(kernel.clone(this.current || kernel.initialState()))); }
+  portableState() { return JSON.stringify(stateReconcile.reconcileState(kernel.clone(this.current || stateReconcile.initialState()))); }
 }
 
 module.exports = {
@@ -6378,7 +6397,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.68.0';
+const HOST_COMPAT_VERSION = '0.69.0';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9177,19 +9196,19 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.68.0',
-    name: 'Community Parent-Local Alias Classification Repair',
-    scenario: '06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT',
+    version: '0.69.0',
+    name: 'M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion',
+    scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
-      'Community - separator 뒤 parent/local descriptor를 bounded evidence로 판정해 recurrent platform-family miss를 수리',
-      'exact PLATFORM_FAMILIES와 Structure diversity 규칙은 그대로 유지하고 classifier만 좁게 보강',
-      'classifier v2→v3 기존 bounded migration으로 최근 alias reaction_max를 canonical 맘카페 key에 복원',
+      'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',
+      'Kernel → Community/Recurrence/Lineage/Handoff upward dependency 4개와 transition exception 4개를 제거',
+      'STATE_VERSION/CORE_STATE_VERSION과 persistent schema는 그대로 두고 v0.68 state 결과와 deep-equivalent 유지',
       '이상 징후는 현재 진단을 먼저 보존하고 WATCH / DEFER / FIX / BLOCKER로 분류',
     ]),
     recent: Object.freeze([
+      Object.freeze({ version: '0.69.0', name: 'M2-6 State Reconcile / Kernel Inversion', bullets: Object.freeze(['state assembly/reconcile ownership extraction', 'Kernel foundation upward edges retired']) }),
       Object.freeze({ version: '0.68.0', name: 'Community Parent-Local Alias Repair', bullets: Object.freeze(['descriptor-aware bounded parent/local alias classification', 'classifier v3 bounded reaction-max backfill']) }),
       Object.freeze({ version: '0.67.0', name: 'M2-5 Recovery Debt Retirement', bullets: Object.freeze(['zero-caller Recovery facade physical retirement', 'direct owner topology retained']) }),
-      Object.freeze({ version: '0.66.0', name: 'M2-4 Boundary Completion', bullets: Object.freeze(['Session finalization/housekeeping ownership 축소', 'Mirror Observe→Interpret→Apply→Record 경계 완성']) }),
     ]),
   });
 
@@ -9202,9 +9221,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 <div style="color:#9fb3d7;margin-bottom:8px">${escapeHtml(card.name)}</div>
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
 <div style="font-weight:700;margin:8px 0 5px">실전 확인</div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 Mode C/COMMUNITY 요청에서 Version 0.68.0 · Runtime ACTIVE · output COMMITTED 확인</li><li>Structure/Frame continuity와 mirror commit이 기존 안전 규칙대로 유지되는지 확인</li><li>자연 출력에 맘스홀릭 / 예비맘·육아 수다방이 나오면 unknown-platform/diversity warning이 사라졌는지 증거 보존</li><li>pre-v3 state에서 migration receipt가 보이면 classifierVersion 3과 bounded scan을 확인</li><li>target label을 얻기 위한 반복 생성은 하지 말고 deterministic regression을 exact branch authority로 사용</li></ol>
+<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 A/C 요청에서 Version 0.69.0 · CURRENT TURN · request hook SEEN · core handshake FOUND · binding BOUND · output COMMITTED 확인</li><li>새로고침/재진입 후 mirror-fast 또는 snapshot 등 non-fresh state source가 실제로 재사용되고 다음 ordinary turn이 정상 commit되는지 확인</li><li>Mode C에서 classifier v3, reaction/platform maxima와 Structure/Frame continuity가 기존과 동일하게 유지되는지 확인</li><li>STATE_VERSION/CORE_STATE_VERSION 또는 persistent schema migration이 새로 나타나면 즉시 중지하고 증거 보존</li><li>기존 WATCH 재현은 State Reconcile causal evidence가 없으면 별도 lane으로 유지</li></ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>exact-family precedence 변화, false-positive parent/local 분류, Structure diversity 완화, reaction grammar 변화, migration bound/schema 변화 또는 예상 밖 state 손상이 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
+<div>state field/ordering 변화, unexpected bootstrap/migration, Kernel upward dependency 재등장, mirror/snapshot 재수화 손상, Structure/Community 의미 변화 또는 latest/install 불일치가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
 <div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code></div>
 <div style="font-weight:700;margin:10px 0 5px">최근 업데이트</div>
 <ul style="margin:0 0 0 18px;padding:0">${recent}</ul>

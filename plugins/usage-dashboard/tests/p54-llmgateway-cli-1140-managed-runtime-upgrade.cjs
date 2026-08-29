@@ -64,7 +64,12 @@ assert.equal((cliRuntime.match(/async function runCliProcess\(/g) || []).length,
 
 assert.ok(sources.includes("runCliProcess(['orgs', 'list', '--json']"), 'P54 account capture must retain official orgs list JSON command');
 assert.ok(sources.includes("runCli(['credits', '--json'])"), 'P54 credits bootstrap must retain official credits JSON command');
-assert.match(sources, /['\"]usage['\"]/, 'P54 source graph must retain the official usage command family');
+assert.equal(
+  /runCli(?:Process)?\(\s*\[\s*['"]usage['"]/.test(sources),
+  false,
+  'P54 must not invent a new usage CLI invocation; usage remains on the existing capture/API source path',
+);
+assert.ok(sources.includes("captureAccountDetailsViaCliSession('24h')"), 'P54 must retain the existing 24h account capture source path');
 
 assert.ok(pluginCore.includes("const REQUIRED_BRIDGE_VERSION = '1.6.27';"), 'P54 Plugin Engine requirement must advance to 1.6.27');
 assert.ok(pluginCore.includes("const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.2';"), 'P54 Plugin Manager requirement must advance to 1.3.2');

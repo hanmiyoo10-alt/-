@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "system": "R2.7",
+  "name": "Evidence-Derived Operations",
+  "expectedDispositions": [
+    "SAFE_TO_RERUN_FAILED_JOB",
+    "FRESH_PERMANENT_DISPATCH_REQUIRED",
+    "RECOVERY_REQUEST_REQUIRED",
+    "MANUAL_EVIDENCE_REQUIRED",
+    "BLOCKED_IDENTITY_MOVED"
+  ],
+  "authorityMutation": "NONE"
+}

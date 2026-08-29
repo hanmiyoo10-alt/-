@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.68.0-intent-01",
+  "releaseId": "simcore-v0.68.0-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+  "sourceCommit": "03a68c2c47e3042cf952e4f2a46b66a502eeba39",
+  "candidateCommit": "497a58fd376189f86178a087415aa1db8d32b940",
+  "candidateReleaseBlob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.68.0-intent-01",
+  "builderPath": "products/simcore/tooling/build-06800-community-parent-local-alias-classification-repair.py",
+  "builderSha256": "a2ac417b9d05073f76195959adc8c87066acd2602f79fd3de37f54eecc52e1d4",
+  "verifierCommit": "03a68c2c47e3042cf952e4f2a46b66a502eeba39",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "09f1e284598ccefaa78cf5d9259314d15f14664c58e6a682a24e94e1fe921e6c",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

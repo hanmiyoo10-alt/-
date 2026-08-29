@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "authority": "SHADOW_ONLY",
+  "intentId": "simcore-v0.68.0-intent-01",
+  "releaseId": "simcore-v0.68.0-new-01",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.68.0-intent-01.json",
+  "derivedSpec": {
+    "schemaVersion": 1,
+    "releaseId": "simcore-v0.68.0-new-01",
+    "product": "SimCore",
+    "version": "0.68.0",
+    "releaseName": "Community Parent-Local Alias Classification Repair",
+    "releaseMode": "NEW_VERSION",
+    "candidateCommit": "497a58fd376189f86178a087415aa1db8d32b940",
+    "expectedProductionCommit": "01a4204981191968ba22ba6ad161c1053d6bc7d0",
+    "candidateReleaseBlob": "5094755266444de311ec9cc8ffc7a4dd658e65b1",
+    "primaryGoalId": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR",
+    "changeClass": "RUNTIME_FEATURE",
+    "evidenceRefs": [
+      "docs/SIMCORE_06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_DESIGN_2026-08-29.md",
+      "docs/SIMCORE_06800_IMPLEMENTATION_AUTHORIZATION_2026-08-29.md",
+      "docs/SIMCORE_06800_IMPLEMENTATION_AUTHORIZATION_CONVERGENCE_2026-08-29.md",
+      "docs/SIMCORE_06800_IMPLEMENTATION_EVIDENCE_2026-08-29.md"
+    ],
+    "liveGate": {
+      "required": true,
+      "scenarioId": "06800_COMMUNITY_PARENT_LOCAL_ALIAS_CLASSIFICATION_REPAIR_REAL_LONG_CHAT",
+      "closeAuthority": "HUMAN_EVIDENCE"
+    }
+  }
+}

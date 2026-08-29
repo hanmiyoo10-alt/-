@@ -1,0 +1,136 @@
+name: SimCore R2.7 Durable Status Projection
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'products/simcore/releases/records/**'
+      - 'products/simcore/releases/state-receipts/**'
+      - '.github/workflows/simcore-r2-7-status-projection.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: simcore-r2-7-status-projection
+  cancel-in-progress: false
+
+jobs:
+  project:
+    name: Project Documentary Status
+    runs-on: ubuntu-24.04
+    env:
+      STATUS_PATH: products/simcore/releases/R_V2_7_EVIDENCE_DERIVED_OPERATIONS_STATUS.json
+      GH_TOKEN: ${{ github.token }}
+      REPO_MAIN_WRITE_PROTECTED_MODE: '1'
+    steps:
+      - name: Checkout exact main evidence head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Derive and land first eligible R2.7 operational proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .simcore-r2-7-projection
+
+          CURRENT_GATE="$(node -e "const s=require('./${STATUS_PATH}'); process.stdout.write(String(s.activationGate||''))")"
+          if test "$CURRENT_GATE" = 'CONSUMED_BY_FIRST_GENUINE_R2_7_RELEASE'; then
+            echo 'SIMCORE_R2_7_STATUS_PROJECTION_NOOP gate=already-consumed'
+            exit 0
+          fi
+          test "$CURRENT_GATE" = 'FIRST_GENUINE_R2_7_OPERATIONAL_CONFIRMATION_PENDING'
+
+          python3 - <<'PY' > .simcore-r2-7-projection/candidates.tsv
+          import glob, json, os
+          rows=[]
+          for record_path in glob.glob('products/simcore/releases/records/*.json'):
+              try:
+                  record=json.load(open(record_path, encoding='utf-8'))
+              except Exception:
+                  continue
+              rid=str(record.get('releaseId') or '')
+              if not rid:
+                  continue
+              receipt_path=f'products/simcore/releases/state-receipts/{rid}.json'
+              if not os.path.isfile(receipt_path):
+                  continue
+              try:
+                  run_id=int(str(record.get('publisherRunId') or ''))
+              except Exception:
+                  continue
+              rows.append((run_id,rid,record_path,receipt_path))
+          for row in sorted(rows):
+              print('\t'.join(map(str,row)))
+          PY
+
+          FOUND=0
+          while IFS=$'\t' read -r RUN_ID RELEASE_ID RECORD RECEIPT; do
+            test -n "$RELEASE_ID" || continue
+            PROOF=".simcore-r2-7-projection/proof-${RELEASE_ID}.json"
+            PROJECTED=".simcore-r2-7-projection/projected-${RELEASE_ID}.json"
+            REPORT=".simcore-r2-7-projection/projection-${RELEASE_ID}.json"
+
+            node products/simcore/tooling/release-operational-proof.mjs \
+              --root . \
+              --record "$RECORD" \
+              --receipt "$RECEIPT" \
+              --report "$PROOF"
+
+            node products/simcore/tooling/release-rsystem-status-project.mjs \
+              --root . \
+              --status "$STATUS_PATH" \
+              --proof "$PROOF" \
+              --record "$RECORD" \
+              --output "$PROJECTED" \
+              --report "$REPORT"
+
+            DISPOSITION="$(node -e "const r=require('./${REPORT}'); process.stdout.write(String(r.disposition||''))")"
+            case "$DISPOSITION" in
+              NO_PROJECTION_NOT_ELIGIBLE)
+                echo "SIMCORE_R2_7_STATUS_PROJECTION_SKIP release=$RELEASE_ID reason=pre-implementation-verifier"
+                ;;
+              NO_OP_ALREADY_DURABLE|NO_OP_GATE_ALREADY_CONSUMED)
+                echo "SIMCORE_R2_7_STATUS_PROJECTION_NOOP release=$RELEASE_ID disposition=$DISPOSITION"
+                exit 0
+                ;;
+              PROJECT)
+                cp "$PROJECTED" "$STATUS_PATH"
+                mapfile -t CHANGED < <(git diff --name-only --)
+                test "${#CHANGED[@]}" -eq 1
+                test "${CHANGED[0]}" = "$STATUS_PATH"
+
+                git config user.name 'github-actions[bot]'
+                git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+                git add -- "$STATUS_PATH"
+                git commit -m "state(simcore): project R2.7 operational proof ${RELEASE_ID}"
+                PAYLOAD_COMMIT="$(git rev-parse HEAD)"
+
+                python3 scripts/repo-main-write.py \
+                  --commit "$PAYLOAD_COMMIT" \
+                  --allow "$STATUS_PATH" \
+                  --required-workflow simcore-ci.yml \
+                  --required-profile MAIN_HEALTH \
+                  --required-job Required \
+                  --staging-prefix simcore-r2-7-status-projection
+
+                git fetch --no-tags origin main
+                git show "origin/main:${STATUS_PATH}" > .simcore-r2-7-projection/durable-status.json
+                cmp "$STATUS_PATH" .simcore-r2-7-projection/durable-status.json
+                echo "SIMCORE_R2_7_STATUS_PROJECTION_PASS release=$RELEASE_ID payload=$PAYLOAD_COMMIT durable=$(git rev-parse origin/main)"
+                FOUND=1
+                break
+                ;;
+              *)
+                echo "SIMCORE_R2_7_STATUS_PROJECTION_DISPOSITION_INVALID:$DISPOSITION" >&2
+                exit 2
+                ;;
+            esac
+          done < .simcore-r2-7-projection/candidates.tsv
+
+          if test "$FOUND" -eq 0; then
+            echo 'SIMCORE_R2_7_STATUS_PROJECTION_NOOP reason=no-eligible-proof'
+          fi

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "release-system-r2-7-status-projection-contract",
+  "suite": "release-system-r2-7-status-projection",
+  "input": {
+    "proofOwner": "release-operational-proof",
+    "implementationAncestor": "f01483956a8f3117852c501b17a366d77eefa1d8"
+  },
+  "expected": {
+    "firstEligibleDisposition": "PROJECT",
+    "sameProofDisposition": "NO_OP_ALREADY_DURABLE",
+    "laterProofDisposition": "NO_OP_GATE_ALREADY_CONSUMED",
+    "preImplementationDisposition": "NO_PROJECTION_NOT_ELIGIBLE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

@@ -88,7 +88,17 @@ export async function runSuite(){
     const status=JSON.parse(fs.readFileSync(path.join(REPO,'products/simcore/releases/R_V2_7_EVIDENCE_DERIVED_OPERATIONS_STATUS.json'),'utf8'));
     equal(status.designFrozen,true,'R2.7 design freeze');
     equal(status.implementationAuthorized,true,'R2.7 implementation authorization');
-    equal(status.activationAuthorized,false,'R2.7 activation remains separate');
+    if(status.activationAuthorized===false){
+      equal(status.activationGate,'FIRST_GENUINE_R2_7_OPERATIONAL_CONFIRMATION_PENDING','R2.7 pending activation gate');
+      equal(status.implementation.operationalActivationProof,'PENDING_FIRST_GENUINE_R2_7_RELEASE','R2.7 pending proof marker');
+    } else {
+      equal(status.activationAuthorized,true,'R2.7 documentary activation consumed');
+      equal(status.status,'OPERATIONALLY_PROVEN_FIRST_USE_COMPLETE','R2.7 proven lifecycle status');
+      equal(status.activationFieldSemantics,'DOCUMENTARY_FIRST_USE_GATE_CONSUMED','R2.7 activation field semantics');
+      equal(status.activationGate,'CONSUMED_BY_FIRST_GENUINE_R2_7_RELEASE','R2.7 consumed activation gate');
+      equal(status.operationallyProven,true,'R2.7 operational proof durable');
+      equal(status.implementation.operationalActivationProof.result,'PASS','R2.7 stored proof result');
+    }
     equal(status.preservedAuthorities.productionPublisherCount,1,'R2.7 publisher count');
     equal(status.preservedAuthorities.mainGateway,'repo-main-write.py','R2.7 main gateway');
     equal(status.runtimeMutation,'NONE','R2.7 runtime mutation');

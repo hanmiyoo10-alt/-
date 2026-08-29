@@ -282,7 +282,7 @@ ok('release-declaration-transition-deterministic-tests', () => {
 ok('legacy-map-complete', () => {
   const map = JSON.parse(fs.readFileSync('products/simcore/ci/legacy-gate-map.json','utf8'));
   const mapped = new Set(map.workflows.map((row) => row.legacyWorkflow));
-  const permanent = new Set(['simcore-ci.yml','simcore-release.yml','simcore-release-permanent.yml','simcore-release-required.yml','simcore-release-pr-activation.yml']);
+  const permanent = new Set(['simcore-ci.yml','simcore-release.yml','simcore-release-permanent.yml','simcore-release-required.yml','simcore-release-pr-activation.yml','simcore-r2-7-status-projection.yml']);
   const files = fs.readdirSync('.github/workflows')
     .filter((name) => /^simcore-.*\.yml$/.test(name))
     .filter((name) => !permanent.has(name))

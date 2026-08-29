@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "v06900-builder-basic",
+  "suite": "builder-v06900",
+  "input": {},
+  "expected": {},
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

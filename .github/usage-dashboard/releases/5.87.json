@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "releaseTitle": "Stable Contract Manager Authority Single Source Repair",
+  "productVersion": "3.0.0-alpha.5.87",
+  "engineVersion": "1.6.26",
+  "managerVersion": "1.3.1",
+  "cliVersion": "0.13.2",
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.86 — Managed CLI Engine/Manager Pin Parity Repair`",
+  "materializer": "plugins/usage-dashboard/tools/release_stable_contract_manager_authority_587.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
+  "workflows": {
+    "stage": "usage-dashboard-e7-candidate-ready.yml",
+    "validation": "usage-dashboard-e9-candidate-validation.yml",
+    "mergeGuard": "usage-dashboard-e11-merge-ready.yml",
+    "promotion": "usage-dashboard-e5-exact-byte-promotion.yml"
+  },
+  "engine": {
+    "sourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+    "buildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs"
+  },
+  "newTests": [
+    "plugins/usage-dashboard/tests/p53-stable-contract-manager-authority-single-source.cjs"
+  ],
+  "highlights": [
+    "Runtime Diagnostics의 Stable contract Manager 버전이 readiness와 동일한 REQUIRED_BRIDGE_MANAGER_VERSION authority를 사용하도록 단일소스화",
+    "Engine 1.6.26과 Manager semantic 1.3.1, managed CLI 1.10.0 동작은 그대로 유지",
+    "Manager artifact는 현재 Product 5.87 sync identity만 갱신하고 provisioning/fallback 동작은 변경하지 않음"
+  ],
+  "diagnosticHints": [
+    "전체 Diagnostics에서 Stable contract의 manager가 1.3.1로 표시되고 Bridge manager v1.3.1과 일치하는지 확인",
+    "READY / Health ok / active errors 0 / failures 0가 유지되는지 확인",
+    "Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok이고 정상 작업이 managed-direct를 유지하는지 확인",
+    "DevPass/Credits/Request Ledger와 기존 source-truth 표시가 5.86과 동일하게 유지되는지 확인"
+  ]
+}

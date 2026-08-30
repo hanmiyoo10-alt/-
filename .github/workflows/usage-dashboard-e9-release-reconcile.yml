@@ -20,6 +20,7 @@ on:
       - 'plugins/usage-dashboard/tools/source_change_semantics.cjs'
       - 'plugins/usage-dashboard/tools/merge_guard_e11.cjs'
       - 'plugins/usage-dashboard/tools/merge_guard_receipt_e12.cjs'
+      - 'plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs'
       - 'plugins/usage-dashboard/tools/reducer_wake_e13.sh'
   schedule:
     - cron: '*/5 * * * *'
@@ -262,6 +263,41 @@ jobs:
               echo "E11_MERGE_BLOCKED_PROTECTED_MAIN_DRIFT:$CANDIDATE_SHA:$CURRENT_MAIN_SHA"
               exit 0
             fi
+
+            if [[ "$RELEASE_GENERATION" == 'E13' ]]; then
+              MATERIALIZATION_JSON="$(node - "$CANDIDATE_SHA" <<'NODE'
+          const mergeGuard=require('./plugins/usage-dashboard/tools/merge_guard_e11.cjs');
+          const identity=mergeGuard.materializationIdentity(process.argv[2]);
+          if(!identity) throw new Error(`E16_MATERIALIZATION_IDENTITY_MISSING:${process.argv[2]}`);
+          process.stdout.write(JSON.stringify(identity));
+          NODE
+              )"
+              E16_CAPSULE_JSON="$(node - "$REQUEST_JSON" "$RUNNER_TEMP/pr.json" "$VALIDATION_JSON" "$MERGE_GUARD_JSON" "$MATERIALIZATION_JSON" "$GITHUB_REPOSITORY" "$REQUEST_NUMBER" "$CURRENT_MAIN_SHA" <<'NODE'
+          const fs=require('node:fs');
+          const e16=require('./plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs');
+          const [requestJson,prFile,validationJson,mergeGuardJson,materializationJson,repository,requestNumber,freshMainSha]=process.argv.slice(2);
+          const capsule=e16.compileMergeCapsule({
+            request:JSON.parse(requestJson),
+            pr:JSON.parse(fs.readFileSync(prFile,'utf8')),
+            validation:JSON.parse(validationJson),
+            mergeGuard:JSON.parse(mergeGuardJson),
+            materialization:JSON.parse(materializationJson),
+            repository,
+            requestNumber:Number(requestNumber),
+            freshMainSha,
+          });
+          process.stdout.write(JSON.stringify(capsule));
+          NODE
+              )"
+              E16_MARKER="$(node -e "const e16=require('./plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs');process.stdout.write(e16.markerForCapsule(JSON.parse(process.argv[1])))" "$E16_CAPSULE_JSON")"
+              if ! has_line "$E16_MARKER"; then
+                E16_BODY="$(node -e "const e16=require('./plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs');process.stdout.write(e16.formatMergeCapsule(JSON.parse(process.argv[1])))" "$E16_CAPSULE_JSON")"
+                post_comment "$REQUEST_NUMBER" "$E16_BODY"
+                api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+              fi
+              echo "E16_MERGE_CAPSULE_READY:$CANDIDATE_SHA:$CURRENT_MAIN_SHA"
+            fi
+
             if ! has_line "$VALIDATED_MARKER"; then
               post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: VALIDATED\nmerge_guard: %s\nmain_sha: %s\nnext: re-read head/candidate/main/mergeability and expected-head merge' "$VALIDATED_MARKER" "$PR_NUMBER" "$MERGE_GUARD_VERDICT" "$CURRENT_MAIN_SHA")"
             fi

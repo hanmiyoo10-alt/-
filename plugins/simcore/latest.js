@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.0
+//@version 0.70.1
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.1 Cold First-Turn Tail Attribution:
+// - Splits the existing post-onSend residual into bounded current-request timing segments for history stabilization, prompt accounting, cache topology, cache candidate work and conservative unattributed remainder
+// - Keeps the previous post-onSend total authoritative and reports BOUNDED only when named non-negative segments close within rounding tolerance; checkpoint failure degrades diagnostics to UNRESOLVED
+// - Adds monotonic timestamp reads and pure OPS accounting only; no await, yield, callback, timer, storage/network/chat I/O, prompt/state/output semantic or persistent telemetry schema change
+// - Preserves v0.70.0 Current Task Primacy Guard, v0.69.2 MamsHolic aliases, COMMUNITY_CLASSIFIER_VERSION 3 and the M2-6 architecture graph
 //
 // v0.70.0 Current Task Primacy Guard:
 // - Makes the current user input the primary generation-task authority while keeping prior assistant output as continuity/reference context rather than automatic current-task authority
@@ -717,7 +723,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.0';
+const SIMCORE_RUNTIME_VERSION = '0.70.1';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -5643,12 +5649,40 @@ function perfNow() {
   return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
 }
 function perfMs(start) { return Math.max(0, perfNow() - start); }
+function timingCheckpoint(nowFn = perfNow) {
+  try {
+    const value = Number(nowFn());
+    return Number.isFinite(value) ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+function timingSpan(start, end) {
+  if (start == null || end == null) return null;
+  const value = Number(end) - Number(start);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+function postOnSendAttribution(totalMs, segments, toleranceMs = 0.5) {
+  const total = Number(totalMs);
+  const tolerance = Math.max(0, Number(toleranceMs) || 0);
+  const values = Array.isArray(segments) ? segments.map((value) => value == null ? null : Number(value)) : [];
+  const invalid = !Number.isFinite(total) || total < 0 || !values.length || values.some((value) => value == null || !Number.isFinite(value) || value < 0);
+  if (invalid) {
+    return { totalMs: Number.isFinite(total) && total >= 0 ? total : null, namedMs: null, unattributedMs: null, confidence: 'UNRESOLVED', checkpointFailure: true };
+  }
+  const named = values.reduce((sum, value) => sum + value, 0);
+  const remainder = total - named;
+  if (!Number.isFinite(named) || !Number.isFinite(remainder) || remainder < -tolerance) {
+    return { totalMs: total, namedMs: null, unattributedMs: null, confidence: 'UNRESOLVED', checkpointFailure: true };
+  }
+  return { totalMs: total, namedMs: named, unattributedMs: Math.max(0, remainder), confidence: 'BOUNDED', checkpointFailure: false };
+}
 function normalizationIssues(state) {
   return (state?.community?.lastNormalization || []).map((x) =>
     `Reaction normalization ${x.platform}: ${x.mode} (${Number(x.generatedMin).toLocaleString('en-US')}..${Number(x.generatedMax).toLocaleString('en-US')} → ${Number(x.normalizedMin).toLocaleString('en-US')}..${Number(x.normalizedMax).toLocaleString('en-US')}, family historical ${Number(x.historicalFamilyMax ?? x.historicalMax ?? 0).toLocaleString('en-US')})`
   );
 }
-module.exports = { perfNow, perfMs, normalizationIssues };
+module.exports = { perfNow, perfMs, timingCheckpoint, timingSpan, postOnSendAttribution, normalizationIssues };
 });
 
 SimCore.define("runtime-contracts", function (require, module, exports) {
@@ -6421,7 +6455,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.0';
+const HOST_COMPAT_VERSION = '0.70.1';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -7752,7 +7786,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   let lastDiagnosticCopyProbe = null;
   let lastTelemetryCheckpointProbe = null;
 
-  const { perfNow, perfMs } = ops;
+  const { perfNow, perfMs, timingCheckpoint, timingSpan, postOnSendAttribution } = ops;
   const host = runtimeHostRules.createHostAdapter(Risuai);
   const runtimePromptCache = runtimeCacheRules.createRuntimePromptCacheTracker(runtimeContracts.cache);
   const requestTopology = runtimeTopologyRules.createRequestTopologyTracker();
@@ -8238,7 +8272,10 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 
     const postOnSendStart = perfNow();
     if (result.active && result.promptBlock) {
+      const postOnSendHistoryStarted = timingCheckpoint();
       lastHistoryStabilizationProbe = stabilizeHistoryProjection(messages, chat?.message || [], sendIndex);
+      if (perf) perf.postOnSendHistoryStabilizationMs = timingSpan(postOnSendHistoryStarted, timingCheckpoint());
+      const postOnSendPromptAccountingStarted = timingCheckpoint();
       const runtimeBudgetText = String(result.promptBlock || '');
       const runtimeBudgetLines = runtimeBudgetText ? runtimeBudgetText.split('\n') : [];
       const runtimeBudgetReactionLine = runtimeBudgetLines.find((line) => line.startsWith('reaction_max=')) || '';
@@ -8298,6 +8335,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         at: Date.now(),
       });
       messages.push({ role: 'system', content: result.promptBlock });
+      if (perf) perf.postOnSendPromptAccountingMs = timingSpan(postOnSendPromptAccountingStarted, timingCheckpoint());
       const topologyStarted = perfNow();
       const previousTopologyProbe = lastRequestTopologyProbe;
       lastRequestTopologyProbe = requestTopology.observe(runtimePromptKey, messages, {
@@ -8316,6 +8354,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         at: Number(lastRequestTopologyProbe?.at || Date.now()),
       });
       lastCacheCandidateCostMs = perfMs(candidateStarted);
+      if (perf) perf.cacheCandidateMs = lastCacheCandidateCostMs;
       const pendingProbe = result.state.pending || null;
       if (pendingProbe && !/^B_/.test(String(pendingProbe.mode || ''))) {
         lastNarrativeClockProbe = {
@@ -8424,7 +8463,22 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       lastEvidenceFenceProbe = null;
       lastCore = { active: false, mode: null, issues: [], diagnostics: [] };
     }
-    if (perf) perf.postOnSendMs = perfMs(postOnSendStart);
+    if (perf) {
+      perf.postOnSendMs = perfMs(postOnSendStart);
+      const tail = postOnSendAttribution(perf.postOnSendMs, [
+        perf.postOnSendHistoryStabilizationMs,
+        perf.postOnSendPromptAccountingMs,
+        perf.cacheTopologyMs,
+        perf.cacheCandidateMs,
+      ]);
+      perf.postOnSendAttribution = {
+        ...tail,
+        historyStabilizationMs: perf.postOnSendHistoryStabilizationMs,
+        promptAccountingMs: perf.postOnSendPromptAccountingMs,
+        cacheTopologyMs: Number.isFinite(Number(perf.cacheTopologyMs)) ? Number(perf.cacheTopologyMs) : null,
+        cacheCandidateMs: Number.isFinite(Number(perf.cacheCandidateMs)) ? Number(perf.cacheCandidateMs) : null,
+      };
+    }
     // v0.62: do not call setChatToIndex on the request-critical path. The authoritative
     // pre/send snapshots are already persisted; scriptstate mirror is refreshed after output.
     return result;
@@ -8515,7 +8569,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     const totalStart = perfNow();
     const perf = {
       totalMs: 0, indicesMs: 0, chatLoadMs: 0, sessionLoadMs: 0, sessionDetail: null, promptScanMs: 0,
-      bootstrapMs: 0, editReconcileMs: 0, editDetail: null, aliasRepairMs: 0, aliasRepair: null, onSendMs: 0, snapshotDetail: null, postOnSendMs: 0,
+      bootstrapMs: 0, editReconcileMs: 0, editDetail: null, aliasRepairMs: 0, aliasRepair: null, onSendMs: 0, snapshotDetail: null, postOnSendMs: 0, postOnSendHistoryStabilizationMs: null, postOnSendPromptAccountingMs: null, cacheCandidateMs: null, postOnSendAttribution: null,
       sendIndex: -1, locationKey: '',
       promptScannedMessages: 0, promptTotalMessages: Array.isArray(messages) ? messages.length : 0, promptScannedChars: 0,
     };
@@ -8780,6 +8834,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 
     const session = perf.sessionDetail || {};
     const edit = perf.editDetail || {};
+    const tail = perf.postOnSendAttribution || {};
+    const tailNumber = (value) => value == null || !Number.isFinite(Number(value)) || Number(value) < 0 ? null : Number(value);
     const sessionKnown = n(session.chatFallbackMs) + n(session.characterLoadMs) + n(session.initScanMs) + n(session.initMs);
     const sessionOther = Math.max(0, n(perf.sessionLoadMs) - sessionKnown);
 
@@ -8812,6 +8868,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       indicesMs: n(perf.indicesMs), chatLoadMs: n(perf.chatLoadMs), sessionLoadMs: n(perf.sessionLoadMs), promptScanMs: n(perf.promptScanMs),
       sessionChatFallbackMs: n(session.chatFallbackMs), characterLoadMs: n(session.characterLoadMs), initScanMs: n(session.initScanMs), initMs: n(session.initMs),
       bootstrapMs: n(perf.bootstrapMs), editReconcileMs: n(perf.editReconcileMs), aliasRepairMs: n(perf.aliasRepairMs), onSendMs: n(perf.onSendMs), postOnSendMs: n(perf.postOnSendMs), cacheTopologyMs: n(perf.cacheTopologyMs),
+      postOnSendNamedMs: tailNumber(tail.namedMs), postOnSendUnattributedMs: tailNumber(tail.unattributedMs),
+      postOnSendHistoryStabilizationMs: tailNumber(tail.historyStabilizationMs), postOnSendPromptAccountingMs: tailNumber(tail.promptAccountingMs), postOnSendCacheCandidateMs: tailNumber(tail.cacheCandidateMs),
+      postOnSendAttributionConfidence: String(tail.confidence || 'UNRESOLVED'), postOnSendAttributionCheckpointFailure: !!tail.checkpointFailure,
       preLoadMs: n(send.preLoadMs), templateBootstrapMs: n(send.templateBootstrapMs), lifecycleMs: n(send.lifecycleMs),
       turnSerializeMs: n(send.turnSerializeMs), turnSetMs: n(send.turnSetMs), turnPayloadChars, turnSetPerKChars, runtimeRenderMs: n(send.runtimeRenderMs),
       restoreReason: String(send.restoreReason || 'n/a'), preRead: !!send.mustRestorePre, preHit: !!send.existingPre,
@@ -9009,6 +9068,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Session surface: ${lastTelemetryCheckpointProbe?.surface ? `WINDOW ${lastTelemetryCheckpointProbe.surface.window || 'UNOBSERVED'} · GLOBAL_THIS ${lastTelemetryCheckpointProbe.surface.globalThis || 'UNOBSERVED'} · relation ${lastTelemetryCheckpointProbe.surface.relation || 'NONE'}` : 'n/a'}`,
       `Host-local transport: ${lastTelemetryCheckpointProbe?.host ? `API ${lastTelemetryCheckpointProbe.host.api || 'UNOBSERVED'} · store ${lastTelemetryCheckpointProbe.host.store || 'UNOBSERVED'} · clear ${lastTelemetryCheckpointProbe.host.clear || 'UNKNOWN'} · boot ${lastTelemetryCheckpointProbe.host.boot || 'UNOBSERVED'}` : 'n/a'}`,
       `Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `MEMORY ${lastTelemetryCheckpointProbe.memory || 'UNAVAILABLE'} · SESSION ${lastTelemetryCheckpointProbe.session || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.session === 'WRITTEN' ? ` via ${lastTelemetryCheckpointProbe.sessionRoot || 'NONE'}` : (lastTelemetryCheckpointProbe.sessionRoot && lastTelemetryCheckpointProbe.sessionRoot !== 'NONE' ? ` · root ${lastTelemetryCheckpointProbe.sessionRoot}` : '')}${lastTelemetryCheckpointProbe.fallbackFrom ? ` · fallback ${lastTelemetryCheckpointProbe.fallbackFrom}` : ''}${lastTelemetryCheckpointProbe.attempted && lastTelemetryCheckpointProbe.session === 'FAILED' ? ` · attempted ${lastTelemetryCheckpointProbe.attempted}` : ''} · HOST_LOCAL ${lastTelemetryCheckpointProbe.hostLocal || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.serialization && lastTelemetryCheckpointProbe.serialization !== 'OK' ? ` · serialization ${lastTelemetryCheckpointProbe.serialization}` : ''} · ${Number(lastTelemetryCheckpointProbe.serializedChars || 0)} chars${lastTelemetryCheckpointProbe.hostElapsedMs > 0 ? ` · host ${diagnosticFormatMs(lastTelemetryCheckpointProbe.hostElapsedMs)}` : ''} · ${diagnosticFormatMs(lastTelemetryCheckpointProbe.elapsedMs)} total · trigger ${lastTelemetryCheckpointProbe.trigger || 'UNKNOWN'}` : 'n/a'}`,
+      `Post-onSend attribution: ${requestBreakdown ? `named ${requestBreakdown.postOnSendNamedMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendNamedMs)} · history ${requestBreakdown.postOnSendHistoryStabilizationMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendHistoryStabilizationMs)} · prompt ${requestBreakdown.postOnSendPromptAccountingMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendPromptAccountingMs)} · topology ${diagnosticFormatMs(requestBreakdown.cacheTopologyMs)} · candidate ${requestBreakdown.postOnSendCacheCandidateMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendCacheCandidateMs)} · unattributed ${requestBreakdown.postOnSendUnattributedMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendUnattributedMs)} · first-request ${requestBreakdown.sessionPath || 'n/a'} · confidence ${requestBreakdown.postOnSendAttributionConfidence || 'UNRESOLVED'}${requestBreakdown.postOnSendAttributionCheckpointFailure ? ' · checkpoint FAIL_CLOSED' : ''}` : 'n/a'}`,
       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
       `Broadcast lifecycle: ${probeFresh && budget ? `${budget.broadcastSessionState || 'CLOSED'} · mode ${budget.mode || 'n/a'}` : 'n/a'}`,
@@ -9224,8 +9284,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.0',
-    name: 'Current Task Primacy Guard',
+    version: '0.70.1',
+    name: 'Cold First-Turn Tail Attribution',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

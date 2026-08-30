@@ -62,16 +62,22 @@ assert.ok(helperSource.includes("execFileSync('git'"), 'E18 may derive impact on
 const workflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
 assert.ok(workflow.includes('derived_impact_e18.cjs --smoke-plan "$TRUSTED_BASE_SHA"'), 'E7 must select smoke from post-materialization derived impact');
 assert.ok(workflow.includes('UD_DERIVED_IMPACT:'), 'E7 should expose bounded derived-impact diagnostics');
-assert.ok(workflow.includes("E18_UNKNOWN_RUNTIME_IMPACT"), 'unknown shipped/runtime impact must fail closed');
+assert.ok(workflow.includes('E18_UNKNOWN_RUNTIME_IMPACT'), 'unknown shipped/runtime impact must fail closed');
 assert.equal(workflow.includes("if [[ \"$ENGINE_CHANGED\" == 'true' ]]"), false, 'source-intent Engine flag must no longer select behavior smoke');
 assert.equal(workflow.includes("elif [[ \"$PLUGIN_CHANGED\" == 'true' ]]"), false, 'source-intent Plugin flag must no longer select behavior smoke');
-assert.ok(workflow.includes('ENGINE_CHANGED:' ) || workflow.includes('engine_changed='), 'source-intent Engine classification remains available for source policy/diagnostics');
+assert.ok(workflow.includes('engine_changed=') && workflow.includes('plugin_changed='), 'source-intent classification remains available for source policy/diagnostics');
 
 const materializer = fs.readFileSync('plugins/usage-dashboard/tools/release_cost_drivers_594.py','utf8');
-assert.equal(materializer.includes("state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost'"), false, 'historical 5.94 materializer must not reject equivalent source spelling');
-assert.equal(materializer.includes("candidates.slice().sort"), false, 'feature implementation syntax belongs to P60 behavior coverage, not materializer self-checks');
-assert.ok(materializer.includes('5.94 Engine exact-byte preservation failed'), 'structural exact-byte assertions remain in materializer');
-assert.ok(materializer.includes('5.94 manifest Product mismatch'), 'structural target identity assertions remain in materializer');
+const validateStart = materializer.indexOf('def validate_target() -> None:');
+const validateEnd = materializer.indexOf('\n\nspec = load_spec()', validateStart);
+assert.ok(validateStart >= 0 && validateEnd > validateStart, 'historical 5.94 validate_target boundary missing');
+const validateTarget = materializer.slice(validateStart, validateEnd);
+assert.equal(validateTarget.includes("state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost'"), false, 'historical 5.94 self-check must not reject equivalent ternary spelling');
+assert.equal(validateTarget.includes('candidates.slice().sort'), false, 'feature implementation syntax belongs to P60 behavior coverage, not materializer self-checks');
+assert.equal(validateTarget.includes('cost > 0'), false, 'positive-cost semantics belong to P60, not source-spelling self-checks');
+assert.equal(validateTarget.includes('scopeActivity.providers[0]'), false, 'first-row semantic regression belongs to P60');
+assert.ok(validateTarget.includes('5.94 Engine exact-byte preservation failed'), 'structural exact-byte assertions remain in materializer');
+assert.ok(validateTarget.includes('5.94 manifest Product mismatch'), 'structural target identity assertions remain in materializer');
 
 const p60 = fs.readFileSync('plugins/usage-dashboard/tests/p60-compact-authoritative-cost-drivers.cjs','utf8');
 assert.ok(p60.includes("assert.equal(truth.model.state, 'no-positive-cost'"), 'P60 must own no-positive-cost behavior semantics');

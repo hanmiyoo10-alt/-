@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.69.1`
-- Release: `Refreshless Targeted Update Liveness Repair`
+- Version: `0.69.2`
+- Release: `MamsHolic Exact Brand Alias Repair`
 - Release branch: `release-simcore`
-- Release commit: `5dc5ec1099c6097a6a0e46effeb826889a4741c3`
-- Release blob: `de764f2c98174aa7f8ae8dc356d83aa6851b3745`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f`
+- Release blob: `8132fc447e237f7f7a08a27126191a47dc6eac6f`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-6`
@@ -30,18 +30,17 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
-- Release transaction: `simcore-v0.69.1-new-06`
-- Production commit: `5dc5ec1099c6097a6a0e46effeb826889a4741c3`
-- Validation status: `LIVE_PASS`
-- Current priority: `POST_M2_6_ARCHITECTURE_FREEZE_OBSERVATION_REVIEW`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Release transaction: `simcore-v0.69.2-new-06`
+- Production commit: `2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `06902_MAMSHOLIC_EXACT_BRAND_ALIAS_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

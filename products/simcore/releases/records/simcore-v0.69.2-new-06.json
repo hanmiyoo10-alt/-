@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.69.2-new-06",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "9fe9c6c6f97af9cdaeff4aabefcb21c632f1cba2",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.69.2-new-06.json",
+  "releaseSpecSha256": "23f1cc57a63d7a40ed268a670d84324681687320ba190514095efed9c7f9b655",
+  "productionCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+  "previousProductionCommit": "5dc5ec1099c6097a6a0e46effeb826889a4741c3",
+  "productionBlob": "8132fc447e237f7f7a08a27126191a47dc6eac6f",
+  "version": "0.69.2",
+  "releaseName": "MamsHolic Exact Brand Alias Repair",
+  "verificationReportSha256": "ab96c561c3c2f0cef8edec8770f960a5c60a52cd1e5b8a85c51334ed74926225",
+  "verifierCommit": "3931f3ad2818a4cbe4341f95c01d3036bf413911",
+  "publisherRunId": "33290487855",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06902_MAMSHOLIC_EXACT_BRAND_ALIAS_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

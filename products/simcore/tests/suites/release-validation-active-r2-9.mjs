@@ -48,3 +48,11 @@ export async function runActiveProjectedValidationContract(contractId, ctx) {
   const profile = loadActiveValidationProfile(ctx.source);
   return runProjectedValidationContract(contractId, ctx, profile);
 }
+
+export async function runSuite(ctx) {
+  const contractIds = [...new Set((ctx.fixtures || []).map((fixture) => fixture?.suite).filter(Boolean))];
+  if (contractIds.length !== 1) {
+    throw activeError('VALIDATION_ACTIVE_FIXTURE_CONTRACT_AMBIGUOUS', `expected one active contract fixture identity, found ${contractIds.length}`);
+  }
+  return runActiveProjectedValidationContract(contractIds[0], ctx);
+}

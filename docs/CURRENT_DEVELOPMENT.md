@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.69.0`
-- Release: `M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion`
+- Version: `0.69.1`
+- Release: `Refreshless Targeted Update Liveness Repair`
 - Release branch: `release-simcore`
-- Release commit: `31b4c5075659a55861731c6fd73f999402321e94`
-- Release blob: `86954f4d7ff7dec9119e2a8c047bfbfa6f801d56`
+- Release commit: `5dc5ec1099c6097a6a0e46effeb826889a4741c3`
+- Release blob: `de764f2c98174aa7f8ae8dc356d83aa6851b3745`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -33,10 +33,10 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
 ## Current Release Live Gate
 
-- Release transaction: `simcore-v0.69.0-new-01`
-- Production commit: `31b4c5075659a55861731c6fd73f999402321e94`
+- Release transaction: `simcore-v0.69.1-new-06`
+- Production commit: `5dc5ec1099c6097a6a0e46effeb826889a4741c3`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT`
+- Current priority / live gate: `06901_REFRESHLESS_TARGETED_UPDATE_LIVENESS_REAL_LONG_CHAT`
 - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
 This block is machine-managed by `release-state-converge` from immutable publication evidence.

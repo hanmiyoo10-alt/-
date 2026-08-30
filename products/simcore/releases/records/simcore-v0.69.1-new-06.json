@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.69.1-new-06",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "8426675b5e4bf52aaf935fc85acac03be2b34de4",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.69.1-new-06.json",
+  "releaseSpecSha256": "a38a80f6fb172a884ac65e55444073fc458477d6e7dc05a9dd48597e11c05112",
+  "productionCommit": "5dc5ec1099c6097a6a0e46effeb826889a4741c3",
+  "previousProductionCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "productionBlob": "de764f2c98174aa7f8ae8dc356d83aa6851b3745",
+  "version": "0.69.1",
+  "releaseName": "Refreshless Targeted Update Liveness Repair",
+  "verificationReportSha256": "de37bba74ceac561b9e0cd2f1dae344fd4cc032a463e3043d3038cbb8a0f4813",
+  "verifierCommit": "67fe47af61866bbcbfe6c5a7aa88a699d864ad1a",
+  "publisherRunId": "33285500779",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06901_REFRESHLESS_TARGETED_UPDATE_LIVENESS_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

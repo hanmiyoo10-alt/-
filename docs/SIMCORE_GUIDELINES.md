@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.69.0 — M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion
-Release commit: 31b4c5075659a55861731c6fd73f999402321e94
+SimCore v0.69.1 — Refreshless Targeted Update Liveness Repair
+Release commit: 5dc5ec1099c6097a6a0e46effeb826889a4741c3
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

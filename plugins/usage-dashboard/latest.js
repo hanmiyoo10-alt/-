@@ -1,25 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.92
+//@version 3.0.0-alpha.5.93
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.92';
+  const VERSION = '3.0.0-alpha.5.93';
   const RELEASE_NOTES = Object.freeze({
-    title: "PAYG + Auto-Reload Read-Only Fidelity",
+    title: "Truthful DevPass Cycle / Source-Window Summary",
     highlights: Object.freeze([
-    "DevPass PAYG 상태를 true/false/UNKNOWN 그대로 보존해 missing 값을 OFF로 오표시하지 않음",
-    "기존 인증 상태 캡처가 제공하는 Auto-Reload 상태·threshold·amount를 읽기 전용으로 표시",
-    "Overflow balance는 explicit PAYG + Regular Credits에서만 계정 수준 상태를 계산하며 요청별 결제 출처는 추론하지 않음"
+    "DevPass 7d/30d 기존 activity source에서 요청·토큰·Cached input share·Peak day를 source-backed 값으로 요약",
+    "billing cycle이 KST 일 경계와 source coverage로 정확히 증명될 때만 ‘이번 사이클’을 쓰고 아니면 최근 30일/7일로 fail-closed",
+    "missing daily scalar는 0으로 메우지 않고 UNKNOWN으로 보존하며 Credits 데이터와 기존 월간 예상 사용량 의미를 섞지 않음",
+    "E16 live-proof 문서 상태 자동화는 선행 maintenance #962로 main baseline에 고정되어 release authority와 분리"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.92 · Engine 1.6.29 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "PAYG overflow와 Auto-Reload의 ON/OFF/—가 Diagnostics의 PAYG status 줄과 일치하는지 확인",
-    "Regular Credits·Reload threshold·Reload amount는 source가 없으면 —이고 explicit 0은 0으로 유지되는지 확인",
-    "기존 Reset Pass와 Premium 주간 한도 카드가 그대로이며 추가 refresh/CLI/network 작업이나 결제 조작 UI가 없는지 확인"
+    "업데이트 후 Product 5.93 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "DevPass 요약 제목이 Diagnostics의 cycle summary mode와 정확히 일치하는지 확인",
+    "요청·토큰·Cached input share·Peak day가 Diagnostics와 일치하고 source가 부족한 값은 —로 남는지 확인",
+    "기존 Billing Cycle·Premium·PAYG와 월간 예상 사용량이 그대로이며 Credits 혼합이나 추가 CLI/network/refresh가 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.29';
+  const REQUIRED_BRIDGE_VERSION = '1.6.30';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -2030,6 +2031,27 @@ async function importLegacyTodayBaselines() {
     };
   }
 
+
+  function normalizeDailyScalarSeries(value) {
+    if (!value || typeof value !== 'object') return null;
+    const exact = scalar => typeof scalar === 'number' && Number.isFinite(scalar) && scalar >= 0 ? Number(scalar) : null;
+    const granularity = typeof value.granularity === 'string' ? value.granularity.trim().toLowerCase() : '';
+    const range = typeof value.range === 'string' ? value.range.trim() : '';
+    const buckets = Array.isArray(value.buckets) ? value.buckets.map(row => {
+      const date = typeof row?.date === 'string' && row.date.trim() ? row.date.trim() : null;
+      if (!date) return null;
+      return {
+        date,
+        requestCount:exact(row.requestCount),
+        inputTokens:exact(row.inputTokens),
+        cachedTokens:exact(row.cachedTokens),
+        totalTokens:exact(row.totalTokens),
+      };
+    }).filter(Boolean) : [];
+    if (!granularity && !buckets.length) return null;
+    return {range,granularity,buckets};
+  }
+
   function normalizeScopeActivity(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const rows = value => Array.isArray(value) ? value.map(row => ({
@@ -2072,7 +2094,7 @@ async function importLegacyTodayBaselines() {
     const recent = normalizeRecentRequestRows(rawRecent);
     const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
     if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),dailySeries:normalizeDailyScalarSeries(raw.dailySeries),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {
@@ -2328,6 +2350,140 @@ async function importLegacyTodayBaselines() {
   async function renderRefreshWidget(reason, stage) {
     try { await renderWidget(reason); noteLocalRuntimeRecovery(stage); return true; }
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
+  }
+
+  function cycleSummaryExactMetric(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+  }
+
+  function cycleSummaryKstDateKey(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const text = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const timestamp = typeof value === 'number' && Number.isFinite(value) ? value : Date.parse(text);
+    if (!Number.isFinite(timestamp)) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone:KST_TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit'
+    }).formatToParts(new Date(timestamp));
+    const get = type => parts.find(part => part.type === type)?.value || '';
+    const year = get('year'), month = get('month'), day = get('day');
+    return year && month && day ? `${year}-${month}-${day}` : '';
+  }
+
+  function cycleSummaryIsKstMidnight(timestamp) {
+    if (!Number.isFinite(timestamp)) return false;
+    const date = new Date(timestamp);
+    if (date.getUTCMilliseconds() !== 0) return false;
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone:KST_TIME_ZONE, hourCycle:'h23', hour:'2-digit', minute:'2-digit', second:'2-digit'
+    }).formatToParts(date);
+    const number = type => Number(parts.find(part => part.type === type)?.value);
+    return number('hour') === 0 && number('minute') === 0 && number('second') === 0;
+  }
+
+  function cycleSummaryDailySeries(window, range) {
+    const source = window?.dailySeries;
+    if (!source || typeof source !== 'object') return null;
+    const granularity = typeof source.granularity === 'string' ? source.granularity.trim().toLowerCase() : '';
+    const buckets = Array.isArray(source.buckets) ? source.buckets.map(row => {
+      const date = cycleSummaryKstDateKey(row?.date);
+      if (!date) return null;
+      return {
+        date,
+        requestCount:cycleSummaryExactMetric(row?.requestCount),
+        inputTokens:cycleSummaryExactMetric(row?.inputTokens),
+        cachedTokens:cycleSummaryExactMetric(row?.cachedTokens),
+        totalTokens:cycleSummaryExactMetric(row?.totalTokens),
+      };
+    }).filter(Boolean).sort((a,b) => a.date.localeCompare(b.date)) : [];
+    const uniqueDates = new Set(buckets.map(row => row.date));
+    return {
+      range:String(source.range || range || ''),
+      granularity,
+      buckets,
+      valid:granularity === 'daily' && buckets.length > 0 && uniqueDates.size === buckets.length,
+    };
+  }
+
+  function cycleSummaryMetrics(buckets) {
+    const rows = Array.isArray(buckets) ? buckets : [];
+    const complete = key => rows.length > 0 && rows.every(row => cycleSummaryExactMetric(row?.[key]) !== null);
+    const sum = key => complete(key) ? rows.reduce((total,row) => total + Number(row[key]), 0) : null;
+    const requests = sum('requestCount');
+    const totalTokens = sum('totalTokens');
+    const inputTokens = sum('inputTokens');
+    const cachedTokens = sum('cachedTokens');
+    const cachedInputShare = inputTokens !== null && cachedTokens !== null && inputTokens > 0
+      ? cachedTokens / inputTokens * 100
+      : null;
+    let peakDay = null;
+    if (requests !== null && requests > 0) {
+      let best = null;
+      for (const row of rows) {
+        const count = cycleSummaryExactMetric(row.requestCount);
+        if (count === null) { best = null; break; }
+        if (!best || count > best.count || (count === best.count && row.date < best.date)) best = {date:row.date,count};
+      }
+      peakDay = best?.date || null;
+    }
+    return {requests,totalTokens,cachedInputShare,peakDay};
+  }
+
+  function devpassCycleSummaryTruth(account, analytics, now = Date.now()) {
+    const windows = analytics?.windows && typeof analytics.windows === 'object' ? analytics.windows : {};
+    const raw30 = windows['30d'] || null;
+    const raw7 = windows['7d'] || null;
+    const series30 = cycleSummaryDailySeries(raw30, '30d');
+    const series7 = cycleSummaryDailySeries(raw7, '7d');
+    const start = account?.billingCycleStart ? Date.parse(String(account.billingCycleStart)) : NaN;
+    const end = account?.expiresAt ? Date.parse(String(account.expiresAt)) : NaN;
+    const current = Number(now);
+    let exactReason = 'ok';
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) exactReason = 'boundary-missing';
+    else if (!Number.isFinite(current) || current < start || current >= end) exactReason = 'period-ended';
+    else if (!cycleSummaryIsKstMidnight(start)) exactReason = 'boundary-not-kst-day';
+    else if (series30 && series30.granularity && series30.granularity !== 'daily') exactReason = 'granularity-not-daily';
+    else if (!series30?.valid) exactReason = 'coverage-insufficient';
+    else {
+      const startKey = cycleSummaryKstDateKey(start);
+      if (!startKey || !series30.buckets.some(row => row.date === startKey)) exactReason = 'coverage-insufficient';
+    }
+
+    let mode = 'window-unavailable';
+    let title = '사용량 요약';
+    let reason = 'window-unavailable';
+    let selected = [];
+    if (exactReason === 'ok' && series30?.valid) {
+      const startKey = cycleSummaryKstDateKey(start);
+      const nowKey = cycleSummaryKstDateKey(current);
+      selected = series30.buckets.filter(row => row.date >= startKey && (!nowKey || row.date <= nowKey));
+      mode = 'billing-cycle-exact';
+      title = '이번 사이클';
+      reason = 'ok';
+    } else if (series30?.valid) {
+      selected = series30.buckets;
+      mode = 'window-30d';
+      title = '최근 30일';
+      reason = exactReason;
+    } else if (series7?.valid) {
+      selected = series7.buckets;
+      mode = 'window-7d';
+      title = '최근 7일';
+      reason = exactReason === 'granularity-not-daily' ? 'granularity-not-daily' : 'coverage-insufficient';
+    }
+
+    const metrics = cycleSummaryMetrics(selected);
+    if (mode === 'billing-cycle-exact' && reason === 'ok' && [metrics.requests,metrics.totalTokens,metrics.cachedInputShare].some(value => value === null)) {
+      reason = 'metric-incomplete';
+    }
+    return Object.freeze({mode,title,reason,...metrics});
+  }
+
+  function devpassCycleSummaryDiagnosticText(truth) {
+    const value = truth && typeof truth === 'object' ? truth : devpassCycleSummaryTruth(null, null);
+    const scalar = input => input === null || input === undefined ? '—' : String(input);
+    const cached = value.cachedInputShare === null ? '—' : `${Number(value.cachedInputShare).toFixed(1)}%`;
+    return `DevPass cycle summary: mode ${value.mode} · reason ${value.reason} · requests ${scalar(value.requests)} · tokens ${scalar(value.totalTokens)} · cached-input ${cached} · peak ${scalar(value.peakDay)}`;
   }
 
   function premiumAllowanceTruth(weekly) {
@@ -3077,6 +3233,7 @@ async function importLegacyTodayBaselines() {
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),
+      devpassCycleSummaryDiagnosticText(devpassCycleSummaryTruth(diagAccount, d.analyticsScopes?.scopes?.devpass)),
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
@@ -3236,6 +3393,7 @@ function todayOverviewMetrics(d) {
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     const premiumAllowance = premiumAllowanceTruth(d.weekly);
     const paygTruth = paygAccountTruth(devpassAccount);
+    const cycleSummary = devpassCycleSummaryTruth(devpassAccount, d.analyticsScopes?.scopes?.devpass);
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -3319,6 +3477,12 @@ function todayOverviewMetrics(d) {
             <div class="mini"><span>기간 종료</span><b>${esc(billingEndText)}</b></div>
             <div class="mini"><span>남은 기간</span><b>${esc(billingRemainingText)}</b></div>
             <div class="mini"><span>취소 상태</span><b>${esc(billingCancelledText)}</b></div>
+          </div></div>
+          <div class="usage-detail-box devpass-cycle-summary"><div class="recent-head"><h3>${esc(cycleSummary.title)}</h3><span>${esc(cycleSummary.mode)}</span></div><div class="minis">
+            <div class="mini accent"><span>요청</span><b>${cycleSummary.requests === null ? '—' : Number(cycleSummary.requests).toLocaleString()}</b></div>
+            <div class="mini"><span>토큰</span><b>${cycleSummary.totalTokens === null ? '—' : Number(cycleSummary.totalTokens).toLocaleString()}</b></div>
+            <div class="mini purple"><span>Cached input share</span><b>${cycleSummary.cachedInputShare === null ? '—' : `${Number(cycleSummary.cachedInputShare).toFixed(1)}%`}</b></div>
+            <div class="mini"><span>Peak day</span><b>${esc(cycleSummary.peakDay || '—')}</b></div>
           </div></div>
         </div>`
       : '';

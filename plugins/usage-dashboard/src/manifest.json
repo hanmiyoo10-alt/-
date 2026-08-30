@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.92",
+  "version": "3.0.0-alpha.5.93",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "d0e4870f724e5868431aa2c07c54e60802c9b9d7f1cf42b65a3378101a5ba494",
+  "artifactSha256": "2d495f5369d0e3e8e8af493fa50d9888fc738e83e723710397b8477e2a913f9e",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 14832,
-      "sha256": "56809b0cd3842f93144dd7e42b6cbfbe9fe14e6c3474ad76478921c65e071df3"
+      "bytes": 15039,
+      "sha256": "42ae201861ee8be2cc0244c23179cb1eda36227c4e1bc4b39fd26eeaac016fca"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -64,8 +64,14 @@
     {
       "file": "16-usage-analytics.part.js",
       "label": "usage + analytics normalization",
-      "bytes": 19156,
-      "sha256": "2c4e7ec037f45a27f37ae4003457367e1b4c586ac1d3d1b273e54cbe9523b30f"
+      "bytes": 20174,
+      "sha256": "215da6f398e72422ec5d54eadf0a9fb542aaf830919a0a7e1ae93ba7021536b4"
+    },
+    {
+      "file": "17-cycle-summary.part.js",
+      "label": "DevPass cycle/source-window truth",
+      "bytes": 6705,
+      "sha256": "61ed3b2c329b90c0744892c861e0d391cac6fe15af3df08ab7303a10bcabbb83"
     },
     {
       "file": "18-premium-allowance.part.js",
@@ -94,14 +100,14 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 47043,
-      "sha256": "51be90979829c1a172ebccdff7e438420ad79bd95356c5e94671fe31e156e5f9"
+      "bytes": 47159,
+      "sha256": "ce33371710f2b0f43696d8c2176c98e087a8914cd65f6d551f507d60d00ca5af"
     },
     {
       "file": "50-dashboard-context.part.js",
       "label": "dashboard/context",
-      "bytes": 12342,
-      "sha256": "841370ac73f507810a728377600a653c90383334a2768e1cbfa78b1cff9f9807"
+      "bytes": 13263,
+      "sha256": "c16513a8556a944e743583f6efdae1d5bdc34da38469eb05991e5bc775c74d91"
     },
     {
       "file": "52-analytics-context.part.js",

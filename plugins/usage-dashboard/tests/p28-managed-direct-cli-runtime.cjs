@@ -41,7 +41,7 @@ assert.match(manager, /const MANAGED_CLI_RETRY_MS = 30 \* 60 \* 1000;/);
 assert.ok(manager.includes("spawn('npm', ['install','--ignore-scripts','--no-audit','--no-fund','--package-lock=true']"));
 assert.ok(manager.includes("path.join(MANAGED_CLI_ROOT, `cli-next-${process.pid}-${Date.now()}`)"));
 assert.ok(manager.includes('fs.renameSync(stage, MANAGED_CLI_VERSION_ROOT)'));
-assert.ok(manager.includes("if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error('managed CLI package identity mismatch')"));
+assert.ok(manager.includes("if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error("), 'managed CLI package name/version verifier must remain fail-closed');
 assert.ok(manager.includes("if (!pathInside(rootReal, packageReal)) throw new Error('managed CLI package escaped runtime root')"));
 assert.ok(manager.includes("if (!pathInside(packageReal, entry) || !pathInside(rootReal, entry)) throw new Error('managed CLI entry escaped runtime root')"));
 assert.ok(manager.includes("if (!fs.statSync(entry).isFile()) throw new Error('managed CLI entry is not a file')"));

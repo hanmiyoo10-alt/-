@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.0-intent-01",
+  "releaseId": "simcore-v0.70.0-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+  "sourceCommit": "df4c19bd91909e4253ffc4a110fc086140f1bd7b",
+  "candidateCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+  "candidateReleaseBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.0-intent-01",
+  "builderPath": "products/simcore/tooling/build-07000-current-task-primacy-guard.py",
+  "builderSha256": "45ada95c80d7071ea80ba7d118c05146f3ce320c326521253b6597bf0db7b03c",
+  "verifierCommit": "df4c19bd91909e4253ffc4a110fc086140f1bd7b",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "626515fd1b4b2e97a0256133108f98f55dde09dcfbed2972d8293fbc52fe84d7",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

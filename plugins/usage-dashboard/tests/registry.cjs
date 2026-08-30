@@ -21,6 +21,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'candidate-stage-transaction-contract.cjs',
   'e7-validation-control-command-contract.cjs',
   'release-generic-preflight-contract.cjs',
+  'managed-cli-package-authority-contract.cjs',
   'e8-early-failure-orchestration-contract.cjs',
   'e9-durable-release-transaction-contract.cjs',
   'e10-immediate-convergence-contract.cjs',

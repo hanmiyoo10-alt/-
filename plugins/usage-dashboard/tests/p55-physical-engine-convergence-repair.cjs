@@ -60,7 +60,6 @@ for (const marker of [
   "const rollback = await startManagedCandidate(previous);",
 ]) assert.ok(manager.includes(marker), `P55 Manager exact-version convergence marker missing: ${marker}`);
 
-// Plugin reconciliation must follow current modular ownership and must not silently hide a live Engine mismatch behind bundleAvailable.
 assert.equal(
   pluginBridgeIo.includes("if (!status?.connected || status.engineManaged !== true || status.engineBundleAvailable !== true) return status;"),
   false,
@@ -90,10 +89,12 @@ const engineSha = sha256(engineBytes);
 const bootstrapSha = sha256(bootstrapBytes);
 assert.equal(engineSha, 'd3849b2bb579fcd640938019884f7bf1155c85f9ae519fa83dab5dc704bb3e9b', 'P55 Engine artifact must be byte-identical to deployed 5.88 Engine 1.6.27');
 assert.equal(engineSha, manifest.components.bridge.sha256, 'P55 manifest Engine hash must match unchanged Engine bytes');
+// UD_HISTORICAL_VERSION_LOCK — exact 5.89 product fixture owned by P55.
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.89');
 assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.89');
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.27');
 assert.equal(manifest.components.bridgeManager.version, '1.3.3');
+// UD_HISTORICAL_VERSION_LOCK — exact 5.89 Manager product fixture owned by P55.
 assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.89');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 assert.equal(bootstrapSha, '4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c', 'P55 bootstrap must remain byte-identical');

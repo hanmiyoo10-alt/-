@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.89
+//@version 3.0.0-alpha.5.90
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.89';
+  const VERSION = '3.0.0-alpha.5.90';
   const RELEASE_NOTES = Object.freeze({
-    title: "Physical Engine Convergence Repair",
+    title: "Managed CLI Package Authority Repair",
     highlights: Object.freeze([
-    "5.88 실기에서 남아 있던 Engine 1.6.26 / managed CLI 1.10.0 런타임을 목표 Engine 1.6.27로 확실히 수렴시키는 Manager/Plugin 복구",
-    "Manager가 bundled 상태와 재시작 성공을 디스크 경로가 아니라 live Engine version까지 포함해 검증하도록 강화",
-    "Engine 바이트·데이터 I/O·source-truth·launcher 순서·contract 1/1은 그대로 유지"
+    "부모 LLM Gateway v1.14.0을 CLI package 1.14.0으로 잘못 등치한 dependency authority를 실제 @llmgateway/cli 1.10.0 package tag 기준으로 복구",
+    "Engine/Manager pin을 1.10.0으로 다시 일치시키고 5.89의 live Engine convergence 보강은 그대로 유지",
+    "5.90 이후 모든 릴리스가 release spec 내부 package-specific authority와 runtime pin 일치를 검증하도록 generic contract 추가"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.89 · Engine 1.6.27 · Manager 1.3.3이 일치하는지 확인",
-    "Bridge CLI runtime이 managed · ready · v1.14.0 · provisioning ok인지 확인",
+    "업데이트 후 Product 5.90 · Engine 1.6.28 · Manager 1.3.4가 일치하는지 확인",
+    "Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok인지 확인",
     "Stable readiness READY · Health ok · active errors 0 · failures 0인지 확인",
-    "정상 acceptance capture에서 managed-direct가 유지되고 Organizations/DevPass/Credits/Request Ledger 의미가 5.88과 동일한지 확인"
+    "정상 acceptance capture에서 managed-direct가 유지되고 direct/npx fallback이 0인지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,8 +40,8 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.27';
-  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.3';
+  const REQUIRED_BRIDGE_VERSION = '1.6.28';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;

@@ -26,13 +26,15 @@ User authorization: the user explicitly requested that this be handled now as a 
 
 ## Frozen change
 
-Add one exact/anchored known-brand family before generic fallback:
+Add one exact/anchored known-brand alias at the start of `parentLocalAliasInfo`, before the generic parent/local predicates:
 
 ```js
-{ key: '맘스홀릭', group: '학부모/지역', re: /^맘스홀릭(?=$|[\s\-–—/:|·])/i },
+if (/^맘스홀릭(?=$|[\s\-–—/:|·])/i.test(text)) {
+  return { shown, key: '맘카페', group: '학부모/지역', source: 'alias-parent-local' };
+}
 ```
 
-The canonical reaction/state key remains the existing `맘카페` family semantics only where canonicalization already applies; this exact brand family's group is `학부모/지역` and its source is `exact`.
+This deliberately maps the known brand `맘스홀릭` onto the existing canonical `맘카페` reaction/state key. It does not create a new persistent platform key and does not broaden generic `맘` substring matching.
 
 Required positive fixtures:
 
@@ -42,12 +44,20 @@ Required positive fixtures:
 맘스홀릭 / 육아 이야기
 ```
 
+All three must resolve to:
+
+```text
+key = 맘카페
+group = 학부모/지역
+source = alias-parent-local
+```
+
 Required preservation controls:
 
 ```text
 맘카페 / 자유게시판 -> existing exact family remains exact
 네이버 카페 / 자유게시판 -> existing exact family remains exact
-맘스홀릭 / 예비맘·육아 수다방 -> still recognized
+맘스홀릭 / 예비맘·육아 수다방 -> still canonical 맘카페
 맘스터치 / 자유게시판 -> unknown
 게임홀릭 / 수다방 -> unknown
 ```
@@ -74,7 +84,7 @@ Require:
 metadata/runtime/HOST identity = 0.69.2
 latest.js == install.js
 node syntax PASS
-exact 맘스홀릭 recognition PASS
+anchored 맘스홀릭 -> canonical 맘카페 recognition PASS
 generic-descriptor target warning input now contributes 학부모/지역
 negative false-positive controls PASS
 COMMUNITY_CLASSIFIER_VERSION remains 3

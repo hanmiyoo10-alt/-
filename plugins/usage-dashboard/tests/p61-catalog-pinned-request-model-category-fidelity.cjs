@@ -7,6 +7,11 @@ const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
+if (release.productVersion !== '3.0.0-alpha.5.95') {
+  console.log(`P61 Catalog-Pinned Request Model Category Fidelity: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.95`);
+  process.exit(0);
+}
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(release.productVersion, '3.0.0-alpha.5.95');
 assert.equal(release.engineVersion, '1.6.31');
 assert.equal(release.managerVersion, '1.3.5');

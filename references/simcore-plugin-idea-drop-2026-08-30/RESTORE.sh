@@ -25,6 +25,7 @@ restore_one() {
 restore_one comments  lightboard-comments-4.0.0.charx
 restore_one miniboard lightboard-miniboard-4.1.1.charx
 restore_one hunternet lightboard-hunternet-4.0.0.charx
+restore_one news       lightboard-news-4.0.0.charx
 restore_one core       lightboard-core-4.1.1.charx
 restore_one scripting  risuai-scripting-skill.zip
 

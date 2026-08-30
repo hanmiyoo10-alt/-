@@ -26,6 +26,13 @@
       "parts_dir": "source-base64/hunternet"
     },
     {
+      "source_label": "라이트보드 뉴스 4.0.0",
+      "filename": "lightboard-news-4.0.0.charx",
+      "bytes": 29320,
+      "sha256": "9bef481204e87a3f8856074eea23e0f780ab43aa43b755de9069de8fc4bebe1d",
+      "parts_dir": "source-base64/news"
+    },
+    {
       "source_label": "라이트보드 본체 4.1.1",
       "filename": "lightboard-core-4.1.1.charx",
       "bytes": 37503,

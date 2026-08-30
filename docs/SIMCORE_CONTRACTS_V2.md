@@ -1,18 +1,18 @@
 # SimCore 2.0M Major - Contracts v2
 
-> Current production authority: `v0.68.0 - Community Parent-Local Alias Classification Repair`
+> Current production authority: `v0.69.1 - Refreshless Targeted Update Liveness Repair`
 >
-> Production release: `release-simcore@6b31a5265f67daf5a90222d6c08bb85f3abde538`
+> Production release: `release-simcore@5dc5ec1099c6097a6a0e46effeb826889a4741c3`
 >
-> Production runtime blob: `5094755266444de311ec9cc8ffc7a4dd658e65b1`
+> Production runtime blob: `de764f2c98174aa7f8ae8dc356d83aa6851b3745`
 >
 > Validation: **LIVE_PASS**
 >
-> Durable checkpoint: **M2-5**
+> Durable checkpoint: **M2-6**
 >
-> Current architecture state: **Post-M2-5 review complete. v0.69.0 M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion is design-frozen; implementation requires separate authorization after this architecture-authority projection converges.**
+> Current architecture state: **M2 architecture frozen at M2-6. No M2-7 is authorized. Future runtime work returns to source-proven quality/performance maintenance unless a separate roadmap reconciliation proves new structural debt.**
 
-This document is the living human-readable authority for the SimCore Contracts v2 architecture. Historical M0/M1/M2 evidence remains in the release/design evidence documents and is not rewritten to pretend retired seams never existed.
+This document is the living human-readable authority for the SimCore Contracts v2 architecture. Historical M0/M1/M2 evidence remains in its point-in-time documents and is not rewritten.
 
 Machine-readable authority:
 
@@ -28,16 +28,16 @@ Runtime source authority remains exact `release-simcore`. `main/plugins/simcore/
 
 ## 1. Core architectural decision
 
-The 2.0M Major remains a staged mechanical ownership refactor, not a whole-system rewrite.
+The 2.0M Major completed as a staged mechanical ownership refactor rather than a whole-system rewrite.
 
 ```text
 preserve proven behavior
 +
-move only responsibility with direct ownership evidence
+move responsibility only with direct ownership evidence
 +
 prove equivalence before deleting transition seams
 +
-freeze again after each justified checkpoint
+freeze after each justified checkpoint
 ```
 
 Completed structural checkpoints:
@@ -48,35 +48,29 @@ M2-2  v0.64.0   Representation ownership extraction
 M2-3  v0.65.0   Edit Reconcile extraction + runtime identity convergence
 M2-4  v0.66.0   Session / Runtime Mirror boundary completion
 M2-5  v0.67.0   Recovery compatibility facade retirement
+M2-6  v0.69.0   State Reconcile ownership extraction + Kernel dependency inversion
 ```
 
-Post-M2-5 runtime mini:
+Post-M2 quality/maintenance releases do not advance the M2 checkpoint automatically.
 
 ```text
 v0.68.0  Community Parent-Local Alias Classification Repair
-checkpoint remains M2-5
-LIVE_PASS
+v0.69.1  Refreshless Targeted Update Liveness Repair
 ```
 
-Fresh roadmap reconciliation selected exactly one additional currently justified structural checkpoint:
-
-```text
-M2-6  v0.69.0  State Reconcile Ownership Extraction + Kernel Dependency Inversion
-```
-
-M2-7 is not preauthorized.
+M2-7 is **not preauthorized**.
 
 ---
 
-## 2. Layer contract
+## 2. Frozen layer contract
 
 ```text
 Foundation
   contracts / store / kernel
         ↓
 Domain
-  community / recurrence / lineage / handoff / evidence
-  time / frame / lifecycle / reaction
+  community / recurrence / lineage / handoff / state-reconcile
+  evidence / time / frame / lifecycle / reaction
         ↓
 Validation
   structure
@@ -99,7 +93,7 @@ Runtime
 
 Dependency rules:
 
-1. Foundation depends only on Foundation except explicitly recorded transition exceptions.
+1. Foundation depends only on Foundation.
 2. Domain depends only on Foundation/Domain.
 3. Validation remains judge-only.
 4. Representation remains memory-only identity/provenance authority.
@@ -109,14 +103,13 @@ Dependency rules:
 8. Observability renders bounded facts and does not mutate business state to simplify diagnostics.
 9. No circular imports.
 10. Raw Fresh/response bodies are not retained for provenance convenience.
-
-Known Kernel transition exceptions may shrink and must disappear when their exact source edges disappear. They may not expand silently.
+11. Kernel transition exceptions are now zero. New upward Foundation exceptions require a new architecture decision, not an inline waiver.
 
 ---
 
-## 3. Current v0.68 physical ownership truth
+## 3. Terminal M2-6 physical ownership truth
 
-Current production physically contains the stable owners below:
+Current production physically contains:
 
 ```text
 foundation
@@ -129,6 +122,7 @@ domain
   recurrence
   lineage
   handoff
+  state-reconcile
   evidence
   time
   frame
@@ -167,58 +161,80 @@ runtime
 
 Recovery is historical only and is physically absent from v0.67 and later production.
 
-The previously discussed generic foundation `state` module remains **DEFERRED**. It must not be silently repurposed as the selected M2-6 owner.
+The generic foundation `state` module remains **DEFERRED** and must not be introduced merely because M2 is complete.
 
 ---
 
-## 4. Remaining Kernel transition debt
+## 4. Kernel / State Reconcile freeze
 
-Exact v0.68 production still contains four direct upward Kernel dependencies:
+M2-6 retired the last source-proven Kernel transition debt.
 
-```js
-const { normalizePlatformMaxMap } = require('./community');
-const recurrence = require('./recurrence');
-const lineage = require('./lineage');
-const handoff = require('./handoff');
-```
-
-Those dependencies are used by portable-state initial assembly/reconciliation, not by broad Kernel domain policy.
-
-Current contract therefore records exactly these transition exceptions:
+Kernel now owns shared state-version constants and cross-cutting primitives only. It has:
 
 ```text
-kernel -> community
-kernel -> recurrence
-kernel -> lineage
-kernel -> handoff
+kernel -> community   0
+kernel -> recurrence  0
+kernel -> lineage     0
+kernel -> handoff     0
+transition exceptions 0
 ```
 
-No fifth exception is permitted.
+`state-reconcile` is the physical **Domain integration owner** for:
 
-The frozen v0.69 M2-6 design removes all four by introducing one application-level `state-reconcile` composition owner. Until v0.69 implementation is separately authorized and proven, the four exceptions remain truthful current-production declarations.
+```text
+portable-state initial assembly
+cross-domain portable-state normalization composition
+legacy field cleanup already owned by the former reconcileState path
+```
+
+Allowed direct dependencies:
+
+```text
+kernel
+community
+recurrence
+lineage
+handoff
+```
+
+It does not absorb the semantic policy of those domain owners.
+
+The original v0.69 design proposed `state-reconcile` at Application layer. Exact preflight discovered that `Lifecycle.prepareTurn()` is a direct reconciliation consumer while Lifecycle remains Domain. The repository stopped before runtime mutation and converged only this layer field:
+
+```text
+state-reconcile: application -> domain
+```
+
+Authority:
+
+`docs/SIMCORE_06900_LIFECYCLE_STATE_RECONCILE_LAYER_CONTRADICTION_DESIGN_CONVERGENCE_2026-08-30.md`
+
+This corrected Domain classification is the frozen terminal M2-6 contract.
 
 ---
 
-## 5. Recovery retirement contract
+## 5. State / Session / Runtime Mirror boundary
 
-Recovery transition history:
+Session remains the narrowed per-chat application state holder/orchestrator plus bounded request/output/persistence sequencing.
+
+State Reconcile owns portable-state construction/reconciliation composition.
+
+Runtime Mirror owns host observation, exact base/opaque-candidate facts, identity/location/staleness guards and mirror transport. Output Compat interprets compatibility meaning. Representation records accepted canonical-equivalence provenance.
+
+No compatibility facade remains in Kernel for `initialState()` or `reconcileState()`.
+
+Frozen consumer shape includes:
 
 ```text
-v0.66 production
-  physical module PRESENT
-  own policy/state/I/O NONE
-  runtime callers ZERO
-  forwarding compatibility facade only
-
-v0.67+
-  physical module ABSENT
-  runtime require('./recovery') = 0
-  replacement barrel = NONE
+lifecycle
+prompt
+bootstrap-migration
+edit-reconcile
+output-finalize
+session
 ```
 
-Recovery retirement is complete and LIVE_PASS-proven. Historical documents may still mention the facade because they are point-in-time evidence.
-
-The machine contract marks Recovery as `retired`; it is not a current required module and must not reappear without a new design.
+consuming `state-reconcile` directly where reconciliation is required.
 
 ---
 
@@ -260,41 +276,9 @@ Prior OUTPUT_MISMATCH + current exact prior Fresh
 
 ---
 
-## 7. State / Session / Runtime Mirror boundary
+## 7. Persistent-state compatibility freeze
 
-Session remains the narrowed per-chat application state holder/orchestrator plus bounded request/output/persistence sequencing.
-
-Runtime Mirror owns host observation, exact base/opaque-candidate facts, identity/location/staleness guards and mirror transport. Output Compat interprets compatibility meaning. Representation records accepted canonical-equivalence provenance.
-
-Current v0.68 Kernel still owns portable-state assembly/reconciliation composition. This is the one source-proven seam selected for M2-6.
-
-Frozen v0.69 target:
-
-```text
-kernel
-  foundation primitives/constants only
-  zero domain upward requires
-  zero transition exceptions
-
-state-reconcile
-  application physical owner
-  portable-state initial assembly
-  cross-domain reconciliation composition
-  allowed direct dependencies:
-    kernel / community / recurrence / lineage / handoff
-
-session
-  consumes state-reconcile instead of kernel.initialState/reconcileState
-  otherwise behaviorally unchanged
-```
-
-No broad Session receipt/state rewrite is authorized by that target.
-
----
-
-## 8. Persistent-state compatibility freeze
-
-The v0.69 ownership move is behavior-preserving. Therefore the following remain frozen unless new evidence forces redesign:
+M2-6 was behavior-preserving. The terminal architecture therefore keeps these frozen unless new evidence forces redesign:
 
 ```text
 persisted field names and meanings
@@ -309,13 +293,13 @@ lineage version
 handoff version
 ```
 
-A schema/version bump discovered during the M2-6 implementation preflight is a stop condition, not a convenience edit.
+Ownership movement alone is never authority for a schema/version bump.
 
 ---
 
-## 9. Frozen semantic safety invariants
+## 8. Frozen semantic safety invariants
 
-Frozen unless separately promoted:
+Frozen unless separately promoted through source/live evidence:
 
 ```text
 Broadcast lifecycle / Broadcast End Authority
@@ -333,13 +317,12 @@ network/timer/provider-routing policy
 Deferred Mirror strict identity/location/staleness gates
 Fresh/raw-body non-retention
 Community v3 parent/local alias classification semantics
+OUTPUT_COMMIT as Host-local telemetry durability authority
 ```
-
-WATCH/DEFER items remain separate from M2-6 unless direct evidence proves causality.
 
 ---
 
-## 10. Current M2 checkpoint ledger
+## 9. Terminal M2 checkpoint ledger
 
 ```text
 M2-1 v0.63.56  completed
@@ -348,22 +331,20 @@ M2-3 v0.65.0   LIVE_PASS
 M2-4 v0.66.0   LIVE_PASS
 M2-5 v0.67.0   LIVE_PASS
 v0.68.0        LIVE_PASS / checkpoint M2-5 unchanged
-M2-6 v0.69.0   DESIGN FROZEN / IMPLEMENTATION NOT YET AUTHORIZED
+M2-6 v0.69.0   structural live matrix PASS
+v0.69.1        LIVE_PASS / durable checkpoint M2-6 terminally accepted
 ```
 
-Post-M2-5 roadmap authority:
+Terminal authority:
 
-`docs/SIMCORE_POST_M2_5_ROADMAP_RECONCILIATION_2026-08-30.md`
-
-Frozen v0.69 design authority:
-
-`docs/SIMCORE_06900_M2_6_STATE_RECONCILE_OWNERSHIP_EXTRACTION_KERNEL_DEPENDENCY_INVERSION_DESIGN_2026-08-30.md`
-
-If the exact filename differs, the commit titled `docs(simcore): freeze v0.69 M2-6 state reconcile design` remains the design authority until the document index is normalized.
+- `docs/SIMCORE_06900_M2_6_IMPLEMENTATION_EVIDENCE_2026-08-30.md`
+- `docs/SIMCORE_06900_M2_6_REAL_LONG_CHAT_EVIDENCE_2026-08-30.md`
+- `docs/SIMCORE_LIVE_06901_RELEASE_CLOSE_2026-08-30.md`
+- `docs/SIMCORE_POST_M2_6_ARCHITECTURE_FREEZE_OBSERVATION_REVIEW_2026-08-30.md`
 
 ---
 
-## 11. CI architecture drift guard
+## 10. CI architecture drift guard
 
 Machine-readable contract:
 
@@ -387,50 +368,57 @@ no duplicate module definitions
 latest/install graph parity
 ```
 
-For exact v0.68 production, the checker must accept the four declared Kernel transition exceptions and Recovery absence.
-
-For the future v0.69 candidate, the candidate architecture contract must promote physical `state-reconcile`, remove the four Kernel exceptions, and prove a cycle-free application-layer dependency graph.
+For current v0.69.1 production the checker must accept physical `state-reconcile`, zero Kernel transition exceptions, corrected Domain classification, and Recovery absence.
 
 ---
 
-## 12. Deferred / WATCH separation
+## 11. Post-M2 WATCH / DEFER separation
 
-Still outside the selected M2-6 runtime scope:
+No item below is automatically promoted merely because M2 closed:
 
 ```text
 PARTIAL_PREVIOUS_TURN_REPLAY
-broad COMMUNITY diversity recurrence
+  highest-priority investigation, symptom recurrent, root cause unproven
+
 genuine-edit latency WATCH
+  40.224 s historical outlier; comparable multi-tens recurrence still required
+
+LONG_CHAT_STORAGE / COLD_INIT
+  recurrent performance observation; bounded SimCore-owned redundant-work source not yet proven
+
 B_START wording/closure heuristic WATCH
-THOUGHTS_UNRESOLVED_KNOWLEDGE_QUARANTINE
-PRE_SIMCORE / cache-history frontier
-provider-cache engineering or claims
-runtime-topology fingerprint dedupe
-request-pipeline / turn-pipeline extraction
-generic foundation state module
+THOUGHTS_UNRESOLVED_KNOWLEDGE_QUARANTINE WATCH
+PRE_SIMCORE / cache-history / host-prefix frontier WATCH/DEFER
+provider cache UNVERIFIED
+runtime-topology fingerprint dedupe DEFER / low-risk slimming
+request-pipeline / turn-pipeline extraction DEFER
+generic foundation state module DEFER
+broader generated COMMUNITY platform-family diversity DEFER / observe
 ```
 
-No item above may be folded into v0.69 merely because implementation touches adjacent source.
+No provider-cache tuning or Structure relaxation is authorized by these observations.
 
 ---
 
-## 13. Current advancement boundary
+## 12. Post-M2 advancement boundary
 
 ```text
-DONE  v0.68 production LIVE_PASS
-DONE  R2.8 first genuine terminal convergence proof
-DONE  post-M2-5 roadmap reconciliation
-DONE  v0.69 M2-6 design freeze
-DONE  post-v0.68 Contracts v2 human/machine authority projection
-NEXT  separate v0.69 implementation authorization
-THEN  dedicated runtime work branch from exact v0.68 production
-THEN  state-reconcile extraction + Kernel inversion only
-THEN  static/differential/permanent CI
-THEN  normal exact candidate + permanent release transaction
-THEN  release-simcore publication
-THEN  real long-chat Stage A/B/C
-THEN  human LIVE_PASS + R2.8 terminal convergence
-THEN  post-M2-6 architecture freeze review
+DONE  v0.69.1 production LIVE_PASS
+DONE  durable checkpoint M2-6
+DONE  post-M2-6 architecture freeze review
+DONE  M2 architecture freeze decision
+
+CURRENT ADMIN TASK
+  converge living Contracts v2 machine/human authority to terminal v0.69.1 / M2-6 truth
+
+AFTER CONVERGENCE
+  investigate PARTIAL_PREVIOUS_TURN_REPLAY attribution
+  and performance lanes separately
+
+NEXT RUNTIME VERSION
+  not selected until one lane has a source-proven owner + bounded repair contract
 ```
 
-No automatic M2-7 follows a successful v0.69 release.
+`v0.70.x` is reserved as the next non-M quality/performance version family, but no scope is frozen and implementation is not authorized.
+
+M2-7 requires a separate roadmap reconciliation with new source/live evidence.

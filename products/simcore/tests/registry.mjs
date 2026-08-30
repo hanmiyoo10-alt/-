@@ -13,7 +13,7 @@ export const registry = Object.freeze([
   { id: 'broadcast-closure', module: './suites/broadcast-closure.test.mjs', fixtureDir: 'broadcast-closure', coverage: 'HYBRID_TRANSITIONAL', required: true, goldenGate: true },
   { id: 'diagnostic-copy', module: './suites/diagnostic-copy.test.mjs', fixtureDir: 'diagnostic-copy', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity-v06902.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'operator-release-card', module: './suites/operator-release-card-v06901.test.mjs', fixtureDir: 'operator-release-card', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'operator-release-card', module: './suites/operator-release-card-v06902.test.mjs', fixtureDir: 'operator-release-card', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'host-local-telemetry', module: './suites/host-local-telemetry-v06901.test.mjs', fixtureDir: 'host-local-telemetry', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'bounded-telemetry-capsule', module: './suites/bounded-telemetry-capsule-v06901.test.mjs', fixtureDir: 'bounded-telemetry-capsule', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'preflight-compression', module: './suites/preflight-compression.test.mjs', fixtureDir: 'preflight-compression', coverage: 'EXECUTABLE', required: true, goldenGate: true },

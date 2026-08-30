@@ -1,0 +1,121 @@
+{
+  "schema_version": 2,
+  "name": "SimCore Contracts v2 - v0.69.1 Candidate",
+  "production_baseline": {
+    "version": "0.69.1",
+    "release_name": "Refreshless Targeted Update Liveness Repair",
+    "release_commit": "CANDIDATE_BOUND_BY_RELEASE_SYSTEM",
+    "release_blob": "CANDIDATE_BOUND_BY_RELEASE_SYSTEM",
+    "validation_status": "CANDIDATE_REQUIRED"
+  },
+  "major_update": {
+    "milestone": "2.0M",
+    "phase": "M2",
+    "status": "M2_6_PATCH_AUTHORIZED_CANDIDATE",
+    "m2_runtime_move_gate": "V0_63_55_REAL_LONG_CHAT_REPRESENTATION_FAST_RECONCILE_VALIDATED",
+    "runtime_refactor_authorized": true,
+    "checkpoint": "M2-6",
+    "m2_1_release": {"version":"0.63.56","scope":"mechanical recovery boundary split only","live_validation":"SUPPORTED_REAL_LONG_CHAT"},
+    "m2_2_release": {"version":"0.64.0","scope":"mechanical representation ownership split only","static_validation":"PASS"},
+    "m2_3_release": {"version":"0.65.0","release_commit":"c6659296c68b4322d0ed43f7d8a3339e57f1cbf1","release_blob":"1b38e2b2874f2581edae8f1080edc39558febefa","scope":"Edit Reconcile ownership extraction plus runtime identity convergence","static_validation":"PASS","live_validation":"LIVE_PASS"},
+    "m2_4_release": {"version":"0.66.0","release_commit":"4b6ae1a4c63f6be658c6163168cc46a1adef60aa","release_blob":"f0da13d4c47fd98e9065d7dbf253a3296151ee16","scope":"Session / Runtime Mirror Boundary Completion","static_validation":"PASS","live_validation":"LIVE_PASS"},
+    "m2_5_release": {"version":"0.67.0","release_commit":"01a4204981191968ba22ba6ad161c1053d6bc7d0","release_blob":"24c57d86b3533a89e675c5b598b0c4a3a4fef6fe","scope":"Recovery Transition Debt Retirement","static_validation":"PASS","live_validation":"LIVE_PASS"},
+    "post_m2_5_release": {"version":"0.68.0","release_commit":"6b31a5265f67daf5a90222d6c08bb85f3abde538","release_blob":"5094755266444de311ec9cc8ffc7a4dd658e65b1","scope":"Community Parent-Local Alias Classification Repair","checkpoint":"M2-5","static_validation":"PASS","live_validation":"LIVE_PASS"},
+    "next_selected_release": {"version":"0.69.1","checkpoint":"M2-6","scope":"Refreshless Targeted Update Liveness Repair","design_frozen":true,"implementation_authorized":true}
+  },
+  "global_rules": [
+    "foundation_must_not_gain_new_upward_dependencies",
+    "core_modules_must_not_depend_on_runtime_modules",
+    "store_owns_persistence_mechanics_not_semantic_decisions",
+    "structure_is_judge_not_repair",
+    "representation_is_memory_only_identity_and_provenance_metadata",
+    "fresh_chat_is_identity_evidence_not_body_source",
+    "runtime_may_observe_host_state_but_core_must_not_call_host_directly",
+    "provider_cache_remains_unverified",
+    "history_stabilization_remains_observe_only",
+    "tail_after_current_user_remains_frozen"
+  ],
+  "layers": {
+    "foundation": "pure/shared primitives, contracts and persistence mechanics",
+    "domain": "bounded semantic state/policy and cross-domain state-normalization composition modules",
+    "validation": "judges integrity and commit safety; no repair",
+    "representation": "bounded identity/provenance classification; memory-only",
+    "application": "coordinates domain/foundation services and turn/output sequencing",
+    "observability": "structured performance/diagnostic helpers; no generation/state policy",
+    "runtime": "host adapters, hooks, mirrors, cache/topology observation and renderers"
+  },
+  "layer_dependency_policy": {
+    "foundation": ["foundation"],
+    "domain": ["foundation", "domain"],
+    "validation": ["foundation", "domain", "validation"],
+    "representation": ["foundation", "representation"],
+    "application": ["foundation", "domain", "validation", "representation", "application"],
+    "observability": ["foundation", "domain", "validation", "representation", "application", "observability"],
+    "runtime": ["foundation", "domain", "validation", "representation", "application", "observability", "runtime"]
+  },
+  "modules": {
+    "contracts": {"physical":"required","layer":"foundation","status":"current","owns":"architecture responsibility metadata","allowed_dependencies":[]},
+    "store": {"physical":"required","layer":"foundation","status":"current_m2_4_housekeeping_owner","owns":"snapshot persistence, retention and deferred retention housekeeping mechanics","allowed_dependencies":[]},
+    "kernel": {"physical":"required","layer":"foundation","status":"m2_6_inverted_foundation_owner","owns":"shared state-version constants and cross-cutting primitives only","allowed_dependencies":[]},
+    "community": {"physical":"required","layer":"domain","status":"current_v3_parent_local_alias_repair","owns":"COMMUNITY parsing and platform taxonomy","allowed_dependencies":[]},
+    "recurrence": {"physical":"required","layer":"domain","status":"current","owns":"bounded repeated request-template state","allowed_dependencies":[]},
+    "lineage": {"physical":"required","layer":"domain","status":"current","owns":"request root parent depth source-chain state","allowed_dependencies":[]},
+    "handoff": {"physical":"required","layer":"domain","status":"current","owns":"short-C source reuse and parent-shift observation","allowed_dependencies":[]},
+    "state-reconcile": {"physical":"required","layer":"domain","status":"m2_6_candidate_owner","owns":"portable-state initial assembly and cross-domain reconciliation composition","allowed_dependencies":["kernel","community","recurrence","lineage","handoff"]},
+    "evidence": {"physical":"required","layer":"domain","status":"current","owns":"authoritative request-message mapping and bounded request-only fencing","allowed_dependencies":[]},
+    "time": {"physical":"required","layer":"domain","status":"current","owns":"timestamp calendar broadcast-airtime narrative-clock and world-year synchronization","allowed_dependencies":[]},
+    "frame": {"physical":"required","layer":"domain","status":"current","owns":"visible frame parsing and sequence enforcement","allowed_dependencies":[]},
+    "lifecycle": {"physical":"required","layer":"domain","status":"m2_6_state_reconcile_consumer","owns":"broadcast lifecycle plus current cross-domain request preparation coordination","allowed_dependencies":["kernel","state-reconcile","time","recurrence","lineage","handoff"]},
+    "reaction": {"physical":"required","layer":"domain","status":"current","owns":"reaction parsing historical floors and deterministic normalization","allowed_dependencies":["community"]},
+    "structure": {"physical":"required","layer":"validation","status":"current_judge_only","owns":"frame/envelope/COMMUNITY/Knowledge integrity and state-commit safety","allowed_dependencies":["kernel","community","reaction","lifecycle","time"]},
+    "recovery": {"physical":"retired","layer":"application","status":"retired_at_v0_67_zero_runtime_callers_proven","owns":"historical pre-v0.67 compatibility facade only; physically absent from current production","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","output-compat","bootstrap-migration"]},
+    "prompt": {"physical":"required","layer":"application","status":"m2_6_state_reconcile_consumer","owns":"runtime prompt compilation and serialization","allowed_dependencies":["kernel","state-reconcile","lifecycle","time","recurrence"]},
+    "session": {"physical":"required","layer":"application","status":"m2_6_state_reconcile_consumer","owns":"session state holder plus bounded request/output/persistence sequencing","allowed_dependencies":["store","kernel","state-reconcile","lifecycle","time","frame","community","reaction","structure","edit-reconcile","output-compat","bootstrap-migration","output-finalize","recurrence","prompt"],"m2_target":["edit_reconcile_extraction_completed_m2_3","recovery_runtime_callers_migrated_m2_4","recovery_facade_retired_m2_5","output_finalization_extracted_m2_4","store_housekeeping_ownership_completed_m2_4","state_reconcile_consumer_switch_completed_m2_6_candidate"]},
+    "ops": {"physical":"required","layer":"observability","status":"current_narrow","owns":"performance helpers and core diagnostic formatting","allowed_dependencies":[]},
+    "runtime-contracts": {"physical":"required","layer":"runtime","status":"current","owns":"runtime cache/placement ownership declarations","allowed_dependencies":[]},
+    "runtime-host": {"physical":"required","layer":"runtime","status":"current","owns":"host API adapter","allowed_dependencies":[]},
+    "runtime-cache": {"physical":"required","layer":"runtime","status":"current","owns":"runtime prompt cache observation and identity","allowed_dependencies":[]},
+    "runtime-topology": {"physical":"required","layer":"runtime","status":"current_fingerprint_dedupe_deferred","owns":"request topology signatures and host-prefix sketches","allowed_dependencies":[]},
+    "runtime-cache-candidates": {"physical":"required","layer":"runtime","status":"current","owns":"bounded cache-trajectory observation","allowed_dependencies":[]},
+    "runtime-telemetry": {"physical":"required","layer":"runtime","status":"current","owns":"refreshless metadata-only telemetry handoff capsule","allowed_dependencies":[]},
+    "runtime-session": {"physical":"required","layer":"runtime","status":"current","owns":"host-facing CoreSession reuse/load/cold-init selection","allowed_dependencies":[]},
+    "runtime-mirror": {"physical":"required","layer":"runtime","status":"current_m2_4_observe_guard_transport","owns":"Fresh host read, exact base/opaque-candidate observation, identity/location/staleness guards and mirror transport","allowed_dependencies":["output-compat"],"m2_target":["representation_provenance_moved_m2_2","compatibility_interpretation_moved_to_output_compat_m2_4"]},
+    "runtime-hooks": {"physical":"required","layer":"runtime","status":"current","owns":"named host hook registration/removal","allowed_dependencies":[]},
+    "runtime-probe": {"physical":"required","layer":"runtime","status":"current_renderer","owns":"diagnostic rendering/summarization","allowed_dependencies":[]},
+    "representation": {"physical":"required","layer":"representation","status":"current_m2_4_identity_and_accepted_canonical_equivalence","owns":"exact fingerprint identity, CANONICAL/HOST_RAW/FRESH_CHAT relations, bounded provenance and accepted canonical-equivalence classification","allowed_dependencies":["kernel"],"principle":"Fresh is identity evidence, not a body source."},
+    "edit-reconcile": {"physical":"required","layer":"application","status":"m2_6_state_reconcile_consumer","owns":"single edit reconciliation decision tree and fallback coordination","allowed_dependencies":["kernel","state-reconcile","time","output-compat","bootstrap-migration","output-finalize"]},
+    "output-finalize": {"physical":"required","layer":"application","status":"m2_6_state_reconcile_consumer","owns":"deterministic prepared-output to committed-state/content transition composition","allowed_dependencies":["kernel","state-reconcile","time","frame","reaction","structure"]},
+    "output-compat": {"physical":"required","layer":"application","status":"current_m2_4_envelope_and_fresh_candidate_interpretation","owns":"output envelope compatibility/canonicalization and bounded Fresh-confirmation candidate planning/interpretation metadata","allowed_dependencies":["kernel","lifecycle","time","community","reaction","structure","representation"]},
+    "bootstrap-migration": {"physical":"required","layer":"application","status":"m2_6_state_reconcile_consumer","owns":"history bootstrap and legacy migration/repair coordination","allowed_dependencies":["kernel","state-reconcile","store","lifecycle","time","community","reaction","structure","output-compat"]},
+    "state": {"physical":"deferred","layer":"foundation","status":"generic_state_module_remains_deferred","owns":"possible pure state schema seam; not the selected M2-6 state-reconcile owner","allowed_dependencies":[]}
+  },
+  "transition_policy": {
+    "no_big_bang_refactor": true,
+    "m2_order": [
+      "M2-1 recovery output-compat/bootstrap split",
+      "M2-2 representation ownership extraction",
+      "M2-3 edit-reconcile extraction and runtime identity convergence",
+      "M2-4 session/runtime-mirror boundary completion",
+      "M2-5 Recovery facade retirement after exact zero-consumer proof",
+      "M2-6 State Reconcile ownership extraction + Kernel dependency inversion"
+    ],
+    "positive_controls": [
+      "v0.68 initialState/reconcileState deep-equivalent after ownership move",
+      "genuine user edit stays USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT",
+      "confirmed Fresh exact carryover stays representation-only acceptance with no state rebuild/write",
+      "Structure remains judge-only",
+      "provider cache stays UNVERIFIED",
+      "history stabilization stays OBSERVE_ONLY",
+      "TAIL_AFTER_CURRENT_USER remains unchanged"
+    ],
+    "completed_checkpoints": [
+      "M2-1: Recovery mechanically split into output-compat + bootstrap-migration behind compatibility facade",
+      "M2-2: Representation ownership split released",
+      "M2-3: Edit Reconcile extraction + runtime identity convergence released and accepted LIVE_PASS",
+      "M2-4: Session / Runtime Mirror Boundary Completion released and accepted LIVE_PASS",
+      "M2-5: Recovery facade retired in v0.67 and accepted LIVE_PASS"
+    ],
+    "post_m2_5_review": "M2-6 selected as the only currently justified next structural checkpoint. No automatic M2-7.",
+    "next_review": "post-v0.69.1 LIVE_PASS architecture freeze review"
+  }
+}

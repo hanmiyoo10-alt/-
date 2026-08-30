@@ -39,7 +39,7 @@
     "releaseGeneration": "E13",
     "e18": "derived-impact smoke only; no authority change"
   },
-  "materializer": "plugins/usage-dashboard/tools/release_model_category_595_idempotent.py",
+  "materializer": "plugins/usage-dashboard/tools/release_model_category_595.py",
   "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
   "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
   "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",

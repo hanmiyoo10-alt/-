@@ -322,7 +322,10 @@ function normalizeOrganizations(rawOrgs, rawCredits) {
       devPlanResetPassesPro: finite(pick(row, ['devPlanResetPassesPro', 'dev_plan_reset_passes_pro'], null)),
       devPlanResetPassesMax: finite(pick(row, ['devPlanResetPassesMax', 'dev_plan_reset_passes_max'], null)),
       devPlanIncludedResetPassesUsed: finite(pick(row, ['devPlanIncludedResetPassesUsed', 'dev_plan_included_reset_passes_used'], null)),
-      devPlanPaygEnabled: Boolean(pick(row, ['devPlanPaygEnabled', 'dev_plan_payg_enabled'], false)),
+      devPlanPaygEnabled: explicitBillingBoolean(pick(row, ['devPlanPaygEnabled', 'dev_plan_payg_enabled'], null)),
+      devPlanAutoTopUpEnabled: explicitBillingBoolean(pick(row, ['devPlanAutoTopUpEnabled', 'dev_plan_auto_top_up_enabled', 'autoTopUpEnabled', 'auto_top_up_enabled'], null)),
+      devPlanAutoTopUpThreshold: finite(pick(row, ['devPlanAutoTopUpThreshold', 'dev_plan_auto_top_up_threshold', 'autoTopUpThreshold', 'auto_top_up_threshold'], null)),
+      devPlanAutoTopUpAmount: finite(pick(row, ['devPlanAutoTopUpAmount', 'dev_plan_auto_top_up_amount', 'autoTopUpAmount', 'auto_top_up_amount'], null)),
     };
   }).filter(Boolean);
 }
@@ -426,7 +429,8 @@ function normalizeIndependentDevPassStatus(payload) {
     expiresAt,
     premiumWeekResetsAt: pick(raw, ['devPlanPremiumWeekResetsAt', 'dev_plan_premium_week_resets_at'], null),
     cancelled: explicitBillingBoolean(pick(raw, ['devPlanCancelled', 'dev_plan_cancelled', 'cancelled'], null)),
-    paygEnabled: Boolean(pick(raw, ['devPlanPaygEnabled', 'dev_plan_payg_enabled', 'paygEnabled'], false)),
+    paygEnabled: explicitBillingBoolean(pick(raw, ['devPlanPaygEnabled', 'dev_plan_payg_enabled', 'paygEnabled'], null)),
+    autoTopUpEnabled: explicitBillingBoolean(pick(raw, ['autoTopUpEnabled', 'auto_top_up_enabled', 'devPlanAutoTopUpEnabled', 'dev_plan_auto_top_up_enabled'], null)),
     hasPersonalOrg: Boolean(pick(raw, ['hasPersonalOrg', 'has_personal_org'], plan && plan !== 'none')),
     hasBillingHistory: Boolean(pick(raw, ['hasBillingHistory', 'has_billing_history'], false)),
     organizationId: String(pick(raw, ['organizationId', 'organization_id', 'orgId', 'org_id'], '') || '') || null,
@@ -448,6 +452,8 @@ function normalizeIndependentDevPassStatus(payload) {
     includedResetPassesRemaining: ['devPlanIncludedResetPassesRemaining', 'dev_plan_included_reset_passes_remaining'],
     resetPassPrice: ['devPlanResetPassPrice', 'dev_plan_reset_pass_price'],
     regularCredits: ['regularCredits', 'regular_credits'],
+    autoTopUpThreshold: ['autoTopUpThreshold', 'auto_top_up_threshold', 'devPlanAutoTopUpThreshold', 'dev_plan_auto_top_up_threshold'],
+    autoTopUpAmount: ['autoTopUpAmount', 'auto_top_up_amount', 'devPlanAutoTopUpAmount', 'dev_plan_auto_top_up_amount'],
   };
   for (const [key, aliases] of Object.entries(numberFields)) {
     const value = finite(pick(raw, aliases, null));
@@ -485,7 +491,10 @@ async function loadDevPassStatus() {
         resetPassesPro: devOrg.devPlanResetPassesPro,
         resetPassesMax: devOrg.devPlanResetPassesMax,
         includedResetPassesUsed: devOrg.devPlanIncludedResetPassesUsed,
-        paygEnabled: Boolean(devOrg.devPlanPaygEnabled),
+        paygEnabled: explicitBillingBoolean(devOrg.devPlanPaygEnabled),
+        autoTopUpEnabled: explicitBillingBoolean(devOrg.devPlanAutoTopUpEnabled),
+        autoTopUpThreshold: finite(devOrg.devPlanAutoTopUpThreshold),
+        autoTopUpAmount: finite(devOrg.devPlanAutoTopUpAmount),
         fetchedAt: Date.now(),
         source: 'LLMGateway CLI session · full /orgs fallback',
       };

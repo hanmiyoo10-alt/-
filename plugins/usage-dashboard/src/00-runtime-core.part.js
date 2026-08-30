@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.91
+//@version 3.0.0-alpha.5.92
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.91';
+  const VERSION = '3.0.0-alpha.5.92';
   const RELEASE_NOTES = Object.freeze({
-    title: "DevPass Weekly Premium Allowance Truth Card",
+    title: "PAYG + Auto-Reload Read-Only Fidelity",
     highlights: Object.freeze([
-    "DevPass 탭에 source-backed Premium 주간 한도 truth card 추가",
-    "explicit 사용·한도 값이 있을 때만 남음·사용률을 계산하고 missing/invalid 값은 —로 유지",
-    "주의·소진은 80%/100% 로컬 표시 기준만 사용하며 PAYG funding 상태나 요청별 결제 출처를 추론하지 않음"
+    "DevPass PAYG 상태를 true/false/UNKNOWN 그대로 보존해 missing 값을 OFF로 오표시하지 않음",
+    "기존 인증 상태 캡처가 제공하는 Auto-Reload 상태·threshold·amount를 읽기 전용으로 표시",
+    "Overflow balance는 explicit PAYG + Regular Credits에서만 계정 수준 상태를 계산하며 요청별 결제 출처는 추론하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.91 · Engine 1.6.28 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "Premium 카드의 사용·한도·남음·사용률이 Diagnostics의 Premium allowance 줄과 일치하는지 확인",
-    "리셋은 explicit source가 있을 때만 표시되고 UNKNOWN 값은 —로 남는지 확인",
-    "기존 floating Premium widget · Reset Pass/PAYG · Billing Cycle이 그대로이고 추가 refresh/CLI/network 작업이 없는지 확인"
+    "업데이트 후 Product 5.92 · Engine 1.6.29 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "PAYG overflow와 Auto-Reload의 ON/OFF/—가 Diagnostics의 PAYG status 줄과 일치하는지 확인",
+    "Regular Credits·Reload threshold·Reload amount는 source가 없으면 —이고 explicit 0은 0으로 유지되는지 확인",
+    "기존 Reset Pass와 Premium 주간 한도 카드가 그대로이며 추가 refresh/CLI/network 작업이나 결제 조작 UI가 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.28';
+  const REQUIRED_BRIDGE_VERSION = '1.6.29';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

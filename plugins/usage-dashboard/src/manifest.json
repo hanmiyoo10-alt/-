@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.91",
+  "version": "3.0.0-alpha.5.92",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "17d0fe4ef4a04d026fb108099d0e29f619e6d4358d67bbd4ff294ab75484680c",
+  "artifactSha256": "d0e4870f724e5868431aa2c07c54e60802c9b9d7f1cf42b65a3378101a5ba494",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 14770,
-      "sha256": "15284d472db15100b4898d1a23b03749a1f9c74bebedbda1b8ac8a32d9222cdc"
+      "bytes": 14832,
+      "sha256": "56809b0cd3842f93144dd7e42b6cbfbe9fe14e6c3474ad76478921c65e071df3"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -64,14 +64,20 @@
     {
       "file": "16-usage-analytics.part.js",
       "label": "usage + analytics normalization",
-      "bytes": 18845,
-      "sha256": "0490f096f7eefd9dc32141e465a56995521e04747aade497d7ed3aa38c0811ce"
+      "bytes": 19156,
+      "sha256": "2c4e7ec037f45a27f37ae4003457367e1b4c586ac1d3d1b273e54cbe9523b30f"
     },
     {
       "file": "18-premium-allowance.part.js",
       "label": "DevPass Premium allowance truth",
       "bytes": 1936,
       "sha256": "d140c40405953493323df210faaad03238d81f8392f9de6230d79bb2f15c1b96"
+    },
+    {
+      "file": "19-payg-account.part.js",
+      "label": "DevPass PAYG + Auto-Reload truth",
+      "bytes": 2288,
+      "sha256": "5e7d04d71ec6e56b403df4697a36dcc1a0faee0747e40f6b3a81063c1285959d"
     },
     {
       "file": "20-bridge-io.part.js",
@@ -88,14 +94,14 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 47105,
-      "sha256": "14008afed6b23cf9a1e7124aa0abce77997a340b19272bed3942e6d5eef362a8"
+      "bytes": 47043,
+      "sha256": "51be90979829c1a172ebccdff7e438420ad79bd95356c5e94671fe31e156e5f9"
     },
     {
       "file": "50-dashboard-context.part.js",
       "label": "dashboard/context",
-      "bytes": 11717,
-      "sha256": "5f406a2a3732676369dd240849e1c1444f62d8008d6f701da5866eb4e59aa469"
+      "bytes": 12342,
+      "sha256": "841370ac73f507810a728377600a653c90383334a2768e1cbfa78b1cff9f9807"
     },
     {
       "file": "52-analytics-context.part.js",

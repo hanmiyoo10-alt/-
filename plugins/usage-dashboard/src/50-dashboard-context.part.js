@@ -36,6 +36,7 @@
     const systemHealthText = `${String(lifecycleMode || 'off').toUpperCase()} · Engine ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · Manager ${productRuntime.managerVersion ? `v${productRuntime.managerVersion}` : '—'} · ${state.lastSyncAt ? age(state.lastSyncAt) : '대기'}`;
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     const premiumAllowance = premiumAllowanceTruth(d.weekly);
+    const paygTruth = paygAccountTruth(devpassAccount);
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -93,13 +94,17 @@
             <div class="mini"><span>Personal org</span><b>${devpassAccount.hasPersonalOrg === null ? '—' : devpassAccount.hasPersonalOrg ? '있음' : '없음'}</b></div>
             <div class="mini"><span>Billing history</span><b>${devpassAccount.hasBillingHistory === null ? '—' : devpassAccount.hasBillingHistory ? '있음' : '없음'}</b></div>
           </div></div>
-          <div class="usage-detail-box"><div class="recent-head"><h3>Reset Pass · PAYG</h3><span>${devpassAccount.paygEnabled ? 'PAYG ON' : 'PAYG OFF'}</span></div><div class="minis">
+          <div class="usage-detail-box"><div class="recent-head"><h3>Reset Pass · PAYG</h3><span>${paygTruth.paygState === 'on' ? 'PAYG ON' : paygTruth.paygState === 'off' ? 'PAYG OFF' : 'PAYG —'}</span></div><div class="minis">
             <div class="mini purple"><span>총 사용 가능</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>
             <div class="mini purple"><span>구매/보유 패스</span><b>${num(devpassAccount.resetPasses) ? `${Number(devpassAccount.resetPasses)}장` : '—'}</b></div>
             <div class="mini purple"><span>기본 패스 남음</span><b>${esc(devpassIncludedPassText)}</b></div>
             <div class="mini"><span>Reset Pass 가격</span><b>${money(devpassAccount.resetPassPrice)}</b></div>
-            <div class="mini"><span>PAYG overflow</span><b>${devpassAccount.paygEnabled ? '켜짐' : '꺼짐'}</b></div>
-            <div class="mini cyan"><span>Regular Credits</span><b>${money(devpassAccount.regularCredits)}</b></div>
+            <div class="mini"><span>PAYG overflow</span><b>${paygTruth.paygLabel}</b></div>
+            <div class="mini cyan"><span>Regular Credits</span><b>${paygTruth.regularCredits === null ? '—' : money(paygTruth.regularCredits)}</b></div>
+            <div class="mini"><span>Overflow balance</span><b>${esc(paygTruth.balanceStateLabel)}</b></div>
+            <div class="mini"><span>Auto-Reload</span><b>${paygTruth.autoTopUpLabel}</b></div>
+            <div class="mini"><span>Reload threshold</span><b>${paygTruth.autoTopUpThreshold === null ? '—' : money(paygTruth.autoTopUpThreshold)}</b></div>
+            <div class="mini"><span>Reload amount</span><b>${paygTruth.autoTopUpAmount === null ? '—' : money(paygTruth.autoTopUpAmount)}</b></div>
           </div></div>
           <div class="usage-detail-box premium-allowance-card"><div class="recent-head"><h3>Premium 주간 한도</h3><span>${esc(premiumAllowance.stateLabel)}</span></div><div class="minis">
             <div class="mini purple"><span>사용</span><b>${premiumAllowance.used === null ? '—' : money(premiumAllowance.used)}</b></div>

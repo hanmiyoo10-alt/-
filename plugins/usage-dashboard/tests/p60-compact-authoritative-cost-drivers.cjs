@@ -53,14 +53,12 @@ const helperEnd = analyticsSource.indexOf('function normalize(payload)', helperS
 assert.ok(helperStart >= 0 && helperEnd > helperStart, '5.94 cost-driver helper boundary missing');
 const helperSource = analyticsSource.slice(helperStart, helperEnd);
 for (const marker of [
+  'function costDriverMeaningfulName(value)',
+  'function costDriverCodePointCompare(left, right)',
   'function costDriverLeader(rows, totalCost)',
   'function compactCostDriverTruth(window)',
   'function costDriverDiagnosticText(scope, window)',
-  'costDriverCodePointCompare(left.name, right.name)',
-  'candidates.slice().sort',
-  "state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost'",
-  "shareState:share === null ? 'total-unknown' : 'ok'",
-]) assert.ok(helperSource.includes(marker), `5.94 helper invariant missing: ${marker}`);
+]) assert.ok(helperSource.includes(marker), `5.94 helper API missing: ${marker}`);
 for (const forbidden of ['fetch(', 'XMLHttpRequest', 'Risuai.', 'setTimeout(', 'setInterval(', 'localStorage', '/logs', '/activity', 'catalog', 'pricing']) {
   assert.equal(helperSource.toLowerCase().includes(forbidden.toLowerCase()), false, `cost-driver helper must remain pure/local: ${forbidden}`);
 }

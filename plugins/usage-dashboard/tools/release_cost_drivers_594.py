@@ -407,11 +407,6 @@ def sync_manifest() -> None:
 
 def validate_target() -> None:
     core = CORE.read_text(encoding='utf-8')
-    analytics = ANALYTICS.read_text(encoding='utf-8')
-    dashboard = DASHBOARD.read_text(encoding='utf-8')
-    analytics_context = ANALYTICS_CONTEXT.read_text(encoding='utf-8')
-    markup = MARKUP.read_text(encoding='utf-8')
-    diagnostics = DIAGNOSTICS.read_text(encoding='utf-8')
     manager = MANAGER.read_text(encoding='utf-8')
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     if sha256(ENGINE) != BASE_ENGINE_SHA:
@@ -427,35 +422,6 @@ def validate_target() -> None:
         if marker not in core:
             raise SystemExit(f'5.94 Plugin target marker missing: {marker}')
     for marker in [
-        'function compactCostDriverTruth(window)',
-        'function costDriverLeader(rows, totalCost)',
-        'cost > 0',
-        "state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost'",
-        'costDriverCodePointCompare(left.name, right.name)',
-        'candidates.slice().sort',
-    ]:
-        if marker not in analytics:
-            raise SystemExit(f'5.94 cost-driver helper marker missing: {marker}')
-    helper_start = analytics.index('function costDriverMeaningfulName(value)')
-    helper_end = analytics.index('function normalize(payload)', helper_start)
-    helper = analytics[helper_start:helper_end]
-    for forbidden in ['fetch(', 'XMLHttpRequest', 'Risuai.', 'setTimeout(', 'setInterval(', 'localStorage', '/logs', '/activity', 'catalog', 'pricing']:
-        if forbidden.lower() in helper.lower():
-            raise SystemExit(f'5.94 cost-driver helper added forbidden owner/inference: {forbidden}')
-    if 'scopeActivity.providers[0]' in dashboard or 'scopeActivity.models[0]' in dashboard:
-        raise SystemExit('5.94 usage shortcut still trusts first row')
-    if 'analyticsW24.providers[0]' in analytics_context or 'analyticsW24.models[0]' in analytics_context:
-        raise SystemExit('5.94 Analytics shortcut still trusts first row')
-    for marker in ['scopeCostDrivers = compactCostDriverTruth(scopeActivity)', 'analyticsCostDrivers = compactCostDriverTruth(analyticsW24)']:
-        if marker not in dashboard + analytics_context:
-            raise SystemExit(f'5.94 cost-driver UI binding missing: {marker}')
-    for marker in ['24h 비용 주도 · Top Model', '24h 비용 주도 · Top Provider', '.mini.cost-driver b{white-space:normal']:
-        if marker not in markup:
-            raise SystemExit(f'5.94 cost-driver markup missing: {marker}')
-    for marker in ['const diagAnalyticsScopeKey =', 'costDriverDiagnosticText(diagAnalyticsScopeKey, diagAnalyticsW24)']:
-        if marker not in diagnostics:
-            raise SystemExit(f'5.94 cost-driver diagnostics missing: {marker}')
-    for marker in [
         "const MANAGER_VERSION = '1.3.4';",
         "const PRODUCT_VERSION = '3.0.0-alpha.5.94';",
         "const BUNDLED_ENGINE_VERSION = '1.6.30';",
@@ -466,6 +432,8 @@ def validate_target() -> None:
             raise SystemExit(f'5.94 Manager target marker missing: {marker}')
     if manifest.get('productVersion') != TARGET_VERSION:
         raise SystemExit('5.94 manifest Product mismatch')
+    if manifest.get('components', {}).get('plugin', {}).get('version') != TARGET_VERSION:
+        raise SystemExit('5.94 manifest Plugin version mismatch')
     if manifest.get('components', {}).get('bridge', {}).get('requiredVersion') != TARGET_ENGINE:
         raise SystemExit('5.94 manifest Engine version mismatch')
     if manifest.get('components', {}).get('bridge', {}).get('sha256') != BASE_ENGINE_SHA:

@@ -6,10 +6,10 @@
     "systemVersion": "R2.9",
     "seedReleaseVersion": "0.70.0",
     "syntheticNextVersion": "0.70.1",
-    "activation": "DEFERRED"
+    "activation": "NORMAL_PATH"
   },
   "expected": {
-    "activeRouteMutation": "NONE",
+    "activeRouteMutation": "R2_9_PROJECTED_NORMAL_PATH",
     "runtimeMutation": "NONE",
     "releaseSimcoreMutation": "NONE",
     "profileRequired": true,

@@ -42,6 +42,8 @@
   "materializer": "plugins/usage-dashboard/tools/release_model_category_595.py",
   "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
   "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
   "newRegression": "plugins/usage-dashboard/tests/p61-catalog-pinned-request-model-category-fidelity.cjs",
   "releaseNotes": {
     "highlights": [

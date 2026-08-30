@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.94
+//@version 3.0.0-alpha.5.95
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.94';
+  const VERSION = '3.0.0-alpha.5.95';
   const RELEASE_NOTES = Object.freeze({
-    title: "Compact Authoritative 24h Cost Drivers",
+    title: "Catalog-Pinned Premium/Regular Request Model Category Fidelity",
     highlights: Object.freeze([
-    "선택한 Analytics 범위의 기존 24h model/provider rows에서 양수 observed cost만 사용해 Top Model/Provider 비용 주도를 계산",
-    "0·missing·invalid cost는 현재 source fidelity상 구분 불가하므로 leader로 만들지 않고 UNKNOWN으로 fail-closed",
-    "동률은 source display name code-point 순으로 결정하고 기존 analytics rows를 mutate/re-sort하지 않음",
-    "Engine 1.6.30과 CLI 1.10.0은 그대로 유지하며 새 network/CLI/timer/persist owner를 추가하지 않음"
+    "Managed runtime now treats @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 as one exact READY pair.",
+    "Recent served-model rows gain local-only Premium / Regular / UNKNOWN model-category fidelity from the exact managed catalog.",
+    "Classification mirrors upstream pricing thresholds while keeping catalog misses/unavailability UNKNOWN instead of inferring from names, tier, cost, plan, or provider.",
+    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or raw catalog projection is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.94 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "Analytics의 24h 비용 주도 Top Model/Provider가 같은 scope의 상세 rows 중 양수 cost leader와 일치하는지 확인",
-    "share가 보이면 같은 24h total cost 기준으로 일치하고 denominator가 불명확하면 —로 남는지 확인",
-    "Diagnostics Cost drivers 줄이 UI와 일치하고 기존 5.93 cycle summary·Billing Cycle·Premium·PAYG가 그대로인지 확인"
+    "Verify Product 5.95 · Engine 1.6.31 · Manager 1.3.5 · CLI 1.10.0 and READY/Health ok.",
+    "Diagnostics should show managed @llmgateway/models 1.251.0 ready when the exact pair is installed.",
+    "Natural resolved served-model rows may show Premium or Regular; unresolved rows must remain ? / UNKNOWN without inference.",
+    "Existing service tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium allowance, PAYG, Cost Drivers, and request identity must remain unchanged.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,8 +41,8 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.30';
-  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
+  const REQUIRED_BRIDGE_VERSION = '1.6.31';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;

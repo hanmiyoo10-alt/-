@@ -40,6 +40,8 @@
       engineBundleVersion:String(raw.engineBundleVersion || raw.engine_bundle_version || ''),
       cliRuntimeState:['ready','provisioning','unavailable','invalid'].includes(String(raw.cliRuntimeState || raw.cli_runtime_state)) ? String(raw.cliRuntimeState || raw.cli_runtime_state) : 'unavailable',
       cliRuntimeVersion:String(raw.cliRuntimeVersion || raw.cli_runtime_version || ''),
+      cliCatalogState:['ready','unavailable','invalid'].includes(String(raw.cliCatalogState || raw.cli_catalog_state)) ? String(raw.cliCatalogState || raw.cli_catalog_state) : 'unavailable',
+      cliCatalogVersion:String(raw.cliCatalogVersion || raw.cli_catalog_version || ''),
       cliRuntimeProvisioning:['ok','pending','backoff','disabled','unavailable'].includes(String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning)) ? String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning) : 'unavailable',
       candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
       adoptionState:String(raw.adoptionState || raw.adoption_state || ''),

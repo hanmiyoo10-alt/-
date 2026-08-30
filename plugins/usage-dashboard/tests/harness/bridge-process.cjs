@@ -12,6 +12,7 @@ const fakeCliPath = path.join(root, 'tests', 'harness', 'fake-cli.cjs');
 const clockPreloadPath = path.join(root, 'tests', 'harness', 'controlled-clock.mjs');
 const engineSource = fs.readFileSync(enginePath, 'utf8');
 const managedCliVersion = /const CLI_VERSION = process\.env\.LLMGATEWAY_CLI_VERSION \|\| '([^']+)';/.exec(engineSource)?.[1] || '';
+const managedModelCatalogVersion = /const MODEL_CATALOG_VERSION = '([^']+)';/.exec(engineSource)?.[1] || '';
 if (!managedCliVersion) throw new Error('behavior harness could not resolve Engine managed CLI version');
 
 function delay(ms) {
@@ -71,12 +72,36 @@ async function startBridge(options = {}) {
       `require(${JSON.stringify(fakeCliPath)});`,
       '',
     ].join('\n'));
+
+    let catalogDescriptor = {};
+    if (managedModelCatalogVersion) {
+      const catalogRoot = path.join(versionRoot, 'node_modules', '@llmgateway', 'models');
+      const catalogEntry = path.join(catalogRoot, 'index.mjs');
+      fs.mkdirSync(catalogRoot, {recursive:true});
+      fs.writeFileSync(path.join(catalogRoot, 'package.json'), JSON.stringify({
+        name:'@llmgateway/models',
+        version:managedModelCatalogVersion,
+        type:'module',
+        exports:{'.':'./index.mjs'},
+      }));
+      fs.writeFileSync(catalogEntry, [
+        "export const models = [{id:'fixture-regular',providers:[]}];",
+        '',
+      ].join('\n'));
+      catalogDescriptor = {
+        catalogPackage:'@llmgateway/models',
+        catalogVersion:managedModelCatalogVersion,
+        catalogEntry,
+      };
+    }
+
     fs.writeFileSync(path.join(cliRoot, 'managed-cli.json'), JSON.stringify({
       format:1,
       state:'ready',
       package:'@llmgateway/cli',
       version:managedCliVersion,
       entry,
+      ...catalogDescriptor,
     }));
     fs.writeFileSync(path.join(cliRoot, 'managed-cli-state.json'), JSON.stringify({
       state:'ready',
@@ -189,4 +214,4 @@ async function startBridge(options = {}) {
   return api;
 }
 
-module.exports = {startBridge,managedCliVersion};
+module.exports = {startBridge,managedCliVersion,managedModelCatalogVersion};

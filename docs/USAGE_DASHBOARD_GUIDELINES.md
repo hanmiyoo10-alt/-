@@ -21,9 +21,9 @@ The common-rules layer does not own this project's mutable production, release, 
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.89`
-- Bridge Engine: `1.6.27`
-- Bridge Manager: `1.3.3`
+- Product: `3.0.0-alpha.5.90`
+- Bridge Engine: `1.6.28`
+- Bridge Manager: `1.3.4`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`
 <!-- USAGE_DASHBOARD_RELEASE_STATE_END -->
@@ -32,7 +32,7 @@ This block is machine-maintained by `plugins/usage-dashboard/tools/sync_project_
 
 ## Current development memory
 
-Last verified real-device baseline: `3.0.0-alpha.5.87 — Stable Contract Manager Authority Single Source Repair`.
+Last verified real-device baseline: `3.0.0-alpha.5.89 — READY on managed @llmgateway/cli 1.10.0`.
 
 Verified 5.64 foreground evidence:
 
@@ -40,7 +40,7 @@ Verified 5.64 foreground evidence:
 - All three foreground source operations followed direct `llmgateway` ENOENT into the existing `npx` fallback, so routine npx-launcher use on the device is VERIFIED.
 - The portion of each 7–8.6s interval attributable to npm metadata freshness checks remains UNKNOWN. Launcher attribution alone does not prove that npx is the dominant latency source.
 
-Current release implementation: `3.0.0-alpha.5.89 — Physical Engine Convergence Repair`.
+Current release implementation: `3.0.0-alpha.5.90 — Managed CLI Package Authority Repair`.
 
 5.66 release contract:
 

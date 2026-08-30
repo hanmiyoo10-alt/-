@@ -107,16 +107,25 @@ assert.equal(classifyModelCategoryFromMap('provider/no-pricing', map).modelCateg
 assert.deepEqual(JSON.parse(JSON.stringify(classifyModelCategoryFromMap('provider/not-in-catalog', map))), {modelCategory:'unknown',modelCategorySource:'unknown'}, 'catalog miss must remain UNKNOWN');
 assert.deepEqual(JSON.parse(JSON.stringify(classifyModelCategoryFromMap('premium-looking-name', map))), {modelCategory:'unknown',modelCategorySource:'unknown'}, 'model name must never infer Premium');
 
-const ledger = fs.readFileSync('plugins/usage-dashboard/src/14-request-ledger.part.js', 'utf8');
+const provenance = fs.readFileSync('plugins/usage-dashboard/src/15-request-provenance.part.js', 'utf8');
 for (const marker of [
   "return ['premium','regular','unknown'].includes(text) ? text : 'unknown';",
   "if (category === 'premium') return 'Premium';",
   "if (category === 'regular') return 'Regular';",
   "return '?';",
+  'function preferKnownModelCategory',
+  'function requestModelCategoryStats',
+]) assert.ok(provenance.includes(marker), `Plugin category helper provenance missing: ${marker}`);
+
+const ledger = fs.readFileSync('plugins/usage-dashboard/src/14-request-ledger.part.js', 'utf8');
+for (const marker of [
+  'const modelCategory = requestModelCategoryValue',
   'const modelCategoryTruth = preferKnownModelCategory',
   'modelCategory:modelCategoryTruth.modelCategory',
   'modelCategorySource:modelCategoryTruth.modelCategorySource',
-]) assert.ok(ledger.includes(marker), `Plugin category fidelity missing: ${marker}`);
+  'requestModelCategoryText(row)',
+]) assert.ok(ledger.includes(marker), `Plugin category ledger binding missing: ${marker}`);
+assert.equal(ledger.includes('function requestModelCategoryValue(value)'), false, 'category helper implementation must stay out of the bounded ledger owner');
 const keyStart = ledger.indexOf('function requestLedgerKey(row)');
 const keyEnd = ledger.indexOf('function collectRecentRequestLedger(data)', keyStart);
 const keySource = ledger.slice(keyStart, keyEnd);
@@ -157,4 +166,4 @@ assert.equal(manifest.components?.bridgeManager?.managedModelCatalogVersion, '1.
 assert.equal(bootstrapSha, '4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
-console.log(`P61 Catalog-Pinned Request Model Category Fidelity: OK · Product 5.95 · Engine 1.6.31 ${engineSha.slice(0,12)} · Manager 1.3.5 ${managerSha.slice(0,12)} · CLI 1.10.0 + Models 1.251.0 exact · Premium/Regular/UNKNOWN · no new I/O`);
+console.log(`P61 Catalog-Pinned Request Model Category Fidelity: OK · Product 5.95 · Engine 1.6.31 ${engineSha.slice(0,12)} · Manager 1.3.5 ${managerSha.slice(0,12)} · CLI 1.10.0 + Models 1.251.0 exact · Premium/Regular/UNKNOWN · no new I/O · ledger budget preserved`);

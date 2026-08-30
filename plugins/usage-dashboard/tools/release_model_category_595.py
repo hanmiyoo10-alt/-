@@ -16,6 +16,7 @@ TOOLS = UD / 'tools'
 SPEC = ROOT / '.github' / 'usage-dashboard' / 'releases' / '5.95.json'
 CORE = SRC / '00-runtime-core.part.js'
 LEDGER = SRC / '14-request-ledger.part.js'
+PROVENANCE = SRC / '15-request-provenance.part.js'
 BRIDGE_IO = SRC / '20-bridge-io.part.js'
 DIAGNOSTICS = SRC / '40-diagnostics.part.js'
 ENGINE_CORE = ENGINE_SRC / '00-core.part.mjs'
@@ -367,12 +368,10 @@ MODEL_CATEGORY_PLUGIN_HELPERS = r'''
 
 
 def patch_plugin_ledger() -> None:
+    provenance = PROVENANCE.read_text(encoding='utf-8')
+    if 'function requestModelCategoryValue(value)' not in provenance:
+        PROVENANCE.write_text(provenance.rstrip() + '\n' + MODEL_CATEGORY_PLUGIN_HELPERS, encoding='utf-8')
     text = LEDGER.read_text(encoding='utf-8')
-    if 'function requestModelCategoryValue(value)' not in text:
-        anchor = '  function normalizeRecentRequestRows(rows, limit = 12) {'
-        if text.count(anchor) != 1:
-            raise SystemExit('5.95 Plugin category helper anchor mismatch')
-        text = text.replace(anchor, MODEL_CATEGORY_PLUGIN_HELPERS + '\n' + anchor, 1)
     old = "      const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');"
     new = old + "\n      const modelCategory = requestModelCategoryValue(recentRequestValue(row, ['modelCategory','model_category'], 'unknown'));\n      const modelCategorySource = requestModelCategorySourceValue(recentRequestValue(row, ['modelCategorySource','model_category_source'], 'unknown'), modelCategory);"
     if 'const modelCategory = requestModelCategoryValue' not in text:
@@ -567,6 +566,7 @@ def validate_target(engine_sha: str, manager_sha: str) -> None:
     engine_cli = ENGINE_CLI.read_text(encoding='utf-8')
     manager = MANAGER.read_text(encoding='utf-8')
     ledger = LEDGER.read_text(encoding='utf-8')
+    provenance = PROVENANCE.read_text(encoding='utf-8')
     diagnostics = DIAGNOSTICS.read_text(encoding='utf-8')
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     for marker in ['//@version 3.0.0-alpha.5.95', "const VERSION = '3.0.0-alpha.5.95';", "const REQUIRED_BRIDGE_VERSION = '1.6.31';", "const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';"]:
@@ -579,9 +579,12 @@ def validate_target(engine_sha: str, manager_sha: str) -> None:
         if marker not in manager: raise SystemExit(f'5.95 Manager target missing: {marker}')
     if '^1.251.0' in manager or '~1.251.0' in manager:
         raise SystemExit('5.95 model catalog pin must be exact')
-    for marker in ['requestModelCategoryText(row)', 'modelCategory:modelCategoryTruth.modelCategory', "modelCategorySource:'llmgateway-model-catalog'"]:
-        if marker not in ledger and marker not in MODEL_CATEGORY_PART.read_text(encoding='utf-8'):
-            raise SystemExit(f'5.95 request category binding missing: {marker}')
+    for marker in ['requestModelCategoryValue(value)', "if (category === 'premium') return 'Premium';", "if (category === 'regular') return 'Regular';"]:
+        if marker not in provenance: raise SystemExit(f'5.95 Plugin category helper missing: {marker}')
+    for marker in ['requestModelCategoryText(row)', 'modelCategory:modelCategoryTruth.modelCategory']:
+        if marker not in ledger: raise SystemExit(f'5.95 request category binding missing: {marker}')
+    if "modelCategorySource:'llmgateway-model-catalog'" not in MODEL_CATEGORY_PART.read_text(encoding='utf-8'):
+        raise SystemExit('5.95 Engine category source binding missing')
     for marker in ['Model category catalog:', 'Model category fidelity:']:
         if marker not in diagnostics: raise SystemExit(f'5.95 diagnostics missing: {marker}')
     if sha256(ENGINE) != engine_sha or sha256(MANAGER) != manager_sha:

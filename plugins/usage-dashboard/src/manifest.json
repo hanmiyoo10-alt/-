@@ -5,7 +5,7 @@
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "568c18ef5cf92a4b0d309e7ae8c796c3a719f6b4fdc4a5a695b79a49e011476c",
+  "artifactSha256": "2f2157e776bfb9732d52e69533ebd0ac5327f03d20fc0592cc6832bdf6d5ed2e",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
@@ -52,14 +52,14 @@
     {
       "file": "14-request-ledger.part.js",
       "label": "request ledger + drilldown",
-      "bytes": 39794,
-      "sha256": "0741633038fe57758ba2043058f3021293a291382e35215734b4d8fee0cd7587"
+      "bytes": 38180,
+      "sha256": "b314f6cf1909905324de4e082001e05cb156980b437b168a205421745490a907"
     },
     {
       "file": "15-request-provenance.part.js",
       "label": "request account provenance",
-      "bytes": 396,
-      "sha256": "0c729a3d2b58c33d0384bdc74b540ffe9347d98c6a57018855d8c9ac326736b1"
+      "bytes": 2009,
+      "sha256": "b9e7f3f26c066564b3c7c689af4c6db41913f1481948b5d5f2882ea49f4cefee"
     },
     {
       "file": "16-usage-analytics.part.js",

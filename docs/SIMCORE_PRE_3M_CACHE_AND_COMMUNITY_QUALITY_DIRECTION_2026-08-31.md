@@ -1,298 +1,287 @@
-# SimCore Pre-3.0M Cache + Community Quality Direction
+# SimCore Pre-3.0M Cache-First Direction
 
 Date: 2026-08-31 KST
-Status: DIRECTION ONLY · NO VERSION ASSIGNED · NO DESIGN FREEZE · NO IMPLEMENTATION AUTHORITY
-Classification: PRODUCT ROADMAP / PRE-3M MINI CANDIDATES
+Status: DIRECTION UPDATED · CACHE PROGRAM FIRST · 3.0M SCOPE UNFROZEN · NO IMPLEMENTATION AUTHORITY
+Classification: PRODUCT ROADMAP / PRE-3M CACHE PROGRAM / IDEA PARKING
 
 ## Context
 
-The 2.0M M-series architecture is complete and frozen at M2-6. A separate candidate map currently ranks Source Intelligence as the strongest future 3.0M major theme.
+The 2.0M M-series architecture is complete and frozen at M2-6. A separate candidate map records possible future 3.0M themes, including Source Intelligence.
 
-Before freezing 3.0M, two smaller product directions are worth considering:
-
-1. cost-oriented cache/prefix optimization;
-2. higher-quality Community rendering without defining a separate HunterNet product surface.
-
-These are direction records only. They do not authorize a runtime release or modify the current v0.70.1 live gate.
-
-## Sequence rule
-
-Current production authority must close its existing real-long-chat gate before a new behavioral mini is selected.
-
-Preferred sequence hypothesis:
+The current product priority is now clarified:
 
 ```text
-close current v0.70.1 live gate
-→ cache/prefix cost mini, if source audit proves controllable savings surface
-→ Community Quality mini, if separately authorized
-→ freeze 3.0M scope later
+finish the current v0.70.1 live gate
+→ complete the currently justified cache/cost program
+→ only then begin the next major 3.0M design in earnest
 ```
 
-Do not combine cache changes and Community semantic changes in one release.
+The previously discussed HunterNet-like Community upgrade remains an idea/reference direction only. It is not scheduled as a mandatory pre-3.0M release and is not part of a frozen 3.0M scope.
 
-# A. Cache / Cost Efficiency Mini
+## 1. Cache-first program rule
 
-## Goal
+Caching is no longer treated merely as one optional mini before 3.0M. The preferred roadmap is to keep working the cache/cost lane until the **SimCore-owned, source-proven caching work is closed cleanly**.
 
-Reduce avoidable uncached prompt/input cost where SimCore can actually control the request prefix, without weakening correctness or changing semantic behavior merely to chase a cache metric.
-
-The monetary target is provider/gateway prompt-cache reuse when available. Local JavaScript caching alone can reduce CPU latency but does not prove or imply token-billing savings.
-
-## Existing foundation
-
-SimCore already has substantial cache-readiness architecture:
+This does not mean chasing an impossible notion of perfect caching forever. Closure means that every currently justified cache surface has reached one of these terminal states:
 
 ```text
-Prompt/cache guidance in SIMCORE_GUIDELINES
-full-prefix first-break ownership vocabulary
-CHAT_HISTORY / CURRENT_USER / SIMCORE_RUNTIME attribution
-runtime-cache / runtime-cache-candidates ownership
+FIXED
+PROVEN NOT SIMCORE-OWNED
+DEFERRED WITH EXPLICIT EXTERNAL/PROVIDER BOUNDARY
+BLOCKED BY MISSING AUTHORITATIVE TELEMETRY
+```
+
+Only after that closure should a new broad 3.0M product-major program be frozen.
+
+## 2. Why cache first
+
+The motivation is both operational and monetary.
+
+A future Source/Sidecar major may increase prompt complexity or eventually introduce auxiliary semantic work. It is therefore preferable to understand and reduce avoidable input/cache cost before expanding the product surface.
+
+The desired outcome is:
+
+```text
+same or better correctness
+same or better main-model quality
+less avoidable unstable prefix
+more provider-cache reuse when the provider supports it
+lower billed input cost when authoritative billing evidence confirms it
+```
+
+Cost reduction must never outrank correctness, state safety, or main-model isolation.
+
+## 3. Existing cache foundation
+
+SimCore already contains substantial cache-readiness and attribution infrastructure:
+
+```text
+Prompt Cache First guidance
+CHAT_HISTORY / CURRENT_USER / SIMCORE_RUNTIME first-break ownership
+stable / slow / volatile / full compiler tiers
+runtime-cache and runtime-cache-candidates ownership
 cache topology timing
 cache candidate cost observation
-stable / slow / volatile / full compiler tiers
-representation fingerprinting and history stability controls
+history representation fingerprinting
+Current Task / history stability controls
+v0.70.1 bounded post-onSend attribution for CACHE_TOPOLOGY / CACHE_CANDIDATE
 ```
 
-v0.70.1 additionally names cache topology and cache candidate spans inside bounded post-onSend attribution.
+Therefore the cache program should begin from exact request-shape/source evidence, not by inventing another generic cache subsystem.
 
-Therefore a future cache mini should not begin by inventing another cache subsystem. It should begin from exact source and request-shape evidence.
+## 4. Hard cache distinction
 
-## Hard distinction
+Keep these separate at all times:
 
 ```text
 LOCAL PREFIX STABILITY
-!= PROVIDER CACHE HIT
+!= LOCAL JAVASCRIPT CACHE
+!= GATEWAY CACHE
+!= PROVIDER PROMPT CACHE
 != BILLED CACHED TOKENS
 ```
 
-Provider cache remains `UNVERIFIED` until authoritative provider/gateway telemetry or billing evidence exists.
+Provider cache remains `UNVERIFIED` without authoritative provider/gateway telemetry or billing evidence.
 
-If the host/provider exposes cached-token usage, capture it as bounded observational evidence. If it does not, use provider-side billing/dashboard evidence where available. Do not infer monetary savings from local fingerprints alone.
+A local fingerprint match may prove that SimCore produced a stable prefix. It does not, by itself, prove monetary savings.
 
-## First design question
+## 5. First cache question
+
+Every cache optimization should first answer:
 
 ```text
-Where is the earliest avoidable prefix break that SimCore owns?
+Where is the earliest avoidable request-prefix break,
+and who owns it?
 ```
 
-If the first break is consistently:
+If the earliest meaningful break is consistently outside SimCore, for example:
 
 ```text
 PRE_SIMCORE / HOST_PREFIX
-or
-CHAT_HISTORY outside a SimCore-controlled representation
+CHAT_HISTORY representation controlled by the host
+provider-side behavior not exposed to the plugin
 ```
 
-then a SimCore runtime rewrite is not justified merely for cache savings.
+then SimCore must not manufacture a runtime rewrite merely to improve a local cache metric.
 
-If exact audit instead finds a SimCore-owned unstable prefix or avoidable compiler volatility, a bounded mini can stabilize only that surface.
+If exact audit identifies SimCore-owned avoidable volatility, only that bounded surface should be changed.
 
-## Preferred scope
+## 6. Cache program work classes
 
-Potentially valid work, subject to exact source audit:
+Potentially valid cache work, subject to evidence:
 
-- remove unnecessary volatility from an already stable/slow compiler tier;
-- prevent semantically identical SimCore prefix components from changing representation;
-- reuse existing bounded fingerprints/topology data rather than rescanning solely for diagnostics;
-- preserve history representation identity where SimCore already owns it;
-- add bounded cache-cost receipts only where they are observational and cheap;
-- measure billed/provider cache evidence when the host actually exposes it.
+- remove semantically unnecessary volatility from compiler tiers;
+- preserve byte/representation stability for semantically identical SimCore prompt components;
+- reduce duplicate cache-topology/history work when the same bounded evidence is already available;
+- preserve existing history identity where SimCore owns it;
+- identify avoidable prefix breaks introduced by runtime metadata or diagnostics;
+- measure cache-attribution cost so diagnostics do not erase the benefit they measure;
+- capture provider/gateway cached-token receipts if the host exposes them safely;
+- correlate authoritative billing/cache evidence with stable request shapes where possible.
 
-Not automatically valid:
+Forbidden shortcuts:
 
-- moving the runtime prompt from its current verified tail placement;
-- changing semantic ordering for cache metrics;
-- weakening Deferred Mirror or edit-reconcile safety;
-- rewriting history to make a prefix look stable;
-- claiming provider cache hits from local prefix equality;
-- adding network/provider calls merely to query cache state.
+- moving the verified runtime prompt placement solely for a cache metric;
+- weakening Deferred Mirror, edit-reconcile, or history identity safety;
+- direct historical-chat rewrite to fabricate stable prefixes;
+- dropping needed context merely to increase cache reuse;
+- claiming provider-cache hits from local equality alone;
+- adding provider/network calls merely to interrogate cache state;
+- combining cache work with unrelated Community/Source feature development in one release.
 
-## Success criteria
+## 7. Cache completion gate
 
-A monetary optimization mini should ideally prove both:
+Before the roadmap considers the cache program closed, the evidence should answer the following as far as the host/provider permits:
 
 ```text
-SEMANTIC NON-REGRESSION = PASS
-CACHE/COST EFFECT = OBSERVED WITH AUTHORITATIVE EVIDENCE
+A. REQUEST SHAPE
+   earliest break ownership understood for ordinary long chat
+
+B. SIMCORE-OWNED VOLATILITY
+   every source-proven avoidable instability fixed or explicitly deferred
+
+C. SEMANTIC NON-REGRESSION
+   main response quality / Current Task / continuity / Community / edit / reroll remain correct
+
+D. STATE SAFETY
+   no weakening of Deferred Mirror, persistence, lineage, or representation identity
+
+E. LOCAL COST
+   cache diagnostics/topology work remains bounded and does not become the latency hotspot
+
+F. PROVIDER / BILLING EVIDENCE
+   cached-token or cost effect measured when authoritative telemetry exists
+   otherwise provider cache remains explicitly UNVERIFIED
+
+G. REAL LONG-CHAT
+   cold/warm, ordinary, reroll/edit, and long-history behavior remain healthy for the surfaces touched
+
+H. DOCUMENT CLOSURE
+   remaining WATCH / DEFER / external boundaries are recorded before moving on
 ```
 
-If provider cost evidence cannot be observed, the release may still be justified as a measured prefix-stability or local-performance mini, but it must not be sold as proven token-cost reduction.
+The cache program may consist of multiple narrow minis if evidence reveals multiple independent owners. Do not force unrelated cache findings into one giant release.
 
-# B. Community Quality, Not HunterNet Productization
+## 8. Relationship between cache work and the 3.0M number
 
-## Direction
+Version cadence and major-product scope are separate concepts.
 
-Do not define `HunterNet` as a new universal SimCore product primitive.
+It is possible that continued cache minis naturally advance the product/version line to the numerical 3.0M neighborhood before a new feature-major scope is frozen.
 
-Instead, treat the useful HunterNet qualities as evidence for improving the existing Community surface.
-
-Canonical product direction:
+That is acceptable.
 
 ```text
-<COMMUNITY> remains the user-visible semantic family
-
-SimCore decides:
-- what the audience can know;
-- what source/community context is active;
-- what communication culture is plausible;
-- which claims are fact, attribution, rumor, opinion, joke, or noise;
-- how much historical Community context is relevant.
-
-Main model renders:
-- natural posts/comments/reactions inside those constraints.
+reaching the 3.0M number through cache work
+!= automatically freezing a new 3.0M feature architecture
 ```
 
-## Why this is preferable
+Do not hold back justified cache work merely to preserve a clean version-number ceremony. Likewise, do not prematurely declare a broad 3.0M major only because the version counter reaches that boundary.
 
-A named HunterNet runtime would overfit one reference/world style and create unnecessary parallel contracts.
+If cache investigation itself uncovers a genuinely major SimCore-owned architectural capability or change, that must be promoted through a separate evidence/design decision rather than assumed from version arithmetic.
 
-A richer Community system can express HunterNet-like quality when appropriate while also supporting:
+## 9. Community / HunterNet-like idea posture
+
+The HunterNet reference remains useful inspiration, but the current decision is to **park it as an idea rather than schedule it before 3.0M**.
+
+Preferred product interpretation remains:
 
 ```text
-anonymous occupational board
-professional forum
-public social feed
-local neighborhood board
-live broadcast comments
-fan/community forum
-institutional discussion space
-other world-specific community cultures
+not: add a universal HUNTERNET primitive
+
+instead, if promoted later:
+upgrade existing <COMMUNITY> quality
+through generic source/community texture
 ```
 
-The reference artifact supplies design inspiration, not the product ontology.
-
-## Community Source Profile concept
-
-A future bounded Community Quality design can describe source texture through generic dimensions rather than copied platform names.
-
-Illustrative dimensions only:
+Potential reusable ideas remain:
 
 ```text
-identity model
-  anonymous / pseudonymous / role-visible / public
-
-source scope
-  local / occupational / broad-public / event-local
-
-reaction cadence
-  live / near-real-time / delayed
-
-credibility cues
-  none / role-based / attributed / mixed
-
-discourse style
-  short-reaction / thread-discussion / professional / chaotic-social
-
-exposure boundary
-  derived from existing evidence/handoff/frame authority
+source-local voice diversity
+anonymous / pseudonymous / role-visible identity texture
+post ↔ comment coherence
+source-appropriate slang and status cues
+reaction timing / reachability
+fact vs rumor vs joke vs opinion quarantine
+bounded old-Community context
 ```
 
-These are not yet a frozen schema.
+But none of these currently create implementation or scheduling authority.
 
-## Quality improvements that fit the current Community family
+## 10. Main-model boundary for any later Community work
 
-Promising first-wave qualities:
-
-- stronger source-local voice diversity;
-- more coherent post/comment relationships;
-- realistic identity affordances without requiring a permanent account database;
-- less generic repeated reaction phrasing;
-- source-appropriate slang/formality/status cues;
-- audience knowledge boundaries applied before style generation;
-- rumor/joke/opinion kept epistemically quarantined from world truth;
-- time-aware reaction availability using existing Time/Frame/Handoff owners;
-- bounded old-Community context rather than unlimited replay.
-
-## Important invariant
+If Community Quality is promoted in the future, preserve:
 
 ```text
-COMMUNITY STYLE
-must not modify
-WORLD KNOWLEDGE AUTHORITY
+SimCore plugin
+  owns source policy / exposure / timing / state / validation / bounded context
+
+main model
+  renders natural language inside those constraints
 ```
 
-A professional-looking post is not more true because it sounds authoritative. An anonymous rumor is not canon because it is repeated. Style/profile never grants exposure or factual authority.
+A richer Community surface must not turn into a reason to inject large historical sidecar state into the primary model request.
 
-## First implementation should stay light
-
-If promoted as a pre-3M mini, prefer:
+## 11. Updated roadmap hypothesis
 
 ```text
-existing <COMMUNITY> surface
-existing main response request
-existing world/time/evidence owners
-ephemeral or bounded identity texture
-no new historical chat mutation
-no separate provider request
-no autonomous background event generation
-no unbounded persistent user registry
+1. close current v0.70.1 real-long-chat gate
+
+2. CACHE / COST PROGRAM
+   investigate exact first-break ownership
+   implement only source-proven bounded fixes
+   validate each mini independently
+   continue until currently justified SimCore-owned cache work is closed
+   preserve provider-cache UNVERIFIED where external telemetry is absent
+
+3. CACHE PROGRAM CLOSE
+   record FIX / WATCH / DEFER / external-provider boundaries
+   confirm semantic and long-chat non-regression
+
+4. BEGIN 3.0M MAJOR DESIGN IN EARNEST
+   re-open candidate map with fresh post-cache evidence
+   choose the actual major theme then
+
+PARKED IDEA
+   HunterNet-like Community quality upgrade
+   no mandatory placement before 3.0M
 ```
 
-That keeps the update a Community quality improvement rather than prematurely building the whole Source Intelligence major.
+## 12. Why this sequencing is attractive
 
-## Relationship to 3.0M
+This ordering removes financial/cache uncertainty before broad feature expansion.
 
-A successful Community Quality mini would be useful evidence for 3.0M, not a substitute for it.
+It also prevents the roadmap from forcing a speculative Community or Source feature simply because reference research produced attractive ideas.
+
+The next major can then be selected from a cleaner base:
 
 ```text
-pre-3M Community Quality
-= prove richer source-local Community semantics on one existing surface
-
-3.0M Source Intelligence
-= later generalize proven semantics into a multi-source sidecar/runtime contract
+M-series architecture debt closed
++
+current v0.70.x correctness/performance evidence closed
++
+cache/cost behavior understood as far as SimCore can control it
++
+reference research preserved but not prematurely productized
 ```
 
-This gives the future major real SimCore-native evidence instead of designing the entire source runtime from reference material alone.
-
-# C. Preferred pre-3M ordering
-
-Current hypothesis:
-
-```text
-1. close v0.70.1 real-long-chat gate
-
-2. CACHE / COST MINI
-   - exact first-break/source audit first
-   - stabilize only SimCore-owned avoidable volatility
-   - prove provider/billing savings only with authoritative evidence
-
-3. COMMUNITY QUALITY MINI
-   - keep <COMMUNITY>
-   - generic source profile, not HunterNet naming
-   - improve realism/identity/thread texture/epistemic boundaries
-   - no auxiliary call in the first pass
-
-4. 3.0M DESIGN FREEZE
-   - use actual cache + Community evidence
-   - decide how much Context Projection / Semantic Sidecar / Source Intelligence to absorb
-```
-
-The cache and Community minis must remain separate release transactions.
-
-# D. Why this sequencing is attractive
-
-Cost optimization before a source/sidecar major reduces financial pressure before any future feature that could increase prompt complexity or auxiliary computation.
-
-Community Quality before a generalized source major gives us a narrow proving ground for:
-
-- source-local style;
-- audience knowledge boundaries;
-- provenance/quarantine;
-- bounded context;
-- main-model isolation.
-
-That means 3.0M can generalize behavior already proven in SimCore rather than importing a large speculative framework at once.
+That is a stronger starting point for a real 3.0M design.
 
 ## Disposition
 
 ```text
-PRE_3M_CACHE_MINI = STRONG CANDIDATE, EVIDENCE-GATED
-PRE_3M_COMMUNITY_QUALITY = STRONG CANDIDATE
+PRE_3M_PRIMARY_PROGRAM = CACHE / COST
+CACHE_PROGRAM = COMPLETE BEFORE NEW BROAD 3.0M DESIGN FREEZE
+CACHE_WORK MAY SPAN MULTIPLE MINI RELEASES
+VERSION NUMBER MAY NATURALLY APPROACH/CROSS 3.0M DURING CACHE WORK
+VERSION NUMBER != AUTOMATIC MAJOR-SCOPE AUTHORITY
+
+COMMUNITY_QUALITY = PARKED IDEA / REFERENCE-BACKED OPTION
 HUNTERNET_AS_SEPARATE_PRODUCT_PRIMITIVE = NOT PREFERRED
-HUNTERNET_QUALITY_PATTERNS = REUSE AS GENERIC COMMUNITY INSPIRATION
+HUNTERNET_QUALITY_PATTERNS = PRESERVED AS GENERIC COMMUNITY INSPIRATION
+
 CACHE + COMMUNITY IN ONE RELEASE = FORBIDDEN
-3.0M SCOPE = STILL UNFROZEN
+3.0M FEATURE SCOPE = UNFROZEN
 IMPLEMENTATION AUTHORITY = NONE
 ```
 
-No runtime, `release-simcore`, `latest.js`, `install.js`, release-system, v0.70.1 semantics, or 3.0M implementation authority is changed by this direction record.
+No runtime, `release-simcore`, `latest.js`, `install.js`, release-system, current v0.70.1 semantics, or future 3.0M implementation authority is changed by this direction update.

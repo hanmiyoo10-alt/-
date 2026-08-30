@@ -46,3 +46,12 @@
     }
     return stats;
   }
+
+  function categoryPair(row) {
+    const modelCategory = requestModelCategoryValue(recentRequestValue(row, ['modelCategory','model_category'], 'unknown'));
+    return {modelCategory,modelCategorySource:requestModelCategorySourceValue(recentRequestValue(row, ['modelCategorySource','model_category_source'], 'unknown'), modelCategory)};
+  }
+
+  function mergeCategory(row, current) {
+    return preferKnownModelCategory(row?.modelCategory, row?.modelCategorySource, current?.modelCategory, current?.modelCategorySource);
+  }

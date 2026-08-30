@@ -42,6 +42,7 @@ CATALOG_VERSION = '1.251.0'
 BASE_ENGINE_SHA = '035aa5d6535edd357df3390b7cd22acff2dec298a79e86d2fe2b4b0d3f2b4228'
 BASE_MANAGER_SHA = 'bbcbb6b4ae2dfe6a27ec4282da8147d3e5a693586a1648211d90a107713f0801'
 BASE_BOOTSTRAP_SHA = '4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c'
+LEDGER_MAX_BYTES = 37 * 1024
 
 
 def sha256(path: Path) -> str:
@@ -364,6 +365,15 @@ MODEL_CATEGORY_PLUGIN_HELPERS = r'''
     }
     return stats;
   }
+
+  function categoryPair(row) {
+    const modelCategory = requestModelCategoryValue(recentRequestValue(row, ['modelCategory','model_category'], 'unknown'));
+    return {modelCategory,modelCategorySource:requestModelCategorySourceValue(recentRequestValue(row, ['modelCategorySource','model_category_source'], 'unknown'), modelCategory)};
+  }
+
+  function mergeCategory(row, current) {
+    return preferKnownModelCategory(row?.modelCategory, row?.modelCategorySource, current?.modelCategory, current?.modelCategorySource);
+  }
 '''
 
 
@@ -373,20 +383,20 @@ def patch_plugin_ledger() -> None:
         PROVENANCE.write_text(provenance.rstrip() + '\n' + MODEL_CATEGORY_PLUGIN_HELPERS, encoding='utf-8')
     text = LEDGER.read_text(encoding='utf-8')
     old = "      const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');"
-    new = old + "\n      const modelCategory = requestModelCategoryValue(recentRequestValue(row, ['modelCategory','model_category'], 'unknown'));\n      const modelCategorySource = requestModelCategorySourceValue(recentRequestValue(row, ['modelCategorySource','model_category_source'], 'unknown'), modelCategory);"
-    if 'const modelCategory = requestModelCategoryValue' not in text:
+    new = old + "\n      const cat=categoryPair(row);"
+    if 'const cat=categoryPair(row);' not in text:
         if text.count(old) != 1:
             raise SystemExit('5.95 Plugin category normalization anchor mismatch')
         text = text.replace(old, new, 1)
     return_anchor = '        model,\n        cost:num(costRaw) ? Number(costRaw) : null,'
-    return_new = '        model,\n        modelCategory,\n        modelCategorySource,\n        cost:num(costRaw) ? Number(costRaw) : null,'
-    if return_new not in text:
+    return_new = '        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,\n        cost:num(costRaw)?Number(costRaw):null,'
+    if 'modelCategory:cat.modelCategory' not in text:
         if text.count(return_anchor) != 1:
             raise SystemExit('5.95 Plugin category return anchor mismatch')
         text = text.replace(return_anchor, return_new, 1)
     merge_anchor = "        const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);\n        byKey.set(key, {"
-    merge_new = "        const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);\n        const modelCategoryTruth = preferKnownModelCategory(row?.modelCategory, row?.modelCategorySource, current?.modelCategory, current?.modelCategorySource);\n        byKey.set(key, {"
-    if 'const modelCategoryTruth = preferKnownModelCategory' not in text:
+    merge_new = "        const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);\n        const modelCategoryTruth=mergeCategory(row,current);\n        byKey.set(key, {"
+    if 'const modelCategoryTruth=mergeCategory(row,current);' not in text:
         if text.count(merge_anchor) != 1:
             raise SystemExit('5.95 Plugin category merge anchor mismatch')
         text = text.replace(merge_anchor, merge_new, 1)
@@ -579,10 +589,12 @@ def validate_target(engine_sha: str, manager_sha: str) -> None:
         if marker not in manager: raise SystemExit(f'5.95 Manager target missing: {marker}')
     if '^1.251.0' in manager or '~1.251.0' in manager:
         raise SystemExit('5.95 model catalog pin must be exact')
-    for marker in ['requestModelCategoryValue(value)', "if (category === 'premium') return 'Premium';", "if (category === 'regular') return 'Regular';"]:
+    for marker in ['requestModelCategoryValue(value)', "if (category === 'premium') return 'Premium';", "if (category === 'regular') return 'Regular';", 'function categoryPair(row)', 'function mergeCategory(row, current)']:
         if marker not in provenance: raise SystemExit(f'5.95 Plugin category helper missing: {marker}')
-    for marker in ['requestModelCategoryText(row)', 'modelCategory:modelCategoryTruth.modelCategory']:
+    for marker in ['const cat=categoryPair(row);', 'const modelCategoryTruth=mergeCategory(row,current);', 'requestModelCategoryText(row)', 'modelCategory:modelCategoryTruth.modelCategory']:
         if marker not in ledger: raise SystemExit(f'5.95 request category binding missing: {marker}')
+    if LEDGER.stat().st_size > LEDGER_MAX_BYTES:
+        raise SystemExit(f'5.95 request ledger budget exceeded: {LEDGER.stat().st_size}>{LEDGER_MAX_BYTES}')
     if "modelCategorySource:'llmgateway-model-catalog'" not in MODEL_CATEGORY_PART.read_text(encoding='utf-8'):
         raise SystemExit('5.95 Engine category source binding missing')
     for marker in ['Model category catalog:', 'Model category fidelity:']:
@@ -631,5 +643,6 @@ print(
     f'5.95 materialized: Plugin {old_plugin_bytes}->{LATEST.stat().st_size}; '
     f'Engine {old_engine_bytes}->{ENGINE.stat().st_size} v{TARGET_ENGINE} SHA {engine_sha}; '
     f'Manager {old_manager_bytes}->{MANAGER.stat().st_size} v{TARGET_MANAGER} SHA {manager_sha}; '
-    f'CLI {TARGET_CLI} + models {CATALOG_VERSION} exact pair; contracts 1/1; bootstrap exact {BASE_BOOTSTRAP_SHA}'
+    f'CLI {TARGET_CLI} + models {CATALOG_VERSION} exact pair; ledger {LEDGER.stat().st_size}/{LEDGER_MAX_BYTES}; '
+    f'contracts 1/1; bootstrap exact {BASE_BOOTSTRAP_SHA}'
 )

@@ -32,8 +32,7 @@
       const timestamp = bridgeTimestamp(timestampField.value);
       const provider = String(recentRequestValue(row, ['provider','providerName','provider_name','usedProvider','used_provider','metadata.used_provider','metadata.usedProvider','source.provider'], 'Unknown') || 'Unknown');
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
-      const modelCategory = requestModelCategoryValue(recentRequestValue(row, ['modelCategory','model_category'], 'unknown'));
-      const modelCategorySource = requestModelCategorySourceValue(recentRequestValue(row, ['modelCategorySource','model_category_source'], 'unknown'), modelCategory);
+      const cat=categoryPair(row);
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
@@ -74,10 +73,8 @@
         timestampPrecision:requestTimestampPrecision(timestamp, timestampField.key, requestNumber),
         timestampSource:String(timestampField.key || ''),
         provider,
-        model,
-        modelCategory,
-        modelCategorySource,
-        cost:num(costRaw) ? Number(costRaw) : null,
+        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,
+        cost:num(costRaw)?Number(costRaw):null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
         inputTokens:cacheMetrics.inputTokens,
         outputTokens:cacheMetrics.outputTokens,
@@ -253,7 +250,7 @@
         const currentHttpStatus = requestHttpStatusMetadata(current || {});
         const httpStatus = incomingHttpStatus.httpStatusFidelity === 'explicit' ? incomingHttpStatus : currentHttpStatus;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
-        const modelCategoryTruth = preferKnownModelCategory(row?.modelCategory, row?.modelCategorySource, current?.modelCategory, current?.modelCategorySource);
+        const modelCategoryTruth=mergeCategory(row,current);
         byKey.set(key, {
           ...(current || {}),
           ...row,

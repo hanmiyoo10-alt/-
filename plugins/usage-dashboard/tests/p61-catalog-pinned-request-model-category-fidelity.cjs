@@ -115,17 +115,20 @@ for (const marker of [
   "return '?';",
   'function preferKnownModelCategory',
   'function requestModelCategoryStats',
+  'function categoryPair(row)',
+  'function mergeCategory(row, current)',
 ]) assert.ok(provenance.includes(marker), `Plugin category helper provenance missing: ${marker}`);
 
 const ledger = fs.readFileSync('plugins/usage-dashboard/src/14-request-ledger.part.js', 'utf8');
 for (const marker of [
-  'const modelCategory = requestModelCategoryValue',
-  'const modelCategoryTruth = preferKnownModelCategory',
+  'const cat=categoryPair(row);',
+  'const modelCategoryTruth=mergeCategory(row,current);',
   'modelCategory:modelCategoryTruth.modelCategory',
   'modelCategorySource:modelCategoryTruth.modelCategorySource',
   'requestModelCategoryText(row)',
 ]) assert.ok(ledger.includes(marker), `Plugin category ledger binding missing: ${marker}`);
 assert.equal(ledger.includes('function requestModelCategoryValue(value)'), false, 'category helper implementation must stay out of the bounded ledger owner');
+assert.ok(fs.statSync('plugins/usage-dashboard/src/14-request-ledger.part.js').size <= 37 * 1024, 'request ledger owner must remain within the 37 KiB hard ceiling');
 const keyStart = ledger.indexOf('function requestLedgerKey(row)');
 const keyEnd = ledger.indexOf('function collectRecentRequestLedger(data)', keyStart);
 const keySource = ledger.slice(keyStart, keyEnd);

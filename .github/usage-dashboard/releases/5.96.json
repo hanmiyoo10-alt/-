@@ -49,7 +49,8 @@
     "snapshot": 1,
     "recentRequest": 1
   },
-  "verifiedBaseline": "Latest installed real-device evidence: `3.0.0-alpha.5.95 / Engine 1.6.31 / Manager 1.3.5 / READY / model-category feature PASS / diagnostic identity FAIL because CLI was displayed as Models 1.251.0`; last fully accepted product baseline remains 5.94 until this repair is physically verified.",
+  "verifiedBaseline": "3.0.0-alpha.5.94 / Engine 1.6.30 / Manager 1.3.4 / CLI 1.10.0 / READY / Health ok / active errors 0 / failures 0 / Cost Drivers PASS_PHYSICAL",
+  "latestInstalledEvidence": "3.0.0-alpha.5.95 / Engine 1.6.31 / Manager 1.3.5 / READY / model-category feature PASS / diagnostic identity FAIL because CLI was displayed as Models 1.251.0",
   "authority": {
     "featureIssue": 1012,
     "repairOfFeatureIssue": 987,

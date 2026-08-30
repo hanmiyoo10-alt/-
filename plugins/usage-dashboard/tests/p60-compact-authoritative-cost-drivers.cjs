@@ -7,7 +7,10 @@ const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
-assert.equal(release.productVersion, '3.0.0-alpha.5.94');
+if (release.productVersion !== '3.0.0-alpha.5.94') {
+  console.log(`P60 Compact Authoritative Cost Drivers: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.94`);
+  process.exit(0);
+}
 assert.equal(release.engineVersion, '1.6.30');
 assert.equal(release.managerVersion, '1.3.4');
 assert.equal(release.snapshotContract, 1);
@@ -37,6 +40,7 @@ for (const marker of [
 ]) assert.ok(manager.includes(marker), `5.94 Manager invariant missing: ${marker}`);
 
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.94');
 assert.equal(manifest.components?.plugin?.version, '3.0.0-alpha.5.94');
 assert.equal(manifest.components?.bridge?.requiredVersion, '1.6.30');

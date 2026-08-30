@@ -58,8 +58,7 @@ for (const marker of [
   'function costDriverDiagnosticText(scope, window)',
   'costDriverCodePointCompare(left.name, right.name)',
   'candidates.slice().sort',
-  "state:'no-positive-cost'",
-  "state:'name-unavailable'",
+  "state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost'",
   "shareState:share === null ? 'total-unknown' : 'ok'",
 ]) assert.ok(helperSource.includes(marker), `5.94 helper invariant missing: ${marker}`);
 for (const forbidden of ['fetch(', 'XMLHttpRequest', 'Risuai.', 'setTimeout(', 'setInterval(', 'localStorage', '/logs', '/activity', 'catalog', 'pricing']) {
@@ -148,6 +147,7 @@ assert.ok(diagnostics.includes('paygAccountDiagnosticText(diagAccount)'), 'PAYG 
 
 const p59 = fs.readFileSync('plugins/usage-dashboard/tests/p59-truthful-devpass-cycle-summary.cjs', 'utf8');
 assert.ok(p59.includes("if (release.productVersion !== '3.0.0-alpha.5.93')"), 'P59 must become an exact historical applicability regression on 5.94');
+assert.ok(p59.includes('UD_HISTORICAL_VERSION_LOCK'), 'P59 stale manifest Product assertion must be explicitly historical');
 assert.ok(p59.includes("assert.equal(truth.mode, 'billing-cycle-exact')"), 'P59 historical body must remain intact');
 
 const materializer = fs.readFileSync('plugins/usage-dashboard/tools/release_cost_drivers_594.py', 'utf8');

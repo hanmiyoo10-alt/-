@@ -10,7 +10,6 @@ RUNTIME = ROOT / 'runtime'
 RUNTIME_SRC = ROOT / 'runtime-src' / 'bridge-engine'
 TOOLS = ROOT / 'tools'
 SPEC = Path('.github/usage-dashboard/releases/5.90.json')
-AUTHORITY = Path('.github/usage-dashboard/dependencies/llmgateway-cli.json')
 
 CORE = SRC / '00-runtime-core.part.js'
 BRIDGE_IO = SRC / '20-bridge-io.part.js'
@@ -56,8 +55,14 @@ def replace_once_or_target(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
 
-def validate_authority() -> None:
-    value = json.loads(AUTHORITY.read_text(encoding='utf-8'))
+def load_spec():
+    return json.loads(SPEC.read_text(encoding='utf-8'))
+
+
+def validate_authority(spec) -> None:
+    value = spec.get('managedCliAuthority')
+    if not isinstance(value, dict):
+        raise SystemExit('5.90 managed CLI authority must be embedded in release spec')
     expected = {
         'schemaVersion': 1,
         'package': '@llmgateway/cli',
@@ -75,13 +80,13 @@ def validate_authority() -> None:
 
 
 def load_release_notes():
-    spec = json.loads(SPEC.read_text(encoding='utf-8'))
+    spec = load_spec()
+    validate_authority(spec)
     expected = {
         'productVersion': TARGET_VERSION,
         'engineVersion': TARGET_ENGINE,
         'managerVersion': TARGET_MANAGER,
         'managedCliVersion': TARGET_CLI,
-        'managedCliAuthority': str(AUTHORITY),
         'materializer': 'plugins/usage-dashboard/tools/release_managed_cli_package_authority_590.py',
     }
     for key, value in expected.items():
@@ -145,7 +150,8 @@ def assert_convergence_markers(manager: str, bridge_io: str) -> None:
 
 
 def validate_baseline() -> None:
-    validate_authority()
+    spec = load_spec()
+    validate_authority(spec)
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     product = manifest.get('productVersion')
     if product == TARGET_VERSION:
@@ -260,7 +266,8 @@ def sync_manifest_hashes() -> None:
 
 
 def validate_target() -> None:
-    validate_authority()
+    spec = load_spec()
+    validate_authority(spec)
     core = CORE.read_text(encoding='utf-8')
     bridge_io = BRIDGE_IO.read_text(encoding='utf-8')
     engine_core = ENGINE_CORE.read_text(encoding='utf-8')
@@ -320,7 +327,8 @@ def validate_target() -> None:
         raise SystemExit('5.90 contracts changed')
 
 
-validate_authority()
+spec = load_spec()
+validate_authority(spec)
 title, highlights, hints = load_release_notes()
 validate_baseline()
 old_plugin_bytes = LATEST.stat().st_size

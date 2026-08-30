@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.0-intent-01",
+  "releaseId": "simcore-v0.70.0-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.70.0",
+  "releaseName": "Current Task Primacy Guard",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+  "builderPath": "products/simcore/tooling/build-07000-current-task-primacy-guard.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "07000_CURRENT_TASK_PRIMACY_GUARD",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07000_CURRENT_TASK_PRIMACY_GUARD_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_07000_PARTIAL_PREVIOUS_TURN_REPLAY_PROMPT_SCOPE_GAP_ROOT_CAUSE_2026-08-30.md",
+    "docs/SIMCORE_07000_CURRENT_TASK_PRIMACY_GUARD_REBASED_DESIGN_2026-08-30.md",
+    "docs/SIMCORE_07000_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+    "docs/SIMCORE_07000_IMPLEMENTATION_EVIDENCE_2026-08-30.md"
+  ]
+}

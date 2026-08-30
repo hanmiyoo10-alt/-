@@ -27,7 +27,7 @@ function staleProductAssertions(source, targetVersion) {
   const lines = source.split(/\r?\n/);
   const scopes = historicalScopeVersions(source);
   const findings = [];
-  const exact = /assert\.(?:equal|strictEqual)\(\s*[^,\n]*\.productVersion\s*,\s*(['"])(3\.0\.0-alpha\.5\.\d+)\1/;
+  const exact = /^\s*assert\.(?:equal|strictEqual)\(\s*(?:release|manifest)\.productVersion\s*,\s*(['"])(3\.0\.0-alpha\.5\.\d+)\1/;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const match = line.match(exact);

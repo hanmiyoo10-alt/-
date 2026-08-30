@@ -1,0 +1,43 @@
+{
+  "archive_id": "simcore-plugin-idea-drop-2026-08-30",
+  "authority": "reference-only",
+  "runtime_authority": false,
+  "release_simcore_changed": false,
+  "artifacts": [
+    {
+      "source_label": "라이트보드 댓글창 4.0.0",
+      "filename": "lightboard-comments-4.0.0.charx",
+      "bytes": 17939,
+      "sha256": "d6cb46311481c64d3bf8829cdb6f6a1b3e30cf68099035cc4b2aab80f494b8bf",
+      "parts_dir": "source-base64/comments"
+    },
+    {
+      "source_label": "라이트보드 미니보드 4.1.1",
+      "filename": "lightboard-miniboard-4.1.1.charx",
+      "bytes": 25559,
+      "sha256": "dc3eb38d9b4195ccaaf079bb761aa4f5c35b489f761ac7ad1f6e034170341236",
+      "parts_dir": "source-base64/miniboard"
+    },
+    {
+      "source_label": "라이트보드 헌터넷 4.0.0",
+      "filename": "lightboard-hunternet-4.0.0.charx",
+      "bytes": 23160,
+      "sha256": "ae7ecb090e5def555cfbef28b2e9c4d55b09ffaeb6443d9796ecc6d0b87f3f81",
+      "parts_dir": "source-base64/hunternet"
+    },
+    {
+      "source_label": "라이트보드 본체 4.1.1",
+      "filename": "lightboard-core-4.1.1.charx",
+      "bytes": 37503,
+      "sha256": "fd97f4dab7b5fd1749dc4984d723790485fe37d0b54b9140eb54b518a7d1d6f5",
+      "parts_dir": "source-base64/core"
+    },
+    {
+      "source_label": "risuai scripting skill",
+      "filename": "risuai-scripting-skill.zip",
+      "bytes": 38522,
+      "sha256": "bce7013f542b7947a48a192e971b7be20e2cea2d1061b4b9ea3e20ef79c90431",
+      "parts_dir": "source-base64/scripting"
+    }
+  ]
+}

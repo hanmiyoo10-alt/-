@@ -55,8 +55,10 @@
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const scopeNames = {all:['전체 24h Usage',`DevPass + ${creditsOrgLabel} Credits 합산 서버 집계`],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage',`${creditsOrgLabel} 서버 집계`]};
     const scopeActivity = d.usageScopes?.scopes?.[scopeKey] || (scopeKey === 'all' ? normalizeScopeActivity({totalRequests:a?.requests24h,totalCost:a?.cost24h,totalTokens:a?.totalTokens24h,errorRate:a?.errorRate24h,fetchedAt:d.fetchedAt,source:d.source}) : null);
-    const scopeTopProvider = Array.isArray(scopeActivity?.providers) && scopeActivity.providers[0]?.name ? String(scopeActivity.providers[0].name) : '—';
-    const scopeTopModel = Array.isArray(scopeActivity?.models) && scopeActivity.models[0]?.name ? String(scopeActivity.models[0].name) : '—';
+    const scopeCostDrivers = compactCostDriverTruth(scopeActivity);
+    const costDriverUiText = row => row?.name ? `${row.name} · ${money(row.cost,4)}${row.share === null ? '' : ` · ${Number(row.share).toFixed(1)}%`}` : '—';
+    const scopeTopProvider = costDriverUiText(scopeCostDrivers.provider);
+    const scopeTopModel = costDriverUiText(scopeCostDrivers.model);
     const scopeFetchedAt = scopeActivity?.fetchedAt || d.usageScopes?.fetchedAt || d.fetchedAt;
     const devpassAccountStatus = !devpassAccount
       ? '—'

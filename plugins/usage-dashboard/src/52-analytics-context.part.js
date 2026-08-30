@@ -9,8 +9,9 @@
     const analyticsW7 = analyticsBundle?.windows?.['7d'] || null;
     const analyticsW30 = analyticsBundle?.windows?.['30d'] || null;
     const analyticsAverages = analyticsBundle?.averages || {};
-    const analyticsTopProvider = Array.isArray(analyticsW24?.providers) && analyticsW24.providers[0]?.name ? String(analyticsW24.providers[0].name) : '—';
-    const analyticsTopModel = Array.isArray(analyticsW24?.models) && analyticsW24.models[0]?.name ? String(analyticsW24.models[0].name) : '—';
+    const analyticsCostDrivers = compactCostDriverTruth(analyticsW24);
+    const analyticsTopProvider = costDriverUiText(analyticsCostDrivers.provider);
+    const analyticsTopModel = costDriverUiText(analyticsCostDrivers.model);
     const analyticsFetchedAt = analyticsBundle?.fetchedAt || d.analyticsScopes?.fetchedAt || analyticsW24?.fetchedAt || d.fetchedAt;
     const analyticsExtra = analyticsScopeKey === 'devpass'
       ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>기간 종료</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`

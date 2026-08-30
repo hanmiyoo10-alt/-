@@ -5,6 +5,7 @@ const {execFileSync} = require('node:child_process');
 const stage = require('./candidate_stage_e6.cjs');
 const changes = require('./source_change_semantics.cjs');
 const preflight = require('./release_generic_preflight.cjs');
+const specContract = require('./release_spec_contract_e19.cjs');
 
 class ReadinessError extends Error {
   constructor(code, receipt = {}) {
@@ -147,8 +148,16 @@ function assertMaterializerSyntax(sourceSha, releaseSpecPath) {
     offending_path:releaseSpecPath,
     repair_hint:'repair release specification JSON before staging',
   }); }
+
+  const findings = specContract.inspectReleaseSpec(spec);
+  if (findings.length) readinessFail('release-spec-contract','SOURCE_SHA_NOT_READY',{
+    detail:`release-spec-contract:${specContract.summarizeFindings(findings)}`,
+    offending_path:releaseSpecPath,
+    repair_hint:'repair all listed canonical release-spec findings on the same source SHA before staging',
+  });
+
   const materializer = String(spec?.materializer || '');
-  if (!/^plugins\/usage-dashboard\/tools\/[A-Za-z0-9._/-]+\.py$/.test(materializer) || materializer.includes('..')) {
+  if (!specContract.MATERIALIZER_RE.test(materializer) || materializer.includes('..')) {
     readinessFail('materializer-path','SOURCE_SHA_NOT_READY',{
       detail:`materializer-path:${materializer || '<missing>'}`,
       offending_path:releaseSpecPath,

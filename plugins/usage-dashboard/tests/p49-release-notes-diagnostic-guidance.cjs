@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 const {discoverTests} = require('./registry.cjs');
 const {PARTS} = require('../src/parts.cjs');
+const {assertReleaseSpec} = require('../tools/release_spec_contract_e19.cjs');
 
 const root = 'plugins/usage-dashboard';
 const src = `${root}/src`;
@@ -16,7 +17,7 @@ const markup = fs.readFileSync(`${src}/54-dashboard-markup.part.js`, 'utf8');
 const settings = fs.readFileSync(`${src}/60-settings-runtime.part.js`, 'utf8');
 const latest = fs.readFileSync(`${root}/latest.js`, 'utf8');
 const sourceManifest = JSON.parse(fs.readFileSync(`${src}/manifest.json`, 'utf8'));
-const spec = JSON.parse(fs.readFileSync(release.specPath, 'utf8'));
+const spec = assertReleaseSpec(JSON.parse(fs.readFileSync(release.specPath, 'utf8')), release.specPath);
 
 assert.equal(spec.productVersion, release.productVersion);
 assert.equal(spec.engineVersion, release.engineVersion);
@@ -24,14 +25,6 @@ assert.equal(spec.managerVersion, release.managerVersion);
 assert.deepEqual(spec.contracts, {snapshot:1,recentRequest:1});
 assert.equal(typeof spec.releaseTitle, 'string');
 assert.ok(spec.releaseTitle.trim());
-for (const key of ['highlights','diagnosticHints']) {
-  assert.ok(Array.isArray(spec[key]) && spec[key].length >= 1 && spec[key].length <= 5, `P49 ${key} count must be 1..5`);
-  for (const item of spec[key]) {
-    assert.equal(typeof item, 'string');
-    assert.ok(item.trim(), `P49 ${key} item must be non-empty`);
-    assert.ok(item.length <= 160, `P49 ${key} item must remain bounded`);
-  }
-}
 
 assert.ok(core.includes('const RELEASE_NOTES = Object.freeze({'), 'P49 static RELEASE_NOTES constant missing');
 assert.ok(core.includes(`title: ${JSON.stringify(spec.releaseTitle)}`), 'P49 release title must be materialized from current spec');
@@ -60,8 +53,8 @@ for (const marker of [
   '${releaseNotesPanelHtml()}',
 ]) assert.ok(markup.includes(marker), `P49 Settings release-notes control missing: ${marker}`);
 
-assert.ok(context.includes('id="release-notes-panel"'), 'P49 release-notes panel id missing');
-assert.ok(context.includes('hidden>'), 'P49 release-notes panel must be closed by default');
+assert.ok(context.includes('id="release-notes-panel"'), 'P49 release notes panel id missing');
+assert.ok(context.includes('hidden>'), 'P49 release notes panel must be closed by default');
 
 const handlerStart = settings.indexOf("    if (q('#release-notes-toggle'))");
 const handlerEnd = settings.indexOf("    if (q('#connect'))", handlerStart);
@@ -101,4 +94,4 @@ const suite = discoverTests();
 assert.ok(suite.regressions.includes('p48-exact-final-http-status.cjs'), 'P49 must retain P48 HTTP-status regression');
 assert.ok(suite.regressions.includes('p49-release-notes-diagnostic-guidance.cjs'), 'P49 registry must include P49');
 
-console.log(`P49 Release Notes & Diagnostic Guidance: OK · current spec ${release.productVersion} · spec-backed static notes · DOM-only toggle · zero refresh/network/timer/persistence ownership · module registry parity ${PARTS.length}`);
+console.log(`P49 Release Notes & Diagnostic Guidance: OK · current spec ${release.productVersion} · canonical E19 spec shape · spec-backed static notes · DOM-only toggle · zero refresh/network/timer/persistence ownership · module registry parity ${PARTS.length}`);

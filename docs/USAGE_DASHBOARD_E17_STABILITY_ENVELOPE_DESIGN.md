@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E17 Stability Envelope
 
-Status: **IMPLEMENTED CANDIDATE — BYTE-NEUTRAL MAINTENANCE / CI PENDING**
+Status: **IMPLEMENTED — VALIDATED BYTE-NEUTRAL MAINTENANCE**
 
 Tracking: #968
 
@@ -39,6 +39,8 @@ This removes hand-copied locator text from the normal first-write path while kee
 
 A lock without the matching guard fails closed as `historical-scope-missing`. A guard without the lock remains a stale current-version assertion.
 
+The scanner is intentionally limited to direct `release.productVersion` / `manifest.productVersion` assertions so policy fixtures and inspection-output examples are not mistaken for release authority.
+
 No historical regression body is weakened.
 
 ### E17-C — E16 baseline-proof semantics
@@ -74,7 +76,30 @@ E17 adds no:
 
 UNKNOWN remains UNKNOWN.
 
-## Verification
+## Validation receipt
+
+PR #971 validation run `33310175634` completed GREEN on the E17 implementation candidate before this receipt-only documentation update.
+
+- full registry: `TEST_REGISTRY_GREEN:119`;
+- current release: Product `3.0.0-alpha.5.93` / Engine `1.6.30` / Manager `1.3.4` / contracts `1/1`;
+- Engine source parity SHA-256: `035aa5d6535edd357df3390b7cd22acff2dec298a79e86d2fe2b4b0d3f2b4228`;
+- E15 handoff contract: GREEN;
+- E16 capsule contract: GREEN;
+- E16 baseline-proof documentation parity: GREEN;
+- E17 stability-envelope contract: GREEN;
+- P59 current 5.93 regression: GREEN;
+- historical P55-P58 applicability: correctly scoped/SKIP on 5.93.
+
+The two implementation-feedback REDs before the GREEN run were control/test-contract feedback only:
+
+1. the first scanner draft over-matched non-authoritative policy/test fixtures; it was narrowed to direct release/manifest assertions without weakening historical scope rules;
+2. the existing E8 regression still assumed a lock comment alone granted a historical exemption; it was updated so only an exact release-version guard plus lock can pass.
+
+Neither feedback item changed runtime artifacts or E16 authority semantics.
+
+A final CI run after this documentation receipt is still required before merge.
+
+## Regression contract
 
 `e17-stability-envelope-contract.cjs` locks:
 
@@ -86,7 +111,7 @@ UNKNOWN remains UNKNOWN.
 - candidate-source denial for release-control helpers;
 - existing assistant PR-write boundary and no new merge writer.
 
-Full Usage Dashboard registry must be GREEN before merge.
+Full Usage Dashboard registry must remain GREEN through the final merge candidate.
 
 ## Physical boundary
 

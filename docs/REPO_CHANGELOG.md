@@ -843,6 +843,13 @@
 - Event ID: `0a51bc650b6ee58da700743299d5786e7aa66849482ff3b566518ecb10737d4e`
 <!-- canonical-main-doc-promoted:0a51bc650b6ee58da700743299d5786e7aa66849482ff3b566518ecb10737d4e -->
 
+### 2026-08-30 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `77598e95f124cd214ae9bf7075264923ab50a5c42bc791758a961137c8597dc3`
+<!-- canonical-main-doc-promoted:77598e95f124cd214ae9bf7075264923ab50a5c42bc791758a961137c8597dc3 -->
+
 ### 2026-08-30 — Merge pull request #890 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.90
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

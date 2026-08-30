@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.3-intent-01",
+  "releaseId": "simcore-v0.70.3-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.70.3",
+  "releaseName": "Runtime Cache Hash Primitive Convergence",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "builderPath": "products/simcore/tooling/build-s2-1-dead-prompt-render-seam.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "S2_1_DEAD_PROMPT_RENDER_COMPAT_SEAM_RETIREMENT",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "S7_CUMULATIVE_SIMPLIFICATION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_PRE_MAJOR_SIMPLIFICATION_ROUTINE_2026-08-31.md",
+    "docs/SIMCORE_S1_1_RUNTIME_CACHE_FNV_PRIMITIVE_CONVERGENCE_IMPLEMENTATION_EVIDENCE_2026-08-31.md",
+    "docs/SIMCORE_S2_1_DEAD_PROMPT_RENDER_COMPAT_SEAM_RETIREMENT_DESIGN_2026-08-31.md",
+    "docs/SIMCORE_S2_1_DEAD_PROMPT_RENDER_COMPAT_SEAM_IMPLEMENTATION_EVIDENCE_2026-08-31.md"
+  ]
+}

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.69.2
+//@version 0.70.0
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.0 Current Task Primacy Guard:
+// - Makes the current user input the primary generation-task authority while keeping prior assistant output as continuity/reference context rather than automatic current-task authority
+// - Prevents replay of a completed prior response frame/task unless the current input explicitly requests continuation, recap, comparison or reuse
+// - Advances PROMPT_COMPILER_VERSION 3 -> 4 in the stable Prompt tier only; request ordering, TAIL_AFTER_CURRENT_USER placement, history mutation disposition and persistent schemas remain unchanged
+// - Preserves v0.69.2 MamsHolic exact-brand alias behavior, COMMUNITY_CLASSIFIER_VERSION 3 and the M2-6 architecture graph
 //
 // v0.69.2 MamsHolic Exact Brand Alias Repair:
 // - Recognizes anchored 맘스홀릭 headers as the existing canonical 맘카페 family so generic descriptors such as 자유게시판 retain 학부모/지역 classification
@@ -711,7 +717,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.69.2';
+const SIMCORE_RUNTIME_VERSION = '0.70.0';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4336,7 +4342,7 @@ const lifecycle = require('./lifecycle');
 const time = require('./time');
 const recurrence = require('./recurrence');
 
-const PROMPT_COMPILER_VERSION = 3;
+const PROMPT_COMPILER_VERSION = 4;
 
 function compileStableContract() {
   return [
@@ -4346,6 +4352,9 @@ function compileStableContract() {
     'period_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline',
     'do_not_replay_completed_prior_period_transition_as_current_period_transition=1',
     'current_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions',
+    'current_input_task=primary_generation_authority',
+    'prior_assistant_output=continuity_reference_context_not_current_task_authority',
+    'do_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1',
     'reference_sources=character_card+currently_exposed_lore_if_present',
     'character_world_facts_use_reference_sources=1',
     'knowledge_required=1',
@@ -6412,7 +6421,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.69.2';
+const HOST_COMPAT_VERSION = '0.70.0';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9215,8 +9224,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.69.2',
-    name: 'MamsHolic Exact Brand Alias Repair',
+    version: '0.70.0',
+    name: 'Current Task Primacy Guard',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

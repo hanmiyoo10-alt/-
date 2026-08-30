@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.1-intent-01",
+  "releaseId": "simcore-v0.70.1-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+  "sourceCommit": "200847d15ea160818afa7a7108856636a7f0537d",
+  "candidateCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "candidateReleaseBlob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.1-intent-01",
+  "builderPath": "products/simcore/tooling/build-07001-cold-first-turn-tail-attribution.py",
+  "builderSha256": "9a2eea6ad9ab76b124de0b1f83a9b5a24076bbcaeb3e9c70d8aa11ac3013961d",
+  "verifierCommit": "200847d15ea160818afa7a7108856636a7f0537d",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "143628b0beb01443f1d60047baaf386c23195906f680e1e80d56c1a9320fef01",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

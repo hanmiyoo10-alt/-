@@ -17,12 +17,14 @@ export async function runSuite() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'simcore-arch-select-'));
   try {
     equal(candidateContractPath('0.69.0'), 'config/simcore-architecture-v06900-candidate.json', 'v0.69 canonical release id');
+    equal(candidateContractPath('0.69.1'), 'config/simcore-architecture-v06901-candidate.json', 'v0.69.1 patch release id');
     equal(candidateContractPath('0.64.11'), 'config/simcore-architecture-v06411-candidate.json', 'two-digit patch release id');
     equal(candidateContractPath('1.2.3'), 'config/simcore-architecture-v10203-candidate.json', 'generic zero-padded release id');
     pass('V06900-arch-select-release-id-canonicalization');
 
     write(root, 'config/simcore-architecture-v2.json', '{}\n');
     write(root, 'config/simcore-architecture-v06900-candidate.json', '{}\n');
+    write(root, 'config/simcore-architecture-v06901-candidate.json', '{}\n');
 
     write(root, 'v068-latest.js', '//@name simcore\n//@version 0.68.0\n');
     write(root, 'v068-install.js', '//@name simcore\n//@version 0.68.0\n');
@@ -39,6 +41,14 @@ export async function runSuite() {
     equal(candidate.contract, 'config/simcore-architecture-v06900-candidate.json', 'v0.69 exact sidecar contract');
     equal(candidate.transitional, true, 'v0.69 sidecar is transitional');
     pass('V06900-arch-select-exact-candidate');
+
+    write(root, 'v06901-latest.js', '//@name simcore\n//@version 0.69.1\n');
+    write(root, 'v06901-install.js', '//@name simcore\n//@version 0.69.1\n');
+    const patchCandidate = selectArchitectureContract({ root, source: 'v06901-latest.js', mirrorSource: 'v06901-install.js' });
+    equal(patchCandidate.version, '0.69.1', 'v0.69.1 source version');
+    equal(patchCandidate.contract, 'config/simcore-architecture-v06901-candidate.json', 'v0.69.1 exact sidecar contract');
+    equal(patchCandidate.transitional, true, 'v0.69.1 sidecar is transitional');
+    pass('V06901-arch-select-exact-patch-candidate');
 
     fs.rmSync(path.join(root, 'config/simcore-architecture-v06900-candidate.json'));
     const fallback = selectArchitectureContract({ root, source: 'v069-latest.js', mirrorSource: 'v069-install.js' });

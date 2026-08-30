@@ -2,10 +2,8 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
 const {loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const ROOT = process.cwd();
 const release = loadCurrentRelease();
 const alpha = /^3\.0\.0-alpha\.5\.(\d+)$/.exec(String(release.productVersion || ''));
 
@@ -18,15 +16,9 @@ if (alpha && Number(alpha[1]) < 90) {
 assert.ok(Object.hasOwn(release, 'managedCliVersion'), 'managed CLI authority: release spec missing managedCliVersion');
 assert.ok(Object.hasOwn(release, 'managedCliAuthority'), 'managed CLI authority: release spec missing managedCliAuthority');
 assert.match(String(release.managedCliVersion || ''), /^\d+\.\d+\.\d+$/, 'managed CLI authority: invalid package version');
+assert.ok(release.managedCliAuthority && typeof release.managedCliAuthority === 'object' && !Array.isArray(release.managedCliAuthority), 'managed CLI authority: release spec authority must be an embedded object');
 
-const authorityRoot = path.resolve(ROOT, '.github/usage-dashboard/dependencies');
-const authorityPath = path.resolve(ROOT, String(release.managedCliAuthority || ''));
-const relative = path.relative(authorityRoot, authorityPath);
-assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative), 'managed CLI authority: authority path must stay inside dependency authority root');
-assert.equal(path.extname(authorityPath), '.json', 'managed CLI authority: authority record must be JSON');
-assert.ok(fs.existsSync(authorityPath), `managed CLI authority: authority record missing ${release.managedCliAuthority}`);
-
-const authority = JSON.parse(fs.readFileSync(authorityPath, 'utf8'));
+const authority = release.managedCliAuthority;
 assert.equal(authority.schemaVersion, 1, 'managed CLI authority: unsupported authority schema');
 assert.equal(authority.package, '@llmgateway/cli', 'managed CLI authority: wrong package');
 assert.equal(authority.upstreamRepository, 'theopenco/llmgateway-templates', 'managed CLI authority: wrong package repository');

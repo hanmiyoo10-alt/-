@@ -26,6 +26,8 @@
     "membership": "exact-normalized-model-id",
     "unknownOnMissingCatalog": true
   },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
   "contracts": {
     "snapshot": 1,
     "recentRequest": 1

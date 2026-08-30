@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { equal, assert } from '../../tooling/assertions.mjs';
+import { BundleLoader } from '../../tooling/bundle-loader.mjs';
 import { registry } from '../registry.mjs';
 import {
   VALIDATION_CONTRACT_MODES,
@@ -120,8 +121,9 @@ export async function runSuite(ctx) {
   const nextProfile = syntheticNextProfile(validated);
   validateValidationProfile(nextProfile, { requiredContracts: REQUIRED_CONTRACTS });
   const nextSource = syntheticNextSource(ctx.source);
+  const nextCtx = { ...ctx, source: nextSource, loader: new BundleLoader(nextSource) };
   for (const contractId of REQUIRED_CONTRACTS) {
-    const result = await runProjectedValidationContract(contractId, { ...ctx, source: nextSource }, nextProfile);
+    const result = await runProjectedValidationContract(contractId, nextCtx, nextProfile);
     equal(result.status || 'PASS', 'PASS', `synthetic next-version contract ${contractId}`);
   }
   assert(!inventory.suiteFiles.includes('reload-cache-continuity-v07001.test.mjs'), 'synthetic next version must not require a reload wrapper');

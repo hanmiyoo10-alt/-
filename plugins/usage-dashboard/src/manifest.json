@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.90",
+  "version": "3.0.0-alpha.5.91",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "b85cf22087a9e498b45bac38f1e87861ad484a0b2020725325cbaf743141604f",
+  "artifactSha256": "17d0fe4ef4a04d026fb108099d0e29f619e6d4358d67bbd4ff294ab75484680c",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 14761,
-      "sha256": "aa7af15f8ef38bd0d1fd7ff9986778189a4c3d4a8eb989d6f8db0636a34846c6"
+      "bytes": 14770,
+      "sha256": "15284d472db15100b4898d1a23b03749a1f9c74bebedbda1b8ac8a32d9222cdc"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -68,6 +68,12 @@
       "sha256": "0490f096f7eefd9dc32141e465a56995521e04747aade497d7ed3aa38c0811ce"
     },
     {
+      "file": "18-premium-allowance.part.js",
+      "label": "DevPass Premium allowance truth",
+      "bytes": 1936,
+      "sha256": "d140c40405953493323df210faaad03238d81f8392f9de6230d79bb2f15c1b96"
+    },
+    {
       "file": "20-bridge-io.part.js",
       "label": "bridge I/O",
       "bytes": 12157,
@@ -82,14 +88,14 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 47057,
-      "sha256": "6126ca00344c8d4fac3f5dfdd5179ba397258d8db0866104eeafadc99212c97f"
+      "bytes": 47105,
+      "sha256": "14008afed6b23cf9a1e7124aa0abce77997a340b19272bed3942e6d5eef362a8"
     },
     {
       "file": "50-dashboard-context.part.js",
       "label": "dashboard/context",
-      "bytes": 10681,
-      "sha256": "d2b169cf058ca3f4268644997dd9bc7ae04d468972fc46355e587af6860724c3"
+      "bytes": 11717,
+      "sha256": "5f406a2a3732676369dd240849e1c1444f62d8008d6f701da5866eb4e59aa469"
     },
     {
       "file": "52-analytics-context.part.js",

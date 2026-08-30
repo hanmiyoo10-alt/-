@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.90
+//@version 3.0.0-alpha.5.91
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.90';
+  const VERSION = '3.0.0-alpha.5.91';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed CLI Package Authority Repair",
+    title: "DevPass Weekly Premium Allowance Truth Card",
     highlights: Object.freeze([
-    "부모 LLM Gateway v1.14.0을 CLI package 1.14.0으로 잘못 등치한 dependency authority를 실제 @llmgateway/cli 1.10.0 package tag 기준으로 복구",
-    "Engine/Manager pin을 1.10.0으로 다시 일치시키고 5.89의 live Engine convergence 보강은 그대로 유지",
-    "5.90 이후 모든 릴리스가 release spec 내부 package-specific authority와 runtime pin 일치를 검증하도록 generic contract 추가"
+    "DevPass 탭에 source-backed Premium 주간 한도 truth card 추가",
+    "explicit 사용·한도 값이 있을 때만 남음·사용률을 계산하고 missing/invalid 값은 —로 유지",
+    "주의·소진은 80%/100% 로컬 표시 기준만 사용하며 PAYG funding 상태나 요청별 결제 출처를 추론하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.90 · Engine 1.6.28 · Manager 1.3.4가 일치하는지 확인",
-    "Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok인지 확인",
-    "Stable readiness READY · Health ok · active errors 0 · failures 0인지 확인",
-    "정상 acceptance capture에서 managed-direct가 유지되고 direct/npx fallback이 0인지 확인"
+    "업데이트 후 Product 5.91 · Engine 1.6.28 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "Premium 카드의 사용·한도·남음·사용률이 Diagnostics의 Premium allowance 줄과 일치하는지 확인",
+    "리셋은 explicit source가 있을 때만 표시되고 UNKNOWN 값은 —로 남는지 확인",
+    "기존 floating Premium widget · Reset Pass/PAYG · Billing Cycle이 그대로이고 추가 refresh/CLI/network 작업이 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -2327,6 +2327,40 @@ async function importLegacyTodayBaselines() {
     catch (error) { noteLocalRuntimeError(stage, error); return false; }
   }
 
+  function premiumAllowanceTruth(weekly) {
+    const source = weekly && typeof weekly === 'object' ? weekly : null;
+    const explicitNumber = (value, predicate) => {
+      if (value === null || value === undefined || value === '') return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && predicate(parsed) ? parsed : null;
+    };
+    const used = explicitNumber(source?.used, value => value >= 0);
+    const limit = explicitNumber(source?.limit, value => value > 0);
+    const complete = used !== null && limit !== null;
+    const remaining = complete ? Math.max(0, limit - used) : null;
+    const percentUsed = complete ? (used / limit) * 100 : null;
+    const visualPercent = percentUsed === null ? null : Math.min(100, Math.max(0, percentUsed));
+    const resetCandidate = source?.resetAt;
+    const resetMs = resetTimestamp(resetCandidate);
+    const resetAt = Number.isFinite(resetMs) ? resetCandidate : null;
+    const state = percentUsed === null
+      ? 'unknown'
+      : percentUsed >= 100
+        ? 'exhausted'
+        : percentUsed >= 80
+          ? 'warning'
+          : 'normal';
+    const stateLabel = state === 'normal' ? '정상' : state === 'warning' ? '주의' : state === 'exhausted' ? '소진' : '—';
+    return Object.freeze({used, limit, remaining, percentUsed, visualPercent, resetAt, state, stateLabel});
+  }
+
+  function premiumAllowanceDiagnosticText(weekly) {
+    const allowance = premiumAllowanceTruth(weekly);
+    const valueText = value => value === null ? '—' : String(Number(value));
+    const percentText = allowance.percentUsed === null ? '—' : `${Number(allowance.percentUsed).toFixed(1)}%`;
+    return `Premium allowance: used ${valueText(allowance.used)} · limit ${valueText(allowance.limit)} · remaining ${valueText(allowance.remaining)} · ${percentText} · reset ${allowance.resetAt ? String(allowance.resetAt) : '—'} · state ${allowance.state}`;
+  }
+
   async function fetchSnapshot() {
     if (!token) throw new Error('Bridge Token을 먼저 저장해 줘.');
     const base = normalizeBridgeBase(state.bridgeBase);
@@ -2989,6 +3023,7 @@ async function importLegacyTodayBaselines() {
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
+      premiumAllowanceDiagnosticText(d.weekly),
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${money(diagAccount?.regularCredits)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
@@ -3146,6 +3181,7 @@ function todayOverviewMetrics(d) {
     const systemHealthStatus = stableHealth ? 'STABLE' : lifecycleMode === 'paused' ? 'PAUSED' : lifecycleMode === 'off' ? 'OFF' : 'CHECK';
     const systemHealthText = `${String(lifecycleMode || 'off').toUpperCase()} · Engine ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · Manager ${productRuntime.managerVersion ? `v${productRuntime.managerVersion}` : '—'} · ${state.lastSyncAt ? age(state.lastSyncAt) : '대기'}`;
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
+    const premiumAllowance = premiumAllowanceTruth(d.weekly);
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -3210,6 +3246,13 @@ function todayOverviewMetrics(d) {
             <div class="mini"><span>Reset Pass 가격</span><b>${money(devpassAccount.resetPassPrice)}</b></div>
             <div class="mini"><span>PAYG overflow</span><b>${devpassAccount.paygEnabled ? '켜짐' : '꺼짐'}</b></div>
             <div class="mini cyan"><span>Regular Credits</span><b>${money(devpassAccount.regularCredits)}</b></div>
+          </div></div>
+          <div class="usage-detail-box premium-allowance-card"><div class="recent-head"><h3>Premium 주간 한도</h3><span>${esc(premiumAllowance.stateLabel)}</span></div><div class="minis">
+            <div class="mini purple"><span>사용</span><b>${premiumAllowance.used === null ? '—' : money(premiumAllowance.used)}</b></div>
+            <div class="mini purple"><span>한도</span><b>${premiumAllowance.limit === null ? '—' : money(premiumAllowance.limit)}</b></div>
+            <div class="mini purple"><span>남음</span><b>${premiumAllowance.remaining === null ? '—' : money(premiumAllowance.remaining)}</b></div>
+            <div class="mini purple"><span>사용률</span><b>${premiumAllowance.percentUsed === null ? '—' : `${premiumAllowance.percentUsed.toFixed(1)}%`}</b></div>
+            <div class="mini"><span>리셋</span><b>${premiumAllowance.resetAt ? remainingTimeForDashboard(premiumAllowance.resetAt) : '—'}</b></div>
           </div></div>
           <div class="usage-detail-box billing-cycle-truth-strip"><div class="recent-head"><h3>Billing Cycle</h3><span>source truth</span></div><div class="minis">
             <div class="mini"><span>Plan</span><b>${esc(billingPlanText)}</b></div>

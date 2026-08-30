@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.90
+//@version 3.0.0-alpha.5.91
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.90';
+  const VERSION = '3.0.0-alpha.5.91';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed CLI Package Authority Repair",
+    title: "DevPass Weekly Premium Allowance Truth Card",
     highlights: Object.freeze([
-    "부모 LLM Gateway v1.14.0을 CLI package 1.14.0으로 잘못 등치한 dependency authority를 실제 @llmgateway/cli 1.10.0 package tag 기준으로 복구",
-    "Engine/Manager pin을 1.10.0으로 다시 일치시키고 5.89의 live Engine convergence 보강은 그대로 유지",
-    "5.90 이후 모든 릴리스가 release spec 내부 package-specific authority와 runtime pin 일치를 검증하도록 generic contract 추가"
+    "DevPass 탭에 source-backed Premium 주간 한도 truth card 추가",
+    "explicit 사용·한도 값이 있을 때만 남음·사용률을 계산하고 missing/invalid 값은 —로 유지",
+    "주의·소진은 80%/100% 로컬 표시 기준만 사용하며 PAYG funding 상태나 요청별 결제 출처를 추론하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.90 · Engine 1.6.28 · Manager 1.3.4가 일치하는지 확인",
-    "Bridge CLI runtime이 managed · ready · v1.10.0 · provisioning ok인지 확인",
-    "Stable readiness READY · Health ok · active errors 0 · failures 0인지 확인",
-    "정상 acceptance capture에서 managed-direct가 유지되고 direct/npx fallback이 0인지 확인"
+    "업데이트 후 Product 5.91 · Engine 1.6.28 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "Premium 카드의 사용·한도·남음·사용률이 Diagnostics의 Premium allowance 줄과 일치하는지 확인",
+    "리셋은 explicit source가 있을 때만 표시되고 UNKNOWN 값은 —로 남는지 확인",
+    "기존 floating Premium widget · Reset Pass/PAYG · Billing Cycle이 그대로이고 추가 refresh/CLI/network 작업이 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';

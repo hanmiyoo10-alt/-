@@ -35,6 +35,7 @@
     const systemHealthStatus = stableHealth ? 'STABLE' : lifecycleMode === 'paused' ? 'PAUSED' : lifecycleMode === 'off' ? 'OFF' : 'CHECK';
     const systemHealthText = `${String(lifecycleMode || 'off').toUpperCase()} · Engine ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · Manager ${productRuntime.managerVersion ? `v${productRuntime.managerVersion}` : '—'} · ${state.lastSyncAt ? age(state.lastSyncAt) : '대기'}`;
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
+    const premiumAllowance = premiumAllowanceTruth(d.weekly);
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -99,6 +100,13 @@
             <div class="mini"><span>Reset Pass 가격</span><b>${money(devpassAccount.resetPassPrice)}</b></div>
             <div class="mini"><span>PAYG overflow</span><b>${devpassAccount.paygEnabled ? '켜짐' : '꺼짐'}</b></div>
             <div class="mini cyan"><span>Regular Credits</span><b>${money(devpassAccount.regularCredits)}</b></div>
+          </div></div>
+          <div class="usage-detail-box premium-allowance-card"><div class="recent-head"><h3>Premium 주간 한도</h3><span>${esc(premiumAllowance.stateLabel)}</span></div><div class="minis">
+            <div class="mini purple"><span>사용</span><b>${premiumAllowance.used === null ? '—' : money(premiumAllowance.used)}</b></div>
+            <div class="mini purple"><span>한도</span><b>${premiumAllowance.limit === null ? '—' : money(premiumAllowance.limit)}</b></div>
+            <div class="mini purple"><span>남음</span><b>${premiumAllowance.remaining === null ? '—' : money(premiumAllowance.remaining)}</b></div>
+            <div class="mini purple"><span>사용률</span><b>${premiumAllowance.percentUsed === null ? '—' : `${premiumAllowance.percentUsed.toFixed(1)}%`}</b></div>
+            <div class="mini"><span>리셋</span><b>${premiumAllowance.resetAt ? remainingTimeForDashboard(premiumAllowance.resetAt) : '—'}</b></div>
           </div></div>
           <div class="usage-detail-box billing-cycle-truth-strip"><div class="recent-head"><h3>Billing Cycle</h3><span>source truth</span></div><div class="minis">
             <div class="mini"><span>Plan</span><b>${esc(billingPlanText)}</b></div>

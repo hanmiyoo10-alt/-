@@ -13,14 +13,14 @@
     highlights: Object.freeze([
     "Managed runtime now treats @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 as one exact READY pair.",
     "Recent served-model rows gain local-only Premium / Regular / UNKNOWN model-category fidelity from the exact managed catalog.",
-    "Classification mirrors upstream pricing thresholds while keeping catalog misses/unavailability UNKNOWN instead of inferring from names, tier, cost, plan, or provider.",
+    "Classification follows explicit pricing thresholds; catalog miss/unavailability stays UNKNOWN, with no inference from names, tier, cost, plan, or provider.",
     "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or raw catalog projection is added.",
     ]),
     diagnosticHints: Object.freeze([
     "Verify Product 5.95 · Engine 1.6.31 · Manager 1.3.5 · CLI 1.10.0 and READY/Health ok.",
     "Diagnostics should show managed @llmgateway/models 1.251.0 ready when the exact pair is installed.",
     "Natural resolved served-model rows may show Premium or Regular; unresolved rows must remain ? / UNKNOWN without inference.",
-    "Existing service tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium allowance, PAYG, Cost Drivers, and request identity must remain unchanged.",
+    "Existing tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium, PAYG, Cost Drivers, and request identity must stay unchanged.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';

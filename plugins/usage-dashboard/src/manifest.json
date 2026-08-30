@@ -5,13 +5,13 @@
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "7b68ec25a7f642dc4efe37fa6053804beac32867cbfde5eace484b0bfb6e67e3",
+  "artifactSha256": "5a903fdcb2220433014ea8e97c9c04557dda90bbf955b125572ca24eecd333ae",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 15039,
-      "sha256": "d2b3adfef5b450bf5095949c887ef3f11b373c01051fcc6d712dc0b64f45c9ea"
+      "bytes": 15008,
+      "sha256": "8b4324d00e7cc73cfcbdae11d0406fae1c2f43d1bf1b05e135ea03cd63f4e6f3"
     },
     {
       "file": "02-runtime-state.part.js",

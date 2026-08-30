@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "releaseTitle": "DevPass Weekly Premium Allowance Truth Card",
+  "productVersion": "3.0.0-alpha.5.91",
+  "engineVersion": "1.6.28",
+  "managerVersion": "1.3.4",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-30",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "cliVersion": "0.13.2",
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.89 — READY on managed @llmgateway/cli 1.10.0`",
+  "materializer": "plugins/usage-dashboard/tools/release_premium_allowance_truth_card_591.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "engineSourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+  "engineBuildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs",
+  "workflows": {
+    "stage": "usage-dashboard-e7-candidate-ready.yml",
+    "validation": "usage-dashboard-e9-candidate-validation.yml",
+    "mergeGuard": "usage-dashboard-e11-merge-ready.yml",
+    "promotion": "usage-dashboard-e5-exact-byte-promotion.yml"
+  },
+  "engine": {
+    "sourceManifest": "plugins/usage-dashboard/runtime-src/bridge-engine/parts.json",
+    "buildTool": "plugins/usage-dashboard/tools/build_bridge_engine.cjs"
+  },
+  "newTests": [
+    "plugins/usage-dashboard/tests/p57-devpass-premium-allowance-truth-card.cjs"
+  ],
+  "highlights": [
+    "DevPass 탭에 source-backed Premium 주간 한도 truth card 추가",
+    "explicit 사용·한도 값이 있을 때만 남음·사용률을 계산하고 missing/invalid 값은 —로 유지",
+    "주의·소진은 80%/100% 로컬 표시 기준만 사용하며 PAYG funding 상태나 요청별 결제 출처를 추론하지 않음"
+  ],
+  "diagnosticHints": [
+    "업데이트 후 Product 5.91 · Engine 1.6.28 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "Premium 카드의 사용·한도·남음·사용률이 Diagnostics의 Premium allowance 줄과 일치하는지 확인",
+    "리셋은 explicit source가 있을 때만 표시되고 UNKNOWN 값은 —로 남는지 확인",
+    "기존 floating Premium widget · Reset Pass/PAYG · Billing Cycle이 그대로이고 추가 refresh/CLI/network 작업이 없는지 확인"
+  ]
+}

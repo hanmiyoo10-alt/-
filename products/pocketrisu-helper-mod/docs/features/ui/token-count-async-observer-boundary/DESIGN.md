@@ -67,6 +67,16 @@ One branch / one PR:
 2. replace the three inline `CharConfig.svelte` counters and remove duplicated local machinery;
 3. run/observe focused type/build checks available in CI.
 
+Do not split out an unused helper-only commit/PR: the smallest coherent slice is the observer component plus all three existing owner replacements.
+
 ## Upstream suitability
 
 Suitable as a small refactor if validation remains green. It adopts an external implementation pattern as evidence, not as authority; PocketRisu semantics above are the acceptance contract.
+
+## Progression record — 2026-08-30 14:44 KST
+
+INSPECT_ONLY was repeated against personal branch `feat/token-count-async-observer-boundary@e57c0435018646800566f2158fd1a9fa12caa9e2`. The matching owner is now directly confirmed at `src/lib/SideBars/CharConfig.svelte`, including the three expected 400 ms timer/sequence observers. The branch still points exactly to the intended `develop` base, with no production commit on it.
+
+Implementation was intentionally not started. The connector mutates existing files by complete replacement, while this large component is returned through bounded/truncated response surfaces; the local execution environment also cannot resolve `github.com`, so a clean clone/patch/`pnpm check` path is unavailable. The repository `pr-check.yml` runs `pnpm check`, build, tests, and compatibility tests only for PRs targeting `main`; because this feature correctly belongs on the current `develop` base, opening a draft PR cannot be used as a substitute for the required pre-PR verification. Treat this as tooling/integration blockage only, not a failed code or CI result.
+
+Resume only when the existing large file can be patched from a complete trustworthy source and the resulting tree can run `pnpm check` (plus focused build/tests). Then complete the one coherent extraction, verify the diff and guardrails, and only afterward open the personal-fork draft PR.

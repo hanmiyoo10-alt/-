@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.69.2 — MamsHolic Exact Brand Alias Repair
-Release commit: 2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f
+SimCore v0.70.0 — Current Task Primacy Guard
+Release commit: 13179cff70feaf7d12fe53c56e4735155fcf3eaa
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.0-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "0f5bdeb9a3c32c12769ccee05be478dc03c63e6c",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.0-new-01.json",
+  "releaseSpecSha256": "49638d94bd5ac98a40493a4e86d5ef03192cd08777719fcb2ab38138b97b59a9",
+  "productionCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+  "previousProductionCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+  "productionBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+  "version": "0.70.0",
+  "releaseName": "Current Task Primacy Guard",
+  "verificationReportSha256": "e15a8b70d77903dadc39763b47533ac9009037b40615b6a5be0aa594b1948a70",
+  "verifierCommit": "56cc4dd909a860c0a1c38d22a467ac5ee7215a30",
+  "publisherRunId": "33292597590",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07000_CURRENT_TASK_PRIMACY_GUARD_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

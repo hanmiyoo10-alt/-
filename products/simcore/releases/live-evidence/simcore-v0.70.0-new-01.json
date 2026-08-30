@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.0-new-01",
+  "productionCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+  "productionBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+  "liveScenarioId": "07000_CURRENT_TASK_PRIMACY_GUARD_REAL_LONG_CHAT",
+  "decision": "LIVE_PASS",
+  "checkpoint": "M2-6",
+  "nextPriority": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_IMPLEMENTATION",
+  "humanEvidence": [
+    "docs/SIMCORE_LIVE_07000_RELEASE_CLOSE_2026-08-30.md",
+    "docs/SIMCORE_LIVE_07000_CURRENT_TASK_PRIMACY_GUARD_ACCEPTANCE_READY_2026-08-30.md"
+  ],
+  "authorityConfirmation": "HUMAN_EVIDENCE"
+}

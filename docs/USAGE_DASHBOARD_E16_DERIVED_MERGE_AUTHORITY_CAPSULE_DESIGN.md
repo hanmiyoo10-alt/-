@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E16 Derived Merge-Authority Capsule Design
 
-Status: **IMPLEMENTATION IN PROGRESS**
+Status: **IMPLEMENTED — CI PENDING / LIVE PRODUCT PROOF PENDING**
 
 Tracking: #906
 
@@ -60,33 +60,39 @@ A capsule is valid only for the exact `expected_head_sha` + `fresh_main_sha` pai
 
 ## Pure helper
 
-Add:
+Implemented as:
 
 `plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs`
 
 The helper accepts already-read request/PR/E9/E11 facts and performs no I/O. It reuses E15 body validation and produces deterministic JSON / receipt text.
 
-It must reject mismatches with stable E16 error codes instead of silently normalizing authority.
+It rejects mismatches with stable E16 error codes instead of silently normalizing authority.
 
-## E11 extension
+## E11 reuse — no schema extension
 
-`merge_guard_e11.cjs --classify` already parses the materialization commit message. Expose the parsed candidate materialization version and source SHA in its existing classification result.
+The final implementation deliberately does **not** extend `merge_guard_e11.cjs --classify` output.
 
-This is derived data from the same candidate commit, not a new parser or authority source.
+E11 already exports the single canonical `materializationIdentity()` parser for the candidate commit message. The existing reconciler calls that export once and passes its `{version, sourceSha, frozenMainSha}` result into E16.
+
+This is smaller than adding duplicated materialization fields to the E11 classification schema and avoids creating another representation that could drift. E11 remains the same merge-readiness classifier; E16 only composes its existing outputs.
 
 ## Reconciler integration
 
-Extend the existing durable E9 reconciler after E9 GREEN and E11 READY.
+The existing durable E9 reconciler is extended after E9 GREEN and E11 READY.
 
-The reconciler already owns issue-comment writes, PR reads, main reads, validation reads, and E11 classification. It should invoke the pure E16 helper and post one immutable marker:
+The reconciler already owns issue-comment writes, PR reads, main reads, validation reads, and E11 classification. It invokes the pure E16 helper and posts one immutable marker through its existing `post_comment()` writer:
 
 ```text
 UD_E16_MERGE_CAPSULE:<candidate_sha>:<fresh_main_sha>
 ```
 
+The reconciler obtains the marker and receipt through `markerForCapsule()` and `formatMergeCapsule()` rather than duplicating the canonical text format in workflow code.
+
 No new workflow, token class, queue, timer, schedule, or writer is added.
 
 The existing `UD_E9_VALIDATED` compatibility marker remains.
+
+Historical durable generations E9–E12 keep their existing behavior. E16 capsule generation is attached only to the current E13 release path.
 
 ## Freshness and merge authority
 
@@ -139,7 +145,7 @@ Production remains whatever `release-usage-dashboard` currently declares; E16 ma
 
 ## Regression plan
 
-The E16 contract must prove:
+The E16 contract proves:
 
 - canonical capsule determinism;
 - request/PR/E9/E11/materialization exact identity binding;
@@ -149,9 +155,18 @@ The E16 contract must prove:
 - no-drift and unrelated-drift E11 ready verdicts can yield a capsule;
 - `expected_head_sha` is exposed but no merge writer exists in the helper;
 - reconciler uses its existing comment writer and no second workflow/writer appears;
+- workflow reuses `markerForCapsule()` / `formatMergeCapsule()` instead of duplicating marker formatting;
 - E13 remains durable generation and E16 remains rejected by `release_generation` parsing;
 - runtime artifacts are unchanged;
 - full Usage Dashboard registry remains GREEN.
+
+## First CI feedback
+
+The first PR validation run reached the new E16 contract and failed because the test incorrectly required the workflow itself to contain a literal `UD_E16_MERGE_CAPSULE:` string.
+
+That expectation contradicted the simplification goal: the workflow correctly delegated canonical marker generation to the pure helper. The regression was repaired to require `markerForCapsule()` and `formatMergeCapsule()` reuse and to reject a duplicated workflow-local marker format.
+
+No production/runtime code was implicated by that failure.
 
 ## Expected result
 

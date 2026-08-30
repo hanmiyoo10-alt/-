@@ -42,8 +42,13 @@ assert.match(materialize,/git diff --binary "\$INTENT_BASE_SHA" "\$SOURCE_SHA"/)
 assert.match(materialize,/git apply --index --3way/);
 assert.match(materialize,/SOURCE_INTENT_CONFLICT/);
 assert.match(materialize,/reconcile_release_candidate\.py --spec "\$RELEASE_SPEC" --two-pass/);
-assert.match(materialize,/run_behavior_smoke\.cjs --repeat 3/);
-assert.match(materialize,/run_behavior_smoke\.cjs --repeat 1/);
+assert.match(materialize,/derived_impact_e18\.cjs --smoke-plan "\$TRUSTED_BASE_SHA"/,'E18 smoke depth must derive from post-materialization artifact impact');
+assert.match(materialize,/UD_DERIVED_IMPACT/);
+assert.match(materialize,/E18_UNKNOWN_RUNTIME_IMPACT/);
+assert.match(materialize,/run_behavior_smoke\.cjs --repeat "\$E18_SMOKE_REPEAT"/);
+assert.match(materialize,/E18_SMOKE_REPEAT/);
+assert.doesNotMatch(materialize,/if \[\[ "\$ENGINE_CHANGED" == 'true' \]\]/,'source-intent Engine flag must not choose post-materialization smoke depth');
+assert.doesNotMatch(materialize,/elif \[\[ "\$PLUGIN_CHANGED" == 'true' \]\]/,'source-intent Plugin flag must not choose post-materialization smoke depth');
 assert.match(materialize,/NEEDS_FROZEN_MAIN_PARENT=false/);
 assert.match(materialize,/git merge-base --is-ancestor "\$TRUSTED_BASE_SHA" "\$CANDIDATE_PARENT_SHA"/);
 assert.match(materialize,/PARENT_ARGS=\(-p "\$CANDIDATE_PARENT_SHA"\)/);
@@ -108,4 +113,4 @@ const fallbackIf=fallback.match(/^    if:.*$/m)?.[0]||'';
 assert.match(fallbackIf,/\/usage-dashboard prepare /);
 assert.doesNotMatch(fallbackIf,/\/usage-dashboard stage /,'fallback preparation must not own the normal E7 stage command');
 
-console.log('usage-dashboard E7/E14 stage transaction contract: OK · candidate-ready boundary, conditional ancestry convergence, config-free PR authority split, exact-SHA full validation, preflight, exact-byte promotion preserved');
+console.log('usage-dashboard E7/E14 stage transaction contract: OK · candidate-ready boundary, derived-impact smoke selection, conditional ancestry convergence, config-free PR authority split, exact-SHA full validation, preflight, exact-byte promotion preserved');

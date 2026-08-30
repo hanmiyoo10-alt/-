@@ -11,6 +11,7 @@ const PARTS = Object.freeze([
   {file:'14-request-ledger.part.js', marker:'\n  function requestTimestampPrecision(timestamp, sourceKey, requestNumber) {', label:'request ledger + drilldown'},
   {file:'15-request-provenance.part.js', marker:'\n  function requestAccountScopeStats(rows) {', label:'request account provenance'},
   {file:'16-usage-analytics.part.js', marker:'\n  function normalizeRequestProvenanceMetadata(raw) {', label:'usage + analytics normalization'},
+  {file:'17-cycle-summary.part.js', marker:'\n  function cycleSummaryExactMetric(value) {', label:'DevPass cycle/source-window truth'},
   {file:'18-premium-allowance.part.js', marker:'\n  function premiumAllowanceTruth(weekly) {', label:'DevPass Premium allowance truth'},
   {file:'19-payg-account.part.js', marker:'\n  function paygAccountTruth(account) {', label:'DevPass PAYG + Auto-Reload truth'},
   {file:'20-bridge-io.part.js', marker:'\n  async function fetchSnapshot() {', label:'bridge I/O'},

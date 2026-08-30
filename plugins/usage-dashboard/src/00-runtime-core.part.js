@@ -1,25 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.92
+//@version 3.0.0-alpha.5.93
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.92';
+  const VERSION = '3.0.0-alpha.5.93';
   const RELEASE_NOTES = Object.freeze({
-    title: "PAYG + Auto-Reload Read-Only Fidelity",
+    title: "Truthful DevPass Cycle / Source-Window Summary",
     highlights: Object.freeze([
-    "DevPass PAYG 상태를 true/false/UNKNOWN 그대로 보존해 missing 값을 OFF로 오표시하지 않음",
-    "기존 인증 상태 캡처가 제공하는 Auto-Reload 상태·threshold·amount를 읽기 전용으로 표시",
-    "Overflow balance는 explicit PAYG + Regular Credits에서만 계정 수준 상태를 계산하며 요청별 결제 출처는 추론하지 않음"
+    "DevPass 7d/30d 기존 activity source에서 요청·토큰·Cached input share·Peak day를 source-backed 값으로 요약",
+    "billing cycle이 KST 일 경계와 source coverage로 정확히 증명될 때만 ‘이번 사이클’을 쓰고 아니면 최근 30일/7일로 fail-closed",
+    "missing daily scalar는 0으로 메우지 않고 UNKNOWN으로 보존하며 Credits 데이터와 기존 월간 예상 사용량 의미를 섞지 않음",
+    "E16 live-proof 문서 상태 자동화는 선행 maintenance #962로 main baseline에 고정되어 release authority와 분리"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.92 · Engine 1.6.29 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "PAYG overflow와 Auto-Reload의 ON/OFF/—가 Diagnostics의 PAYG status 줄과 일치하는지 확인",
-    "Regular Credits·Reload threshold·Reload amount는 source가 없으면 —이고 explicit 0은 0으로 유지되는지 확인",
-    "기존 Reset Pass와 Premium 주간 한도 카드가 그대로이며 추가 refresh/CLI/network 작업이나 결제 조작 UI가 없는지 확인"
+    "업데이트 후 Product 5.93 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "DevPass 요약 제목이 Diagnostics의 cycle summary mode와 정확히 일치하는지 확인",
+    "요청·토큰·Cached input share·Peak day가 Diagnostics와 일치하고 source가 부족한 값은 —로 남는지 확인",
+    "기존 Billing Cycle·Premium·PAYG와 월간 예상 사용량이 그대로이며 Credits 혼합이나 추가 CLI/network/refresh가 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.29';
+  const REQUIRED_BRIDGE_VERSION = '1.6.30';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

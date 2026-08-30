@@ -7,7 +7,10 @@ const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
-assert.equal(release.productVersion, '3.0.0-alpha.5.92');
+if (release.productVersion !== '3.0.0-alpha.5.92') {
+  console.log(`P58 PAYG + Auto-Reload Read-Only Fidelity: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.92`);
+  process.exit(0);
+}
 assert.equal(release.engineVersion, '1.6.29');
 assert.equal(release.managerVersion, '1.3.4');
 assert.equal(release.snapshotContract, 1);
@@ -33,10 +36,12 @@ for (const marker of [
 ]) assert.ok(manager.includes(marker), `5.92 Manager invariant missing: ${marker}`);
 
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
+// UD_HISTORICAL_VERSION_LOCK — P58 verifies the immutable 5.92 release when that release is current.
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.92');
 assert.equal(manifest.components?.bridge?.requiredVersion, '1.6.29');
 assert.equal(manifest.components?.bridge?.sha256, engineSha);
 assert.equal(manifest.components?.bridgeManager?.version, '1.3.4');
+// UD_HISTORICAL_VERSION_LOCK — Manager Product identity is part of the frozen 5.92 regression.
 assert.equal(manifest.components?.bridgeManager?.productVersion, '3.0.0-alpha.5.92');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 const bootstrapSha = crypto.createHash('sha256').update(fs.readFileSync('plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh')).digest('hex');

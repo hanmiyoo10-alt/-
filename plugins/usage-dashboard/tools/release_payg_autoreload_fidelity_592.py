@@ -316,6 +316,18 @@ def sync_release_memory() -> None:
         text, count = current_re.subn(TARGET_RELEASE_MEMORY, text, count=1)
         if count != 1:
             raise SystemExit('5.92 current release memory marker missing')
+
+    release_spec = load_spec()
+    verified_baseline = str(release_spec.get('verifiedBaseline') or '').strip()
+    if not verified_baseline.startswith('Last verified real-device baseline: `') or not verified_baseline.endswith('`'):
+        raise SystemExit('5.92 verified baseline missing or malformed')
+    baseline_re = re.compile(r'^Last verified real-device baseline: `[^`]+`\.?$', re.M)
+    target_baseline = verified_baseline + '.'
+    if target_baseline not in text:
+        text, count = baseline_re.subn(target_baseline, text, count=1)
+        if count != 1:
+            raise SystemExit(f'5.92 verified baseline marker mismatch: {count}')
+
     GUIDELINES.write_text(text, encoding='utf-8')
 
 

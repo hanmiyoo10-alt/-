@@ -16,8 +16,16 @@ function walkCjs(root) {
   return out.sort();
 }
 
+function historicalScopeVersions(source) {
+  const scopes = new Set();
+  const guard = /if\s*\(\s*release\.productVersion\s*!==\s*(['"])(3\.0\.0-alpha\.5\.\d+)\1\s*\)/g;
+  for (const match of String(source || '').matchAll(guard)) scopes.add(match[2]);
+  return scopes;
+}
+
 function staleProductAssertions(source, targetVersion) {
   const lines = source.split(/\r?\n/);
+  const scopes = historicalScopeVersions(source);
   const findings = [];
   const exact = /assert\.(?:equal|strictEqual)\(\s*[^,\n]*\.productVersion\s*,\s*(['"])(3\.0\.0-alpha\.5\.\d+)\1/;
   for (let index = 0; index < lines.length; index += 1) {
@@ -25,8 +33,14 @@ function staleProductAssertions(source, targetVersion) {
     const match = line.match(exact);
     if (!match || match[2] === targetVersion) continue;
     const previous = index > 0 ? lines[index - 1] : '';
-    if (line.includes(HISTORICAL_LOCK) || previous.includes(HISTORICAL_LOCK)) continue;
-    findings.push({line:index + 1, literal:match[2], text:line.trim()});
+    const locked = line.includes(HISTORICAL_LOCK) || previous.includes(HISTORICAL_LOCK);
+    if (locked && scopes.has(match[2])) continue;
+    findings.push({
+      line:index + 1,
+      literal:match[2],
+      text:line.trim(),
+      reason:locked ? 'historical-scope-missing' : 'stale-current-version-assertion',
+    });
   }
   return findings;
 }
@@ -51,7 +65,7 @@ function run(argv) {
   const result = inspect(args[1]);
   if (result.findings.length) {
     for (const finding of result.findings) {
-      console.error(`RELEASE_PREFLIGHT_STALE_PRODUCT_LITERAL:${finding.file}:${finding.line}:${finding.literal}:target=${result.targetVersion}`);
+      console.error(`RELEASE_PREFLIGHT_STALE_PRODUCT_LITERAL:${finding.file}:${finding.line}:${finding.literal}:target=${result.targetVersion}:reason=${finding.reason}`);
     }
     throw new Error(`RELEASE_PREFLIGHT_REJECTED:${result.findings.length}`);
   }
@@ -63,4 +77,4 @@ if (require.main === module) {
   catch (error) { console.error(error && error.message ? error.message : String(error)); process.exitCode = 1; }
 }
 
-module.exports = {HISTORICAL_LOCK, staleProductAssertions, inspect};
+module.exports = {HISTORICAL_LOCK, historicalScopeVersions, staleProductAssertions, inspect};

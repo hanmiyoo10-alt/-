@@ -31,6 +31,7 @@ BASE_CLI = '1.14.0'
 TARGET_CLI = '1.10.0'
 TARGET_RELEASE_TITLE = 'Managed CLI Package Authority Repair'
 TARGET_RELEASE_MEMORY = f'Current release implementation: `{TARGET_VERSION} — {TARGET_RELEASE_TITLE}`.'
+TARGET_VERIFIED_BASELINE = 'Last verified real-device baseline: `3.0.0-alpha.5.89 — READY on managed @llmgateway/cli 1.10.0`'
 BASE_ENGINE_SHA = 'd3849b2bb579fcd640938019884f7bf1155c85f9ae519fa83dab5dc704bb3e9b'
 BASE_MANAGER_SHA = '35bf1562638a5cb0d25163eea1c795e8eeb1f721af2b1b6d4f15c05d15950854'
 BASE_BOOTSTRAP_SHA = '4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c'
@@ -87,6 +88,7 @@ def load_release_notes():
         'engineVersion': TARGET_ENGINE,
         'managerVersion': TARGET_MANAGER,
         'managedCliVersion': TARGET_CLI,
+        'verifiedBaseline': TARGET_VERIFIED_BASELINE,
         'materializer': 'plugins/usage-dashboard/tools/release_managed_cli_package_authority_590.py',
     }
     for key, value in expected.items():
@@ -243,6 +245,12 @@ def patch_manager_authority(engine_sha: str) -> None:
 
 def sync_release_memory() -> None:
     text = GUIDELINES.read_text(encoding='utf-8')
+    baseline_re = re.compile(r'Last verified real-device baseline: `[^`]+`\.', re.M)
+    baseline_line = f'{TARGET_VERIFIED_BASELINE}.'
+    if baseline_line not in text:
+        text, count = baseline_re.subn(baseline_line, text, count=1)
+        if count != 1:
+            raise SystemExit('5.90 verified baseline memory marker missing')
     current_re = re.compile(r'Current release implementation: `[^`]+`\.', re.M)
     if TARGET_RELEASE_MEMORY not in text:
         text, count = current_re.subn(TARGET_RELEASE_MEMORY, text, count=1)
@@ -274,6 +282,7 @@ def validate_target() -> None:
     engine = ENGINE.read_text(encoding='utf-8')
     manager = MANAGER.read_text(encoding='utf-8')
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
+    guidelines = GUIDELINES.read_text(encoding='utf-8')
 
     for marker in [
         f"const VERSION = '{TARGET_VERSION}';",
@@ -307,6 +316,10 @@ def validate_target() -> None:
         raise SystemExit('5.90 stale invalid Manager CLI 1.14.0 authority remains')
     assert_convergence_markers(manager, bridge_io)
 
+    if TARGET_VERIFIED_BASELINE not in guidelines:
+        raise SystemExit('5.90 verified physical baseline missing from durable project memory')
+    if TARGET_RELEASE_MEMORY not in guidelines:
+        raise SystemExit('5.90 current release memory missing from durable project memory')
     if sha256(BOOTSTRAP) != BASE_BOOTSTRAP_SHA:
         raise SystemExit('5.90 bootstrap exact-byte preservation failed')
     if manifest.get('productVersion') != TARGET_VERSION:

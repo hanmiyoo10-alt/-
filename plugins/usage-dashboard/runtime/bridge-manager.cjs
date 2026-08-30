@@ -10,7 +10,7 @@ const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
 const MANAGER_VERSION = '1.3.4';
-const PRODUCT_VERSION = '3.0.0-alpha.5.90';
+const PRODUCT_VERSION = '3.0.0-alpha.5.91';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);

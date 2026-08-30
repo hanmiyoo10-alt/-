@@ -1,0 +1,84 @@
+name: SimCore v0.69.1 Fresh Permanent Dispatch Bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - products/simcore/releases/dispatch-requests/simcore-v0.69.1-new-06.json
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout current main authority
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate exact bounded request
+        shell: bash
+        env:
+          REQUEST: products/simcore/releases/dispatch-requests/simcore-v0.69.1-new-06.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          p=os.environ['REQUEST']
+          r=json.load(open(p))
+          expected={
+            'schemaVersion':1,
+            'releaseId':'simcore-v0.69.1-new-06',
+            'releaseSpecPath':'products/simcore/releases/specs/simcore-v0.69.1-new-06.json',
+            'candidateFetchRef':'candidate/simcore/simcore-v0.69.1-intent-06',
+            'candidateCommit':'5dc5ec1099c6097a6a0e46effeb826889a4741c3',
+            'expectedProductionCommit':'31b4c5075659a55861731c6fd73f999402321e94',
+            'authorityConfirmation':'RS2_4_RELEASE',
+            'disposition':'FRESH_PERMANENT_DISPATCH_REQUIRED'
+          }
+          if r != expected:
+              raise SystemExit('V06901_FRESH_DISPATCH_REQUEST_MISMATCH')
+          print('V06901_FRESH_DISPATCH_REQUEST_EXACT_PASS')
+          PY
+
+      - name: Revalidate immutable identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin release-simcore candidate/simcore/simcore-v0.69.1-intent-06
+          test "$(git rev-parse origin/release-simcore)" = '31b4c5075659a55861731c6fd73f999402321e94'
+          test "$(git rev-parse FETCH_HEAD)" = '5dc5ec1099c6097a6a0e46effeb826889a4741c3'
+          git cat-file -e '5dc5ec1099c6097a6a0e46effeb826889a4741c3^{commit}'
+          echo 'V06901_FRESH_DISPATCH_IDENTITIES_PASS'
+
+      - name: Dispatch existing permanent release controller
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          print(json.dumps({
+            'ref':'main',
+            'inputs':{
+              'release_spec_path':'products/simcore/releases/specs/simcore-v0.69.1-new-06.json',
+              'candidate_fetch_ref':'candidate/simcore/simcore-v0.69.1-intent-06',
+              'authority_confirmation':'RS2_4_RELEASE'
+            }
+          }))
+          PY
+          code="$(curl -sS -o /tmp/response.txt -w '%{http_code}' \
+            -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/simcore-release-permanent.yml/dispatches" \
+            --data-binary @/tmp/body.json)"
+          test "$code" = '204' || { cat /tmp/response.txt; exit 1; }
+          echo 'V06901_FRESH_PERMANENT_DISPATCH_CREATED'

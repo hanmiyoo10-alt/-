@@ -1,33 +1,61 @@
 # SimCore Pre-3M Cache-First Direction
 
 Date: 2026-08-31 KST
-Status: DIRECTION CORRECTED · CACHE PROGRAM FIRST · 3M MAJOR GATED BY CACHE CLOSURE · NO IMPLEMENTATION AUTHORITY
-Classification: PRODUCT ROADMAP / PRE-3M CACHE PROGRAM / IDEA PARKING
+Status: DIRECTION CORRECTED · TOKEN-MILESTONE CADENCE CLARIFIED · CACHE PROGRAM FIRST · 3M MAJOR GATED BY CACHE CLOSURE · NO IMPLEMENTATION AUTHORITY
+Classification: PRODUCT ROADMAP / TOKEN-MILESTONE CADENCE / PRE-3M CACHE PROGRAM / IDEA PARKING
 
 ## 0. Terminology correction
 
-In this roadmap discussion, **3M does not refer to the SimCore runtime version number**.
+In this roadmap vocabulary, `M` milestones refer to the user's long-chat cumulative token count, **not** to the SimCore runtime version number.
 
-It refers to the user's long-chat cumulative token milestone:
+Canonical interpretation:
 
 ```text
-3M = approximately 3,000,000 cumulative chat tokens
+1.0M tokens  ~= 1,000,000 cumulative chat tokens
+1.5M tokens  ~= 1,500,000 cumulative chat tokens
+2.0M tokens  ~= 2,000,000 cumulative chat tokens
+2.5M tokens  ~= 2,500,000 cumulative chat tokens
+3.0M tokens  ~= 3,000,000 cumulative chat tokens
 ```
 
-SimCore runtime versions continue independently on their normal version line.
+SimCore runtime versions continue independently on their normal `v0.x` line.
 
 Therefore:
 
 ```text
-reaching 3,000,000 cumulative tokens
-!= automatic permission to begin the 3M major update
+MILESTONE LABEL != RUNTIME VERSION NUMBER
 ```
 
-The product gate is cache completion, not the token counter itself.
+## 1. General token-milestone update cadence
 
-## 1. Current priority
+The project's update cadence is anchored to cumulative long-chat token milestones:
 
-The current product priority is:
+```text
+whole-million milestone
+1M / 2M / 3M / 4M / ...
+→ major-update planning landmark
+
+half-million milestone
+1.5M / 2.5M / 3.5M / ...
+→ medium-update planning landmark
+```
+
+This is a scheduling/planning rhythm, not an automatic implementation authority.
+
+A milestone says **when the project normally considers a larger update**, not that unresolved prerequisite work must be abandoned to hit the ceremony exactly.
+
+Canonical rule:
+
+```text
+TOKEN_MILESTONE_REACHED = planning landmark
+PREREQUISITE_GATES_CLOSED = required before the corresponding update begins
+```
+
+This also explains why a major update can naturally absorb work that might otherwise have become the following medium update. If the major program already solves those medium-scale goals as necessary prerequisites, the project does not preserve artificial work merely to satisfy the half-million milestone.
+
+## 2. Current 3M priority
+
+For the upcoming 3M token milestone, the current product priority is:
 
 ```text
 finish the current production/live gate
@@ -35,12 +63,12 @@ finish the current production/live gate
 → only after cache closure begin the 3M major update in earnest
 ```
 
-If the long chat reaches or passes 3,000,000 cumulative tokens before caching is closed, the 3M major update remains blocked.
+If the long chat reaches or passes approximately 3,000,000 cumulative tokens before caching is closed, the 3M major update remains blocked.
 
 Canonical rule:
 
 ```text
-TOKEN_MILESTONE_3M_REACHED = informational only
+TOKEN_MILESTONE_3M_REACHED = informational/planning landmark
 CACHE_PROGRAM_CLOSED = required gate
 
 if token milestone reached && cache program open:
@@ -48,7 +76,7 @@ if token milestone reached && cache program open:
     do not start 3M major
 ```
 
-## 2. Cache-first program rule
+## 3. Cache-first program rule
 
 Caching is not treated as one optional mini. Continue the cache/cost lane until the **currently justified SimCore-owned, source-proven cache work is closed cleanly**.
 
@@ -61,9 +89,9 @@ DEFERRED WITH EXPLICIT EXTERNAL/PROVIDER BOUNDARY
 BLOCKED BY MISSING AUTHORITATIVE TELEMETRY
 ```
 
-Only after that closure may a broad 3M product-major program begin.
+Only after that closure may the 3M product-major program begin.
 
-## 3. Why cache first
+## 4. Why cache first
 
 The motivation is both operational and monetary.
 
@@ -81,7 +109,7 @@ lower billed input cost when authoritative evidence confirms it
 
 Cost reduction never outranks correctness, state safety, or main-model isolation.
 
-## 4. Existing cache foundation
+## 5. Existing cache foundation
 
 SimCore already contains substantial cache-readiness and attribution infrastructure:
 
@@ -99,7 +127,7 @@ v0.70.1 bounded post-onSend attribution for CACHE_TOPOLOGY / CACHE_CANDIDATE
 
 The cache program should begin from exact request-shape/source evidence, not from inventing another generic cache subsystem.
 
-## 5. Hard cache distinction
+## 6. Hard cache distinction
 
 Keep these separate:
 
@@ -115,7 +143,7 @@ Provider cache remains `UNVERIFIED` without authoritative provider/gateway telem
 
 A local fingerprint match can prove SimCore produced a stable prefix. It does not by itself prove monetary savings.
 
-## 6. First cache question
+## 7. First cache question
 
 Every cache optimization first asks:
 
@@ -136,7 +164,7 @@ then SimCore must not manufacture a runtime rewrite merely to improve a local ca
 
 If exact audit identifies SimCore-owned avoidable volatility, only that bounded surface should change.
 
-## 7. Cache program work classes
+## 8. Cache program work classes
 
 Potentially valid work, subject to evidence:
 
@@ -159,7 +187,7 @@ Forbidden shortcuts:
 - adding provider/network calls merely to interrogate cache state;
 - combining cache work with unrelated Community/Source feature development in one release.
 
-## 8. Cache completion gate
+## 9. Cache completion gate
 
 Before the roadmap considers the cache program closed, evidence should answer the following as far as the host/provider permits:
 
@@ -192,9 +220,9 @@ H. DOCUMENT CLOSURE
 
 The cache program may span multiple narrow runtime releases if evidence reveals independent owners. Do not force unrelated cache findings into one giant release.
 
-## 9. 3M token milestone gate
+## 10. 3M token milestone gate
 
-The long-chat token milestone is a scheduling landmark, not an implementation authority.
+The 3M long-chat token milestone is the normal major-update landmark, but not an override of the cache prerequisite.
 
 ```text
 < 3,000,000 tokens + cache open
@@ -210,9 +238,9 @@ The long-chat token milestone is a scheduling landmark, not an implementation au
 
 Crossing the token milestone must not pressure the project into leaving cache debt behind.
 
-Likewise, cache closure before the milestone does not automatically freeze a specific major theme. The future 3M major theme is selected from fresh post-cache evidence.
+Likewise, cache closure does not automatically freeze a specific major theme. The future 3M major theme is selected from fresh post-cache evidence.
 
-## 10. Community / HunterNet-like idea posture
+## 11. Community / HunterNet-like idea posture
 
 The HunterNet reference remains useful inspiration, but it is **parked as an idea** rather than scheduled work.
 
@@ -240,7 +268,7 @@ bounded old-Community context
 
 None currently create implementation or scheduling authority.
 
-## 11. Main-model boundary for any later Community work
+## 12. Main-model boundary for any later Community work
 
 If Community Quality is promoted later, preserve:
 
@@ -254,7 +282,7 @@ main model
 
 A richer Community surface must not justify injecting large historical sidecar state into the primary model request.
 
-## 12. Updated roadmap
+## 13. Updated roadmap
 
 ```text
 1. close current production/live gate
@@ -270,9 +298,10 @@ A richer Community surface must not justify injecting large historical sidecar s
    record FIX / WATCH / DEFER / external-provider boundaries
    confirm semantic and long-chat non-regression
 
-4. 3M MAJOR UPDATE
-   may begin only after cache closure
-   cumulative token count alone never authorizes it
+4. 3M TOKEN MILESTONE / MAJOR UPDATE
+   approximately 3,000,000 cumulative long-chat tokens is the normal major landmark
+   major work may begin only after cache closure
+   token count alone never authorizes it
    re-open candidate map with fresh post-cache evidence
 
 PARKED IDEA
@@ -282,9 +311,12 @@ PARKED IDEA
 ## Disposition
 
 ```text
-3M_MEANING = LONG_CHAT CUMULATIVE TOKEN MILESTONE (~3,000,000)
-3M_MEANING != RUNTIME VERSION NUMBER
+MILESTONE_SYSTEM = LONG_CHAT CUMULATIVE TOKEN COUNT
+WHOLE_MILLION_MILESTONE = MAJOR-UPDATE PLANNING LANDMARK
+HALF_MILLION_MILESTONE = MEDIUM-UPDATE PLANNING LANDMARK
+MILESTONE_SYSTEM != RUNTIME VERSION NUMBER
 
+3M_MEANING = LONG_CHAT CUMULATIVE TOKEN MILESTONE (~3,000,000)
 PRE_3M_PRIMARY_PROGRAM = CACHE / COST
 CACHE_PROGRAM = REQUIRED GATE BEFORE 3M MAJOR
 TOKEN_3M_REACHED_WHILE_CACHE_OPEN = CONTINUE CACHE / DO NOT START MAJOR

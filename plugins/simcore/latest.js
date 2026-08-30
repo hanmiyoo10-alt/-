@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.69.0
+//@version 0.69.1
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.69.1 Refreshless Targeted Update Liveness Repair:
+// - Retires disposed runtime hooks and UI before optional UNLOAD telemetry so same-tab + replacement cannot be held behind Host-local I/O
+// - Keeps OUTPUT_COMMIT on the existing awaited Host-local durable publication path while UNLOAD uses only the existing bounded memory/session publish path
+// - Adds no detached Host write, retry, polling, timer, storage key, telemetry schema, persistent-state or M2 architecture change
+// - Preserves runtimeDisposed/runtimeEpoch stale-work defense and requires exactly-one active hook/UI surface after targeted replacement
 //
 // v0.69.0 M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion:
 // - Extracts portable-state initial assembly and cross-domain reconciliation composition from Kernel into one physical Domain integration owner, State Reconcile
@@ -699,7 +705,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.69.0';
+const SIMCORE_RUNTIME_VERSION = '0.69.1';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6397,7 +6403,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.69.0';
+const HOST_COMPAT_VERSION = '0.69.1';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -7756,7 +7762,11 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         lastTelemetryCheckpointProbe = probe;
         return probe;
       }
-      await runtimeTelemetryRules.publishWithHostLocal(globalThis, typeof window !== 'undefined' ? window : null, Risuai, capsule);
+      if (normalizedTrigger === 'UNLOAD') {
+        runtimeTelemetryRules.publish(globalThis, typeof window !== 'undefined' ? window : null, capsule);
+      } else {
+        await runtimeTelemetryRules.publishWithHostLocal(globalThis, typeof window !== 'undefined' ? window : null, Risuai, capsule);
+      }
       const write = runtimeTelemetryRules.diagnostics().write || null;
       const probe = Object.freeze({
         trigger: normalizedTrigger,
@@ -9196,8 +9206,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.69.0',
-    name: 'M2-6 State Reconcile Ownership Extraction + Kernel Dependency Inversion',
+    version: '0.69.1',
+    name: 'Refreshless Targeted Update Liveness Repair',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',
@@ -9546,12 +9556,12 @@ ${aliasDiag ? `<div class="card"><div class="k" style="margin-bottom:8px">Commun
   await Risuai.onUnload(async () => {
     runtimeDisposed = true;
     runtimeEpoch += 1;
-    await checkpointRuntimeTelemetry('UNLOAD');
     await runtimeHooks.remove(Risuai, beforeRequestHandler, outputHandler);
     for (const part of simcoreUiParts.splice(0)) {
       if (!part?.id) continue;
       try { await Risuai.unregisterUIPart(part.id); } catch (_) {}
     }
+    await checkpointRuntimeTelemetry('UNLOAD');
     coreSession = null;
     coreKey = null;
     coreLocationKey = null;

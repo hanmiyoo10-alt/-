@@ -1,0 +1,93 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.96",
+  "releaseTitle": "Managed Runtime Diagnostic Identity Fidelity Repair",
+  "engineVersion": "1.6.32",
+  "managerVersion": "1.3.5",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-30",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.251.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.251.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export"
+  },
+  "modelCategoryContract": {
+    "values": ["premium", "regular", "unknown"],
+    "source": "llmgateway-model-catalog",
+    "inputThreshold": 0.000005,
+    "outputThreshold": 0.000015,
+    "membership": "exact-normalized-model-id",
+    "unknownOnMissingCatalog": true
+  },
+  "diagnosticIdentityContract": {
+    "cliPackage": "@llmgateway/cli",
+    "catalogPackage": "@llmgateway/models",
+    "disjointVersionFields": true,
+    "engineManagerMismatch": "fail-closed",
+    "pluginCatalogVersionHardcode": false,
+    "fullAndCompactShareTruth": true
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Latest installed real-device evidence: `3.0.0-alpha.5.95 / Engine 1.6.31 / Manager 1.3.5 / READY / model-category feature PASS / diagnostic identity FAIL because CLI was displayed as Models 1.251.0`; last fully accepted product baseline remains 5.94 until this repair is physically verified.",
+  "authority": {
+    "featureIssue": 1012,
+    "repairOfFeatureIssue": 987,
+    "physicalAcceptanceIssue": 1012,
+    "releaseGeneration": "E13",
+    "e18": "derived-impact smoke only; no authority change",
+    "e19": "shift-left validation reuse; no authority change"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_diagnostic_identity_596.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p62-managed-runtime-diagnostic-identity-fidelity.cjs",
+  "highlights": [
+    "Managed CLI and managed Models diagnostics now keep separate version identities end to end instead of sharing a generic version field.",
+    "Full and compact Diagnostics use the same local truth resolver and fail closed when Engine and Manager report conflicting component versions.",
+    "Model-category classification and the exact @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 managed pair remain unchanged.",
+    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or catalog projection is added."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.96 · Engine 1.6.32 · Manager 1.3.5 and READY/Health ok.",
+    "Full Diagnostics must show @llmgateway/cli 1.10.0 and @llmgateway/models 1.251.0 on separate lines without version overwrite.",
+    "Compact Diagnostics must show Engine 1.6.32 · Manager 1.3.5 · CLI 1.10.0 · Models 1.251.0 · ready.",
+    "Existing Premium/Regular/UNKNOWN model-category fidelity, Billing Cycle, Premium, PAYG, Cost Drivers, request ledger, cache, tier, outcome and HTTP-status behavior must remain unchanged."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Managed CLI and managed Models diagnostics now keep separate version identities end to end instead of sharing a generic version field.",
+      "Full and compact Diagnostics use the same local truth resolver and fail closed when Engine and Manager report conflicting component versions.",
+      "Model-category classification and the exact @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 managed pair remain unchanged.",
+      "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or catalog projection is added."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.96 · Engine 1.6.32 · Manager 1.3.5 and READY/Health ok.",
+      "Full Diagnostics must show @llmgateway/cli 1.10.0 and @llmgateway/models 1.251.0 on separate lines without version overwrite.",
+      "Compact Diagnostics must show Engine 1.6.32 · Manager 1.3.5 · CLI 1.10.0 · Models 1.251.0 · ready.",
+      "Existing Premium/Regular/UNKNOWN model-category fidelity, Billing Cycle, Premium, PAYG, Cost Drivers, request ledger, cache, tier, outcome and HTTP-status behavior must remain unchanged."
+    ]
+  }
+}

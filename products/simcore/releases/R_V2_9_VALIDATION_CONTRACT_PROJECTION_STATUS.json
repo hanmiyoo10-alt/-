@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "systemVersion": "R2.9",
+  "name": "Validation Contract Projection & Fixture Closure",
+  "date": "2026-08-30",
+  "status": "IMPLEMENTED_SHADOW_READY_ACTIVATION_DEFERRED",
+  "disposition": "STABILITY_SIMPLICITY_BOUNDED_AUTOMATION",
+  "predecessor": "R2.8_HUMAN_EVIDENCE_TERMINAL_CONVERGENCE",
+  "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_9_VALIDATION_CONTRACT_PROJECTION_AND_FIXTURE_CLOSURE_DESIGN_2026-08-30.md",
+  "implementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_9_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_9_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+  "implementationClosureAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_9_IMPLEMENTATION_CLOSURE_2026-08-30.md",
+  "designFrozen": true,
+  "implementationAuthorized": true,
+  "implementationVerified": true,
+  "implementationClosed": true,
+  "normalPathActivated": false,
+  "activationGate": "DEFERRED_UNTIL_V07000_HUMAN_EVIDENCE_LIVE_PASS_AND_SECOND_ORDINARY_R2_8_TERMINAL_CONVERGENCE",
+  "principles": [
+    "KEEP_R2_8_AUTHORITY_BOUNDARIES_FROZEN",
+    "MAKE_CONTRACT_INHERITANCE_EXPLICIT",
+    "PARAMETERIZE_STABLE_CONTRACTS",
+    "MAKE_BUILDER_FIXTURE_REGISTRATION_ATOMIC",
+    "FAIL_EARLY_ON_VALIDATION_TOPOLOGY_GAPS",
+    "AUTOMATE_MECHANICAL_WIRING_NOT_RELEASE_AUTHORITY"
+  ],
+  "implementedOwners": {
+    "validationProfile": "products/simcore/tooling/validation-contract-profile.mjs",
+    "validationProfileSeed": "products/simcore/releases/validation-profiles/0.70.0.json",
+    "projectedContracts": "products/simcore/tests/suites/release-validation-contracts-r2-9.mjs",
+    "builderFixtureClosure": "products/simcore/tooling/validation-builder-discovery.mjs",
+    "topologyPreflight": "products/simcore/tooling/validation-topology-preflight.mjs",
+    "regressionSuite": "release-system-r2-9-validation-contract-projection"
+  },
+  "qualification": {
+    "qualifiedHead": "ba1b57907e58045d42d67a93601083c2134fcd5d",
+    "run": 33294519183,
+    "verifyJob": 99211782464,
+    "requiredJob": 99211827012,
+    "result": "PASS"
+  },
+  "failClosedEvidence": [
+    {
+      "classification": "FIX",
+      "reason": "SHADOW_REGRESSION_CONTEXT_IDENTITY",
+      "run": 33294355535,
+      "document": "docs/SIMCORE_RELEASE_SYSTEM_V2_9_IMPLEMENTATION_CI_FAILURE_01_SYNTHETIC_LOADER_IDENTITY_2026-08-30.md"
+    },
+    {
+      "classification": "FIX",
+      "reason": "SHADOW_REGRESSION_FIXTURE_OWNERSHIP",
+      "run": 33294455048,
+      "document": "docs/SIMCORE_RELEASE_SYSTEM_V2_9_IMPLEMENTATION_CI_FAILURE_02_NESTED_FIXTURE_OWNERSHIP_2026-08-30.md"
+    }
+  ],
+  "activeRouteMutation": "NONE",
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE",
+  "productionBoundary": {
+    "releaseSimcoreCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+    "version": "0.70.0",
+    "latestBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+    "installBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+    "latestEqualsInstall": true,
+    "deploymentDisposition": "N_A_VERIFIED_NO_RUNTIME_MUTATION"
+  },
+  "preservedAuthorities": {
+    "productionPublisher": "RS2_4_PERMANENT",
+    "mainWriter": "repo-main-write.py",
+    "humanLivePassRequired": true,
+    "automaticLivePassDecision": false,
+    "automaticCheckpointSelection": false,
+    "automaticPrioritySelection": false,
+    "backgroundPollingOrRetry": false
+  }
+}

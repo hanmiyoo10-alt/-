@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "r2-9-validation-contract-projection-and-fixture-closure",
+  "suite": "release-system-r2-9-validation-contract-projection",
+  "input": {
+    "systemVersion": "R2.9",
+    "seedReleaseVersion": "0.70.0",
+    "syntheticNextVersion": "0.70.1",
+    "activation": "DEFERRED"
+  },
+  "expected": {
+    "activeRouteMutation": "NONE",
+    "runtimeMutation": "NONE",
+    "releaseSimcoreMutation": "NONE",
+    "profileRequired": true,
+    "builderFixtureClosure": "ALL_OR_NONE",
+    "implicitAuthorityInference": false
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

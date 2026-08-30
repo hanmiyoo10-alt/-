@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.93
+//@version 3.0.0-alpha.5.94
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.93';
+  const VERSION = '3.0.0-alpha.5.94';
   const RELEASE_NOTES = Object.freeze({
-    title: "Truthful DevPass Cycle / Source-Window Summary",
+    title: "Compact Authoritative 24h Cost Drivers",
     highlights: Object.freeze([
-    "DevPass 7d/30d 기존 activity source에서 요청·토큰·Cached input share·Peak day를 source-backed 값으로 요약",
-    "billing cycle이 KST 일 경계와 source coverage로 정확히 증명될 때만 ‘이번 사이클’을 쓰고 아니면 최근 30일/7일로 fail-closed",
-    "missing daily scalar는 0으로 메우지 않고 UNKNOWN으로 보존하며 Credits 데이터와 기존 월간 예상 사용량 의미를 섞지 않음",
-    "E16 live-proof 문서 상태 자동화는 선행 maintenance #962로 main baseline에 고정되어 release authority와 분리"
+    "선택한 Analytics 범위의 기존 24h model/provider rows에서 양수 observed cost만 사용해 Top Model/Provider 비용 주도를 계산",
+    "0·missing·invalid cost는 현재 source fidelity상 구분 불가하므로 leader로 만들지 않고 UNKNOWN으로 fail-closed",
+    "동률은 source display name code-point 순으로 결정하고 기존 analytics rows를 mutate/re-sort하지 않음",
+    "Engine 1.6.30과 CLI 1.10.0은 그대로 유지하며 새 network/CLI/timer/persist owner를 추가하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.93 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "DevPass 요약 제목이 Diagnostics의 cycle summary mode와 정확히 일치하는지 확인",
-    "요청·토큰·Cached input share·Peak day가 Diagnostics와 일치하고 source가 부족한 값은 —로 남는지 확인",
-    "기존 Billing Cycle·Premium·PAYG와 월간 예상 사용량이 그대로이며 Credits 혼합이나 추가 CLI/network/refresh가 없는지 확인"
+    "업데이트 후 Product 5.94 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "Analytics의 24h 비용 주도 Top Model/Provider가 같은 scope의 상세 rows 중 양수 cost leader와 일치하는지 확인",
+    "share가 보이면 같은 24h total cost 기준으로 일치하고 denominator가 불명확하면 —로 남는지 확인",
+    "Diagnostics Cost drivers 줄이 UI와 일치하고 기존 5.93 cycle summary·Billing Cycle·Premium·PAYG가 그대로인지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -2160,6 +2160,84 @@ async function importLegacyTodayBaselines() {
     };
   }
 
+
+  function costDriverMeaningfulName(value) {
+    const name = value === null || value === undefined ? '' : String(value).trim();
+    return !name || name.toLowerCase() === 'unknown' ? '' : name;
+  }
+
+  function costDriverCodePointCompare(left, right) {
+    const a = Array.from(String(left || ''));
+    const b = Array.from(String(right || ''));
+    const length = Math.max(a.length, b.length);
+    for (let index = 0; index < length; index += 1) {
+      if (index >= a.length) return -1;
+      if (index >= b.length) return 1;
+      const ac = a[index].codePointAt(0);
+      const bc = b[index].codePointAt(0);
+      if (ac !== bc) return ac - bc;
+    }
+    return 0;
+  }
+
+  function costDriverLeader(rows, totalCost) {
+    const source = Array.isArray(rows) ? rows : [];
+    if (!source.length) return Object.freeze({name:null,cost:null,share:null,state:'source-unavailable',shareState:'total-unknown'});
+    let positiveCostRows = 0;
+    const candidates = [];
+    for (const row of source) {
+      const cost = typeof row?.cost === 'number' && Number.isFinite(row.cost) ? Number(row.cost) : null;
+      if (!(cost > 0)) continue;
+      positiveCostRows += 1;
+      const name = costDriverMeaningfulName(row?.name);
+      if (!name) continue;
+      candidates.push({name,cost});
+    }
+    if (!candidates.length) {
+      return Object.freeze({
+        name:null,
+        cost:null,
+        share:null,
+        state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost',
+        shareState:'total-unknown',
+      });
+    }
+    const ranked = candidates.slice().sort((left, right) => {
+      if (right.cost !== left.cost) return right.cost - left.cost;
+      return costDriverCodePointCompare(left.name, right.name);
+    });
+    const leader = ranked[0];
+    const total = typeof totalCost === 'number' && Number.isFinite(totalCost) && totalCost > 0 ? Number(totalCost) : null;
+    const share = total !== null && total >= leader.cost ? leader.cost / total * 100 : null;
+    return Object.freeze({
+      name:leader.name,
+      cost:leader.cost,
+      share,
+      state:'ok',
+      shareState:share === null ? 'total-unknown' : 'ok',
+    });
+  }
+
+  function compactCostDriverTruth(window) {
+    const value = window && typeof window === 'object' ? window : null;
+    const totalCost = value?.totalCost;
+    return Object.freeze({
+      model:costDriverLeader(value?.models, totalCost),
+      provider:costDriverLeader(value?.providers, totalCost),
+    });
+  }
+
+  function costDriverDiagnosticText(scope, window) {
+    const scopeKey = ['all','devpass','credits'].includes(String(scope)) ? String(scope) : 'all';
+    const truth = compactCostDriverTruth(window);
+    const format = row => {
+      if (!row?.name) return `— (${row?.state || 'source-unavailable'})`;
+      const share = row.share === null ? ` · share — (${row.shareState})` : ` · share ${Number(row.share).toFixed(1)}%`;
+      return `${row.name} $${Number(row.cost).toFixed(4)}${share}`;
+    };
+    return `Cost drivers: scope ${scopeKey} · window 24h · model ${format(truth.model)} · provider ${format(truth.provider)} · fidelity positive-cost-only`;
+  }
+
   function normalize(payload) {
     const r = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     if (!r || typeof r !== 'object') throw new Error('snapshot 형식이 잘못됐어.');
@@ -3164,6 +3242,9 @@ async function importLegacyTodayBaselines() {
       : 'unknown';
     const stableReadiness = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const diagAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
+    const diagAnalyticsScopeKey = ['all','devpass','credits'].includes(String(state.analyticsScopeView)) ? String(state.analyticsScopeView) : 'all';
+    const diagAnalyticsBundle = d.analyticsScopes?.scopes?.[diagAnalyticsScopeKey] || (diagAnalyticsScopeKey === 'all' ? d.analytics : null) || null;
+    const diagAnalyticsW24 = diagAnalyticsBundle?.windows?.['24h'] || d.usageScopes?.scopes?.[diagAnalyticsScopeKey] || null;
     return [
       `Local Usage Dashboard v${VERSION}`,
       `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
@@ -3234,6 +3315,7 @@ async function importLegacyTodayBaselines() {
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),
       devpassCycleSummaryDiagnosticText(devpassCycleSummaryTruth(diagAccount, d.analyticsScopes?.scopes?.devpass)),
+      costDriverDiagnosticText(diagAnalyticsScopeKey, diagAnalyticsW24),
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
@@ -3411,8 +3493,10 @@ function todayOverviewMetrics(d) {
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const scopeNames = {all:['전체 24h Usage',`DevPass + ${creditsOrgLabel} Credits 합산 서버 집계`],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage',`${creditsOrgLabel} 서버 집계`]};
     const scopeActivity = d.usageScopes?.scopes?.[scopeKey] || (scopeKey === 'all' ? normalizeScopeActivity({totalRequests:a?.requests24h,totalCost:a?.cost24h,totalTokens:a?.totalTokens24h,errorRate:a?.errorRate24h,fetchedAt:d.fetchedAt,source:d.source}) : null);
-    const scopeTopProvider = Array.isArray(scopeActivity?.providers) && scopeActivity.providers[0]?.name ? String(scopeActivity.providers[0].name) : '—';
-    const scopeTopModel = Array.isArray(scopeActivity?.models) && scopeActivity.models[0]?.name ? String(scopeActivity.models[0].name) : '—';
+    const scopeCostDrivers = compactCostDriverTruth(scopeActivity);
+    const costDriverUiText = row => row?.name ? `${row.name} · ${money(row.cost,4)}${row.share === null ? '' : ` · ${Number(row.share).toFixed(1)}%`}` : '—';
+    const scopeTopProvider = costDriverUiText(scopeCostDrivers.provider);
+    const scopeTopModel = costDriverUiText(scopeCostDrivers.model);
     const scopeFetchedAt = scopeActivity?.fetchedAt || d.usageScopes?.fetchedAt || d.fetchedAt;
     const devpassAccountStatus = !devpassAccount
       ? '—'
@@ -3502,8 +3586,9 @@ function todayOverviewMetrics(d) {
     const analyticsW7 = analyticsBundle?.windows?.['7d'] || null;
     const analyticsW30 = analyticsBundle?.windows?.['30d'] || null;
     const analyticsAverages = analyticsBundle?.averages || {};
-    const analyticsTopProvider = Array.isArray(analyticsW24?.providers) && analyticsW24.providers[0]?.name ? String(analyticsW24.providers[0].name) : '—';
-    const analyticsTopModel = Array.isArray(analyticsW24?.models) && analyticsW24.models[0]?.name ? String(analyticsW24.models[0].name) : '—';
+    const analyticsCostDrivers = compactCostDriverTruth(analyticsW24);
+    const analyticsTopProvider = costDriverUiText(analyticsCostDrivers.provider);
+    const analyticsTopModel = costDriverUiText(analyticsCostDrivers.model);
     const analyticsFetchedAt = analyticsBundle?.fetchedAt || d.analyticsScopes?.fetchedAt || analyticsW24?.fetchedAt || d.fetchedAt;
     const analyticsExtra = analyticsScopeKey === 'devpass'
       ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>기간 종료</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
@@ -3515,7 +3600,7 @@ function todayOverviewMetrics(d) {
       *{box-sizing:border-box}body{margin:0;background:var(--b);color:var(--t);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(900px,100%);margin:auto;padding:14px}
       header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}h1{margin:0;font-size:23px}.dashboard-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:-2px 0 12px;position:sticky;top:0;z-index:20;background:var(--b);padding:6px 0}.dashboard-nav button{min-width:0;padding:8px 3px;font-size:10px;white-space:nowrap}.dashboard-nav button.active{background:var(--g);border-color:var(--g);color:#15170f}.system-health{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--p);border:1px solid var(--l);border-radius:11px;padding:9px 11px;margin:-3px 0 10px}.system-health>div{min-width:0}.system-health-kicker{display:block;color:var(--m);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.system-health b{display:block;font-size:11px;margin-top:2px;white-space:normal}.system-health-status{border:1px solid var(--l);border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;white-space:nowrap}.system-health.ok .system-health-status{border-color:var(--g);color:var(--g)}.system-health.check .system-health-status{border-color:var(--e);color:var(--e)}.shell[data-dashboard-view="overview"] .grid>:nth-child(n+6){display:none}.shell[data-dashboard-view="devpass"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="credits"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="devpass"] .usage-primary .scope-tabs,.shell[data-dashboard-view="credits"] .usage-primary .scope-tabs{display:none}.shell[data-dashboard-view="analytics"] .grid>:not(:nth-child(7)){display:none}.shell[data-dashboard-view="settings"] .grid>:not(:nth-child(8)):not(:nth-child(9)){display:none}.muted,p{color:var(--m);font-size:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
       .panel{background:var(--p);border:1px solid var(--l);border-radius:13px;padding:13px}.metric{min-height:135px;display:flex;flex-direction:column}.metric small{color:var(--m);font-weight:700}.metric strong{font-size:24px;margin-top:9px}.metric em{font-style:normal;color:var(--m);font-size:12px}.metric p{margin-top:auto;margin-bottom:0}.bar{height:5px;background:#2d3138;border-radius:99px;overflow:hidden;margin:11px 0}.bar i{display:block;height:100%;background:var(--g)}.weekly .bar i{background:var(--v)}.wide{grid-column:1/-1}
-      .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mini.cost-driver b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
       .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
       .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}.credits-org-picker{max-width:420px;margin-top:10px}.credits-org-picker select{margin-top:2px}.credits-org-fallback{margin:6px 0 0}
       .grid>.usage-primary{order:20}.grid>.activity-secondary{order:21}.grid>.analytics-panel{order:30}.grid>.advanced-panel{order:40}
@@ -3560,8 +3645,8 @@ function todayOverviewMetrics(d) {
           <div class="mini"><span>입력 / 출력</span><b>${num(scopeActivity.inputTokens) || num(scopeActivity.outputTokens) ? `${num(scopeActivity.inputTokens)?Number(scopeActivity.inputTokens).toLocaleString():'—'} / ${num(scopeActivity.outputTokens)?Number(scopeActivity.outputTokens).toLocaleString():'—'}` : '—'}</b></div>
           <div class="mini"><span>오류</span><b>${num(scopeActivity.errorCount) ? `${Number(scopeActivity.errorCount).toLocaleString()}회 · ${num(scopeActivity.errorRate)?Number(scopeActivity.errorRate).toFixed(1):'0.0'}%` : (num(scopeActivity.errorRate) ? `${Number(scopeActivity.errorRate).toFixed(1)}%` : '—')}</b></div>
           <div class="mini"><span>캐시</span><b>${usageCacheText(scopeActivity)}</b></div>
-          <div class="mini"><span>Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
-          <div class="mini"><span>Top Model</span><b>${esc(scopeTopModel)}</b></div>
+          <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
+          <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(scopeTopModel)}</b></div>
           ${scopeExtra}
         </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(errorSummaryText(d.usageScopes.errors[scopeKey]))}</p>` : ''}
@@ -3584,8 +3669,8 @@ function todayOverviewMetrics(d) {
           <div class="mini"><span>7일 총 비용</span><b>${money(analyticsW7?.totalCost,4)}</b></div>
           <div class="mini"><span>7일 일평균</span><b>${num(analyticsAverages.dailyCost7d) ? `${money(analyticsAverages.dailyCost7d,4)}/일` : '—'}</b></div>
           <div class="mini"><span>30일 총 비용</span><b>${money(analyticsW30?.totalCost,4)}</b></div>
-          <div class="mini"><span>Top Model</span><b>${esc(analyticsTopModel)}</b></div>
-          <div class="mini"><span>Top Provider</span><b>${esc(analyticsTopProvider)}</b></div>
+          <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(analyticsTopModel)}</b></div>
+          <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(analyticsTopProvider)}</b></div>
           ${analyticsExtra}
         </div>` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.analyticsScopes?.errors?.[analyticsScopeKey] ? `<p class="warn">Analytics · ${esc(errorSummaryText(d.analyticsScopes.errors[analyticsScopeKey]))}</p>` : ''}

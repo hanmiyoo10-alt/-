@@ -67,9 +67,25 @@ function syntheticNextProfile(profile) {
   return out;
 }
 
+function suitesDirectory() {
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+function fixturesDirectory() {
+  return path.resolve(suitesDirectory(), '../fixtures');
+}
+
+function contractFixtures(contractId) {
+  const dir = path.join(fixturesDirectory(), contractId);
+  assert(fs.existsSync(dir) && fs.statSync(dir).isDirectory(), `contract fixture directory missing: ${contractId}`);
+  const files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort();
+  assert(files.length > 0, `contract fixture files missing: ${contractId}`);
+  return files.map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
+}
+
 function filesystemInventory() {
-  const suitesDir = path.dirname(fileURLToPath(import.meta.url));
-  const fixturesDir = path.resolve(suitesDir, '../fixtures');
+  const suitesDir = suitesDirectory();
+  const fixturesDir = fixturesDirectory();
   const suiteFiles = fs.readdirSync(suitesDir).filter((name) => name.endsWith('.mjs')).sort();
   const fixtureDirs = fs.readdirSync(fixturesDir)
     .filter((name) => fs.statSync(path.join(fixturesDir, name)).isDirectory())
@@ -95,7 +111,8 @@ export async function runSuite(ctx) {
   assert(registry.some((row) => row.id === 'builder-v07000'), 'active explicit builder-v07000 row must remain before R2.9 activation');
 
   for (const contractId of REQUIRED_CONTRACTS) {
-    const result = await runProjectedValidationContract(contractId, ctx, validated);
+    const projectedCtx = { ...ctx, fixtures: contractFixtures(contractId) };
+    const result = await runProjectedValidationContract(contractId, projectedCtx, validated);
     equal(result.status || 'PASS', 'PASS', `projected current contract ${contractId}`);
   }
 
@@ -121,8 +138,14 @@ export async function runSuite(ctx) {
   const nextProfile = syntheticNextProfile(validated);
   validateValidationProfile(nextProfile, { requiredContracts: REQUIRED_CONTRACTS });
   const nextSource = syntheticNextSource(ctx.source);
-  const nextCtx = { ...ctx, source: nextSource, loader: new BundleLoader(nextSource) };
+  const nextLoader = new BundleLoader(nextSource);
   for (const contractId of REQUIRED_CONTRACTS) {
+    const nextCtx = {
+      ...ctx,
+      source: nextSource,
+      loader: nextLoader,
+      fixtures: contractFixtures(contractId),
+    };
     const result = await runProjectedValidationContract(contractId, nextCtx, nextProfile);
     equal(result.status || 'PASS', 'PASS', `synthetic next-version contract ${contractId}`);
   }
@@ -181,6 +204,7 @@ export async function runSuite(ctx) {
       { id: 'r2-9-profile-schema-and-contract-modes', status: 'PASS' },
       { id: 'r2-9-active-v07000-routes-unchanged', status: 'PASS' },
       { id: 'r2-9-current-profile-projected-contracts-pass', status: 'PASS' },
+      { id: 'r2-9-projected-contract-fixture-ownership', status: 'PASS' },
       { id: 'r2-9-builder-fixture-closure-pass', status: 'PASS' },
       { id: 'r2-9-topology-preflight-pass', status: 'PASS' },
       { id: 'r2-9-synthetic-next-version-no-wrapper-fanout', status: 'PASS' },

@@ -5,7 +5,19 @@
   "engineVersion": "1.6.28",
   "managerVersion": "1.3.4",
   "managedCliVersion": "1.10.0",
-  "managedCliAuthority": ".github/usage-dashboard/dependencies/llmgateway-cli.json",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-30",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
   "cliVersion": "0.13.2",
   "snapshotContract": 1,
   "recentRequestContract": 1,
@@ -38,7 +50,7 @@
   "highlights": [
     "부모 LLM Gateway v1.14.0을 CLI package 1.14.0으로 잘못 등치한 dependency authority를 실제 @llmgateway/cli 1.10.0 package tag 기준으로 복구",
     "Engine/Manager pin을 1.10.0으로 다시 일치시키고 5.89의 live Engine convergence 보강은 그대로 유지",
-    "5.90 이후 모든 릴리스가 package-specific authority 파일과 runtime pin 일치를 검증하도록 generic contract 추가"
+    "5.90 이후 모든 릴리스가 release spec 내부 package-specific authority와 runtime pin 일치를 검증하도록 generic contract 추가"
   ],
   "diagnosticHints": [
     "업데이트 후 Product 5.90 · Engine 1.6.28 · Manager 1.3.4가 일치하는지 확인",

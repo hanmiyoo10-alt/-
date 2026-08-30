@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { equal, assert } from '../../tooling/assertions.mjs';
-import { BundleLoader } from '../../tooling/bundle-loader.mjs';
 import { registry } from '../registry.mjs';
 import {
   VALIDATION_CONTRACT_MODES,
@@ -15,6 +14,7 @@ import {
   R2_9_AUTHORITY_CAPABILITIES,
 } from './release-validation-contracts-r2-9.mjs';
 import {
+  buildActiveValidationContext,
   loadActiveValidationProfile,
   runActiveProjectedValidationContract,
 } from './release-validation-active-r2-9.mjs';
@@ -93,14 +93,6 @@ function fixturesDirectory() {
   return path.resolve(suitesDirectory(), '../fixtures');
 }
 
-function contractFixtures(contractId) {
-  const dir = path.join(fixturesDirectory(), contractId);
-  assert(fs.existsSync(dir) && fs.statSync(dir).isDirectory(), `contract fixture directory missing: ${contractId}`);
-  const files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort();
-  assert(files.length > 0, `contract fixture files missing: ${contractId}`);
-  return files.map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
-}
-
 function filesystemInventory() {
   const suitesDir = suitesDirectory();
   const fixturesDir = fixturesDirectory();
@@ -116,17 +108,20 @@ function filesystemInventory() {
 }
 
 async function assertActiveContracts(source, ctx, label) {
-  const loader = new BundleLoader(source);
   const profile = loadActiveValidationProfile(source);
   equal(profile.releaseVersion, extractSourceReleaseVersion(source), `${label} exact profile binding`);
   for (const contractId of REQUIRED_CONTRACTS) {
-    const contractCtx = {
-      ...ctx,
-      source,
-      loader,
-      fixtures: contractFixtures(contractId),
-    };
-    const result = await runActiveProjectedValidationContract(contractId, contractCtx);
+    const ambientCtx = { ...ctx, source };
+    const coherent = buildActiveValidationContext(contractId, ambientCtx);
+    equal(coherent.source, source, `${label} coherent source ${contractId}`);
+    equal(coherent.sourceVersion, profile.releaseVersion, `${label} coherent source version ${contractId}`);
+    equal(coherent.loader.source, source, `${label} coherent loader ${contractId}`);
+    equal(coherent.profile.releaseVersion, profile.releaseVersion, `${label} coherent profile ${contractId}`);
+    equal(coherent.fixtureOwner, contractId, `${label} coherent fixture owner ${contractId}`);
+    assert(coherent.fixtures.length > 0, `${label} coherent fixtures missing ${contractId}`);
+    assert(coherent.fixtures.every((fixture) => fixture?.suite === contractId), `${label} coherent fixture suite ${contractId}`);
+    equal(coherent.provenance.owner, 'R2.10_CONTEXT_COHERENT_VALIDATION_HARNESS', `${label} context provenance owner ${contractId}`);
+    const result = await runActiveProjectedValidationContract(contractId, ambientCtx);
     equal(result.status || 'PASS', 'PASS', `${label} active contract ${contractId}`);
   }
   return profile;
@@ -250,6 +245,7 @@ export async function runSuite(ctx) {
       { id: 'r2-9-known-v07000-active-contracts-pass', status: 'PASS' },
       { id: 'r2-9-known-v07001-active-contracts-pass', status: 'PASS' },
       { id: 'r2-9-projected-contract-fixture-ownership', status: 'PASS' },
+      { id: 'r2-9-r2-10-context-owner-coherent', status: 'PASS' },
       { id: 'r2-9-builder-fixture-closure-pass', status: 'PASS' },
       { id: 'r2-9-topology-preflight-active-source-bound', status: 'PASS' },
       { id: 'r2-9-v07001-no-wrapper-fanout', status: 'PASS' },

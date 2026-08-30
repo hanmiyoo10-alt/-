@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const rr = require('../tools/release_request_e9.cjs');
 const handoff = require('../tools/release_handoff_e15.cjs');
+const docs = require('../tools/render_e15_status_doc.cjs');
 const controlPlane = require('../../../.github/plugin-control-plane/lib.cjs');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
@@ -28,6 +29,11 @@ const parsed = rr.parseIssue(`[usage-dashboard-release] ${release.productVersion
 assert.equal(parsed.releaseGeneration, 'E13', 'E15 must preserve E13 as the durable transaction generation');
 assert.equal(rr.DURABLE_TRANSACTION_GENERATION_RE.test('E14'), false, 'E14 remains an orthogonal candidate DAG baseline');
 assert.equal(rr.DURABLE_TRANSACTION_GENERATION_RE.test('E15'), false, 'E15 must not become a durable transaction generation');
+assert.equal(handoff.E15_IMPLEMENTATION_STATUS.implementation, 'baseline-active');
+assert.equal(handoff.E15_IMPLEMENTATION_STATUS.durableReleaseGeneration, 'E13');
+assert.equal(handoff.E15_IMPLEMENTATION_STATUS.durableGeneration, false);
+assert.equal(handoff.E15_IMPLEMENTATION_STATUS.documentationMode, 'generated-parity');
+
 assert.throws(
   () => rr.parseIssue(`[usage-dashboard-release] ${release.productVersion}`, requestBody.split('\n').slice(1).join('\n')),
   /E15_REQUEST_PLUGIN_MISSING/,
@@ -65,7 +71,22 @@ const prBody = handoff.renderStablePrBody({
   requestNumber,
 });
 assert.equal(handoff.validateStablePrBody(prBody, requestNumber), true, 'canonical locator-only PR body must validate');
+assert.equal(handoff.renderStableLocatorBlock(), handoff.REQUIRED_PR_LOCATORS.join('\n'), 'canonical locator block must have one renderer source');
 for (const locator of handoff.REQUIRED_PR_LOCATORS) assert.ok(prBody.includes(locator), `stable PR body missing ${locator}`);
+for (const entry of handoff.REQUIRED_PR_LOCATOR_ENTRIES) {
+  assert.equal(prBody.split('\n').filter((line) => line.trim() === entry.line).length, 1, `canonical locator must appear exactly once: ${entry.key}`);
+}
+
+const missingBacktickNearMiss = prBody.replace(
+  'Source authority: durable release request `source_sha`',
+  'Source authority: durable release request source_sha',
+);
+assert.throws(
+  () => handoff.validateStablePrBody(missingBacktickNearMiss, requestNumber),
+  /E15_PR_LOCATOR_INVALID:source-authority:count=0/,
+  'the exact 5.89 missing-backtick source_sha near-miss must fail with a stable source-authority key',
+);
+assert.equal(handoff.validateStablePrBody(prBody, requestNumber), true, 'canonical source_sha locator must pass after near-miss regression');
 
 const candidateC0 = 'a'.repeat(40);
 const candidateC1 = 'b'.repeat(40);
@@ -93,8 +114,8 @@ assert.throws(
 );
 assert.throws(
   () => handoff.validateStablePrBody(prBody.replace('Candidate authority: current PR head','Candidate authority: stale body value'), requestNumber),
-  /E15_PR_LOCATOR_INVALID/,
-  'all stable authority locators are mandatory',
+  /E15_PR_LOCATOR_INVALID:candidate-authority:count=0/,
+  'all stable authority locators are mandatory and failures use stable keys',
 );
 
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml','utf8');
@@ -104,30 +125,45 @@ assert.ok(!validator.includes('schedule:'), 'E15 must not add another scheduled 
 assert.ok(!validator.includes('PR_BODY_UPDATE'), 'E15 must not add a PR-body synchronization state');
 
 const helperSource = fs.readFileSync('plugins/usage-dashboard/tools/release_handoff_e15.cjs','utf8');
-for (const forbidden of [
-  'fetch(',
-  'http://',
-  'https://',
-  'child_process',
-  'setTimeout',
-  'setInterval',
-  'GITHUB_TOKEN',
-  'git push',
-  'curl ',
-]) assert.ok(!helperSource.includes(forbidden), `E15 pure helper must not own I/O or release mutation: ${forbidden}`);
+const docsRendererSource = fs.readFileSync('plugins/usage-dashboard/tools/render_e15_status_doc.cjs','utf8');
+for (const source of [helperSource, docsRendererSource]) {
+  for (const forbidden of [
+    'fetch(',
+    'http://',
+    'https://',
+    'child_process',
+    'setTimeout',
+    'setInterval',
+    'GITHUB_TOKEN',
+    'git push',
+    'curl ',
+  ]) assert.ok(!source.includes(forbidden), `E15 pure local tooling must not own I/O or release mutation: ${forbidden}`);
+}
 
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml','utf8');
 assert.ok(reconciler.includes("issues?state=open&labels=plugin%3Ausage-dashboard"), 'existing label-selected E9 lane must remain unchanged');
 assert.ok(!reconciler.includes('issues?state=open&sort=created'), 'E15 must not broaden E9 into unlabeled release-like issue scanning');
 assert.ok(!reconciler.includes('release_handoff_e15.cjs --update'), 'E15 must not add a PR-body update command');
+assert.ok(!reconciler.includes('render_e15_status_doc.cjs --write'), 'E15 must not add an autonomous documentation writer');
 assert.ok(!reconciler.includes('E15_REAL_RELEASE_PROOF'), 'E15 must not manufacture a new durable generation proof marker');
 
-const design = fs.readFileSync('docs/USAGE_DASHBOARD_PR_LIFECYCLE_E15_HANDOFF_HYGIENE_AUTOMATION_DESIGN.md','utf8');
+const designPath = 'docs/USAGE_DASHBOARD_PR_LIFECYCLE_E15_HANDOFF_HYGIENE_AUTOMATION_DESIGN.md';
+const design = fs.readFileSync(designPath,'utf8');
 for (const token of [
+  'IMPLEMENTED — BASELINE ACTIVE',
   'first-write correctness',
   'Plugin: usage-dashboard',
   'Candidate authority: current PR head',
   'zero PR-body synchronization operations',
+  'generated source + enforced parity',
 ]) assert.ok(design.includes(token), `E15 design missing ${token}`);
+assert.ok(!design.includes('IMPLEMENTATION NOT STARTED'), 'implemented E15 helper/contract must not coexist with obsolete pre-implementation document status');
+assert.equal(docs.extractStatusBlock(design), docs.renderStatusBlock(), 'committed E15 generated status block must exactly match deterministic local renderer output');
+assert.equal(docs.assertStatusCurrent(design), true, 'E15 documentation status parity must be current');
+assert.throws(
+  () => docs.assertStatusCurrent(design.replace('implementation: `baseline-active`','implementation: `stale`')),
+  /E15_DOC_STATUS_STALE:regenerate canonical E15 status block/,
+  'documentation status drift must fail with one actionable deterministic receipt',
+);
 
-console.log(`usage-dashboard E15 release handoff hygiene contract: OK · ${release.productVersion} · explicit scope first-write + locator-only PR presentation + E13/E14/E11 authority unchanged`);
+console.log(`usage-dashboard E15 release handoff hygiene contract: OK · ${release.productVersion} · canonical first-write + keyed fail-closed locators + generated documentation parity + E13/E14/E11 authority unchanged`);

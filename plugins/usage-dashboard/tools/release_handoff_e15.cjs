@@ -4,13 +4,24 @@ const CANONICAL_PLUGIN_LINE = 'Plugin: usage-dashboard';
 const PLUGIN_VALUE = 'usage-dashboard';
 const SHA40_RE = /\b[0-9a-f]{40}\b/i;
 const PR_REQUEST_MARKER_RE = /^Usage-Dashboard-Release-Request: #([1-9]\d*)$/;
-const REQUIRED_PR_LOCATORS = Object.freeze([
-  'Candidate authority: current PR head',
-  'Source authority: durable release request `source_sha`',
-  'Frozen-main authority: candidate trailer + E11 receipt',
-  'Validation authority: E9 exact-SHA receipt',
-  'Merge authority: fresh E11 receipt + expected-head merge',
+
+const E15_IMPLEMENTATION_STATUS = Object.freeze({
+  schema: 1,
+  implementation: 'baseline-active',
+  durableReleaseGeneration: 'E13',
+  durableGeneration: false,
+  documentationMode: 'generated-parity',
+  liveEvidenceIssue: '#869',
+});
+
+const REQUIRED_PR_LOCATOR_ENTRIES = Object.freeze([
+  Object.freeze({key:'candidate-authority', line:'Candidate authority: current PR head'}),
+  Object.freeze({key:'source-authority', line:'Source authority: durable release request `source_sha`'}),
+  Object.freeze({key:'frozen-main-authority', line:'Frozen-main authority: candidate trailer + E11 receipt'}),
+  Object.freeze({key:'validation-authority', line:'Validation authority: E9 exact-SHA receipt'}),
+  Object.freeze({key:'merge-authority', line:'Merge authority: fresh E11 receipt + expected-head merge'}),
 ]);
+const REQUIRED_PR_LOCATORS = Object.freeze(REQUIRED_PR_LOCATOR_ENTRIES.map((entry) => entry.line));
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -73,6 +84,10 @@ function requireRequestNumber(value) {
   return number;
 }
 
+function renderStableLocatorBlock() {
+  return REQUIRED_PR_LOCATORS.join('\n');
+}
+
 function renderStablePrBody(input = {}) {
   const version = requireOneLine(input.version, 'version');
   const summary = String(input.summary ?? '').replace(/\r/g, '').trim();
@@ -104,9 +119,9 @@ function renderStablePrBody(input = {}) {
 function validateStablePrBody(body, requestNumber) {
   const expectedRequest = requireRequestNumber(requestNumber);
   const lines = normalizedLines(body).map((line) => line.trim());
-  for (const locator of REQUIRED_PR_LOCATORS) {
-    const count = lines.filter((line) => line === locator).length;
-    if (count !== 1) fail('E15_PR_LOCATOR_INVALID', `${locator}:count=${count}`);
+  for (const locator of REQUIRED_PR_LOCATOR_ENTRIES) {
+    const count = lines.filter((line) => line === locator.line).length;
+    if (count !== 1) fail('E15_PR_LOCATOR_INVALID', `${locator.key}:count=${count}`);
   }
 
   const markers = lines
@@ -128,9 +143,12 @@ function validateStablePrBody(body, requestNumber) {
 module.exports = {
   CANONICAL_PLUGIN_LINE,
   PLUGIN_VALUE,
+  E15_IMPLEMENTATION_STATUS,
+  REQUIRED_PR_LOCATOR_ENTRIES,
   REQUIRED_PR_LOCATORS,
   explicitPluginDeclarations,
   validateRequestPluginDeclaration,
+  renderStableLocatorBlock,
   renderStablePrBody,
   validateStablePrBody,
 };

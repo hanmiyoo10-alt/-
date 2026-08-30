@@ -7,9 +7,9 @@ Tracking: #906
 Scope: `plugins/usage-dashboard/` release-control only.
 
 <!-- E16_GENERATED_STATUS:BEGIN -->
-## Generated implementation / live-proof status
+## Generated implementation / baseline-proof status
 
-> Machine-owned block. Regenerate from the local E16 documentation contract; do not hand-edit its contents.
+> Machine-owned block. Baseline proof is intentionally fixed; later operational proof lives in immutable request/E16/release receipts.
 
 - schema: `1`
 - implementation: `live-baseline-proven`
@@ -21,9 +21,12 @@ Scope: `plugins/usage-dashboard/` release-control only.
 - documentation mode: `generated-parity`
 - evidence mode: `immutable-release-receipts`
 - live evidence history: `#906`
-- live proof releases: `3.0.0-alpha.5.91, 3.0.0-alpha.5.92`
-- live proof requests: `#909, #923`
+- baseline proof releases: `3.0.0-alpha.5.91, 3.0.0-alpha.5.92`
+- baseline proof requests: `#909, #923`
+- later proof authority: `immutable request / E16 capsule / release receipts`
 <!-- E16_GENERATED_STATUS:END -->
+
+The baseline proof list is intentionally non-exhaustive. It records the first two releases that proved the E16 architecture. Later releases, including 5.93 and beyond, are represented by their immutable durable-request, E16 capsule, merge, promotion, and release receipts rather than by continually mutating this baseline list.
 
 ## Goal
 
@@ -179,7 +182,7 @@ The E16 contract proves:
 - runtime artifacts are unchanged;
 - full Usage Dashboard registry remains GREEN.
 
-The generated documentation-status parity contract additionally proves the E16 live-proof prose cannot drift behind the immutable 5.91/5.92 evidence without CI detecting it. This automation is pure/local and does not mutate historical capsules or widen merge authority.
+The generated documentation-status parity contract additionally proves the E16 baseline-proof prose cannot drift behind its fixed architectural baseline without CI detecting it. Later operational history is intentionally owned by immutable receipts. This automation is pure/local and does not mutate historical capsules or widen merge authority.
 
 ## First CI feedback
 

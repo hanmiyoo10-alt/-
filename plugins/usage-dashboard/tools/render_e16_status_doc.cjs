@@ -10,8 +10,8 @@ const STATUS = Object.freeze({
   documentationMode: 'generated-parity',
   evidenceMode: 'immutable-release-receipts',
   liveEvidenceIssue: '#906',
-  liveProofReleases: Object.freeze(['3.0.0-alpha.5.91', '3.0.0-alpha.5.92']),
-  liveProofRequests: Object.freeze(['#909', '#923']),
+  baselineProofReleases: Object.freeze(['3.0.0-alpha.5.91', '3.0.0-alpha.5.92']),
+  baselineProofRequests: Object.freeze(['#909', '#923']),
 });
 
 function fail(code, detail = '') {
@@ -21,9 +21,9 @@ function fail(code, detail = '') {
 function renderStatusBlock() {
   return [
     STATUS_BEGIN,
-    '## Generated implementation / live-proof status',
+    '## Generated implementation / baseline-proof status',
     '',
-    '> Machine-owned block. Regenerate from the local E16 documentation contract; do not hand-edit its contents.',
+    '> Machine-owned block. Baseline proof is intentionally fixed; later operational proof lives in immutable request/E16/release receipts.',
     '',
     `- schema: \`${STATUS.schema}\``,
     `- implementation: \`${STATUS.implementation}\``,
@@ -35,8 +35,9 @@ function renderStatusBlock() {
     `- documentation mode: \`${STATUS.documentationMode}\``,
     `- evidence mode: \`${STATUS.evidenceMode}\``,
     `- live evidence history: \`${STATUS.liveEvidenceIssue}\``,
-    `- live proof releases: \`${STATUS.liveProofReleases.join(', ')}\``,
-    `- live proof requests: \`${STATUS.liveProofRequests.join(', ')}\``,
+    `- baseline proof releases: \`${STATUS.baselineProofReleases.join(', ')}\``,
+    `- baseline proof requests: \`${STATUS.baselineProofRequests.join(', ')}\``,
+    '- later proof authority: `immutable request / E16 capsule / release receipts`',
     STATUS_END,
   ].join('\n');
 }

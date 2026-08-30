@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.69.2-intent-06",
+  "releaseId": "simcore-v0.69.2-new-06",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "5dc5ec1099c6097a6a0e46effeb826889a4741c3",
+  "sourceCommit": "f3952ff67739e9866af5cb5c8c4fa46c74a5694f",
+  "candidateCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+  "candidateReleaseBlob": "8132fc447e237f7f7a08a27126191a47dc6eac6f",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.69.2-intent-06",
+  "builderPath": "products/simcore/tooling/build-06902-mamsholic-exact-brand-alias.py",
+  "builderSha256": "3ce81c4b4e4dbb00cd20e21958fe1fd3844714e522095eee6ecb39d6e2f8ab3b",
+  "verifierCommit": "f3952ff67739e9866af5cb5c8c4fa46c74a5694f",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "e89c18c8859e3604036772b9135a4c7b1254a08c318b084f2605b92af7553a2e",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

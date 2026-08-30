@@ -86,8 +86,9 @@ for (const forbidden of ['accountId','organizationId','projectId','apiKey','auth
 }
 
 const registryFiles = PARTS.map(part => part.file);
+const sourceManifestFiles = sourceManifest.parts.map(part => part.file);
 assert.equal(sourceManifest.parts.length, PARTS.length, 'P49 source-manifest module count must match the canonical parts registry');
-assert.deepEqual(sourceManifest.parts, registryFiles, 'P49 source-manifest module order must match the canonical parts registry');
+assert.deepEqual(sourceManifestFiles, registryFiles, 'P49 source-manifest module order must match the canonical parts registry');
 assert.equal(sourceManifest.version, release.productVersion, 'P49 source manifest must track current product version');
 assert.ok(latest.includes('id="release-notes-panel"'), 'P49 built Plugin release notes panel missing');
 assert.ok(latest.includes('진단 제출 가이드 복사'), 'P49 built Plugin copy action missing');

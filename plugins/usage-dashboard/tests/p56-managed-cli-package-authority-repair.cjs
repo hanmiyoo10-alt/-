@@ -17,7 +17,6 @@ const sources = fs.readFileSync(`${root}/runtime-src/bridge-engine/40-sources.pa
 const engine = fs.readFileSync(`${root}/runtime/bridge-engine.mjs`, 'utf8');
 const manager = fs.readFileSync(`${root}/runtime/bridge-manager.cjs`, 'utf8');
 const manifest = JSON.parse(fs.readFileSync(`${root}/runtime/product-manifest.json`, 'utf8'));
-const authority = JSON.parse(fs.readFileSync('.github/usage-dashboard/dependencies/llmgateway-cli.json', 'utf8'));
 const release = assertCurrentReleaseArtifacts();
 
 if (release.productVersion !== '3.0.0-alpha.5.90') {
@@ -28,10 +27,11 @@ if (release.productVersion !== '3.0.0-alpha.5.90') {
 assert.equal(release.engineVersion, '1.6.28');
 assert.equal(release.managerVersion, '1.3.4');
 assert.equal(release.managedCliVersion, '1.10.0');
-assert.equal(release.managedCliAuthority, '.github/usage-dashboard/dependencies/llmgateway-cli.json');
+assert.ok(release.managedCliAuthority && typeof release.managedCliAuthority === 'object' && !Array.isArray(release.managedCliAuthority));
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
 
+const authority = release.managedCliAuthority;
 assert.equal(authority.schemaVersion, 1);
 assert.equal(authority.package, '@llmgateway/cli');
 assert.equal(authority.version, '1.10.0');
@@ -61,7 +61,6 @@ assert.ok(manager.includes("const MANAGER_VERSION = '1.3.4';"));
 assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.90';"));
 assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.28';"));
 
-// Preserve the exact 5.89 physical convergence repair while fixing only dependency authority.
 for (const marker of [
   "String(identity?.bridgeVersion || '') === BUNDLED_ENGINE_VERSION",
   "async function waitForManagedEngine(expected, expectedVersion = '', timeoutMs = 12000)",

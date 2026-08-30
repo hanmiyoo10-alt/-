@@ -98,7 +98,11 @@ def validate_baseline() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     product = manifest.get('productVersion')
     if product == TARGET_VERSION:
-        return
+        engine_sha = sha256(ENGINE)
+        manager_sha = sha256(MANAGER)
+        validate_target(engine_sha, manager_sha)
+        print(f'MATERIALIZER_IDEMPOTENT:{TARGET_VERSION}')
+        raise SystemExit(0)
     if product != BASE_VERSION:
         raise SystemExit(f'5.95 baseline Product mismatch: {product}')
     if manifest.get('components', {}).get('bridge', {}).get('requiredVersion') != BASE_ENGINE:

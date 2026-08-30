@@ -1,0 +1,56 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.95",
+  "releaseTitle": "Catalog-Pinned Premium/Regular Request Model Category Fidelity",
+  "engineVersion": "1.6.31",
+  "managerVersion": "1.3.5",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true
+  },
+  "managedModelCatalogVersion": "1.251.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.251.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export"
+  },
+  "modelCategoryContract": {
+    "values": ["premium", "regular", "unknown"],
+    "source": "llmgateway-model-catalog",
+    "inputThreshold": 0.000005,
+    "outputThreshold": 0.000015,
+    "membership": "exact-normalized-model-id",
+    "unknownOnMissingCatalog": true
+  },
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "verifiedBaseline": "Last verified real-device baseline: `3.0.0-alpha.5.94 / Engine 1.6.30 / Manager 1.3.4 / CLI 1.10.0 / READY / Health ok / active errors 0 / failures 0 / Cost Drivers PASS_PHYSICAL`",
+  "authority": {
+    "featureIssue": 987,
+    "physicalAcceptanceIssue": 984,
+    "releaseGeneration": "E13",
+    "e18": "derived-impact smoke only; no authority change"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_model_category_595.py",
+  "newRegression": "plugins/usage-dashboard/tests/p61-catalog-pinned-request-model-category-fidelity.cjs",
+  "releaseNotes": {
+    "highlights": [
+      "Managed runtime now treats @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 as one exact READY pair.",
+      "Recent served-model rows gain local-only Premium / Regular / UNKNOWN model-category fidelity from the exact managed catalog.",
+      "Classification mirrors upstream pricing thresholds while keeping catalog misses/unavailability UNKNOWN instead of inferring from names, tier, cost, plan, or provider.",
+      "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or raw catalog projection is added."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.95 · Engine 1.6.31 · Manager 1.3.5 · CLI 1.10.0 and READY/Health ok.",
+      "Diagnostics should show managed @llmgateway/models 1.251.0 ready when the exact pair is installed.",
+      "Natural resolved served-model rows may show Premium or Regular; unresolved rows must remain ? / UNKNOWN without inference.",
+      "Existing service tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium allowance, PAYG, Cost Drivers, and request identity must remain unchanged."
+    ]
+  }
+}

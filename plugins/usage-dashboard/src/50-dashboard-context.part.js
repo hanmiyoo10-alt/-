@@ -37,6 +37,7 @@
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     const premiumAllowance = premiumAllowanceTruth(d.weekly);
     const paygTruth = paygAccountTruth(devpassAccount);
+    const cycleSummary = devpassCycleSummaryTruth(devpassAccount, d.analyticsScopes?.scopes?.devpass);
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -120,6 +121,12 @@
             <div class="mini"><span>기간 종료</span><b>${esc(billingEndText)}</b></div>
             <div class="mini"><span>남은 기간</span><b>${esc(billingRemainingText)}</b></div>
             <div class="mini"><span>취소 상태</span><b>${esc(billingCancelledText)}</b></div>
+          </div></div>
+          <div class="usage-detail-box devpass-cycle-summary"><div class="recent-head"><h3>${esc(cycleSummary.title)}</h3><span>${esc(cycleSummary.mode)}</span></div><div class="minis">
+            <div class="mini accent"><span>요청</span><b>${cycleSummary.requests === null ? '—' : Number(cycleSummary.requests).toLocaleString()}</b></div>
+            <div class="mini"><span>토큰</span><b>${cycleSummary.totalTokens === null ? '—' : Number(cycleSummary.totalTokens).toLocaleString()}</b></div>
+            <div class="mini purple"><span>Cached input share</span><b>${cycleSummary.cachedInputShare === null ? '—' : `${Number(cycleSummary.cachedInputShare).toFixed(1)}%`}</b></div>
+            <div class="mini"><span>Peak day</span><b>${esc(cycleSummary.peakDay || '—')}</b></div>
           </div></div>
         </div>`
       : '';

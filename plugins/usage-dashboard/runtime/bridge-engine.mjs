@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.29';
+const VERSION = '1.6.30';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -2088,6 +2088,29 @@ function officialActivityRows(root) {
   return [];
 }
 
+function explicitDailyActivityMetric(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return Number(value);
+}
+
+function boundedDailyActivitySeries(raw, range) {
+  const rows = officialActivityRows(raw);
+  const granularity = typeof raw?.granularity === 'string' ? raw.granularity.trim().toLowerCase() : '';
+  const buckets = rows.map((row) => {
+    const date = typeof row?.date === 'string' && row.date.trim() ? row.date.trim() : null;
+    if (!date) return null;
+    return {
+      date,
+      requestCount: explicitDailyActivityMetric(row.requestCount),
+      inputTokens: explicitDailyActivityMetric(row.inputTokens),
+      cachedTokens: explicitDailyActivityMetric(row.cachedTokens),
+      totalTokens: explicitDailyActivityMetric(row.totalTokens),
+    };
+  }).filter(Boolean);
+  if (!granularity && !buckets.length) return null;
+  return { range:String(range || ''), granularity, buckets };
+}
+
 function normalizeCapturedRecentLogs(root) {
   const rows = Array.isArray(root?.rows) ? root.rows : [];
   return rows.map((row) => {
@@ -2163,6 +2186,7 @@ function normalizeUsageActivity(raw, org = null, range = '24h') {
   const modelMap = new Map();
   const recent = [];
   const rows = officialActivityRows(raw);
+  const dailySeries = boundedDailyActivitySeries(raw, range);
   let totalRequests = 0;
   let totalCost = 0;
   const metrics = blankMetrics();
@@ -2261,6 +2285,7 @@ function normalizeUsageActivity(raw, org = null, range = '24h') {
   return {
     __bridgeActivity: true,
     scope: range,
+    ...(dailySeries ? { dailySeries } : {}),
     totalRequests,
     totalCost,
     ...metrics,
@@ -2320,6 +2345,8 @@ function mergeUsageActivities(items, range = '24h') {
   const modelMap = new Map();
   const recent = [];
   const recentRequests = [];
+  const dailySeriesCandidates = (items || []).map((item) => item?.dailySeries).filter((series) => series && typeof series === 'object');
+  const dailySeries = dailySeriesCandidates.length === 1 ? dailySeriesCandidates[0] : null;
   let totalRequests = 0;
   let totalCost = 0;
   const metrics = blankMetrics();
@@ -2336,6 +2363,7 @@ function mergeUsageActivities(items, range = '24h') {
   return {
     __bridgeActivity: true,
     scope: range,
+    ...(dailySeries ? { dailySeries } : {}),
     totalRequests,
     totalCost,
     ...metrics,

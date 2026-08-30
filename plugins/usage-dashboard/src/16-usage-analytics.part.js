@@ -20,6 +20,27 @@
     };
   }
 
+
+  function normalizeDailyScalarSeries(value) {
+    if (!value || typeof value !== 'object') return null;
+    const exact = scalar => typeof scalar === 'number' && Number.isFinite(scalar) && scalar >= 0 ? Number(scalar) : null;
+    const granularity = typeof value.granularity === 'string' ? value.granularity.trim().toLowerCase() : '';
+    const range = typeof value.range === 'string' ? value.range.trim() : '';
+    const buckets = Array.isArray(value.buckets) ? value.buckets.map(row => {
+      const date = typeof row?.date === 'string' && row.date.trim() ? row.date.trim() : null;
+      if (!date) return null;
+      return {
+        date,
+        requestCount:exact(row.requestCount),
+        inputTokens:exact(row.inputTokens),
+        cachedTokens:exact(row.cachedTokens),
+        totalTokens:exact(row.totalTokens),
+      };
+    }).filter(Boolean) : [];
+    if (!granularity && !buckets.length) return null;
+    return {range,granularity,buckets};
+  }
+
   function normalizeScopeActivity(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const rows = value => Array.isArray(value) ? value.map(row => ({
@@ -62,7 +83,7 @@
     const recent = normalizeRecentRequestRows(rawRecent);
     const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
     if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),dailySeries:normalizeDailyScalarSeries(raw.dailySeries),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {

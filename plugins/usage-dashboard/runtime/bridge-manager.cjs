@@ -10,7 +10,7 @@ const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
 const MANAGER_VERSION = '1.3.4';
-const PRODUCT_VERSION = '3.0.0-alpha.5.92';
+const PRODUCT_VERSION = '3.0.0-alpha.5.93';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -28,8 +28,8 @@ const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-prelo
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
-const BUNDLED_ENGINE_VERSION = '1.6.29';
-const BUNDLED_ENGINE_SHA256 = '19a74fa0b1ae3ef24008a66e325b170edb4e29d6a84b84e0d4d49ad72293bcd7';
+const BUNDLED_ENGINE_VERSION = '1.6.30';
+const BUNDLED_ENGINE_SHA256 = '035aa5d6535edd357df3390b7cd22acff2dec298a79e86d2fe2b4b0d3f2b4228';
 const MANAGED_CLI_PACKAGE = '@llmgateway/cli';
 const MANAGED_CLI_VERSION = '1.10.0';
 const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';

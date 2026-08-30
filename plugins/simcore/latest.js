@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.69.1
+//@version 0.69.2
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.69.2 MamsHolic Exact Brand Alias Repair:
+// - Recognizes anchored 맘스홀릭 headers as the existing canonical 맘카페 family so generic descriptors such as 자유게시판 retain 학부모/지역 classification
+// - Keeps the broad 맘 substring guard narrow and preserves existing exact-family precedence plus unrelated negative controls
+// - Keeps COMMUNITY_CLASSIFIER_VERSION 3, bounded migration caps, Structure diversity semantics, Reaction grammar and M2-6 architecture unchanged
+// - Keeps v0.70 Current Task Primacy Guard work completely separate from this Community classifier mini
 //
 // v0.69.1 Refreshless Targeted Update Liveness Repair:
 // - Retires disposed runtime hooks and UI before optional UNLOAD telemetry so same-tab + replacement cannot be held behind Host-local I/O
@@ -705,7 +711,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.69.1';
+const SIMCORE_RUNTIME_VERSION = '0.69.2';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -960,6 +966,9 @@ function parentLocalAliasInfo(shown) {
   // Keep it deliberately narrow: require both a parent/local identity and a community-shaped signal.
   const text = String(shown || '').trim();
   if (!text) return null;
+  if (/^맘스홀릭(?=$|[\s\-–—/:|·])/i.test(text)) {
+    return { shown, key: '맘카페', group: '학부모/지역', source: 'alias-parent-local' };
+  }
   const segments = text.split(/[\/|｜]/).map((part) => part.trim()).filter(Boolean);
   const namePart = segments[0] || '';
   const descriptorParts = segments.slice(1);
@@ -6403,7 +6412,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.69.1';
+const HOST_COMPAT_VERSION = '0.69.2';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9206,8 +9215,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.69.1',
-    name: 'Refreshless Targeted Update Liveness Repair',
+    version: '0.69.2',
+    name: 'MamsHolic Exact Brand Alias Repair',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

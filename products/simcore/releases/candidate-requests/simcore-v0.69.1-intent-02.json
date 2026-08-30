@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.69.1-intent-02",
+  "releaseId": "simcore-v0.69.1-new-02",
+  "product": "SimCore",
+  "targetVersion": "0.69.1",
+  "releaseName": "Refreshless Targeted Update Liveness Repair",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "builderPath": "products/simcore/tooling/build-06901-refreshless-targeted-update-liveness.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "06901_REFRESHLESS_TARGETED_UPDATE_LIVENESS_REPAIR",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "06901_REFRESHLESS_TARGETED_UPDATE_LIVENESS_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_06901_REFRESHLESS_TARGETED_UPDATE_LIVENESS_REPAIR_DESIGN_2026-08-30.md",
+    "docs/SIMCORE_06901_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+    "docs/SIMCORE_06901_IMPLEMENTATION_PREFLIGHT_2026-08-30.md",
+    "docs/SIMCORE_06901_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+    "docs/SIMCORE_06901_CANDIDATE_CI_FAILURE_01_RELOAD_VERSION_BRIDGE_2026-08-30.md"
+  ]
+}

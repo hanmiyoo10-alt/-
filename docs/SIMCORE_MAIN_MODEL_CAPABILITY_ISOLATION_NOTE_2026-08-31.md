@@ -29,6 +29,63 @@ MAIN MODEL SEMANTIC JOB
 receives only the minimum source-derived information required for that job.
 ```
 
+## Role-boundary invariant
+
+The intended architecture keeps the main model and the SimCore plugin in distinct roles.
+
+```text
+MAIN MODEL
+- semantic reasoning
+- world / character interpretation
+- natural-language generation for the active semantic job
+- integration of the bounded evidence intentionally projected to that job
+
+SIMCORE PLUGIN
+- semantic-owner selection
+- current-task / source eligibility
+- context and field projection
+- state ownership and lifecycle
+- channel reachability / timing policy
+- source-sidecar orchestration
+- validation / deterministic normalization
+- rendering / presentation
+- reroll, edit, reload and reconciliation plumbing
+- optional auxiliary-model dispatch where separately authorized
+```
+
+The design target is therefore not:
+
+```text
+new feature
+→ add more instructions and more history to the main model
+```
+
+It is:
+
+```text
+new feature
+→ give the plugin a bounded owner and policy
+→ project only the evidence needed by that semantic job
+→ invoke generative reasoning only where generative reasoning is actually required
+→ validate and render the result outside the main semantic job
+```
+
+A plugin cannot manufacture rich semantic language or world interpretation deterministically when the feature genuinely requires model reasoning. In that case the plugin should remain the orchestrator and authority boundary while either:
+
+1. dispatching a bounded auxiliary request/model, if later authorized, or
+2. asking the main model to perform a narrowly scoped semantic sub-job without importing the full sidecar prompt/history into the ordinary main response path.
+
+This distinction matters:
+
+```text
+WHO ORCHESTRATES THE FEATURE = plugin
+WHO PERFORMS GENERATIVE SEMANTIC REASONING, WHEN NEEDED = model
+```
+
+The plugin may still perform a large fraction of a HunterNet-like feature without model reasoning, including eligibility, timing, persistence, identity bookkeeping, counters, deterministic formatting, validation, rendering and context projection.
+
+The main-model role should remain stable as source features are added. Feature growth should primarily increase plugin-side orchestration and bounded sidecar work, not the ordinary main-model prompt surface.
+
 ## Safe architecture direction
 
 A HunterNet-like feature should remain a bounded semantic sidecar/source owner:
@@ -122,6 +179,7 @@ If source-disabled or source-irrelevant turns become measurably worse, the featu
 
 ```text
 PROMISING / REINFORCING · MAIN_MODEL_CAPABILITY_ISOLATION
+PROMISING / REINFORCING · MAIN_MODEL_PLUGIN_ROLE_BOUNDARY
 WATCH · CONTEXT_BUDGET_DILUTION
 WATCH · INSTRUCTION_COMPETITION
 BLOCKER for future source feature · SOURCE_ASSERTION_CANON_LEAK

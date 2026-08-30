@@ -163,6 +163,7 @@ const managerBytes = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-man
 const engineSha = crypto.createHash('sha256').update(engineBytes).digest('hex');
 const managerSha = crypto.createHash('sha256').update(managerBytes).digest('hex');
 const bootstrapSha = crypto.createHash('sha256').update(fs.readFileSync('plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh')).digest('hex');
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.95');
 assert.equal(manifest.components?.bridge?.requiredVersion, '1.6.31');
 assert.equal(manifest.components?.bridge?.sha256, engineSha);

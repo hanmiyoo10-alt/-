@@ -151,11 +151,13 @@ const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release
 for (const token of [
   'release_merge_capsule_e16.cjs',
   'materializationIdentity',
-  'UD_E16_MERGE_CAPSULE:',
+  'markerForCapsule',
+  'formatMergeCapsule',
   'E16_CAPSULE_JSON',
   'E16_MERGE_CAPSULE_READY',
 ]) assert.ok(reconciler.includes(token),`E16 reconciler integration missing ${token}`);
 assert.equal((reconciler.match(/post_comment\(\) \{/g)||[]).length,1,'E16 must reuse the existing reconciler issue-comment writer');
+assert.ok(!reconciler.includes("E16_MARKER=\"UD_E16_MERGE_CAPSULE:"),'E16 reconciler must not duplicate the canonical marker format outside the pure helper');
 assert.ok(!reconciler.includes('E16_GENERATION_ISSUE'),'E16 must not create a new durable generation issue binding');
 assert.ok(!reconciler.includes('pulls/$PR_NUMBER/merge'),'E16 reconciler must not auto-merge the PR');
 
@@ -166,6 +168,7 @@ for (const token of [
   'assistant fresh identity re-read',
   'expected-head merge',
   'byte-neutral',
+  'materializationIdentity()',
 ]) assert.ok(design.includes(token),`E16 design missing ${token}`);
 
 console.log(`usage-dashboard E16 derived merge-authority capsule contract: OK · ${release.productVersion} · exact request/PR/E9/E11/materialization binding + read-only merge handoff`);

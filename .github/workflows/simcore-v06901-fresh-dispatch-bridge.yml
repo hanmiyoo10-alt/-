@@ -50,8 +50,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin release-simcore candidate/simcore/simcore-v0.69.1-intent-06
+          git fetch --no-tags origin release-simcore
           test "$(git rev-parse origin/release-simcore)" = '31b4c5075659a55861731c6fd73f999402321e94'
+          git fetch --no-tags origin candidate/simcore/simcore-v0.69.1-intent-06
           test "$(git rev-parse FETCH_HEAD)" = '5dc5ec1099c6097a6a0e46effeb826889a4741c3'
           git cat-file -e '5dc5ec1099c6097a6a0e46effeb826889a4741c3^{commit}'
           echo 'V06901_FRESH_DISPATCH_IDENTITIES_PASS'

@@ -98,23 +98,45 @@
     return `managed-direct ${counts.managedDirect} · direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
   }
 
-  function bridgeCliRuntimeText(diagnostics) {
+  function runtimeIdentityVersionTruth(engineValue, managerValue) {
+    const engine = String(engineValue || '').trim();
+    const manager = String(managerValue || '').trim();
+    if (engine && manager && engine !== manager) return {state:'mismatch',version:'',engine,manager};
+    const version = engine || manager;
+    return {state:version ? 'known' : 'unknown',version,engine,manager};
+  }
+
+  function managedRuntimeIdentityTruth(diagnostics) {
     const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
     const manager = state.bridgeManagerRuntime || null;
-    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(String(runtime?.state || manager?.cliRuntimeState)) ? String(runtime?.state || manager?.cliRuntimeState) : 'unavailable';
-    const version = String(runtime?.version || manager?.cliRuntimeVersion || '');
-    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(runtime?.provisioning || manager?.cliRuntimeProvisioning)) ? String(runtime?.provisioning || manager?.cliRuntimeProvisioning) : 'unavailable';
-    return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
+    const cli = runtimeIdentityVersionTruth(runtime?.cliVersion || runtime?.version, manager?.cliRuntimeVersion);
+    const models = runtimeIdentityVersionTruth(runtime?.modelCatalogVersion, manager?.cliCatalogVersion);
+    const rawCliState = String(runtime?.state || manager?.cliRuntimeState || '');
+    const rawModelState = String(runtime?.modelCatalogState || manager?.cliCatalogState || '');
+    const rawProvisioning = String(runtime?.provisioning || manager?.cliRuntimeProvisioning || '');
+    const cliState = ['ready','provisioning','unavailable','invalid'].includes(rawCliState) ? rawCliState : 'unavailable';
+    const modelState = ['ready','unavailable','invalid'].includes(rawModelState) ? rawModelState : 'unavailable';
+    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(rawProvisioning) ? rawProvisioning : 'unavailable';
+    const modelExpectedVersion = String(runtime?.modelCatalogExpectedVersion || '').trim();
+    return {cli,models,cliState,modelState,provisioning,modelExpectedVersion};
+  }
+
+  function bridgeCliRuntimeText(diagnostics) {
+    const truth = managedRuntimeIdentityTruth(diagnostics);
+    if (truth.cli.state === 'mismatch') {
+      return `managed · mismatch · @llmgateway/cli engine ${truth.cli.engine || '—'} · manager ${truth.cli.manager || '—'} · provisioning ${truth.provisioning}`;
+    }
+    return `managed · ${truth.cliState} · @llmgateway/cli ${truth.cli.version || '—'} · provisioning ${truth.provisioning}`;
   }
 
 
   function modelCategoryCatalogDiagnosticText(diagnostics) {
-    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
-    const manager = state.bridgeManagerRuntime || null;
-    const stateValue = String(runtime?.modelCatalogState || manager?.cliCatalogState || 'unavailable');
-    const version = String(runtime?.modelCatalogVersion || manager?.cliCatalogVersion || '');
-    if (stateValue === 'ready' && version === '1.251.0') return 'managed · ready · @llmgateway/models 1.251.0';
-    return `managed · unavailable · expected @llmgateway/models 1.251.0`;
+    const truth = managedRuntimeIdentityTruth(diagnostics);
+    if (truth.models.state === 'mismatch') {
+      return `managed · mismatch · @llmgateway/models engine ${truth.models.engine || '—'} · manager ${truth.models.manager || '—'}`;
+    }
+    if (truth.modelState === 'ready' && truth.models.version) return `managed · ready · @llmgateway/models ${truth.models.version}`;
+    return `managed · ${truth.modelState === 'invalid' ? 'invalid' : 'unavailable'} · expected @llmgateway/models ${truth.modelExpectedVersion || '—'}`;
   }
 
   function modelCategoryFidelityDiagnosticText(rows) {

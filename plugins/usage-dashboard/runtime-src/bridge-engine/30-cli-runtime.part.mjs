@@ -77,6 +77,7 @@ async function managedCliDiagnostics() {
   return {
     state:runtime.state,
     version:runtime.version,
+    cliVersion:runtime.version,
     provisioning:runtime.provisioning,
     modelCatalogState:runtime.modelCatalogState,
     modelCatalogVersion:runtime.modelCatalogVersion,

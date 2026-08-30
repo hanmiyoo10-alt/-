@@ -1,153 +1,136 @@
 # SimCore M-series completion status assessment
 
-Date: 2026-08-29 KST
-Status: ASSESSMENT ONLY · NO RUNTIME CHANGE
+Original snapshot: 2026-08-29 KST
+Refreshed: 2026-08-31 KST
+Status: **M2-6 CLOSED · 2.0M MAJOR COMPLETE · M2 ARCHITECTURE FROZEN**
 Classification: ROADMAP / ARCHITECTURE STATUS
 
-## Question
-
-Is the SimCore M-series nearly complete?
-
-## Short answer
-
-Yes for the **high-risk core ownership refactor**, but not yet for the **entire originally envisioned M-series cleanup program**.
-
-Current durable product state is:
+## Administrative correction
 
 ```text
-production = v0.67.0
-validation = LIVE_PASS
-major milestone = 2.0M
-phase = M2
-checkpoint = M2-5
-current product priority = v0.68 Community parent/local alias implementation
+FIX · M_SERIES_STATUS_DOC_DRIFT
 ```
 
-v0.68 is explicitly a QUALITY / CONTRACT mini and does **not** advance the M2 architecture checkpoint.
+The original 2026-08-29 snapshot was correct for its point in time, when M2-5 was the durable checkpoint and an explicit post-M2-5 reconciliation had not yet closed the architecture program.
 
-## Why M2 is late-stage
+Later `main` authority superseded that open-ended assessment.
 
-The original M0 architecture audit identified the highest-pressure ownership areas as:
+Current terminal architecture authority is `docs/SIMCORE_CONTRACTS_V2.md`, which records:
 
 ```text
-Recovery phase split
-Representation ownership
-Edit Reconcile consolidation
-Session responsibility reduction
-Runtime Mirror / representation boundary
-Contracts v2 dependency enforcement
+2.0M Major = COMPLETE
+Durable checkpoint = M2-6
+M2 architecture = FROZEN AT M2-6
+M2-7 = NOT AUTHORIZED
 ```
 
-Those large-risk moves are now substantially complete through the actual M2 checkpoints:
+The old conclusion that the M-series formal roadmap was still open is therefore stale and is replaced by this refreshed status.
+
+## Current completion state
 
 ```text
-M2-1  Recovery split into output-compat + bootstrap-migration behind facade
-M2-2  Representation ownership extraction
-M2-3  Edit Reconcile extraction + runtime identity convergence
-M2-4  Session / Runtime Mirror boundary completion + output-finalize extraction
-M2-5  zero-runtime-caller Recovery compatibility facade retirement
+M0 historical groundwork / architecture audit = DONE
+M1 foundation / contract groundwork            = DONE
+
+M2-1 Recovery split                            = DONE
+M2-2 Representation ownership extraction       = DONE
+M2-3 Edit Reconcile extraction                 = DONE
+M2-4 Session / Runtime Mirror boundary          = DONE
+M2-5 Recovery facade retirement                = DONE
+M2-6 State Reconcile + Kernel inversion         = DONE
+
+M2 architecture                                = FROZEN AT M2-6
+2.0M Major                                     = COMPLETE
+M2-7                                           = NOT AUTHORIZED
 ```
 
-Therefore the most dangerous architecture surgery is no longer ahead of us. The current architecture is much closer to the intended ownership map than it was at M0.
+Completed structural checkpoints as recorded by Contracts v2:
 
-## Important roadmap evolution
+```text
+M2-1  v0.63.56  Recovery split behind compatibility facade
+M2-2  v0.64.0   Representation ownership extraction
+M2-3  v0.65.0   Edit Reconcile extraction + runtime identity convergence
+M2-4  v0.66.0   Session / Runtime Mirror boundary completion
+M2-5  v0.67.0   Recovery compatibility facade retirement
+M2-6  v0.69.0   State Reconcile ownership extraction + Kernel dependency inversion
+```
 
-The original M0 roadmap placed:
+M2-6 is the final currently justified structural checkpoint. The architecture was deliberately frozen after it rather than continuing mechanical extraction by roadmap inertia.
+
+## Roadmap reconciliation
+
+The original M0 roadmap labels must not be read literally as untouched future mega-phases.
+
+Historical plan:
 
 ```text
 M2 = mechanical boundary refactor
 M3 = Representation / Edit consolidation
-M4 = observability boundary cleanup
+M4 = observability / whole-architecture boundary cleanup
 ```
 
-Actual implementation evolved differently.
-
-Representation and Edit consolidation, originally described as an M3 concern, were pulled forward and completed as M2-2 / M2-3, with the surrounding Session / Runtime Mirror work completed in M2-4.
-
-Therefore the old numerical roadmap must not be read literally as:
+Actual implementation pulled important later themes forward:
 
 ```text
-M2-5 now
-→ all of M3 still untouched
-→ all of M4 still untouched
+old M3 representation / edit themes
+→ substantially absorbed by M2-2 and M2-3
+
+old M4-style session / mirror / architecture-boundary / audit themes
+→ substantially absorbed by M2-4 through M2-6
 ```
 
-That would substantially understate completed work.
-
-## What is still structurally unresolved
-
-The remaining architecture debt is lower-risk and more selective, but real:
+Therefore it is incorrect to interpret the current state as:
 
 ```text
-Kernel foundation dependency inversion
-→ possible State extraction / reconciliation seam
-
-Lifecycle cross-domain request composition
-→ possible Request / Turn Pipeline extraction
-
-remaining Session migration / diagnostic receipt residue
-→ only where source evidence justifies movement
-
-runtime-topology fingerprint primitive duplication
-→ deferred dedupe candidate
-
-outer/runtime observability cleanup
-→ structured probes / history observer ownership can still be narrowed
+M2 finished
+→ M3 untouched
+→ M4 untouched
 ```
 
-None of these is currently authorized as a broad refactor.
+The numbered roadmap evolved while the underlying ownership goals were completed.
 
-The v0.68 frozen design explicitly excludes `M2-6 architecture work`, `Kernel/State/Request Pipeline refactor`, and other mega-refactors. That means a later architecture review is still expected before declaring the 2.0M Major fully complete.
+## What "complete" means
 
-## Practical interpretation
+The currently authorized core M-series structural program is complete.
 
-Use this distinction:
+That does **not** mean SimCore can never receive another architecture change. It means future structural work is evidence-gated rather than automatically scheduled as another M checkpoint.
+
+A future M2-7 or equivalent structural checkpoint requires all of:
+
+1. new SimCore-native evidence of a real structural gap;
+2. anomaly classification and preserved evidence;
+3. explicit roadmap/design authorization;
+4. a bounded implementation scope;
+5. normal static/CI/release/live validation workflow.
+
+Deferred ideas such as additional request-pipeline extraction, observability narrowing, topology deduplication, or other cleanup candidates do not keep the M-series open by themselves.
+
+## Current product track
+
+Post-M2 releases are quality, correctness, long-chat, liveness, attribution, performance, and operational maintenance work unless new structural evidence proves otherwise.
+
+In particular, current v0.70.x work is **post-M architecture work**, not evidence that M2 remains unfinished.
 
 ```text
-Core architectural stabilization
-= LATE STAGE / MOST HIGH-RISK MOVES COMPLETE
-
-M2 administrative checkpoint sequence
-= M2-5 CLOSED, possible M2-6+ review remains
-
-Original M-series roadmap as a whole
-= NOT FORMALLY COMPLETE
-
-Broad future rewrite requirement
-= NO
+M-series structural architecture program = COMPLETE
+current product evolution                 = POST-M QUALITY / CORRECTNESS / PERFORMANCE
 ```
 
-The likely remaining work should be evidence-driven cleanup, not another large migration wave unless fresh source audit proves otherwise.
+## Practical answer
 
-## Closure criterion recommendation
-
-Before declaring the M-series / 2.0M architecture program complete, perform one explicit post-M2-5 roadmap reconciliation review that:
-
-1. maps every original M0/M1 target to DONE / RETIRED / DEFERRED / STILL-JUSTIFIED;
-2. decides whether a real M2-6 checkpoint is necessary;
-3. decides whether the old M3/M4 labels should be retired because their core work was absorbed into M2, or preserved for remaining observability/foundation cleanup;
-4. records an explicit `2.0M ARCHITECTURE COMPLETE` criterion rather than inferring completion from version count.
-
-Until that review, the correct status is:
+If asked "how much of the M-series is done?", the correct current interpretation is:
 
 ```text
-M-SERIES CORE = NEAR COMPLETION
-M-SERIES FORMAL ROADMAP = NOT YET CLOSED
+currently authorized core architecture scope = 100% COMPLETE
+formal 2.0M Major architecture program       = COMPLETE
+M2 checkpoint sequence                        = CLOSED AT M2-6
+next structural checkpoint                    = NONE AUTHORIZED
 ```
 
-## Documentation drift noticed during this assessment
+This percentage refers to the **currently authorized structural scope**, not an assertion that no future architecture idea can ever be justified.
 
-Separate non-runtime FIX candidate:
+## Isolation
 
-`docs/SIMCORE_CONTRACTS_V2.md` and `config/simcore-architecture-v2.json` still describe the v0.66 / M2-4 production baseline and v0.67 M2-5 as pending publication/live validation, while authoritative `product-manifest.json` and `CURRENT_DEVELOPMENT.md` now declare v0.67 LIVE_PASS / M2-5.
+This refresh changes documentation only.
 
-Classification:
-
-```text
-POST_06700_ARCHITECTURE_AUTHORITY_PROJECTION_DRIFT
-= FIX
-= NON_RUNTIME
-= SEPARATE FROM v0.68 PRODUCT IMPLEMENTATION
-```
-
-Do not mix that documentation/architecture-authority convergence with the authorized v0.68 runtime patch.
+It creates no runtime, `release-simcore`, `plugins/simcore/latest.js`, `plugins/simcore/install.js`, v0.70.1, R2.9, schema/provider, or deployment authority and requires no release or live-chat validation.

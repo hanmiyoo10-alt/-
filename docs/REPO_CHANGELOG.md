@@ -857,6 +857,13 @@
 - Event ID: `7a2ad89d7d7810d3f9444ab163ce483d2d0ea490b7dbc8a53519cd62ee1791e4`
 <!-- canonical-main-doc-promoted:7a2ad89d7d7810d3f9444ab163ce483d2d0ea490b7dbc8a53519cd62ee1791e4 -->
 
+### 2026-08-30 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `9e7b2147ab85c709226c85b06215feeb67ac75c4423f00045735139fe20f9d8c`
+<!-- canonical-main-doc-promoted:9e7b2147ab85c709226c85b06215feeb67ac75c4423f00045735139fe20f9d8c -->
+
 ### 2026-08-30 — Merge pull request #890 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.90
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

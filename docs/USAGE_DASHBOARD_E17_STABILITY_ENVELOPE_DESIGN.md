@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E17 Stability Envelope
 
-Status: **IMPLEMENTED — VALIDATED BYTE-NEUTRAL MAINTENANCE**
+Status: **IMPLEMENTED — VALIDATED / MERGED BYTE-NEUTRAL MAINTENANCE**
 
 Tracking: #968
 
@@ -76,9 +76,9 @@ E17 adds no:
 
 UNKNOWN remains UNKNOWN.
 
-## Validation receipt
+## Validation and merge receipt
 
-PR #971 validation run `33310175634` completed GREEN on the E17 implementation candidate before this receipt-only documentation update.
+PR #971 implementation validation run `33310175634` completed GREEN and recorded the detailed registry receipt:
 
 - full registry: `TEST_REGISTRY_GREEN:119`;
 - current release: Product `3.0.0-alpha.5.93` / Engine `1.6.30` / Manager `1.3.4` / contracts `1/1`;
@@ -90,14 +90,19 @@ PR #971 validation run `33310175634` completed GREEN on the E17 implementation c
 - P59 current 5.93 regression: GREEN;
 - historical P55-P58 applicability: correctly scoped/SKIP on 5.93.
 
+After the validation receipt was added to this document, final PR-head validation run `33310282938` also completed SUCCESS.
+
+- final validated PR head: `bd8de42b6df653c14c0e32c0682338fe23440815`;
+- PR #971 merge: expected-head bound;
+- main merge SHA: `4ccc00a7983e5362a153821ce8a12f0c68cca68c`;
+- post-merge `release-usage-dashboard` SHA: unchanged at `a506185701025ac167b2550aaff0def04ed322e2`.
+
 The two implementation-feedback REDs before the GREEN run were control/test-contract feedback only:
 
 1. the first scanner draft over-matched non-authoritative policy/test fixtures; it was narrowed to direct release/manifest assertions without weakening historical scope rules;
 2. the existing E8 regression still assumed a lock comment alone granted a historical exemption; it was updated so only an exact release-version guard plus lock can pass.
 
 Neither feedback item changed runtime artifacts or E16 authority semantics.
-
-A final CI run after this documentation receipt is still required before merge.
 
 ## Regression contract
 
@@ -111,7 +116,7 @@ A final CI run after this documentation receipt is still required before merge.
 - candidate-source denial for release-control helpers;
 - existing assistant PR-write boundary and no new merge writer.
 
-Full Usage Dashboard registry must remain GREEN through the final merge candidate.
+The final merged implementation passed the full Usage Dashboard validation path before merge.
 
 ## Physical boundary
 

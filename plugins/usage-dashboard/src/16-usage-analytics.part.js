@@ -149,6 +149,84 @@
     };
   }
 
+
+  function costDriverMeaningfulName(value) {
+    const name = value === null || value === undefined ? '' : String(value).trim();
+    return !name || name.toLowerCase() === 'unknown' ? '' : name;
+  }
+
+  function costDriverCodePointCompare(left, right) {
+    const a = Array.from(String(left || ''));
+    const b = Array.from(String(right || ''));
+    const length = Math.max(a.length, b.length);
+    for (let index = 0; index < length; index += 1) {
+      if (index >= a.length) return -1;
+      if (index >= b.length) return 1;
+      const ac = a[index].codePointAt(0);
+      const bc = b[index].codePointAt(0);
+      if (ac !== bc) return ac - bc;
+    }
+    return 0;
+  }
+
+  function costDriverLeader(rows, totalCost) {
+    const source = Array.isArray(rows) ? rows : [];
+    if (!source.length) return Object.freeze({name:null,cost:null,share:null,state:'source-unavailable',shareState:'total-unknown'});
+    let positiveCostRows = 0;
+    const candidates = [];
+    for (const row of source) {
+      const cost = typeof row?.cost === 'number' && Number.isFinite(row.cost) ? Number(row.cost) : null;
+      if (!(cost > 0)) continue;
+      positiveCostRows += 1;
+      const name = costDriverMeaningfulName(row?.name);
+      if (!name) continue;
+      candidates.push({name,cost});
+    }
+    if (!candidates.length) {
+      return Object.freeze({
+        name:null,
+        cost:null,
+        share:null,
+        state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost',
+        shareState:'total-unknown',
+      });
+    }
+    const ranked = candidates.slice().sort((left, right) => {
+      if (right.cost !== left.cost) return right.cost - left.cost;
+      return costDriverCodePointCompare(left.name, right.name);
+    });
+    const leader = ranked[0];
+    const total = typeof totalCost === 'number' && Number.isFinite(totalCost) && totalCost > 0 ? Number(totalCost) : null;
+    const share = total !== null && total >= leader.cost ? leader.cost / total * 100 : null;
+    return Object.freeze({
+      name:leader.name,
+      cost:leader.cost,
+      share,
+      state:'ok',
+      shareState:share === null ? 'total-unknown' : 'ok',
+    });
+  }
+
+  function compactCostDriverTruth(window) {
+    const value = window && typeof window === 'object' ? window : null;
+    const totalCost = value?.totalCost;
+    return Object.freeze({
+      model:costDriverLeader(value?.models, totalCost),
+      provider:costDriverLeader(value?.providers, totalCost),
+    });
+  }
+
+  function costDriverDiagnosticText(scope, window) {
+    const scopeKey = ['all','devpass','credits'].includes(String(scope)) ? String(scope) : 'all';
+    const truth = compactCostDriverTruth(window);
+    const format = row => {
+      if (!row?.name) return `— (${row?.state || 'source-unavailable'})`;
+      const share = row.share === null ? ` · share — (${row.shareState})` : ` · share ${Number(row.share).toFixed(1)}%`;
+      return `${row.name} $${Number(row.cost).toFixed(4)}${share}`;
+    };
+    return `Cost drivers: scope ${scopeKey} · window 24h · model ${format(truth.model)} · provider ${format(truth.provider)} · fidelity positive-cost-only`;
+  }
+
   function normalize(payload) {
     const r = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     if (!r || typeof r !== 'object') throw new Error('snapshot 형식이 잘못됐어.');

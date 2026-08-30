@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.93
+//@version 3.0.0-alpha.5.94
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.93';
+  const VERSION = '3.0.0-alpha.5.94';
   const RELEASE_NOTES = Object.freeze({
-    title: "Truthful DevPass Cycle / Source-Window Summary",
+    title: "Compact Authoritative 24h Cost Drivers",
     highlights: Object.freeze([
-    "DevPass 7d/30d 기존 activity source에서 요청·토큰·Cached input share·Peak day를 source-backed 값으로 요약",
-    "billing cycle이 KST 일 경계와 source coverage로 정확히 증명될 때만 ‘이번 사이클’을 쓰고 아니면 최근 30일/7일로 fail-closed",
-    "missing daily scalar는 0으로 메우지 않고 UNKNOWN으로 보존하며 Credits 데이터와 기존 월간 예상 사용량 의미를 섞지 않음",
-    "E16 live-proof 문서 상태 자동화는 선행 maintenance #962로 main baseline에 고정되어 release authority와 분리"
+    "선택한 Analytics 범위의 기존 24h model/provider rows에서 양수 observed cost만 사용해 Top Model/Provider 비용 주도를 계산",
+    "0·missing·invalid cost는 현재 source fidelity상 구분 불가하므로 leader로 만들지 않고 UNKNOWN으로 fail-closed",
+    "동률은 source display name code-point 순으로 결정하고 기존 analytics rows를 mutate/re-sort하지 않음",
+    "Engine 1.6.30과 CLI 1.10.0은 그대로 유지하며 새 network/CLI/timer/persist owner를 추가하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.93 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "DevPass 요약 제목이 Diagnostics의 cycle summary mode와 정확히 일치하는지 확인",
-    "요청·토큰·Cached input share·Peak day가 Diagnostics와 일치하고 source가 부족한 값은 —로 남는지 확인",
-    "기존 Billing Cycle·Premium·PAYG와 월간 예상 사용량이 그대로이며 Credits 혼합이나 추가 CLI/network/refresh가 없는지 확인"
+    "업데이트 후 Product 5.94 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "Analytics의 24h 비용 주도 Top Model/Provider가 같은 scope의 상세 rows 중 양수 cost leader와 일치하는지 확인",
+    "share가 보이면 같은 24h total cost 기준으로 일치하고 denominator가 불명확하면 —로 남는지 확인",
+    "Diagnostics Cost drivers 줄이 UI와 일치하고 기존 5.93 cycle summary·Billing Cycle·Premium·PAYG가 그대로인지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';

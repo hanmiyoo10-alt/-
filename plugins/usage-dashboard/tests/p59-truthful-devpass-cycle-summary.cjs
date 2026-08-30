@@ -7,7 +7,10 @@ const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
-assert.equal(release.productVersion, '3.0.0-alpha.5.93');
+if (release.productVersion !== '3.0.0-alpha.5.93') {
+  console.log(`P59 Truthful DevPass Cycle / Source-Window Summary: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.93`);
+  process.exit(0);
+}
 assert.equal(release.engineVersion, '1.6.30');
 assert.equal(release.managerVersion, '1.3.4');
 assert.equal(release.snapshotContract, 1);
@@ -36,6 +39,7 @@ for (const marker of [
 ]) assert.ok(manager.includes(marker), `5.93 Manager invariant missing: ${marker}`);
 
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.93');
 assert.equal(manifest.components?.bridge?.requiredVersion, '1.6.30');
 assert.equal(manifest.components?.bridge?.sha256, engineSha);

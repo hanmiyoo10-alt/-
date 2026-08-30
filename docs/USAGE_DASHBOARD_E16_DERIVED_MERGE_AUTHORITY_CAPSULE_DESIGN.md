@@ -1,10 +1,29 @@
 # Local Usage Dashboard — E16 Derived Merge-Authority Capsule Design
 
-Status: **IMPLEMENTED — LIVE PRODUCT PROOF PENDING**
+Status: **IMPLEMENTED — LIVE BASELINE PROVEN / GENERATED STATUS ENFORCED**
 
 Tracking: #906
 
 Scope: `plugins/usage-dashboard/` release-control only.
+
+<!-- E16_GENERATED_STATUS:BEGIN -->
+## Generated implementation / live-proof status
+
+> Machine-owned block. Regenerate from the local E16 documentation contract; do not hand-edit its contents.
+
+- schema: `1`
+- implementation: `live-baseline-proven`
+- authority helper: `plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs` (unchanged)
+- authority contract: `plugins/usage-dashboard/tests/e16-derived-merge-authority-capsule-contract.cjs`
+- documentation parity: `plugins/usage-dashboard/tests/e16-documentation-status-hygiene-contract.cjs`
+- durable release generation: `E13`
+- E16 durable generation: `no`
+- documentation mode: `generated-parity`
+- evidence mode: `immutable-release-receipts`
+- live evidence history: `#906`
+- live proof releases: `3.0.0-alpha.5.91, 3.0.0-alpha.5.92`
+- live proof requests: `#909, #923`
+<!-- E16_GENERATED_STATUS:END -->
 
 ## Goal
 
@@ -159,6 +178,8 @@ The E16 contract proves:
 - E13 remains durable generation and E16 remains rejected by `release_generation` parsing;
 - runtime artifacts are unchanged;
 - full Usage Dashboard registry remains GREEN.
+
+The generated documentation-status parity contract additionally proves the E16 live-proof prose cannot drift behind the immutable 5.91/5.92 evidence without CI detecting it. This automation is pure/local and does not mutate historical capsules or widen merge authority.
 
 ## First CI feedback
 

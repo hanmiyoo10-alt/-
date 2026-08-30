@@ -1,6 +1,6 @@
 # Local Usage Dashboard — E16 Derived Merge-Authority Capsule Design
 
-Status: **IMPLEMENTED — CI PENDING / LIVE PRODUCT PROOF PENDING**
+Status: **IMPLEMENTED — LIVE PRODUCT PROOF PENDING**
 
 Tracking: #906
 
@@ -166,7 +166,9 @@ The first PR validation run reached the new E16 contract and failed because the 
 
 That expectation contradicted the simplification goal: the workflow correctly delegated canonical marker generation to the pure helper. The regression was repaired to require `markerForCapsule()` and `formatMergeCapsule()` reuse and to reject a duplicated workflow-local marker format.
 
-No production/runtime code was implicated by that failure.
+The next validation reached the same E16 contract and exposed a second presentation-only brittleness: an exact lowercase natural-language phrase in this document was treated as executable contract. That check was reduced to stable structural tokens and implementation symbols rather than prose casing.
+
+Neither feedback item implicated production/runtime code or artifact parity.
 
 ## Expected result
 

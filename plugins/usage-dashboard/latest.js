@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.91
+//@version 3.0.0-alpha.5.92
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.91';
+  const VERSION = '3.0.0-alpha.5.92';
   const RELEASE_NOTES = Object.freeze({
-    title: "DevPass Weekly Premium Allowance Truth Card",
+    title: "PAYG + Auto-Reload Read-Only Fidelity",
     highlights: Object.freeze([
-    "DevPass 탭에 source-backed Premium 주간 한도 truth card 추가",
-    "explicit 사용·한도 값이 있을 때만 남음·사용률을 계산하고 missing/invalid 값은 —로 유지",
-    "주의·소진은 80%/100% 로컬 표시 기준만 사용하며 PAYG funding 상태나 요청별 결제 출처를 추론하지 않음"
+    "DevPass PAYG 상태를 true/false/UNKNOWN 그대로 보존해 missing 값을 OFF로 오표시하지 않음",
+    "기존 인증 상태 캡처가 제공하는 Auto-Reload 상태·threshold·amount를 읽기 전용으로 표시",
+    "Overflow balance는 explicit PAYG + Regular Credits에서만 계정 수준 상태를 계산하며 요청별 결제 출처는 추론하지 않음"
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.91 · Engine 1.6.28 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "Premium 카드의 사용·한도·남음·사용률이 Diagnostics의 Premium allowance 줄과 일치하는지 확인",
-    "리셋은 explicit source가 있을 때만 표시되고 UNKNOWN 값은 —로 남는지 확인",
-    "기존 floating Premium widget · Reset Pass/PAYG · Billing Cycle이 그대로이고 추가 refresh/CLI/network 작업이 없는지 확인"
+    "업데이트 후 Product 5.92 · Engine 1.6.29 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
+    "PAYG overflow와 Auto-Reload의 ON/OFF/—가 Diagnostics의 PAYG status 줄과 일치하는지 확인",
+    "Regular Credits·Reload threshold·Reload amount는 source가 없으면 —이고 explicit 0은 0으로 유지되는지 확인",
+    "기존 Reset Pass와 Premium 주간 한도 카드가 그대로이며 추가 refresh/CLI/network 작업이나 결제 조작 UI가 없는지 확인"
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.28';
+  const REQUIRED_BRIDGE_VERSION = '1.6.29';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -2211,7 +2211,10 @@ async function importLegacyTodayBaselines() {
         pendingTier:ds.pendingTier === null || ds.pendingTier === undefined ? '' : String(ds.pendingTier),
         serviceTier:String(ds.serviceTier || 'default'),
         routingStrategy:String(ds.routingStrategy || 'auto'),
-        paygEnabled:ds.paygEnabled === true,
+        paygEnabled:typeof ds.paygEnabled === 'boolean' ? ds.paygEnabled : null,
+        autoTopUpEnabled:typeof ds.autoTopUpEnabled === 'boolean' ? ds.autoTopUpEnabled : null,
+        autoTopUpThreshold:num(ds.autoTopUpThreshold) ? Number(ds.autoTopUpThreshold) : null,
+        autoTopUpAmount:num(ds.autoTopUpAmount) ? Number(ds.autoTopUpAmount) : null,
         hasPersonalOrg:typeof ds.hasPersonalOrg === 'boolean' ? ds.hasPersonalOrg : null,
         hasBillingHistory:typeof ds.hasBillingHistory === 'boolean' ? ds.hasBillingHistory : null,
         resetPasses:num(ds.resetPasses) ? Number(ds.resetPasses) : null,
@@ -2359,6 +2362,55 @@ async function importLegacyTodayBaselines() {
     const valueText = value => value === null ? '—' : String(Number(value));
     const percentText = allowance.percentUsed === null ? '—' : `${Number(allowance.percentUsed).toFixed(1)}%`;
     return `Premium allowance: used ${valueText(allowance.used)} · limit ${valueText(allowance.limit)} · remaining ${valueText(allowance.remaining)} · ${percentText} · reset ${allowance.resetAt ? String(allowance.resetAt) : '—'} · state ${allowance.state}`;
+  }
+
+  function paygAccountTruth(account) {
+    const source = account && typeof account === 'object' ? account : null;
+    const exactBoolean = value => typeof value === 'boolean' ? value : null;
+    const exactNumber = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
+    const paygEnabled = exactBoolean(source?.paygEnabled);
+    const regularCredits = exactNumber(source?.regularCredits);
+    const autoTopUpEnabled = exactBoolean(source?.autoTopUpEnabled);
+    const autoTopUpThreshold = exactNumber(source?.autoTopUpThreshold);
+    const autoTopUpAmount = exactNumber(source?.autoTopUpAmount);
+
+    let balanceState = 'unknown';
+    if (paygEnabled !== null && regularCredits !== null && regularCredits >= 0) {
+      if (paygEnabled && regularCredits > 0) balanceState = 'available';
+      else if (paygEnabled && regularCredits === 0) balanceState = 'empty';
+      else if (!paygEnabled && regularCredits > 0) balanceState = 'held-off';
+      else if (!paygEnabled && regularCredits === 0) balanceState = 'off';
+    }
+
+    const booleanState = value => value === true ? 'on' : value === false ? 'off' : 'unknown';
+    const booleanLabel = value => value === true ? '켜짐' : value === false ? '꺼짐' : '—';
+    const balanceLabels = {
+      available:'사용 가능',
+      empty:'잔액 없음',
+      'held-off':'보유 중 · PAYG OFF',
+      off:'PAYG OFF',
+      unknown:'—',
+    };
+
+    return Object.freeze({
+      paygEnabled,
+      paygState:booleanState(paygEnabled),
+      paygLabel:booleanLabel(paygEnabled),
+      regularCredits,
+      balanceState,
+      balanceStateLabel:balanceLabels[balanceState] || '—',
+      autoTopUpEnabled,
+      autoTopUpState:booleanState(autoTopUpEnabled),
+      autoTopUpLabel:booleanLabel(autoTopUpEnabled),
+      autoTopUpThreshold,
+      autoTopUpAmount,
+    });
+  }
+
+  function paygAccountDiagnosticText(account) {
+    const truth = paygAccountTruth(account);
+    const scalar = value => value === null ? '—' : String(value);
+    return `PAYG status: overflow ${truth.paygState} · credits ${scalar(truth.regularCredits)} · balance-state ${truth.balanceState} · auto-reload ${truth.autoTopUpState} · threshold ${scalar(truth.autoTopUpThreshold)} · amount ${scalar(truth.autoTopUpAmount)}`;
   }
 
   async function fetchSnapshot() {
@@ -3024,7 +3076,8 @@ async function importLegacyTodayBaselines() {
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
-      `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)} · PAYG ${diagAccount?.paygEnabled ? 'on' : 'off'} · regular credits ${money(diagAccount?.regularCredits)}`,
+      paygAccountDiagnosticText(diagAccount),
+      `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
       `Runtime state: ${performanceRuntime.runtimeState} · transitions ${Number(performanceRuntime.runtimeTransitions || 0)} · reason ${state.runtimeStatus?.reason || '—'} · healthy ${performanceRuntime.lastHealthySyncAt ? age(performanceRuntime.lastHealthySyncAt) : '—'} · degraded ${performanceRuntime.degradedSince ? age(performanceRuntime.degradedSince) : 'none'}`,
@@ -3182,6 +3235,7 @@ function todayOverviewMetrics(d) {
     const systemHealthText = `${String(lifecycleMode || 'off').toUpperCase()} · Engine ${bridgeDiag.version ? `v${bridgeDiag.version}` : '—'} · Manager ${productRuntime.managerVersion ? `v${productRuntime.managerVersion}` : '—'} · ${state.lastSyncAt ? age(state.lastSyncAt) : '대기'}`;
     const devpassAccount = d.devpassAccount && typeof d.devpassAccount === 'object' ? d.devpassAccount : null;
     const premiumAllowance = premiumAllowanceTruth(d.weekly);
+    const paygTruth = paygAccountTruth(devpassAccount);
     const dashboardView = ['overview','devpass','credits','analytics','settings'].includes(String(state.dashboardView)) ? String(state.dashboardView) : 'overview';
     const creditsOrganizations = (Array.isArray(d.organizations) ? d.organizations : []).filter(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
@@ -3239,13 +3293,17 @@ function todayOverviewMetrics(d) {
             <div class="mini"><span>Personal org</span><b>${devpassAccount.hasPersonalOrg === null ? '—' : devpassAccount.hasPersonalOrg ? '있음' : '없음'}</b></div>
             <div class="mini"><span>Billing history</span><b>${devpassAccount.hasBillingHistory === null ? '—' : devpassAccount.hasBillingHistory ? '있음' : '없음'}</b></div>
           </div></div>
-          <div class="usage-detail-box"><div class="recent-head"><h3>Reset Pass · PAYG</h3><span>${devpassAccount.paygEnabled ? 'PAYG ON' : 'PAYG OFF'}</span></div><div class="minis">
+          <div class="usage-detail-box"><div class="recent-head"><h3>Reset Pass · PAYG</h3><span>${paygTruth.paygState === 'on' ? 'PAYG ON' : paygTruth.paygState === 'off' ? 'PAYG OFF' : 'PAYG —'}</span></div><div class="minis">
             <div class="mini purple"><span>총 사용 가능</span><b>${num(d.weekly?.resetPasses) ? `${Number(d.weekly.resetPasses)}장` : 'API 미제공'}</b></div>
             <div class="mini purple"><span>구매/보유 패스</span><b>${num(devpassAccount.resetPasses) ? `${Number(devpassAccount.resetPasses)}장` : '—'}</b></div>
             <div class="mini purple"><span>기본 패스 남음</span><b>${esc(devpassIncludedPassText)}</b></div>
             <div class="mini"><span>Reset Pass 가격</span><b>${money(devpassAccount.resetPassPrice)}</b></div>
-            <div class="mini"><span>PAYG overflow</span><b>${devpassAccount.paygEnabled ? '켜짐' : '꺼짐'}</b></div>
-            <div class="mini cyan"><span>Regular Credits</span><b>${money(devpassAccount.regularCredits)}</b></div>
+            <div class="mini"><span>PAYG overflow</span><b>${paygTruth.paygLabel}</b></div>
+            <div class="mini cyan"><span>Regular Credits</span><b>${paygTruth.regularCredits === null ? '—' : money(paygTruth.regularCredits)}</b></div>
+            <div class="mini"><span>Overflow balance</span><b>${esc(paygTruth.balanceStateLabel)}</b></div>
+            <div class="mini"><span>Auto-Reload</span><b>${paygTruth.autoTopUpLabel}</b></div>
+            <div class="mini"><span>Reload threshold</span><b>${paygTruth.autoTopUpThreshold === null ? '—' : money(paygTruth.autoTopUpThreshold)}</b></div>
+            <div class="mini"><span>Reload amount</span><b>${paygTruth.autoTopUpAmount === null ? '—' : money(paygTruth.autoTopUpAmount)}</b></div>
           </div></div>
           <div class="usage-detail-box premium-allowance-card"><div class="recent-head"><h3>Premium 주간 한도</h3><span>${esc(premiumAllowance.stateLabel)}</span></div><div class="minis">
             <div class="mini purple"><span>사용</span><b>${premiumAllowance.used === null ? '—' : money(premiumAllowance.used)}</b></div>

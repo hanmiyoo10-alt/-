@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "authority": "SHADOW_ONLY",
+  "intentId": "simcore-v0.70.0-intent-01",
+  "releaseId": "simcore-v0.70.0-new-01",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.70.0-intent-01.json",
+  "derivedSpec": {
+    "schemaVersion": 1,
+    "releaseId": "simcore-v0.70.0-new-01",
+    "product": "SimCore",
+    "version": "0.70.0",
+    "releaseName": "Current Task Primacy Guard",
+    "releaseMode": "NEW_VERSION",
+    "candidateCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+    "expectedProductionCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+    "candidateReleaseBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+    "primaryGoalId": "07000_CURRENT_TASK_PRIMACY_GUARD",
+    "changeClass": "RUNTIME_CORRECTION",
+    "evidenceRefs": [
+      "docs/SIMCORE_07000_PARTIAL_PREVIOUS_TURN_REPLAY_PROMPT_SCOPE_GAP_ROOT_CAUSE_2026-08-30.md",
+      "docs/SIMCORE_07000_CURRENT_TASK_PRIMACY_GUARD_REBASED_DESIGN_2026-08-30.md",
+      "docs/SIMCORE_07000_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+      "docs/SIMCORE_07000_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+      "docs/SIMCORE_07000_CANDIDATE_PR_FAILURE_01_VALIDATION_VERSION_BRIDGE_2026-08-30.md"
+    ],
+    "liveGate": {
+      "required": true,
+      "scenarioId": "07000_CURRENT_TASK_PRIMACY_GUARD_REAL_LONG_CHAT",
+      "closeAuthority": "HUMAN_EVIDENCE"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Status
 
-**E18 IMPLEMENTED — VALIDATION IN PROGRESS / BYTE-NEUTRAL MAINTENANCE**
+**E18 IMPLEMENTED — VALIDATED / MERGE READY BYTE-NEUTRAL MAINTENANCE**
 
 E18 is a design label for a byte-neutral release-control maintenance envelope. It is **not** a new durable release generation, authority layer, writer, queue, or merge/promotion controller.
 
@@ -201,6 +201,24 @@ Implementation validation must prove at minimum:
 
 No PocketRisu physical check is required for E18-only maintenance because it must not alter shipped runtime bytes.
 
+## Validation receipt
+
+PR #981 implementation validation on head `45b7ec280eb05e0eae214f1acc0dafb70b575109` completed SUCCESS in Usage Dashboard Candidate Validation run `33315510093`.
+
+The run proved:
+
+- `E18 Semantic Impact Smoke: OK`;
+- `TEST_REGISTRY_GREEN:121`;
+- P60 cost-driver behavior GREEN;
+- materializer idempotency GREEN;
+- Product `3.0.0-alpha.5.94` / Engine `1.6.30` / Manager `1.3.4` / contracts `1/1` unchanged;
+- Engine source parity SHA-256 remained `035aa5d6535edd357df3390b7cd22acff2dec298a79e86d2fe2b4b0d3f2b4228`;
+- E15/E16/E17 contracts remained GREEN.
+
+The only preceding RED was an existing `candidate-stage-transaction-contract.cjs` assertion that still required the retired hard-coded `run_behavior_smoke --repeat 3/1` presentation. It was migrated to assert the E18 derived-impact smoke decision without weakening unrelated E7/E14/CAS/writer/preflight boundaries.
+
+The final documentation-only status commit must also receive the normal PR validation before merge.
+
 ## Success metric
 
 The next legitimate product release should demonstrate:
@@ -216,7 +234,7 @@ The ideal E18 outcome is fewer repair cycles with equal or stronger truthfulness
 
 ## Verdict
 
-**E17 remains sealed and successful. E18 is implemented as a bounded semantic-validation + derived-impact smoke maintenance envelope, pending full CI validation.**
+**E17 remains sealed and successful. E18 is implemented and full-registry validated as a bounded semantic-validation + derived-impact smoke maintenance envelope, pending final-head CI and merge.**
 
 If a future change requires a new writer, durable generation, queue, state machine, or merge authority, that proposal is outside E18 and must be reduced or separately justified.
 

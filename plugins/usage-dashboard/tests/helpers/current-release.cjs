@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
+const {assertReleaseSpec} = require('../../tools/release_spec_contract_e19.cjs');
 
 const ROOT = process.cwd();
 const RELEASES_ROOT = path.join(ROOT, '.github/usage-dashboard/releases');
@@ -36,12 +37,7 @@ function discoverSpecPath() {
 
 function loadCurrentRelease() {
   const specPath = discoverSpecPath();
-  const spec = readJson(specPath);
-  for (const key of [
-    'productVersion', 'engineVersion', 'managerVersion', 'snapshotContract',
-    'recentRequestContract', 'releaseTitle', 'callerWorkflow', 'sharedWorkflow',
-  ]) assert.ok(Object.hasOwn(spec, key), `release spec missing ${key}`);
-
+  const spec = assertReleaseSpec(readJson(specPath), path.relative(ROOT, specPath));
   return Object.freeze({
     ...spec,
     specPath:path.relative(ROOT, specPath),
@@ -87,6 +83,8 @@ function assertCurrentReleaseArtifacts(release = loadCurrentRelease()) {
   assert.ok(manager.includes(`const BUNDLED_ENGINE_VERSION = '${release.engineVersion}';`));
   assert.ok(fs.existsSync(path.join(ROOT, release.callerWorkflow)));
   assert.ok(fs.existsSync(path.join(ROOT, release.sharedWorkflow)));
+  assert.ok(fs.existsSync(path.join(ROOT, release.validatorWorkflow)));
+  assert.ok(fs.existsSync(path.join(ROOT, release.publisherWorkflow)));
   return release;
 }
 

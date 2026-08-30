@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.70.0",
-  "release_name": "Current Task Primacy Guard",
+  "production_version": "0.70.1",
+  "release_name": "Cold First-Turn Tail Attribution",
   "release_branch": "release-simcore",
-  "release_commit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
-  "release_blob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+  "release_commit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "release_blob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_IMPLEMENTATION",
+  "current_priority": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -32,7 +32,7 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "validation_status": "LIVE_PASS",
+  "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
   "major_update_checkpoint": "M2-6",

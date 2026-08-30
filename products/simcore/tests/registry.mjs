@@ -11,7 +11,7 @@ export const registry = Object.freeze([
   { id: 'frame', module: './suites/frame.test.mjs', fixtureDir: 'frame', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'broadcast-closure', module: './suites/broadcast-closure.test.mjs', fixtureDir: 'broadcast-closure', coverage: 'HYBRID_TRANSITIONAL', required: true, goldenGate: true },
   { id: 'diagnostic-copy', module: './suites/diagnostic-copy.test.mjs', fixtureDir: 'diagnostic-copy', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity-v06900.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'reload-cache-continuity', module: './suites/reload-cache-continuity-v06901.test.mjs', fixtureDir: 'reload-cache-continuity', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'operator-release-card', module: './suites/operator-release-card-v06900.test.mjs', fixtureDir: 'operator-release-card', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'host-local-telemetry', module: './suites/host-local-telemetry-v06900.test.mjs', fixtureDir: 'host-local-telemetry', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'bounded-telemetry-capsule', module: './suites/bounded-telemetry-capsule-v06900.test.mjs', fixtureDir: 'bounded-telemetry-capsule', coverage: 'EXECUTABLE', required: true, goldenGate: true },

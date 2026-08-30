@@ -1,10 +1,10 @@
-# Local Usage Dashboard — Post-5.93 Stability / Simplification / Automation Next-Cycle Design
+# Local Usage Dashboard — E17 Stability Envelope Design
 
-Status: **DESIGN READY — IMPLEMENTATION GATED BY 5.93 PHYSICAL ACCEPTANCE**
+Status: **E17 DESIGN READY — NON-AUTHORITY OPTIMIZATION ENVELOPE / IMPLEMENTATION GATED**
 
 Tracking: #968
 
-Scope: `plugins/usage-dashboard/` release-control / regression / documentation maintenance plus next-version sequencing.
+Scope: `plugins/usage-dashboard/` release-control, regression, documentation, and next-version sequencing.
 
 ## Fresh production authority
 
@@ -21,129 +21,214 @@ At design time `release-usage-dashboard` declares:
 
 Repository/static proof does not substitute for PocketRisu acceptance.
 
-## Decision
+## E17 definition
 
-The next development cycle keeps 5.93 as the behavioral baseline and prioritizes:
+E17 is **not** a new durable release generation and **not** a new authority layer.
 
-1. **stability** — remove avoidable release/test presentation failures without weakening fail-closed gates;
-2. **simplification** — reduce duplicated mutable facts and distinguish baseline proof from exhaustive operational history;
-3. **bounded automation** — generate canonical local artifacts from existing authority rather than introducing new writers or state machines.
+`E17` is the design label for a bounded stability envelope around the already-proven E13/E14/E15/E9/E11/E16 graph.
 
-Control-plane/test/documentation maintenance is byte-neutral and must not by itself create a Product or Engine version bump.
+Its job is to make the existing release path:
 
-A future actual product version is activated only after 5.93 physical PASS and selection of one genuine runtime/user-facing primary goal.
+1. more stable — fewer avoidable presentation/test failures;
+2. simpler — fewer duplicated mutable facts and fewer manual translations between existing authorities;
+3. more automatic — canonical local derivation before writes, without adding new state machines or writers.
 
-## Layer A — byte-neutral maintenance
+The authority graph remains:
 
-### A1. Canonical E15 PR body at first write
+`E13 durable request -> E14 candidate ancestry -> E15 canonical handoff -> E9 exact-SHA validation -> E11 fresh-main readiness -> E16 derived merge capsule -> assistant fresh reread -> expected-head merge -> exact-byte promotion -> separate physical acceptance`
 
-Observed 5.93 friction: the initial deterministic PR body omitted the canonical E15 locator block, and E9 correctly failed before product validation with `E15_PR_LOCATOR_INVALID:candidate-authority:count=0`.
+E17 adds no arrow to that graph.
+
+## Hard invariants
+
+E17 must not add:
+
+- `release_generation: E17`;
+- a second merge authority;
+- auto-merge;
+- a new promotion authority;
+- a new workflow solely to own state;
+- a queue, timer, poller, scheduled bot, or synchronization loop;
+- mutable PR/capsule SHA synchronization;
+- network-backed documentation mutation;
+- production writer authority;
+- physical verification as repository authority.
+
+E16 remains the latest merge-control layer and stays derived/read-only.
+
+## E17 workstreams
+
+### E17-A — canonical first-write handoff automation
+
+Observed 5.93 friction: the initial deterministic release PR body omitted the canonical E15 locator block and E9 correctly failed with `E15_PR_LOCATOR_INVALID:candidate-authority:count=0` before product validation.
 
 Design:
 
-- normal PR creation consumes the existing canonical `renderStablePrBody()` output;
-- `validateStablePrBody()` must succeed before the write;
-- hand-copied locator strings are not the normal path;
-- body repair is recovery-only;
-- no body-sync writer, poller, timer, queue, mutable candidate/source/main SHA prose, or new authority.
+- the normal release PR creation path consumes `release_handoff_e15.cjs::renderStablePrBody()`;
+- `validateStablePrBody()` must succeed locally before a PR create/update call;
+- locator strings are not hand-reproduced in the normal path;
+- body repair remains recovery-only for historical/noncanonical state;
+- no mutable candidate/source/main SHA prose is inserted into the body.
 
-Success condition: the next real product release reaches E9 exact-SHA validation without a body-only repair cycle.
+Acceptance:
 
-### A2. Historical regression scope contract
+- the next real release creates the canonical PR body on first write;
+- every E15 locator appears exactly once;
+- E9 identity binding reaches exact-SHA validation without a body-only repair cycle.
 
-Observed 5.93 friction: P58 was a 5.92 historical regression whose fixed release tuple was not scoped with the established historical-version pattern, so current 5.93 preflight correctly failed closed.
+### E17-B — historical regression scope hygiene
+
+Observed 5.93 friction: P58 was a valid 5.92 historical regression but lacked the established version-scoped applicability marker, so 5.93 preflight correctly failed closed on a stale current-version assertion.
 
 Design:
 
-- every historical fixed-version regression declares explicit target-version scope;
-- registry hygiene rejects fixed historical Product/Engine assertions that lack scope;
-- version scoping only controls applicability and must not weaken the regression body;
-- fresh release contract remains current-version authority.
+- every fixed historical Product/Engine regression declares explicit target-version scope using the existing registry pattern;
+- registry hygiene rejects fixed historical tuple assertions that lack explicit scope;
+- scoping controls applicability only and must not weaken the historical regression body;
+- the fresh release contract/manifest remains current-version authority.
 
-Success condition: historical regressions keep their intended coverage but cannot masquerade as current release tuple authority.
+Acceptance:
 
-### A3. E16 proof-status semantics
+- intended historical versions still execute the full regression;
+- future releases cannot receive false current-version RED from an unscoped old tuple.
 
-E16 live behavior is proven across 5.91, 5.92, and 5.93, while the generated documentation block lists 5.91/5.92 under `live proof releases`.
+### E17-C — E16 proof-status semantic stabilization
+
+E16 live behavior is proven across 5.91, 5.92, and 5.93. Its generated status currently lists 5.91/5.92 as `live proof releases`, which can look like an exhaustive history even though immutable receipts own later operational evidence.
 
 Design:
 
 - keep `release_merge_capsule_e16.cjs` authority semantics unchanged;
-- rename/document that static list as **baseline proof releases**, not exhaustive current operational history;
-- immutable E16/request/release receipts remain the owner of later release history;
-- renderer remains pure/local and CI-parity enforced;
-- no network writer, scheduled docs bot, mutable historical receipt, or E17 generation.
+- rename/document the static list as **baseline proof releases** / **baseline proof requests**;
+- immutable request/E16/release receipts own later operational history;
+- keep the renderer pure/local and CI-parity enforced;
+- do not append every successful release into a hand-maintained list;
+- do not mutate historical E16 capsules.
 
-Success condition: another successful release does not make the E16 design page appear stale merely because its immutable baseline proof list is intentionally fixed.
+Acceptance:
 
-### A4. Candidate-source boundary preservation
+- a later successful release does not make the E16 design page semantically stale;
+- E16 authority helper and capsule format remain unchanged.
 
-Observed 5.93 positive proof: E7 rejected release-authority helper mutation from product source intent.
+### E17-D — candidate-source boundary preservation
+
+Observed 5.93 positive proof: E7 correctly rejected release-authority helper mutation from product candidate source intent.
 
 Design:
 
-- preserve the existing source-path fail-closed rule;
-- byte-neutral control-plane maintenance lands on `main` before a future product source freeze;
-- future product candidate intent stays restricted to authorized product source/materializer classes;
-- do not widen candidate authority for convenience.
+- preserve the current fail-closed source-path boundary;
+- byte-neutral release-control maintenance lands on `main` before future product source freeze;
+- product candidate source stays limited to authorized product spec/materializer/source classes;
+- do not widen candidate authority merely to bundle maintenance conveniently.
 
-Success condition: release-control maintenance cannot accidentally become candidate product authority.
+Acceptance:
 
-## Layer B — next actual product version
+- release-control maintenance cannot silently become candidate product authority;
+- runtime artifacts remain byte-identical for E17-only maintenance.
 
-Do **not** reserve `3.0.0-alpha.5.94` at design time.
+### E17-E — derived operator summary, not new authority
 
-Activation requires all of:
+After E9/E11/E16 are ready, the assistant still has to visually join several receipts before the final fresh reread. E16 already owns the exact merge capsule, so E17 must not duplicate it.
 
-1. 5.93 physical acceptance PASS;
-2. fresh `release-usage-dashboard` tuple/SHA read;
-3. Layer A GREEN/byte-neutral, or explicit bounded deferral with no correctness impact;
-4. selection of exactly one genuine runtime/user-facing primary goal;
-5. fresh proof that the next Product/Engine versions are free immediately before implementation.
+Design:
 
-Current inventory context:
+- if an operator-facing summary is useful, derive a read-only projection from existing immutable receipts;
+- expose only status such as `CURRENT`, `STALE`, `SUPERSEDED`, or `BLOCKED` for human readability;
+- the projection grants zero merge/promotion authority and cannot suppress the final fresh PR/main/mergeability reread;
+- absence or ambiguity must fail closed to `UNKNOWN/BLOCKED` rather than infer state.
+
+Acceptance:
+
+- fewer manual interpretation steps without any new writer or authority source;
+- canonical E16 capsule remains the merge-handoff evidence.
+
+## Simplification rule
+
+Every E17 implementation slice must remove or prevent more operational complexity than it adds.
+
+A proposed slice is rejected if it requires a new persistent owner, queue, workflow state machine, synchronization protocol, or duplicated authority representation merely to save a few manual lines.
+
+Prefer:
+
+`existing authority -> pure helper -> deterministic output -> local validation -> existing writer`
+
+over:
+
+`new authority -> new state -> new synchronization -> new repair path`.
+
+## Automation rule
+
+Automation is allowed when it is deterministic and bounded:
+
+- generate canonical PR text before first write;
+- validate locally before mutation;
+- derive documentation blocks from local constants/immutable baseline evidence;
+- enforce parity in CI;
+- derive read-only operator projections from existing receipts.
+
+Automation is not allowed to invent missing truth. UNKNOWN remains UNKNOWN.
+
+## Runtime boundary
+
+E17-only implementation is byte-neutral for Product/Plugin/Engine/Manager/bootstrap runtime artifacts and must not reserve or cause a Product/Engine version bump by itself.
+
+A future product release is activated separately only after:
+
+1. 5.93 PocketRisu physical acceptance PASS;
+2. fresh `release-usage-dashboard` authority reread;
+3. E17 byte-neutral maintenance is GREEN or explicitly deferred with no correctness impact;
+4. exactly one genuine runtime/user-facing primary goal is selected;
+5. the next Product/Engine versions are freshly proven free immediately before implementation.
+
+Current inventory context remains separate:
 
 - `V-COST-DRIVER` #959 — DESIGN READY / source-proven;
-- `V-CREDITS-COST` #960 — BLOCKED/PARTIAL;
-- this design does not auto-activate either item.
+- `V-CREDITS-COST` #960 — BLOCKED/PARTIAL.
 
-## Carried-forward invariants
+E17 does not auto-activate either item.
 
-- 5.93 working runtime/UI remains baseline;
-- UNKNOWN stays UNKNOWN, never synthetic zero;
-- no new HTTP/CLI/timer/poller/persistence owner without source-backed need;
-- E13 remains durable release generation;
-- E14/E15/E9/E11/E16 retain current authority boundaries;
-- E16 remains derived read-only evidence;
-- final merge remains fresh-read + expected-head bound;
-- production promotion remains monotonic and exact-byte verified;
-- physical acceptance remains separate from repository authority;
-- `one release = one primary product goal` remains binding.
+## Regression plan
 
-## Regression acceptance for Layer A
+E17 maintenance must prove at least:
 
-1. canonical first-write PR body equals E15 renderer output;
-2. generated body validates before PR write;
-3. every canonical E15 locator occurs exactly once;
-4. historical fixed-version regressions require explicit version scope;
-5. scope cannot disable the regression for its intended historical version;
+1. first-write PR body equals canonical E15 renderer output;
+2. generated PR body validates before a write;
+3. E15 locator cardinality is exact;
+4. historical fixed-version regressions require explicit applicability scope;
+5. historical scope cannot weaken intended-version coverage;
 6. E16 generated documentation uses baseline-proof semantics;
-7. E16 capsule authority/format stays owned by the existing helper;
-8. E7 candidate-source policy still rejects release-authority source mutation;
-9. Product/Plugin/Engine/Manager/bootstrap runtime artifacts remain byte-identical;
-10. full Usage Dashboard registry remains GREEN.
+7. E16 authority helper/capsule format stays unchanged;
+8. candidate-source policy still rejects release-authority source mutation;
+9. any operator projection is pure/read-only and fails closed on ambiguity;
+10. no new HTTP/CLI/timer/poller/persistence/writer owner appears;
+11. Product/Plugin/Engine/Manager/bootstrap bytes remain unchanged;
+12. full Usage Dashboard registry remains GREEN.
 
-## E17 decision
+## Implementation sequencing
 
-**HOLD.**
+E17 implementation, when activated, should be split into the smallest byte-neutral slices:
 
-E17 is reconsidered only when a real release exposes a new machine-readable authority/freshness failure that E13/E14/E15/E9/E11/E16 cannot represent fail-closed. Convenience or fewer manual lines is not enough justification for a new authority layer.
+1. E17-A canonical first-write PR generation;
+2. E17-B historical regression scope hygiene;
+3. E17-C E16 baseline-proof terminology/parity;
+4. E17-D source-boundary regression lock;
+5. E17-E operator projection only if it remains strictly simpler than current receipt reading.
 
-## Physical boundary
+Each slice must pass focused tests plus the full registry before merge. No device test is required for an E17-only byte-neutral maintenance slice.
 
-Layer A itself requires no device test because it must be runtime-byte-neutral.
+## E17 exit criteria
 
-The next actual product release still uses the normal flow: `+` update -> PocketRisu verification -> evidence record.
+E17 is considered complete when the next legitimate product release demonstrates:
+
+- canonical E15 handoff on first write;
+- no historical-version false RED;
+- E16 documentation no longer appears stale after later releases;
+- candidate source boundaries stay fail-closed;
+- E9/E11/E16 authority semantics remain unchanged;
+- final merge still requires fresh reread + expected-head binding;
+- exact-byte promotion/parity and separate physical acceptance remain intact.
+
+If those goals require a new authority layer to achieve, the E17 design has failed its own simplification rule and must be reconsidered rather than expanded.
 
 ## Related
 

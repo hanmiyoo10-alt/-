@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.70.3",
+  "releaseName": "Runtime Cache Hash Primitive Convergence",
+  "contracts": {
+    "reload-cache-continuity": {
+      "mode": "INHERIT_BEHAVIOR",
+      "authorityVersion": "0.69.2"
+    },
+    "operator-release-card": {
+      "mode": "CURRENT_IDENTITY_INHERIT_BEHAVIOR",
+      "authorityVersion": "0.69.2",
+      "authorityIdentity": {
+        "releaseName": "MamsHolic Exact Brand Alias Repair"
+      }
+    },
+    "host-local-telemetry": {
+      "mode": "EXACT_CURRENT_IDENTITY",
+      "authorityVersion": "0.70.3",
+      "rejectVersions": [
+        "0.70.1"
+      ]
+    },
+    "bounded-telemetry-capsule": {
+      "mode": "INHERIT_BEHAVIOR",
+      "authorityVersion": "0.69.2"
+    }
+  }
+}

@@ -225,12 +225,22 @@ jobs:
           bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
           git diff --check
-          if [[ "$ENGINE_CHANGED" == 'true' ]]; then
-            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat 3
-          elif [[ "$PLUGIN_CHANGED" == 'true' ]]; then
-            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat 1
+          E18_PLAN="$(node plugins/usage-dashboard/tools/derived_impact_e18.cjs --smoke-plan "$TRUSTED_BASE_SHA")"
+          E18_DIAGNOSTIC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.diagnostic)' "$E18_PLAN")"
+          E18_SMOKE_MODE="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.smoke.mode)' "$E18_PLAN")"
+          E18_SMOKE_REPEAT="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(String(j.smoke.repeat))' "$E18_PLAN")"
+          E18_SMOKE_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.smoke.reason)' "$E18_PLAN")"
+          echo "UD_DERIVED_IMPACT:$E18_DIAGNOSTIC"
+          if [[ "$E18_SMOKE_MODE" == 'block' ]]; then
+            FAILURE_REASON='E18_UNKNOWN_RUNTIME_IMPACT'
+            echo "E18_UNKNOWN_RUNTIME_IMPACT:$E18_SMOKE_REASON"
+            exit 1
+          elif [[ "$E18_SMOKE_MODE" == 'run' ]]; then
+            [[ "$E18_SMOKE_REPEAT" =~ ^[1-9][0-9]*$ ]] || { echo 'E18_SMOKE_REPEAT_INVALID'; exit 1; }
+            node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat "$E18_SMOKE_REPEAT"
           else
-            echo 'BEHAVIOR_SMOKE_SKIPPED:structural-only-source-diff'
+            [[ "$E18_SMOKE_MODE" == 'skip' ]] || { echo "E18_SMOKE_MODE_INVALID:$E18_SMOKE_MODE"; exit 1; }
+            echo "BEHAVIOR_SMOKE_SKIPPED:$E18_SMOKE_REASON"
           fi
           [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]] || { git status --short plugins/usage-dashboard/tests; echo 'TEST_TREE_MUTATED'; exit 1; }
           git add -A

@@ -7,12 +7,13 @@ const path = require('node:path');
 const preflight = require('../tools/release_generic_preflight.cjs');
 
 const target = '3.0.0-alpha.5.74';
-const stale = "const release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
-const current = "const release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.74');\n";
-const lockOnly = "// UD_HISTORICAL_VERSION_LOCK\nconst release={productVersion:'x'}; assert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
+const stale = "const release={productVersion:'x'};\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
+const current = "const release={productVersion:'x'};\nassert.equal(release.productVersion, '3.0.0-alpha.5.74');\n";
+const lockOnly = "const release={productVersion:'x'};\n// UD_HISTORICAL_VERSION_LOCK\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
 const guardOnly = "const release={productVersion:'x'}; if (release.productVersion !== '3.0.0-alpha.5.73') process.exit(0);\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
 const historical = "const release={productVersion:'x'}; if (release.productVersion !== '3.0.0-alpha.5.73') { process.exit(0); }\n// UD_HISTORICAL_VERSION_LOCK\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
 const wrongGuard = "const release={productVersion:'x'}; if (release.productVersion !== '3.0.0-alpha.5.72') { process.exit(0); }\n// UD_HISTORICAL_VERSION_LOCK\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
+const inspectionFixture = "assert.equal(inspected.productVersion, '3.0.0-alpha.5.73');\n";
 
 assert.deepEqual(preflight.staleProductAssertions(current,target),[]);
 assert.equal(preflight.staleProductAssertions(stale,target)[0].reason,'stale-current-version-assertion');
@@ -21,6 +22,7 @@ assert.equal(preflight.staleProductAssertions(guardOnly,target)[0].reason,'stale
 assert.equal(preflight.staleProductAssertions(wrongGuard,target)[0].reason,'historical-scope-missing');
 assert.deepEqual([...preflight.historicalScopeVersions(historical)],['3.0.0-alpha.5.73']);
 assert.deepEqual(preflight.staleProductAssertions(historical,target),[]);
+assert.deepEqual(preflight.staleProductAssertions(inspectionFixture,target),[], 'inspection-output fixtures are not current release/manifest authority');
 
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'usage-dashboard-preflight-'));
 try {
@@ -46,4 +48,4 @@ assert.match(stage,/release_generic_preflight\.cjs --spec "\$RELEASE_SPEC"/);
 assert.match(stage,/RELEASE_PREFLIGHT_REJECTED/);
 assert.match(stage,/next: release-generic preflight \+ materializing/);
 
-console.log('usage-dashboard E7 release-generic preflight contract: OK · historical exemption requires lock + exact release-version guard · stale current-version literals fail early');
+console.log('usage-dashboard E7 release-generic preflight contract: OK · authoritative release/manifest assertions only · historical exemption requires lock + exact release-version guard');

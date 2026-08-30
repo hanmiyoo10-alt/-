@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.69.1-intent-06",
+  "releaseId": "simcore-v0.69.1-new-06",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "31b4c5075659a55861731c6fd73f999402321e94",
+  "sourceCommit": "2eec398ea8982ec98846c23595afa178c63cd325",
+  "candidateCommit": "5dc5ec1099c6097a6a0e46effeb826889a4741c3",
+  "candidateReleaseBlob": "de764f2c98174aa7f8ae8dc356d83aa6851b3745",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.69.1-intent-06",
+  "builderPath": "products/simcore/tooling/build-06901-refreshless-targeted-update-liveness.py",
+  "builderSha256": "3dd7072db17c1589d1077e1cb579d7c2bcd76a7c466517a77b8462bf931cb809",
+  "verifierCommit": "2eec398ea8982ec98846c23595afa178c63cd325",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "525e5e21ff060fc88c69eabb31e5bdd4ac1124cb0ff30f171df69af7ca3c7c4f",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

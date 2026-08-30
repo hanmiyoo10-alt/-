@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.70.1-new-01",
+  "product": "SimCore",
+  "version": "0.70.1",
+  "releaseName": "Cold First-Turn Tail Attribution",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "expectedProductionCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+  "candidateReleaseBlob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
+  "primaryGoalId": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION",
+  "changeClass": "RUNTIME_FEATURE",
+  "evidenceRefs": [
+    "docs/SIMCORE_07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_DESIGN_2026-08-30.md",
+    "docs/SIMCORE_07001_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+    "docs/SIMCORE_07001_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+    "docs/SIMCORE_R2_8_V07000_SECOND_ORDINARY_TERMINAL_CLOSE_2026-08-30.md",
+    "docs/SIMCORE_07001_CANDIDATE_REQUEST_FAILURE_01_CHANGE_CLASS_ENUM_2026-08-30.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

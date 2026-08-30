@@ -12,10 +12,12 @@ assert.deepEqual(hygiene.findings, [], 'current repository must carry no unannot
 const match = release.productVersion.match(/^(.*\.)(\d+)$/);
 assert.ok(match, `unexpected product version: ${release.productVersion}`);
 const staleVersion = `${match[1]}${Math.max(0, Number(match[2]) - 1)}`;
-const staleFixture = `const r={productVersion:'x'}; assert.equal(r.productVersion, '${staleVersion}');\n`;
+const staleFixture = `const release={productVersion:'x'};\nassert.equal(release.productVersion, '${staleVersion}');\n`;
 assert.equal(preflight.staleProductAssertions(staleFixture, release.productVersion).length, 1);
-const lockedFixture = `// ${preflight.HISTORICAL_LOCK}\n${staleFixture}`;
-assert.deepEqual(preflight.staleProductAssertions(lockedFixture, release.productVersion), []);
+const lockedOnlyFixture = `const release={productVersion:'x'};\n// ${preflight.HISTORICAL_LOCK}\nassert.equal(release.productVersion, '${staleVersion}');\n`;
+assert.equal(preflight.staleProductAssertions(lockedOnlyFixture, release.productVersion)[0].reason, 'historical-scope-missing');
+const guardedHistoricalFixture = `const release={productVersion:'x'}; if (release.productVersion !== '${staleVersion}') { process.exit(0); }\n// ${preflight.HISTORICAL_LOCK}\nassert.equal(release.productVersion, '${staleVersion}');\n`;
+assert.deepEqual(preflight.staleProductAssertions(guardedHistoricalFixture, release.productVersion), []);
 
 const reconcile = fs.readFileSync('plugins/usage-dashboard/tools/reconcile_release_candidate.py', 'utf8');
 assert.match(reconcile, /def validate_release_memory_contract\(spec_path: Path\)/);
@@ -86,4 +88,4 @@ for (const token of [
   'must not create or advance release Git refs',
 ]) assert.ok(runbook.includes(token), `E8 runbook missing ${token}`);
 
-console.log(`usage-dashboard E8 early-failure/orchestration contract: OK · ${release.productVersion} · continuous hygiene + pre-candidate release-memory gate + owner issue self-heal dispatch + exact-SHA authority + ref boundary`);
+console.log(`usage-dashboard E8 early-failure/orchestration contract: OK · ${release.productVersion} · continuous hygiene + guarded historical scope + pre-candidate release-memory gate + owner issue self-heal dispatch + exact-SHA authority + ref boundary`);

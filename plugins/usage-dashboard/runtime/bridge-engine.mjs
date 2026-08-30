@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.31';
+const VERSION = '1.6.32';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -719,6 +719,7 @@ async function managedCliDiagnostics() {
   return {
     state:runtime.state,
     version:runtime.version,
+    cliVersion:runtime.version,
     provisioning:runtime.provisioning,
     modelCatalogState:runtime.modelCatalogState,
     modelCatalogVersion:runtime.modelCatalogVersion,
@@ -2458,7 +2459,7 @@ function startCreditsUsageEarly(rawCreditsPromise, requestedOrgId = '') {
 
 let modelCategoryCatalogMap = null;
 let modelCategoryCatalogLoad = null;
-let modelCategoryCatalogStatus = Object.freeze({state:'unavailable',version:'',expectedVersion:MODEL_CATALOG_VERSION});
+let modelCategoryCatalogStatus = Object.freeze({modelCatalogState:'unavailable',modelCatalogVersion:'',modelCatalogExpectedVersion:MODEL_CATALOG_VERSION});
 
 function normalizeModelCategoryId(usedModel) {
   const value = typeof usedModel === 'string' ? usedModel.trim() : '';
@@ -2519,10 +2520,10 @@ async function ensureModelCategoryCatalog() {
       const derived = buildModelCategoryMap(module.models);
       if (!derived.size) throw new Error('managed model catalog produced empty classification map');
       modelCategoryCatalogMap = derived;
-      modelCategoryCatalogStatus = Object.freeze({state:'ready',version:MODEL_CATALOG_VERSION,expectedVersion:MODEL_CATALOG_VERSION});
+      modelCategoryCatalogStatus = Object.freeze({modelCatalogState:'ready',modelCatalogVersion:MODEL_CATALOG_VERSION,modelCatalogExpectedVersion:MODEL_CATALOG_VERSION});
       return derived;
     } catch {
-      modelCategoryCatalogStatus = Object.freeze({state:'unavailable',version:'',expectedVersion:MODEL_CATALOG_VERSION});
+      modelCategoryCatalogStatus = Object.freeze({modelCatalogState:'unavailable',modelCatalogVersion:'',modelCatalogExpectedVersion:MODEL_CATALOG_VERSION});
       return null;
     } finally {
       modelCategoryCatalogLoad = null;
@@ -2547,7 +2548,12 @@ const managedCliDiagnosticsBeforeModelCategory = managedCliDiagnostics;
 managedCliDiagnostics = async function managedCliDiagnosticsWithModelCategory() {
   const runtime = await managedCliDiagnosticsBeforeModelCategory();
   await ensureModelCategoryCatalog();
-  return {...runtime, ...modelCategoryCatalogStatus};
+  return {
+    ...runtime,
+    modelCatalogState:modelCategoryCatalogStatus.modelCatalogState,
+    modelCatalogVersion:modelCategoryCatalogStatus.modelCatalogVersion,
+    modelCatalogExpectedVersion:modelCategoryCatalogStatus.modelCatalogExpectedVersion,
+  };
 };
 async function loadOrgs() {
   const value = await cached('orgs', async () => {

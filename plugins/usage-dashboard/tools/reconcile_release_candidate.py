@@ -25,6 +25,12 @@ TRACKED_ROOTS = [SRC, RUNTIME, RUNTIME_SRC]
 TRACKED_FILES = [LATEST, GUIDELINES]
 CURRENT_RELEASE_RE = re.compile(r'^Current release implementation: `[^`]+`\.$', re.MULTILINE)
 MANAGER_ENGINE_SHA_RE = re.compile(r"const BUNDLED_ENGINE_SHA256 = '[0-9a-f]{64}';")
+MATERIALIZER_RE = re.compile(r'^plugins/usage-dashboard/tools/[A-Za-z0-9_.-]+\.py$')
+E19_STRUCTURAL_TESTS = [
+    'plugins/usage-dashboard/tests/current-release-contract.cjs',
+    'plugins/usage-dashboard/tests/p5-module-layout.cjs',
+    'plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs',
+]
 
 
 def fail(code: str, detail: str = '') -> None:
@@ -44,7 +50,7 @@ def load_spec(path: Path) -> dict:
         spec = json.loads(path.read_text(encoding='utf-8'))
     except Exception as exc:
         fail('RECONCILE_SPEC_INVALID', str(exc))
-    required = ['releaseTitle', 'productVersion', 'engineVersion', 'managerVersion', 'snapshotContract', 'recentRequestContract']
+    required = ['releaseTitle', 'productVersion', 'engineVersion', 'managerVersion', 'snapshotContract', 'recentRequestContract', 'materializer']
     missing = [key for key in required if key not in spec]
     if missing:
         fail('RECONCILE_SPEC_MISSING', ','.join(missing))
@@ -159,10 +165,60 @@ def tree_state() -> dict[str, str]:
     return state
 
 
+def candidate_tree_sha() -> str:
+    subprocess.run(['git', 'add', '-A'], check=True)
+    try:
+        return subprocess.check_output(['git', 'write-tree'], text=True).strip()
+    finally:
+        subprocess.run(['git', 'reset', '--mixed', 'HEAD'], check=True, stdout=subprocess.DEVNULL)
+
+
+def assert_declared_materializer_second_pass(spec: dict) -> None:
+    materializer_text = str(spec.get('materializer') or '')
+    if not MATERIALIZER_RE.fullmatch(materializer_text):
+        fail('E19_MATERIALIZER_PATH_DENIED', materializer_text or '<missing>')
+    materializer = Path(materializer_text)
+    if not materializer.is_file():
+        fail('E19_MATERIALIZER_MISSING', materializer_text)
+
+    before_tree = candidate_tree_sha()
+    before_critical = {
+        'latest': sha256(LATEST),
+        'engine': sha256(ENGINE),
+        'manager': sha256(MANAGER),
+        'manifest': sha256(MANIFEST),
+    }
+    run('python3', materializer_text)
+    after_tree = candidate_tree_sha()
+    after_critical = {
+        'latest': sha256(LATEST),
+        'engine': sha256(ENGINE),
+        'manager': sha256(MANAGER),
+        'manifest': sha256(MANIFEST),
+    }
+    if before_tree != after_tree:
+        fail('E19_MATERIALIZER_NOT_IDEMPOTENT', f'{before_tree}!={after_tree}')
+    if before_critical != after_critical:
+        fail('E19_MATERIALIZER_CRITICAL_HASH_DRIFT')
+    print(f"E19_MATERIALIZER_SECOND_PASS_GREEN:{spec['productVersion']}:{after_tree}")
+
+
+def run_shift_left_structural_gates(spec_path: Path) -> None:
+    env = os.environ.copy()
+    env['UD_RELEASE_SPEC'] = spec_path.as_posix()
+    passed = []
+    for test in E19_STRUCTURAL_TESTS:
+        result = subprocess.run(['node', test], env=env, check=False)
+        if result.returncode != 0:
+            fail('E19_STRUCTURAL_GATE_REJECTED', test)
+        passed.append(Path(test).name)
+    print(f"E19_STRUCTURAL_GATES_GREEN:{','.join(passed)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description='Reconcile generated Local Usage Dashboard release candidate state.')
     parser.add_argument('--spec', required=True, help='release spec path under .github/usage-dashboard/releases')
-    parser.add_argument('--two-pass', action='store_true', help='prove the reconciliation result is idempotent')
+    parser.add_argument('--two-pass', action='store_true', help='prove declared materializer + reconciliation are idempotent and run E19 structural gates')
     args = parser.parse_args()
 
     spec_path = Path(args.spec)
@@ -171,6 +227,11 @@ def main() -> None:
     if not spec_path.is_file():
         fail('RECONCILE_SPEC_MISSING_FILE', spec_path.as_posix())
     spec = load_spec(spec_path)
+
+    if args.two_pass:
+        # E7 has already executed the declared materializer once. Prove that the exact
+        # target tree is a no-op under the same materializer before generic reconciliation.
+        assert_declared_materializer_second_pass(spec)
 
     reconcile_once(spec_path, spec)
     if not args.two_pass:
@@ -199,6 +260,9 @@ def main() -> None:
     if critical_first != critical_second:
         fail('MATERIALIZER_CRITICAL_HASH_DRIFT')
     print(f"MATERIALIZER_IDEMPOTENT:{spec['productVersion']}")
+
+    # These existing deterministic contracts now fail before E18 repeat behavior smoke.
+    run_shift_left_structural_gates(spec_path)
 
 
 if __name__ == '__main__':

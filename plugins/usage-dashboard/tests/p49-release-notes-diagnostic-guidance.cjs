@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 const {discoverTests} = require('./registry.cjs');
+const {PARTS} = require('../src/parts.cjs');
 
 const root = 'plugins/usage-dashboard';
 const src = `${root}/src`;
@@ -84,7 +85,9 @@ for (const forbidden of ['accountId','organizationId','projectId','apiKey','auth
   assert.equal(spec.highlights.concat(spec.diagnosticHints).join('\n').toLowerCase().includes(forbidden.toLowerCase()), false, `P49 static notes must not contain ${forbidden}`);
 }
 
-assert.equal(sourceManifest.parts.length, 24, 'P49 module count must remain 24');
+const registryFiles = PARTS.map(part => part.file);
+assert.equal(sourceManifest.parts.length, PARTS.length, 'P49 source-manifest module count must match the canonical parts registry');
+assert.deepEqual(sourceManifest.parts, registryFiles, 'P49 source-manifest module order must match the canonical parts registry');
 assert.equal(sourceManifest.version, release.productVersion, 'P49 source manifest must track current product version');
 assert.ok(latest.includes('id="release-notes-panel"'), 'P49 built Plugin release notes panel missing');
 assert.ok(latest.includes('진단 제출 가이드 복사'), 'P49 built Plugin copy action missing');
@@ -97,4 +100,4 @@ const suite = discoverTests();
 assert.ok(suite.regressions.includes('p48-exact-final-http-status.cjs'), 'P49 must retain P48 HTTP-status regression');
 assert.ok(suite.regressions.includes('p49-release-notes-diagnostic-guidance.cjs'), 'P49 registry must include P49');
 
-console.log(`P49 Release Notes & Diagnostic Guidance: OK · current spec ${release.productVersion} · spec-backed static notes · DOM-only toggle · zero refresh/network/timer/persistence ownership · module count 24`);
+console.log(`P49 Release Notes & Diagnostic Guidance: OK · current spec ${release.productVersion} · spec-backed static notes · DOM-only toggle · zero refresh/network/timer/persistence ownership · module registry parity ${PARTS.length}`);

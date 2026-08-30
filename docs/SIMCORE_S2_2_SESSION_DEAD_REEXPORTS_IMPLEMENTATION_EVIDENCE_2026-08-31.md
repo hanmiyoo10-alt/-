@@ -6,7 +6,7 @@ Classification: **POST-M2 SIMPLIFICATION / S2 / RETIRE DEAD SESSION EXPORT SEAMS
 
 Authority:
 - `docs/SIMCORE_PRE_MAJOR_SIMPLIFICATION_ROUTINE_2026-08-31.md`
-- `docs/SIMCORE_S2_2_SESSION_DEAD_REEXPORT_RETIREMENT_DESIGN_2026-08-31.md`
+- `docs/SIMCORE_S2_2_SESSION_DEAD_REEXPORT_SURFACE_RETIREMENT_DESIGN_2026-08-31.md`
 - prior cumulative checkpoint `docs/SIMCORE_S2_1_DEAD_PROMPT_RENDER_COMPAT_SEAM_IMPLEMENTATION_EVIDENCE_2026-08-31.md`
 
 Production authority remains `release-simcore` v0.70.1. Its `plugins/simcore/latest.js` and `plugins/simcore/install.js` are byte-identical at blob `8f332cfceed316d35954e353c2eaca38c2f34d95`.

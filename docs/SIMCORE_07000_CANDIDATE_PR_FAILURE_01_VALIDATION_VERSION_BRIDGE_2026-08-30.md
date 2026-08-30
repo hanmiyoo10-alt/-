@@ -79,6 +79,23 @@ The v0.70 builder suite is also permanent release evidence and must be registere
 5. Register `builder-v07000` as required/golden.
 6. Route only the four exact-version-sensitive registry entries to the v0.70 wrappers.
 
+## Follow-up harness observation during repair PR
+
+The first repair head then failed closed with:
+
+```text
+PR = #933
+head = 409b58b1855f9cc9d4fbcbbf6eb779475a46911b
+SimCore CI run = 33292301046
+profile = PR_MAIN
+conclusion = INFRA_ERROR
+reason = HARNESS_ERROR
+GATE_REGRESSION = INFRA_ERROR
+stderr = FIXTURE_DIRECTORY_MISSING: builder-v07000
+```
+
+This is the fixture half of registering a required/golden suite. Existing builder suites carry a minimal fixture authority directory, so `products/simcore/tests/fixtures/builder-v07000/basic.json` is added with the same executable/golden contract shape. This does not alter runtime semantics or candidate materialization.
+
 ## Frozen boundary
 
 ```text
@@ -94,7 +111,9 @@ release-system workflow semantics = untouched
 
 ```text
 07000_PR932 = FAIL_CLOSED
+07000_PR933_FIRST_HEAD = FAIL_CLOSED_HARNESS_FIXTURE_MISSING
 07000_RUNTIME_IMPLEMENTATION = UNCHANGED
 07000_VALIDATION_BRIDGES = FIX REQUIRED
+07000_BUILDER_FIXTURE_AUTHORITY = FIX REQUIRED
 07000_PRODUCTION = STILL_0.69.2
 ```

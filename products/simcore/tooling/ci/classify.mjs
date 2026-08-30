@@ -4,13 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const LABELS = Object.freeze(['CI_SELF','HARNESS','ARCH_CONTRACT','STATE_SYNC','LEGACY_VERIFICATION','SIMCORE_DOC_ONLY','SHARED_MAIN_COORDINATION']);
-const permanentReleaseWorkflows=Object.freeze(['.github/workflows/simcore-release-permanent.yml','.github/workflows/simcore-release-required.yml','.github/workflows/simcore-release-pr-activation.yml']);
+const permanentReleaseWorkflows=Object.freeze(['.github/workflows/simcore-release-permanent.yml','.github/workflows/simcore-release-required.yml','.github/workflows/simcore-release-pr-activation.yml','.github/workflows/simcore-v06901-fresh-dispatch-bridge.yml']);
 const exact=Object.freeze({
   '.github/workflows/simcore-ci.yml':['CI_SELF'],
   '.github/workflows/simcore-release.yml':['CI_SELF','HARNESS','STATE_SYNC'],
   '.github/workflows/simcore-release-permanent.yml':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
   '.github/workflows/simcore-release-required.yml':['CI_SELF','HARNESS'],
   '.github/workflows/simcore-release-pr-activation.yml':['CI_SELF','HARNESS'],
+  '.github/workflows/simcore-v06901-fresh-dispatch-bridge.yml':['CI_SELF','HARNESS'],
   '.github/workflows/product-simcore-candidate-materialize.yml':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
   '.github/workflows/simcore-r2-7-status-projection.yml':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
   '.github/workflows/product-simcore-terminal-convergence-r2-8.yml':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],

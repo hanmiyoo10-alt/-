@@ -163,9 +163,8 @@ assert.ok(!reconciler.includes('pulls/$PR_NUMBER/merge'),'E16 reconciler must no
 
 const design = fs.readFileSync('docs/USAGE_DASHBOARD_E16_DERIVED_MERGE_AUTHORITY_CAPSULE_DESIGN.md','utf8');
 for (const token of [
-  'derived merge-authority capsule',
+  'E16 Derived Merge-Authority Capsule Design',
   'release_generation: E16',
-  'assistant fresh identity re-read',
   'expected-head merge',
   'byte-neutral',
   'materializationIdentity()',

@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.94
+//@version 3.0.0-alpha.5.95
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.94';
+  const VERSION = '3.0.0-alpha.5.95';
   const RELEASE_NOTES = Object.freeze({
-    title: "Compact Authoritative 24h Cost Drivers",
+    title: "Catalog-Pinned Premium/Regular Request Model Category Fidelity",
     highlights: Object.freeze([
-    "선택한 Analytics 범위의 기존 24h model/provider rows에서 양수 observed cost만 사용해 Top Model/Provider 비용 주도를 계산",
-    "0·missing·invalid cost는 현재 source fidelity상 구분 불가하므로 leader로 만들지 않고 UNKNOWN으로 fail-closed",
-    "동률은 source display name code-point 순으로 결정하고 기존 analytics rows를 mutate/re-sort하지 않음",
-    "Engine 1.6.30과 CLI 1.10.0은 그대로 유지하며 새 network/CLI/timer/persist owner를 추가하지 않음"
+    "Managed runtime now treats @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 as one exact READY pair.",
+    "Recent served-model rows gain local-only Premium / Regular / UNKNOWN model-category fidelity from the exact managed catalog.",
+    "Classification follows explicit pricing thresholds; catalog miss/unavailability stays UNKNOWN, with no inference from names, tier, cost, plan, or provider.",
+    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or raw catalog projection is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "업데이트 후 Product 5.94 · Engine 1.6.30 · Manager 1.3.4 · CLI 1.10.0이 일치하는지 확인",
-    "Analytics의 24h 비용 주도 Top Model/Provider가 같은 scope의 상세 rows 중 양수 cost leader와 일치하는지 확인",
-    "share가 보이면 같은 24h total cost 기준으로 일치하고 denominator가 불명확하면 —로 남는지 확인",
-    "Diagnostics Cost drivers 줄이 UI와 일치하고 기존 5.93 cycle summary·Billing Cycle·Premium·PAYG가 그대로인지 확인"
+    "Verify Product 5.95 · Engine 1.6.31 · Manager 1.3.5 · CLI 1.10.0 and READY/Health ok.",
+    "Diagnostics should show managed @llmgateway/models 1.251.0 ready when the exact pair is installed.",
+    "Natural resolved served-model rows may show Premium or Regular; unresolved rows must remain ? / UNKNOWN without inference.",
+    "Existing tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium, PAYG, Cost Drivers, and request identity must stay unchanged.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,8 +41,8 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.30';
-  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.4';
+  const REQUIRED_BRIDGE_VERSION = '1.6.31';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;
@@ -1505,6 +1505,7 @@ async function importLegacyTodayBaselines() {
       const timestamp = bridgeTimestamp(timestampField.value);
       const provider = String(recentRequestValue(row, ['provider','providerName','provider_name','usedProvider','used_provider','metadata.used_provider','metadata.usedProvider','source.provider'], 'Unknown') || 'Unknown');
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
+      const cat=categoryPair(row);
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
@@ -1545,8 +1546,8 @@ async function importLegacyTodayBaselines() {
         timestampPrecision:requestTimestampPrecision(timestamp, timestampField.key, requestNumber),
         timestampSource:String(timestampField.key || ''),
         provider,
-        model,
-        cost:num(costRaw) ? Number(costRaw) : null,
+        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,
+        cost:num(costRaw)?Number(costRaw):null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
         inputTokens:cacheMetrics.inputTokens,
         outputTokens:cacheMetrics.outputTokens,
@@ -1722,6 +1723,7 @@ async function importLegacyTodayBaselines() {
         const currentHttpStatus = requestHttpStatusMetadata(current || {});
         const httpStatus = incomingHttpStatus.httpStatusFidelity === 'explicit' ? incomingHttpStatus : currentHttpStatus;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
+        const modelCategoryTruth=mergeCategory(row,current);
         byKey.set(key, {
           ...(current || {}),
           ...row,
@@ -1751,6 +1753,8 @@ async function importLegacyTodayBaselines() {
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
           servedServiceTierSource:String(row.servedServiceTierSource || current?.servedServiceTierSource || ''),
           serviceTierSelectionSource:preferKnownServiceTierSelectionSource(row.serviceTierSelectionSource, current?.serviceTierSelectionSource),
+          modelCategory:modelCategoryTruth.modelCategory,
+          modelCategorySource:modelCategoryTruth.modelCategorySource,
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
@@ -1941,7 +1945,7 @@ async function importLegacyTodayBaselines() {
         const tierSelectionText = requestServiceTierSelectionSourceText(row);
         const durationText = `Duration ${requestDurationText(row)}`;
         const httpStatusText = requestHttpStatusText(row);
-        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
+        const usageText = [resultText, requestModelCategoryText(row), httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
@@ -1986,7 +1990,7 @@ async function importLegacyTodayBaselines() {
       const tierSelectionText = requestServiceTierSelectionSourceText(row);
       const durationText = `Duration ${requestDurationText(row)}`;
       const httpStatusText = requestHttpStatusText(row);
-      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
+      const usageText = [resultText, requestModelCategoryText(row), httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);
@@ -2008,6 +2012,52 @@ async function importLegacyTodayBaselines() {
       if (row?.requestScopeConflict === true) stats.conflict += 1;
     }
     return stats;
+  }
+
+  function requestModelCategoryValue(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return ['premium','regular','unknown'].includes(text) ? text : 'unknown';
+  }
+
+  function requestModelCategorySourceValue(value, category = 'unknown') {
+    const text = String(value || '').trim().toLowerCase();
+    return requestModelCategoryValue(category) !== 'unknown' && text === 'llmgateway-model-catalog'
+      ? 'llmgateway-model-catalog'
+      : 'unknown';
+  }
+
+  function preferKnownModelCategory(incomingCategory, incomingSource, currentCategory, currentSource) {
+    const incoming = requestModelCategoryValue(incomingCategory);
+    if (incoming !== 'unknown') return {modelCategory:incoming,modelCategorySource:requestModelCategorySourceValue(incomingSource, incoming)};
+    const current = requestModelCategoryValue(currentCategory);
+    if (current !== 'unknown') return {modelCategory:current,modelCategorySource:requestModelCategorySourceValue(currentSource, current)};
+    return {modelCategory:'unknown',modelCategorySource:'unknown'};
+  }
+
+  function requestModelCategoryText(row) {
+    const category = requestModelCategoryValue(row?.modelCategory);
+    if (category === 'premium') return 'Premium';
+    if (category === 'regular') return 'Regular';
+    return '?';
+  }
+
+  function requestModelCategoryStats(rows) {
+    const stats = {rows:0,premium:0,regular:0,unknown:0};
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      const category = requestModelCategoryValue(row?.modelCategory);
+      stats.rows += 1;
+      stats[category] += 1;
+    }
+    return stats;
+  }
+
+  function categoryPair(row) {
+    const modelCategory = requestModelCategoryValue(recentRequestValue(row, ['modelCategory','model_category'], 'unknown'));
+    return {modelCategory,modelCategorySource:requestModelCategorySourceValue(recentRequestValue(row, ['modelCategorySource','model_category_source'], 'unknown'), modelCategory)};
+  }
+
+  function mergeCategory(row, current) {
+    return preferKnownModelCategory(row?.modelCategory, row?.modelCategorySource, current?.modelCategory, current?.modelCategorySource);
   }
 
   function normalizeRequestProvenanceMetadata(raw) {
@@ -2688,6 +2738,8 @@ async function importLegacyTodayBaselines() {
       engineBundleVersion:String(raw.engineBundleVersion || raw.engine_bundle_version || ''),
       cliRuntimeState:['ready','provisioning','unavailable','invalid'].includes(String(raw.cliRuntimeState || raw.cli_runtime_state)) ? String(raw.cliRuntimeState || raw.cli_runtime_state) : 'unavailable',
       cliRuntimeVersion:String(raw.cliRuntimeVersion || raw.cli_runtime_version || ''),
+      cliCatalogState:['ready','unavailable','invalid'].includes(String(raw.cliCatalogState || raw.cli_catalog_state)) ? String(raw.cliCatalogState || raw.cli_catalog_state) : 'unavailable',
+      cliCatalogVersion:String(raw.cliCatalogVersion || raw.cli_catalog_version || ''),
       cliRuntimeProvisioning:['ok','pending','backoff','disabled','unavailable'].includes(String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning)) ? String(raw.cliRuntimeProvisioning || raw.cli_runtime_provisioning) : 'unavailable',
       candidateSafe:typeof raw.candidateSafe === 'boolean' ? raw.candidateSafe : null,
       adoptionState:String(raw.adoptionState || raw.adoption_state || ''),
@@ -3107,6 +3159,22 @@ async function importLegacyTodayBaselines() {
     return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
   }
 
+
+  function modelCategoryCatalogDiagnosticText(diagnostics) {
+    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
+    const manager = state.bridgeManagerRuntime || null;
+    const stateValue = String(runtime?.modelCatalogState || manager?.cliCatalogState || 'unavailable');
+    const version = String(runtime?.modelCatalogVersion || manager?.cliCatalogVersion || '');
+    if (stateValue === 'ready' && version === '1.251.0') return 'managed · ready · @llmgateway/models 1.251.0';
+    return `managed · unavailable · expected @llmgateway/models 1.251.0`;
+  }
+
+  function modelCategoryFidelityDiagnosticText(rows) {
+    const stats = requestModelCategoryStats(rows);
+    const source = (stats.premium + stats.regular) > 0 ? 'llmgateway-model-catalog' : 'unknown';
+    return `Premium ${stats.premium} · Regular ${stats.regular} · Unknown ${stats.unknown} · source ${source}`;
+  }
+
   function bridgeCreditsEarlyStartText(performance) {
     const early = performance?.creditsEarlyStart && typeof performance.creditsEarlyStart === 'object'
       ? performance.creditsEarlyStart
@@ -3279,6 +3347,8 @@ async function importLegacyTodayBaselines() {
       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI runtime: ${bridgeCliRuntimeText(state.data?.bridge?.diagnostics)}`,
+      `Model category catalog: ${modelCategoryCatalogDiagnosticText(state.data?.bridge?.diagnostics)}`,
+      `Model category fidelity: ${modelCategoryFidelityDiagnosticText(requestLedgerRowsForScope('all'))}`,
       `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,

@@ -7,15 +7,18 @@ import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.30';
+const VERSION = '1.6.31';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.DEVPASS_BRIDGE_PORT || 39117);
 const CLI_VERSION = process.env.LLMGATEWAY_CLI_VERSION || '1.10.0';
+const MODEL_CATALOG_PACKAGE = '@llmgateway/models';
+const MODEL_CATALOG_VERSION = '1.251.0';
 const NPX_PREFER_OFFLINE = String(process.env.DEVPASS_BRIDGE_NPX_PREFER_OFFLINE || '1') !== '0';
 const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
 const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
@@ -669,33 +672,58 @@ async function readManagedCliState() {
 }
 
 async function managedCliRuntime() {
-  if (!MANAGED_CLI_ENABLED) return {state:'unavailable',version:'',provisioning:'disabled',entry:null};
+  const unavailable = (state = 'unavailable', provisioning = 'unavailable') => ({
+    state, version:'', provisioning, entry:null,
+    modelCatalogState:'unavailable', modelCatalogVersion:'', modelCatalogExpectedVersion:MODEL_CATALOG_VERSION, modelCatalogEntry:null,
+  });
+  if (!MANAGED_CLI_ENABLED) return unavailable('unavailable', 'disabled');
   let descriptor;
   try { descriptor = JSON.parse(await fs.readFile(MANAGED_CLI_DESCRIPTOR, 'utf8')); }
   catch {
     const state = await readManagedCliState();
-    return state.state === 'ready'
-      ? {state:'invalid',version:'',provisioning:'unavailable',entry:null}
-      : {...state,entry:null};
+    return state.state === 'ready' ? unavailable('invalid') : {...unavailable(state.state, state.provisioning), version:state.version};
   }
-  if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== '@llmgateway/cli' || descriptor?.version !== CLI_VERSION) {
-    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+  if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== '@llmgateway/cli' || descriptor?.version !== CLI_VERSION
+      || descriptor?.catalogPackage !== MODEL_CATALOG_PACKAGE || descriptor?.catalogVersion !== MODEL_CATALOG_VERSION) {
+    return unavailable('invalid');
   }
   try {
     const versionRoot = await fs.realpath(MANAGED_CLI_VERSION_ROOT);
     const entry = await fs.realpath(String(descriptor.entry || ''));
-    if (!pathInside(versionRoot, entry)) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
-    const stat = await fs.stat(entry);
-    if (!stat.isFile()) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
-    return {state:'ready',version:CLI_VERSION,provisioning:'ok',entry};
+    if (!pathInside(versionRoot, entry)) return unavailable('invalid');
+    if (!(await fs.stat(entry)).isFile()) return unavailable('invalid');
+
+    const catalogRoot = await fs.realpath(path.join(versionRoot, 'node_modules', '@llmgateway', 'models'));
+    if (!pathInside(versionRoot, catalogRoot)) return unavailable('invalid');
+    const packageJson = JSON.parse(await fs.readFile(path.join(catalogRoot, 'package.json'), 'utf8'));
+    if (packageJson?.name !== MODEL_CATALOG_PACKAGE || packageJson?.version !== MODEL_CATALOG_VERSION) return unavailable('invalid');
+    const rootExport = packageJson?.exports?.['.'] ?? packageJson?.exports;
+    const exportPath = typeof rootExport === 'string' ? rootExport : (rootExport?.import || packageJson?.module || '');
+    if (typeof exportPath !== 'string' || !exportPath) return unavailable('invalid');
+    const modelCatalogEntry = await fs.realpath(path.resolve(catalogRoot, exportPath));
+    if (!pathInside(catalogRoot, modelCatalogEntry) || !pathInside(versionRoot, modelCatalogEntry)) return unavailable('invalid');
+    if (!(await fs.stat(modelCatalogEntry)).isFile()) return unavailable('invalid');
+    if (await fs.realpath(String(descriptor.catalogEntry || '')) !== modelCatalogEntry) return unavailable('invalid');
+    return {
+      state:'ready', version:CLI_VERSION, provisioning:'ok', entry,
+      modelCatalogState:'ready', modelCatalogVersion:MODEL_CATALOG_VERSION,
+      modelCatalogExpectedVersion:MODEL_CATALOG_VERSION, modelCatalogEntry,
+    };
   } catch {
-    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+    return unavailable('invalid');
   }
 }
 
 async function managedCliDiagnostics() {
   const runtime = await managedCliRuntime();
-  return {state:runtime.state,version:runtime.version,provisioning:runtime.provisioning};
+  return {
+    state:runtime.state,
+    version:runtime.version,
+    provisioning:runtime.provisioning,
+    modelCatalogState:runtime.modelCatalogState,
+    modelCatalogVersion:runtime.modelCatalogVersion,
+    modelCatalogExpectedVersion:runtime.modelCatalogExpectedVersion,
+  };
 }
 
 async function runCliProcess(args, extraEnv = {}) {
@@ -2428,6 +2456,99 @@ function startCreditsUsageEarly(rawCreditsPromise, requestedOrgId = '') {
     });
 }
 
+let modelCategoryCatalogMap = null;
+let modelCategoryCatalogLoad = null;
+let modelCategoryCatalogStatus = Object.freeze({state:'unavailable',version:'',expectedVersion:MODEL_CATALOG_VERSION});
+
+function normalizeModelCategoryId(usedModel) {
+  const value = typeof usedModel === 'string' ? usedModel.trim() : '';
+  if (!value) return '';
+  const slashIndex = value.indexOf('/');
+  const withoutProvider = slashIndex === -1 ? value : value.slice(slashIndex + 1);
+  const colonIndex = withoutProvider.indexOf(':');
+  return (colonIndex === -1 ? withoutProvider : withoutProvider.slice(0, colonIndex)).trim();
+}
+
+function modelCategoryFinitePrice(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const number = Number.parseFloat(String(value));
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function buildModelCategoryMap(models) {
+  const out = new Map();
+  if (!Array.isArray(models)) return out;
+  for (const model of models) {
+    const id = typeof model?.id === 'string' ? model.id.trim() : '';
+    if (!id) continue;
+    let premium = false;
+    for (const provider of (Array.isArray(model?.providers) ? model.providers : [])) {
+      const inputPrice = modelCategoryFinitePrice(provider?.inputPrice);
+      const outputPrice = modelCategoryFinitePrice(provider?.outputPrice);
+      if ((inputPrice !== null && inputPrice >= 5e-6) || (outputPrice !== null && outputPrice >= 15e-6)) {
+        premium = true;
+        break;
+      }
+    }
+    out.set(id, premium ? 'premium' : 'regular');
+  }
+  return out;
+}
+
+function classifyModelCategoryFromMap(usedModel, catalogMap) {
+  const id = normalizeModelCategoryId(usedModel);
+  if (!id || !(catalogMap instanceof Map) || !catalogMap.has(id)) {
+    return {modelCategory:'unknown',modelCategorySource:'unknown'};
+  }
+  const value = catalogMap.get(id);
+  if (!['premium','regular'].includes(value)) return {modelCategory:'unknown',modelCategorySource:'unknown'};
+  return {modelCategory:value,modelCategorySource:'llmgateway-model-catalog'};
+}
+
+async function ensureModelCategoryCatalog() {
+  if (modelCategoryCatalogMap instanceof Map) return modelCategoryCatalogMap;
+  if (modelCategoryCatalogLoad) return modelCategoryCatalogLoad;
+  modelCategoryCatalogLoad = (async () => {
+    try {
+      const runtime = await managedCliRuntime();
+      if (runtime?.state !== 'ready' || runtime?.modelCatalogState !== 'ready' || runtime?.modelCatalogVersion !== MODEL_CATALOG_VERSION || !runtime?.modelCatalogEntry) {
+        throw new Error('managed model catalog pair unavailable');
+      }
+      const module = await import(pathToFileURL(runtime.modelCatalogEntry).href);
+      if (!Array.isArray(module?.models)) throw new Error('managed model catalog export missing models[]');
+      const derived = buildModelCategoryMap(module.models);
+      if (!derived.size) throw new Error('managed model catalog produced empty classification map');
+      modelCategoryCatalogMap = derived;
+      modelCategoryCatalogStatus = Object.freeze({state:'ready',version:MODEL_CATALOG_VERSION,expectedVersion:MODEL_CATALOG_VERSION});
+      return derived;
+    } catch {
+      modelCategoryCatalogStatus = Object.freeze({state:'unavailable',version:'',expectedVersion:MODEL_CATALOG_VERSION});
+      return null;
+    } finally {
+      modelCategoryCatalogLoad = null;
+    }
+  })();
+  return modelCategoryCatalogLoad;
+}
+
+const loadAccountCaptureBeforeModelCategory = loadAccountCapture;
+loadAccountCapture = async function loadAccountCaptureWithModelCategory() {
+  await ensureModelCategoryCatalog();
+  return loadAccountCaptureBeforeModelCategory();
+};
+
+const normalizeCapturedRecentLogsBeforeModelCategory = normalizeCapturedRecentLogs;
+normalizeCapturedRecentLogs = function normalizeCapturedRecentLogsWithModelCategory(root) {
+  const rows = normalizeCapturedRecentLogsBeforeModelCategory(root);
+  return rows.map((row) => ({...row, ...classifyModelCategoryFromMap(row?.model, modelCategoryCatalogMap)}));
+};
+
+const managedCliDiagnosticsBeforeModelCategory = managedCliDiagnostics;
+managedCliDiagnostics = async function managedCliDiagnosticsWithModelCategory() {
+  const runtime = await managedCliDiagnosticsBeforeModelCategory();
+  await ensureModelCategoryCatalog();
+  return {...runtime, ...modelCategoryCatalogStatus};
+};
 async function loadOrgs() {
   const value = await cached('orgs', async () => {
     // Account capture already runs the official `orgs list --json` command and

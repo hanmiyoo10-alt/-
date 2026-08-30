@@ -32,6 +32,7 @@
       const timestamp = bridgeTimestamp(timestampField.value);
       const provider = String(recentRequestValue(row, ['provider','providerName','provider_name','usedProvider','used_provider','metadata.used_provider','metadata.usedProvider','source.provider'], 'Unknown') || 'Unknown');
       const model = String(recentRequestValue(row, ['model','modelId','model_id','usedModel','used_model','metadata.used_model','metadata.usedModel','source.model'], 'Unknown') || 'Unknown');
+      const cat=categoryPair(row);
       const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);
       const tokensRaw = recentRequestValue(row, ['totalTokens','total_tokens','usage.total_tokens'], null);
       const cacheMetrics = requestCacheMetrics(row);
@@ -72,8 +73,8 @@
         timestampPrecision:requestTimestampPrecision(timestamp, timestampField.key, requestNumber),
         timestampSource:String(timestampField.key || ''),
         provider,
-        model,
-        cost:num(costRaw) ? Number(costRaw) : null,
+        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,
+        cost:num(costRaw)?Number(costRaw):null,
         totalTokens:num(tokensRaw) ? Number(tokensRaw) : null,
         inputTokens:cacheMetrics.inputTokens,
         outputTokens:cacheMetrics.outputTokens,
@@ -249,6 +250,7 @@
         const currentHttpStatus = requestHttpStatusMetadata(current || {});
         const httpStatus = incomingHttpStatus.httpStatusFidelity === 'explicit' ? incomingHttpStatus : currentHttpStatus;
         const scopes = new Set([...(Array.isArray(current?.scopes) ? current.scopes : []), scopeKey]);
+        const modelCategoryTruth=mergeCategory(row,current);
         byKey.set(key, {
           ...(current || {}),
           ...row,
@@ -278,6 +280,8 @@
           requestedServiceTierSource:String(row.requestedServiceTierSource || current?.requestedServiceTierSource || ''),
           servedServiceTierSource:String(row.servedServiceTierSource || current?.servedServiceTierSource || ''),
           serviceTierSelectionSource:preferKnownServiceTierSelectionSource(row.serviceTierSelectionSource, current?.serviceTierSelectionSource),
+          modelCategory:modelCategoryTruth.modelCategory,
+          modelCategorySource:modelCategoryTruth.modelCategorySource,
           timestampPrecision:String(row.timestampPrecision || current?.timestampPrecision || 'unknown'),
           timestampSource:String(row.timestampSource || current?.timestampSource || ''),
           requestNumber:String(row.requestNumber || current?.requestNumber || ''),
@@ -468,7 +472,7 @@
         const tierSelectionText = requestServiceTierSelectionSourceText(row);
         const durationText = `Duration ${requestDurationText(row)}`;
         const httpStatusText = requestHttpStatusText(row);
-        const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
+        const usageText = [resultText, requestModelCategoryText(row), httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
         return `<div class="request-detail-row hour-request-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${esc(requestExactTime(row))}</span></div><em class="${row.success === false ? 'error-text' : 'ok-text'}">${usageText}</em></div>`;
       }).join('');
       const truncated = selected.length > visible.length ? `<p>성능 보호로 최신 ${visible.length}/${selected.length}건 표시</p>` : '';
@@ -513,7 +517,7 @@
       const tierSelectionText = requestServiceTierSelectionSourceText(row);
       const durationText = `Duration ${requestDurationText(row)}`;
       const httpStatusText = requestHttpStatusText(row);
-      const usageText = [resultText, httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
+      const usageText = [resultText, requestModelCategoryText(row), httpStatusText, num(row.cost) ? money(row.cost,4) : '', num(row.totalTokens) ? `${Number(row.totalTokens).toLocaleString()} tok` : '', tierText, tierSelectionText, durationText, cacheText].filter(Boolean).join(' · ');
       return `<div class="request-detail-row"><div class="request-main"><b>${numberText}${esc(row.provider)}</b><span class="request-model">${esc(row.model)}</span><span>${row.timestamp ? esc(requestExactTime(row)) : '시간 미제공'}</span></div><em class="${row.success ? 'ok-text' : 'error-text'}">${usageText}</em></div>`;
     }).join('');
     const sourceRows = Number(scopeActivity.recentRawCount || 0);

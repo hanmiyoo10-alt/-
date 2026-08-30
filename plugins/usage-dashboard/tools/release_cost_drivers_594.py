@@ -430,8 +430,7 @@ def validate_target() -> None:
         'function compactCostDriverTruth(window)',
         'function costDriverLeader(rows, totalCost)',
         'cost > 0',
-        "state:'no-positive-cost'",
-        "state:'name-unavailable'",
+        "state:positiveCostRows > 0 ? 'name-unavailable' : 'no-positive-cost'",
         'costDriverCodePointCompare(left.name, right.name)',
         'candidates.slice().sort',
     ]:

@@ -11,26 +11,37 @@
     "state": "DESIGN_RECORDED_IMPLEMENTATION_NOT_STARTED"
   },
   "latestEvaluation": {
-    "date": "2026-08-29",
-    "runtimeRelease": "0.66.0",
-    "releaseId": "simcore-v0.66.0-new-05",
-    "activeSystem": "R2.5_APPROVAL_BOUNDARY_CONVERGENCE_PLUS_RS2_4_PERMANENT",
-    "evaluatedThrough": "HUMAN_EVIDENCE_ACCEPTED_TERMINAL_ADMIN_REVERTED",
-    "feedback": "docs/SIMCORE_RELEASE_SYSTEM_V2_5_V06600_PRELIVE_OPERATIONAL_FEEDBACK_2026-08-29.md",
+    "date": "2026-08-30",
+    "runtimeRelease": "0.70.0",
+    "releaseId": "simcore-v0.70.0-new-01",
+    "activeSystem": "R2.8_HUMAN_EVIDENCE_TERMINAL_CONVERGENCE_PLUS_R2.7_EVIDENCE_DERIVED_OPERATIONS_PLUS_R2.6_POST_PUBLISH_BOUNDARY_CONVERGENCE_PLUS_RS2_4_PERMANENT",
+    "evaluatedThrough": "LIVE_PENDING_POST_PUBLISH_CONVERGENCE",
+    "feedback": "docs/SIMCORE_07000_RELEASE_SYSTEM_CONTINUOUS_FEEDBACK_PRELIVE_2026-08-30.md",
     "provisionalDisposition": "STABILIZE",
-    "approvalBoundaryFirstRealUse": "PASS",
-    "primaryFollowUp": "R2_5_PREPUBLICATION_POST_PUBLISH_REPLAY_GAP",
-    "secondaryFollowUps": [
-      "R2_5_POST_PUBLISH_PAYLOAD_OWNER_WRITER_PARITY_GAP",
-      "R2_5_POST_PUBLISH_REPAIR_TRUST_BOOTSTRAP_CYCLE",
-      "TERMINAL_CLOSURE_AUTOMATED_REVERT_ROOT_CAUSE"
+    "stabilizationMode": "IN_PLACE_NO_SUCCESSOR_AUTHORIZED",
+    "coreSafety": "PASS",
+    "authorityIntegrity": "PASS",
+    "stateConvergence": "PASS",
+    "productionCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+    "productionBlob": "addf07e273a6fc87f04cdadcb51fa3aa5d6fe298",
+    "permanentReleaseRun": "33292597590",
+    "releaseState": "LIVE_PENDING",
+    "resolvedFindings": [
+      "V07000_EXACT_VERSION_VALIDATION_BRIDGE_GAP",
+      "V07000_BUILDER_FIXTURE_REGISTRATION_GAP"
     ],
-    "candidateNextTheme": "POST_PUBLISH_BOUNDARY_CONVERGENCE",
-    "formalSuccessorDesignAuthorized": true,
-    "formalSuccessor": "R2.6_POST_PUBLISH_BOUNDARY_CONVERGENCE",
-    "successorDesign": "docs/SIMCORE_RELEASE_SYSTEM_V2_6_POST_PUBLISH_BOUNDARY_CONVERGENCE_DESIGN.md",
-    "successorDesignStatus": "DESIGN_FROZEN_IMPLEMENTATION_BLOCKED_PENDING_TERMINAL_CONTROL_PLANE_RESOLUTION",
+    "primaryFollowUp": "RELEASE_VERSION_VALIDATION_COVERAGE_AUTHORING_REPETITION",
+    "secondaryFollowUps": [
+      "V07000_HUMAN_EVIDENCE_TERMINAL_CLOSE_PENDING_PRODUCT_GATE",
+      "GITHUB_ACTIONS_NODE20_ACTION_RUNTIME_DEPRECATION_NONBLOCKING"
+    ],
+    "candidateNextTheme": "VALIDATION_VERSION_COVERAGE_EARLY_CHECKING_SIMPLIFICATION",
+    "formalSuccessorDesignAuthorized": false,
+    "formalSuccessor": null,
     "successorImplementationAuthorized": false,
+    "r2_6FirstUseAlreadyConsumed": true,
+    "r2_7FirstUseAlreadyConsumed": true,
+    "r2_8FirstUseAlreadyConsumed": true,
     "terminalRetrospectivePending": true
   },
   "loop": [

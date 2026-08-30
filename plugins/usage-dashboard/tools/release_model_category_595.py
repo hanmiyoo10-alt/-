@@ -96,8 +96,11 @@ def load_spec() -> dict:
 
 def validate_baseline() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
-    if manifest.get('productVersion') != BASE_VERSION:
-        raise SystemExit(f'5.95 baseline Product mismatch: {manifest.get("productVersion")}')
+    product = manifest.get('productVersion')
+    if product == TARGET_VERSION:
+        return
+    if product != BASE_VERSION:
+        raise SystemExit(f'5.95 baseline Product mismatch: {product}')
     if manifest.get('components', {}).get('bridge', {}).get('requiredVersion') != BASE_ENGINE:
         raise SystemExit('5.95 baseline Engine semantic mismatch')
     if manifest.get('components', {}).get('bridgeManager', {}).get('version') != BASE_MANAGER:

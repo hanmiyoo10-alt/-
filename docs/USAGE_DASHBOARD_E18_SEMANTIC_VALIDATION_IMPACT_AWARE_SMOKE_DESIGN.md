@@ -2,7 +2,7 @@
 
 ## Status
 
-**E18 IMPLEMENTED — VALIDATED / MERGE READY BYTE-NEUTRAL MAINTENANCE**
+**E18 IMPLEMENTED — MERGED / BYTE-NEUTRAL CLOSURE VERIFIED**
 
 E18 is a design label for a byte-neutral release-control maintenance envelope. It is **not** a new durable release generation, authority layer, writer, queue, or merge/promotion controller.
 
@@ -201,11 +201,11 @@ Implementation validation must prove at minimum:
 
 No PocketRisu physical check is required for E18-only maintenance because it must not alter shipped runtime bytes.
 
-## Validation receipt
+## Validation and closure receipt
 
 PR #981 implementation validation on head `45b7ec280eb05e0eae214f1acc0dafb70b575109` completed SUCCESS in Usage Dashboard Candidate Validation run `33315510093`.
 
-The run proved:
+The implementation run proved:
 
 - `E18 Semantic Impact Smoke: OK`;
 - `TEST_REGISTRY_GREEN:121`;
@@ -217,7 +217,11 @@ The run proved:
 
 The only preceding RED was an existing `candidate-stage-transaction-contract.cjs` assertion that still required the retired hard-coded `run_behavior_smoke --repeat 3/1` presentation. It was migrated to assert the E18 derived-impact smoke decision without weakening unrelated E7/E14/CAS/writer/preflight boundaries.
 
-The final documentation-only status commit must also receive the normal PR validation before merge.
+Final PR head `793e85364022872e484bbe33ff9811503d3d9bb0` then completed normal Usage Dashboard Candidate Validation SUCCESS in run `33315594405`; Plugin Control Plane observe also completed SUCCESS in run `33315594237`.
+
+PR #981 was merged with exact expected head `793e85364022872e484bbe33ff9811503d3d9bb0` as main merge commit `648e25f4f64bf928b3c8ac9ca7b82d5d62a5b999`.
+
+Post-merge fresh production readback confirmed `release-usage-dashboard` remained at `bfec7e60ad671adf8fa0ffb7f12387eef5a808fe`, with Product `3.0.0-alpha.5.94`, Engine `1.6.30` SHA-256 `035aa5d6535edd357df3390b7cd22acff2dec298a79e86d2fe2b4b0d3f2b4228`, Manager `1.3.4` SHA-256 `bbcbb6b4ae2dfe6a27ec4282da8147d3e5a693586a1648211d90a107713f0801`, bootstrap SHA-256 `4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c`, and contracts `1/1`. E18 therefore changed no production Product/Plugin/Engine/Manager/bootstrap release bytes.
 
 ## Success metric
 
@@ -234,7 +238,7 @@ The ideal E18 outcome is fewer repair cycles with equal or stronger truthfulness
 
 ## Verdict
 
-**E17 remains sealed and successful. E18 is implemented and full-registry validated as a bounded semantic-validation + derived-impact smoke maintenance envelope, pending final-head CI and merge.**
+**E17 remains sealed and successful. E18 is implemented, full-registry validated, merged, and post-merge byte-neutrality verified. E18 closure is complete.**
 
 If a future change requires a new writer, durable generation, queue, state machine, or merge authority, that proposal is outside E18 and must be reduced or separately justified.
 

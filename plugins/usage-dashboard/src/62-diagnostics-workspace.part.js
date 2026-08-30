@@ -37,16 +37,15 @@
   }
 
   function diagnosticsWorkspaceCliRuntime() {
-    const runtime = state.data?.bridge?.diagnostics?.cliRuntime;
-    const manager = state.bridgeManagerRuntime || null;
-    const rawState = String(runtime?.state || manager?.cliRuntimeState || '');
-    const rawProvisioning = String(runtime?.provisioning || manager?.cliRuntimeProvisioning || '');
-    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(rawState) ? rawState : 'unavailable';
-    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(rawProvisioning) ? rawProvisioning : 'unavailable';
+    const truth = managedRuntimeIdentityTruth(state.data?.bridge?.diagnostics);
     return {
-      state:stateValue,
-      version:String(runtime?.version || manager?.cliRuntimeVersion || ''),
-      provisioning,
+      state:truth.cliState,
+      version:truth.cli.version,
+      provisioning:truth.provisioning,
+      identityState:truth.cli.state,
+      modelState:truth.modelState,
+      modelVersion:truth.models.version,
+      modelIdentityState:truth.models.state,
     };
   }
 
@@ -98,6 +97,8 @@
     if (activeErrors > 0) issues.push(`Local active errors ${activeErrors}`);
     if (failures > 0) issues.push(`Refresh failures ${failures}`);
     if (cli.state !== 'ready') issues.push(`CLI runtime ${cli.state}`);
+    if (cli.identityState === 'mismatch') issues.push('CLI identity mismatch');
+    if (cli.modelIdentityState === 'mismatch') issues.push('Models identity mismatch');
     return {
       capture,
       readiness:stable.ready ? 'READY' : 'BLOCKED',
@@ -132,7 +133,7 @@
       `Diagnostic captured: ${diagnosticTimestamp(model.capture.capturedAt)}`,
       `Refresh identity: ${diagnosticsCaptureIdentityText(model.capture)}`,
       `Status: ${model.readiness} · Health ${model.health} · active errors ${model.activeErrors} · failures ${model.failures}`,
-      `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · Managed CLI ${model.cli.version ? `v${model.cli.version}` : 'v—'} · ${model.cli.state}`,
+      `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · CLI ${model.cli.version || '—'} · Models ${model.cli.modelVersion || '—'} · ${model.cli.state}`,
       `Last refresh: ${lastRefresh} · snapshot ${snapshot} · critical ${critical}`,
       `Data: age ${model.dataAge} · stale modules ${model.staleModules === null ? '—' : model.staleModules} · Request fidelity exact ${model.exactRows}/${model.ledgerRows}`,
       `Updater: ${model.updaterCompatible ? 'compatible' : 'incompatible'} · sync ${model.managerSync}`,
@@ -269,7 +270,7 @@
     const issueHtml = model.issues.length
       ? `<div class="diag-workspace-issues"><b>Current evidence</b>${model.issues.map(item => `<p>${esc(item)}</p>`).join('')}</div>`
       : '';
-    return `<div class="diag-workspace-capture"><b>Captured #${model.capture.refreshCount}</b><span>${esc(diagnosticTimestamp(model.capture.capturedAt))} · ${esc(model.capture.reason)} · sync ${esc(model.capture.lastSyncAt === null ? 'UNKNOWN' : new Date(Number(model.capture.lastSyncAt)).toISOString())}</span></div><div class="minis diag-summary diag-workspace-basic"><div class="mini"><span>Status</span><b>${esc(model.readiness)}</b><small>Health ${esc(model.health)} · errors ${model.activeErrors} · failures ${model.failures}</small></div><div class="mini"><span>Runtime</span><b>Engine ${esc(model.engineVersion || '—')}</b><small>Manager ${esc(model.managerVersion || '—')} · CLI ${model.cli.version ? `v${esc(model.cli.version)}` : 'v—'} ${esc(model.cli.state)}</small></div><div class="mini"><span>Last refresh</span><b>${esc(lastRefresh)}</b><small>snapshot ${esc(snapshot)} · critical ${esc(critical)}</small></div><div class="mini"><span>Data</span><b>${esc(model.dataAge)}</b><small>stale ${model.staleModules === null ? '—' : model.staleModules} · exact ${model.exactRows}/${model.ledgerRows}</small></div><div class="mini"><span>Updater</span><b>${model.updaterCompatible ? 'compatible' : 'incompatible'}</b><small>sync ${esc(model.managerSync)}</small></div></div>${issueHtml}`;
+    return `<div class="diag-workspace-capture"><b>Captured #${model.capture.refreshCount}</b><span>${esc(diagnosticTimestamp(model.capture.capturedAt))} · ${esc(model.capture.reason)} · sync ${esc(model.capture.lastSyncAt === null ? 'UNKNOWN' : new Date(Number(model.capture.lastSyncAt)).toISOString())}</span></div><div class="minis diag-summary diag-workspace-basic"><div class="mini"><span>Status</span><b>${esc(model.readiness)}</b><small>Health ${esc(model.health)} · errors ${model.activeErrors} · failures ${model.failures}</small></div><div class="mini"><span>Runtime</span><b>Engine ${esc(model.engineVersion || '—')}</b><small>Manager ${esc(model.managerVersion || '—')} · CLI ${esc(model.cli.version || '—')} · Models ${esc(model.cli.modelVersion || '—')} · ${esc(model.cli.state)}</small></div><div class="mini"><span>Last refresh</span><b>${esc(lastRefresh)}</b><small>snapshot ${esc(snapshot)} · critical ${esc(critical)}</small></div><div class="mini"><span>Data</span><b>${esc(model.dataAge)}</b><small>stale ${model.staleModules === null ? '—' : model.staleModules} · exact ${model.exactRows}/${model.ledgerRows}</small></div><div class="mini"><span>Updater</span><b>${model.updaterCompatible ? 'compatible' : 'incompatible'}</b><small>sync ${esc(model.managerSync)}</small></div></div>${issueHtml}`;
   }
 
   function diagnosticsWorkspacePanelHtml() {

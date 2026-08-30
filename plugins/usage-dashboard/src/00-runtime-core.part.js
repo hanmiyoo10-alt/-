@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.95
+//@version 3.0.0-alpha.5.96
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.95';
+  const VERSION = '3.0.0-alpha.5.96';
   const RELEASE_NOTES = Object.freeze({
-    title: "Catalog-Pinned Premium/Regular Request Model Category Fidelity",
+    title: "Managed Runtime Diagnostic Identity Fidelity Repair",
     highlights: Object.freeze([
-    "Managed runtime now treats @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 as one exact READY pair.",
-    "Recent served-model rows gain local-only Premium / Regular / UNKNOWN model-category fidelity from the exact managed catalog.",
-    "Classification follows explicit pricing thresholds; catalog miss/unavailability stays UNKNOWN, with no inference from names, tier, cost, plan, or provider.",
-    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or raw catalog projection is added.",
+    "Managed CLI and managed Models diagnostics now keep separate version identities end to end instead of sharing a generic version field.",
+    "Full and compact Diagnostics use the same local truth resolver and fail closed when Engine and Manager report conflicting component versions.",
+    "Model-category classification and the exact @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 managed pair remain unchanged.",
+    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or catalog projection is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.95 · Engine 1.6.31 · Manager 1.3.5 · CLI 1.10.0 and READY/Health ok.",
-    "Diagnostics should show managed @llmgateway/models 1.251.0 ready when the exact pair is installed.",
-    "Natural resolved served-model rows may show Premium or Regular; unresolved rows must remain ? / UNKNOWN without inference.",
-    "Existing tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium, PAYG, Cost Drivers, and request identity must stay unchanged.",
+    "Verify Product 5.96 · Engine 1.6.32 · Manager 1.3.5 and READY/Health ok.",
+    "Full Diagnostics must show @llmgateway/cli 1.10.0 and @llmgateway/models 1.251.0 on separate lines without version overwrite.",
+    "Compact Diagnostics must show Engine 1.6.32 · Manager 1.3.5 · CLI 1.10.0 · Models 1.251.0 · ready.",
+    "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.31';
+  const REQUIRED_BRIDGE_VERSION = '1.6.32';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

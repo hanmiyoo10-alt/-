@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.95
+//@version 3.0.0-alpha.5.96
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.95';
+  const VERSION = '3.0.0-alpha.5.96';
   const RELEASE_NOTES = Object.freeze({
-    title: "Catalog-Pinned Premium/Regular Request Model Category Fidelity",
+    title: "Managed Runtime Diagnostic Identity Fidelity Repair",
     highlights: Object.freeze([
-    "Managed runtime now treats @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 as one exact READY pair.",
-    "Recent served-model rows gain local-only Premium / Regular / UNKNOWN model-category fidelity from the exact managed catalog.",
-    "Classification follows explicit pricing thresholds; catalog miss/unavailability stays UNKNOWN, with no inference from names, tier, cost, plan, or provider.",
-    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or raw catalog projection is added.",
+    "Managed CLI and managed Models diagnostics now keep separate version identities end to end instead of sharing a generic version field.",
+    "Full and compact Diagnostics use the same local truth resolver and fail closed when Engine and Manager report conflicting component versions.",
+    "Model-category classification and the exact @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 managed pair remain unchanged.",
+    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or catalog projection is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.95 · Engine 1.6.31 · Manager 1.3.5 · CLI 1.10.0 and READY/Health ok.",
-    "Diagnostics should show managed @llmgateway/models 1.251.0 ready when the exact pair is installed.",
-    "Natural resolved served-model rows may show Premium or Regular; unresolved rows must remain ? / UNKNOWN without inference.",
-    "Existing tier, account scope, cache, duration, HTTP status, outcomes, Billing Cycle, Premium, PAYG, Cost Drivers, and request identity must stay unchanged.",
+    "Verify Product 5.96 · Engine 1.6.32 · Manager 1.3.5 and READY/Health ok.",
+    "Full Diagnostics must show @llmgateway/cli 1.10.0 and @llmgateway/models 1.251.0 on separate lines without version overwrite.",
+    "Compact Diagnostics must show Engine 1.6.32 · Manager 1.3.5 · CLI 1.10.0 · Models 1.251.0 · ready.",
+    "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.31';
+  const REQUIRED_BRIDGE_VERSION = '1.6.32';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -3150,23 +3150,45 @@ async function importLegacyTodayBaselines() {
     return `managed-direct ${counts.managedDirect} · direct ${counts.direct} · npx-fallback ${counts.npxFallback} · unknown ${counts.unknown} · policy ${npxPolicy} · direct ENOENT ${counts.directEnoent}`;
   }
 
-  function bridgeCliRuntimeText(diagnostics) {
+  function runtimeIdentityVersionTruth(engineValue, managerValue) {
+    const engine = String(engineValue || '').trim();
+    const manager = String(managerValue || '').trim();
+    if (engine && manager && engine !== manager) return {state:'mismatch',version:'',engine,manager};
+    const version = engine || manager;
+    return {state:version ? 'known' : 'unknown',version,engine,manager};
+  }
+
+  function managedRuntimeIdentityTruth(diagnostics) {
     const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
     const manager = state.bridgeManagerRuntime || null;
-    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(String(runtime?.state || manager?.cliRuntimeState)) ? String(runtime?.state || manager?.cliRuntimeState) : 'unavailable';
-    const version = String(runtime?.version || manager?.cliRuntimeVersion || '');
-    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(String(runtime?.provisioning || manager?.cliRuntimeProvisioning)) ? String(runtime?.provisioning || manager?.cliRuntimeProvisioning) : 'unavailable';
-    return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
+    const cli = runtimeIdentityVersionTruth(runtime?.cliVersion || runtime?.version, manager?.cliRuntimeVersion);
+    const models = runtimeIdentityVersionTruth(runtime?.modelCatalogVersion, manager?.cliCatalogVersion);
+    const rawCliState = String(runtime?.state || manager?.cliRuntimeState || '');
+    const rawModelState = String(runtime?.modelCatalogState || manager?.cliCatalogState || '');
+    const rawProvisioning = String(runtime?.provisioning || manager?.cliRuntimeProvisioning || '');
+    const cliState = ['ready','provisioning','unavailable','invalid'].includes(rawCliState) ? rawCliState : 'unavailable';
+    const modelState = ['ready','unavailable','invalid'].includes(rawModelState) ? rawModelState : 'unavailable';
+    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(rawProvisioning) ? rawProvisioning : 'unavailable';
+    const modelExpectedVersion = String(runtime?.modelCatalogExpectedVersion || '').trim();
+    return {cli,models,cliState,modelState,provisioning,modelExpectedVersion};
+  }
+
+  function bridgeCliRuntimeText(diagnostics) {
+    const truth = managedRuntimeIdentityTruth(diagnostics);
+    if (truth.cli.state === 'mismatch') {
+      return `managed · mismatch · @llmgateway/cli engine ${truth.cli.engine || '—'} · manager ${truth.cli.manager || '—'} · provisioning ${truth.provisioning}`;
+    }
+    return `managed · ${truth.cliState} · @llmgateway/cli ${truth.cli.version || '—'} · provisioning ${truth.provisioning}`;
   }
 
 
   function modelCategoryCatalogDiagnosticText(diagnostics) {
-    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
-    const manager = state.bridgeManagerRuntime || null;
-    const stateValue = String(runtime?.modelCatalogState || manager?.cliCatalogState || 'unavailable');
-    const version = String(runtime?.modelCatalogVersion || manager?.cliCatalogVersion || '');
-    if (stateValue === 'ready' && version === '1.251.0') return 'managed · ready · @llmgateway/models 1.251.0';
-    return `managed · unavailable · expected @llmgateway/models 1.251.0`;
+    const truth = managedRuntimeIdentityTruth(diagnostics);
+    if (truth.models.state === 'mismatch') {
+      return `managed · mismatch · @llmgateway/models engine ${truth.models.engine || '—'} · manager ${truth.models.manager || '—'}`;
+    }
+    if (truth.modelState === 'ready' && truth.models.version) return `managed · ready · @llmgateway/models ${truth.models.version}`;
+    return `managed · ${truth.modelState === 'invalid' ? 'invalid' : 'unavailable'} · expected @llmgateway/models ${truth.modelExpectedVersion || '—'}`;
   }
 
   function modelCategoryFidelityDiagnosticText(rows) {
@@ -4267,16 +4289,15 @@ function todayOverviewMetrics(d) {
   }
 
   function diagnosticsWorkspaceCliRuntime() {
-    const runtime = state.data?.bridge?.diagnostics?.cliRuntime;
-    const manager = state.bridgeManagerRuntime || null;
-    const rawState = String(runtime?.state || manager?.cliRuntimeState || '');
-    const rawProvisioning = String(runtime?.provisioning || manager?.cliRuntimeProvisioning || '');
-    const stateValue = ['ready','provisioning','unavailable','invalid'].includes(rawState) ? rawState : 'unavailable';
-    const provisioning = ['ok','pending','backoff','disabled','unavailable'].includes(rawProvisioning) ? rawProvisioning : 'unavailable';
+    const truth = managedRuntimeIdentityTruth(state.data?.bridge?.diagnostics);
     return {
-      state:stateValue,
-      version:String(runtime?.version || manager?.cliRuntimeVersion || ''),
-      provisioning,
+      state:truth.cliState,
+      version:truth.cli.version,
+      provisioning:truth.provisioning,
+      identityState:truth.cli.state,
+      modelState:truth.modelState,
+      modelVersion:truth.models.version,
+      modelIdentityState:truth.models.state,
     };
   }
 
@@ -4328,6 +4349,8 @@ function todayOverviewMetrics(d) {
     if (activeErrors > 0) issues.push(`Local active errors ${activeErrors}`);
     if (failures > 0) issues.push(`Refresh failures ${failures}`);
     if (cli.state !== 'ready') issues.push(`CLI runtime ${cli.state}`);
+    if (cli.identityState === 'mismatch') issues.push('CLI identity mismatch');
+    if (cli.modelIdentityState === 'mismatch') issues.push('Models identity mismatch');
     return {
       capture,
       readiness:stable.ready ? 'READY' : 'BLOCKED',
@@ -4362,7 +4385,7 @@ function todayOverviewMetrics(d) {
       `Diagnostic captured: ${diagnosticTimestamp(model.capture.capturedAt)}`,
       `Refresh identity: ${diagnosticsCaptureIdentityText(model.capture)}`,
       `Status: ${model.readiness} · Health ${model.health} · active errors ${model.activeErrors} · failures ${model.failures}`,
-      `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · Managed CLI ${model.cli.version ? `v${model.cli.version}` : 'v—'} · ${model.cli.state}`,
+      `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · CLI ${model.cli.version || '—'} · Models ${model.cli.modelVersion || '—'} · ${model.cli.state}`,
       `Last refresh: ${lastRefresh} · snapshot ${snapshot} · critical ${critical}`,
       `Data: age ${model.dataAge} · stale modules ${model.staleModules === null ? '—' : model.staleModules} · Request fidelity exact ${model.exactRows}/${model.ledgerRows}`,
       `Updater: ${model.updaterCompatible ? 'compatible' : 'incompatible'} · sync ${model.managerSync}`,
@@ -4499,7 +4522,7 @@ function todayOverviewMetrics(d) {
     const issueHtml = model.issues.length
       ? `<div class="diag-workspace-issues"><b>Current evidence</b>${model.issues.map(item => `<p>${esc(item)}</p>`).join('')}</div>`
       : '';
-    return `<div class="diag-workspace-capture"><b>Captured #${model.capture.refreshCount}</b><span>${esc(diagnosticTimestamp(model.capture.capturedAt))} · ${esc(model.capture.reason)} · sync ${esc(model.capture.lastSyncAt === null ? 'UNKNOWN' : new Date(Number(model.capture.lastSyncAt)).toISOString())}</span></div><div class="minis diag-summary diag-workspace-basic"><div class="mini"><span>Status</span><b>${esc(model.readiness)}</b><small>Health ${esc(model.health)} · errors ${model.activeErrors} · failures ${model.failures}</small></div><div class="mini"><span>Runtime</span><b>Engine ${esc(model.engineVersion || '—')}</b><small>Manager ${esc(model.managerVersion || '—')} · CLI ${model.cli.version ? `v${esc(model.cli.version)}` : 'v—'} ${esc(model.cli.state)}</small></div><div class="mini"><span>Last refresh</span><b>${esc(lastRefresh)}</b><small>snapshot ${esc(snapshot)} · critical ${esc(critical)}</small></div><div class="mini"><span>Data</span><b>${esc(model.dataAge)}</b><small>stale ${model.staleModules === null ? '—' : model.staleModules} · exact ${model.exactRows}/${model.ledgerRows}</small></div><div class="mini"><span>Updater</span><b>${model.updaterCompatible ? 'compatible' : 'incompatible'}</b><small>sync ${esc(model.managerSync)}</small></div></div>${issueHtml}`;
+    return `<div class="diag-workspace-capture"><b>Captured #${model.capture.refreshCount}</b><span>${esc(diagnosticTimestamp(model.capture.capturedAt))} · ${esc(model.capture.reason)} · sync ${esc(model.capture.lastSyncAt === null ? 'UNKNOWN' : new Date(Number(model.capture.lastSyncAt)).toISOString())}</span></div><div class="minis diag-summary diag-workspace-basic"><div class="mini"><span>Status</span><b>${esc(model.readiness)}</b><small>Health ${esc(model.health)} · errors ${model.activeErrors} · failures ${model.failures}</small></div><div class="mini"><span>Runtime</span><b>Engine ${esc(model.engineVersion || '—')}</b><small>Manager ${esc(model.managerVersion || '—')} · CLI ${esc(model.cli.version || '—')} · Models ${esc(model.cli.modelVersion || '—')} · ${esc(model.cli.state)}</small></div><div class="mini"><span>Last refresh</span><b>${esc(lastRefresh)}</b><small>snapshot ${esc(snapshot)} · critical ${esc(critical)}</small></div><div class="mini"><span>Data</span><b>${esc(model.dataAge)}</b><small>stale ${model.staleModules === null ? '—' : model.staleModules} · exact ${model.exactRows}/${model.ledgerRows}</small></div><div class="mini"><span>Updater</span><b>${model.updaterCompatible ? 'compatible' : 'incompatible'}</b><small>sync ${esc(model.managerSync)}</small></div></div>${issueHtml}`;
   }
 
   function diagnosticsWorkspacePanelHtml() {

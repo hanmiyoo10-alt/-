@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.0 — Current Task Primacy Guard
-Release commit: 13179cff70feaf7d12fe53c56e4735155fcf3eaa
+SimCore v0.70.1 — Cold First-Turn Tail Attribution
+Release commit: 861100f4771967aa5b8ab8811d06f11702c0d3ff
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

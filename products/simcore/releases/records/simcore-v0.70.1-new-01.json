@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.1-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "be968d8bc9a805390f5367bddb1bca8fd48cae54",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.1-new-01.json",
+  "releaseSpecSha256": "911dde69a7538ce31f20e1079e85659f61f388a9ee821681132b516b4b7f4a53",
+  "productionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "previousProductionCommit": "13179cff70feaf7d12fe53c56e4735155fcf3eaa",
+  "productionBlob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
+  "version": "0.70.1",
+  "releaseName": "Cold First-Turn Tail Attribution",
+  "verificationReportSha256": "dddf420d422b1ca690e0c9f1ad0d38e5687e32b3b561cc6629e166c75ff05598",
+  "verifierCommit": "bdc3dd44b7631ad9e7363137554d518b616a1adc",
+  "publisherRunId": "33297991331",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

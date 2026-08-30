@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.69.2-new-06",
+  "productionCommit": "2f7e6a55f89adb7a9b33f7306a47ca06a8baf18f",
+  "productionBlob": "8132fc447e237f7f7a08a27126191a47dc6eac6f",
+  "liveScenarioId": "06902_MAMSHOLIC_EXACT_BRAND_ALIAS_REAL_LONG_CHAT",
+  "decision": "LIVE_PASS",
+  "checkpoint": "M2-6",
+  "nextPriority": "07000_CURRENT_TASK_PRIMACY_GUARD_PARENT_REBASE_REVIEW",
+  "humanEvidence": [
+    "docs/SIMCORE_LIVE_06902_RELEASE_CLOSE_2026-08-30.md",
+    "docs/SIMCORE_06902_MAMSHOLIC_EXACT_BRAND_ALIAS_REPAIR_PLAN_2026-08-30.md"
+  ],
+  "authorityConfirmation": "HUMAN_EVIDENCE"
+}

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "systemVersion": "R2.10",
+  "name": "Context-Coherent Validation Harness",
+  "date": "2026-08-30",
+  "status": "IMPLEMENTED_CLOSED_QUALIFIED_NORMAL_PATH_ACTIVE",
+  "disposition": "STABILITY_SIMPLICITY_BOUNDED_AUTOMATION",
+  "predecessor": "R2.9_VALIDATION_CONTRACT_PROJECTION_AND_FIXTURE_CLOSURE",
+  "designAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_10_CONTEXT_COHERENT_VALIDATION_HARNESS_DESIGN_2026-08-30.md",
+  "implementationAuthorizationAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_10_IMPLEMENTATION_AUTHORIZATION_2026-08-30.md",
+  "implementationEvidence": "docs/SIMCORE_RELEASE_SYSTEM_V2_10_IMPLEMENTATION_EVIDENCE_2026-08-30.md",
+  "implementationClosureAuthority": "docs/SIMCORE_RELEASE_SYSTEM_V2_10_IMPLEMENTATION_CLOSURE_2026-08-30.md",
+  "designFrozen": true,
+  "implementationAuthorized": true,
+  "implementationVerified": true,
+  "implementationClosed": true,
+  "normalPathActive": true,
+  "principles": [
+    "KEEP_R2_8_HUMAN_AUTHORITY_FROZEN",
+    "KEEP_R2_9_PROFILE_AND_PROJECTED_CONTRACT_SEMANTICS_FROZEN",
+    "PRESERVE_AUTOMATION_BOUNDARIES",
+    "MAKE_VALIDATION_CONTEXT_ATOMIC",
+    "FAIL_CLOSED_ON_PROVENANCE_CONTRADICTIONS",
+    "ADD_NO_RELEASE_AUTHORITY"
+  ],
+  "implementedOwners": {
+    "validationContext": "products/simcore/tooling/validation-context-r2-10.mjs",
+    "activeRoute": "products/simcore/tests/suites/release-validation-active-r2-9.mjs",
+    "r2_9Regression": "products/simcore/tests/suites/release-system-r2-9-validation-contract-projection.test.mjs",
+    "r2_10Regression": "products/simcore/tests/suites/release-system-r2-10-context-coherent-validation.test.mjs"
+  },
+  "simplicity": {
+    "manualSourceLoaderPairingNormalPath": 0,
+    "manualFixtureSubstitutionNormalPath": 0,
+    "hardCodedActiveProductionVersionAssumption": 0,
+    "newPerVersionWrapperFanout": 0,
+    "newApprovalSteps": 0,
+    "newPublishers": 0,
+    "newMainWriters": 0,
+    "newBackgroundWorkers": 0
+  },
+  "qualification": {
+    "qualifiedHead": "ade420e825c99f2d4e5d02ec54d52e3512ae2659",
+    "run": 33301389293,
+    "verifyJob": 99230136297,
+    "requiredJob": 99230205488,
+    "result": "PASS"
+  },
+  "evidenceQualification": {
+    "qualifiedHead": "2a3d671357fdc264055fd7a533faefed426e7d73",
+    "run": 33301474325,
+    "verifyJob": 99230395471,
+    "requiredJob": 99230449128,
+    "result": "PASS"
+  },
+  "failClosedEvidence": [],
+  "runtimeMutation": "NONE",
+  "releaseSimcoreMutation": "NONE",
+  "deploymentDisposition": "N_A_VERIFIED_NO_RUNTIME_MUTATION",
+  "productionBoundaryBaseline": {
+    "releaseSimcoreCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+    "version": "0.70.1",
+    "latestBlob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
+    "installBlob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
+    "latestEqualsInstall": true
+  },
+  "preservedAuthorities": {
+    "productionPublisher": "RS2_4_PERMANENT",
+    "mainWriter": "repo-main-write.py",
+    "humanLivePassRequired": true,
+    "automaticLivePassDecision": false,
+    "automaticCheckpointSelection": false,
+    "automaticPrioritySelection": false,
+    "backgroundPollingOrRetry": false
+  }
+}

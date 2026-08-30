@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "r2-10-context-coherent-validation-harness",
+  "suite": "release-system-r2-10-context-coherent-validation",
+  "input": {
+    "systemVersion": "R2.10",
+    "theme": "CONTEXT_COHERENT_VALIDATION_HARNESS",
+    "predecessor": "R2.9",
+    "activation": "IN_PLACE_STABILIZATION"
+  },
+  "expected": {
+    "automation": "PRESERVED",
+    "authorityExpansion": "NONE",
+    "manualSourceLoaderPairingNormalPath": 0,
+    "manualFixtureSubstitutionNormalPath": 0,
+    "perVersionWrapperFanout": 0,
+    "runtimeMutation": "NONE",
+    "releaseSimcoreMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

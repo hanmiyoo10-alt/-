@@ -30,33 +30,58 @@ async function readManagedCliState() {
 }
 
 async function managedCliRuntime() {
-  if (!MANAGED_CLI_ENABLED) return {state:'unavailable',version:'',provisioning:'disabled',entry:null};
+  const unavailable = (state = 'unavailable', provisioning = 'unavailable') => ({
+    state, version:'', provisioning, entry:null,
+    modelCatalogState:'unavailable', modelCatalogVersion:'', modelCatalogExpectedVersion:MODEL_CATALOG_VERSION, modelCatalogEntry:null,
+  });
+  if (!MANAGED_CLI_ENABLED) return unavailable('unavailable', 'disabled');
   let descriptor;
   try { descriptor = JSON.parse(await fs.readFile(MANAGED_CLI_DESCRIPTOR, 'utf8')); }
   catch {
     const state = await readManagedCliState();
-    return state.state === 'ready'
-      ? {state:'invalid',version:'',provisioning:'unavailable',entry:null}
-      : {...state,entry:null};
+    return state.state === 'ready' ? unavailable('invalid') : {...unavailable(state.state, state.provisioning), version:state.version};
   }
-  if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== '@llmgateway/cli' || descriptor?.version !== CLI_VERSION) {
-    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+  if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== '@llmgateway/cli' || descriptor?.version !== CLI_VERSION
+      || descriptor?.catalogPackage !== MODEL_CATALOG_PACKAGE || descriptor?.catalogVersion !== MODEL_CATALOG_VERSION) {
+    return unavailable('invalid');
   }
   try {
     const versionRoot = await fs.realpath(MANAGED_CLI_VERSION_ROOT);
     const entry = await fs.realpath(String(descriptor.entry || ''));
-    if (!pathInside(versionRoot, entry)) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
-    const stat = await fs.stat(entry);
-    if (!stat.isFile()) return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
-    return {state:'ready',version:CLI_VERSION,provisioning:'ok',entry};
+    if (!pathInside(versionRoot, entry)) return unavailable('invalid');
+    if (!(await fs.stat(entry)).isFile()) return unavailable('invalid');
+
+    const catalogRoot = await fs.realpath(path.join(versionRoot, 'node_modules', '@llmgateway', 'models'));
+    if (!pathInside(versionRoot, catalogRoot)) return unavailable('invalid');
+    const packageJson = JSON.parse(await fs.readFile(path.join(catalogRoot, 'package.json'), 'utf8'));
+    if (packageJson?.name !== MODEL_CATALOG_PACKAGE || packageJson?.version !== MODEL_CATALOG_VERSION) return unavailable('invalid');
+    const rootExport = packageJson?.exports?.['.'] ?? packageJson?.exports;
+    const exportPath = typeof rootExport === 'string' ? rootExport : (rootExport?.import || packageJson?.module || '');
+    if (typeof exportPath !== 'string' || !exportPath) return unavailable('invalid');
+    const modelCatalogEntry = await fs.realpath(path.resolve(catalogRoot, exportPath));
+    if (!pathInside(catalogRoot, modelCatalogEntry) || !pathInside(versionRoot, modelCatalogEntry)) return unavailable('invalid');
+    if (!(await fs.stat(modelCatalogEntry)).isFile()) return unavailable('invalid');
+    if (await fs.realpath(String(descriptor.catalogEntry || '')) !== modelCatalogEntry) return unavailable('invalid');
+    return {
+      state:'ready', version:CLI_VERSION, provisioning:'ok', entry,
+      modelCatalogState:'ready', modelCatalogVersion:MODEL_CATALOG_VERSION,
+      modelCatalogExpectedVersion:MODEL_CATALOG_VERSION, modelCatalogEntry,
+    };
   } catch {
-    return {state:'invalid',version:'',provisioning:'unavailable',entry:null};
+    return unavailable('invalid');
   }
 }
 
 async function managedCliDiagnostics() {
   const runtime = await managedCliRuntime();
-  return {state:runtime.state,version:runtime.version,provisioning:runtime.provisioning};
+  return {
+    state:runtime.state,
+    version:runtime.version,
+    provisioning:runtime.provisioning,
+    modelCatalogState:runtime.modelCatalogState,
+    modelCatalogVersion:runtime.modelCatalogVersion,
+    modelCatalogExpectedVersion:runtime.modelCatalogExpectedVersion,
+  };
 }
 
 async function runCliProcess(args, extraEnv = {}) {

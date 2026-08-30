@@ -107,6 +107,22 @@
     return `managed · ${stateValue} · ${version ? `v${version}` : 'v—'} · provisioning ${provisioning}`;
   }
 
+
+  function modelCategoryCatalogDiagnosticText(diagnostics) {
+    const runtime = diagnostics?.cliRuntime && typeof diagnostics.cliRuntime === 'object' ? diagnostics.cliRuntime : null;
+    const manager = state.bridgeManagerRuntime || null;
+    const stateValue = String(runtime?.modelCatalogState || manager?.cliCatalogState || 'unavailable');
+    const version = String(runtime?.modelCatalogVersion || manager?.cliCatalogVersion || '');
+    if (stateValue === 'ready' && version === '1.251.0') return 'managed · ready · @llmgateway/models 1.251.0';
+    return `managed · unavailable · expected @llmgateway/models 1.251.0`;
+  }
+
+  function modelCategoryFidelityDiagnosticText(rows) {
+    const stats = requestModelCategoryStats(rows);
+    const source = (stats.premium + stats.regular) > 0 ? 'llmgateway-model-catalog' : 'unknown';
+    return `Premium ${stats.premium} · Regular ${stats.regular} · Unknown ${stats.unknown} · source ${source}`;
+  }
+
   function bridgeCreditsEarlyStartText(performance) {
     const early = performance?.creditsEarlyStart && typeof performance.creditsEarlyStart === 'object'
       ? performance.creditsEarlyStart
@@ -279,6 +295,8 @@
       `Bridge snapshot timeline: ${bridgeSnapshotTimelineText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI operations: ${bridgeCliOperationsText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI runtime: ${bridgeCliRuntimeText(state.data?.bridge?.diagnostics)}`,
+      `Model category catalog: ${modelCategoryCatalogDiagnosticText(state.data?.bridge?.diagnostics)}`,
+      `Model category fidelity: ${modelCategoryFidelityDiagnosticText(requestLedgerRowsForScope('all'))}`,
       `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,

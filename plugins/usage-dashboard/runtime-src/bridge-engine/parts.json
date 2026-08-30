@@ -9,6 +9,7 @@
     "30-cli-runtime.part.mjs",
     "35-request-provenance-capture.part.mjs",
     "40-sources.part.mjs",
+    "45-model-category.part.mjs",
     "50-organization-capture.part.mjs",
     "55-request-provenance.part.mjs",
     "60-snapshot-scheduler.part.mjs",

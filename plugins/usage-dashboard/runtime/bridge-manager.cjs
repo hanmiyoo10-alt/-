@@ -9,8 +9,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 
-const MANAGER_VERSION = '1.3.4';
-const PRODUCT_VERSION = '3.0.0-alpha.5.94';
+const MANAGER_VERSION = '1.3.5';
+const PRODUCT_VERSION = '3.0.0-alpha.5.95';
 const PROTOCOL = 'bridge-manager-v1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.LUD_MANAGER_PORT || 39119);
@@ -28,10 +28,12 @@ const TERMUX_EXEC_LD_PRELOAD = path.join(PREFIX, 'lib', 'libtermux-exec-ld-prelo
 const ENGINE_DESCRIPTOR = path.join(RUNTIME_ROOT, 'engine-adopted.json');
 const BUNDLED_ENGINE_FILE = path.join(RUNTIME_ROOT, 'bridge-engine.mjs');
 const BUNDLED_ENGINE_URL = `${RELEASE_PREFIX}bridge-engine.mjs`;
-const BUNDLED_ENGINE_VERSION = '1.6.30';
-const BUNDLED_ENGINE_SHA256 = '035aa5d6535edd357df3390b7cd22acff2dec298a79e86d2fe2b4b0d3f2b4228';
+const BUNDLED_ENGINE_VERSION = '1.6.31';
+const BUNDLED_ENGINE_SHA256 = 'b46f307494514eefdb2a237e54b18ba04c1582f2eb7766a0a6828d28604470d4';
 const MANAGED_CLI_PACKAGE = '@llmgateway/cli';
 const MANAGED_CLI_VERSION = '1.10.0';
+const MANAGED_MODEL_CATALOG_PACKAGE = '@llmgateway/models';
+const MANAGED_MODEL_CATALOG_VERSION = '1.251.0';
 const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
 const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');
 const MANAGED_CLI_VERSION_ROOT = path.join(MANAGED_CLI_ROOT, MANAGED_CLI_VERSION);
@@ -100,32 +102,50 @@ function resolveManagedCliBin(packageJson) {
   const values = Object.values(packageJson.bin).filter(value => typeof value === 'string');
   return values.length === 1 ? values[0] : '';
 }
+function resolveManagedCatalogEntry(rootReal) {
+  const catalogRoot = fs.realpathSync(path.join(rootReal, 'node_modules', '@llmgateway', 'models'));
+  if (!pathInside(rootReal, catalogRoot)) throw new Error('managed model catalog escaped runtime root');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(catalogRoot, 'package.json'), 'utf8'));
+  if (packageJson?.name !== MANAGED_MODEL_CATALOG_PACKAGE || packageJson?.version !== MANAGED_MODEL_CATALOG_VERSION) throw new Error('managed model catalog version mismatch');
+  const rootExport = packageJson?.exports?.['.'] ?? packageJson?.exports;
+  const exportPath = typeof rootExport === 'string' ? rootExport : (rootExport?.import || packageJson?.module || '');
+  if (typeof exportPath !== 'string' || !exportPath) throw new Error('managed model catalog export missing');
+  const catalogEntry = fs.realpathSync(path.resolve(catalogRoot, exportPath));
+  if (!pathInside(catalogRoot, catalogEntry) || !pathInside(rootReal, catalogEntry)) throw new Error('managed model catalog entry escaped runtime root');
+  if (!fs.statSync(catalogEntry).isFile()) throw new Error('managed model catalog entry is not a file');
+  return catalogEntry;
+}
+
 function verifyManagedCliDirectory(root) {
   const rootReal = fs.realpathSync(root);
   const packageRoot = path.join(rootReal, 'node_modules', '@llmgateway', 'cli');
   const packageReal = fs.realpathSync(packageRoot);
   if (!pathInside(rootReal, packageReal)) throw new Error('managed CLI package escaped runtime root');
   const packageJson = JSON.parse(fs.readFileSync(path.join(packageReal, 'package.json'), 'utf8'));
-  if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error('managed CLI package identity mismatch');
+  if (packageJson?.name !== MANAGED_CLI_PACKAGE || packageJson?.version !== MANAGED_CLI_VERSION) throw new Error('managed CLI package version mismatch');
   const bin = resolveManagedCliBin(packageJson);
-  if (!bin) throw new Error('managed CLI bin missing');
   const entry = fs.realpathSync(path.resolve(packageReal, bin));
   if (!pathInside(packageReal, entry) || !pathInside(rootReal, entry)) throw new Error('managed CLI entry escaped runtime root');
   if (!fs.statSync(entry).isFile()) throw new Error('managed CLI entry is not a file');
-  return entry;
+  const catalogEntry = resolveManagedCatalogEntry(rootReal);
+  return {entry,catalogEntry};
 }
 function managedCliRuntimeStatus() {
-  if (!MANAGED_CLI_ENABLED) return {cliRuntimeState:'unavailable',cliRuntimeVersion:'',cliRuntimeProvisioning:'disabled'};
+  if (!MANAGED_CLI_ENABLED) return {cliRuntimeState:'unavailable',cliRuntimeVersion:'',cliRuntimeProvisioning:'disabled',cliCatalogState:'unavailable',cliCatalogVersion:''};
   try {
     const descriptor = JSON.parse(fs.readFileSync(MANAGED_CLI_DESCRIPTOR, 'utf8'));
-    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
-    if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== MANAGED_CLI_PACKAGE || descriptor?.version !== MANAGED_CLI_VERSION || fs.realpathSync(String(descriptor.entry || '')) !== entry) throw new Error('managed CLI descriptor mismatch');
-    return {cliRuntimeState:'ready',cliRuntimeVersion:MANAGED_CLI_VERSION,cliRuntimeProvisioning:'ok'};
+    const verified = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
+    if (descriptor?.format !== 1 || descriptor?.state !== 'ready' || descriptor?.package !== MANAGED_CLI_PACKAGE || descriptor?.version !== MANAGED_CLI_VERSION
+        || descriptor?.catalogPackage !== MANAGED_MODEL_CATALOG_PACKAGE || descriptor?.catalogVersion !== MANAGED_MODEL_CATALOG_VERSION
+        || fs.realpathSync(String(descriptor.entry || '')) !== verified.entry || fs.realpathSync(String(descriptor.catalogEntry || '')) !== verified.catalogEntry) {
+      throw new Error('managed CLI/catalog descriptor mismatch');
+    }
+    return {cliRuntimeState:'ready',cliRuntimeVersion:MANAGED_CLI_VERSION,cliRuntimeProvisioning:'ok',cliCatalogState:'ready',cliCatalogVersion:MANAGED_MODEL_CATALOG_VERSION};
   } catch (_) {
     const state = readManagedCliState();
     return state.state === 'ready'
-      ? {cliRuntimeState:'invalid',cliRuntimeVersion:'',cliRuntimeProvisioning:'unavailable'}
-      : {cliRuntimeState:state.state,cliRuntimeVersion:state.version,cliRuntimeProvisioning:state.provisioning};
+      ? {cliRuntimeState:'invalid',cliRuntimeVersion:'',cliRuntimeProvisioning:'unavailable',cliCatalogState:'invalid',cliCatalogVersion:''}
+      : {cliRuntimeState:state.state,cliRuntimeVersion:state.version,cliRuntimeProvisioning:state.provisioning,cliCatalogState:'unavailable',cliCatalogVersion:''};
   }
 }
 function runNpmInstall(stage) {
@@ -166,8 +186,8 @@ async function provisionManagedCli() {
     return;
   }
   try {
-    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
-    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry,promotedAt:Date.now()});
+    const verified = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
+    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry:verified.entry,catalogPackage:MANAGED_MODEL_CATALOG_PACKAGE,catalogVersion:MANAGED_MODEL_CATALOG_VERSION,catalogEntry:verified.catalogEntry,promotedAt:Date.now()});
     writeManagedCliState('ready','ok');
     return;
   } catch (_) {}
@@ -182,7 +202,7 @@ async function provisionManagedCli() {
   try {
     writeManagedCliState('provisioning','pending');
     fs.mkdirSync(stage, {recursive:false,mode:0o700});
-    fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({private:true,dependencies:{[MANAGED_CLI_PACKAGE]:MANAGED_CLI_VERSION}}, null, 2) + '\n', {mode:0o600});
+    fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({private:true,dependencies:{[MANAGED_CLI_PACKAGE]:MANAGED_CLI_VERSION,[MANAGED_MODEL_CATALOG_PACKAGE]:MANAGED_MODEL_CATALOG_VERSION}}, null, 2) + '\n', {mode:0o600});
     await runNpmInstall(stage);
     verifyManagedCliDirectory(stage);
     if (fs.existsSync(MANAGED_CLI_VERSION_ROOT)) {
@@ -191,8 +211,8 @@ async function provisionManagedCli() {
     }
     fs.renameSync(stage, MANAGED_CLI_VERSION_ROOT);
     promoted = true;
-    const entry = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
-    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry,promotedAt:Date.now()});
+    const verified = verifyManagedCliDirectory(MANAGED_CLI_VERSION_ROOT);
+    atomicJsonWrite(MANAGED_CLI_DESCRIPTOR, {format:1,state:'ready',package:MANAGED_CLI_PACKAGE,version:MANAGED_CLI_VERSION,entry:verified.entry,catalogPackage:MANAGED_MODEL_CATALOG_PACKAGE,catalogVersion:MANAGED_MODEL_CATALOG_VERSION,catalogEntry:verified.catalogEntry,promotedAt:Date.now()});
     writeManagedCliState('ready','ok');
     if (quarantined) fs.rmSync(quarantine, {recursive:true,force:true});
   } catch (_) {

@@ -108,10 +108,12 @@ assert.ok(sources.includes("runCli(['credits', '--json'])"));
 assert.equal(/runCli(?:Process)?\(\s*\[\s*['"]usage['"]/.test(sources), false, 'P56 must not add a usage CLI request');
 assert.ok(sources.includes("captureAccountDetailsViaCliSession('24h')"));
 
+// UD_HISTORICAL_VERSION_LOCK — exact 5.90 product fixture owned by P56.
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.90');
 assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.90');
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.28');
 assert.equal(manifest.components.bridgeManager.version, '1.3.4');
+// UD_HISTORICAL_VERSION_LOCK — exact 5.90 Manager product fixture owned by P56.
 assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.90');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 

@@ -10,6 +10,17 @@ const READY_VERDICTS = new Set([
   'MERGE_READY_NO_DRIFT',
   'MERGE_READY_WITH_UNRELATED_MAIN_DRIFT',
 ]);
+const E16_IMPLEMENTATION_STATUS = Object.freeze({
+  schema: 1,
+  implementation: 'live-baseline-proven',
+  durableReleaseGeneration: 'E13',
+  durableGeneration: false,
+  documentationMode: 'generated-parity',
+  liveEvidenceIssue: '#906',
+  liveProofReleases: Object.freeze(['3.0.0-alpha.5.91', '3.0.0-alpha.5.92']),
+  liveProofRequests: Object.freeze(['#909', '#923']),
+  evidenceMode: 'immutable-release-receipts',
+});
 
 function fail(code, detail = '') {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -165,6 +176,7 @@ module.exports = {
   CAPSULE_AUTHORITY,
   CAPSULE_NEXT,
   READY_VERDICTS,
+  E16_IMPLEMENTATION_STATUS,
   compileMergeCapsule,
   markerForCapsule,
   formatMergeCapsule,

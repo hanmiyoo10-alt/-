@@ -1,6 +1,6 @@
 let modelCategoryCatalogMap = null;
 let modelCategoryCatalogLoad = null;
-let modelCategoryCatalogStatus = Object.freeze({state:'unavailable',version:'',expectedVersion:MODEL_CATALOG_VERSION});
+let modelCategoryCatalogStatus = Object.freeze({modelCatalogState:'unavailable',modelCatalogVersion:'',modelCatalogExpectedVersion:MODEL_CATALOG_VERSION});
 
 function normalizeModelCategoryId(usedModel) {
   const value = typeof usedModel === 'string' ? usedModel.trim() : '';
@@ -61,10 +61,10 @@ async function ensureModelCategoryCatalog() {
       const derived = buildModelCategoryMap(module.models);
       if (!derived.size) throw new Error('managed model catalog produced empty classification map');
       modelCategoryCatalogMap = derived;
-      modelCategoryCatalogStatus = Object.freeze({state:'ready',version:MODEL_CATALOG_VERSION,expectedVersion:MODEL_CATALOG_VERSION});
+      modelCategoryCatalogStatus = Object.freeze({modelCatalogState:'ready',modelCatalogVersion:MODEL_CATALOG_VERSION,modelCatalogExpectedVersion:MODEL_CATALOG_VERSION});
       return derived;
     } catch {
-      modelCategoryCatalogStatus = Object.freeze({state:'unavailable',version:'',expectedVersion:MODEL_CATALOG_VERSION});
+      modelCategoryCatalogStatus = Object.freeze({modelCatalogState:'unavailable',modelCatalogVersion:'',modelCatalogExpectedVersion:MODEL_CATALOG_VERSION});
       return null;
     } finally {
       modelCategoryCatalogLoad = null;
@@ -89,5 +89,10 @@ const managedCliDiagnosticsBeforeModelCategory = managedCliDiagnostics;
 managedCliDiagnostics = async function managedCliDiagnosticsWithModelCategory() {
   const runtime = await managedCliDiagnosticsBeforeModelCategory();
   await ensureModelCategoryCatalog();
-  return {...runtime, ...modelCategoryCatalogStatus};
+  return {
+    ...runtime,
+    modelCatalogState:modelCategoryCatalogStatus.modelCatalogState,
+    modelCatalogVersion:modelCategoryCatalogStatus.modelCatalogVersion,
+    modelCatalogExpectedVersion:modelCategoryCatalogStatus.modelCatalogExpectedVersion,
+  };
 };

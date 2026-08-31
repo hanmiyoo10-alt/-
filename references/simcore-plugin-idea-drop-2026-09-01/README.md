@@ -22,9 +22,17 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
    - gzip bytes: `4613`
    - gzip SHA-256: `d6bb66dbfcce95d4445966413d1e8ce1d1bc812c98048c4ce4842a260b04a854`
    - restore: `./RESTORE-INTERVIEW.sh`
+2. `lightboard-alter-store-1.03.1.risum` — **COMPLETE**
+   - original: `🛒라이트보드 알터 스토어 Ver.1.03.1.risum`
+   - bytes: `46348`
+   - SHA-256: `c4dae1d170b6c9cd506f15f1c646a51639e745cbeb8851d30342f97714ca1bd9`
+   - transport: deterministic gzip → base64 → 3 verified text parts
+   - gzip bytes: `13712`
+   - gzip SHA-256: `8887de19e2154e39553b2c69a763dab30c061f2a29446e4b7150ed421ab749ca`
+   - restore: `./RESTORE-ALTER-STORE.sh`
 
 `MANIFEST.json` records the exact source and transport identities.
 
 ## Current disposition
 
-`ARTIFACT_1_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_2_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

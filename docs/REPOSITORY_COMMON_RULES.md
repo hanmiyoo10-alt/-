@@ -225,6 +225,41 @@ When a development, analysis, review, or release procedure repeats, prefer small
 
 Reusable workflow modules should compose with existing Git, CI, release, security, and project contracts rather than replace them.
 
+### RCR-D11 — Choose the narrowest capable semantic owner/effect surface
+
+**Class:** `DEFAULT`
+
+Before selecting an implementation mechanism, classify the semantic job and prefer the narrowest existing owner/effect surface that can perform it correctly. Do not introduce broader state ownership, privileged hooks, workers, storage owners, APIs, background jobs, UI owners, or release machinery when a smaller existing surface can satisfy the requirement.
+
+Project-specific architecture decides what the candidate surfaces are. This rule governs selection discipline without replacing project ownership.
+
+### RCR-D12 — Map state/data/effect flow before multi-layer mutation
+
+**Class:** `DEFAULT`
+
+When one change spans multiple modules, layers, processes, or persistence boundaries, explicitly map the semantic flow before mutation. A useful generic shape is:
+
+```text
+input/event
+→ semantic owner
+→ state/data transform
+→ persistence boundary if any
+→ consumer/presentation
+→ validation surface
+```
+
+The map may be textual, tabular, or diagrammatic. It is an analysis artifact and must not become a second source of truth.
+
+### RCR-D13 — Validate contracts across boundaries, not files in isolation
+
+**Class:** `DEFAULT`
+
+When one semantic feature is represented across multiple layers, validation should check the connection points between those layers rather than treating each file or module as independently sufficient.
+
+Examples include producer field ↔ consumer field, UI action ↔ handler, state writer ↔ state reader, schema field ↔ persistence/migration logic, manifest declaration ↔ runtime owner, diagnostics identity ↔ displayed identity, canonical source ↔ generated artifact, and release tuple ↔ promoted artifact.
+
+Project-owned tests and contracts decide the concrete assertions. The common layer does not invent one universal schema.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived
@@ -290,6 +325,24 @@ Parallel agreement, voting, or repeated model output is supporting evidence only
 When a tool or workflow exposes an explicit analysis, audit, research, diagnosis, or review phase, keep that phase read-only while uncertainty and scope are still being resolved. Mutation should begin only after evidence is sufficient for a selected design and the owning workflow authorizes writes.
 
 An exploratory index, audit report, diagnosis, or candidate comparison must not silently become a writer merely because the tooling can also modify files.
+
+### RCR-C09 — Prefer validators before introducing replacement/shared writers
+
+**Class:** `CONDITIONAL`
+
+When proposing a new shared writer, builder, migration owner, publisher, or replacement mechanism for an existing workflow, prefer first establishing a read-only scanner or validator that proves the current contract, repeated failure mode, and missing enforcement gap.
+
+Where practical, use:
+
+```text
+observe/scan
+→ validate current contract
+→ collect repeated evidence
+→ define exact gap
+→ introduce a writer/replacement owner only if still justified
+```
+
+This does not prohibit ordinary project-local source edits or already-authorized writers. It applies when creating or replacing an authority-bearing mechanism.
 
 ## 7. Deliberately project-only rules
 

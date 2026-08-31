@@ -54,7 +54,6 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
    - gzip bytes: `8924`
    - gzip SHA-256: `6fc567293ac28e249c73e2711a84f146818ff29d87481919a3a41b377d2e46ad`
    - restore: `./RESTORE-LIGHT-STATUS-200.sh`
-
 6. `lightboard-light-status-window-2.1.0-inner-thoughts-toggle.module.charx` — **COMPLETE**
    - original: `[🔦😋가벼운 상태창 2.1.0 - 속마음 온오프].module.charx`
    - bytes: `29046`
@@ -66,6 +65,15 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
 
 `MANIFEST.json` records the exact source and transport identities.
 
+## Batch closure
+
+The currently supplied post-SNS LightBoard / MiniBoard intake is exhausted at artifact 6.
+
+- all received source artifacts have been archived and analyzed,
+- no seventh source artifact is present in the current intake,
+- any later user-supplied reference should begin a new follow-on intake rather than silently extending this closed batch,
+- production/release authority remains unchanged.
+
 ## Current disposition
 
-`ARTIFACTS_1_6_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_6_COMPLETE · BATCH_COMPLETE · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

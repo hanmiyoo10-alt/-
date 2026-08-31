@@ -168,12 +168,12 @@ def patch_historical_p63() -> None:
         if text.count(anchor) != 1:
             raise SystemExit('5.98 P63 release guard anchor mismatch')
         text = text.replace(anchor, anchor + guard, 1)
-    manifest_anchor = "const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json','utf8'));\n"
-    manifest_lock = manifest_anchor + '// UD_HISTORICAL_VERSION_LOCK\n'
+    manifest_assertion = "assert.equal(manifest.productVersion, '3.0.0-alpha.5.97');\n"
+    manifest_lock = '// UD_HISTORICAL_VERSION_LOCK\n' + manifest_assertion
     if manifest_lock not in text:
-        if text.count(manifest_anchor) != 1:
+        if text.count(manifest_assertion) != 1:
             raise SystemExit('5.98 P63 manifest history anchor mismatch')
-        text = text.replace(manifest_anchor, manifest_lock, 1)
+        text = text.replace(manifest_assertion, manifest_lock, 1)
     P63.write_text(text, encoding='utf-8')
 
 
@@ -258,8 +258,12 @@ def validate_target() -> None:
     if manifest.get('contracts') != {'snapshot': 1, 'recentRequest': 1}:
         raise SystemExit('5.98 contracts changed')
     p63 = P63.read_text(encoding='utf-8')
-    if "if (release.productVersion !== '3.0.0-alpha.5.97')" not in p63 or p63.count('UD_HISTORICAL_VERSION_LOCK') < 2:
-        raise SystemExit('5.98 P63 historical boundary missing')
+    if "if (release.productVersion !== '3.0.0-alpha.5.97')" not in p63:
+        raise SystemExit('5.98 P63 historical guard missing')
+    if p63.count('UD_HISTORICAL_VERSION_LOCK') != 2:
+        raise SystemExit('5.98 P63 historical lock count mismatch')
+    if "// UD_HISTORICAL_VERSION_LOCK\nassert.equal(manifest.productVersion, '3.0.0-alpha.5.97');" not in p63:
+        raise SystemExit('5.98 P63 manifest historical lock placement mismatch')
     if spec.get('managedModelCatalogAuthority', {}).get('upstreamCommit') != UPSTREAM_MODELS_COMMIT:
         raise SystemExit('5.98 upstream Models commit drift')
     run('node', 'plugins/usage-dashboard/tools/build_usage_dashboard.cjs', '--check')

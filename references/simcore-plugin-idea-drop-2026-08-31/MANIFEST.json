@@ -53,9 +53,18 @@
     },
     {
       "ordinal": 4,
-      "status": "PENDING",
+      "status": "COMPLETE",
       "originalFilename": "🔦라이트보드 주석 4.0.0.charx",
-      "repositoryFilename": "lightboard-annotations-4.0.0.charx"
+      "repositoryFilename": "lightboard-annotations-4.0.0.charx",
+      "bytes": 16938,
+      "sha256": "00c3aac1d5e0bdb0a4d8a9e8c97988761651d2b47dc937ec16abee0df9a86124",
+      "transport": {
+        "encoding": "deterministic-gzip-json-byte-array-parts",
+        "gzipBytes": 16747,
+        "gzipSha256": "c6d8684693b64b82c91251f65a396a49c833163147cdbea70ad69d412bffa0d3",
+        "parts": 5,
+        "gzipBytePartLengths": [4096, 4096, 4096, 4096, 363]
+      }
     }
   ]
 }

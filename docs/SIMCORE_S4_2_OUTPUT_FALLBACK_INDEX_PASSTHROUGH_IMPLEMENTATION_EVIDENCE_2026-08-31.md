@@ -1,7 +1,7 @@
 # SimCore S4-2 Output Fallback Index Pass-Through Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **STAGED · PR-DRY NEXT · NO PUBLICATION BEFORE S7**
+Status: **PR-DRY QUALIFIED · INTENT REMOVAL NEXT · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S4 / OUTER RUNTIME SHELL / PASS-THROUGH PARAMETER RETIREMENT**
 
 ## Authority
@@ -152,7 +152,7 @@ telemetry checkpoint gating = unchanged
 release-simcore = unchanged
 ```
 
-## PR-dry qualification plan
+## PR-dry qualification
 
 Temporary dry identity:
 
@@ -163,7 +163,46 @@ purpose = GATE_PR1_DRY only
 candidate persistence = forbidden
 ```
 
-After a successful PR-dry, remove the request and require fresh request-free substantive CI with `candidateCommit = null` before merge.
+Qualified evidence:
+
+```text
+PR = #1047
+qualified head = 539d30daa6ebdec3f6e5bc1ba5696006b590526b
+workflow run = 33368925644
+Verify job = 99415405285 / PASS
+Required job = 99415565933 / PASS
+PR merge-test / verifierCommit = 971ea4de295c09d1db2dd8b7c157aa790022ac61
+PR base = 51522eb1552cd6a3e8bb451051ddcc273e4a3e0c
+conclusion = PASS
+reasonCodes = []
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = PASS
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+production bytes = 574325
+architecture contract = 0.70.1 / non-transitional
+```
+
+The successful PR-dry proves the single-file builder decoded and hash-verified its embedded predecessor, reproduced P0→P9, applied the exact P9→P10 delta, passed static/architecture/regression verification, and did not persist a candidate.
+
+## Request-free qualification plan
+
+The temporary request is now eligible for removal. After deletion, require a fresh substantive CI:
+
+```text
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = NOT_APPLICABLE
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+Required = PASS
+candidateCommit = null
+```
 
 ## Anomaly ledger
 
@@ -178,8 +217,9 @@ BLOCKER = NONE
 
 ```text
 S4_2_DESIGN = FROZEN ON MAIN
-S4_2_P10_BUILDER = STAGED
-S4_2_SELF_CONTAINMENT = BUILT-IN
-S4_2_PR_DRY = NEXT
+S4_2_P10_BUILDER = STAGED / PR-DRY QUALIFIED
+S4_2_SELF_CONTAINMENT = PASS
+S4_2_PR_DRY = PASS
+S4_2_REQUEST_FREE_CI = NEXT
 S4_2_PUBLICATION = NONE BEFORE S7
 ```

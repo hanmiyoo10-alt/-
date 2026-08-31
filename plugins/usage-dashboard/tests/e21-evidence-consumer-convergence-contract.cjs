@@ -97,19 +97,32 @@ assert.deepEqual(jsKeys, pythonKeys, 'JS release ordering must match the monoton
 
 const testsRoot = 'plugins/usage-dashboard/tests';
 const directEvidenceNames = ['verifiedBaseline','latestInstalledEvidence','releaseEvidence'];
+const directEvidenceOwners = new Set([
+  'e21-evidence-consumer-convergence-contract.cjs', // contract owner: malformed/dual-owner fixtures + static canary
+  'p63-credits-spend-composition-source-fidelity.cjs', // frozen 5.97 live E20 release proof
+]);
+const p63Source = fs.readFileSync(path.join(testsRoot,'p63-credits-spend-composition-source-fidelity.cjs'),'utf8');
+assert.ok(p63Source.includes("assert.equal(release.productVersion, '3.0.0-alpha.5.97')"), 'P63 allowlist must remain exact 5.97 release-specific proof');
+for (const marker of directEvidenceNames) assert.ok(p63Source.includes(marker), `P63 bounded evidence owner marker missing: ${marker}`);
+
 const offenders = [];
 for (const name of fs.readdirSync(testsRoot).filter((entry)=>entry.endsWith('.cjs'))) {
   const file = path.join(testsRoot,name);
   const source = fs.readFileSync(file,'utf8');
   if (!source.includes('helpers/current-release.cjs')) continue;
+  if (directEvidenceOwners.has(name)) continue;
   for (const marker of directEvidenceNames) {
     if (source.includes(marker)) offenders.push(`${name}:${marker}`);
   }
 }
 assert.deepEqual(offenders, [], `generic current-release consumers must use evidenceView only: ${offenders.join(',')}`);
+assert.deepEqual([...directEvidenceOwners].sort(), [
+  'e21-evidence-consumer-convergence-contract.cjs',
+  'p63-credits-spend-composition-source-fidelity.cjs',
+], 'direct evidence owners must remain explicitly bounded');
 
 const e20Source = fs.readFileSync('plugins/usage-dashboard/tools/release_evidence_contract_e20.cjs','utf8');
 assert.ok(e20Source.includes("require('./release_version_order.cjs')"), 'E20 ordering must reuse the shared JS release-order helper');
 assert.equal(e20Source.includes("/^3\\.0\\.0-alpha\\.5\\."), false, 'E20 must not retain its old alpha.5-only ordering regex');
 
-console.log(`E21 Evidence Consumer Convergence: OK · ${currentProduct} -> synthetic ${forwardProduct} · closed shape · canonical view · direct-read canary · monotonic-order parity`);
+console.log(`E21 Evidence Consumer Convergence: OK · ${currentProduct} -> synthetic ${forwardProduct} · closed shape · canonical view · bounded direct-read owners · monotonic-order parity`);

@@ -81,7 +81,7 @@
     "Verify Product 5.98 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
     "Full Diagnostics must show Bridge CLI runtime @llmgateway/cli 1.10.0 separately from Model category catalog @llmgateway/models 1.280.0.",
     "Compact Diagnostics must show CLI 1.10.0 · Models 1.280.0 without identity crossover.",
-    "Recheck naturally observed model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend composition, ledger, cache, tier, outcome and HTTP behavior."
+    "Recheck model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend, ledger, cache, tier, outcome and HTTP behavior."
   ],
   "releaseNotes": {
     "highlights": [
@@ -94,7 +94,7 @@
       "Verify Product 5.98 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
       "Full Diagnostics must show Bridge CLI runtime @llmgateway/cli 1.10.0 separately from Model category catalog @llmgateway/models 1.280.0.",
       "Compact Diagnostics must show CLI 1.10.0 · Models 1.280.0 without identity crossover.",
-      "Recheck naturally observed model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend composition, ledger, cache, tier, outcome and HTTP behavior."
+      "Recheck model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend, ledger, cache, tier, outcome and HTTP behavior."
     ]
   }
 }

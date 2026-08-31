@@ -44,12 +44,7 @@ assert.ok(diagnostics.includes('unknown stays unknown'));
 assert.ok(diagnostics.includes('active local errors'));
 assert.ok(diagnostics.includes('Bridge 24h capture reuse:'));
 assert.ok(diagnostics.includes('Bridge organization discovery:'));
-if (currentRelease.releaseEvidence) {
-  assert.ok(currentRelease.releaseEvidence.acceptedBaseline, 'structured release evidence must retain an accepted baseline');
-  assert.ok(currentRelease.releaseEvidence.latestInstalled, 'structured release evidence must retain latest-installed evidence');
-} else {
-  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
-}
+assert.ok(currentRelease.evidenceView?.display?.acceptedBaseline, 'canonical evidence view must retain accepted-baseline evidence');
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
 assert.ok(guidelines.includes('Provisioning adds no snapshot source operation or endpoint.'));

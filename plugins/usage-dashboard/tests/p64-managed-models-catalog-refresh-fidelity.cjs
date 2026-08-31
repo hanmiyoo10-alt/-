@@ -5,7 +5,6 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
-const evidence = require('../tools/release_evidence_contract_e20.cjs');
 
 const release = loadCurrentRelease();
 assert.equal(release.productVersion, '3.0.0-alpha.5.98');
@@ -27,11 +26,11 @@ assert.equal(spec.managedModelCatalogAuthority?.exact, true);
 assert.equal(spec.managedModelCatalogAuthority?.upstreamRepository, 'theopenco/llmgateway');
 assert.equal(spec.managedModelCatalogAuthority?.upstreamCommit, 'fbb40efa41c379db5223dff708509b6dd82e05a9');
 assert.deepEqual(spec.contracts, {snapshot:1,recentRequest:1});
-assert.equal(Object.hasOwn(spec, 'verifiedBaseline'), false);
-assert.equal(Object.hasOwn(spec, 'latestInstalledEvidence'), false);
-assert.deepEqual(evidence.inspectReleaseEvidence(spec.releaseEvidence, {required:true,targetProductVersion:release.productVersion}), []);
+
+const evidenceView = release.evidenceView;
+assert.equal(evidenceView.mode, 'structured');
 for (const role of ['acceptedBaseline','latestInstalled']) {
-  const row = spec.releaseEvidence[role];
+  const row = evidenceView[role];
   assert.equal(row.productVersion, '3.0.0-alpha.5.97');
   assert.equal(row.releaseSha, 'ef4686126addf26eac07b1d4c3e047e2dfacaaae');
   assert.equal(row.verdict, 'accepted');
@@ -142,11 +141,12 @@ const p62 = fs.readFileSync('plugins/usage-dashboard/tests/p62-managed-runtime-d
 assert.ok(p62.includes("if (release.productVersion !== '3.0.0-alpha.5.96')"), 'P62 historical diagnostic identity proof must remain frozen');
 const p63 = fs.readFileSync('plugins/usage-dashboard/tests/p63-credits-spend-composition-source-fidelity.cjs', 'utf8');
 assert.ok(p63.includes("if (release.productVersion !== '3.0.0-alpha.5.97')"), 'P63 must become exact historical applicability on 5.98');
-assert.ok((p63.match(/UD_HISTORICAL_VERSION_LOCK/g) || []).length >= 2, 'P63 historical Product/manifest locks must be explicit');
+assert.ok(p63.includes("// UD_HISTORICAL_VERSION_LOCK\nassert.equal(release.productVersion, '3.0.0-alpha.5.97');"), 'P63 historical Product lock must be explicit');
+assert.ok(p63.includes("// UD_HISTORICAL_VERSION_LOCK\nassert.equal(manifest.productVersion, '3.0.0-alpha.5.97');"), 'P63 historical manifest lock must be explicit');
 
 const materializer = fs.readFileSync('plugins/usage-dashboard/tools/release_models_catalog_598.py', 'utf8');
 assert.ok(materializer.includes('MATERIALIZER_IDEMPOTENT:{TARGET_PRODUCT}'), '5.98 materializer must provide second-pass no-op proof');
-assert.ok(materializer.includes("classifier source changed during catalog-only materialization"), '5.98 materializer must lock classifier source byte-neutrality');
+assert.ok(materializer.includes('classifier source changed during catalog-only materialization'), '5.98 materializer must lock classifier source byte-neutrality');
 
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json', 'utf8'));
 const engineBytes = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs');
@@ -165,4 +165,4 @@ assert.equal(manifest.components?.bridgeManager?.managedModelCatalogVersion, '1.
 assert.equal(bootstrapSha, '4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
-console.log(`P64 Managed Models Catalog Refresh Fidelity: OK · Product 5.98 · Engine 1.6.34 ${engineSha.slice(0,12)} · Manager 1.3.6 ${managerSha.slice(0,12)} · CLI 1.10.0 · Models 1.280.0 exact · classifier policy unchanged · E21 structured evidence · no new I/O`);
+console.log(`P64 Managed Models Catalog Refresh Fidelity: OK · Product 5.98 · Engine 1.6.34 ${engineSha.slice(0,12)} · Manager 1.3.6 ${managerSha.slice(0,12)} · CLI 1.10.0 · Models 1.280.0 exact · classifier policy unchanged · E21 canonical evidence view · no new I/O`);

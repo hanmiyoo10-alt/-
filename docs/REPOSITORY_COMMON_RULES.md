@@ -193,6 +193,38 @@ Manual/device steps remain appropriate when the needed evidence genuinely exists
 
 A production incident or newly established durable contract should gain an appropriate regression check when practical. Tests should validate public/operational behavior or durable boundaries rather than merely duplicating implementation details.
 
+### RCR-D07 — Scope impact before broad change
+
+**Class:** `DEFAULT`
+
+Before a broad, architectural, or high-blast-radius change, establish the relevant structure, ownership boundaries, callers/dependents/tests, and likely impact surface first. Then re-read the original source at the affected symbols before making implementation claims or selecting a repair.
+
+A structural index, dependency graph, impact report, or other derived view may reduce repeated broad scanning, but it does not replace current owning source or authority.
+
+### RCR-D08 — Distill context, preserve source authority
+
+**Class:** `DEFAULT`
+
+Repeatedly used knowledge should be distilled into a compact, source-linked index or summary layer when that materially reduces repeated broad scanning. Original source and deeper references must remain available for targeted re-read.
+
+Derived summaries, indexes, graphs, skills, or memory aids are context-management tools. They do not become a competing source of mutable project truth and must not silently override current owning authority.
+
+### RCR-D09 — Creation is incomplete without feedback
+
+**Class:** `DEFAULT`
+
+Generated or changed work should be checked through the strongest practical feedback loop available for that artifact before it is declared complete. Appropriate feedback may include executable tests, static checks, diff review, rendered-output inspection, source-backed diagnostics, or required real-device evidence.
+
+The exact validator remains project- or artifact-owned; this rule does not require one universal check. Creation, generation, or compilation alone is not completion when a stronger practical verification surface exists.
+
+### RCR-D10 — Prefer composable workflow modules
+
+**Class:** `DEFAULT`
+
+When a development, analysis, review, or release procedure repeats, prefer small, composable, inspectable procedures, skills, checks, or tools where they improve consistency. Avoid introducing a monolithic process framework that silently takes authority away from existing project owners or makes failures difficult to isolate.
+
+Reusable workflow modules should compose with existing Git, CI, release, security, and project contracts rather than replace them.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived
@@ -242,6 +274,22 @@ When a project records runtime errors or incidents, current actionable health an
 **Class:** `CONDITIONAL`
 
 When authoritative validation genuinely requires a real device or external runtime, repository work may stop at that evidence boundary. The project contract owns the exact device steps and success criteria; the common layer does not invent them.
+
+### RCR-C07 — Isolate parallel exploration; select explicitly
+
+**Class:** `CONDITIONAL`
+
+For genuinely complex, high-risk, or naturally parallelizable work, independent approaches may be explored in isolated branches, worktrees, read-only review lanes, or equivalent bounded environments. Selection or merge should happen only after the alternatives are compared against explicit criteria and current owning authority.
+
+Parallel agreement, voting, or repeated model output is supporting evidence only; it does not manufacture source truth. Small or straightforward work should not pay parallel-orchestration overhead without a concrete benefit.
+
+### RCR-C08 — Separate analysis from mutation where supported
+
+**Class:** `CONDITIONAL`
+
+When a tool or workflow exposes an explicit analysis, audit, research, diagnosis, or review phase, keep that phase read-only while uncertainty and scope are still being resolved. Mutation should begin only after evidence is sufficient for a selected design and the owning workflow authorizes writes.
+
+An exploratory index, audit report, diagnosis, or candidate comparison must not silently become a writer merely because the tooling can also modify files.
 
 ## 7. Deliberately project-only rules
 

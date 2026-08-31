@@ -76,7 +76,11 @@
       "gzip_sha256": "6fc567293ac28e249c73e2711a84f146818ff29d87481919a3a41b377d2e46ad",
       "parts": [
         "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part001.txt",
-        "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part002.txt"
+        "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part002.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part003.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part004.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part005.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part006.txt"
       ],
       "complete": true
     }

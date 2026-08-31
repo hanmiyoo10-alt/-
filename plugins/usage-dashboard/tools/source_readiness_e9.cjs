@@ -61,6 +61,30 @@ function grepTree(sha, needle, pathspec) {
   }
 }
 
+function productVersionAt(sha) {
+  const path = 'plugins/usage-dashboard/runtime/product-manifest.json';
+  const text = showText(sha,path);
+  if (text === null) readinessFail('product-manifest-missing','SOURCE_SHA_NOT_READY',{
+    detail:`product-manifest-missing:${path}`,
+    offending_path:path,
+    repair_hint:'restore the trusted Usage Dashboard product manifest before staging',
+  });
+  let manifest;
+  try { manifest = JSON.parse(text); }
+  catch { readinessFail('product-manifest-json','SOURCE_SHA_NOT_READY',{
+    detail:`product-manifest-json:${path}`,
+    offending_path:path,
+    repair_hint:'repair trusted product-manifest JSON before staging',
+  }); }
+  const version = String(manifest?.productVersion || '');
+  if (!specContract.PRODUCT_RE.test(version)) readinessFail('product-manifest-version','SOURCE_SHA_NOT_READY',{
+    detail:`product-manifest-version:${version || '<missing>'}`,
+    offending_path:path,
+    repair_hint:'restore a canonical Local Usage Dashboard Product identity before staging',
+  });
+  return version;
+}
+
 function parsePartsAt(sha) {
   const path = 'plugins/usage-dashboard/src/parts.cjs';
   const text = showText(sha,path);
@@ -134,7 +158,7 @@ function assertPythonSyntax(text, filename = '<materializer>') {
   }
 }
 
-function assertMaterializerSyntax(sourceSha, releaseSpecPath) {
+function assertMaterializerSyntax(sourceSha, releaseSpecPath, currentProductVersion = '') {
   const specText = showText(sourceSha, releaseSpecPath);
   if (specText === null) readinessFail('release-spec-missing','SOURCE_SHA_NOT_READY',{
     detail:`release-spec-missing:${releaseSpecPath}`,
@@ -149,7 +173,7 @@ function assertMaterializerSyntax(sourceSha, releaseSpecPath) {
     repair_hint:'repair release specification JSON before staging',
   }); }
 
-  const findings = specContract.inspectReleaseSpec(spec);
+  const findings = specContract.inspectReleaseSpec(spec,{currentProductVersion});
   if (findings.length) readinessFail('release-spec-contract','SOURCE_SHA_NOT_READY',{
     detail:`release-spec-contract:${specContract.summarizeFindings(findings)}`,
     offending_path:releaseSpecPath,
@@ -220,11 +244,13 @@ function inspectReadiness(trustedBaseSha, sourceSha) {
   }
 
   assertTouchedPartBoundaries(transaction.sourceSha, changeRows);
-  const materializer = assertMaterializerSyntax(transaction.sourceSha, transaction.releaseSpec);
+  const currentProductVersion = productVersionAt(transaction.intentBaseSha);
+  const materializer = assertMaterializerSyntax(transaction.sourceSha, transaction.releaseSpec, currentProductVersion);
 
   return {
     sourceSha:transaction.sourceSha,
     productVersion:transaction.productVersion,
+    currentProductVersion,
     releaseSpec:transaction.releaseSpec,
     materializer,
     candidateBranch:transaction.candidateBranch,
@@ -250,6 +276,7 @@ module.exports = {
   receiptForError,
   showText,
   grepTree,
+  productVersionAt,
   parsePartsAt,
   assertTouchedPartBoundaries,
   assertPythonSyntax,

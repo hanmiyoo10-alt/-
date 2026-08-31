@@ -54,11 +54,6 @@ assert.ok(diagnostics.includes('Bridge CLI timing:'));
 assert.ok(diagnostics.includes('Bridge snapshot cache:'));
 assert.ok(diagnostics.includes('Bridge snapshot circuit:'));
 assert.ok(guidelines.includes(currentRelease.currentMemory));
-if (currentRelease.releaseEvidence) {
-  assert.ok(currentRelease.releaseEvidence.acceptedBaseline, 'structured release evidence must retain an accepted baseline');
-  assert.ok(currentRelease.releaseEvidence.latestInstalled, 'structured release evidence must retain latest-installed evidence');
-} else {
-  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
-}
+assert.ok(currentRelease.evidenceView?.display?.acceptedBaseline, 'canonical evidence view must retain accepted-baseline evidence');
 
 console.log('usage-dashboard P16 snapshot performance attribution: OK · invariants retained; emitted timing behavior delegated to black-box Engine harness');

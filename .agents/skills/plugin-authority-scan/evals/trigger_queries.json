@@ -1,0 +1,52 @@
+[
+  {
+    "query": "Usage Dashboard 지금 production 기준이 어디야? manifest랑 release branch 확인해줘",
+    "should_trigger": true,
+    "reason": "Direct current-authority lookup for the pilot scope."
+  },
+  {
+    "query": "로컬 Usage Dashboard 최신 버전 레포에서 다시 확인해줘",
+    "should_trigger": true,
+    "reason": "Indirect current mutable truth request that requires authority discovery."
+  },
+  {
+    "query": "예전 대화 말고 현재 소스 기준으로 usage dashboard authority chain부터 잡아줘",
+    "should_trigger": true,
+    "reason": "Explicit request for authority chain and fresh source."
+  },
+  {
+    "query": "다음 Usage Dashboard 업데이트 설계 전에 지금 production baseline부터 확인해",
+    "should_trigger": true,
+    "reason": "Authority scan is a required first phase inside a larger task."
+  },
+  {
+    "query": "Usage Dashboard 진단 로그인데 failures 0이면 정상인지 분석해줘",
+    "should_trigger": false,
+    "reason": "Runtime diagnostic triage is a different skill; authority scan may be a dependency but is not the requested job."
+  },
+  {
+    "query": "Usage Dashboard 카드 UI 간격 좀 줄여줘",
+    "should_trigger": false,
+    "reason": "Direct code/UI mutation request, not an authority-discovery task."
+  },
+  {
+    "query": "SimCore production manifest 어디야?",
+    "should_trigger": false,
+    "reason": "This pilot is validated only for plugin:usage-dashboard."
+  },
+  {
+    "query": "repo에 등록된 모든 플러그인의 release branch 목록 뽑아줘",
+    "should_trigger": false,
+    "reason": "Repository-wide enumeration is outside the one-plugin pilot boundary."
+  },
+  {
+    "query": "usage-dashboard release workflow 테스트가 왜 실패했는지 고쳐줘",
+    "should_trigger": false,
+    "reason": "Diagnosis/repair request, not a locator-only authority scan."
+  },
+  {
+    "query": "docs/USAGE_DASHBOARD_GUIDELINES.md 문장 다듬어줘",
+    "should_trigger": false,
+    "reason": "Documentation editing request, not current-authority discovery."
+  }
+]

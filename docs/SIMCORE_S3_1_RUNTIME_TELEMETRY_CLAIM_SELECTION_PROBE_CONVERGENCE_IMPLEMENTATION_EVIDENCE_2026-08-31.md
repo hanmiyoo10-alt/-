@@ -1,7 +1,7 @@
 # SimCore S3-1 Runtime Telemetry Claim Selection Probe Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **PR-DRY QUALIFIED AFTER BUILDER MATCHER FIX · TEMPORARY INTENT REMOVED · REQUEST-FREE FINAL CI NEXT**
+Status: **INTERNAL CHECKPOINT QUALIFIED · PR-DRY + REQUEST-FREE SUBSTANTIVE CI PASS · PRODUCTION UNCHANGED**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE TELEMETRY BOOKKEEPING DEDUPE**
 
 Authority:
@@ -160,15 +160,7 @@ No candidate was persisted and `release-simcore` was not mutated.
 
 ## Temporary intent retirement
 
-The PR-only request:
-
-```text
-simcore-v0.70.3-intent-04
-```
-
-was deleted after repaired PR-dry qualification as required.
-
-Current branch posture:
+The PR-only request `simcore-v0.70.3-intent-04` was deleted after repaired PR-dry qualification as required.
 
 ```text
 candidate request = ABSENT
@@ -177,7 +169,49 @@ release-simcore mutation = NONE
 S7 release authority = NONE
 ```
 
-A fresh request-free exact-head substantive CI is required before merge. `GATE_PR1_DRY` is correctly not required in that final phase; builder classification must still exercise `GATE_CI_SELF`, `GATE_STATIC`, `GATE_ARCH`, and `GATE_REGRESSION` rather than produce doc-only NOOP.
+## Request-free substantive final qualification
+
+After intent retirement and evidence synchronization, exact request-free head `00ac472b312d4fd6ef394cb92342a56e45548b59` was validated without candidate authority.
+
+```text
+SimCore CI run = 33361323660
+Verify job = 99393112258 · SUCCESS
+Required job = 99393204026 · SUCCESS
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+candidateCommit = null
+prBaseCommit = 32d9da3374311b2a4f4e86e663e5866d68ecc102
+prHeadCommit = 00ac472b312d4fd6ef394cb92342a56e45548b59
+```
+
+Classifier result proved the repaired builder classification remained substantive:
+
+```text
+labels = [CI_SELF, HARNESS, SIMCORE_DOC_ONLY]
+docOnly = false
+```
+
+Final request-free gates:
+
+```text
+GATE_CI_SELF    = PASS
+GATE_PR1_DRY    = NOT_APPLICABLE
+GATE_STATIC     = PASS
+GATE_ARCH       = PASS
+GATE_REGRESSION = PASS
+```
+
+Final request-free source identity remained:
+
+```text
+latestSha256  = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes         = 574325
+latest == install = YES
+```
+
+This qualifies S3-1 as an internal cumulative checkpoint. It does not authorize publication or broad live validation before S7.
 
 ## Safety state
 
@@ -202,7 +236,9 @@ S3_1_DESIGN = FROZEN
 S3_1_BUILDER = IMPLEMENTED
 S3_1_PR_DRY = PASS
 S3_1_TEMPORARY_INTENT = REMOVED
-S3_1_REQUEST_FREE_FINAL_CI = PENDING
+S3_1_REQUEST_FREE_FINAL_CI = PASS
+S3_1_INTERNAL_CHECKPOINT = QUALIFIED
 S3_1_PUBLICATION = NONE BEFORE S7
 release-simcore = v0.70.1 unchanged
+NEXT = EXACT-HEAD CI AFTER THIS EVIDENCE SYNC, THEN MERGE IF PASS
 ```

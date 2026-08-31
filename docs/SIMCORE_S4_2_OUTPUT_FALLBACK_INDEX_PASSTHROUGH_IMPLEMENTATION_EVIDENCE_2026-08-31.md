@@ -1,0 +1,185 @@
+# SimCore S4-2 Output Fallback Index Pass-Through Implementation Evidence
+
+Date: 2026-08-31 KST
+Status: **STAGED · PR-DRY NEXT · NO PUBLICATION BEFORE S7**
+Classification: **POST-M2 SIMPLIFICATION / S4 / OUTER RUNTIME SHELL / PASS-THROUGH PARAMETER RETIREMENT**
+
+## Authority
+
+- `docs/SIMCORE_POST_M2_SIMPLIFICATION_EXECUTION_ARCHITECTURE_2026-08-31.md`
+- `docs/SIMCORE_S4_1_RUNTIME_CURRENT_GUARD_CONVERGENCE_CLOSURE_2026-08-31.md`
+- `docs/SIMCORE_S4_2_OUTPUT_FALLBACK_INDEX_PASSTHROUGH_RETIREMENT_DESIGN_2026-08-31.md`
+- S4-2 design/closure main merge = `51522eb1552cd6a3e8bb451051ddcc273e4a3e0c`
+
+Production remains unchanged:
+
+```text
+release-simcore version = 0.70.1
+release-simcore commit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+release blob = 8f332cfceed316d35954e353c2eaca38c2f34d95
+provider cache = UNVERIFIED
+```
+
+No deployment, candidate persistence, public release or broad live authority exists before S7.
+
+## Cumulative stages
+
+```text
+P0 = exact v0.70.1 production
+P1 = S1-1 FNV convergence
+P2 = S2-1 Prompt dead render seam retirement
+P3 = S2-2 Session dead re-export retirement
+P4 = S2-3 runtime utility dead export retirement
+P5 = S3-1 claim-selection probe convergence
+P6 = S3-2 session candidate result convergence
+P7 = S3-3 session surface result convergence
+P8 = S3-4 session candidate wrapper convergence
+P9 = S4-1 runtime current guard convergence
+P10 = S4-2 output fallback-index pass-through retirement
+```
+
+## Builder
+
+`products/simcore/tooling/build-s4-2-output-fallback-index-passthrough-retirement.py`
+
+Implementation head after builder creation:
+
+`db1e86d12e13cf557eab164505c619659163147a`
+
+### Self-contained packaging
+
+The isolated materializer receives one builder file. P10 therefore remains self-contained.
+
+Instead of recursively embedding the whole P9 builder, which itself embeds P8, P10 reuses the exact P9-owned hash-verified P8 snapshot and then reproduces P9 using the same frozen S4-1 apply/verification contract before applying P9→P10.
+
+```text
+embedded predecessor = exact P8 builder snapshot
+P8 source SHA256 = 51c01833ded2369b94a78db9287cddfffb6a3feb4c1a414146ea887eb26fc890
+P0→P8 verification = inherited permanent predecessor verification
+P8→P9 verification = explicit S4-1 exact reconstruction + module/side-effect/guard checks
+P9→P10 verification = explicit exact reconstruction + module/side-effect/order checks
+sibling builder runtime dependency = NONE
+network dependency = NONE
+release-system materializer change = NONE
+```
+
+This avoids a recursive builder-snapshot tower while preserving the actual proof obligation that a fully verified P9 is the immediate runtime predecessor of P10.
+
+## Exact P9 -> P10 delta
+
+Before:
+
+```js
+async function processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf = null) {
+  let t = perfNow();
+```
+
+After:
+
+```js
+async function processCoreOutput(content, chaIdx, chatIdx, chat, perf = null) {
+  const fallbackOutIndex = chat?.message?.length ?? 0;
+  let t = perfNow();
+```
+
+Caller before:
+
+```js
+const fallbackOutIndex = chat?.message?.length ?? 0;
+return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
+```
+
+Caller after:
+
+```js
+return await processCoreOutput(content, chaIdx, chatIdx, chat, perf);
+```
+
+The fallback expression remains before `perfNow()` and before the first `runtimeSession.loadCoreForChat` await, preserving synchronous evaluation order and `sessionLoadMs` attribution.
+
+## Frozen proof envelope
+
+The builder fails closed unless:
+
+```text
+P0→P8 predecessor verification passes
+P8→P9 exact reconstruction passes
+P9 S4-1 guard/accounting/module invariants pass
+P9→P10 expected reconstruction equals candidate byte-for-byte
+module graph unchanged
+require surface unchanged
+all true SimCore.define module bodies unchanged
+processCoreOutput definition old=1/new=1 at exact shapes
+sole outputHandler call old=1/new=1 at exact shapes
+fallback expression count remains 1 on this outer path
+Session.resolveOutputIndex(fallbackOutIndex = -1) remains present exactly once
+cs.resolveOutputIndex(fallbackOutIndex) remains present exactly once
+S4-1 guard declaration/call counts unchanged
+staleRuntimeDrops increment/direct-drop counts unchanged
+positive telemetry current-runtime guard unchanged
+host/session/output/checkpoint call marker counts unchanged
+side-effect/protected marker counts unchanged
+latest.js == install.js
+node --check passes
+```
+
+## Pure differential harness
+
+The builder executes a bounded Node harness over:
+
+```text
+null chat
+empty object
+message=null
+message=[]
+one message
+multiple messages
+```
+
+For each shape it requires identical fallback values and identical `resolveOutputIndex` result across inactive/active pending-index controls. Session pending send-index precedence remains unchanged code.
+
+## Async / side-effect posture
+
+```text
+await boundaries = unchanged
+host.currentIndices/getChat ordering = unchanged
+runtimeSession.loadCoreForChat ordering = unchanged
+cs.processOutput ordering = unchanged
+new storage/chat/network/timer I/O = 0
+persistent fields/schema = unchanged
+prompt/Community semantics = unchanged
+telemetry checkpoint gating = unchanged
+release-simcore = unchanged
+```
+
+## PR-dry qualification plan
+
+Temporary dry identity:
+
+```text
+intent = simcore-v0.70.3-intent-09
+release = simcore-v0.70.3-new-09
+purpose = GATE_PR1_DRY only
+candidate persistence = forbidden
+```
+
+After a successful PR-dry, remove the request and require fresh request-free substantive CI with `candidateCommit = null` before merge.
+
+## Anomaly ledger
+
+```text
+WATCH = NONE
+DEFER = NONE
+FIX = NONE
+BLOCKER = NONE
+```
+
+## Current disposition
+
+```text
+S4_2_DESIGN = FROZEN ON MAIN
+S4_2_P10_BUILDER = STAGED
+S4_2_SELF_CONTAINMENT = BUILT-IN
+S4_2_PR_DRY = NEXT
+S4_2_PUBLICATION = NONE BEFORE S7
+```

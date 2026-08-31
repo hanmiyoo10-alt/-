@@ -14,15 +14,22 @@ This directory archives a new user-supplied Lightboard/MiniBoard reference batch
 
 ## Intake batch
 
-Planned artifacts:
+1. `lightboard-kakaotalk-v1.3-3.0.0-popover.risum` — **COMPLETE**
+   - original: `🔦라이트보드 카카오톡 V1.3-3.0.0 팝오버.risum`
+   - bytes: `54631`
+   - SHA-256: `5578f4898fc19810aea93657c444e244e66485de5f8c7f9edc2e51ea576673cc`
+   - authoritative transport: deterministic gzip → base64 → 5 verified parts
+   - restore: `./RESTORE-KAKAOTALK.sh`
+2. `miniboard-renderer-momotalk-1.0.0.charx` — **PENDING**
+3. `lightboard-status-window-4.0.0.charx` — **PENDING**
+4. `lightboard-annotations-4.0.0.charx` — **PENDING**
 
-1. `lightboard-kakaotalk-v1.3-3.0.0-popover.risum`
-2. `miniboard-renderer-momotalk-1.0.0.charx`
-3. `lightboard-status-window-4.0.0.charx`
-4. `lightboard-annotations-4.0.0.charx`
+`MANIFEST.json` records original filenames, normalized repository filenames, byte lengths, SHA-256 identities, transport identities, and per-artifact completion state.
 
-The final `MANIFEST.json` records original filenames, normalized repository filenames, byte lengths, SHA-256 identities, and container observations.
+## Transport note
+
+The initial raw-base64 KakaoTalk intake exposed one unverified slice-length mismatch. That slice was removed before authority was granted. The final KakaoTalk source representation is the five-part deterministic gzip-base64 set under `source-gzip-base64/`, whose Git blob identities were checked against locally computed blob identities before tree admission.
 
 ## Current disposition
 
-`INTAKE_IN_PROGRESS · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACT_1_COMPLETE · ARTIFACTS_2_4_PENDING · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

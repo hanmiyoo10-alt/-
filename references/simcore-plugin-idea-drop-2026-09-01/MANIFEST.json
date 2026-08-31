@@ -1,6 +1,6 @@
 {
   "batch": "simcore-plugin-idea-drop-2026-09-01",
-  "status": "ARTIFACTS_1_5_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
+  "status": "ARTIFACTS_1_6_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
   "artifacts": [
     {
       "ordinal": 1,
@@ -81,6 +81,26 @@
         "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part004.txt",
         "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part005.txt",
         "source-gzip-base64/lightboard-light-status-window-2.0.0-inner-thoughts-always.part006.txt"
+      ],
+      "complete": true
+    },
+    {
+      "ordinal": 6,
+      "original_label": "[🔦😋가벼운 상태창 2.1.0 - 속마음 온오프].module.charx",
+      "normalized_filename": "lightboard-light-status-window-2.1.0-inner-thoughts-toggle.module.charx",
+      "bytes": 29046,
+      "sha256": "20f5e14296a81db164adf2c6ca3dc710630e0d85521649a948fe461919f42bc9",
+      "transport": "deterministic-gzip-base64",
+      "gzip_bytes": 9408,
+      "gzip_sha256": "8d8108834417d04d5fd6314cee4bc0ea4e3335210f18abf9cc7360cb1228ea21",
+      "parts": [
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part001.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part002.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part003.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part004.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part005.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part006.txt",
+        "source-gzip-base64/lightboard-light-status-window-2.1.0-inner-thoughts-toggle.part007.txt"
       ],
       "complete": true
     }

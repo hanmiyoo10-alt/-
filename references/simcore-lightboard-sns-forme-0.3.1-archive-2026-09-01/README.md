@@ -37,13 +37,13 @@ The authoritative representation is the nine independently verified base64 text 
 From this directory:
 
 ```bash
-./RESTORE.sh
+bash ./RESTORE.sh
 ```
 
 or pass an output path:
 
 ```bash
-./RESTORE.sh /tmp/sns-forme-0.3.1.risum
+bash ./RESTORE.sh /tmp/sns-forme-0.3.1.risum
 ```
 
 The script concatenates the nine lexically ordered base64 parts, decodes and decompresses them, and verifies both byte length and SHA-256.

@@ -22,9 +22,19 @@
     },
     {
       "ordinal": 2,
-      "status": "PENDING",
+      "status": "COMPLETE",
       "originalFilename": "♦️미니보드 렌더러 · 모모톡 1.0.0.charx",
-      "repositoryFilename": "miniboard-renderer-momotalk-1.0.0.charx"
+      "repositoryFilename": "miniboard-renderer-momotalk-1.0.0.charx",
+      "bytes": 17540,
+      "sha256": "894392b57dedfff7a16d3367ed6affbbd9ef122f2afab4b735c88d9f2a9baac1",
+      "transport": {
+        "encoding": "deterministic-gzip-base64-parts",
+        "gzipBytes": 17385,
+        "gzipSha256": "3c545985811d9b7cef39a25b9b4839d8a1be3274b9b0f06690b1a926164c8f9b",
+        "base64Chars": 23180,
+        "parts": 6,
+        "partChars": [4000, 4000, 4000, 4000, 4000, 3180]
+      }
     },
     {
       "ordinal": 3,

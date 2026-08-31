@@ -20,7 +20,12 @@ This directory archives a new user-supplied Lightboard/MiniBoard reference batch
    - SHA-256: `5578f4898fc19810aea93657c444e244e66485de5f8c7f9edc2e51ea576673cc`
    - authoritative transport: deterministic gzip → base64 → 5 verified parts
    - restore: `./RESTORE-KAKAOTALK.sh`
-2. `miniboard-renderer-momotalk-1.0.0.charx` — **PENDING**
+2. `miniboard-renderer-momotalk-1.0.0.charx` — **COMPLETE**
+   - original: `♦️미니보드 렌더러 · 모모톡 1.0.0.charx`
+   - bytes: `17540`
+   - SHA-256: `894392b57dedfff7a16d3367ed6affbbd9ef122f2afab4b735c88d9f2a9baac1`
+   - authoritative transport: deterministic gzip → base64 → 6 verified parts
+   - restore: `./RESTORE-MOMOTALK.sh`
 3. `lightboard-status-window-4.0.0.charx` — **PENDING**
 4. `lightboard-annotations-4.0.0.charx` — **PENDING**
 
@@ -28,8 +33,8 @@ This directory archives a new user-supplied Lightboard/MiniBoard reference batch
 
 ## Transport note
 
-The initial raw-base64 KakaoTalk intake exposed one unverified slice-length mismatch. That slice was removed before authority was granted. The final KakaoTalk source representation is the five-part deterministic gzip-base64 set under `source-gzip-base64/`, whose Git blob identities were checked against locally computed blob identities before tree admission.
+The initial raw-base64 KakaoTalk intake exposed one unverified slice-length mismatch. That slice was removed before authority was granted. Completed artifacts use deterministic gzip-base64 parts under `source-gzip-base64/`; Git blob identities are checked against locally computed blob identities before tree admission.
 
 ## Current disposition
 
-`ARTIFACT_1_COMPLETE · ARTIFACTS_2_4_PENDING · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_2_COMPLETE · ARTIFACTS_3_4_PENDING · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

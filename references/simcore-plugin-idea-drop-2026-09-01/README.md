@@ -30,9 +30,17 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
    - gzip bytes: `13712`
    - gzip SHA-256: `8887de19e2154e39553b2c69a763dab30c061f2a29446e4b7150ed421ab749ca`
    - restore: `./RESTORE-ALTER-STORE.sh`
+3. `lightboard-livechat.risum` — **COMPLETE**
+   - original: `🔦라이트보드 - 라이브챗.risum`
+   - bytes: `16979`
+   - SHA-256: `bb299ded52a369c5cd5367ae5a90e56eaa2ee60af5cf3824b704668ceb7a5909`
+   - transport: deterministic gzip → base64 → 2 verified text parts
+   - gzip bytes: `5773`
+   - gzip SHA-256: `5e528d99797fcaf355ab9bf9c530fcca91d1ba4685de36c6ffc920c26951561f`
+   - restore: `./RESTORE-LIVECHAT.sh`
 
 `MANIFEST.json` records the exact source and transport identities.
 
 ## Current disposition
 
-`ARTIFACTS_1_2_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_3_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

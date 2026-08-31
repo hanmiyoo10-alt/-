@@ -1,7 +1,7 @@
 # SimCore S4-3 Pending-Probe Branch Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTED ON WORK BRANCH · PR-DRY QUALIFICATION NEXT · NO PUBLICATION BEFORE S7**
+Status: **PR-DRY QUALIFIED · REQUEST-FREE QUALIFICATION NEXT · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S4 / OUTER RUNTIME SHELL / POST-ONSEND BOOKKEEPING BRANCH CONVERGENCE**
 
 ## Authority
@@ -29,6 +29,7 @@ No release-simcore publication, candidate persistence or broad live authority is
 branch = impl/simcore-s4-3-pending-probe-branch-convergence-20260831
 fresh main parent before implementation = 6a6388f40a0b7fc00512824ad5e8e6b6e701b235
 builder commit = 300441fa190549694e3693d45d12a617b4e2cc3f
+implementation PR = #1054
 ```
 
 The branch was fast-forwarded to the then-current main before implementation because it still contained no implementation commits.
@@ -181,9 +182,9 @@ provider-cache inference = NONE
 release-simcore mutation = NONE
 ```
 
-## Qualification plan
+## PR-dry qualification
 
-Temporary PR-dry identity:
+Temporary identity:
 
 ```text
 intent = simcore-v0.70.3-intent-10
@@ -192,20 +193,54 @@ purpose = GATE_PR1_DRY only
 candidate persistence = forbidden
 ```
 
-Sequence:
+Qualified evidence:
 
 ```text
-1. add temporary dry request
-2. open implementation PR
-3. require Verify + Required PASS with GATE_PR1_DRY PASS
-4. preserve any failure before repair as WATCH / DEFER / FIX / BLOCKER
-5. delete temporary dry request
-6. require request-free Verify + Required PASS
-7. synchronize this evidence to final exact head
-8. require final exact-head Verify + Required PASS
-9. expected-head CAS merge to main
-10. verify release-simcore remains byte-neutral
+PR = #1054
+qualified head = dd039b25606795bbd6434ae0540c7c889f7fb19e
+PR base = 6a6388f40a0b7fc00512824ad5e8e6b6e701b235
+PR merge-test / verifierCommit = 20933d85ae84a11c2f6b95db20c7fa7604f979a9
+workflow run = 33375692669
+Verify job = 99436551200 / PASS
+Required job = 99436722487 / PASS
+conclusion = PASS
+reasonCodes = []
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = PASS
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+GATE_STATE = NOT_APPLICABLE
+GATE_COORDINATION = NOT_APPLICABLE
+GATE_LEGACY_COMPAT = NOT_APPLICABLE
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+production bytes = 574325
+architecture contract = 0.70.1 / non-transitional
 ```
+
+The successful dry gate proves that the ordinary isolated candidate materializer accepted the P11 single-file builder, reconstructed the cumulative checkpoint, passed static/architecture/regression validation and persisted no candidate.
+
+No anomaly was observed during dry qualification.
+
+## Next qualification
+
+The temporary dry request is removed after this evidence synchronization. The resulting request-free head must independently satisfy:
+
+```text
+Verify = PASS
+Required = PASS
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = NOT_APPLICABLE
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+candidateCommit = null
+```
+
+After request-free qualification, this evidence will be synchronized one final time and that exact final head must pass Verify + Required before expected-head CAS merge.
 
 ## Current anomaly ledger
 
@@ -221,8 +256,8 @@ BLOCKER = NONE
 ```text
 S4_3_DESIGN = FROZEN ON MAIN
 S4_3_P11_BUILDER = IMPLEMENTED
-S4_3_PR_DRY = NEXT
-S4_3_REQUEST_FREE_CI = PENDING
+S4_3_PR_DRY = PASS
+S4_3_REQUEST_FREE_CI = NEXT
 S4_3_FINAL_EXACT_HEAD_CI = PENDING
 S4_3_PUBLICATION = NONE BEFORE S7
 ```

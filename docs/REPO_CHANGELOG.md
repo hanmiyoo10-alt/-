@@ -941,3 +941,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b36953a13d3a94c068dfde259c99f04e3a78ba03)
 - Event ID: `ab1eacde816da3db1d99a186689521fd98941002cf0639fb2ac24ca864dbe0ee`
 <!-- canonical-main-doc-promoted:ab1eacde816da3db1d99a186689521fd98941002cf0639fb2ac24ca864dbe0ee -->
+
+### 2026-08-31 — Merge PR #1060: release Usage Dashboard 5.98 models catalog refresh
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fb4ffd77733f96f0c3905924e57f33d3051e9b5e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fb4ffd77733f96f0c3905924e57f33d3051e9b5e)
+- Event ID: `08bfcefc571378c0f60f65012f21674013c7400fd3a1c8dbb97c8f84737b53ad`
+<!-- canonical-main-doc-promoted:08bfcefc571378c0f60f65012f21674013c7400fd3a1c8dbb97c8f84737b53ad -->

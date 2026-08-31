@@ -1,13 +1,14 @@
 # SimCore S3-4 Session Candidate Wrapper Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTED · PR-DRY QUALIFICATION PENDING · INTERNAL CHECKPOINT ONLY**
+Status: **PR-DRY FAILURE PRESERVED · FIX IN PROGRESS · INTERNAL CHECKPOINT ONLY**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE TELEMETRY CANDIDATE WRAPPER DEDUPE**
 
 Authority:
 - `docs/SIMCORE_POST_M2_SIMPLIFICATION_EXECUTION_ARCHITECTURE_2026-08-31.md`
 - `docs/SIMCORE_S3_3_SESSION_SURFACE_RESULT_CONVERGENCE_IMPLEMENTATION_EVIDENCE_2026-08-31.md`
 - `docs/SIMCORE_S3_4_SESSION_CANDIDATE_WRAPPER_CONVERGENCE_DESIGN_2026-08-31.md`
+- historical packaging precedent: `docs/SIMCORE_06600_RELEASE_INTENT_FAILURE_02_FIX01_BUILDER_SELF_CONTAINMENT_2026-08-29.md`
 
 Production remains:
 
@@ -19,24 +20,7 @@ release blob = 8f332cfceed316d35954e353c2eaca38c2f34d95
 
 No deployment or broad live authority exists before S7.
 
-## Cumulative builder architecture
-
-`products/simcore/tooling/build-s3-4-session-candidate-wrapper-convergence.py`
-
-The P8 builder intentionally reuses the already-qualified P7 builder rather than copying its full verification body:
-
-```text
-run build-s3-3-session-surface-result-convergence.py
-→ P7 materialized and P0→P7 proofs re-executed
-→ read byte-identical P7 latest/install
-→ apply exact P7→P8 wrapper-only delta
-→ execute S3-4 differential/static proof
-→ write byte-identical P8 latest/install
-```
-
-This keeps previous qualification executable while narrowing new verification ownership to S3-4.
-
-Stages:
+## Cumulative stages
 
 ```text
 P0 = exact v0.70.1 production
@@ -50,7 +34,7 @@ P7 = S3-3 session surface result convergence
 P8 = S3-4 session candidate wrapper convergence
 ```
 
-## Exact P7 -> P8 delta
+## Exact P7 -> P8 runtime delta
 
 Target:
 
@@ -68,9 +52,11 @@ function sessionStorageCandidate(label, storage) {
 
 Replace only the five repeated direct frozen `{ label, storage }` constructions with helper calls.
 
+The runtime delta itself did not change as a result of the PR-dry failure below.
+
 ## Frozen behavior
 
-The builder fails closed unless P7 -> P8 preserves:
+The builder must fail closed unless P7 -> P8 preserves:
 
 ```text
 inspectSessionSurface call count/order
@@ -99,18 +85,87 @@ The new helper must remain private and occur exactly once as a declaration plus 
 
 A Node differential harness proves deep equality, property order, storage reference identity and frozen output for both candidate labels over representative storage objects.
 
-## PR-dry posture
+## PR-dry failure 01
 
 Temporary request:
 
 ```text
 intent = simcore-v0.70.3-intent-07
-purpose = GATE_PR1_DRY only
-candidate persistence = forbidden
-release authority = none
+PR = #1040
+failed head = 05194b92796e867f200fb5017ae31c2959af258f
+workflow run = 33363560645
+Verify job = 99399539457
 ```
 
-Required qualification:
+Bounded result:
+
+```text
+conclusion = FAIL
+reasonCodes = [PR1_DRY_QUALIFICATION_FAIL]
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = FAIL
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+```
+
+Exact stderr:
+
+```text
+CANDIDATE_BUILDER_FAILED: python3 /tmp/simcore-candidate-40834G/build-s3-4-session-candidate-wrapper-convergence.py
+S3_4_BASE_BUILDER_MISSING: products/simcore/tooling/build-s3-3-session-surface-result-convergence.py
+```
+
+Classification:
+
+```text
+FIX = S3_4_BUILDER_SELF_CONTAINMENT
+class = BUILDER_PACKAGING_SELF_CONTAINMENT
+runtime defect = NO
+production mutation = NONE
+candidate persistence = NONE
+```
+
+Root cause:
+
+```text
+candidate materializer copies the requested builder as one executable file
+→ first P8 implementation expected sibling S3-3 builder from repository
+→ sibling builder is not packaged in isolated candidate directory
+→ P8 composition fails before materialization
+```
+
+This is the same generic single-file builder contract already preserved by the v0.66 builder self-containment incident. The release/candidate materializer must not be changed inside this runtime simplification transaction.
+
+## Correct repair boundary
+
+Replace the failed wrapper composition with a **self-contained P8 builder** that contains the full mechanical P0→P8 transformation and bounded verification needed to materialize this checkpoint in one file.
+
+Forbidden repair:
+
+```text
+change candidate-materialize-core
+copy sibling builders in generic release infrastructure
+introduce repository-relative runtime dependency
+widen S3-4 product delta
+```
+
+Required repair:
+
+```text
+one executable builder file
+exact production v0.70.1 input
+same P1→P7 transformations already qualified
+exact P7→P8 S3-4 delta
+static/differential fences in same file
+latest/install byte identity
+```
+
+## PR-dry posture after repair
+
+`intent-07` remains a dry-only qualification marker and produced no candidate. The repaired head must prove:
 
 ```text
 GATE_CI_SELF = PASS
@@ -122,7 +177,7 @@ candidateCommit = null
 Required = PASS
 ```
 
-After PR-dry qualification:
+After successful qualification:
 
 ```text
 record exact evidence
@@ -152,7 +207,8 @@ broad real-long-chat = S7 only
 
 ```text
 S3_4_DESIGN = FROZEN ON MAIN
-S3_4_BUILDER = IMPLEMENTED
-S3_4_PR_DRY = PENDING
+S3_4_RUNTIME_DELTA = UNCHANGED
+S3_4_PR_DRY_01 = FAIL / PRESERVED
+S3_4_BUILDER_SELF_CONTAINMENT = FIX IN PROGRESS
 S3_4_PUBLICATION = NONE BEFORE S7
 ```

@@ -1,0 +1,53 @@
+{
+  "skill": "plugin-impact-scope",
+  "pilot_scope": "plugin:usage-dashboard",
+  "cases": [
+    {
+      "id": "service-tier-fidelity",
+      "prompt": "Local Usage Dashboard의 service tier selection source를 실제 로그 source에서 받아 Recent Requests랑 Diagnostics에 추가하려고 해. 구현 전에 어디까지 영향받는지 현재 레포 기준으로 impact scope만 잡아줘. 수정은 하지 마.",
+      "expected_output": "A read-only source-linked impact map that begins from current Usage Dashboard authority, traces the selection-source scalar across Engine capture/request metadata/Plugin presentation and diagnostics, identifies request-identity and no-extra-I/O boundaries, reads relevant regression surfaces, and leaves unresolved dynamic edges UNKNOWN rather than proposing implementation.",
+      "assertions": [
+        "Resolves or consumes current verified plugin:usage-dashboard authority before mutable/source ownership claims.",
+        "Separates mechanical candidate discovery from semantic DIRECT/SUPPORTED_LIKELY evidence.",
+        "Maps producer-consumer boundaries across Engine request metadata and Plugin UI/Diagnostics where current source supports them.",
+        "Checks request identity and no-extra-I/O constraints as preservation boundaries rather than inventing new behavior.",
+        "Names relevant tests/contracts only after source-linked review.",
+        "Performs no repository mutation and does not write a design solution."
+      ]
+    },
+    {
+      "id": "managed-model-identity",
+      "prompt": "managed Models package identity를 바꾸는 변경이 들어간다면 Manager provisioning, Engine diagnostics, Plugin 표시, materializer/manifest 쪽에서 무엇을 같이 봐야 하는지 영향 범위만 조사해줘. 현재 소스 기준으로, 업데이트 구현은 하지 마.",
+      "expected_output": "A bounded impact map that distinguishes package provisioning authority, Engine identity/diagnostics ownership, Plugin display consumers, generated/materialized artifacts, manifest/release identity and regression surfaces without assuming every sibling file changes.",
+      "assertions": [
+        "Uses current authority/source reads rather than remembered package/product versions.",
+        "Maps only source-backed Manager/Engine/Plugin/generated/release relationships.",
+        "Does not infer same-directory or same-name files are semantically affected.",
+        "Includes diagnostics identity separation and generated artifact parity only when current contracts prove relevance.",
+        "Keeps unresolved relationships UNKNOWN and stops before implementation/release execution."
+      ]
+    },
+    {
+      "id": "lifecycle-no-version-audit",
+      "prompt": "Usage Dashboard lifecycle stress audit를 추가하면 어떤 테스트/문서/진단 surface가 영향받는지 확인해줘. 제품 바이트가 바뀐다고 가정하지 말고 impact scope만 해.",
+      "expected_output": "A read-only impact scope that maps lifecycle ownership diagnostics and repository audit tests/docs, distinguishes current shipped runtime source from audit-only artifacts, and concludes no shipped-byte impact only if current contracts/source support that bounded claim.",
+      "assertions": [
+        "Does not automatically classify the audit as a product change or no-version change from memory.",
+        "Reads the relevant lifecycle ownership/diagnostic/test contracts.",
+        "Separates repository evidence changes from shipped runtime byte surfaces.",
+        "Does not infer heap/RSS or runtime behavior not supplied by authoritative evidence.",
+        "Performs no mutation."
+      ]
+    },
+    {
+      "id": "narrow-negative",
+      "prompt": "Usage Dashboard README 오타 한 글자 고치려는데 영향 분석 전체 돌려줘.",
+      "expected_output": "A compact NARROW_TASK handoff explaining that full broad impact scoping is not justified for an isolated copy edit unless current evidence reveals a broader contract/generated-artifact dependency.",
+      "assertions": [
+        "Does not expand into repository-wide archaeology by default.",
+        "Does not claim zero impact without checking the bounded path context.",
+        "Performs no mutation."
+      ]
+    }
+  ]
+}

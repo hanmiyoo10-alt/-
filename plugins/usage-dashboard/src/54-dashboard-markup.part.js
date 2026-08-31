@@ -75,7 +75,7 @@
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(analyticsTopModel)}</b></div>
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(analyticsTopProvider)}</b></div>
           ${analyticsExtra}
-        </div>` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        </div>${analyticsCreditsSpendCard}` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.analyticsScopes?.errors?.[analyticsScopeKey] ? `<p class="warn">Analytics · ${esc(errorSummaryText(d.analyticsScopes.errors[analyticsScopeKey]))}</p>` : ''}
         ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
       </section>

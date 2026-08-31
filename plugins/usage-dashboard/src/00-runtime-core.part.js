@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.96
+//@version 3.0.0-alpha.5.97
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.96';
+  const VERSION = '3.0.0-alpha.5.97';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed Runtime Diagnostic Identity Fidelity Repair",
+    title: "Credits Spend Composition Source Fidelity",
     highlights: Object.freeze([
-    "Managed CLI and managed Models diagnostics now keep separate version identities end to end instead of sharing a generic version field.",
-    "Full and compact Diagnostics use the same local truth resolver and fail closed when Engine and Manager report conflicting component versions.",
-    "Model-category classification and the exact @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 managed pair remain unchanged.",
-    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or catalog projection is added.",
+    "Credits Analytics now exposes a bounded 24h composition sourced only from explicit creditsCost and creditsDataStorageCost activity fields.",
+    "Missing or invalid component coverage remains UNKNOWN; explicit zero remains known zero and total spend is derived only when both components are complete.",
+    "The existing generic cost, token, cache, model, provider and request semantics remain unchanged.",
+    "No new endpoint, activity request, logs request, CLI invocation, catalog lookup, timer, poller or persistence owner is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.96 · Engine 1.6.32 · Manager 1.3.5 and READY/Health ok.",
-    "Full Diagnostics must show @llmgateway/cli 1.10.0 and @llmgateway/models 1.251.0 on separate lines without version overwrite.",
-    "Compact Diagnostics must show Engine 1.6.32 · Manager 1.3.5 · CLI 1.10.0 · Models 1.251.0 · ready.",
+    "Verify Product 5.97 · Engine 1.6.33 · Manager 1.3.5 and READY/Health ok.",
+    "Credits Analytics must show usage, data storage and total only from the 24h source-fidelity projection; UNKNOWN must render as —.",
+    "Full and compact Diagnostics must distinguish explicit zero from UNKNOWN for Credits spend composition.",
     "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression.",
     ]),
   });
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.32';
+  const REQUIRED_BRIDGE_VERSION = '1.6.33';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

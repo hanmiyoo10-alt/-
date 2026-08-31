@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const {loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const {formatReleaseEvidence} = require('../tools/release_evidence_contract_e20.cjs');
 
 const release = assertCurrentReleaseArtifacts();
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
@@ -11,7 +12,18 @@ const publisher = fs.readFileSync(release.publisherWorkflow, 'utf8');
 const resolver = fs.readFileSync('plugins/usage-dashboard/tools/resolve_release_spec.cjs', 'utf8');
 
 assert.ok(guidelines.includes(release.currentMemory));
-assert.ok(guidelines.includes(release.verifiedBaseline));
+if (release.releaseEvidence) {
+  const evidenceMemory = formatReleaseEvidence(release.releaseEvidence);
+  assert.equal(Object.hasOwn(release, 'verifiedBaseline'), false, 'structured evidence must not retain legacy verifiedBaseline ownership');
+  assert.equal(Object.hasOwn(release, 'latestInstalledEvidence'), false, 'structured evidence must not retain legacy latestInstalledEvidence ownership');
+  assert.ok(evidenceMemory.acceptedBaseline.includes(release.releaseEvidence.acceptedBaseline.productVersion));
+  assert.ok(evidenceMemory.acceptedBaseline.includes(release.releaseEvidence.acceptedBaseline.releaseSha.slice(0, 12)));
+  assert.ok(evidenceMemory.latestInstalled.includes(release.releaseEvidence.latestInstalled.productVersion));
+  assert.ok(evidenceMemory.latestInstalled.includes(release.releaseEvidence.latestInstalled.releaseSha.slice(0, 12)));
+  assert.ok(evidenceMemory.latestInstalled.endsWith(`· ${release.releaseEvidence.latestInstalled.verdict}`));
+} else {
+  assert.ok(guidelines.includes(release.verifiedBaseline));
+}
 assert.equal(release.callerWorkflow, '.github/workflows/usage-dashboard-validate.yml');
 assert.ok(caller.includes(`uses: ./${release.validatorWorkflow}`));
 assert.ok(!caller.includes('release_spec:'));

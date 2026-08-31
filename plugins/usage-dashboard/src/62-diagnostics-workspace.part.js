@@ -73,6 +73,7 @@
     const runtimeBridge = bridgeRuntimeSnapshot();
     const stable = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const cli = diagnosticsWorkspaceCliRuntime();
+    const creditsSpendComposition = d.analyticsScopes?.scopes?.credits?.windows?.['24h']?.creditsSpendComposition || d.usageScopes?.scopes?.credits?.creditsSpendComposition || null;
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const ledgerRows = requestLedgerRowsForScope(scopeKey);
     let exactRows = 0;
@@ -108,6 +109,7 @@
       engineVersion:String(bridgeDiag.version || REQUIRED_BRIDGE_VERSION || ''),
       managerVersion:String(runtimeBridge.managerVersion || state.bridgeManagerRuntime?.managerVersion || ''),
       cli,
+      creditsSpendComposition,
       lastRefreshMs:num(state.lastSyncDurationMs) ? Number(state.lastSyncDurationMs) : null,
       snapshotMs,
       criticalPath,
@@ -134,6 +136,7 @@
       `Refresh identity: ${diagnosticsCaptureIdentityText(model.capture)}`,
       `Status: ${model.readiness} · Health ${model.health} · active errors ${model.activeErrors} · failures ${model.failures}`,
       `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · CLI ${model.cli.version || '—'} · Models ${model.cli.modelVersion || '—'} · ${model.cli.state}`,
+      creditsSpendCompositionDiagnosticText(model.creditsSpendComposition),
       `Last refresh: ${lastRefresh} · snapshot ${snapshot} · critical ${critical}`,
       `Data: age ${model.dataAge} · stale modules ${model.staleModules === null ? '—' : model.staleModules} · Request fidelity exact ${model.exactRows}/${model.ledgerRows}`,
       `Updater: ${model.updaterCompatible ? 'compatible' : 'incompatible'} · sync ${model.managerSync}`,

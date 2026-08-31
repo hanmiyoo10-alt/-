@@ -38,9 +38,18 @@
     },
     {
       "ordinal": 3,
-      "status": "PENDING",
+      "status": "COMPLETE",
       "originalFilename": "🔦라이트보드 상태창 4.0.0.charx",
-      "repositoryFilename": "lightboard-status-window-4.0.0.charx"
+      "repositoryFilename": "lightboard-status-window-4.0.0.charx",
+      "bytes": 10752,
+      "sha256": "263d2827d1fda16164b44332e6533bad363b4dacf693db7ca9ae2eb30a7a1fee",
+      "transport": {
+        "encoding": "deterministic-gzip-json-byte-array-parts",
+        "gzipBytes": 10586,
+        "gzipSha256": "767c0197f61d1efae968802d7f4b5eb3df33ec97ef73d24c361027662efb5dfe",
+        "parts": 12,
+        "gzipBytePartLengths": [1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 512, 512, 346]
+      }
     },
     {
       "ordinal": 4,

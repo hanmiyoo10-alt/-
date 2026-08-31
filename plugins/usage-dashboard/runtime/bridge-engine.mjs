@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.32';
+const VERSION = '1.6.33';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -2140,6 +2140,38 @@ function boundedDailyActivitySeries(raw, range) {
   return { range:String(range || ''), granularity, buckets };
 }
 
+function explicitCreditsSpendComponent(row, key) {
+  if (!row || typeof row !== 'object' || !Object.prototype.hasOwnProperty.call(row, key)) return null;
+  return explicitDailyActivityMetric(row[key]);
+}
+
+function boundedCreditsSpendComposition(raw, range) {
+  if (String(range || '') !== '24h') return null;
+  const rows = officialActivityRows(raw);
+  let usageCost = 0;
+  let dataStorageCost = 0;
+  let usageKnown = rows.length > 0;
+  let storageKnown = rows.length > 0;
+  for (const row of rows) {
+    const usage = explicitCreditsSpendComponent(row, 'creditsCost');
+    const storage = explicitCreditsSpendComponent(row, 'creditsDataStorageCost');
+    if (usage === null) usageKnown = false;
+    else usageCost += usage;
+    if (storage === null) storageKnown = false;
+    else dataStorageCost += storage;
+  }
+  const complete = usageKnown && storageKnown;
+  return {
+    window:'24h',
+    usageCost:usageKnown ? usageCost : null,
+    dataStorageCost:storageKnown ? dataStorageCost : null,
+    totalSpend:complete ? usageCost + dataStorageCost : null,
+    usageCostSource:usageKnown ? 'activity.creditsCost' : 'unknown',
+    dataStorageCostSource:storageKnown ? 'activity.creditsDataStorageCost' : 'unknown',
+    complete,
+  };
+}
+
 function normalizeCapturedRecentLogs(root) {
   const rows = Array.isArray(root?.rows) ? root.rows : [];
   return rows.map((row) => {
@@ -2216,6 +2248,7 @@ function normalizeUsageActivity(raw, org = null, range = '24h') {
   const recent = [];
   const rows = officialActivityRows(raw);
   const dailySeries = boundedDailyActivitySeries(raw, range);
+  const creditsSpendComposition = boundedCreditsSpendComposition(raw, range);
   let totalRequests = 0;
   let totalCost = 0;
   const metrics = blankMetrics();
@@ -2315,6 +2348,7 @@ function normalizeUsageActivity(raw, org = null, range = '24h') {
     __bridgeActivity: true,
     scope: range,
     ...(dailySeries ? { dailySeries } : {}),
+    ...(creditsSpendComposition ? { creditsSpendComposition } : {}),
     totalRequests,
     totalCost,
     ...metrics,
@@ -2376,6 +2410,8 @@ function mergeUsageActivities(items, range = '24h') {
   const recentRequests = [];
   const dailySeriesCandidates = (items || []).map((item) => item?.dailySeries).filter((series) => series && typeof series === 'object');
   const dailySeries = dailySeriesCandidates.length === 1 ? dailySeriesCandidates[0] : null;
+  const creditsSpendCompositionCandidates = (items || []).map((item) => item?.creditsSpendComposition).filter((value) => value && typeof value === 'object');
+  const creditsSpendComposition = creditsSpendCompositionCandidates.length === 1 ? creditsSpendCompositionCandidates[0] : null;
   let totalRequests = 0;
   let totalCost = 0;
   const metrics = blankMetrics();
@@ -2393,6 +2429,7 @@ function mergeUsageActivities(items, range = '24h') {
     __bridgeActivity: true,
     scope: range,
     ...(dailySeries ? { dailySeries } : {}),
+    ...(creditsSpendComposition ? { creditsSpendComposition } : {}),
     totalRequests,
     totalCost,
     ...metrics,

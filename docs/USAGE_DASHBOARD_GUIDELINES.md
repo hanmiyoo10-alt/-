@@ -21,8 +21,8 @@ The common-rules layer does not own this project's mutable production, release, 
 ## Current production snapshot
 
 <!-- USAGE_DASHBOARD_RELEASE_STATE_START -->
-- Product: `3.0.0-alpha.5.96`
-- Bridge Engine: `1.6.32`
+- Product: `3.0.0-alpha.5.97`
+- Bridge Engine: `1.6.33`
 - Bridge Manager: `1.3.5`
 - Release branch: `release-usage-dashboard`
 - Source: `plugins/usage-dashboard/runtime/product-manifest.json`

@@ -283,6 +283,7 @@
     const diagAnalyticsScopeKey = ['all','devpass','credits'].includes(String(state.analyticsScopeView)) ? String(state.analyticsScopeView) : 'all';
     const diagAnalyticsBundle = d.analyticsScopes?.scopes?.[diagAnalyticsScopeKey] || (diagAnalyticsScopeKey === 'all' ? d.analytics : null) || null;
     const diagAnalyticsW24 = diagAnalyticsBundle?.windows?.['24h'] || d.usageScopes?.scopes?.[diagAnalyticsScopeKey] || null;
+    const diagCreditsSpend = d.analyticsScopes?.scopes?.credits?.windows?.['24h']?.creditsSpendComposition || d.usageScopes?.scopes?.credits?.creditsSpendComposition || null;
     return [
       `Local Usage Dashboard v${VERSION}`,
       `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
@@ -356,6 +357,7 @@
       paygAccountDiagnosticText(diagAccount),
       devpassCycleSummaryDiagnosticText(devpassCycleSummaryTruth(diagAccount, d.analyticsScopes?.scopes?.devpass)),
       costDriverDiagnosticText(diagAnalyticsScopeKey, diagAnalyticsW24),
+      creditsSpendCompositionDiagnosticText(diagCreditsSpend),
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,

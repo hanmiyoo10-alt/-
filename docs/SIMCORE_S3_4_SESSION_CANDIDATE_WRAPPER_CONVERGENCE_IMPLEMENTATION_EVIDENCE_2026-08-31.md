@@ -1,7 +1,7 @@
 # SimCore S3-4 Session Candidate Wrapper Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **PR-DRY QUALIFIED AFTER SELF-CONTAINMENT FIX · TEMP INTENT RETIREMENT NEXT · INTERNAL CHECKPOINT ONLY**
+Status: **PR-DRY + REQUEST-FREE QUALIFIED · MERGE-READY INTERNAL CHECKPOINT · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE TELEMETRY CANDIDATE WRAPPER DEDUPE**
 
 Authority:
@@ -42,7 +42,7 @@ Target:
 runtime-telemetry.resolveSessionCandidates(root, windowLike)
 ```
 
-Add one private helper:
+Private helper:
 
 ```js
 function sessionStorageCandidate(label, storage) {
@@ -50,38 +50,36 @@ function sessionStorageCandidate(label, storage) {
 }
 ```
 
-Replace only the five repeated direct frozen `{ label, storage }` constructions with helper calls.
+Only the five repeated direct frozen `{ label, storage }` constructions are replaced. Candidate selection policy, session access/consume behavior and Host-local behavior remain frozen.
 
-The runtime delta remained unchanged across the builder repair.
+## Frozen proof envelope
 
-## Frozen behavior
-
-The self-contained builder fails closed unless P7 -> P8 preserves:
+The self-contained builder enforces:
 
 ```text
-inspectSessionSurface call count/order
-WINDOW then GLOBAL_THIS inspection order
-window/global usability predicates
-storage identity comparison
-relation branch order and values
+inspectSessionSurface call count/order unchanged
+WINDOW then GLOBAL_THIS inspection order unchanged
+window/global usability predicates unchanged
+storage identity comparison unchanged
+relation branch order and values unchanged
 SAME_OBJECT = WINDOW only
 DISTINCT_OBJECTS = WINDOW first + GLOBAL_THIS second
-SINGLE_CANDIDATE mapping
-NONE/null behavior
-lastSurfaceProbe assignment/timing
-surface/return object shape
-S3-3 sessionStorage access/capability behavior
-S3-2 takeSessionCandidate consume behavior
-S3-1 claim selection behavior
-Host-local acquisition/claim behavior
-telemetry constants/schema/TTL/size rules
-module inventory / require graph
-side-effect marker counts
+SINGLE_CANDIDATE mapping unchanged
+NONE/null behavior unchanged
+lastSurfaceProbe assignment/timing unchanged
+surface/return object shape unchanged
+S3-3 sessionStorage access/capability behavior unchanged
+S3-2 takeSessionCandidate consume behavior unchanged
+S3-1 claim selection behavior unchanged
+Host-local acquisition/claim behavior unchanged
+telemetry constants/schema/TTL/size rules unchanged
+module inventory / require graph unchanged
+side-effect marker counts unchanged
 latest.js == install.js
-node --check
+node --check passes
 ```
 
-The new helper remains private and occurs exactly once as a declaration plus five call sites. A Node differential harness proves deep equality, property order, storage reference identity and frozen output.
+A Node differential harness proves deep equality, property order, storage reference identity and frozen output for the new wrapper helper.
 
 ## PR-dry failure 01 preserved
 
@@ -109,7 +107,7 @@ CANDIDATE_BUILDER_FAILED: python3 /tmp/simcore-candidate-40834G/build-s3-4-sessi
 S3_4_BASE_BUILDER_MISSING: products/simcore/tooling/build-s3-3-session-surface-result-convergence.py
 ```
 
-Classification:
+Classification and root cause:
 
 ```text
 FIX = S3_4_BUILDER_SELF_CONTAINMENT
@@ -117,37 +115,21 @@ class = BUILDER_PACKAGING_SELF_CONTAINMENT
 runtime defect = NO
 production mutation = NONE
 candidate persistence = NONE
-```
-
-Root cause:
-
-```text
-candidate materializer copies the requested builder as one executable file
-→ first P8 implementation expected sibling S3-3 builder from repository
-→ sibling builder is not packaged in isolated candidate directory
-→ P8 composition fails before materialization
+root cause = candidate materializer executes one isolated builder file; sibling builder dependency was invalid
 ```
 
 The generic materializer was deliberately not changed because that would mix release-system restructuring into this runtime simplification transaction.
 
 ## Self-contained repair
 
-Repair commit:
-
 ```text
-8b84326fcf0b08bb06b280855a0a0001a4fc42c1
-```
-
-Repair shape:
-
-```text
-single executable builder file
-exact production v0.70.1 input
-P1→P7 transformations materialized inside the same builder
-P8 exact wrapper-only delta
-bounded cumulative static/differential fences in the same file
-no sibling builder dependency
-latest/install byte identity enforced
+repair commit = 8b84326fcf0b08bb06b280855a0a0001a4fc42c1
+single executable builder = YES
+exact production v0.70.1 input = YES
+P1→P7 cumulative transformations contained locally = YES
+exact P7→P8 wrapper-only delta = YES
+sibling builder dependency = NONE
+latest/install byte identity enforced = YES
 ```
 
 Disposition:
@@ -180,11 +162,43 @@ installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
 bytes = 574325
 ```
 
-Gate result:
-
 ```text
 GATE_CI_SELF = PASS
 GATE_PR1_DRY = PASS
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+GATE_STATE = NOT_APPLICABLE
+GATE_COORDINATION = NOT_APPLICABLE
+GATE_LEGACY_COMPAT = NOT_APPLICABLE
+Required = PASS
+```
+
+## Request-free qualification
+
+Temporary `intent-07` was removed before this run.
+
+```text
+request-free head = 8714ce2fdab335c1828c2a95a3b7b9015a132f50
+workflow run = 33364023528
+Verify job = 99400923260
+Required job = 99401040236
+verifier merge commit = 396c85d89c3c58884fc64fbd7dac1cdb8a565c3a
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+docOnly = false
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+candidateCommit = null
+architectureContract = 0.70.1 / non-transitional
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes = 574325
+```
+
+```text
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = NOT_APPLICABLE
 GATE_STATIC = PASS
 GATE_ARCH = PASS
 GATE_REGRESSION = PASS
@@ -198,25 +212,11 @@ Interpretation:
 
 ```text
 P8 cumulative builder qualification = PASS
-candidate persistence = NONE / candidateCommit null
+request-free substantive classification = CONFIRMED
+candidate persistence = NONE
 release-simcore mutation = NONE
 production parent = unchanged v0.70.1
-latest/install production digest = identical
-```
-
-## Required post-qualification sequence
-
-```text
-remove intent-07
-run fresh request-free substantive CI
-require GATE_PR1_DRY = NOT_APPLICABLE
-require GATE_CI_SELF / GATE_STATIC / GATE_ARCH / GATE_REGRESSION = PASS
-require candidateCommit = null
-require Required = PASS
-record exact-head result
-sync final evidence
-run final evidence-sync exact-head CI
-merge only after Required PASS
+merge readiness = YES, subject only to final evidence-sync exact-head CI
 ```
 
 ## Safety state
@@ -240,7 +240,8 @@ S3_4_RUNTIME_DELTA = IMPLEMENTED
 S3_4_PR_DRY_01 = FAIL / PRESERVED
 S3_4_BUILDER_SELF_CONTAINMENT_FIX = RESOLVED
 S3_4_PR_DRY_REPAIRED = PASS
-S3_4_TEMP_INTENT = RETIRE NEXT
-S3_4_REQUEST_FREE_CI = PENDING
+S3_4_TEMP_INTENT = RETIRED
+S3_4_REQUEST_FREE_CI = PASS
+S3_4_FINAL_EXACT_HEAD_CI = PENDING
 S3_4_PUBLICATION = NONE BEFORE S7
 ```

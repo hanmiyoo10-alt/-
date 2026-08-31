@@ -1,7 +1,7 @@
 # SimCore CI Builder Path Classification Gap Repair Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTED · CI SELF-VALIDATION PENDING**
+Status: **IMPLEMENTED · CI SELF-VALIDATION PASS · READY FOR INDEPENDENT MERGE**
 Classification: **SEPARATE REPOSITORY-SYSTEM REPAIR / NON_RUNTIME**
 
 Design authority:
@@ -14,10 +14,11 @@ Triggering S2-3 blocker:
 
 ## Exact implementation
 
-Changed only:
+Changed only the classifier plus this evidence record:
 
 ```text
 products/simcore/tooling/ci/classify.mjs
+docs/SIMCORE_CI_BUILDER_PATH_CLASSIFICATION_GAP_REPAIR_IMPLEMENTATION_EVIDENCE_2026-08-31.md
 ```
 
 Added one bounded family rule:
@@ -49,7 +50,7 @@ Combined with SimCore documentation:
 
 ```text
 before: docOnly = true
-expected after: docOnly = false
+after:  docOnly = false
 ```
 
 ## Frozen boundaries
@@ -69,21 +70,56 @@ v0.70.2 parked cache program
 S2-3 cumulative builder/runtime delta
 ```
 
-## Verification plan
+## CI self-change validation
 
-This branch changes `products/simcore/tooling/ci/classify.mjs`, so the existing classifier marks the repair itself `CI_SELF` and permanent PR CI must exercise its self-test/static/architecture/regression lane.
-
-After this repair merges independently, PR #1022 is the end-to-end regression proof for the new family rule:
+PR #1028 validated the repair through the existing trusted self-change boundary.
 
 ```text
-request-free S2-3 head
-+ build-s2-3-runtime-utility-dead-exports.py present
--> not SIMCORE_DOC_ONLY
--> substantive final gates planned
--> no candidate request needed
+head before evidence-close sync = 483d2aa7f9434cb090e1f377ddbaffeb7adf8904
+SimCore CI run = 33359530155
+Verify job = 99388073613 · SUCCESS
+Required job = 99388170140 · SUCCESS
+production = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+candidateCommit = null
 ```
 
-Acceptance remains blocked until that downstream proof succeeds.
+Trusted predecessor MAIN_HEALTH passed before the proposed verifier was accepted.
+
+Proposed permanent verifier result:
+
+```text
+conclusion = PASS
+GATE_CI_SELF    = PASS
+GATE_STATIC     = PASS
+GATE_ARCH       = PASS
+GATE_REGRESSION = PASS
+reasonCodes     = []
+```
+
+The repair PR itself classified as:
+
+```text
+labels = [CI_SELF, SIMCORE_DOC_ONLY]
+docOnly = false
+```
+
+No candidate was materialized and no production/release branch mutation occurred.
+
+## End-to-end acceptance boundary
+
+The classifier repair is locally qualified by PR #1028, but the original S2-3 blocker is closed only after the repair merges independently and PR #1022 is retriggered request-free against repaired main.
+
+Required downstream proof:
+
+```text
+request-free S2-3 diff
++ build-s2-3-runtime-utility-dead-exports.py present
+-> builder path classified CI_SELF + HARNESS
+-> overall docOnly = false
+-> substantive final gates planned
+-> no candidate request required
+-> final gates PASS
+```
 
 ## Safety state
 
@@ -92,4 +128,12 @@ production = v0.70.1 unchanged
 release-simcore mutation = NONE
 candidate persistence = NONE
 runtime publication = NONE
+```
+
+## Disposition
+
+```text
+CLASSIFIER_REPAIR = LOCALLY QUALIFIED
+PR_1028 = READY FOR INDEPENDENT MERGE AFTER EXACT-HEAD CI
+S2_3_BLOCKER = STILL ACTIVE UNTIL DOWNSTREAM REQUEST-FREE PROOF
 ```

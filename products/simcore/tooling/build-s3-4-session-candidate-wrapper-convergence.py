@@ -1,14 +1,183 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import importlib.util
 import re
 import subprocess
 
 FILES = [Path("plugins/simcore/latest.js"), Path("plugins/simcore/install.js")]
-BASE_BUILDER = Path("products/simcore/tooling/build-s3-3-session-surface-result-convergence.py")
+FROM_VERSION = "0.70.1"
 TARGET_VERSION = "0.70.3"
 
-OLD_RESOLVE = """function resolveSessionCandidates(root, windowLike) {
+S1_RELEASE_NOTE = """// v0.70.3 Runtime Cache Hash Primitive Convergence:
+// - Converges the three complete-string FNV-1a 32-bit loops inside runtime-cache onto one private local fnv1a32 helper
+// - Keeps both rolling-prefix FNV loops byte-for-byte unchanged and does not create a runtime-cache -> runtime-topology dependency
+// - Adds no export, require edge, await/yield, timer, storage/network/chat I/O, persistent state/schema or prompt/output semantic change
+// - Preserves v0.70.1 cold-tail attribution, v0.70.0 Current Task Primacy Guard, COMMUNITY_CLASSIFIER_VERSION 3 and the frozen M2-6 architecture graph
+//
+"""
+
+OLD_CACHE_HASH = """function cacheHash(text) {
+  const value = String(text == null ? '' : text);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}"""
+NEW_CACHE_HASH = """function fnv1a32(text) {
+  const value = String(text == null ? '' : text);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function cacheHash(text) {
+  return fnv1a32(text).toString(16).padStart(8, '0');
+}"""
+OLD_LINE_HASHES = """  const lineHashes = lines.map((line) => {
+    let x = 0x811c9dc5;
+    for (let i = 0; i < line.length; i++) {
+      x ^= line.charCodeAt(i);
+      x = Math.imul(x, 0x01000193);
+    }
+    return x >>> 0;
+  });"""
+NEW_LINE_HASHES = "  const lineHashes = lines.map(fnv1a32);"
+OLD_CURRENT_LINE_HASHES = """  const currentLineHashes = currentLines.map((line) => {
+    let x = 0x811c9dc5;
+    for (let i = 0; i < line.length; i++) {
+      x ^= line.charCodeAt(i);
+      x = Math.imul(x, 0x01000193);
+    }
+    return x >>> 0;
+  });"""
+NEW_CURRENT_LINE_HASHES = "  const currentLineHashes = currentLines.map(fnv1a32);"
+
+OLD_PROMPT_TAIL = """function compileRuntimePrompt(state) {
+  return compileRuntimePromptParts(state).text;
+}
+
+function renderRuntimePrompt(state) {
+  return compileRuntimePrompt(state);
+}
+
+module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts, compileRuntimePrompt, renderRuntimePrompt };"""
+NEW_PROMPT_TAIL = "module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts };"
+S2_1_SESSION_ALIAS = "const renderRuntimePrompt = prompt.renderRuntimePrompt;\n"
+S2_1_SESSION_EXPORT = "  renderRuntimePrompt,\n"
+S2_2_EXPORTS = (
+    "  inspectPreviousBEndOutput,\n",
+    "  validateStructure: structure.validateStructure,\n",
+    "  communityBlocks: community.communityBlocks,\n",
+    "  prepareTurn: lifecycle.prepareTurn,\n",
+)
+CACHE_EXPORTS_P3 = "module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, runtimeLineTier, runtimeIdentity, createRuntimePromptCacheTracker };"
+CACHE_EXPORTS_P4 = "module.exports = { createRuntimePromptCacheTracker };"
+TOPO_EXPORTS_P3 = "module.exports = { exactHash, messageSignature, leadingSystemCount, breakAttribution, createRequestTopologyTracker };"
+TOPO_EXPORTS_P4 = "module.exports = { messageSignature, breakAttribution, createRequestTopologyTracker };"
+
+HOST_REASON_AND_VALIDATE = """function hostReason(hostClaim, validation) {
+  if (!hostClaim) return 'no-compatible-handoff';
+  if (hostClaim.status !== 'CONSUMED') return `host-local-${String(hostClaim.status || 'unavailable').toLowerCase()}`;
+  return validation?.reason || 'no-compatible-handoff';
+}
+
+function validate(claimed, locationKey, now = Date.now(), hostClaim = null) {"""
+HOST_REASON_HELPER_AND_VALIDATE = """function hostReason(hostClaim, validation) {
+  if (!hostClaim) return 'no-compatible-handoff';
+  if (hostClaim.status !== 'CONSUMED') return `host-local-${String(hostClaim.status || 'unavailable').toLowerCase()}`;
+  return validation?.reason || 'no-compatible-handoff';
+}
+
+function recordClaimSelection(memoryValidation, sessionValidation, hostValidation, selected, selectedRoot) {
+  lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation, sessionValidation, hostValidation, selected, selectedRoot });
+  return lastClaimProbe;
+}
+
+function validate(claimed, locationKey, now = Date.now(), hostClaim = null) {"""
+S3_ASSIGNMENTS = (
+    (
+        "    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: 'exact', sessionValidation: (firstEntry || secondEntry) ? 'standby' : 'empty', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'memory', selectedRoot: 'NONE' });",
+        "    recordClaimSelection('exact', (firstEntry || secondEntry) ? 'standby' : 'empty', hostClaim ? 'standby' : 'empty', 'memory', 'NONE');",
+    ),
+    (
+        "    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'session', selectedRoot: firstEntry.root });",
+        "    recordClaimSelection(validationClass(memory), 'exact', hostClaim ? 'standby' : 'empty', 'session', firstEntry.root);",
+    ),
+    (
+        "    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'session', selectedRoot: secondEntry.root });",
+        "    recordClaimSelection(validationClass(memory), 'exact', hostClaim ? 'standby' : 'empty', 'session', secondEntry.root);",
+    ),
+    (
+        "    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), hostValidation: 'exact', selected: 'host-local', selectedRoot: 'NONE' });",
+        "    recordClaimSelection(validationClass(memory), validationClass(secondEntry ? secondValidation : firstValidation), 'exact', 'host-local', 'NONE');",
+    ),
+    (
+        "  lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), hostValidation: hostClaim ? validationClass(hostValidation) : 'empty', selected: 'NONE', selectedRoot: 'NONE' });",
+        "  recordClaimSelection(validationClass(memory), validationClass(secondEntry ? secondValidation : firstValidation), hostClaim ? validationClass(hostValidation) : 'empty', 'NONE', 'NONE');",
+    ),
+)
+
+S3_2_OLD = """function takeSessionCandidate(candidate) {
+  if (!candidate) return null;
+  let raw = null;
+  try { raw = candidate.storage.getItem(SESSION_KEY); }
+  catch (_) { return Object.freeze({ root: candidate.label, status: 'failed', capsule: null, serializedChars: 0 }); }
+  if (raw == null) return Object.freeze({ root: candidate.label, status: 'empty', capsule: null, serializedChars: 0 });
+  try { candidate.storage.removeItem(SESSION_KEY); } catch (_) {}
+  const serializedChars = String(raw).length;
+  if (serializedChars > MAX_SESSION_CHARS) return Object.freeze({ root: candidate.label, status: 'oversize', capsule: null, serializedChars });
+  try { return Object.freeze({ root: candidate.label, status: 'available', capsule: JSON.parse(String(raw)), serializedChars }); }
+  catch (_) { return Object.freeze({ root: candidate.label, status: 'malformed', capsule: null, serializedChars }); }
+}"""
+S3_2_NEW = """function sessionCandidateResult(root, status, capsule = null, serializedChars = 0) {
+  return Object.freeze({ root, status, capsule, serializedChars });
+}
+
+function takeSessionCandidate(candidate) {
+  if (!candidate) return null;
+  let raw = null;
+  try { raw = candidate.storage.getItem(SESSION_KEY); }
+  catch (_) { return sessionCandidateResult(candidate.label, 'failed', null, 0); }
+  if (raw == null) return sessionCandidateResult(candidate.label, 'empty', null, 0);
+  try { candidate.storage.removeItem(SESSION_KEY); } catch (_) {}
+  const serializedChars = String(raw).length;
+  if (serializedChars > MAX_SESSION_CHARS) return sessionCandidateResult(candidate.label, 'oversize', null, serializedChars);
+  try { return sessionCandidateResult(candidate.label, 'available', JSON.parse(String(raw)), serializedChars); }
+  catch (_) { return sessionCandidateResult(candidate.label, 'malformed', null, serializedChars); }
+}"""
+
+S3_3_OLD = """function inspectSessionSurface(root, label) {
+  if (!root) return Object.freeze({ label, status: 'ROOT_ABSENT', storage: null });
+  let storage = null;
+  try { storage = root.sessionStorage; }
+  catch (_) { return Object.freeze({ label, status: 'ACCESS_ERROR', storage: null }); }
+  if (storage == null) return Object.freeze({ label, status: 'STORAGE_ABSENT', storage: null });
+  if (typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function' || typeof storage.removeItem !== 'function') {
+    return Object.freeze({ label, status: 'METHODS_INCOMPLETE', storage: null });
+  }
+  return Object.freeze({ label, status: 'USABLE', storage });
+}"""
+S3_3_NEW = """function sessionSurfaceResult(label, status, storage = null) {
+  return Object.freeze({ label, status, storage });
+}
+
+function inspectSessionSurface(root, label) {
+  if (!root) return sessionSurfaceResult(label, 'ROOT_ABSENT');
+  let storage = null;
+  try { storage = root.sessionStorage; }
+  catch (_) { return sessionSurfaceResult(label, 'ACCESS_ERROR'); }
+  if (storage == null) return sessionSurfaceResult(label, 'STORAGE_ABSENT');
+  if (typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function' || typeof storage.removeItem !== 'function') {
+    return sessionSurfaceResult(label, 'METHODS_INCOMPLETE');
+  }
+  return sessionSurfaceResult(label, 'USABLE', storage);
+}"""
+
+S3_4_OLD = """function resolveSessionCandidates(root, windowLike) {
   const windowSurface = inspectSessionSurface(windowLike, 'WINDOW');
   const globalSurface = inspectSessionSurface(root, 'GLOBAL_THIS');
   const windowUsable = windowSurface.status === 'USABLE';
@@ -36,8 +205,7 @@ OLD_RESOLVE = """function resolveSessionCandidates(root, windowLike) {
   lastSurfaceProbe = surface;
   return Object.freeze({ surface, first, second });
 }"""
-
-NEW_RESOLVE = """function sessionStorageCandidate(label, storage) {
+S3_4_NEW = """function sessionStorageCandidate(label, storage) {
   return Object.freeze({ label, storage });
 }
 
@@ -83,6 +251,12 @@ TELEMETRY_CONSTANTS = (
     "const MAX_SESSION_CHARS = 16384;",
     "const MAX_SERIALIZED_CHARS = 16384;",
 )
+PROTECTED_MARKERS = (
+    "provider cache UNVERIFIED", "Post-onSend attribution:",
+    "const PROMPT_COMPILER_VERSION = 4;", "const COMMUNITY_CLASSIFIER_VERSION = 3;",
+    "const STATE_VERSION = 5;", "const CORE_STATE_VERSION = 10;", "TAIL_AFTER_CURRENT_USER",
+    "__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__", "__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__",
+)
 
 
 def fail(code, detail=""):
@@ -119,106 +293,152 @@ def require_surface(source):
     return re.findall(r"require\(['\"]([^'\"]+)['\"]\)", source)
 
 
-def function_slice(source, name):
-    declaration = re.compile(rf"(?m)^(?:async\s+)?function\s+{re.escape(name)}\s*\(")
-    matches = list(declaration.finditer(source))
-    if len(matches) != 1:
-        fail("S3_4_FUNCTION_BOUNDARY_INVALID", f"{name} starts={[m.start() for m in matches]}")
-    start = matches[0].start()
-    next_function = re.search(r"(?m)^(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\(", source[matches[0].end():])
-    end = matches[0].end() + next_function.start() if next_function else len(source)
-    return source[start:end]
-
-
 def same_counts(before, after, markers, code):
     for marker in markers:
         if before.count(marker) != after.count(marker):
             fail(code, f"{marker}: {before.count(marker)} -> {after.count(marker)}")
 
 
-def load_base_builder():
-    if not BASE_BUILDER.exists():
-        fail("S3_4_BASE_BUILDER_MISSING", str(BASE_BUILDER))
-    spec = importlib.util.spec_from_file_location("simcore_s3_3_builder", BASE_BUILDER)
-    if spec is None or spec.loader is None:
-        fail("S3_4_BASE_BUILDER_LOAD_FAILED")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    if not callable(getattr(module, "main", None)):
-        fail("S3_4_BASE_BUILDER_MAIN_MISSING")
-    return module
+def apply_s1(p0):
+    out = one(p0, f"//@version {FROM_VERSION}", f"//@version {TARGET_VERSION}", "metadata-version")
+    out = one(out, f"const SIMCORE_RUNTIME_VERSION = '{FROM_VERSION}';", f"const SIMCORE_RUNTIME_VERSION = '{TARGET_VERSION}';", "runtime-version")
+    out = one(out, f"const HOST_COMPAT_VERSION = '{FROM_VERSION}';", f"const HOST_COMPAT_VERSION = '{TARGET_VERSION}';", "host-version")
+    out = one(out, "// v0.70.1 Cold First-Turn Tail Attribution:", S1_RELEASE_NOTE + "// v0.70.1 Cold First-Turn Tail Attribution:", "release-note")
+    out = one(out, OLD_CACHE_HASH, NEW_CACHE_HASH, "cache-hash")
+    out = one(out, OLD_LINE_HASHES, NEW_LINE_HASHES, "line-hashes")
+    out = one(out, OLD_CURRENT_LINE_HASHES, NEW_CURRENT_LINE_HASHES, "current-line-hashes")
+    return one(out, "    version: '0.70.1',\n    name: 'Cold First-Turn Tail Attribution',", "    version: '0.70.3',\n    name: 'Runtime Cache Hash Primitive Convergence',", "operator-card")
 
 
-def wrapper_equivalence():
+def apply_s2_1(p1):
+    out = one(p1, OLD_PROMPT_TAIL, NEW_PROMPT_TAIL, "prompt-dead-render")
+    out = one(out, S2_1_SESSION_ALIAS, "", "session-render-alias")
+    return one(out, S2_1_SESSION_EXPORT, "", "session-render-export")
+
+
+def apply_s2_2(p2):
+    out = p2
+    for marker in S2_2_EXPORTS:
+        out = one(out, marker, "", f"session-export-{marker.strip()}")
+    return out
+
+
+def apply_s2_3(p3):
+    out = one(p3, CACHE_EXPORTS_P3, CACHE_EXPORTS_P4, "runtime-cache-exports")
+    return one(out, TOPO_EXPORTS_P3, TOPO_EXPORTS_P4, "runtime-topology-exports")
+
+
+def apply_s3_1(p4):
+    out = one(p4, HOST_REASON_AND_VALIDATE, HOST_REASON_HELPER_AND_VALIDATE, "claim-selection-helper")
+    for index, (old, new) in enumerate(S3_ASSIGNMENTS, 1):
+        out = one(out, old, new, f"claim-selection-{index}")
+    return out
+
+
+def apply_s3_2(p5):
+    return one(p5, S3_2_OLD, S3_2_NEW, "session-candidate-result")
+
+
+def apply_s3_3(p6):
+    return one(p6, S3_3_OLD, S3_3_NEW, "session-surface-result")
+
+
+def apply_s3_4(p7):
+    return one(p7, S3_4_OLD, S3_4_NEW, "session-candidate-wrapper")
+
+
+def equivalence_harness():
     script = r"""
-function oldCandidate(label, storage) {
-  return Object.freeze({ label, storage });
+function oldRaw(text) {
+  const value = String(text == null ? '' : text); let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) { h ^= value.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
 }
-function sessionStorageCandidate(label, storage) {
-  return Object.freeze({ label, storage });
+function fnv1a32(text) {
+  const value = String(text == null ? '' : text); let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) { h ^= value.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
 }
-const storages = [
-  { id: 'window', getItem(){}, setItem(){}, removeItem(){} },
-  { id: 'global', getItem(){}, setItem(){}, removeItem(){} },
-];
-for (const label of ['WINDOW', 'GLOBAL_THIS']) for (const storage of storages) {
-  const expected = oldCandidate(label, storage);
-  const actual = sessionStorageCandidate(label, storage);
-  if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('CANDIDATE_WRAPPER_DIFF');
-  if (Object.keys(expected).join(',') !== Object.keys(actual).join(',')) throw new Error('CANDIDATE_WRAPPER_PROPERTY_ORDER_DIFF');
-  if (actual.storage !== storage) throw new Error('CANDIDATE_STORAGE_IDENTITY_DIFF');
-  if (!Object.isFrozen(actual)) throw new Error('CANDIDATE_WRAPPER_NOT_FROZEN');
+for (const x of [null, undefined, '', 'abc', '한글 테스트', 'emoji 😀 🚀', ('가😀\n').repeat(1024)]) {
+  if (oldRaw(x) !== fnv1a32(x)) throw new Error('FNV_DIFF');
 }
-console.log('S3_4_CANDIDATE_WRAPPER_EQ_PASS');
+function oldSession(root,status,capsule,serializedChars){ return Object.freeze({root,status,capsule,serializedChars}); }
+function sessionCandidateResult(root,status,capsule=null,serializedChars=0){ return Object.freeze({root,status,capsule,serializedChars}); }
+for (const row of [['WINDOW','failed',null,0],['GLOBAL_THIS','available',{schema:1},12],['WINDOW','malformed',null,7]]) {
+  const a=oldSession(...row), b=sessionCandidateResult(...row);
+  if (JSON.stringify(a)!==JSON.stringify(b) || Object.keys(a).join(',')!==Object.keys(b).join(',') || !Object.isFrozen(b)) throw new Error('SESSION_RESULT_DIFF');
+}
+function oldSurface(label,status,storage){ return Object.freeze({label,status,storage}); }
+function sessionSurfaceResult(label,status,storage=null){ return Object.freeze({label,status,storage}); }
+for (const row of [['WINDOW','ROOT_ABSENT',null],['GLOBAL_THIS','USABLE',{id:1}]]) {
+  const a=oldSurface(...row), b=sessionSurfaceResult(...row);
+  if (JSON.stringify(a)!==JSON.stringify(b) || Object.keys(a).join(',')!==Object.keys(b).join(',') || !Object.isFrozen(b)) throw new Error('SURFACE_RESULT_DIFF');
+}
+function oldCandidate(label,storage){ return Object.freeze({label,storage}); }
+function sessionStorageCandidate(label,storage){ return Object.freeze({label,storage}); }
+for (const label of ['WINDOW','GLOBAL_THIS']) {
+  const storage={id:label}; const a=oldCandidate(label,storage), b=sessionStorageCandidate(label,storage);
+  if (JSON.stringify(a)!==JSON.stringify(b) || Object.keys(a).join(',')!==Object.keys(b).join(',') || b.storage!==storage || !Object.isFrozen(b)) throw new Error('WRAPPER_DIFF');
+}
+console.log('S3_4_EQ_PASS');
 """
     result = subprocess.run(["node", "-e", script], text=True, capture_output=True)
-    if result.returncode != 0 or "S3_4_CANDIDATE_WRAPPER_EQ_PASS" not in result.stdout:
-        fail("S3_4_CANDIDATE_WRAPPER_EQUIVALENCE_FAIL", (result.stderr or result.stdout).strip())
+    if result.returncode != 0 or "S3_4_EQ_PASS" not in result.stdout:
+        fail("S3_4_EQUIVALENCE_FAIL", (result.stderr or result.stdout).strip())
 
 
-def verify_s3_4(p7, p8):
-    if module_names(p7) != module_names(p8):
+def verify_stages(stages):
+    p0, p1, p2, p3, p4, p5, p6, p7, p8 = stages
+    names = module_names(p0)
+    if not names or any(module_names(x) != names for x in stages[1:]):
         fail("S3_4_MODULE_GRAPH_CHANGED")
-    for name in module_names(p7):
-        if name != "runtime-telemetry" and module_text(p7, name) != module_text(p8, name):
-            fail("S3_4_NON_TARGET_MODULE_CHANGED", name)
+    if require_surface(p0) != require_surface(p8):
+        fail("S3_4_REQUIRE_SURFACE_CHANGED")
+    same_counts(p0, p8, SIDE_EFFECT_MARKERS, "S3_4_SIDE_EFFECT_CHANGED")
+    same_counts(p0, p8, PROTECTED_MARKERS, "S3_4_PROTECTED_MARKER_CHANGED")
 
+    c0 = module_text(p0, "runtime-cache")
+    c1 = module_text(p1, "runtime-cache")
+    if c0.count("0x811c9dc5") != 5 or c1.count("0x811c9dc5") != 3:
+        fail("S3_4_S1_FNV_SHAPE_INVALID")
+    for marker in ("function fnv1a32(text)", "lines.map(fnv1a32)", "currentLines.map(fnv1a32)"):
+        if marker not in c1:
+            fail("S3_4_S1_MARKER_MISSING", marker)
+
+    if "function compileRuntimePrompt(state)" in p2 or "function renderRuntimePrompt(state)" in p2 or S2_1_SESSION_ALIAS in p2 or S2_1_SESSION_EXPORT in p2:
+        fail("S3_4_S2_1_DEAD_SEAM_SURVIVED")
+    for marker in S2_2_EXPORTS:
+        if marker in module_text(p3, "session"):
+            fail("S3_4_S2_2_DEAD_EXPORT_SURVIVED", marker.strip())
+    if CACHE_EXPORTS_P4 not in module_text(p4, "runtime-cache") or TOPO_EXPORTS_P4 not in module_text(p4, "runtime-topology"):
+        fail("S3_4_S2_3_EXPORT_SHAPE_INVALID")
+
+    t4 = module_text(p4, "runtime-telemetry")
+    t5 = module_text(p5, "runtime-telemetry")
+    t6 = module_text(p6, "runtime-telemetry")
     t7 = module_text(p7, "runtime-telemetry")
     t8 = module_text(p8, "runtime-telemetry")
-    if t7.replace(OLD_RESOLVE, NEW_RESOLVE, 1) != t8:
-        fail("S3_4_RUNTIME_TELEMETRY_DELTA_WIDENED")
-    if require_surface(t7) != require_surface(t8):
-        fail("S3_4_REQUIRE_SURFACE_CHANGED")
-    if t7.count(OLD_RESOLVE) != 1:
-        fail("S3_4_PARENT_RESOLVE_DRIFT")
-
+    if t5.count("function recordClaimSelection(") != 1 or t5.count("recordClaimSelection(") != 6:
+        fail("S3_4_S3_1_HELPER_COUNT_INVALID")
+    if t6.count("function sessionCandidateResult(") != 1 or t6.count("sessionCandidateResult(") != 6:
+        fail("S3_4_S3_2_HELPER_COUNT_INVALID")
+    if t7.count("function sessionSurfaceResult(") != 1 or t7.count("sessionSurfaceResult(") != 6:
+        fail("S3_4_S3_3_HELPER_COUNT_INVALID")
     if t8.count("function sessionStorageCandidate(") != 1 or t8.count("sessionStorageCandidate(") != 6:
         fail("S3_4_HELPER_COUNT_INVALID")
-    exports_match = re.search(r"module\.exports\s*=\s*\{[^}]+\};", t8, re.S)
-    if not exports_match or "sessionStorageCandidate" in exports_match.group(0):
-        fail("S3_4_HELPER_EXPORT_INVALID")
+    if t7.replace(S3_4_OLD, S3_4_NEW, 1) != t8:
+        fail("S3_4_P7_P8_DELTA_WIDENED")
+    for name in names:
+        if name != "runtime-telemetry" and module_text(p7, name) != module_text(p8, name):
+            fail("S3_4_P8_NON_TARGET_MODULE_CHANGED", name)
 
-    frozen_functions = (
-        "sessionSurfaceResult", "inspectSessionSurface", "surfaceDiagnostics", "serializeCapsule",
-        "publishPrepared", "publish", "updateHostProbe", "getHostLocalTelemetryStoreOnce",
-        "publishWithHostLocal", "takeMemory", "sessionCandidateResult", "takeSessionCandidate",
-        "claim", "hostExportShape", "classifyConsumedHostCapsule", "claimHostLocalOnce",
-        "validateCapsule", "validationClass", "sessionReason", "hostReason",
-        "recordClaimSelection", "validate", "diagnostics",
-    )
-    for name in frozen_functions:
-        if function_slice(t7, name) != function_slice(t8, name):
-            fail("S3_4_FROZEN_FUNCTION_CHANGED", name)
+    for marker in TELEMETRY_CONSTANTS:
+        if any(module_text(x, "runtime-telemetry").count(marker) != 1 for x in (p4, p5, p6, p7, p8)):
+            fail("S3_4_TELEMETRY_CONSTANT_CHANGED", marker)
+    if "const HOST_COMPAT_VERSION = '0.70.3';" not in t8:
+        fail("S3_4_HOST_COMPAT_IDENTITY_INVALID")
 
-    old_resolve = function_slice(t7, "resolveSessionCandidates")
-    new_resolve = function_slice(t8, "resolveSessionCandidates")
-    if old_resolve.strip() != OLD_RESOLVE.strip():
-        fail("S3_4_PARENT_RESOLVE_SHAPE_INVALID")
-    expected_new_resolve = NEW_RESOLVE[NEW_RESOLVE.find("function resolveSessionCandidates(root, windowLike) {"):]
-    if new_resolve.strip() != expected_new_resolve.strip():
-        fail("S3_4_NEW_RESOLVE_SHAPE_INVALID")
-
-    order_markers = (
+    order = (
         "inspectSessionSurface(windowLike, 'WINDOW')",
         "inspectSessionSurface(root, 'GLOBAL_THIS')",
         "windowSurface.storage === globalSurface.storage",
@@ -226,47 +446,15 @@ def verify_s3_4(p7, p8):
         "relation = 'DISTINCT_OBJECTS'",
         "relation = 'SINGLE_CANDIDATE'",
     )
-    old_positions = [old_resolve.find(marker) for marker in order_markers]
-    new_positions = [new_resolve.find(marker) for marker in order_markers]
-    if any(pos < 0 for pos in old_positions + new_positions):
-        fail("S3_4_ORDER_MARKER_MISSING")
-    if old_positions != sorted(old_positions) or new_positions != sorted(new_positions):
-        fail("S3_4_RELATION_ORDER_CHANGED", f"old={old_positions} new={new_positions}")
+    positions = [t8.find(x) for x in order]
+    if any(x < 0 for x in positions) or positions != sorted(positions):
+        fail("S3_4_RELATION_ORDER_CHANGED", repr(positions))
 
-    expected_calls = (
-        "sessionStorageCandidate('WINDOW', windowSurface.storage)",
-        "sessionStorageCandidate('WINDOW', windowSurface.storage)",
-        "sessionStorageCandidate('GLOBAL_THIS', globalSurface.storage)",
-        "sessionStorageCandidate('WINDOW', windowSurface.storage)",
-        "sessionStorageCandidate('GLOBAL_THIS', globalSurface.storage)",
-    )
-    positions = []
-    cursor = 0
-    for call in expected_calls:
-        pos = new_resolve.find(call, cursor)
-        if pos < 0:
-            fail("S3_4_CANDIDATE_CALL_ORDER_INVALID", call)
-        positions.append(pos)
-        cursor = pos + len(call)
-    if positions != sorted(positions):
-        fail("S3_4_CANDIDATE_CALL_ORDER_CHANGED")
-
-    for marker in TELEMETRY_CONSTANTS:
-        if t7.count(marker) != 1 or t8.count(marker) != 1:
-            fail("S3_4_TELEMETRY_CONSTANT_CHANGED", marker)
-    if "const HOST_COMPAT_VERSION = '0.70.3';" not in t7 or "const HOST_COMPAT_VERSION = '0.70.3';" not in t8:
-        fail("S3_4_HOST_COMPAT_IDENTITY_CHANGED")
-
-    protected = (
-        "sessionSurfaceResult", "sessionCandidateResult", "recordClaimSelection",
-        "claimHostLocalOnce", "getHostLocalTelemetryStoreOnce",
-        "__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__", "__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__",
-        "provider cache UNVERIFIED", "Post-onSend attribution:", "const PROMPT_COMPILER_VERSION = 4;",
-        "const COMMUNITY_CLASSIFIER_VERSION = 3;", "const STATE_VERSION = 5;", "const CORE_STATE_VERSION = 10;", "TAIL_AFTER_CURRENT_USER",
-    )
-    same_counts(p7, p8, protected, "S3_4_PROTECTED_MARKER_CHANGED")
-    same_counts(p7, p8, SIDE_EFFECT_MARKERS, "S3_4_SIDE_EFFECT_CHANGED")
-    wrapper_equivalence()
+    exports_match = re.search(r"module\.exports\s*=\s*\{[^}]+\};", t8, re.S)
+    for helper in ("recordClaimSelection", "sessionCandidateResult", "sessionSurfaceResult", "sessionStorageCandidate"):
+        if not exports_match or helper in exports_match.group(0):
+            fail("S3_4_PRIVATE_HELPER_EXPORTED", helper)
+    equivalence_harness()
 
 
 def verify_identity(text):
@@ -287,18 +475,26 @@ def syntax_check(path):
 
 
 def main():
-    base = load_base_builder()
-    base.main()
+    originals = []
+    for path in FILES:
+        if not path.exists():
+            fail("S3_4_SOURCE_MISSING", str(path))
+        originals.append(path.read_text(encoding="utf-8"))
+    if originals[0] != originals[1]:
+        fail("S3_4_PARENT_LATEST_INSTALL_DIVERGED")
+    if originals[0].count(f"//@version {FROM_VERSION}") != 1:
+        fail("S3_4_PARENT_VERSION_MISMATCH")
 
-    p7_latest = FILES[0].read_text(encoding="utf-8")
-    p7_install = FILES[1].read_text(encoding="utf-8")
-    if p7_latest != p7_install:
-        fail("S3_4_P7_LATEST_INSTALL_DIVERGED")
-    if p7_latest.count(OLD_RESOLVE) != 1:
-        fail("S3_4_P7_RESOLVE_ANCHOR_INVALID", f"count={p7_latest.count(OLD_RESOLVE)}")
-
-    p8 = one(p7_latest, OLD_RESOLVE, NEW_RESOLVE, "session-candidate-wrapper-convergence")
-    verify_s3_4(p7_latest, p8)
+    p0 = originals[0]
+    p1 = apply_s1(p0)
+    p2 = apply_s2_1(p1)
+    p3 = apply_s2_2(p2)
+    p4 = apply_s2_3(p3)
+    p5 = apply_s3_1(p4)
+    p6 = apply_s3_2(p5)
+    p7 = apply_s3_3(p6)
+    p8 = apply_s3_4(p7)
+    verify_stages((p0, p1, p2, p3, p4, p5, p6, p7, p8))
     verify_identity(p8)
 
     for path in FILES:

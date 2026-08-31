@@ -1,0 +1,22 @@
+{
+  "artifact": "SNS Forme 0.3.1",
+  "original_label": "🆔 SNS 모듈 0.3.1 - 라이트보드.risum",
+  "normalized_filename": "lightboard-sns-forme-0.3.1.risum",
+  "bytes": 114438,
+  "sha256": "b65acf7529c70de1145eef76e191cc6dffa061a33c71764084e38fe6dbfac0cb",
+  "transport": "deterministic-gzip-base64",
+  "gzip_bytes": 26894,
+  "gzip_sha256": "d9834316a3c08f6913796db7ed172390c6a502aa9b7107fb953b9fccef6a4819",
+  "parts": [
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part001.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part002.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part003.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part004.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part005.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part006.txt"
+  ],
+  "parts_verified": true,
+  "roundtrip_verified": true,
+  "analysis": "docs/SIMCORE_REFERENCE_ANALYSIS_LIGHTBOARD_SNS_FORME_0_3_1_2026-09-01.md",
+  "status": "SOURCE_ARCHIVE_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED"
+}

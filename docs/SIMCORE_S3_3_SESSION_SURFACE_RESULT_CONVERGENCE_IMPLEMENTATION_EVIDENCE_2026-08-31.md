@@ -1,7 +1,7 @@
 # SimCore S3-3 Session Surface Result Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTED ON WORK BRANCH · PR-DRY QUALIFICATION NEXT · INTERNAL CHECKPOINT ONLY**
+Status: **PR-DRY QUALIFIED · TEMPORARY INTENT RETIREMENT IN PROGRESS · INTERNAL CHECKPOINT ONLY**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE SESSION-SURFACE RESULT BOOKKEEPING DEDUPE**
 
 Authority:
@@ -91,6 +91,57 @@ node --check passes
 
 A pure Node differential harness compares old direct surface-result construction with `sessionSurfaceResult()` across both labels, all five statuses, null storage and a representative storage object. It requires deep equality, identical property order and frozen output.
 
+## PR-dry qualification evidence
+
+PR:
+
+```text
+PR = #1038
+base = 1cd9f45f32df98bd1d44281161d31c66e4fd7c30
+qualified head = 28eed6c89df7138ce9b1c657b3bf97ffb0c0afab
+workflow run = 33362447107
+Verify job = 99396305533
+verifier merge commit = dbfb60326fc13250d2fada5e4e60059711ebb360
+```
+
+Permanent CI report:
+
+```text
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+candidateCommit = null
+architectureContract = 0.70.1 / non-transitional
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes = 574325
+```
+
+Gate result:
+
+```text
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = PASS
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+GATE_STATE = NOT_APPLICABLE
+GATE_COORDINATION = NOT_APPLICABLE
+GATE_LEGACY_COMPAT = NOT_APPLICABLE
+Required = PASS
+```
+
+Interpretation:
+
+```text
+P7 cumulative builder qualification = PASS
+candidate persistence = NONE / candidateCommit null
+release-simcore mutation = NONE
+production parent = unchanged v0.70.1
+latest/install production digest = identical
+```
+
 ## Validation posture
 
 Temporary PR-dry request:
@@ -100,19 +151,20 @@ intent = simcore-v0.70.3-intent-06
 purpose = GATE_PR1_DRY only
 candidate persistence = forbidden
 release authority = none
+qualification = COMPLETE
+retirement = REQUIRED BEFORE FINAL REQUEST-FREE CI
 ```
 
-Required PR-dry gates:
+Required post-qualification sequence:
 
 ```text
-GATE_CI_SELF
-GATE_PR1_DRY
-GATE_STATIC
-GATE_ARCH
-GATE_REGRESSION
+remove intent-06
+run fresh request-free substantive CI
+require GATE_PR1_DRY = NOT_APPLICABLE
+require GATE_CI_SELF / GATE_STATIC / GATE_ARCH / GATE_REGRESSION = PASS
+record exact-head result
+merge only after Required PASS
 ```
-
-After qualification the temporary request must be removed and a fresh request-free substantive exact-head CI must pass before merge.
 
 ## Safety state
 
@@ -133,6 +185,8 @@ broad real-long-chat = S7 only
 ```text
 S3_3_DESIGN = FROZEN ON MAIN
 S3_3_BUILDER = IMPLEMENTED
-S3_3_PR_DRY = PENDING
+S3_3_PR_DRY = PASS
+S3_3_TEMP_INTENT = RETIRE NEXT
+S3_3_REQUEST_FREE_CI = PENDING
 S3_3_PUBLICATION = NONE BEFORE S7
 ```

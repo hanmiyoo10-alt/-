@@ -1,6 +1,6 @@
 {
   "batch": "simcore-plugin-idea-drop-2026-09-01",
-  "status": "ARTIFACTS_1_3_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
+  "status": "ARTIFACTS_1_4_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
   "artifacts": [
     {
       "ordinal": 1,
@@ -45,6 +45,23 @@
       "parts": [
         "source-gzip-base64/lightboard-livechat.part001.txt",
         "source-gzip-base64/lightboard-livechat.part002.txt"
+      ],
+      "complete": true
+    },
+    {
+      "ordinal": 4,
+      "original_label": "🔦라이트보드 나무위키 v1.8.0.risum",
+      "normalized_filename": "lightboard-namuwiki-1.8.0.risum",
+      "bytes": 67786,
+      "sha256": "beba5a303b2f9ed249f31acae5b9f84e50f8927204ca7bc7dfe5a40c793d7389",
+      "transport": "deterministic-gzip-base64",
+      "gzip_bytes": 17395,
+      "gzip_sha256": "f36808c07b3f2cc87cb378f54a869ef53d14402eea34d605b965bebbd7684d54",
+      "parts": [
+        "source-gzip-base64/lightboard-namuwiki-1.8.0.part001.txt",
+        "source-gzip-base64/lightboard-namuwiki-1.8.0.part002.txt",
+        "source-gzip-base64/lightboard-namuwiki-1.8.0.part003.txt",
+        "source-gzip-base64/lightboard-namuwiki-1.8.0.part004.txt"
       ],
       "complete": true
     }

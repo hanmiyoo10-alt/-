@@ -46,7 +46,12 @@ assert.ok(!engine.includes('snapshotPerformance.rawArgs'));
 assert.ok(!engine.includes('snapshotPerformance.commandOutput'));
 assert.ok(!diagnostics.includes('DEVPASS_BRIDGE_CAPTURE_FILE'));
 
-assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+if (currentRelease.releaseEvidence) {
+  assert.ok(currentRelease.releaseEvidence.acceptedBaseline, 'structured release evidence must retain an accepted baseline');
+  assert.ok(currentRelease.releaseEvidence.latestInstalled, 'structured release evidence must retain latest-installed evidence');
+} else {
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+}
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));
 

@@ -1,0 +1,105 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.97",
+  "releaseTitle": "Credits Spend Composition Source Fidelity",
+  "engineVersion": "1.6.33",
+  "managerVersion": "1.3.5",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.251.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.251.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export"
+  },
+  "creditsSpendCompositionContract": {
+    "window": "24h",
+    "usageCostSource": "activity.creditsCost",
+    "dataStorageCostSource": "activity.creditsDataStorageCost",
+    "missingValue": "unknown",
+    "explicitZeroKnown": true,
+    "wholeWindowRequiresCompleteBuckets": true,
+    "totalRequiresBothComponents": true,
+    "sharesRequirePositiveCompleteTotal": true,
+    "newIo": false
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.96",
+      "releaseSha": "5fc75fbc0725962997f65de17db4ffaf156ba6f9",
+      "verdict": "accepted",
+      "issue": 1017,
+      "note": "5.96 completed physical acceptance before the 5.97 source freeze."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.96",
+      "releaseSha": "5fc75fbc0725962997f65de17db4ffaf156ba6f9",
+      "verdict": "accepted",
+      "issue": 1017,
+      "note": "5.96 remains the latest installed accepted production release at 5.97 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 960,
+    "designPullRequest": 1032,
+    "physicalAcceptanceIssue": 1017,
+    "releaseGeneration": "E13",
+    "e18": "derived-impact smoke only; no authority change",
+    "e19": "shift-left validation reuse; no authority change",
+    "e20": "first live structured releaseEvidence proof"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_credits_spend_597.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p63-credits-spend-composition-source-fidelity.cjs",
+  "highlights": [
+    "Credits Analytics now exposes a bounded 24h composition sourced only from explicit creditsCost and creditsDataStorageCost activity fields.",
+    "Missing or invalid component coverage remains UNKNOWN; explicit zero remains known zero and total spend is derived only when both components are complete.",
+    "The existing generic cost, token, cache, model, provider and request semantics remain unchanged.",
+    "No new endpoint, activity request, logs request, CLI invocation, catalog lookup, timer, poller or persistence owner is added."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.97 · Engine 1.6.33 · Manager 1.3.5 and READY/Health ok.",
+    "Credits Analytics must show usage, data storage and total only from the 24h source-fidelity projection; UNKNOWN must render as —.",
+    "Full and compact Diagnostics must distinguish explicit zero from UNKNOWN for Credits spend composition.",
+    "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Credits Analytics now exposes a bounded 24h composition sourced only from explicit creditsCost and creditsDataStorageCost activity fields.",
+      "Missing or invalid component coverage remains UNKNOWN; explicit zero remains known zero and total spend is derived only when both components are complete.",
+      "The existing generic cost, token, cache, model, provider and request semantics remain unchanged.",
+      "No new endpoint, activity request, logs request, CLI invocation, catalog lookup, timer, poller or persistence owner is added."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.97 · Engine 1.6.33 · Manager 1.3.5 and READY/Health ok.",
+      "Credits Analytics must show usage, data storage and total only from the 24h source-fidelity projection; UNKNOWN must render as —.",
+      "Full and compact Diagnostics must distinguish explicit zero from UNKNOWN for Credits spend composition.",
+      "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression."
+    ]
+  }
+}

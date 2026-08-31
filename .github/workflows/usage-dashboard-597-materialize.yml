@@ -1,0 +1,49 @@
+name: Usage Dashboard 5.97 Materialize
+
+on:
+  push:
+    branches:
+      - impl/usage-dashboard-597-credits-spend-composition-20260831
+
+permissions:
+  contents: write
+
+concurrency:
+  group: usage-dashboard-597-materialize
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: ${{ !contains(github.event.head_commit.message, '[materialized-597]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - name: Materialize exact 5.97 candidate
+        run: python3 plugins/usage-dashboard/tools/release_credits_spend_597.py
+      - name: Targeted P63 regression
+        run: node plugins/usage-dashboard/tests/p63-credits-spend-composition-source-fidelity.cjs
+      - name: Deterministic source parity
+        run: |
+          node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
+          node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
+      - name: Commit materialized candidate
+        shell: bash
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo '5.97 candidate already materialized'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            plugins/usage-dashboard/src \
+            plugins/usage-dashboard/latest.js \
+            plugins/usage-dashboard/runtime-src \
+            plugins/usage-dashboard/runtime \
+            plugins/usage-dashboard/tests/p62-managed-runtime-diagnostic-identity-fidelity.cjs \
+            docs/USAGE_DASHBOARD_GUIDELINES.md
+          git commit -m 'release(usage-dashboard): materialize 5.97 exact artifacts [materialized-597]'
+          git push origin HEAD:${GITHUB_REF_NAME}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.3-intent-11",
+  "releaseId": "simcore-v0.70.3-new-11",
+  "product": "SimCore",
+  "targetVersion": "0.70.3",
+  "releaseName": "Cumulative Simplification S5-1 Dry Qualification",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "builderPath": "products/simcore/tooling/build-s5-1-state-reconcile-optional-trimmed-string-convergence.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "S5_1_STATE_RECONCILE_OPTIONAL_TRIMMED_STRING_CONVERGENCE",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "S7_CUMULATIVE_SIMPLIFICATION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_POST_M2_SIMPLIFICATION_EXECUTION_ARCHITECTURE_2026-08-31.md",
+    "docs/SIMCORE_S4_OUTER_RUNTIME_SHELL_CLOSURE_2026-08-31.md",
+    "docs/SIMCORE_S5_1_STATE_RECONCILE_OPTIONAL_TRIMMED_STRING_CONVERGENCE_DESIGN_2026-08-31.md",
+    "docs/SIMCORE_S5_1_STATE_RECONCILE_OPTIONAL_TRIMMED_STRING_CONVERGENCE_IMPLEMENTATION_EVIDENCE_2026-08-31.md"
+  ]
+}

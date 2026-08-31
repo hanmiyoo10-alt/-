@@ -1,7 +1,7 @@
 # SimCore S4-1 Runtime Current Guard Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **PR-DRY FAILURE 01 PRESERVED · FIX IN PROGRESS · NO PUBLICATION BEFORE S7**
+Status: **PR-DRY QUALIFIED · FIX RESOLVED · INTENT REMOVAL NEXT · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S4 / OUTER RUNTIME SHELL / STALE-RUNTIME GUARD DEDUPE**
 
 ## Authority
@@ -48,7 +48,7 @@ The candidate materializer executes one isolated builder file. S4-1 therefore co
 ```text
 P8 predecessor file = products/simcore/tooling/build-s3-4-session-candidate-wrapper-convergence.py
 P8 predecessor source SHA256 = 51c01833ded2369b94a78db9287cddfffb6a3feb4c1a414146ea887eb26fc890
-P9 builder source SHA256 at initial staging = e7217b30c594a5c8148e0c96bc343e40f34ffdc26d94df8b660bb892f04fea7b
+P9 repaired builder source SHA256 = 145526176ee5397c056a862dcfd9f43989949d2be93b33e9fb94d183b100735c
 sibling builder runtime dependency = NONE
 network dependency = NONE
 release-system materializer change = NONE
@@ -115,8 +115,6 @@ node --check passes
 
 ## Local pre-PR verification
 
-Performed before opening PR-dry:
-
 ```text
 python -m py_compile build-s4-1-runtime-current-guard-convergence.py = PASS
 pure Node current/stale guard equivalence harness = PASS
@@ -166,16 +164,62 @@ release-system defect = NO
 
 Root cause:
 
-The inherited P8 `module_text()` helper finds a module start and then uses the next `SimCore.define` as its end. For the final module, `runtime-probe`, it therefore treats EOF as the end. The asynchronous outer runtime shell follows `runtime-probe`, so the intentional P8→P9 outer-shell change is falsely attributed to the last module body.
+The inherited P8 `module_text()` uses the next `SimCore.define` as a module end and therefore uses EOF for the final `runtime-probe` module. The outer async runtime shell follows that final module, so an intentional outer-shell-only P8→P9 delta was falsely attributed to `runtime-probe`.
+
+## FIX repair
+
+Repair commit:
+
+```text
+0cb78df195512d82498a5e97a22c26f5f55bd26a
+```
 
 Repair rule:
 
 ```text
-do not relax P0→P8 predecessor verification
-do not alter materializer/release-system code
-do not widen the runtime delta
-for P8→P9 only, compare true module bodies using each module's explicit `\n});` close boundary
-then retain exact expected-delta byte equality as the stronger outer-shell proof
+P0→P8 inherited verification = unchanged
+release-system/materializer = unchanged
+runtime delta = unchanged
+P8→P9 last-module comparison only = bounded at explicit outer async-shell marker
+all earlier module comparisons = inherited P8 helper
+exact P8→P9 expected-byte equality = retained
+```
+
+This repairs the verifier boundary without relaxing product-delta proof.
+
+## Repaired PR-dry PASS
+
+```text
+PR = #1043
+qualified head = 0cb78df195512d82498a5e97a22c26f5f55bd26a
+workflow run = 33366845766
+Verify job = 99409154127
+Required job = 99409289317
+PR merge test commit / verifierCommit = a00ed560571cc087bfd26fb13109cd001f378ea6
+PR base = fe54058aecd5ec70f2754ff5f508407b63ca0ec8
+conclusion = PASS
+reasonCodes = []
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = PASS
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+Required = PASS
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+production bytes = 574325
+architecture contract = 0.70.1 / non-transitional
+```
+
+Disposition:
+
+```text
+FIX S4_1_LAST_MODULE_BOUNDARY_VERIFIER = RESOLVED
+runtime anomaly = NONE OBSERVED
+candidate persisted = NO
+production moved = NO
 ```
 
 ## Async / side-effect posture
@@ -190,22 +234,22 @@ telemetry checkpoint gating = unchanged
 release-simcore = unchanged
 ```
 
-## PR-dry plan
+## Request-free qualification plan
 
-Temporary request identity:
+The temporary request is now eligible for removal:
 
 ```text
 intent = simcore-v0.70.3-intent-08
 release = simcore-v0.70.3-new-08
 purpose = GATE_PR1_DRY only
-candidate persistence = forbidden
+candidate persistence = NONE
 ```
 
-After verifier repair, expected qualification:
+After deletion, a fresh substantive CI must pass:
 
 ```text
 GATE_CI_SELF = PASS
-GATE_PR1_DRY = PASS
+GATE_PR1_DRY = NOT_APPLICABLE
 GATE_STATIC = PASS
 GATE_ARCH = PASS
 GATE_REGRESSION = PASS
@@ -213,27 +257,26 @@ Required = PASS
 candidateCommit = null
 ```
 
-After PR-dry PASS, `intent-08` must be removed and a fresh request-free substantive CI must pass with `GATE_PR1_DRY = NOT_APPLICABLE` before merge readiness.
-
 ## Anomaly ledger
 
 ```text
-OPEN WATCH = NONE
-OPEN DEFER = NONE
-OPEN FIX = S4_1_LAST_MODULE_BOUNDARY_VERIFIER
-OPEN BLOCKER = NONE
+WATCH = NONE
+DEFER = NONE
+FIX = S4_1_LAST_MODULE_BOUNDARY_VERIFIER / RESOLVED
+BLOCKER = NONE
 ```
 
 ## Current disposition
 
 ```text
 S4_1_DESIGN = FROZEN ON MAIN
-S4_1_P9_BUILDER = STAGED
+S4_1_P9_BUILDER = STAGED / REPAIRED VERIFIER
 S4_1_SELF_CONTAINMENT = BUILT-IN / HASH-VERIFIED
 S4_1_LOCAL_STATIC = PASS
 S4_1_LOCAL_GUARD_EQUIVALENCE = PASS
 S4_1_PR_DRY_01 = FAIL / PRESERVED
-S4_1_LAST_MODULE_BOUNDARY_VERIFIER = FIX IN PROGRESS
-S4_1_REQUEST_FREE_CI = NOT_STARTED
+S4_1_PR_DRY_02 = PASS
+S4_1_FIX = RESOLVED
+S4_1_REQUEST_FREE_CI = NEXT
 S4_1_PUBLICATION = NONE BEFORE S7
 ```

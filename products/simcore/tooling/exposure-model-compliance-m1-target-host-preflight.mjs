@@ -20,6 +20,16 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function pairRunStem(runId) {
+  const text = String(runId || '').trim();
+  if (!text) return null;
+  const parts = text.split(':');
+  if (parts.length < 2) return null;
+  const tail = parts.at(-1);
+  if (!['X', 'Y'].includes(tail)) return null;
+  return parts.slice(0, -1).join(':');
+}
+
 export function createTargetHostPreflightEvidenceTemplate() {
   return {
     schema: 1,
@@ -105,7 +115,15 @@ function validateReceipt(receipt, condition, failures, missing) {
 function validatePair(b0, e6, failures) {
   if (!b0 || !e6) return;
   if (b0.runId === e6.runId) failures.push('PAIR_RUN_ID_NOT_DISTINCT');
-  if (b0.expectedSyntheticScenarioFingerprint !== e6.expectedSyntheticScenarioFingerprint) failures.push('PAIR_SCENARIO_MISMATCH');
+
+  const b0Stem = pairRunStem(b0.runId);
+  const e6Stem = pairRunStem(e6.runId);
+  if (!b0Stem || !e6Stem) failures.push('PAIR_RUN_ID_FORMAT_INVALID');
+  else if (b0Stem !== e6Stem) failures.push('PAIR_RUN_ID_STEM_MISMATCH');
+
+  if (b0.expectedSyntheticScenarioFingerprint === e6.expectedSyntheticScenarioFingerprint) {
+    failures.push('PAIR_CONDITION_SCENARIO_FINGERPRINT_NOT_DISTINCT');
+  }
   if (b0.requestType !== e6.requestType) failures.push('PAIR_REQUEST_TYPE_MISMATCH');
   if (b0.modelIdentifier !== e6.modelIdentifier) failures.push('PAIR_MODEL_MISMATCH');
   if (b0.modelSettingsFingerprint !== e6.modelSettingsFingerprint) failures.push('PAIR_MODEL_SETTINGS_MISMATCH');
@@ -174,6 +192,7 @@ export function assessTargetHostPreflight(evidence = createTargetHostPreflightEv
     productionImplementationAuthorized: false,
     runtimeMutationAuthorized: false,
     candidateContractHash: EXPECTED_CANDIDATE_HASH,
+    pairIdentityRule: 'SAME_HARNESS_PAIR_RUN_ID_STEM_WITH_DISTINCT_CONDITION_SCENARIO_FINGERPRINTS_PLUS_BASE_REQUEST_MODEL_SETTINGS_REFERENCE_ANCHOR_GATES',
     failures,
     missing,
     checkedConditions: RECEIPT_CONDITIONS.slice(),
@@ -191,6 +210,7 @@ export function assertTargetHostPreflightIntegrity(result) {
   if (result?.runtimeMutationAuthorized !== false) failures.push('RUNTIME_AUTH_FLAG');
   if (!['PASS_TARGET_HOST_PREFLIGHT', 'HOLD_TARGET_HOST_EVIDENCE_REQUIRED', 'BLOCK_TARGET_HOST_PREFLIGHT_FAILED'].includes(result?.status)) failures.push('RESULT_STATUS');
   if (result?.readyForM1Smoke === true && result?.status !== 'PASS_TARGET_HOST_PREFLIGHT') failures.push('READY_STATUS_MISMATCH');
+  if (Array.isArray(result?.failures) && result.failures.includes('PAIR_SCENARIO_MISMATCH')) failures.push('SUPERSEDED_PAIR_RULE_RETAINED');
   return { pass: failures.length === 0, failures };
 }
 
@@ -201,4 +221,5 @@ export {
   EXPECTED_REQUEST_STAGE,
   PREFLIGHT_VERSION,
   RECEIPT_CONDITIONS,
+  pairRunStem,
 };

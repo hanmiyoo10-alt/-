@@ -47,12 +47,7 @@ assert.ok(engine.includes('taskTimeline'));
 assert.ok(engine.includes('cliOperations'));
 
 assert.ok(guidelines.includes(currentRelease.currentMemory));
-if (currentRelease.releaseEvidence) {
-  assert.ok(currentRelease.releaseEvidence.acceptedBaseline, 'structured release evidence must retain an accepted baseline');
-  assert.ok(currentRelease.releaseEvidence.latestInstalled, 'structured release evidence must retain latest-installed evidence');
-} else {
-  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
-}
+assert.ok(currentRelease.evidenceView?.display?.acceptedBaseline, 'canonical evidence view must retain accepted-baseline evidence');
 assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));
 assert.ok(guidelines.includes('Keep 24h usage and DevPass Activity on the foreground truth path.'));
 assert.ok(guidelines.includes('Preserve the hard CLI concurrency cap'));

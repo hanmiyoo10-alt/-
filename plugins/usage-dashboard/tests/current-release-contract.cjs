@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const {loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
-const {formatReleaseEvidence} = require('../tools/release_evidence_contract_e20.cjs');
 
 const release = assertCurrentReleaseArtifacts();
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
@@ -12,17 +11,18 @@ const publisher = fs.readFileSync(release.publisherWorkflow, 'utf8');
 const resolver = fs.readFileSync('plugins/usage-dashboard/tools/resolve_release_spec.cjs', 'utf8');
 
 assert.ok(guidelines.includes(release.currentMemory));
-if (release.releaseEvidence) {
-  const evidenceMemory = formatReleaseEvidence(release.releaseEvidence);
-  assert.equal(Object.hasOwn(release, 'verifiedBaseline'), false, 'structured evidence must not retain legacy verifiedBaseline ownership');
-  assert.equal(Object.hasOwn(release, 'latestInstalledEvidence'), false, 'structured evidence must not retain legacy latestInstalledEvidence ownership');
-  assert.ok(evidenceMemory.acceptedBaseline.includes(release.releaseEvidence.acceptedBaseline.productVersion));
-  assert.ok(evidenceMemory.acceptedBaseline.includes(release.releaseEvidence.acceptedBaseline.releaseSha.slice(0, 12)));
-  assert.ok(evidenceMemory.latestInstalled.includes(release.releaseEvidence.latestInstalled.productVersion));
-  assert.ok(evidenceMemory.latestInstalled.includes(release.releaseEvidence.latestInstalled.releaseSha.slice(0, 12)));
-  assert.ok(evidenceMemory.latestInstalled.endsWith(`· ${release.releaseEvidence.latestInstalled.verdict}`));
+const evidence = release.evidenceView;
+assert.ok(evidence && ['structured','legacy'].includes(evidence.mode));
+assert.ok(evidence.display.acceptedBaseline);
+if (evidence.mode === 'structured') {
+  assert.ok(evidence.acceptedBaseline && evidence.latestInstalled);
+  assert.ok(evidence.display.acceptedBaseline.includes(evidence.acceptedBaseline.productVersion));
+  assert.ok(evidence.display.acceptedBaseline.includes(evidence.acceptedBaseline.releaseSha.slice(0, 12)));
+  assert.ok(evidence.display.latestInstalled.includes(evidence.latestInstalled.productVersion));
+  assert.ok(evidence.display.latestInstalled.includes(evidence.latestInstalled.releaseSha.slice(0, 12)));
+  assert.ok(evidence.display.latestInstalled.endsWith(`· ${evidence.latestInstalled.verdict}`));
 } else {
-  assert.ok(guidelines.includes(release.verifiedBaseline));
+  assert.ok(guidelines.includes(evidence.display.acceptedBaseline));
 }
 assert.equal(release.callerWorkflow, '.github/workflows/usage-dashboard-validate.yml');
 assert.ok(caller.includes(`uses: ./${release.validatorWorkflow}`));

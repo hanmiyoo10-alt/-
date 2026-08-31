@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const {assertReleaseSpec} = require('../../tools/release_spec_contract_e19.cjs');
+const {resolveReleaseEvidenceView} = require('../../tools/release_evidence_view_e21.cjs');
 
 const ROOT = process.cwd();
 const RELEASES_ROOT = path.join(ROOT, '.github/usage-dashboard/releases');
@@ -42,6 +43,7 @@ function loadCurrentRelease() {
     ...spec,
     specPath:path.relative(ROOT, specPath),
     currentMemory:`Current release implementation: \`${spec.productVersion} — ${spec.releaseTitle}\``,
+    evidenceView:resolveReleaseEvidenceView(spec),
   });
 }
 

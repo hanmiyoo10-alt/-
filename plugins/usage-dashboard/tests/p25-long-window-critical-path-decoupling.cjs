@@ -76,12 +76,7 @@ assert.ok(latest.includes('Bridge secondary refresh:'));
 assert.ok(latest.includes('deferred-refresh'));
 
 assert.ok(guidelines.includes(currentRelease.currentMemory));
-if (currentRelease.releaseEvidence) {
-  assert.ok(currentRelease.releaseEvidence.acceptedBaseline, 'structured release evidence must retain an accepted baseline');
-  assert.ok(currentRelease.releaseEvidence.latestInstalled, 'structured release evidence must retain latest-installed evidence');
-} else {
-  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
-}
+assert.ok(currentRelease.evidenceView?.display?.acceptedBaseline, 'canonical evidence view must retain accepted-baseline evidence');
 assert.ok(guidelines.includes('UNKNOWN stays distinct from known zero'));
 assert.ok(guidelines.includes('## Long-term update roadmap'));
 

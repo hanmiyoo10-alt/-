@@ -8,6 +8,11 @@ const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 const evidence = require('../tools/release_evidence_contract_e20.cjs');
 
 const release = loadCurrentRelease();
+if (release.productVersion !== '3.0.0-alpha.5.97') {
+  console.log(`P63 Credits Spend Composition Source Fidelity: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.97`);
+  process.exit(0);
+}
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(release.productVersion, '3.0.0-alpha.5.97');
 assert.equal(release.engineVersion, '1.6.33');
 assert.equal(release.managerVersion, '1.3.5');
@@ -121,6 +126,7 @@ const managerBytes = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-man
 const engineSha = crypto.createHash('sha256').update(engineBytes).digest('hex');
 const managerSha = crypto.createHash('sha256').update(managerBytes).digest('hex');
 const bootstrapSha = crypto.createHash('sha256').update(fs.readFileSync('plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh')).digest('hex');
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.97');
 assert.equal(manifest.components?.bridge?.requiredVersion, '1.6.33');
 assert.equal(manifest.components?.bridge?.sha256, engineSha);

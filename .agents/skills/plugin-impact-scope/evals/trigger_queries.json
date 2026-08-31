@@ -1,0 +1,26 @@
+{
+  "skill": "plugin-impact-scope",
+  "pilot_scope": "plugin:usage-dashboard",
+  "positive": [
+    "Usage Dashboard에서 이 필드를 Engine부터 UI까지 바꾸면 어디까지 영향받는지 구현 전에 조사해줘.",
+    "Local Usage Dashboard 변경이 Manager, Engine, Plugin, manifest에 어떻게 번지는지 impact scope만 잡아줘.",
+    "이 기능이 request identity나 diagnostics regression까지 건드리는지 현재 소스로 blast radius 확인해줘.",
+    "코드 수정 전에 Usage Dashboard lifecycle 변경의 owner/caller/test 영향 관계를 정리해줘.",
+    "release materializer까지 연결될 수 있는 Usage Dashboard 변경인데 먼저 영향 범위를 source-backed로 봐줘.",
+    "여러 레이어를 건드릴 것 같은데 Usage Dashboard semantic flow랑 보호 테스트부터 확인해줘."
+  ],
+  "negative_near_miss": [
+    "Usage Dashboard 지금 production version이 뭐야?",
+    "release-usage-dashboard manifest 위치만 알려줘.",
+    "README 오타 고쳐줘.",
+    "이 에러 로그 원인 진단해줘.",
+    "Service Tier Fidelity 설계 문서 작성해줘.",
+    "5.98 배포해줘.",
+    "SimCore Context Projection 영향 범위를 조사해줘."
+  ],
+  "notes": [
+    "Authority-only questions belong to plugin-authority-scan, not impact scope.",
+    "Diagnosis, design writing, implementation, and release execution are adjacent but separate workflows.",
+    "SimCore remains a negative trigger until explicit second-scope promotion evidence exists."
+  ]
+}

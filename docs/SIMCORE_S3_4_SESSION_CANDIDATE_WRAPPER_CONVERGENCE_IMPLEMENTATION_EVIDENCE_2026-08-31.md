@@ -1,7 +1,7 @@
 # SimCore S3-4 Session Candidate Wrapper Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **PR-DRY FAILURE PRESERVED · FIX IN PROGRESS · INTERNAL CHECKPOINT ONLY**
+Status: **PR-DRY QUALIFIED AFTER SELF-CONTAINMENT FIX · TEMP INTENT RETIREMENT NEXT · INTERNAL CHECKPOINT ONLY**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE TELEMETRY CANDIDATE WRAPPER DEDUPE**
 
 Authority:
@@ -52,11 +52,11 @@ function sessionStorageCandidate(label, storage) {
 
 Replace only the five repeated direct frozen `{ label, storage }` constructions with helper calls.
 
-The runtime delta itself did not change as a result of the PR-dry failure below.
+The runtime delta remained unchanged across the builder repair.
 
 ## Frozen behavior
 
-The builder must fail closed unless P7 -> P8 preserves:
+The self-contained builder fails closed unless P7 -> P8 preserves:
 
 ```text
 inspectSessionSurface call count/order
@@ -81,13 +81,9 @@ latest.js == install.js
 node --check
 ```
 
-The new helper must remain private and occur exactly once as a declaration plus five call sites.
+The new helper remains private and occurs exactly once as a declaration plus five call sites. A Node differential harness proves deep equality, property order, storage reference identity and frozen output.
 
-A Node differential harness proves deep equality, property order, storage reference identity and frozen output for both candidate labels over representative storage objects.
-
-## PR-dry failure 01
-
-Temporary request:
+## PR-dry failure 01 preserved
 
 ```text
 intent = simcore-v0.70.3-intent-07
@@ -95,11 +91,6 @@ PR = #1040
 failed head = 05194b92796e867f200fb5017ae31c2959af258f
 workflow run = 33363560645
 Verify job = 99399539457
-```
-
-Bounded result:
-
-```text
 conclusion = FAIL
 reasonCodes = [PR1_DRY_QUALIFICATION_FAIL]
 GATE_CI_SELF = PASS
@@ -137,35 +128,59 @@ candidate materializer copies the requested builder as one executable file
 → P8 composition fails before materialization
 ```
 
-This is the same generic single-file builder contract already preserved by the v0.66 builder self-containment incident. The release/candidate materializer must not be changed inside this runtime simplification transaction.
+The generic materializer was deliberately not changed because that would mix release-system restructuring into this runtime simplification transaction.
 
-## Correct repair boundary
+## Self-contained repair
 
-Replace the failed wrapper composition with a **self-contained P8 builder** that contains the full mechanical P0→P8 transformation and bounded verification needed to materialize this checkpoint in one file.
-
-Forbidden repair:
+Repair commit:
 
 ```text
-change candidate-materialize-core
-copy sibling builders in generic release infrastructure
-introduce repository-relative runtime dependency
-widen S3-4 product delta
+8b84326fcf0b08bb06b280855a0a0001a4fc42c1
 ```
 
-Required repair:
+Repair shape:
 
 ```text
-one executable builder file
+single executable builder file
 exact production v0.70.1 input
-same P1→P7 transformations already qualified
-exact P7→P8 S3-4 delta
-static/differential fences in same file
-latest/install byte identity
+P1→P7 transformations materialized inside the same builder
+P8 exact wrapper-only delta
+bounded cumulative static/differential fences in the same file
+no sibling builder dependency
+latest/install byte identity enforced
 ```
 
-## PR-dry posture after repair
+Disposition:
 
-`intent-07` remains a dry-only qualification marker and produced no candidate. The repaired head must prove:
+```text
+FIX S3_4_BUILDER_SELF_CONTAINMENT = RESOLVED
+runtime delta widened = NO
+release-system code changed = NO
+production changed = NO
+```
+
+## Repaired PR-dry qualification
+
+```text
+PR = #1040
+base = bb61cb4ab649a4b1862533a5121a61a547b8e0b0
+qualified head = 8b84326fcf0b08bb06b280855a0a0001a4fc42c1
+workflow run = 33363841130
+Verify job = 99400343546
+Required job = 99400495720
+verifier merge commit = 2f9f3aa864de9fcdb1b6b34063c335353e306375
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+candidateCommit = null
+architectureContract = 0.70.1 / non-transitional
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes = 574325
+```
+
+Gate result:
 
 ```text
 GATE_CI_SELF = PASS
@@ -173,20 +188,34 @@ GATE_PR1_DRY = PASS
 GATE_STATIC = PASS
 GATE_ARCH = PASS
 GATE_REGRESSION = PASS
-candidateCommit = null
+GATE_STATE = NOT_APPLICABLE
+GATE_COORDINATION = NOT_APPLICABLE
+GATE_LEGACY_COMPAT = NOT_APPLICABLE
 Required = PASS
 ```
 
-After successful qualification:
+Interpretation:
 
 ```text
-record exact evidence
+P8 cumulative builder qualification = PASS
+candidate persistence = NONE / candidateCommit null
+release-simcore mutation = NONE
+production parent = unchanged v0.70.1
+latest/install production digest = identical
+```
+
+## Required post-qualification sequence
+
+```text
 remove intent-07
 run fresh request-free substantive CI
 require GATE_PR1_DRY = NOT_APPLICABLE
-require CI_SELF / STATIC / ARCH / REGRESSION = PASS
-sync evidence
-run final exact-head CI
+require GATE_CI_SELF / GATE_STATIC / GATE_ARCH / GATE_REGRESSION = PASS
+require candidateCommit = null
+require Required = PASS
+record exact-head result
+sync final evidence
+run final evidence-sync exact-head CI
 merge only after Required PASS
 ```
 
@@ -207,8 +236,11 @@ broad real-long-chat = S7 only
 
 ```text
 S3_4_DESIGN = FROZEN ON MAIN
-S3_4_RUNTIME_DELTA = UNCHANGED
+S3_4_RUNTIME_DELTA = IMPLEMENTED
 S3_4_PR_DRY_01 = FAIL / PRESERVED
-S3_4_BUILDER_SELF_CONTAINMENT = FIX IN PROGRESS
+S3_4_BUILDER_SELF_CONTAINMENT_FIX = RESOLVED
+S3_4_PR_DRY_REPAIRED = PASS
+S3_4_TEMP_INTENT = RETIRE NEXT
+S3_4_REQUEST_FREE_CI = PENDING
 S3_4_PUBLICATION = NONE BEFORE S7
 ```

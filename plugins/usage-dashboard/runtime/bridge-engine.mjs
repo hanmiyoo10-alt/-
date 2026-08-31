@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.33';
+const VERSION = '1.6.34';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -18,7 +18,7 @@ const HOST = '127.0.0.1';
 const PORT = Number(process.env.DEVPASS_BRIDGE_PORT || 39117);
 const CLI_VERSION = process.env.LLMGATEWAY_CLI_VERSION || '1.10.0';
 const MODEL_CATALOG_PACKAGE = '@llmgateway/models';
-const MODEL_CATALOG_VERSION = '1.251.0';
+const MODEL_CATALOG_VERSION = '1.280.0';
 const NPX_PREFER_OFFLINE = String(process.env.DEVPASS_BRIDGE_NPX_PREFER_OFFLINE || '1') !== '0';
 const MANAGED_CLI_ENABLED = String(process.env.DEVPASS_BRIDGE_MANAGED_CLI || '1') !== '0';
 const MANAGED_CLI_ROOT = path.join(os.homedir(), '.local', 'share', 'local-usage-dashboard', 'runtime', 'cli');

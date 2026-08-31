@@ -135,6 +135,24 @@ def verify_s4_1(p8, p9):
     module_names = P8["module_names"]
     module_text = P8["module_text"]
     require_surface = P8["require_surface"]
+
+    def bounded_module_text(text, name, names):
+        # P8's historical helper uses EOF for the final module. S4 intentionally edits
+        # the outer shell after the final runtime-probe module, so bound only that last
+        # module at the explicit async-shell marker while preserving the inherited
+        # helper for every earlier module.
+        if name != names[-1]:
+            return module_text(text, name)
+        if name != "runtime-probe":
+            fail("S4_1_LAST_MODULE_IDENTITY_CHANGED", name)
+        token = f'SimCore.define("{name}", function (require, module, exports) {{'
+        starts = [i for i in range(len(text)) if text.startswith(token, i)]
+        if len(starts) != 1:
+            fail("S4_1_LAST_MODULE_BOUNDARY_INVALID", f"{name} count={len(starts)}")
+        end = text.find("\n\n(async () => {", starts[0] + len(token))
+        if end < 0:
+            fail("S4_1_OUTER_SHELL_BOUNDARY_MISSING")
+        return text[starts[0]:end]
     same_counts = P8["same_counts"]
     names = module_names(p8)
     if module_names(p9) != names:
@@ -145,7 +163,7 @@ def verify_s4_1(p8, p9):
     same_counts(p8, p9, P8["PROTECTED_MARKERS"], "S4_1_PROTECTED_MARKER_CHANGED")
     same_counts(p8, p9, S4_1_CALL_MARKERS, "S4_1_CALL_SURFACE_CHANGED")
     for name in names:
-        if module_text(p8, name) != module_text(p9, name):
+        if bounded_module_text(p8, name, names) != bounded_module_text(p9, name, names):
             fail("S4_1_MODULE_CHANGED", name)
 
     if p8.count(S4_1_HELPER_OLD) != 1 or p9.count(S4_1_HELPER_NEW) != 1:

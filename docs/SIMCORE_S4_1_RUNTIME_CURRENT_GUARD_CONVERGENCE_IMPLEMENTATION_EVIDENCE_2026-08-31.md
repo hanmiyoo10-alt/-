@@ -1,7 +1,7 @@
 # SimCore S4-1 Runtime Current Guard Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTATION STAGED · PR-DRY PENDING · NO PUBLICATION BEFORE S7**
+Status: **PR-DRY FAILURE 01 PRESERVED · FIX IN PROGRESS · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S4 / OUTER RUNTIME SHELL / STALE-RUNTIME GUARD DEDUPE**
 
 ## Authority
@@ -96,7 +96,7 @@ P0→P8 predecessor verification passes first
 P8→P9 exact expected replacement reconstruction equals candidate byte-for-byte
 module graph unchanged
 require surface unchanged
-all SimCore module bodies unchanged
+all true SimCore.define module bodies unchanged
 private guard declaration = 1
 guard calls = exactly 10
 remaining direct dropStaleRuntime call = helper only
@@ -124,6 +124,60 @@ pure Node current/stale guard equivalence harness = PASS
 
 Harness cases include matching epoch, epoch mismatch, disposed runtime, explicit captured epoch and implicit current epoch. For every case the old/new continuation decision and stale-drop delta are identical.
 
+## PR-dry failure 01 preserved
+
+```text
+intent = simcore-v0.70.3-intent-08
+PR = #1043
+failed head = eac9d4fe170268b36bc740ad618111111fd0d0c8
+workflow run = 33366426066
+Verify job = 99407920114
+conclusion = FAIL
+reasonCodes = [PR1_DRY_QUALIFICATION_FAIL]
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = FAIL
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+production bytes = 574325
+```
+
+Exact builder stderr:
+
+```text
+CANDIDATE_BUILDER_FAILED: python3 /tmp/simcore-candidate-8RGEou/build-s4-1-runtime-current-guard-convergence.py
+S4_1_MODULE_CHANGED: runtime-probe
+```
+
+Classification:
+
+```text
+FIX = S4_1_LAST_MODULE_BOUNDARY_VERIFIER
+class = VERIFIER_BOUNDARY_FALSE_POSITIVE
+runtime defect = NO
+production mutation = NONE
+candidate persistence = NONE
+release-system defect = NO
+```
+
+Root cause:
+
+The inherited P8 `module_text()` helper finds a module start and then uses the next `SimCore.define` as its end. For the final module, `runtime-probe`, it therefore treats EOF as the end. The asynchronous outer runtime shell follows `runtime-probe`, so the intentional P8→P9 outer-shell change is falsely attributed to the last module body.
+
+Repair rule:
+
+```text
+do not relax P0→P8 predecessor verification
+do not alter materializer/release-system code
+do not widen the runtime delta
+for P8→P9 only, compare true module bodies using each module's explicit `\n});` close boundary
+then retain exact expected-delta byte equality as the stronger outer-shell proof
+```
+
 ## Async / side-effect posture
 
 ```text
@@ -147,7 +201,7 @@ purpose = GATE_PR1_DRY only
 candidate persistence = forbidden
 ```
 
-Expected qualification:
+After verifier repair, expected qualification:
 
 ```text
 GATE_CI_SELF = PASS
@@ -166,11 +220,9 @@ After PR-dry PASS, `intent-08` must be removed and a fresh request-free substant
 ```text
 OPEN WATCH = NONE
 OPEN DEFER = NONE
-OPEN FIX = NONE
+OPEN FIX = S4_1_LAST_MODULE_BOUNDARY_VERIFIER
 OPEN BLOCKER = NONE
 ```
-
-Any PR-dry or runtime anomaly is preserved here before repair or progression.
 
 ## Current disposition
 
@@ -180,7 +232,8 @@ S4_1_P9_BUILDER = STAGED
 S4_1_SELF_CONTAINMENT = BUILT-IN / HASH-VERIFIED
 S4_1_LOCAL_STATIC = PASS
 S4_1_LOCAL_GUARD_EQUIVALENCE = PASS
-S4_1_PR_DRY = PENDING
+S4_1_PR_DRY_01 = FAIL / PRESERVED
+S4_1_LAST_MODULE_BOUNDARY_VERIFIER = FIX IN PROGRESS
 S4_1_REQUEST_FREE_CI = NOT_STARTED
 S4_1_PUBLICATION = NONE BEFORE S7
 ```

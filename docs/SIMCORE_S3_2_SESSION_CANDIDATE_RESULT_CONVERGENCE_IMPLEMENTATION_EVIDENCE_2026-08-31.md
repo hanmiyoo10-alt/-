@@ -1,7 +1,7 @@
 # SimCore S3-2 Session Candidate Result Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTED ON WORK BRANCH · PR-DRY QUALIFICATION NEXT · INTERNAL CHECKPOINT ONLY**
+Status: **PR-DRY QUALIFIED · TEMPORARY INTENT REMOVED · REQUEST-FREE FINAL CI NEXT**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE SESSION-CANDIDATE RESULT BOOKKEEPING DEDUPE**
 
 Authority:
@@ -16,6 +16,7 @@ Production remains:
 release-simcore version = 0.70.1
 release-simcore commit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
 release blob = 8f332cfceed316d35954e353c2eaca38c2f34d95
+latest.js == install.js = YES
 ```
 
 No deployment or broad live authority exists before S7.
@@ -91,28 +92,86 @@ side-effect marker counts unchanged
 
 A pure Node differential harness compares old direct result construction with `sessionCandidateResult()` for all five statuses, representative WINDOW/GLOBAL_THIS roots, metadata-only capsule values, and boundary serialized sizes. It requires deep equality, property-order equality and frozen output.
 
-## Validation posture
+## PR-dry qualification
 
-Temporary PR-dry request:
+Temporary PR-only request:
 
 ```text
 intent = simcore-v0.70.3-intent-05
 purpose = GATE_PR1_DRY only
-candidate persistence = forbidden
-release authority = none
 ```
 
-Required PR-dry gates:
+Qualified head:
 
 ```text
-GATE_CI_SELF
-GATE_PR1_DRY
-GATE_STATIC
-GATE_ARCH
-GATE_REGRESSION
+head = 723ad778e1bc38803582faf4ea0e04a140a049eb
+SimCore CI run = 33361817290
+Verify job = 99394492738 · SUCCESS
+Required job = 99394611667 · SUCCESS
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+candidateCommit = null
+prBaseCommit = 03d69962083c1ff20dc032879ac85eb5b670f33a
+prHeadCommit = 723ad778e1bc38803582faf4ea0e04a140a049eb
 ```
 
-After PR-dry qualification the temporary request must be removed and a fresh request-free exact-head substantive CI must pass before merge.
+Classifier result:
+
+```text
+labels = [CI_SELF, HARNESS, SIMCORE_DOC_ONLY]
+docOnly = false
+```
+
+Substantive gates:
+
+```text
+GATE_CI_SELF    = PASS
+GATE_PR1_DRY    = PASS
+GATE_STATIC     = PASS
+GATE_ARCH       = PASS
+GATE_REGRESSION = PASS
+```
+
+Generated cumulative source identity:
+
+```text
+latestSha256  = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes         = 574325
+latest == install = YES
+```
+
+No candidate was persisted and `release-simcore` was not mutated.
+
+## Temporary intent retirement
+
+After PR-dry qualification, `simcore-v0.70.3-intent-05` was deleted as required.
+
+Current branch posture:
+
+```text
+candidate request = ABSENT
+candidate persistence = NONE
+release-simcore mutation = NONE
+S7 publication authority = NONE
+```
+
+A fresh request-free exact-head substantive CI must now prove that the builder path remains validation-relevant without candidate authority.
+
+Required final gates:
+
+```text
+GATE_CI_SELF    = PASS
+GATE_PR1_DRY    = NOT_APPLICABLE
+GATE_STATIC     = PASS
+GATE_ARCH       = PASS
+GATE_REGRESSION = PASS
+candidateCommit = null
+docOnly = false
+```
+
+A successful `NOOP_SIMCORE_DOC_ONLY` result is not acceptable final qualification.
 
 ## Safety state
 
@@ -132,6 +191,8 @@ broad real-long-chat = S7 only
 ```text
 S3_2_DESIGN = FROZEN ON MAIN
 S3_2_BUILDER = IMPLEMENTED
-S3_2_PR_DRY = PENDING
+S3_2_PR_DRY = PASS
+S3_2_TEMPORARY_INTENT = REMOVED
+S3_2_REQUEST_FREE_FINAL_CI = PENDING
 S3_2_PUBLICATION = NONE BEFORE S7
 ```

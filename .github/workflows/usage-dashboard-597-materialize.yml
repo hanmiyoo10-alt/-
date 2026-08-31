@@ -29,6 +29,8 @@ jobs:
         run: |
           node plugins/usage-dashboard/tools/build_usage_dashboard.cjs --check
           node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
+      - name: Full Usage Dashboard regression registry
+        run: node plugins/usage-dashboard/tests/run-all.cjs
       - name: Commit materialized candidate
         shell: bash
         run: |

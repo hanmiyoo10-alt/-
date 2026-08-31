@@ -112,8 +112,8 @@ assert.ok(p62.includes('UD_HISTORICAL_VERSION_LOCK'), 'P62 historical lock must 
 
 const materializer = fs.readFileSync('plugins/usage-dashboard/tools/release_credits_spend_597.py','utf8');
 assert.ok(materializer.includes('MATERIALIZER_IDEMPOTENT:{TARGET_PRODUCT}'), '5.97 materializer must provide second-pass no-op proof');
-assert.ok(materializer.includes("build_usage_dashboard.cjs','--write"), '5.97 must materialize Plugin bundle from modules');
-assert.ok(materializer.includes("build_bridge_engine.cjs','--write"), '5.97 must materialize Engine bundle from modules');
+assert.ok(materializer.includes("run('node', 'plugins/usage-dashboard/tools/build_usage_dashboard.cjs', '--write')"), '5.97 must materialize Plugin bundle from modules');
+assert.ok(materializer.includes("run('node', 'plugins/usage-dashboard/tools/build_bridge_engine.cjs', '--write')"), '5.97 must materialize Engine bundle from modules');
 
 const manifest = JSON.parse(fs.readFileSync('plugins/usage-dashboard/runtime/product-manifest.json','utf8'));
 const engineBytes = fs.readFileSync('plugins/usage-dashboard/runtime/bridge-engine.mjs');

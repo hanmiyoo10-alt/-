@@ -1,0 +1,38 @@
+{
+  "skill_name": "plugin-authority-scan",
+  "status": "CANDIDATE_ONLY_NOT_PROMOTED",
+  "candidate_scope": "plugin:simcore",
+  "note": "These are explicit isolated output-eval candidates for the generalization. They do not change trigger expectations or PILOT_VALIDATED_SCOPES.",
+  "evals": [
+    {
+      "id": "simcore-release-identity",
+      "prompt": "SimCore current production version and exact evidence owners를 현재 레포 기준으로 확인해줘. manifest랑 release artifact가 어디서 각각 증명되는지도 구분해.",
+      "assertions": [
+        "Reads current SimCore owning guideline before resolving ref:path evidence reads.",
+        "Treats releaseBranch, manifest, and artifact as independent locators until the guideline/current contract binds them.",
+        "Does not invent a release-branch manifest path merely by joining locator fields.",
+        "Can use separate current reads for release identity and production bytes when the owning contract requires them.",
+        "Provides provenance/basis for every resolved ref:path pair.",
+        "Performs no mutation."
+      ]
+    },
+    {
+      "id": "simcore-production-code",
+      "prompt": "SimCore에서 지금 배포된 production code를 증명하는 exact source가 어디인지 authority scan만 해줘.",
+      "assertions": [
+        "Resolves the candidate scope and reads its owning contract.",
+        "Uses the project-owned production-byte authority rather than assuming main source proves deployed bytes.",
+        "Stops after the authority report and does not diagnose or edit code."
+      ]
+    },
+    {
+      "id": "simcore-runtime-health-handoff",
+      "prompt": "SimCore 지금 runtime이 건강한지 authority 기준부터 확인해줘.",
+      "assertions": [
+        "Locates current repository authority without claiming runtime health from release identity alone.",
+        "Identifies runtime/device diagnostic evidence as a separate required boundary when the owning contract requires it.",
+        "Hands off instead of performing full diagnostic triage inside authority-scan."
+      ]
+    }
+  ]
+}

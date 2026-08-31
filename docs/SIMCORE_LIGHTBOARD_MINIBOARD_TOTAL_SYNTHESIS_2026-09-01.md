@@ -2,7 +2,7 @@
 
 Date: 2026-09-01 KST
 
-Status: **REFERENCE SYNTHESIS · 16 ANALYZED ARTIFACTS · RESEARCH BACKLOG · NO IMPLEMENTATION AUTHORITY**
+Status: **REFERENCE SYNTHESIS · 16 ANALYZED ARTIFACTS · 16 EXACT SOURCE ARCHIVES · RESEARCH BACKLOG · NO IMPLEMENTATION AUTHORITY**
 
 ## 1. Purpose
 
@@ -39,20 +39,42 @@ Separate supporting references also exist for the upstream LightBoard agent skil
 
 ## 3. Archive state
 
-Exact source archives are confirmed for the original five LightBoard-family artifacts from the 2026-08-30 drop, all four artifacts from the 2026-08-31 drop, and all six artifacts from the closed post-SNS 2026-09-01 intake.
+Exact source archives are confirmed for all sixteen analyzed LightBoard / MiniBoard product artifacts.
 
-That gives fifteen independently archived LightBoard / MiniBoard product artifacts with explicit source identity and restoration authority.
+The archive authorities are split across the original intake directories plus the dedicated SNS Forme closure archive:
 
-SNS Forme 0.3.1 has a complete analysis identity (`114438` bytes, SHA-256 `b65acf7529c70de1145eef76e191cc6dffa061a33c71764084e38fe6dbfac0cb`), but current repository search does not expose a separate source-archive authority for that exact artifact.
+```text
+references/simcore-plugin-idea-drop-2026-08-30/
+references/simcore-plugin-idea-drop-2026-08-31/
+references/simcore-plugin-idea-drop-2026-09-01/
+references/simcore-lightboard-sns-forme-0.3.1-archive-2026-09-01/
+```
+
+SNS Forme 0.3.1 was re-supplied on 2026-09-01 and matched the previously analyzed identity exactly:
+
+```text
+original bytes  = 114438
+original SHA-256 = b65acf7529c70de1145eef76e191cc6dffa061a33c71764084e38fe6dbfac0cb
+```
+
+Its dedicated archive stores a deterministic gzip/base64 transport in nine independently verified text parts. Each linked part's Git blob SHA matches the locally computed identity, and the verified local round trip reconstructs the exact original source.
+
+The earlier archive gap is therefore closed:
+
+```text
+CLOSED · SNS_SOURCE_ARCHIVE_GAP
+16_EXACT_SOURCE_ARCHIVES_CONFIRMED
+```
+
+A rejected monolithic/binary transport attempt produced mismatched blob identities during intake. Those orphan blobs were never linked into the authoritative archive tree. The final bounded text-part representation is authoritative.
 
 Classification:
 
 ```text
-WATCH · SNS_SOURCE_ARCHIVE_GAP
+FIX · SNS_BINARY_BLOB_TRANSPORT_MISMATCH
+CLOSED · NO RESIDUAL ARCHIVE GAP
 NOT A SIMCORE RUNTIME DEFECT
 ```
-
-Do not claim sixteen archived originals until a dedicated SNS Forme source archive is located or added.
 
 ## 4. Architecture convergence
 
@@ -336,15 +358,16 @@ original source preservation
 → SNS Forme analysis
 → six-artifact post-SNS intake and analysis
 → post-SNS batch closure
-→ sixteen-source total synthesis   ← CURRENT
+→ sixteen-source total synthesis
+→ SNS Forme exact-source archive gap closure   ← CURRENT
 ```
 
 Current classification:
 
 ```text
 16_ARTIFACTS_ANALYZED
-15_EXACT_SOURCE_ARCHIVES_CONFIRMED
-1_SOURCE_ARCHIVE_GAP_WATCH (SNS Forme)
+16_EXACT_SOURCE_ARCHIVES_CONFIRMED
+SNS_SOURCE_ARCHIVE_GAP_CLOSED
 TOTAL_SYNTHESIS_COMPLETE
 RESEARCH_BACKLOG_ONLY
 PRODUCTION_UNCHANGED

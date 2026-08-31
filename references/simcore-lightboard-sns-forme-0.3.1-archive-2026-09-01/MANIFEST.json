@@ -1,0 +1,37 @@
+{
+  "artifact": "SNS Forme 0.3.1",
+  "original_label": "🆔 SNS 모듈 0.3.1 - 라이트보드.risum",
+  "normalized_filename": "lightboard-sns-forme-0.3.1.risum",
+  "bytes": 114438,
+  "sha256": "b65acf7529c70de1145eef76e191cc6dffa061a33c71764084e38fe6dbfac0cb",
+  "transport": "deterministic-gzip-base64",
+  "gzip_bytes": 26894,
+  "gzip_sha256": "d9834316a3c08f6913796db7ed172390c6a502aa9b7107fb953b9fccef6a4819",
+  "parts": [
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part001.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part002.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part003.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part004.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part005.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part006.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part007.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part008.txt",
+    "source-gzip-base64/lightboard-sns-forme-0.3.1.part009.txt"
+  ],
+  "part_blob_sha1": [
+    "c3c6c910b92441003b279dfff75391db7e7237e0",
+    "b704348770ac36d36d966e2e9de33306af0ba9aa",
+    "d9a85e37a119879f5a66e51da67a3ccd313c9f73",
+    "32116a82b24a740ca47f98c98fc78a778ccac515",
+    "7af4973e0d67c808784b4474261602168f9f2a7e",
+    "b70a593f79701f1115f818f1a6a11eb1f4fa1756",
+    "c859e5a39846a2e87971a54f9357f4facaf753d4",
+    "ac43a816c972d6c0e249da38bf89cc5b34281b69",
+    "fc7cd800dd9ccff5f41f5f52c11b843486f6f89c"
+  ],
+  "parts_verified": true,
+  "roundtrip_verified": true,
+  "transport_anomaly": "FIX_SNS_BINARY_BLOB_TRANSPORT_MISMATCH_REJECTED_UNLINKED",
+  "analysis": "docs/SIMCORE_REFERENCE_ANALYSIS_LIGHTBOARD_SNS_FORME_0_3_1_2026-09-01.md",
+  "status": "SOURCE_ARCHIVE_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED"
+}

@@ -1,7 +1,7 @@
 # SimCore S5-1 State Reconcile Optional Trimmed-String Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **BUILDER STAGED · PR-DRY NEXT · NO PUBLICATION BEFORE S7**
+Status: **PR-DRY QUALIFIED · REQUEST-FREE NEXT · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S5 / STATE RECONCILE LOCAL NORMALIZATION DEDUPE**
 
 ## Authority
@@ -26,9 +26,12 @@ No release-simcore publication, candidate persistence or standalone live release
 
 ```text
 branch = impl/simcore-s5-1-optional-trimmed-string-convergence-20260831
-fresh main parent = 9f2fb51423acc1e6a5e194c8f5d5ed638f0d766d
+fresh main parent at implementation start = 9f2fb51423acc1e6a5e194c8f5d5ed638f0d766d
 builder commit = df6c725146ba66537b6e6c531452b59d186f90b7
+implementation PR = #1061
 ```
+
+After implementation began, main advanced only through unrelated Usage Dashboard 5.98 and PocketRisu documentation changes. The PR merge-test base for dry qualification is therefore the then-current main rather than the implementation-start parent; no SimCore runtime/release-system path overlap was present.
 
 ## Cumulative checkpoint
 
@@ -168,9 +171,9 @@ node --check
 output latest/install equality
 ```
 
-## PR-dry identity
+## PR-dry qualification
 
-Repository search immediately before implementation found no use outside this design lane for:
+Temporary dry identity:
 
 ```text
 intent = simcore-v0.70.3-intent-11
@@ -179,14 +182,67 @@ purpose = GATE_PR1_DRY only
 candidate persistence = forbidden
 ```
 
-The temporary request must be removed after dry qualification and the resulting request-free head must independently pass Verify + Required before final exact-head CI.
+Qualified evidence:
+
+```text
+PR = #1061
+qualified head = a9e65aeed70311e94851a9b08bedd89bcd20a417
+PR base = fb4ffd77733f96f0c3905924e57f33d3051e9b5e
+PR merge-test / verifierCommit = 27c7bea2664b2aa4961d4e1e0c5085a6e6a287bd
+workflow run = 33379426656
+Verify job = 99448140996 / PASS
+Required job = 99448280833 / PASS
+conclusion = PASS
+reasonCodes = []
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = PASS
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
+GATE_STATE = NOT_APPLICABLE
+GATE_COORDINATION = NOT_APPLICABLE
+GATE_LEGACY_COMPAT = NOT_APPLICABLE
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+production bytes = 574325
+architecture contract = 0.70.1 / non-transitional
+CI report artifact = simcore-ci-report-33379426656 / 9753149749
+```
+
+The dry gate proves the ordinary isolated materializer accepted the self-contained P12 builder, reconstructed the cumulative checkpoint, applied the exact S5-1 delta, passed static/architecture/regression verification and persisted no candidate.
+
+## Request-free requirement
+
+The temporary `intent-11` request must now be removed. The resulting head must independently prove:
+
+```text
+Verify = PASS
+Required = PASS
+GATE_PR1_DRY = NOT_APPLICABLE
+candidateCommit = null
+productionCommit = unchanged v0.70.1
+```
+
+Only after request-free qualification may the evidence be synchronized one final time and the exact resulting head receive final Verify + Required before expected-head CAS merge.
+
+## Anomaly ledger
+
+```text
+WATCH = NONE
+DEFER = NONE
+FIX = NONE
+BLOCKER = NONE
+```
 
 ## Current disposition
 
 ```text
-S5_1_IMPLEMENTATION = STAGED
-P12_BUILDER = PRESENT
-PR_DRY = NEXT
+S5_1_IMPLEMENTATION = PR_DRY_QUALIFIED
+P12_BUILDER = PASS
+PR_DRY = PASS
+REQUEST_FREE = NEXT
 PRODUCTION = UNCHANGED v0.70.1
 PUBLICATION = NONE BEFORE S7
 BLOCKER = NONE OBSERVED

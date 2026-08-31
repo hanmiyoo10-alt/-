@@ -26,15 +26,24 @@ This directory archives a new user-supplied Lightboard/MiniBoard reference batch
    - SHA-256: `894392b57dedfff7a16d3367ed6affbbd9ef122f2afab4b735c88d9f2a9baac1`
    - authoritative transport: deterministic gzip → base64 → 6 verified parts
    - restore: `./RESTORE-MOMOTALK.sh`
-3. `lightboard-status-window-4.0.0.charx` — **PENDING**
+3. `lightboard-status-window-4.0.0.charx` — **COMPLETE**
+   - original: `🔦라이트보드 상태창 4.0.0.charx`
+   - bytes: `10752`
+   - SHA-256: `263d2827d1fda16164b44332e6533bad363b4dacf693db7ca9ae2eb30a7a1fee`
+   - authoritative transport: deterministic gzip → explicit JSON byte arrays → 12 verified parts
+   - gzip bytes: `10586`
+   - gzip SHA-256: `767c0197f61d1efae968802d7f4b5eb3df33ec97ef73d24c361027662efb5dfe`
+   - restore: `./RESTORE-STATUS-WINDOW.sh`
 4. `lightboard-annotations-4.0.0.charx` — **PENDING**
 
 `MANIFEST.json` records original filenames, normalized repository filenames, byte lengths, SHA-256 identities, transport identities, and per-artifact completion state.
 
 ## Transport note
 
-The initial raw-base64 KakaoTalk intake exposed one unverified slice-length mismatch. That slice was removed before authority was granted. Completed artifacts use deterministic gzip-base64 parts under `source-gzip-base64/`; Git blob identities are checked against locally computed blob identities before tree admission.
+The initial raw-base64 KakaoTalk intake exposed one unverified slice-length mismatch. That slice was removed before authority was granted. KakaoTalk and MomoTalk use deterministic gzip-base64 parts under `source-gzip-base64/`.
+
+For the Status Window intake, opaque base64 and hex transport attempts were rejected by the tool safety boundary before authority was granted. Those experimental/orphan blobs are non-authoritative and are not linked into the repository tree. The final Status Window representation uses transparent JSON arrays of gzip byte values under `source-gzip-json-bytes/`. Every linked part's Git blob identity matched the locally computed expected identity, and concatenating the byte arrays reconstructs the exact deterministic gzip stream and original SHA-256.
 
 ## Current disposition
 
-`ARTIFACTS_1_2_COMPLETE · ARTIFACTS_3_4_PENDING · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_3_COMPLETE · ARTIFACT_4_PENDING · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

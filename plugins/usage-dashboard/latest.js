@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.96
+//@version 3.0.0-alpha.5.97
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.96';
+  const VERSION = '3.0.0-alpha.5.97';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed Runtime Diagnostic Identity Fidelity Repair",
+    title: "Credits Spend Composition Source Fidelity",
     highlights: Object.freeze([
-    "Managed CLI and managed Models diagnostics now keep separate version identities end to end instead of sharing a generic version field.",
-    "Full and compact Diagnostics use the same local truth resolver and fail closed when Engine and Manager report conflicting component versions.",
-    "Model-category classification and the exact @llmgateway/cli 1.10.0 + @llmgateway/models 1.251.0 managed pair remain unchanged.",
-    "No new network request, CLI invocation, timer, poller, persistence owner, request identity field, or catalog projection is added.",
+    "Credits Analytics now exposes a bounded 24h composition sourced only from explicit creditsCost and creditsDataStorageCost activity fields.",
+    "Missing or invalid component coverage remains UNKNOWN; explicit zero remains known zero and total spend is derived only when both components are complete.",
+    "The existing generic cost, token, cache, model, provider and request semantics remain unchanged.",
+    "No new endpoint, activity request, logs request, CLI invocation, catalog lookup, timer, poller or persistence owner is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.96 · Engine 1.6.32 · Manager 1.3.5 and READY/Health ok.",
-    "Full Diagnostics must show @llmgateway/cli 1.10.0 and @llmgateway/models 1.251.0 on separate lines without version overwrite.",
-    "Compact Diagnostics must show Engine 1.6.32 · Manager 1.3.5 · CLI 1.10.0 · Models 1.251.0 · ready.",
+    "Verify Product 5.97 · Engine 1.6.33 · Manager 1.3.5 and READY/Health ok.",
+    "Credits Analytics must show usage, data storage and total only from the 24h source-fidelity projection; UNKNOWN must render as —.",
+    "Full and compact Diagnostics must distinguish explicit zero from UNKNOWN for Credits spend composition.",
     "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression.",
     ]),
   });
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.32';
+  const REQUIRED_BRIDGE_VERSION = '1.6.33';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -2102,6 +2102,25 @@ async function importLegacyTodayBaselines() {
     return {range,granularity,buckets};
   }
 
+  function normalizeCreditsSpendComposition(value) {
+    if (!value || typeof value !== 'object' || String(value.window || '') !== '24h') return null;
+    const exact = scalar => typeof scalar === 'number' && Number.isFinite(scalar) && scalar >= 0 ? Number(scalar) : null;
+    const usageCost = exact(value.usageCost);
+    const dataStorageCost = exact(value.dataStorageCost);
+    const expectedTotal = usageCost !== null && dataStorageCost !== null ? usageCost + dataStorageCost : null;
+    const reportedTotal = exact(value.totalSpend);
+    const complete = value.complete === true && expectedTotal !== null && reportedTotal !== null && Math.abs(reportedTotal - expectedTotal) <= 1e-9;
+    return {
+      window:'24h',
+      usageCost,
+      dataStorageCost,
+      totalSpend:complete ? expectedTotal : null,
+      usageCostSource:usageCost !== null && String(value.usageCostSource) === 'activity.creditsCost' ? 'activity.creditsCost' : 'unknown',
+      dataStorageCostSource:dataStorageCost !== null && String(value.dataStorageCostSource) === 'activity.creditsDataStorageCost' ? 'activity.creditsDataStorageCost' : 'unknown',
+      complete,
+    };
+  }
+
   function normalizeScopeActivity(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const rows = value => Array.isArray(value) ? value.map(row => ({
@@ -2131,6 +2150,7 @@ async function importLegacyTodayBaselines() {
     const cachedInputTokens = num(raw.cachedInputTokens ?? raw.cached_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) ? Number(raw.cachedInputTokens ?? raw.cached_input_tokens ?? raw.cachedTokens ?? raw.cached_tokens) : null;
     const cacheReadInputTokens = num(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens) ? Number(raw.cacheReadInputTokens ?? raw.cache_read_input_tokens) : null;
     const cacheCreationInputTokens = num(raw.cacheCreationInputTokens ?? raw.cache_creation_input_tokens ?? raw.cacheWriteTokens ?? raw.cache_write_tokens) ? Number(raw.cacheCreationInputTokens ?? raw.cache_creation_input_tokens ?? raw.cacheWriteTokens ?? raw.cache_write_tokens) : null;
+    const creditsSpendComposition = normalizeCreditsSpendComposition(raw.creditsSpendComposition);
     const providers = rows(raw.providers);
     const models = rows(raw.models);
     const recentCandidates = [
@@ -2143,8 +2163,8 @@ async function importLegacyTodayBaselines() {
     const rawRecent = Array.isArray(recentSource[1]) ? recentSource[1] : [];
     const recent = normalizeRecentRequestRows(rawRecent);
     const recentLedger = normalizeRecentRequestRows(rawRecent, 200);
-    if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens].some(num) && !providers.length && !models.length && !rawRecent.length) return null;
-    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),dailySeries:normalizeDailyScalarSeries(raw.dailySeries),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
+    if (![totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens].some(num) && !providers.length && !models.length && !rawRecent.length && !creditsSpendComposition) return null;
+    return {totalRequests,totalCost,totalTokens,inputTokens,outputTokens,errorCount,errorRate,cacheCount,cacheRate,cachedInputTokens,cacheReadInputTokens,cacheCreationInputTokens,providers,models,recent,recentLedger,recentSourceKey,recentRawCount:rawRecent.length,creditsSpendComposition,requestProvenance:normalizeRequestProvenanceMetadata(raw?.requestProvenance),dailySeries:normalizeDailyScalarSeries(raw.dailySeries),fetchedAt:raw.fetchedAt || Date.now(),source:String(raw.source || 'LLMGateway scoped usage')};
   }
 
   function normalizeUsageScopesPayload(raw, fallbackRaw = null) {
@@ -2286,6 +2306,14 @@ async function importLegacyTodayBaselines() {
       return `${row.name} $${Number(row.cost).toFixed(4)}${share}`;
     };
     return `Cost drivers: scope ${scopeKey} · window 24h · model ${format(truth.model)} · provider ${format(truth.provider)} · fidelity positive-cost-only`;
+  }
+
+  function creditsSpendCompositionDiagnosticText(value) {
+    const truth = value && typeof value === 'object' ? value : null;
+    const format = scalar => typeof scalar === 'number' && Number.isFinite(scalar) && scalar >= 0 ? `$${Number(scalar).toFixed(4)}` : '—';
+    if (!truth) return 'Credits spend composition: window 24h · usage — · storage — · total — · complete no · source unknown';
+    const sources = [truth.usageCostSource, truth.dataStorageCostSource].filter(source => source && source !== 'unknown');
+    return `Credits spend composition: window 24h · usage ${format(truth.usageCost)} · storage ${format(truth.dataStorageCost)} · total ${format(truth.totalSpend)} · complete ${truth.complete ? 'yes' : 'no'} · source ${sources.join(' + ') || 'unknown'}`;
   }
 
   function normalize(payload) {
@@ -3335,6 +3363,7 @@ async function importLegacyTodayBaselines() {
     const diagAnalyticsScopeKey = ['all','devpass','credits'].includes(String(state.analyticsScopeView)) ? String(state.analyticsScopeView) : 'all';
     const diagAnalyticsBundle = d.analyticsScopes?.scopes?.[diagAnalyticsScopeKey] || (diagAnalyticsScopeKey === 'all' ? d.analytics : null) || null;
     const diagAnalyticsW24 = diagAnalyticsBundle?.windows?.['24h'] || d.usageScopes?.scopes?.[diagAnalyticsScopeKey] || null;
+    const diagCreditsSpend = d.analyticsScopes?.scopes?.credits?.windows?.['24h']?.creditsSpendComposition || d.usageScopes?.scopes?.credits?.creditsSpendComposition || null;
     return [
       `Local Usage Dashboard v${VERSION}`,
       `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
@@ -3408,6 +3437,7 @@ async function importLegacyTodayBaselines() {
       paygAccountDiagnosticText(diagAccount),
       devpassCycleSummaryDiagnosticText(devpassCycleSummaryTruth(diagAccount, d.analyticsScopes?.scopes?.devpass)),
       costDriverDiagnosticText(diagAnalyticsScopeKey, diagAnalyticsW24),
+      creditsSpendCompositionDiagnosticText(diagCreditsSpend),
       `DevPass account detail: plan ${diagAccount?.plan || '—'} · cycle ${diagAccount?.cycle || '—'} · status ${!diagAccount ? '—' : diagAccount.cancelled ? 'cancelled' : String(diagAccount.plan || 'none') !== 'none' ? 'active' : '—'} · reset total ${num(d.weekly?.resetPasses) ? Number(d.weekly.resetPasses) : '—'} · purchased ${num(diagAccount?.resetPasses) ? Number(diagAccount.resetPasses) : '—'} · included remaining ${num(diagAccount?.includedResetPassesRemaining) ? Number(diagAccount.includedResetPassesRemaining) : '—'} · price ${money(diagAccount?.resetPassPrice)}`,
       `Hourly drilldown: local observed · selected-hour lazy render · request cache HIT/MISS · service tier`,
       `Hourly detail: provider/model summary · cache coverage · click-only partial render · writes ${Number(performanceRuntime.hourlyDetailWrites || 0)} · skips ${Number(performanceRuntime.hourlyDetailSkips || 0)} · fallback ${Number(performanceRuntime.hourlyDetailFallbacks || 0)}`,
@@ -3682,6 +3712,14 @@ function todayOverviewMetrics(d) {
     const analyticsTopProvider = costDriverUiText(analyticsCostDrivers.provider);
     const analyticsTopModel = costDriverUiText(analyticsCostDrivers.model);
     const analyticsFetchedAt = analyticsBundle?.fetchedAt || d.analyticsScopes?.fetchedAt || analyticsW24?.fetchedAt || d.fetchedAt;
+    const analyticsCreditsSpend = analyticsScopeKey === 'credits' ? analyticsW24?.creditsSpendComposition || null : null;
+    const analyticsCreditsSpendMoney = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? `$${Number(value).toFixed(4)}` : '—';
+    const analyticsCreditsSpendSplit = analyticsCreditsSpend?.complete && Number(analyticsCreditsSpend.totalSpend) > 0
+      ? `사용 ${(Number(analyticsCreditsSpend.usageCost) / Number(analyticsCreditsSpend.totalSpend) * 100).toFixed(1)}% · 보관 ${(Number(analyticsCreditsSpend.dataStorageCost) / Number(analyticsCreditsSpend.totalSpend) * 100).toFixed(1)}%`
+      : '—';
+    const analyticsCreditsSpendCard = analyticsScopeKey === 'credits'
+      ? `<div class="usage-detail-box credits-spend-card"><h3>Credits 비용 구성 · 24h</h3><div class="usage-detail-row"><div><b>사용 비용</b><span>${esc(analyticsCreditsSpend?.usageCostSource || 'unknown')}</span></div><span>${analyticsCreditsSpendMoney(analyticsCreditsSpend?.usageCost)}</span></div><div class="usage-detail-row"><div><b>데이터 보관</b><span>${esc(analyticsCreditsSpend?.dataStorageCostSource || 'unknown')}</span></div><span>${analyticsCreditsSpendMoney(analyticsCreditsSpend?.dataStorageCost)}</span></div><div class="usage-detail-row"><div><b>총 비용</b><span>${analyticsCreditsSpend?.complete ? 'complete' : 'UNKNOWN'}</span></div><span>${analyticsCreditsSpendMoney(analyticsCreditsSpend?.totalSpend)}</span></div><p>구성 비율 · ${esc(analyticsCreditsSpendSplit)}</p></div>`
+      : '';
     const analyticsExtra = analyticsScopeKey === 'devpass'
       ? `<div class="mini accent"><span>월간 남음</span><b>${money(d.monthly?.remaining)}</b></div><div class="mini"><span>기간 종료</span><b>${d.monthly?.resetAt ? remainingTimeForDashboard(d.monthly.resetAt) : '—'}</b></div>`
       : analyticsScopeKey === 'credits'
@@ -3764,7 +3802,7 @@ function todayOverviewMetrics(d) {
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(analyticsTopModel)}</b></div>
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(analyticsTopProvider)}</b></div>
           ${analyticsExtra}
-        </div>` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        </div>${analyticsCreditsSpendCard}` : `<p>Bridge snapshot에 ${esc(analyticsNames[analyticsScopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.analyticsScopes?.errors?.[analyticsScopeKey] ? `<p class="warn">Analytics · ${esc(errorSummaryText(d.analyticsScopes.errors[analyticsScopeKey]))}</p>` : ''}
         ${analyticsBundle?.errors && Object.keys(analyticsBundle.errors).length ? `<p class="warn">기간 일부 실패 · ${esc(Object.entries(analyticsBundle.errors).map(([range,error])=>`${range}: ${errorSummaryText(error)}`).join(' · '))}</p>` : ''}
       </section>
@@ -4325,6 +4363,7 @@ function todayOverviewMetrics(d) {
     const runtimeBridge = bridgeRuntimeSnapshot();
     const stable = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const cli = diagnosticsWorkspaceCliRuntime();
+    const creditsSpendComposition = d.analyticsScopes?.scopes?.credits?.windows?.['24h']?.creditsSpendComposition || d.usageScopes?.scopes?.credits?.creditsSpendComposition || null;
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const ledgerRows = requestLedgerRowsForScope(scopeKey);
     let exactRows = 0;
@@ -4360,6 +4399,7 @@ function todayOverviewMetrics(d) {
       engineVersion:String(bridgeDiag.version || REQUIRED_BRIDGE_VERSION || ''),
       managerVersion:String(runtimeBridge.managerVersion || state.bridgeManagerRuntime?.managerVersion || ''),
       cli,
+      creditsSpendComposition,
       lastRefreshMs:num(state.lastSyncDurationMs) ? Number(state.lastSyncDurationMs) : null,
       snapshotMs,
       criticalPath,
@@ -4386,6 +4426,7 @@ function todayOverviewMetrics(d) {
       `Refresh identity: ${diagnosticsCaptureIdentityText(model.capture)}`,
       `Status: ${model.readiness} · Health ${model.health} · active errors ${model.activeErrors} · failures ${model.failures}`,
       `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · CLI ${model.cli.version || '—'} · Models ${model.cli.modelVersion || '—'} · ${model.cli.state}`,
+      creditsSpendCompositionDiagnosticText(model.creditsSpendComposition),
       `Last refresh: ${lastRefresh} · snapshot ${snapshot} · critical ${critical}`,
       `Data: age ${model.dataAge} · stale modules ${model.staleModules === null ? '—' : model.staleModules} · Request fidelity exact ${model.exactRows}/${model.ledgerRows}`,
       `Updater: ${model.updaterCompatible ? 'compatible' : 'incompatible'} · sync ${model.managerSync}`,

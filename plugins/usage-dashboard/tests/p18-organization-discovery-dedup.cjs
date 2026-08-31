@@ -47,7 +47,12 @@ assert.ok(diagnostics.includes('unknown stays unknown'));
 assert.ok(diagnostics.includes('missing Write/TTL is never inferred from price/provider'));
 assert.ok(diagnostics.includes('active local errors'));
 
-assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+if (currentRelease.releaseEvidence) {
+  assert.ok(currentRelease.releaseEvidence.acceptedBaseline, 'structured release evidence must retain an accepted baseline');
+  assert.ok(currentRelease.releaseEvidence.latestInstalled, 'structured release evidence must retain latest-installed evidence');
+} else {
+  assert.ok(guidelines.includes(currentRelease.verifiedBaseline));
+}
 assert.ok(guidelines.includes(currentRelease.currentMemory));
 assert.ok(guidelines.includes('Keep UNKNOWN distinct from known zero'));
 assert.ok(guidelines.includes('Keep already-working behavior unchanged unless the release goal requires touching it.'));

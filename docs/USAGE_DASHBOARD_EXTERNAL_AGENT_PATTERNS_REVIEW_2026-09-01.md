@@ -155,3 +155,39 @@ The important ownership rule is that none of these derived layers becomes produc
 - **NO P-NUMBER / VERSION RESERVED:** all `NV-*` names above are process/audit candidates only.
 
 Future idea-list entries may consume these patterns automatically once a concrete Usage Dashboard need and source authority exist, under the existing automatic designed-idea consumption policy.
+
+## 6. Screenshot-derived additional research candidates
+
+Source: user-supplied screenshot of a curated index titled around GitHub AI tooling. This subsection records only what the screenshot itself names and claims. The repositories/tools below are **NOT YET VERIFIED** by direct source review, so none of them is implementation authority.
+
+The screenshot groups six candidates by intended use:
+
+1. **Hallmark** — captioned as a design-oriented pick for detecting structurally bland/AI-slop-like pages and improving design output.
+2. **Orca** — captioned as a way to run agents in parallel.
+3. **code-review-graph** — captioned as a way to avoid missing code-change impact scope as a codebase grows.
+4. **mattpocock/skills** — captioned as reusable agent work procedures/skills.
+5. **awesome-llm-apps** — captioned as examples of RAG/agent applications.
+6. **OfficeCLI** — captioned as document-file automation tooling.
+
+### Provisional Usage Dashboard relevance
+
+- **Hallmark — MEDIUM, UI/design review candidate.** Potential value is a systematic anti-slop/structural-diversity review lens for Dashboard UI changes. Do not treat aesthetic heuristics as product truth or as a replacement for mobile physical validation.
+- **Orca — MEDIUM, parallel-review candidate.** Potentially overlaps the independent-approach discipline already extracted from Multi-GPT. Verify before adding a new process artifact; avoid duplicate orchestration machinery.
+- **code-review-graph — HIGH, change-impact analysis candidate.** This is especially relevant to the growing modular Engine/Manager/Plugin/materializer/test surface and may complement `NV-LARGE-CODEBASE-INDEX` with explicit changed-symbol impact tracing.
+- **mattpocock/skills — HIGH, process-skill design candidate.** Potential relevance is converting repeated release/design/review procedures into small reusable skills without replacing repository authority.
+- **awesome-llm-apps — LOW-MEDIUM for product runtime, MEDIUM for idea mining.** Use as a pattern/reference catalog only after verifying concrete examples; do not import RAG/agent infrastructure into the Dashboard without a direct need.
+- **OfficeCLI — LOW for current runtime, MEDIUM for artifact/document workflow.** Potentially useful for repository documentation/report automation, but unrelated to current Usage Dashboard runtime unless a concrete document workflow appears.
+
+### Disposition
+
+**RESEARCH QUEUE ONLY / NO PRODUCT CHANGE AUTHORIZED.**
+
+Before any candidate can influence a release or process contract:
+
+1. verify the exact repository and current source;
+2. identify the concrete pattern rather than relying on the screenshot caption;
+3. map ownership and applicability to `plugins/usage-dashboard/`;
+4. reject overlapping or host-owned machinery;
+5. preserve current source/manifest/issue/physical evidence as the only product authority.
+
+Most promising next verification targets from the screenshot are `code-review-graph` and `mattpocock/skills`, because they appear to complement the already adopted large-codebase indexing and reusable-procedure directions without requiring product-runtime changes.

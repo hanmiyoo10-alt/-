@@ -1,0 +1,21 @@
+{
+  "batch": "simcore-plugin-idea-drop-2026-09-01",
+  "status": "ARTIFACT_1_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
+  "artifacts": [
+    {
+      "ordinal": 1,
+      "original_label": "🔦 라이트보드-인터뷰2.0.risum",
+      "normalized_filename": "lightboard-interview-2.0.risum",
+      "bytes": 14834,
+      "sha256": "99bc6753b2cda7cfe8925aa8eca65d0699d96da644bdc7953abc79d6c8839506",
+      "transport": "deterministic-gzip-base64",
+      "gzip_bytes": 4613,
+      "gzip_sha256": "d6bb66dbfcce95d4445966413d1e8ce1d1bc812c98048c4ce4842a260b04a854",
+      "parts": [
+        "source-gzip-base64/lightboard-interview-2.0.part001.txt",
+        "source-gzip-base64/lightboard-interview-2.0.part002.txt"
+      ],
+      "complete": true
+    }
+  ]
+}

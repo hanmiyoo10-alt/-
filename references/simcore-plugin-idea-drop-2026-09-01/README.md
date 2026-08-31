@@ -50,7 +50,7 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
    - original: `[🔦😋가벼운 상태창 2.0.0 - 속마음 항상].module.charx`
    - bytes: `27017`
    - SHA-256: `ec099244aaee5bb3a0ac5cccc6658482cf082bac77d701b05cd041d4a20682c4`
-   - transport: deterministic gzip → base64 → 2 verified text parts
+   - transport: deterministic gzip → base64 → 6 verified text parts
    - gzip bytes: `8924`
    - gzip SHA-256: `6fc567293ac28e249c73e2711a84f146818ff29d87481919a3a41b377d2e46ad`
    - restore: `./RESTORE-LIGHT-STATUS-200.sh`

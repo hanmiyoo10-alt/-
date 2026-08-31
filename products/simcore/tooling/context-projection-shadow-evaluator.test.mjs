@@ -39,6 +39,9 @@ function baseFixture(overrides = {}) {
   assert.deepEqual(plan.keptIndices, [0, 3, 4, 5, 6, 7, 8, 9]);
   assert.equal(plan.unknownKeptCount, 1);
   assert.equal(plan.projectedMessages, 8);
+  assert.equal(plan.candidateExcludedContentChars, 'old-user'.length + 'old-assistant'.length);
+  assert.equal(plan.projectedContentChars, plan.originalContentChars - plan.candidateExcludedContentChars);
+  assert.ok(plan.contentReductionRatio > 0 && plan.contentReductionRatio < 1);
   assert.equal(plan.semanticSafety, 'UNPROVEN_REVIEW_REQUIRED');
   assert.equal(JSON.stringify(fixture), before, 'shadow planner must not mutate fixture/request');
   assert.deepEqual(materializeHypotheticalProjection(fixture, plan), [

@@ -5,23 +5,25 @@
     {
       "id": 1,
       "prompt": "우리 Usage Dashboard 지금 진짜 production version 뭐야? 예전 채팅 말고 현재 레포 기준으로 어디를 먼저 봐야 하는지도 같이 확인해줘.",
-      "expected_output": "The skill first resolves plugin:usage-dashboard from current registry/catalog, reads the owning guideline, then reads the production manifest from the declared release branch before stating any current version. It cites exact ref/path evidence and does not rely on remembered values.",
+      "expected_output": "The skill first resolves plugin:usage-dashboard from current registry/catalog, reads the owning guideline, builds a task-specific authority plan from that current project contract, and only then performs the exact current ref:path evidence read(s) required before stating a production version. It cites the ownership basis and does not rely on remembered values or locator adjacency.",
       "files": [],
       "assertions": [
         "Resolves the scope as plugin:usage-dashboard / Local Usage Dashboard.",
         "Names the registry, repository catalog, and owning Usage Dashboard guideline as authority-discovery sources.",
-        "Treats the declared release branch/manifest as locators and performs a fresh production-manifest read before stating a current version.",
+        "Treats release branch, manifest, artifact, and other authority fields as independent locators until the owning guideline binds the needed ref:path association.",
+        "Performs a fresh read of the exact current owning evidence before stating a mutable production value.",
         "Does not mutate repository state or start release implementation."
       ]
     },
     {
       "id": 2,
       "prompt": "release-usage-dashboard가 맞는지랑 manifest/latest.js/release spec authority 위치만 정리해줘. 수정은 하지 마.",
-      "expected_output": "A compact read-only authority report showing the registered release branch, manifest, artifact, and release-spec locators, plus the owning guideline and consistency verdict. No code or repository mutation occurs.",
+      "expected_output": "A compact read-only authority report showing the registered release branch, manifest, artifact, and release-spec locators, plus the owning guideline. It distinguishes locators from resolved ref:path evidence and reports only associations justified by the current project contract. No code or repository mutation occurs.",
       "files": [],
       "assertions": [
         "Returns the declared release branch, manifest, artifact, and release-spec directory from current registration.",
-        "Distinguishes locator discovery from proof of current mutable values.",
+        "Distinguishes locator discovery from proof of current mutable values and from resolved ref:path ownership.",
+        "Provides an ownership basis for any resolved ref:path evidence read.",
         "Reports VERIFIED/LOCATOR_ONLY/UNKNOWN/CONFLICT with exact evidence boundaries.",
         "Performs no write action."
       ]
@@ -29,10 +31,11 @@
     {
       "id": 3,
       "prompt": "전에 5.97이었던 것 같은데 그걸 기준으로 다음 업데이트 설계해줘.",
-      "expected_output": "The authority-scan phase rejects the remembered version as authority, discovers and re-reads the current Usage Dashboard production authority first, reports the fresh baseline, and then stops/hand-offs rather than silently designing inside this read-only skill.",
+      "expected_output": "The authority-scan phase rejects the remembered version as authority, discovers and re-reads the current Usage Dashboard owning contract/evidence first, reports the fresh baseline, and then stops/hand-offs rather than silently designing inside this read-only skill.",
       "files": [],
       "assertions": [
         "Does not accept the remembered 5.97 value as current authority.",
+        "Builds current ref:path reads from project authority rather than remembered topology.",
         "Reads current production authority before any later design handoff.",
         "Stops the skill after the authority report instead of editing or designing the release itself."
       ]

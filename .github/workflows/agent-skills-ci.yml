@@ -1,0 +1,55 @@
+name: Agent Skills CI
+
+on:
+  pull_request:
+    paths:
+      - '.agents/skills/**'
+      - '.github/workflows/agent-skills-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - '.github/workflows/agent-skills-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Compile Python skill scripts and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find .agents/skills -type f -name '*.py' -print0 | sort -z)
+          if (( ${#files[@]} == 0 )); then
+            echo 'AGENT_SKILLS_PYTHON_FILES:none'
+            exit 0
+          fi
+          python -m py_compile "${files[@]}"
+          echo "AGENT_SKILLS_PYTHON_COMPILE_PASS:${#files[@]}"
+
+      - name: Run skill unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' test_dir; do
+            count=$((count + 1))
+            echo "AGENT_SKILL_TEST_DIR:${test_dir}"
+            python -m unittest discover -s "$test_dir" -p 'test_*.py' -v
+          done < <(find .agents/skills -mindepth 2 -maxdepth 2 -type d -name tests -print0 | sort -z)
+          if (( count == 0 )); then
+            echo 'AGENT_SKILLS_TEST_DIRS:none'
+            exit 1
+          fi
+          echo "AGENT_SKILLS_TEST_PASS:${count}"

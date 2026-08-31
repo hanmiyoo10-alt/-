@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.97
+//@version 3.0.0-alpha.5.98
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.97';
+  const VERSION = '3.0.0-alpha.5.98';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Spend Composition Source Fidelity",
+    title: "Managed Models 1.280.0 Catalog Refresh",
     highlights: Object.freeze([
-    "Credits Analytics now exposes a bounded 24h composition sourced only from explicit creditsCost and creditsDataStorageCost activity fields.",
-    "Missing or invalid component coverage remains UNKNOWN; explicit zero remains known zero and total spend is derived only when both components are complete.",
-    "The existing generic cost, token, cache, model, provider and request semantics remain unchanged.",
-    "No new endpoint, activity request, logs request, CLI invocation, catalog lookup, timer, poller or persistence owner is added.",
+    "Managed @llmgateway/models is refreshed from 1.251.0 to exact 1.280.0 while managed CLI remains exactly 1.10.0.",
+    "The existing catalog-pinned Premium / Regular / Unknown classifier policy is unchanged; only source-backed catalog membership and prices may change outcomes.",
+    "Engine and Manager advance monotonically because both own the exact Models package identity and verification contract.",
+    "No new model endpoint, package updater, CLI invocation, timer, poller, cache owner, persistence owner or request-identity field is added.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.97 · Engine 1.6.33 · Manager 1.3.5 and READY/Health ok.",
-    "Credits Analytics must show usage, data storage and total only from the 24h source-fidelity projection; UNKNOWN must render as —.",
-    "Full and compact Diagnostics must distinguish explicit zero from UNKNOWN for Credits spend composition.",
-    "Recheck model-category, Billing Cycle, Premium, PAYG, Cost Drivers, ledger, cache, tier, outcome and HTTP-status regression.",
+    "Verify Product 5.98 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
+    "Full Diagnostics must show Bridge CLI runtime @llmgateway/cli 1.10.0 separately from Model category catalog @llmgateway/models 1.280.0.",
+    "Compact Diagnostics must show CLI 1.10.0 · Models 1.280.0 without identity crossover.",
+    "Recheck model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend, ledger, cache, tier, outcome and HTTP behavior.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,8 +41,8 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.33';
-  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.5';
+  const REQUIRED_BRIDGE_VERSION = '1.6.34';
+  const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
   const PRODUCT_RUNTIME_SCHEMA_VERSION = 1;

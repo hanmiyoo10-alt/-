@@ -1,7 +1,7 @@
 # SimCore S4-2 Output Fallback Index Pass-Through Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **PR-DRY QUALIFIED · INTENT REMOVAL NEXT · NO PUBLICATION BEFORE S7**
+Status: **MERGE-READY · PR-DRY + REQUEST-FREE QUALIFIED · FINAL EXACT-HEAD CI NEXT · NO PUBLICATION BEFORE S7**
 Classification: **POST-M2 SIMPLIFICATION / S4 / OUTER RUNTIME SHELL / PASS-THROUGH PARAMETER RETIREMENT**
 
 ## Authority
@@ -190,19 +190,50 @@ architecture contract = 0.70.1 / non-transitional
 
 The successful PR-dry proves the single-file builder decoded and hash-verified its embedded predecessor, reproduced P0→P9, applied the exact P9→P10 delta, passed static/architecture/regression verification, and did not persist a candidate.
 
-## Request-free qualification plan
+## Request-free qualification
 
-The temporary request is now eligible for removal. After deletion, require a fresh substantive CI:
+The dry-only request was removed after successful qualification.
 
 ```text
+request-free head = 2edb87967f899bc6cc1d681a62583f4041e46169
+workflow run = 33369150089
+Verify job = 99416139319 / PASS
+Required job = 99416272568 / PASS
+PR merge-test / verifierCommit = 5e8200a7f28dce80c0d04e8984f99ea569a23843
+PR base = 51522eb1552cd6a3e8bb451051ddcc273e4a3e0c
+conclusion = PASS
+reasonCodes = []
 GATE_CI_SELF = PASS
 GATE_PR1_DRY = NOT_APPLICABLE
 GATE_STATIC = PASS
 GATE_ARCH = PASS
 GATE_REGRESSION = PASS
+candidateCommit = null
+productionCommit = 861100f4771967aa5b8ab8811d06f11702c0d3ff
+latestSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+production bytes = 574325
+architecture contract = 0.70.1 / non-transitional
+```
+
+Request-free qualification confirms that the branch no longer carries a candidate request and that permanent CI independently accepts the builder/evidence delta against unchanged production.
+
+## Final exact-head requirement
+
+This evidence synchronization creates a new PR head. That exact head must independently pass:
+
+```text
+Verify = PASS
 Required = PASS
+GATE_CI_SELF = PASS
+GATE_PR1_DRY = NOT_APPLICABLE
+GATE_STATIC = PASS
+GATE_ARCH = PASS
+GATE_REGRESSION = PASS
 candidateCommit = null
 ```
+
+No further implementation/evidence mutation is allowed after that exact-head qualification before expected-head CAS merge.
 
 ## Anomaly ledger
 
@@ -217,9 +248,10 @@ BLOCKER = NONE
 
 ```text
 S4_2_DESIGN = FROZEN ON MAIN
-S4_2_P10_BUILDER = STAGED / PR-DRY QUALIFIED
+S4_2_P10_BUILDER = MERGE-READY
 S4_2_SELF_CONTAINMENT = PASS
 S4_2_PR_DRY = PASS
-S4_2_REQUEST_FREE_CI = NEXT
+S4_2_REQUEST_FREE_CI = PASS
+S4_2_FINAL_EXACT_HEAD_CI = NEXT
 S4_2_PUBLICATION = NONE BEFORE S7
 ```

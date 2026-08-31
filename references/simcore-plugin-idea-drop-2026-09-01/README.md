@@ -55,8 +55,17 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
    - gzip SHA-256: `6fc567293ac28e249c73e2711a84f146818ff29d87481919a3a41b377d2e46ad`
    - restore: `./RESTORE-LIGHT-STATUS-200.sh`
 
+6. `lightboard-light-status-window-2.1.0-inner-thoughts-toggle.module.charx` — **COMPLETE**
+   - original: `[🔦😋가벼운 상태창 2.1.0 - 속마음 온오프].module.charx`
+   - bytes: `29046`
+   - SHA-256: `20f5e14296a81db164adf2c6ca3dc710630e0d85521649a948fe461919f42bc9`
+   - transport: deterministic gzip → base64 → 7 verified text parts
+   - gzip bytes: `9408`
+   - gzip SHA-256: `8d8108834417d04d5fd6314cee4bc0ea4e3335210f18abf9cc7360cb1228ea21`
+   - restore: `./RESTORE-LIGHT-STATUS-210.sh`
+
 `MANIFEST.json` records the exact source and transport identities.
 
 ## Current disposition
 
-`ARTIFACTS_1_5_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_6_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

@@ -36,7 +36,10 @@ const FORBIDDEN_HOST_EFFECTS = Object.freeze([
 const HOST_ADAPTER_CANDIDATE = Object.freeze({
   identifier: 'EVAL_ONLY_API_V3_BEFORE_REQUEST_REPLACER',
   authorityClass: 'TEMPORARY_EVAL_HOST_ADAPTER_ONLY',
-  mutationScope: 'REQUEST_LOCAL_FINAL_MESSAGE_ARRAY_ONLY',
+  mutationScope: 'REQUEST_LOCAL_BEFORE_REQUEST_MESSAGE_ARRAY_ONLY',
+  requestStage: 'BEFORE_REQUEST_PRE_REQUEST_TRIGGER_PRE_PROVIDER_REFORMAT',
+  providerObservationScope: 'READ_ONLY_PROVIDER_REQUEST_BODY_HASH_AND_CANDIDATE_VISIBILITY',
+  providerRequestMutationAuthorized: false,
   persistence: 'NONE',
   permission: 'replacer',
   candidateCondition: 'E6_ONLY',
@@ -220,6 +223,9 @@ export function assertM1ExecutionPrepIntegrity(prep) {
   if (prep.candidateContractHash !== candidateContractHash()) failures.push('CANDIDATE_HASH');
   if (prep.fixtureCorpusHash !== fixtureCorpusHash()) failures.push('CORPUS_HASH');
   if (prep.harnessIntegrity?.pass !== true) failures.push('HARNESS_INTEGRITY');
+  if (prep.hostAdapterCandidate?.mutationScope !== 'REQUEST_LOCAL_BEFORE_REQUEST_MESSAGE_ARRAY_ONLY') failures.push('HOST_ADAPTER_MUTATION_SCOPE');
+  if (prep.hostAdapterCandidate?.requestStage !== 'BEFORE_REQUEST_PRE_REQUEST_TRIGGER_PRE_PROVIDER_REFORMAT') failures.push('HOST_ADAPTER_REQUEST_STAGE');
+  if (prep.hostAdapterCandidate?.providerRequestMutationAuthorized !== false) failures.push('HOST_ADAPTER_PROVIDER_MUTATION_FLAG');
 
   const rows = Array.isArray(prep.executionSheet) ? prep.executionSheet : [];
   const b0 = rows.filter((row) => row.operatorConditionActualId === 'B0');

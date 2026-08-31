@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "batch": "simcore-plugin-idea-drop-2026-08-31",
+  "authority": "REFERENCE_ARCHIVE_ONLY",
+  "productionMutation": "NONE",
+  "artifacts": [
+    {
+      "ordinal": 1,
+      "status": "COMPLETE",
+      "originalFilename": "🔦라이트보드 카카오톡 V1.3-3.0.0 팝오버.risum",
+      "repositoryFilename": "lightboard-kakaotalk-v1.3-3.0.0-popover.risum",
+      "bytes": 54631,
+      "sha256": "5578f4898fc19810aea93657c444e244e66485de5f8c7f9edc2e51ea576673cc",
+      "transport": {
+        "encoding": "deterministic-gzip-base64-parts",
+        "gzipBytes": 13477,
+        "gzipSha256": "01916e60f50f014aba163e17ebe3a506333ecde97dfa8242e24d8eba44fba388",
+        "base64Chars": 17972,
+        "parts": 5,
+        "partChars": [4000, 4000, 4000, 4000, 1972]
+      }
+    },
+    {
+      "ordinal": 2,
+      "status": "PENDING",
+      "originalFilename": "♦️미니보드 렌더러 · 모모톡 1.0.0.charx",
+      "repositoryFilename": "miniboard-renderer-momotalk-1.0.0.charx"
+    },
+    {
+      "ordinal": 3,
+      "status": "PENDING",
+      "originalFilename": "🔦라이트보드 상태창 4.0.0.charx",
+      "repositoryFilename": "lightboard-status-window-4.0.0.charx"
+    },
+    {
+      "ordinal": 4,
+      "status": "PENDING",
+      "originalFilename": "🔦라이트보드 주석 4.0.0.charx",
+      "repositoryFilename": "lightboard-annotations-4.0.0.charx"
+    }
+  ]
+}

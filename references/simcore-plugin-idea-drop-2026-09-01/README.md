@@ -38,9 +38,17 @@ This directory archives the post-SNS user-supplied LightBoard / MiniBoard refere
    - gzip bytes: `5773`
    - gzip SHA-256: `5e528d99797fcaf355ab9bf9c530fcca91d1ba4685de36c6ffc920c26951561f`
    - restore: `./RESTORE-LIVECHAT.sh`
+4. `lightboard-namuwiki-1.8.0.risum` — **COMPLETE**
+   - original: `🔦라이트보드 나무위키 v1.8.0.risum`
+   - bytes: `67786`
+   - SHA-256: `beba5a303b2f9ed249f31acae5b9f84e50f8927204ca7bc7dfe5a40c793d7389`
+   - transport: deterministic gzip → base64 → 4 verified text parts
+   - gzip bytes: `17395`
+   - gzip SHA-256: `f36808c07b3f2cc87cb378f54a869ef53d14402eea34d605b965bebbd7684d54`
+   - restore: `./RESTORE-NAMUWIKI.sh`
 
 `MANIFEST.json` records the exact source and transport identities.
 
 ## Current disposition
 
-`ARTIFACTS_1_3_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`
+`ARTIFACTS_1_4_COMPLETE · BATCH_OPEN · REFERENCE_ONLY · PRODUCTION_UNCHANGED`

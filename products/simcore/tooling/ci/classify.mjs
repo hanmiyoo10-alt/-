@@ -71,6 +71,7 @@ export function classifyPath(input){
   if(p.startsWith('products/simcore/releases/live-evidence/'))out.add('STATE_SYNC');
   if(p.startsWith('products/simcore/contracts/'))add(out,['CI_SELF','HARNESS','ARCH_CONTRACT']);
   if(/^products\/simcore\/tooling\/test-[^/]+\.mjs$/.test(p))add(out,['CI_SELF','HARNESS']);
+  if(/^products\/simcore\/tooling\/build-[^/]+\.py$/.test(p))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/state-sync/'))out.add('STATE_SYNC');
   const permanentWorkflowSet=new Set(permanentReleaseWorkflows);
   if(p.startsWith('.github/workflows/simcore-')&&!['.github/workflows/simcore-ci.yml','.github/workflows/simcore-release.yml','.github/workflows/simcore-release-state-sync.yml','.github/workflows/simcore-r2-7-status-projection.yml',...permanentWorkflowSet].includes(p))out.add('LEGACY_VERIFICATION');

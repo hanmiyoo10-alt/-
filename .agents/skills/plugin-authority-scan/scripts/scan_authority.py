@@ -4,6 +4,10 @@
 This helper is intentionally read-only. It reads repository registration/catalog
 files and reports locators. It never reads network state, mutates repository files,
 or treats a locator as proof of the current value stored there.
+
+Authority fields are independent locators until the owning project contract binds
+a ref-like locator to a path-like locator. This helper deliberately does not build
+project-specific ref:path authority plans.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ REGISTRY_REL = Path(".github/plugin-control-plane/registry.json")
 CATALOG_REL = Path("docs/REPO_PROJECT_CATALOG.md")
 COMMON_RULES_REL = Path("docs/REPOSITORY_COMMON_RULES.md")
 PILOT_VALIDATED_SCOPES = frozenset({"plugin:usage-dashboard"})
+LOCATOR_SEMANTICS = "INDEPENDENT_UNTIL_BOUND_BY_OWNING_CONTRACT"
 
 
 class ScanError(Exception):
@@ -207,7 +212,7 @@ def local_locator_checks(repo_root: Path, entry: ScopeEntry, guideline: str) -> 
             result[key] = {
                 "path": path,
                 "exists_on_current_checkout": (repo_root / path).exists(),
-                "note": "current-checkout existence is not proof of production/ref state",
+                "note": "current-checkout existence is not proof of ref ownership or production state",
             }
     return result
 
@@ -246,6 +251,7 @@ def scan(repo_root: Path, query: str) -> dict[str, Any]:
         "lifecycle": entry.lifecycle,
         "pilot_validated": entry.scope in PILOT_VALIDATED_SCOPES,
         "truth_claim_status": "LOCATOR_ONLY",
+        "locator_semantics": LOCATOR_SEMANTICS,
         "registration_sources": [
             str(REGISTRY_REL),
             str(CATALOG_REL),
@@ -259,10 +265,10 @@ def scan(repo_root: Path, query: str) -> dict[str, Any]:
         "local_locator_checks": local_locator_checks(repo_root, entry, guideline),
         "fresh_read_requirements": [
             "Read the owning guideline and follow its project-specific source-of-truth order.",
-            "Treat registry/catalog authority fields as locators, not current mutable truth.",
-            "For current production/release claims, read the declared production ref and exact owning artifact now.",
-            "For current source claims, read the relevant current main source now.",
-            "If required sources are unavailable or disagree without resolved precedence, preserve UNKNOWN or CONFLICT.",
+            "Treat every registry/catalog authority field as an independent locator unless the owning contract binds fields together.",
+            "Build exact ref:path reads from current project authority, not from locator adjacency.",
+            "Read only the exact evidence needed for the requested claim.",
+            "If ref ownership or required evidence is unavailable or unresolved, preserve UNKNOWN or CONFLICT.",
         ],
         "mutation_performed": False,
     }
@@ -302,6 +308,7 @@ def render_text(result: dict[str, Any]) -> str:
         f"pilot_validated: {'yes' if result['pilot_validated'] else 'no'}",
         f"guideline: {result['guideline'] or '—'}",
         f"catalog_consistency: {result['catalog_consistency']['status']}",
+        f"locator_semantics: {result['locator_semantics']}",
         "declared_authority:",
     ]
     if authority:

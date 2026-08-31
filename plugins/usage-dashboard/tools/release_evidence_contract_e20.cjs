@@ -1,9 +1,13 @@
 'use strict';
 
-const PRODUCT_RE = /^3\.0\.0-alpha\.5\.(\d+)$/;
+const releaseVersion = require('./release_version_order.cjs');
+
+const PRODUCT_RE = releaseVersion.VERSION_RE;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const LATEST_VERDICTS = new Set(['accepted','partial','rejected','unverified']);
 const NOTE_LIMIT = 240;
+const EVIDENCE_KEYS = new Set(['schemaVersion','acceptedBaseline','latestInstalled']);
+const ROLE_KEYS = new Set(['productVersion','releaseSha','verdict','issue','commentId','note']);
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -14,15 +18,19 @@ function finding(code, field, detail = '') {
 }
 
 function productOrdinal(version) {
-  const match = PRODUCT_RE.exec(String(version || ''));
-  return match ? Number(match[1]) : null;
+  const parsed = releaseVersion.parseReleaseVersion(version);
+  return parsed && parsed.stage === 0 && parsed.series === 5 ? parsed.iteration : null;
 }
 
 function compareProductVersions(left, right) {
-  const a = productOrdinal(left);
-  const b = productOrdinal(right);
-  if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b)) return null;
-  return Math.sign(a - b);
+  return releaseVersion.compareReleaseVersions(left, right);
+}
+
+function inspectUnknownKeys(findings, value, allowed, field, code) {
+  if (!isObject(value)) return;
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) findings.push(finding(code, `${field}.${key}`, key));
+  }
 }
 
 function inspectRole(findings, role, field, acceptedRole = false) {
@@ -30,7 +38,8 @@ function inspectRole(findings, role, field, acceptedRole = false) {
     findings.push(finding('release-evidence-role-shape', field));
     return;
   }
-  if (!PRODUCT_RE.test(String(role.productVersion || ''))) findings.push(finding('release-evidence-product', `${field}.productVersion`, role.productVersion));
+  inspectUnknownKeys(findings, role, ROLE_KEYS, field, 'release-evidence-role-key');
+  if (!releaseVersion.parseReleaseVersion(role.productVersion)) findings.push(finding('release-evidence-product', `${field}.productVersion`, role.productVersion));
   if (!SHA_RE.test(String(role.releaseSha || ''))) findings.push(finding('evidence-release-sha', `${field}.releaseSha`, role.releaseSha));
   if (!Number.isSafeInteger(role.issue) || role.issue < 1) findings.push(finding('release-evidence-issue', `${field}.issue`, role.issue));
   if (Object.hasOwn(role,'commentId') && (!Number.isSafeInteger(role.commentId) || role.commentId < 1)) findings.push(finding('release-evidence-comment', `${field}.commentId`, role.commentId));
@@ -55,6 +64,7 @@ function inspectReleaseEvidence(evidence, options = {}) {
     return findings;
   }
   if (!isObject(evidence)) return [finding('release-evidence-role-shape','releaseEvidence')];
+  inspectUnknownKeys(findings, evidence, EVIDENCE_KEYS, 'releaseEvidence', 'release-evidence-key');
   if (evidence.schemaVersion !== 1) findings.push(finding('release-evidence-schema','releaseEvidence.schemaVersion',evidence.schemaVersion));
 
   const accepted = evidence.acceptedBaseline;
@@ -74,9 +84,9 @@ function inspectReleaseEvidence(evidence, options = {}) {
     }
   }
 
-  if (PRODUCT_RE.test(targetProductVersion)) {
+  if (releaseVersion.parseReleaseVersion(targetProductVersion)) {
     for (const [name, role] of [['acceptedBaseline',accepted],['latestInstalled',latest]]) {
-      if (!isObject(role) || !PRODUCT_RE.test(String(role.productVersion || ''))) continue;
+      if (!isObject(role) || !releaseVersion.parseReleaseVersion(role.productVersion)) continue;
       const order = compareProductVersions(role.productVersion, targetProductVersion);
       if (order !== null && order >= 0) findings.push(finding('evidence-target-order',`releaseEvidence.${name}.productVersion`,`${role.productVersion}>=${targetProductVersion}`));
     }
@@ -105,6 +115,8 @@ module.exports = {
   SHA_RE,
   LATEST_VERDICTS,
   NOTE_LIMIT,
+  EVIDENCE_KEYS,
+  ROLE_KEYS,
   productOrdinal,
   compareProductVersions,
   inspectReleaseEvidence,

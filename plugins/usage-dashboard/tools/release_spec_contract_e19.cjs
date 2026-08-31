@@ -1,5 +1,7 @@
 'use strict';
 
+const evidenceContract = require('./release_evidence_contract_e20.cjs');
+
 const PRODUCT_RE = /^3\.0\.0-alpha\.5\.\d+$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const WORKFLOW_RE = /^\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml$/;
@@ -26,12 +28,17 @@ function inspectBoundedTextArray(findings, spec, key) {
   });
 }
 
-function inspectReleaseSpec(spec) {
+function isForwardSpec(spec, currentProductVersion) {
+  if (!PRODUCT_RE.test(String(spec?.productVersion || '')) || !PRODUCT_RE.test(String(currentProductVersion || ''))) return false;
+  return evidenceContract.compareProductVersions(spec.productVersion, currentProductVersion) > 0;
+}
+
+function inspectReleaseSpec(spec, options = {}) {
   const findings = [];
   if (!isObject(spec)) return [finding('object-required', '$')];
 
   const requiredStrings = [
-    'product', 'productVersion', 'releaseTitle', 'engineVersion', 'managerVersion', 'verifiedBaseline',
+    'product', 'productVersion', 'releaseTitle', 'engineVersion', 'managerVersion',
     'materializer', 'callerWorkflow', 'sharedWorkflow', 'validatorWorkflow', 'publisherWorkflow',
   ];
   for (const key of requiredStrings) {
@@ -41,6 +48,18 @@ function inspectReleaseSpec(spec) {
   if (typeof spec.productVersion === 'string' && !PRODUCT_RE.test(spec.productVersion)) findings.push(finding('product-version-format', 'productVersion', spec.productVersion));
   for (const key of ['engineVersion','managerVersion']) {
     if (typeof spec[key] === 'string' && !SEMVER_RE.test(spec[key])) findings.push(finding('semver-format', key, spec[key]));
+  }
+
+  const structuredEvidence = Object.hasOwn(spec,'releaseEvidence');
+  const forward = isForwardSpec(spec, options.currentProductVersion);
+  if (structuredEvidence) {
+    findings.push(...evidenceContract.inspectReleaseEvidence(spec.releaseEvidence, {targetProductVersion:spec.productVersion}));
+    for (const legacyKey of ['verifiedBaseline','latestInstalledEvidence']) {
+      if (Object.hasOwn(spec,legacyKey)) findings.push(finding('evidence-legacy-owner', legacyKey));
+    }
+  } else {
+    if (typeof spec.verifiedBaseline !== 'string' || !spec.verifiedBaseline.trim()) findings.push(finding('string-required','verifiedBaseline'));
+    findings.push(...evidenceContract.inspectReleaseEvidence(undefined, {required:forward,targetProductVersion:spec.productVersion}));
   }
 
   for (const key of ['snapshotContract','recentRequestContract']) {
@@ -104,8 +123,8 @@ function summarizeFindings(findings, limit = 12) {
   return rows.join(',');
 }
 
-function assertReleaseSpec(spec, label = 'release spec') {
-  const findings = inspectReleaseSpec(spec);
+function assertReleaseSpec(spec, label = 'release spec', options = {}) {
+  const findings = inspectReleaseSpec(spec, options);
   if (findings.length) {
     const error = new Error(`${label} rejected: ${summarizeFindings(findings)}`);
     error.code = 'RELEASE_SPEC_CONTRACT_REJECTED';
@@ -120,6 +139,7 @@ module.exports = {
   SEMVER_RE,
   WORKFLOW_RE,
   MATERIALIZER_RE,
+  isForwardSpec,
   inspectReleaseSpec,
   summarizeFindings,
   assertReleaseSpec,

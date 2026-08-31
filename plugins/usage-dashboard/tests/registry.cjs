@@ -36,6 +36,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'e17-stability-envelope-contract.cjs',
   'e18-semantic-impact-smoke-contract.cjs',
   'e19-shift-left-validation-reuse-contract.cjs',
+  'e20-structured-release-evidence-contract.cjs',
   'pr-lifecycle-closure-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([

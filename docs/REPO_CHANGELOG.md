@@ -933,3 +933,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3579ca36cb155f819e0363ae63b1d47938d71b2a)
 - Event ID: `7ec5d4701789892eca0f1ee5eac120eaa4378550c13f808f8a2e14c8774ce283`
 <!-- canonical-main-doc-promoted:7ec5d4701789892eca0f1ee5eac120eaa4378550c13f808f8a2e14c8774ce283 -->
+
+### 2026-08-31 — Merge PR #1044: Local Usage Dashboard 5.97
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `b36953a13d3a94c068dfde259c99f04e3a78ba03`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b36953a13d3a94c068dfde259c99f04e3a78ba03)
+- Event ID: `ab1eacde816da3db1d99a186689521fd98941002cf0639fb2ac24ca864dbe0ee`
+<!-- canonical-main-doc-promoted:ab1eacde816da3db1d99a186689521fd98941002cf0639fb2ac24ca864dbe0ee -->

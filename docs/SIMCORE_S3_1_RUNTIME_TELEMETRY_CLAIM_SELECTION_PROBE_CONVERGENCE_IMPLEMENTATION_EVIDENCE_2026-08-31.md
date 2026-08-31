@@ -1,13 +1,14 @@
 # SimCore S3-1 Runtime Telemetry Claim Selection Probe Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **IMPLEMENTED · CUMULATIVE PR-DRY QUALIFICATION PENDING · INTERNAL CHECKPOINT ONLY**
+Status: **PR-DRY QUALIFIED AFTER BUILDER MATCHER FIX · TEMPORARY INTENT REMOVED · REQUEST-FREE FINAL CI NEXT**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE TELEMETRY BOOKKEEPING DEDUPE**
 
 Authority:
 - `docs/SIMCORE_PRE_MAJOR_SIMPLIFICATION_ROUTINE_2026-08-31.md`
 - `docs/SIMCORE_POST_M2_SIMPLIFICATION_EXECUTION_ARCHITECTURE_2026-08-31.md`
 - `docs/SIMCORE_S3_1_RUNTIME_TELEMETRY_CLAIM_SELECTION_PROBE_CONVERGENCE_DESIGN_2026-08-31.md`
+- `docs/SIMCORE_S3_1_PR_DRY_FAILURE_01_FUNCTION_BOUNDARY_MATCHER_2026-08-31.md`
 
 Production authority remains:
 
@@ -75,6 +76,7 @@ NONE
 The builder fails closed unless:
 - module inventory is unchanged;
 - every non-`runtime-telemetry` module is byte-identical across P4 -> P5;
+- runtime-telemetry P4 -> P5 equals exactly the helper insertion plus five assignment-to-call substitutions;
 - runtime-telemetry require surface is unchanged;
 - the helper is private and not exported;
 - exactly five helper call sites replace the five old selection assignments;
@@ -89,25 +91,93 @@ The builder fails closed unless:
 
 A standalone Node differential harness compares old direct probe assembly with the new helper for representative prior probe objects and all five selection tuples, requiring deep equality and frozen output.
 
-## PR-dry posture
+## Preserved PR-dry finding
 
-Temporary intent:
+The first PR-dry attempt exposed a builder-only validation defect:
+
+```text
+FIX · S3_1_BUILDER_FUNCTION_BOUNDARY_MATCHER
+run = 33360352609
+Verify job = 99390361911
+failure = S3_1_FUNCTION_BOUNDARY_INVALID: getHostLocalTelemetryStoreOnce starts=[5900, 5894]
+```
+
+The matcher independently searched `function name(` and `async function name(`, causing one async declaration to be counted twice through overlapping substrings.
+
+Repair scope was builder-only:
+
+```text
+optional-async anchored function declaration matcher
+runtime delta unchanged
+P0 -> P5 transforms unchanged
+telemetry/Host-local semantics unchanged
+```
+
+The failure remains preserved in its dedicated evidence document and was not erased after repair.
+
+## Repaired PR-dry qualification
+
+Repaired head:
+
+```text
+head = 832229cd61385c9e061cf174e6b2a577a88a36d4
+SimCore CI run = 33361200230
+Verify job = 99392741892 · SUCCESS
+Required job = 99392852109 · SUCCESS
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+candidateCommit = null
+```
+
+Scope:
+
+```text
+labels = [CI_SELF, HARNESS, SIMCORE_DOC_ONLY]
+docOnly = false
+```
+
+Substantive gates:
+
+```text
+GATE_CI_SELF    = PASS
+GATE_PR1_DRY    = PASS
+GATE_STATIC     = PASS
+GATE_ARCH       = PASS
+GATE_REGRESSION = PASS
+```
+
+Generated cumulative source identity:
+
+```text
+latestSha256  = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes         = 574325
+latest == install = YES
+```
+
+No candidate was persisted and `release-simcore` was not mutated.
+
+## Temporary intent retirement
+
+The PR-only request:
 
 ```text
 simcore-v0.70.3-intent-04
 ```
 
-It exists only to exercise `GATE_PR1_DRY` against exact production bytes.
+was deleted after repaired PR-dry qualification as required.
 
-It must:
+Current branch posture:
 
 ```text
-persist no candidate
-mutate no release-simcore bytes
-create no release authority
-be deleted after PR-dry PASS
-be followed by request-free exact-head substantive CI
+candidate request = ABSENT
+candidate persistence = NONE
+release-simcore mutation = NONE
+S7 release authority = NONE
 ```
+
+A fresh request-free exact-head substantive CI is required before merge. `GATE_PR1_DRY` is correctly not required in that final phase; builder classification must still exercise `GATE_CI_SELF`, `GATE_STATIC`, `GATE_ARCH`, and `GATE_REGRESSION` rather than produce doc-only NOOP.
 
 ## Safety state
 
@@ -130,7 +200,9 @@ Prompt / Community / State / Representation semantics
 ```text
 S3_1_DESIGN = FROZEN
 S3_1_BUILDER = IMPLEMENTED
-S3_1_PR_DRY = PENDING
+S3_1_PR_DRY = PASS
+S3_1_TEMPORARY_INTENT = REMOVED
+S3_1_REQUEST_FREE_FINAL_CI = PENDING
 S3_1_PUBLICATION = NONE BEFORE S7
 release-simcore = v0.70.1 unchanged
 ```

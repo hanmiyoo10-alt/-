@@ -1,7 +1,7 @@
 # SimCore S3-2 Session Candidate Result Convergence Implementation Evidence
 
 Date: 2026-08-31 KST
-Status: **PR-DRY QUALIFIED · TEMPORARY INTENT REMOVED · REQUEST-FREE FINAL CI NEXT**
+Status: **INTERNAL CHECKPOINT QUALIFIED · PR-DRY + REQUEST-FREE SUBSTANTIVE CI PASS · PRODUCTION UNCHANGED**
 Classification: **POST-M2 SIMPLIFICATION / S3 / PURE SESSION-CANDIDATE RESULT BOOKKEEPING DEDUPE**
 
 Authority:
@@ -148,8 +148,6 @@ No candidate was persisted and `release-simcore` was not mutated.
 
 After PR-dry qualification, `simcore-v0.70.3-intent-05` was deleted as required.
 
-Current branch posture:
-
 ```text
 candidate request = ABSENT
 candidate persistence = NONE
@@ -157,9 +155,31 @@ release-simcore mutation = NONE
 S7 publication authority = NONE
 ```
 
-A fresh request-free exact-head substantive CI must now prove that the builder path remains validation-relevant without candidate authority.
+## Request-free substantive final qualification
 
-Required final gates:
+Exact request-free head:
+
+```text
+head = be4fbb01fc00c20923eb0202b2748e53c11e17d0
+SimCore CI run = 33361979798
+Verify job = 99394972769 · SUCCESS
+Required job = 99395059151 · SUCCESS
+profile = PR_MAIN
+conclusion = PASS
+reasonCodes = []
+candidateCommit = null
+prBaseCommit = 03d69962083c1ff20dc032879ac85eb5b670f33a
+prHeadCommit = be4fbb01fc00c20923eb0202b2748e53c11e17d0
+```
+
+Classifier result proved the builder remained validation-relevant after intent removal:
+
+```text
+labels = [CI_SELF, HARNESS, SIMCORE_DOC_ONLY]
+docOnly = false
+```
+
+Final request-free gates:
 
 ```text
 GATE_CI_SELF    = PASS
@@ -167,11 +187,18 @@ GATE_PR1_DRY    = NOT_APPLICABLE
 GATE_STATIC     = PASS
 GATE_ARCH       = PASS
 GATE_REGRESSION = PASS
-candidateCommit = null
-docOnly = false
 ```
 
-A successful `NOOP_SIMCORE_DOC_ONLY` result is not acceptable final qualification.
+Final request-free source identity remained:
+
+```text
+latestSha256  = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+installSha256 = 2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf
+bytes         = 574325
+latest == install = YES
+```
+
+This qualifies S3-2 as an internal cumulative checkpoint. It does not authorize publication or broad live validation before S7.
 
 ## Safety state
 
@@ -193,6 +220,9 @@ S3_2_DESIGN = FROZEN ON MAIN
 S3_2_BUILDER = IMPLEMENTED
 S3_2_PR_DRY = PASS
 S3_2_TEMPORARY_INTENT = REMOVED
-S3_2_REQUEST_FREE_FINAL_CI = PENDING
+S3_2_REQUEST_FREE_FINAL_CI = PASS
+S3_2_INTERNAL_CHECKPOINT = QUALIFIED
 S3_2_PUBLICATION = NONE BEFORE S7
+release-simcore = v0.70.1 unchanged
+NEXT = EXACT-HEAD CI AFTER THIS EVIDENCE SYNC, THEN MERGE IF PASS
 ```

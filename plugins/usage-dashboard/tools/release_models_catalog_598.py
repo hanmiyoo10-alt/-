@@ -260,8 +260,8 @@ def validate_target() -> None:
     p63 = P63.read_text(encoding='utf-8')
     if "if (release.productVersion !== '3.0.0-alpha.5.97')" not in p63:
         raise SystemExit('5.98 P63 historical guard missing')
-    if p63.count('UD_HISTORICAL_VERSION_LOCK') != 2:
-        raise SystemExit('5.98 P63 historical lock count mismatch')
+    if "// UD_HISTORICAL_VERSION_LOCK\nassert.equal(release.productVersion, '3.0.0-alpha.5.97');" not in p63:
+        raise SystemExit('5.98 P63 release historical lock placement mismatch')
     if "// UD_HISTORICAL_VERSION_LOCK\nassert.equal(manifest.productVersion, '3.0.0-alpha.5.97');" not in p63:
         raise SystemExit('5.98 P63 manifest historical lock placement mismatch')
     if spec.get('managedModelCatalogAuthority', {}).get('upstreamCommit') != UPSTREAM_MODELS_COMMIT:

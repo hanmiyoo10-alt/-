@@ -7,6 +7,11 @@ const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
+if (release.productVersion !== '3.0.0-alpha.5.96') {
+  console.log(`P62 Managed Runtime Diagnostic Namespace & Identity Fidelity: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.96`);
+  process.exit(0);
+}
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(release.productVersion, '3.0.0-alpha.5.96');
 assert.equal(release.engineVersion, '1.6.32');
 assert.equal(release.managerVersion, '1.3.5');

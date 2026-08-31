@@ -1,6 +1,6 @@
 {
   "batch": "simcore-plugin-idea-drop-2026-09-01",
-  "status": "ARTIFACTS_1_6_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
+  "status": "ARTIFACTS_1_6_COMPLETE_BATCH_COMPLETE_REFERENCE_ONLY_PRODUCTION_UNCHANGED",
   "artifacts": [
     {
       "ordinal": 1,
@@ -104,5 +104,7 @@
       ],
       "complete": true
     }
-  ]
+  ],
+  "closed": true,
+  "closure_note": "All currently supplied post-SNS LightBoard / MiniBoard artifacts are archived and analyzed; no seventh source artifact is present in the current intake."
 }

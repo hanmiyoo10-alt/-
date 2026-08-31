@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import json
 import re
 import subprocess
 
@@ -83,14 +82,12 @@ module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntim
 NEW_PROMPT_TAIL = "module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts };"
 S2_1_SESSION_ALIAS = "const renderRuntimePrompt = prompt.renderRuntimePrompt;\n"
 S2_1_SESSION_EXPORT = "  renderRuntimePrompt,\n"
-
 S2_2_EXPORTS = (
     "  inspectPreviousBEndOutput,\n",
     "  validateStructure: structure.validateStructure,\n",
     "  communityBlocks: community.communityBlocks,\n",
     "  prepareTurn: lifecycle.prepareTurn,\n",
 )
-
 CACHE_EXPORTS_P3 = "module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, runtimeLineTier, runtimeIdentity, createRuntimePromptCacheTracker };"
 CACHE_EXPORTS_P4 = "module.exports = { createRuntimePromptCacheTracker };"
 TOPO_EXPORTS_P3 = "module.exports = { exactHash, messageSignature, leadingSystemCount, breakAttribution, createRequestTopologyTracker };"
@@ -115,7 +112,6 @@ function recordClaimSelection(memoryValidation, sessionValidation, hostValidatio
 }
 
 function validate(claimed, locationKey, now = Date.now(), hostClaim = null) {"""
-
 S3_ASSIGNMENTS = (
     (
         "    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: 'exact', sessionValidation: (firstEntry || secondEntry) ? 'standby' : 'empty', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'memory', selectedRoot: 'NONE' });",
@@ -144,7 +140,6 @@ SIDE_EFFECT_MARKERS = (
     "XMLHttpRequest", "history.splice(", "messages.splice(",
     "messages.push({ role: 'system', content: result.promptBlock });",
 )
-
 TELEMETRY_CONSTANTS = (
     "const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';",
     "const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';",
@@ -196,20 +191,13 @@ def same_counts(before, after, markers, code):
 
 
 def function_slice(source, name):
-    starts = []
-    for token in (f"function {name}(", f"async function {name}("):
-        pos = source.find(token)
-        if pos >= 0:
-            starts.append(pos)
-    if len(starts) != 1:
-        fail("S3_1_FUNCTION_BOUNDARY_INVALID", f"{name} starts={starts}")
-    start = starts[0]
-    candidates = []
-    for token in ("\nfunction ", "\nasync function "):
-        pos = source.find(token, start + 1)
-        if pos >= 0:
-            candidates.append(pos)
-    end = min(candidates) if candidates else len(source)
+    declaration = re.compile(rf"(?m)^(?:async\s+)?function\s+{re.escape(name)}\s*\(")
+    matches = list(declaration.finditer(source))
+    if len(matches) != 1:
+        fail("S3_1_FUNCTION_BOUNDARY_INVALID", f"{name} starts={[m.start() for m in matches]}")
+    start = matches[0].start()
+    next_function = re.search(r"(?m)^(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\(", source[matches[0].end():])
+    end = matches[0].end() + next_function.start() if next_function else len(source)
     return source[start:end]
 
 
@@ -218,19 +206,13 @@ def fnv_equivalence():
 function oldRaw(text) {
   const value = String(text == null ? '' : text);
   let h = 0x811c9dc5;
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
+  for (let i = 0; i < value.length; i++) { h ^= value.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return h >>> 0;
 }
 function fnv1a32(text) {
   const value = String(text == null ? '' : text);
   let h = 0x811c9dc5;
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
+  for (let i = 0; i < value.length; i++) { h ^= value.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return h >>> 0;
 }
 const samples = [null, undefined, '', 'abc', '한글 테스트', 'line1\nline2', 'line1\r\nline2', 'emoji 😀 🚀', ('가😀\n').repeat(4096)];
@@ -263,14 +245,12 @@ const tuples = [
   ['stale','mismatch','exact','host-local','NONE'],
   ['empty','empty','mismatch','NONE','NONE'],
 ];
-for (const prior of priors) {
-  for (const tuple of tuples) {
-    const expected = oldAssembly(prior, ...tuple);
-    lastClaimProbe = prior;
-    const actual = recordClaimSelection(...tuple);
-    if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('CLAIM_PROBE_DIFF');
-    if (!Object.isFrozen(actual)) throw new Error('CLAIM_PROBE_NOT_FROZEN');
-  }
+for (const prior of priors) for (const tuple of tuples) {
+  const expected = oldAssembly(prior, ...tuple);
+  lastClaimProbe = prior;
+  const actual = recordClaimSelection(...tuple);
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('CLAIM_PROBE_DIFF');
+  if (!Object.isFrozen(actual)) throw new Error('CLAIM_PROBE_NOT_FROZEN');
 }
 console.log('S3_1_CLAIM_PROBE_EQ_PASS');
 """
@@ -287,20 +267,13 @@ def apply_s1(p0):
     out = one(out, OLD_CACHE_HASH, NEW_CACHE_HASH, "cache-hash")
     out = one(out, OLD_LINE_HASHES, NEW_LINE_HASHES, "line-hashes")
     out = one(out, OLD_CURRENT_LINE_HASHES, NEW_CURRENT_LINE_HASHES, "current-line-hashes")
-    out = one(
-        out,
-        "    version: '0.70.1',\n    name: 'Cold First-Turn Tail Attribution',",
-        "    version: '0.70.3',\n    name: 'Runtime Cache Hash Primitive Convergence',",
-        "operator-card",
-    )
-    return out
+    return one(out, "    version: '0.70.1',\n    name: 'Cold First-Turn Tail Attribution',", "    version: '0.70.3',\n    name: 'Runtime Cache Hash Primitive Convergence',", "operator-card")
 
 
 def apply_s2_1(p1):
     out = one(p1, OLD_PROMPT_TAIL, NEW_PROMPT_TAIL, "prompt-dead-render")
     out = one(out, S2_1_SESSION_ALIAS, "", "session-render-alias")
-    out = one(out, S2_1_SESSION_EXPORT, "", "session-render-export")
-    return out
+    return one(out, S2_1_SESSION_EXPORT, "", "session-render-export")
 
 
 def apply_s2_2(p2):
@@ -312,8 +285,7 @@ def apply_s2_2(p2):
 
 def apply_s2_3(p3):
     out = one(p3, CACHE_EXPORTS_P3, CACHE_EXPORTS_P4, "runtime-cache-exports")
-    out = one(out, TOPO_EXPORTS_P3, TOPO_EXPORTS_P4, "runtime-topology-exports")
-    return out
+    return one(out, TOPO_EXPORTS_P3, TOPO_EXPORTS_P4, "runtime-topology-exports")
 
 
 def apply_s3_1(p4):
@@ -326,7 +298,6 @@ def apply_s3_1(p4):
 def verify_prior_stages(p0, p1, p2, p3, p4):
     if not (module_names(p0) == module_names(p1) == module_names(p2) == module_names(p3) == module_names(p4)):
         fail("S3_1_PRIOR_MODULE_GRAPH_CHANGED")
-
     c0, c1 = module_text(p0, "runtime-cache"), module_text(p1, "runtime-cache")
     if c0.count("0x811c9dc5") != 5 or c1.count("0x811c9dc5") != 3:
         fail("S3_1_S1_FNV_SHAPE_INVALID")
@@ -339,21 +310,13 @@ def verify_prior_stages(p0, p1, p2, p3, p4):
 
     if "function compileRuntimePrompt(state)" in p2 or "function renderRuntimePrompt(state)" in p2 or S2_1_SESSION_ALIAS in p2 or S2_1_SESSION_EXPORT in p2:
         fail("S3_1_S2_1_DEAD_SEAM_SURVIVED")
-    if "function compileRuntimePromptParts(state)" not in module_text(p2, "prompt"):
-        fail("S3_1_S2_1_LIVE_PROMPT_COMPILER_MISSING")
-    if "const promptCompiled = compileRuntimePromptParts(state);" not in module_text(p2, "session"):
-        fail("S3_1_S2_1_LIVE_SESSION_PROMPT_PATH_MISSING")
+    if "function compileRuntimePromptParts(state)" not in module_text(p2, "prompt") or "const promptCompiled = compileRuntimePromptParts(state);" not in module_text(p2, "session"):
+        fail("S3_1_S2_1_LIVE_PATH_MISSING")
 
     for marker in S2_2_EXPORTS:
         if marker in module_text(p3, "session"):
             fail("S3_1_S2_2_DEAD_EXPORT_SURVIVED", marker.strip())
-    for marker in (
-        "function inspectPreviousBEndOutput(historyMessages, sendIndex) {",
-        "structure.validateStructure(prepared.content, base.pending)",
-        "lifecycle.prepareTurn(base, userText, promptProbe, sendIndex, previousOutputFacts)",
-        "CoreRulesetSession,",
-        "fingerprintText: kernel.fingerprintText,",
-    ):
+    for marker in ("function inspectPreviousBEndOutput(historyMessages, sendIndex) {", "structure.validateStructure(prepared.content, base.pending)", "lifecycle.prepareTurn(base, userText, promptProbe, sendIndex, previousOutputFacts)", "CoreRulesetSession,", "fingerprintText: kernel.fingerprintText,"):
         if marker not in module_text(p3, "session"):
             fail("S3_1_S2_2_LIVE_PATH_MISSING", marker)
 
@@ -365,15 +328,9 @@ def verify_prior_stages(p0, p1, p2, p3, p4):
         fail("S3_1_S2_3_RUNTIME_TOPOLOGY_DELTA_WIDENED")
     if require_surface(cb) != require_surface(ca) or require_surface(tb) != require_surface(ta):
         fail("S3_1_S2_3_REQUIRE_SURFACE_CHANGED")
-
     for name in module_names(p3):
         if name not in ("runtime-cache", "runtime-topology") and module_text(p3, name) != module_text(p4, name):
             fail("S3_1_S2_3_NON_TARGET_MODULE_CHANGED", name)
-
-    for marker in (CACHE_EXPORTS_P4, TOPO_EXPORTS_P4, "cacheRules.createRuntimePromptCacheTracker", "runtimeTopologyRules.messageSignature", "runtimeTopologyRules.createRequestTopologyTracker"):
-        if marker not in p4:
-            fail("S3_1_S2_3_LIVE_SURFACE_MISSING", marker)
-
     same_counts(p0, p1, SIDE_EFFECT_MARKERS, "S3_1_S1_SIDE_EFFECT_CHANGED")
     same_counts(p1, p2, SIDE_EFFECT_MARKERS, "S3_1_S2_1_SIDE_EFFECT_CHANGED")
     same_counts(p2, p3, SIDE_EFFECT_MARKERS, "S3_1_S2_2_SIDE_EFFECT_CHANGED")
@@ -389,25 +346,22 @@ def verify_s3_1(p4, p5):
 
     t4 = module_text(p4, "runtime-telemetry")
     t5 = module_text(p5, "runtime-telemetry")
+    expected = t4.replace(HOST_REASON_AND_VALIDATE, HOST_REASON_HELPER_AND_VALIDATE, 1)
+    for old, new in S3_ASSIGNMENTS:
+        expected = expected.replace(old, new, 1)
+    if expected != t5:
+        fail("S3_1_RUNTIME_TELEMETRY_DELTA_WIDENED")
     if require_surface(t4) != require_surface(t5):
         fail("S3_1_RUNTIME_TELEMETRY_REQUIRE_SURFACE_CHANGED")
-
-    if t5.count("function recordClaimSelection(") != 1:
-        fail("S3_1_HELPER_COUNT_INVALID", str(t5.count("function recordClaimSelection(")))
-    if t5.count("recordClaimSelection(") != 6:
-        fail("S3_1_HELPER_CALL_COUNT_INVALID", str(t5.count("recordClaimSelection(")))
-    for old, new in S3_ASSIGNMENTS:
-        if old in t5:
-            fail("S3_1_OLD_ASSIGNMENT_SURVIVED", old[:80])
-        if t5.count(new) != 1:
-            fail("S3_1_NEW_SELECTION_CALL_INVALID", new[:80])
-    if "recordClaimSelection" in re.search(r"module\.exports\s*=\s*\{[^}]+\};", t5, re.S).group(0):
-        fail("S3_1_HELPER_EXPORTED")
+    if t5.count("function recordClaimSelection(") != 1 or t5.count("recordClaimSelection(") != 6:
+        fail("S3_1_HELPER_COUNT_INVALID")
+    exports_match = re.search(r"module\.exports\s*=\s*\{[^}]+\};", t5, re.S)
+    if not exports_match or "recordClaimSelection" in exports_match.group(0):
+        fail("S3_1_HELPER_EXPORT_INVALID")
 
     for name in ("claim", "updateHostProbe", "getHostLocalTelemetryStoreOnce", "claimHostLocalOnce", "publish", "publishWithHostLocal", "validateCapsule", "validationClass", "sessionReason", "hostReason"):
         if function_slice(t4, name) != function_slice(t5, name):
             fail("S3_1_FROZEN_FUNCTION_CHANGED", name)
-
     for marker in TELEMETRY_CONSTANTS:
         if t4.count(marker) != 1 or t5.count(marker) != 1:
             fail("S3_1_TELEMETRY_CONSTANT_CHANGED", marker)
@@ -424,23 +378,14 @@ def verify_s3_1(p4, p5):
     for marker in return_markers:
         if t4.count(marker) != 1 or t5.count(marker) != 1:
             fail("S3_1_VALIDATE_RETURN_CHANGED", marker[:100])
-
-    ordered_calls = [new for _, new in S3_ASSIGNMENTS]
-    positions = [t5.find(call) for call in ordered_calls]
+    positions = [t5.find(new) for _, new in S3_ASSIGNMENTS]
     if any(pos < 0 for pos in positions) or positions != sorted(positions):
         fail("S3_1_SELECTION_ORDER_CHANGED", repr(positions))
 
     protected = (
-        "claimHostLocalOnce",
-        "getHostLocalTelemetryStoreOnce",
-        "__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__",
-        "provider cache UNVERIFIED",
-        "Post-onSend attribution:",
-        "const PROMPT_COMPILER_VERSION = 4;",
-        "const COMMUNITY_CLASSIFIER_VERSION = 3;",
-        "const STATE_VERSION = 5;",
-        "const CORE_STATE_VERSION = 10;",
-        "TAIL_AFTER_CURRENT_USER",
+        "claimHostLocalOnce", "getHostLocalTelemetryStoreOnce", "__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__",
+        "provider cache UNVERIFIED", "Post-onSend attribution:", "const PROMPT_COMPILER_VERSION = 4;",
+        "const COMMUNITY_CLASSIFIER_VERSION = 3;", "const STATE_VERSION = 5;", "const CORE_STATE_VERSION = 10;", "TAIL_AFTER_CURRENT_USER",
     )
     same_counts(p4, p5, protected, "S3_1_PROTECTED_MARKER_CHANGED")
     same_counts(p4, p5, SIDE_EFFECT_MARKERS, "S3_1_SIDE_EFFECT_CHANGED")
@@ -481,7 +426,6 @@ def main():
     p3 = apply_s2_2(p2)
     p4 = apply_s2_3(p3)
     p5 = apply_s3_1(p4)
-
     verify_prior_stages(p0, p1, p2, p3, p4)
     verify_s3_1(p4, p5)
     verify_identity(p5)

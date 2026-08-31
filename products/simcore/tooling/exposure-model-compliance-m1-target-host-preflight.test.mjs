@@ -9,15 +9,16 @@ import {
 } from './exposure-model-compliance-m1-target-host-preflight.mjs';
 
 const sha = (ch) => ch.repeat(64);
+const PAIR = 'M1:TEST_FIXTURE:T1';
 
 function receipt(condition) {
   const e6 = condition === 'E6';
   return {
     schema: 1,
     adapterVersion: ADAPTER_VERSION,
-    runId: `preflight-${condition.toLowerCase()}`,
+    runId: `${PAIR}:${e6 ? 'Y' : 'X'}`,
     condition,
-    expectedSyntheticScenarioFingerprint: sha('a'),
+    expectedSyntheticScenarioFingerprint: e6 ? sha('4') : sha('a'),
     candidateContractHash: e6 ? EXPECTED_CANDIDATE_HASH : null,
     materializationStatus: 'HOST_CAPTURE_COMPLETE',
     requestStage: EXPECTED_REQUEST_STAGE,
@@ -79,7 +80,23 @@ assert.equal(pass.status, 'PASS_TARGET_HOST_PREFLIGHT');
 assert.equal(pass.readyForM1Smoke, true);
 assert.deepEqual(pass.failures, []);
 assert.deepEqual(pass.missing, []);
+assert.equal(pass.failures.includes('PAIR_SCENARIO_MISMATCH'), false);
 assert.equal(assertTargetHostPreflightIntegrity(pass).pass, true);
+
+const sameScenario = passingEvidence();
+sameScenario.e6Receipt.expectedSyntheticScenarioFingerprint = sameScenario.b0Receipt.expectedSyntheticScenarioFingerprint;
+const sameScenarioResult = assessTargetHostPreflight(sameScenario);
+assert.ok(sameScenarioResult.failures.includes('PAIR_CONDITION_SCENARIO_FINGERPRINT_NOT_DISTINCT'));
+
+const wrongStem = passingEvidence();
+wrongStem.e6Receipt.runId = 'M1:OTHER_FIXTURE:T1:Y';
+const wrongStemResult = assessTargetHostPreflight(wrongStem);
+assert.ok(wrongStemResult.failures.includes('PAIR_RUN_ID_STEM_MISMATCH'));
+
+const invalidStem = passingEvidence();
+invalidStem.e6Receipt.runId = 'invalid';
+const invalidStemResult = assessTargetHostPreflight(invalidStem);
+assert.ok(invalidStemResult.failures.includes('PAIR_RUN_ID_FORMAT_INVALID'));
 
 const b0Delta = passingEvidence();
 b0Delta.b0Receipt.flattenedMessageFingerprint = sha('9');

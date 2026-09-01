@@ -19,6 +19,11 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 ALLOWED_SKILLS = frozenset({"plugin-authority-scan", "plugin-impact-scope"})
+DEFAULT_MODEL_PROFILE = "qwen2.5-1.5b-instruct-q4_k_m"
+ALLOWED_MODEL_PROFILES = frozenset({
+    DEFAULT_MODEL_PROFILE,
+    "qwen2.5-3b-instruct-q4_k_m",
+})
 REQUEST_DIR = ".agent-skill-zero-credit-requests"
 REQUEST_BRANCH_PREFIX = "refs/heads/agent-skill-zero-credit-request/"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -65,6 +70,13 @@ def _validate_case_id(case_id: str) -> str:
     return normalized
 
 
+def _validate_model_profile(model_profile: str) -> str:
+    normalized = str(model_profile).strip() or DEFAULT_MODEL_PROFILE
+    if normalized not in ALLOWED_MODEL_PROFILES:
+        raise RequestError(f"unallowlisted model_profile: {normalized}")
+    return normalized
+
+
 def _validate_branch_ref(github_ref: str) -> str:
     if not github_ref.startswith(REQUEST_BRANCH_PREFIX):
         raise RequestError("push ref is outside the zero-credit request branch namespace")
@@ -82,15 +94,16 @@ def _load_request_from_commit(repo_root: Path, commit_sha: str, path: str) -> di
         raise RequestError(f"request JSON is invalid: {exc}") from exc
     if not isinstance(payload, dict):
         raise RequestError("request JSON must be an object")
-    expected_keys = {"schema_version", "skill", "case_id", "target_repository_sha"}
-    if set(payload) != expected_keys:
-        raise RequestError("request JSON must contain exactly schema_version, skill, case_id, target_repository_sha")
+    required_keys = {"schema_version", "skill", "case_id", "target_repository_sha"}
+    allowed_keys = required_keys | {"model_profile"}
+    if not required_keys.issubset(payload) or not set(payload).issubset(allowed_keys):
+        raise RequestError("request JSON must contain schema_version, skill, case_id, target_repository_sha and optional model_profile only")
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise RequestError("unsupported request schema_version")
     return payload
 
 
-def resolve_dispatch(github_sha: str, skill: str, case_id: str) -> dict[str, Any]:
+def resolve_dispatch(github_sha: str, skill: str, case_id: str, model_profile: str = "") -> dict[str, Any]:
     target = _validate_sha(github_sha, "github_sha")
     return {
         "schema_version": SCHEMA_VERSION,
@@ -100,6 +113,7 @@ def resolve_dispatch(github_sha: str, skill: str, case_id: str) -> dict[str, Any
         "request_path": None,
         "skill": _validate_skill(skill),
         "case_id": _validate_case_id(case_id),
+        "model_profile": _validate_model_profile(model_profile),
     }
 
 
@@ -139,6 +153,7 @@ def resolve_push(repo_root: Path, github_ref: str, github_sha: str) -> dict[str,
         "request_path": request_path,
         "skill": _validate_skill(str(payload["skill"])),
         "case_id": _validate_case_id(str(payload["case_id"])),
+        "model_profile": _validate_model_profile(str(payload.get("model_profile", ""))),
     }
 
 
@@ -149,9 +164,10 @@ def resolve(
     github_sha: str,
     dispatch_skill: str = "",
     dispatch_case_id: str = "",
+    dispatch_model_profile: str = "",
 ) -> dict[str, Any]:
     if event_name == "workflow_dispatch":
-        return resolve_dispatch(github_sha, dispatch_skill, dispatch_case_id)
+        return resolve_dispatch(github_sha, dispatch_skill, dispatch_case_id, dispatch_model_profile)
     if event_name == "push":
         return resolve_push(repo_root, github_ref, github_sha)
     raise RequestError(f"unsupported event_name: {event_name}")
@@ -174,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--github-sha", required=True)
     parser.add_argument("--dispatch-skill", default="")
     parser.add_argument("--dispatch-case-id", default="")
+    parser.add_argument("--dispatch-model-profile", default="")
     parser.add_argument("--output")
     args = parser.parse_args(argv)
 
@@ -185,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
             args.github_sha,
             args.dispatch_skill,
             args.dispatch_case_id,
+            args.dispatch_model_profile,
         )
         _write(Path(args.output) if args.output else None, payload)
     except RequestError as exc:

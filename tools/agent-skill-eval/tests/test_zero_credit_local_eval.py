@@ -73,25 +73,44 @@ class LocalContextTests(unittest.TestCase):
 
 
 class PrepareLocalEvalTests(unittest.TestCase):
-    def test_real_impact_fixture_prepares_without_inference(self):
+    def run_prepare(self, model_id=None):
         repo_root = ROOT.parents[1]
         base = ROOT / "prepare_eval.py"
         if not base.is_file():
             self.skipTest("real repository prepare_eval.py not present in isolated test fixture")
-        with tempfile.TemporaryDirectory() as td:
-            out = Path(td) / "matrix.json"
-            proc = subprocess.run([
-                "python", str(ROOT / "prepare_local_eval.py"),
-                "--repo-root", str(repo_root),
-                "--skill", "plugin-impact-scope",
-                "--case-id", "narrow-negative",
-                "--repository-sha", "a" * 40,
-                "--output", str(out),
-            ], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
-            data = json.loads(out.read_text(encoding="utf-8"))
-            self.assertEqual(data["requested_model"], "qwen2.5-1.5b-instruct-q4_k_m-local")
-            self.assertEqual(data["execution_surface"], "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS")
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        out = Path(td.name) / "matrix.json"
+        cmd = [
+            "python", str(ROOT / "prepare_local_eval.py"),
+            "--repo-root", str(repo_root),
+            "--skill", "plugin-impact-scope",
+            "--case-id", "narrow-negative",
+            "--repository-sha", "a" * 40,
+        ]
+        if model_id is not None:
+            cmd += ["--model-id", model_id]
+        cmd += ["--output", str(out)]
+        proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        data = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
+        return proc, data
+
+    def test_real_impact_fixture_defaults_to_1_5b_without_inference(self):
+        proc, data = self.run_prepare()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(data["requested_model"], "qwen2.5-1.5b-instruct-q4_k_m-local")
+        self.assertEqual(data["execution_surface"], "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS")
+
+    def test_explicit_3b_local_model_is_allowed(self):
+        proc, data = self.run_prepare("qwen2.5-3b-instruct-q4_k_m-local")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(data["requested_model"], "qwen2.5-3b-instruct-q4_k_m-local")
+
+    def test_unallowlisted_local_model_fails_closed(self):
+        proc, data = self.run_prepare("latest-local-model")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIsNone(data)
+        self.assertIn("unallowlisted model", proc.stderr)
 
 
 class PromptTests(unittest.TestCase):
@@ -212,9 +231,10 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("github models", lowered)
         self.assertNotIn("copilot ", lowered)
 
-    def test_runtime_and_model_are_sha_verified_before_use(self):
+    def test_runtime_and_models_are_sha_verified_before_use(self):
         self.assertIn("f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35", self.workflow)
         self.assertIn("6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e", self.workflow)
+        self.assertIn("626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d", self.workflow)
         self.assertLess(self.workflow.index("sha256sum -c llama.sha256"), self.workflow.index("tar -xzf"))
         self.assertLess(self.workflow.index("sha256sum -c model.sha256"), self.workflow.index("Run zero-credit local pair"))
 
@@ -222,6 +242,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", self.workflow)
         self.assertIn("agent-skill-zero-credit-eval.yml", self.ci)
         self.assertNotIn("qwen2.5-1.5b-instruct-q4_k_m.gguf", self.ci)
+        self.assertNotIn("qwen2.5-3b-instruct-q4_k_m.gguf", self.ci)
         self.assertNotIn("llama-cli", self.ci)
 
 

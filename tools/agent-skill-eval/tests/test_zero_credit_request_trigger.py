@@ -35,16 +35,19 @@ class ResolverTests(unittest.TestCase):
         parent = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
         return td, root, parent
 
-    def commit_request(self, root: Path, parent: str, *, skill="plugin-authority-scan", case_id="1", target=None, extra=False):
+    def commit_request(self, root: Path, parent: str, *, skill="plugin-authority-scan", case_id="1", target=None, model_profile=None, extra=False):
         req_dir = root / resolver.REQUEST_DIR
         req_dir.mkdir(parents=True, exist_ok=True)
         request_path = req_dir / "request.json"
-        request_path.write_text(json.dumps({
+        payload = {
             "schema_version": 1,
             "skill": skill,
             "case_id": case_id,
             "target_repository_sha": target or parent,
-        }), encoding="utf-8")
+        }
+        if model_profile is not None:
+            payload["model_profile"] = model_profile
+        request_path.write_text(json.dumps(payload), encoding="utf-8")
         subprocess.run(["git", "-C", str(root), "add", request_path.relative_to(root).as_posix()], check=True)
         if extra:
             (root / "extra.txt").write_text("extra\n", encoding="utf-8")
@@ -62,6 +65,21 @@ class ResolverTests(unittest.TestCase):
         self.assertEqual(out["target_repository_sha"], parent)
         self.assertEqual(out["skill"], "plugin-authority-scan")
         self.assertEqual(out["case_id"], "1")
+        self.assertEqual(out["model_profile"], resolver.DEFAULT_MODEL_PROFILE)
+
+    def test_explicit_3b_model_profile_is_allowed(self):
+        td, root, parent = self.make_repo()
+        self.addCleanup(td.cleanup)
+        request_sha = self.commit_request(root, parent, model_profile="qwen2.5-3b-instruct-q4_k_m")
+        out = resolver.resolve_push(root, "refs/heads/agent-skill-zero-credit-request/impact-3b", request_sha)
+        self.assertEqual(out["model_profile"], "qwen2.5-3b-instruct-q4_k_m")
+
+    def test_unallowlisted_model_profile_fails_closed(self):
+        td, root, parent = self.make_repo()
+        self.addCleanup(td.cleanup)
+        request_sha = self.commit_request(root, parent, model_profile="latest-big-model")
+        with self.assertRaises(resolver.RequestError):
+            resolver.resolve_push(root, "refs/heads/agent-skill-zero-credit-request/impact-unknown-model", request_sha)
 
     def test_extra_changed_path_fails_closed(self):
         td, root, parent = self.make_repo()
@@ -126,6 +144,15 @@ class ResolverTests(unittest.TestCase):
         self.assertEqual(out["execution_trigger"], "workflow_dispatch")
         self.assertEqual(out["target_repository_sha"], sha)
         self.assertIsNone(out["request_path"])
+        self.assertEqual(out["model_profile"], resolver.DEFAULT_MODEL_PROFILE)
+
+    def test_dispatch_can_select_3b_model_profile(self):
+        sha = "a" * 40
+        out = resolver.resolve(
+            Path("."), "workflow_dispatch", "refs/heads/main", sha,
+            "plugin-impact-scope", "narrow-negative", "qwen2.5-3b-instruct-q4_k_m",
+        )
+        self.assertEqual(out["model_profile"], "qwen2.5-3b-instruct-q4_k_m")
 
 
 class WorkflowRequestContractTests(unittest.TestCase):
@@ -152,11 +179,19 @@ class WorkflowRequestContractTests(unittest.TestCase):
         self.assertIn('--repository-sha "$EVAL_REPOSITORY_SHA"', self.workflow)
         self.assertNotIn('--repository-sha "$GITHUB_SHA"', self.workflow)
 
+    def test_model_profiles_are_explicit_and_fail_closed(self):
+        self.assertIn("default: qwen2.5-1.5b-instruct-q4_k_m", self.workflow)
+        self.assertIn("qwen2.5-3b-instruct-q4_k_m", self.workflow)
+        self.assertIn("ZERO_CREDIT_MODEL_PROFILE:UNALLOWLISTED", self.workflow)
+        self.assertIn("626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d", self.workflow)
+        self.assertIn('--model-id "$LOCAL_MODEL_ID"', self.workflow)
+
     def test_permissions_and_ordinary_ci_remain_zero_credit(self):
         self.assertIn("permissions:\n  contents: read", self.workflow)
         self.assertNotIn("copilot-requests", self.workflow.lower())
         self.assertIn(".github/workflows/agent-skill-zero-credit-eval.yml", self.ci)
         self.assertNotIn("qwen2.5-1.5b-instruct-q4_k_m.gguf", self.ci)
+        self.assertNotIn("qwen2.5-3b-instruct-q4_k_m.gguf", self.ci)
         self.assertNotIn("llama-cli", self.ci)
 
 

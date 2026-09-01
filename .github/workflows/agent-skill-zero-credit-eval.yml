@@ -14,6 +14,14 @@ on:
         description: Exact output eval case id
         required: true
         type: string
+      model_profile:
+        description: Allowlisted local CPU model profile
+        required: true
+        default: qwen2.5-1.5b-instruct-q4_k_m
+        type: choice
+        options:
+          - qwen2.5-1.5b-instruct-q4_k_m
+          - qwen2.5-3b-instruct-q4_k_m
   push:
     branches:
       - 'agent-skill-zero-credit-request/**'
@@ -29,11 +37,6 @@ jobs:
     timeout-minutes: 30
     env:
       EVAL_ROOT: .agent-skill-zero-credit-eval
-      LOCAL_MODEL_ID: qwen2.5-1.5b-instruct-q4_k_m-local
-      MODEL_REPOSITORY: Qwen/Qwen2.5-1.5B-Instruct-GGUF
-      MODEL_REVISION: a615a81362316d7b9f5a7a9c4313adfdf9b54588
-      MODEL_FILE: qwen2.5-1.5b-instruct-q4_k_m.gguf
-      MODEL_SHA256: 6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e
       LLAMA_RELEASE: b10516
       LLAMA_SOURCE_DIGEST: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
       LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
@@ -57,6 +60,7 @@ jobs:
         env:
           DISPATCH_SKILL: ${{ github.event.inputs.skill || '' }}
           DISPATCH_CASE_ID: ${{ github.event.inputs.case_id || '' }}
+          DISPATCH_MODEL_PROFILE: ${{ github.event.inputs.model_profile || '' }}
         run: |
           set -euo pipefail
           mkdir -p "$EVAL_ROOT"
@@ -67,19 +71,48 @@ jobs:
             --github-sha "$GITHUB_SHA" \
             --dispatch-skill "$DISPATCH_SKILL" \
             --dispatch-case-id "$DISPATCH_CASE_ID" \
+            --dispatch-model-profile "$DISPATCH_MODEL_PROFILE" \
             --output "$EVAL_ROOT/request-provenance.json"
 
           EVAL_SKILL="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["skill"])')"
           EVAL_CASE_ID="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["case_id"])')"
+          EVAL_MODEL_PROFILE="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["model_profile"])')"
           EVAL_REPOSITORY_SHA="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["target_repository_sha"])')"
           EVAL_REQUEST_SHA="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["request_commit_sha"])')"
           EVAL_EXECUTION_TRIGGER="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["execution_trigger"])')"
 
+          case "$EVAL_MODEL_PROFILE" in
+            qwen2.5-1.5b-instruct-q4_k_m)
+              LOCAL_MODEL_ID='qwen2.5-1.5b-instruct-q4_k_m-local'
+              MODEL_REPOSITORY='Qwen/Qwen2.5-1.5B-Instruct-GGUF'
+              MODEL_REVISION='a615a81362316d7b9f5a7a9c4313adfdf9b54588'
+              MODEL_FILE='qwen2.5-1.5b-instruct-q4_k_m.gguf'
+              MODEL_SHA256='6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e'
+              ;;
+            qwen2.5-3b-instruct-q4_k_m)
+              LOCAL_MODEL_ID='qwen2.5-3b-instruct-q4_k_m-local'
+              MODEL_REPOSITORY='Qwen/Qwen2.5-3B-Instruct-GGUF'
+              MODEL_REVISION='af75b7aaf5bb163ce4c5dab4e6b84d844e96265d'
+              MODEL_FILE='qwen2.5-3b-instruct-q4_k_m.gguf'
+              MODEL_SHA256='626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d'
+              ;;
+            *)
+              echo "ZERO_CREDIT_MODEL_PROFILE:UNALLOWLISTED:$EVAL_MODEL_PROFILE"
+              exit 2
+              ;;
+          esac
+
           printf 'EVAL_SKILL=%s\n' "$EVAL_SKILL" >> "$GITHUB_ENV"
           printf 'EVAL_CASE_ID=%s\n' "$EVAL_CASE_ID" >> "$GITHUB_ENV"
+          printf 'EVAL_MODEL_PROFILE=%s\n' "$EVAL_MODEL_PROFILE" >> "$GITHUB_ENV"
           printf 'EVAL_REPOSITORY_SHA=%s\n' "$EVAL_REPOSITORY_SHA" >> "$GITHUB_ENV"
           printf 'EVAL_REQUEST_SHA=%s\n' "$EVAL_REQUEST_SHA" >> "$GITHUB_ENV"
           printf 'EVAL_EXECUTION_TRIGGER=%s\n' "$EVAL_EXECUTION_TRIGGER" >> "$GITHUB_ENV"
+          printf 'LOCAL_MODEL_ID=%s\n' "$LOCAL_MODEL_ID" >> "$GITHUB_ENV"
+          printf 'MODEL_REPOSITORY=%s\n' "$MODEL_REPOSITORY" >> "$GITHUB_ENV"
+          printf 'MODEL_REVISION=%s\n' "$MODEL_REVISION" >> "$GITHUB_ENV"
+          printf 'MODEL_FILE=%s\n' "$MODEL_FILE" >> "$GITHUB_ENV"
+          printf 'MODEL_SHA256=%s\n' "$MODEL_SHA256" >> "$GITHUB_ENV"
 
           if ! git cat-file -e "${EVAL_REPOSITORY_SHA}^{commit}" 2>/dev/null; then
             git fetch --no-tags --depth=1 origin "$EVAL_REPOSITORY_SHA"
@@ -89,6 +122,7 @@ jobs:
           echo "ZERO_CREDIT_REQUEST_SHA:$EVAL_REQUEST_SHA"
           echo "ZERO_CREDIT_TARGET_SHA:$EVAL_REPOSITORY_SHA"
           echo "ZERO_CREDIT_EXECUTION_TRIGGER:$EVAL_EXECUTION_TRIGGER"
+          echo "ZERO_CREDIT_MODEL_PROFILE:$EVAL_MODEL_PROFILE"
 
       - name: Fetch read-only Usage Dashboard release authority
         shell: bash
@@ -108,6 +142,7 @@ jobs:
             --skill "$EVAL_SKILL" \
             --case-id "$EVAL_CASE_ID" \
             --repository-sha "$EVAL_REPOSITORY_SHA" \
+            --model-id "$LOCAL_MODEL_ID" \
             --output "$EVAL_ROOT/matrix.json"
           python tools/agent-skill-eval/build_local_context.py \
             --repo-root . \

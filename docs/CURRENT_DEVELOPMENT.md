@@ -51,7 +51,7 @@ This block is the terminal administrative state backed by accepted real long-cha
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The current product live gate is closed with accepted human evidence and the durable major checkpoint is M2-5. The selected Community Parent-Local Alias Classification Repair design has passed exact deployed-source re-audit and explicit implementation authorization. The immediate product action is a dedicated runtime work branch constrained to the frozen Community classifier and bounded migration envelope. Provider cache remains `UNVERIFIED`. R2.6 activation/status convergence and unrelated WATCH items remain separate non-runtime/investigation lanes.
+The machine-managed production snapshot and terminal release-state block above are the sole current production identity authorities. The current live gate is durably closed as `LIVE_PASS` through accepted HUMAN_EVIDENCE terminal convergence, and the authorized 2.0M structural program is complete with the M2 architecture frozen at its terminal checkpoint. The immediate product action is the separately frozen S7 post-M2 simplification convergence implementation lane. The reserved cache-attribution release lane remains PARKED and must not be reused by S7. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item.
 
 ## Historical validated precursor — v0.63.55
 
@@ -962,7 +962,7 @@ output:
 SILENT_COMPAT
 CANONICAL 4180:931843fc
 FRESH 4100:ee834c48
-Δ -80
+Δchars -80
 OUTPUT_MISMATCH
 
 next request:
@@ -1177,32 +1177,39 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Start the dedicated v0.68.0 runtime work branch from exact live-complete v0.67.0 production bytes.
-Implement only the frozen Community parent/local descriptor repair, classifier v2→v3 transition, and bounded migration behavior.
-Preserve Structure as judge-only and retain all required negative controls and unrelated regressions.
-Keep R2.6 control-plane convergence and unrelated WATCH items in separate lanes.
+Start the dedicated S7 convergence work branch from exact live-complete v0.70.1 production bytes.
+Reconstruct and verify the cumulative S1–S6 / P0→P12 simplification delta under the frozen S7 design, then prepare the v0.70.3 Post-M2 Simplification Convergence candidate through the normal release path.
+Do not reuse or cancel v0.70.2; preserve it as the parked Cache Observer Cold-Path Attribution lane.
+Keep Exposure/LightBoard research and unrelated WATCH/FIX items in separate lanes.
 ```
 
 Current success condition:
 
 ```text
-v0.67.0 real long-chat evidence = LIVE_PASS
-durable major checkpoint = M2-5
-current product priority = 06800_COMMUNITY_PARENT_LOCAL_ALIAS_IMPLEMENTATION
-next proposed version = v0.68.0 Community Parent-Local Alias Classification Repair
-implementation authorization = YES
-production remains v0.67.0 until a normal approved release transaction publishes a candidate
+v0.70.1 real long-chat evidence = LIVE_PASS
+durable major checkpoint = M2-6
+2.0M / M2 architecture = COMPLETE / FROZEN
+current product priority = S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION
+next proposed convergence version = v0.70.3 Post-M2 Simplification Convergence
+S7 design = FROZEN
+production remains v0.70.1 until a normal approved release transaction publishes the qualified S7 candidate
 latest.js == install.js remains mandatory
 
 product runtime work
-→ dedicated v0.68 runtime branch from exact deployed v0.67 bytes
-→ implement frozen Community classifier repair and bounded v2→v3 migration only
-→ static/differential proof and permanent CI before release transaction
+→ dedicated S7 work branch from exact deployed v0.70.1 bytes
+→ reconstruct cumulative S1–S6 simplification candidate only
+→ differential/static/architecture proof and permanent CI before release transaction
+→ publish through the existing release authority only after qualification
 
 release-system work
-→ remain non-runtime and separately attributable
-→ close R2.6 activation/status truth separately
+→ existing R2.8/R2.9/R2.10 authority remains unchanged
+→ current R v2 development wave is closed; new R work requires new operational evidence
 → preserve the single publisher and existing main-write authority
+→ observe R2.10 naturally on the next genuine runtime release; this deferred proof is non-blocking
+
+parked performance work
+→ v0.70.2 Cache Observer Cold-Path Attribution remains reserved / PARKED
+→ do not reuse its version identity for S7
 
 observed anomaly
 → preserve evidence immediately

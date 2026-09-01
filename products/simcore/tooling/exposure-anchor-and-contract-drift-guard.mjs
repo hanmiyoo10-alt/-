@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { EXPOSURE_LINES } from './exposure-prompt-contract-offline-evaluator.mjs';
 import {
   PROTOCOL_VERSION,
+  assertHarnessIntegrity,
+  buildComplianceEvalHarness,
   candidateContractHash,
 } from './exposure-model-compliance-eval-harness.mjs';
 import {
@@ -26,6 +28,11 @@ const EXPECTED_PRODUCTION_AUTHORITY = Object.freeze({
   releaseBranch: 'release-simcore',
   releaseCommit: '861100f4771967aa5b8ab8811d06f11702c0d3ff',
 });
+const EXPECTED_PROTOCOL_VERSION = 'EXPOSURE_MODEL_COMPLIANCE_EVAL_PROTOCOL_2026-09-01';
+const EXPECTED_PREP_VERSION = 'EXPOSURE_MODEL_COMPLIANCE_M1_EXECUTION_PREP_2026-09-01';
+const EXPECTED_PREFLIGHT_VERSION = 'EXPOSURE_MODEL_COMPLIANCE_M1_TARGET_HOST_PREFLIGHT_2026-09-01';
+const EXPECTED_ADAPTER_VERSION = 'EXPOSURE_MODEL_COMPLIANCE_M1_HOST_ADAPTER_2026-09-01';
+const EXPECTED_RESULT_TOOL_VERSION = 'EXPOSURE_M1_RESULT_INGEST_AND_SCORING_TOOL_2026-09-01';
 const SOURCE_PROVENANCE_PRECEDING_LINE =
   'specific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support;CURRENT_SOURCE_EVIDENCE_may_support_only_nonconflicting_rendered_details=1;outside_root_specifics_omit=1';
 const SOURCE_PROVENANCE_ANCHOR =
@@ -102,11 +109,27 @@ export function assessExposureAnchorAndContractDrift({
   if (!hostAdapter.trim()) missing.push('HOST_ADAPTER_SOURCE');
 
   const actualCandidateHash = candidateContractHash(EXPOSURE_LINES);
+  const m1Harness = buildComplianceEvalHarness({ stage: 'M1' });
+  const harnessIntegrity = assertHarnessIntegrity(m1Harness);
+
+  if (PROTOCOL_VERSION !== EXPECTED_PROTOCOL_VERSION) failures.push('HARNESS_PROTOCOL_VERSION_DRIFT');
+  if (PREP_VERSION !== EXPECTED_PREP_VERSION) failures.push('PREP_VERSION_DRIFT');
+  if (PREFLIGHT_VERSION !== EXPECTED_PREFLIGHT_VERSION) failures.push('PREFLIGHT_VERSION_DRIFT');
+  if (ADAPTER_VERSION !== EXPECTED_ADAPTER_VERSION) failures.push('ADAPTER_VERSION_DRIFT');
+  if (RESULT_TOOL_VERSION !== EXPECTED_RESULT_TOOL_VERSION) failures.push('RESULT_TOOL_VERSION_DRIFT');
+  if (!harnessIntegrity.pass) failures.push(`M1_HARNESS_INTEGRITY_DRIFT:${harnessIntegrity.failures.join('|')}`);
+  if (m1Harness.pairCount !== 12) failures.push('M1_HARNESS_PAIR_COUNT_DRIFT');
+  if (m1Harness.runCount !== 24) failures.push('M1_HARNESS_RUN_COUNT_DRIFT');
+  if (m1Harness.fixtureCount !== 12) failures.push('M1_HARNESS_FIXTURE_COUNT_DRIFT');
+  if (m1Harness.trapFixtureCount !== 7 || m1Harness.controlFixtureCount !== 5) failures.push('M1_HARNESS_FIXTURE_MIX_DRIFT');
+
   if (EXPOSURE_LINES.length !== 6) failures.push('CANDIDATE_LINE_COUNT_DRIFT');
   if (new Set(EXPOSURE_LINES).size !== 6) failures.push('CANDIDATE_LINE_UNIQUENESS_DRIFT');
   if (!EXPOSURE_LINES.every((line) => line.startsWith('short_community_b_'))) failures.push('CANDIDATE_LINE_PREFIX_DRIFT');
   if (actualCandidateHash !== EXPECTED_CANDIDATE_HASH) failures.push('CANDIDATE_HASH_DRIFT');
   if (PREFLIGHT_EXPECTED_CANDIDATE_HASH !== EXPECTED_CANDIDATE_HASH) failures.push('PREFLIGHT_CANDIDATE_HASH_DRIFT');
+  if (m1Harness.candidateContractHash !== EXPECTED_CANDIDATE_HASH) failures.push('HARNESS_CANDIDATE_HASH_DRIFT');
+  if (m1Harness.candidateLineCount !== 6) failures.push('HARNESS_CANDIDATE_LINE_COUNT_DRIFT');
 
   if (HOST_ADAPTER_CANDIDATE.insertionContract !== EXPECTED_INSERTION_CONTRACT) failures.push('PREP_INSERTION_CONTRACT_DRIFT');
   if (HOST_ADAPTER_CANDIDATE.mutationScope !== EXPECTED_MUTATION_SCOPE) failures.push('PREP_MUTATION_SCOPE_DRIFT');
@@ -151,6 +174,14 @@ export function assessExposureAnchorAndContractDrift({
     preflightVersion: PREFLIGHT_VERSION,
     adapterVersion: ADAPTER_VERSION,
     resultToolVersion: RESULT_TOOL_VERSION,
+    m1Harness: {
+      integrityPass: harnessIntegrity.pass,
+      fixtureCount: m1Harness.fixtureCount,
+      trapFixtureCount: m1Harness.trapFixtureCount,
+      controlFixtureCount: m1Harness.controlFixtureCount,
+      pairCount: m1Harness.pairCount,
+      runCount: m1Harness.runCount,
+    },
     insertionContract: HOST_ADAPTER_CANDIDATE.insertionContract,
     requestStage: HOST_ADAPTER_CANDIDATE.requestStage,
     sourceAnchor: SOURCE_PROVENANCE_ANCHOR,
@@ -170,6 +201,13 @@ export function assertExposureDriftGuardIntegrity(result) {
   if (result?.driftGuardVersion !== DRIFT_GUARD_VERSION) failures.push('VERSION');
   if (result?.candidateContractHash !== EXPECTED_CANDIDATE_HASH) failures.push('CANDIDATE_HASH');
   if (result?.candidateLineCount !== 6) failures.push('CANDIDATE_LINE_COUNT');
+  if (result?.protocolVersion !== EXPECTED_PROTOCOL_VERSION) failures.push('PROTOCOL_VERSION');
+  if (result?.prepVersion !== EXPECTED_PREP_VERSION) failures.push('PREP_VERSION');
+  if (result?.preflightVersion !== EXPECTED_PREFLIGHT_VERSION) failures.push('PREFLIGHT_VERSION');
+  if (result?.adapterVersion !== EXPECTED_ADAPTER_VERSION) failures.push('ADAPTER_VERSION');
+  if (result?.resultToolVersion !== EXPECTED_RESULT_TOOL_VERSION) failures.push('RESULT_TOOL_VERSION');
+  if (result?.m1Harness?.integrityPass !== true) failures.push('M1_HARNESS_INTEGRITY');
+  if (result?.m1Harness?.pairCount !== 12 || result?.m1Harness?.runCount !== 24) failures.push('M1_HARNESS_SHAPE');
   if (result?.runtimeMutationAuthorized !== false) failures.push('RUNTIME_AUTH');
   if (result?.productionImplementationAuthorized !== false) failures.push('PRODUCTION_AUTH');
   if (result?.modelCallsExecuted !== false) failures.push('MODEL_CALL_FLAG');
@@ -226,11 +264,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 export {
   DRIFT_GUARD_VERSION,
+  EXPECTED_ADAPTER_VERSION,
   EXPECTED_CANDIDATE_HASH,
   EXPECTED_INSERTION_CONTRACT,
   EXPECTED_MUTATION_SCOPE,
+  EXPECTED_PREFLIGHT_VERSION,
+  EXPECTED_PREP_VERSION,
   EXPECTED_PRODUCTION_AUTHORITY,
+  EXPECTED_PROTOCOL_VERSION,
   EXPECTED_PROVIDER_OBSERVATION_SCOPE,
+  EXPECTED_RESULT_TOOL_VERSION,
   NEW_SOURCE_BRANCH_TOKEN,
   NEW_SOURCE_GUIDANCE_TOKEN,
   PROMPT_CHANGE_REASON_TOKEN,

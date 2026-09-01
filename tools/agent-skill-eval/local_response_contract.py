@@ -2,7 +2,12 @@
 """Versioned response-contract dispatcher preserving historical v8/v9 behavior."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+MODULE_DIR = Path(__file__).resolve().parent
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
 
 import local_response_contract_legacy as _legacy
 import local_response_contract_v10 as _v10

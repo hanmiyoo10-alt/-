@@ -80,7 +80,7 @@ def compose(
 
     structured = response_contract is not None
     grounding_frame = (
-        "For every non-UNKNOWN semantic edge or preservation claim, use only an evidence ID permitted for that claim by CLAIM EVIDENCE COMPATIBILITY; do not write or invent source paths or anchors in the output.\n"
+        "For every non-UNKNOWN semantic edge or preservation claim, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY; do not write or invent source paths or anchors in the output.\n"
         if structured
         else "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
     )
@@ -107,9 +107,9 @@ def compose(
             f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
             "EVIDENCE ID LEGEND\n"
             f"{legend}\n\n"
-            "CLAIM EVIDENCE COMPATIBILITY\n"
+            "CLAIM EVIDENCE STATUS COMPATIBILITY\n"
             f"{compatibility}\n"
-            "Use the ID token in JSON basis fields only for a compatible claim; the path and anchor shown here are grounding references only."
+            "Use only a listed STATUS:E# pair in JSON basis fields for that claim; the path and anchor shown here are grounding references only."
         )
 
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"

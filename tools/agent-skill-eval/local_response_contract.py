@@ -177,14 +177,16 @@ def _v8_validate(content,c,context):
     if p["scope"]!=c["expected_scope"]: raise ResponseContractError("scope mismatch")
     reg=validate_evidence_registry(c,context);flows=validate_flow_edge_registry(c,context);a=c["claim_evidence_status_allowlist"]
     auth=_validate_basis(p["authority"],"authority",reg,a["authority"]);ri=_validate_basis(p["request_identity"],"request_identity",reg,a["request_identity"]);io=_validate_basis(p["no_extra_io"],"no_extra_io",reg,a["no_extra_io"]);gr=_validate_basis(p["generated_release"],"generated_release",reg,a["generated_release"]);nb=_validate_basis(p["narrowest_boundary"],"narrowest_boundary",reg,a["narrowest_boundary"])
-    if not isinstance(p["flow_edges"],list) or len(p["flow_edges"])>3 or len(p["flow_edges"])!=len(set(p["flow_edges"])) or any(x not in flows for x in p["flow_edges"]): raise ResponseContractError("flow_edges invalid")
+    flow_values=p["flow_edges"]
+    if not isinstance(flow_values,list) or len(flow_values)>3 or any(not isinstance(x,str) or x not in flows for x in flow_values): raise ResponseContractError("flow_edges invalid")
+    if len(flow_values)!=len(set(flow_values)): raise ResponseContractError("flow_edges invalid")
     if not isinstance(p["tests"],list) or len(p["tests"])>2: raise ResponseContractError("tests invalid")
     tests=[_validate_basis(x,f"tests[{i}]",reg,a["tests"]) for i,x in enumerate(p["tests"])]
     if p["blocked_claims"]!=[]: raise ResponseContractError("blocked_claims is a compatibility shell and must be empty")
     blocked=[]
     if auth["status"] not in RESOLVED_STATUSES:blocked.append("authority")
     for fid in c["required_flow_edge_ids"]:
-        if fid not in p["flow_edges"]:blocked.append(f"flow:{fid}")
+        if fid not in flow_values:blocked.append(f"flow:{fid}")
     if ri["status"] not in RESOLVED_STATUSES:blocked.append("request_identity")
     if io["status"] not in RESOLVED_STATUSES:blocked.append("no_extra_io")
     if not any(x["status"] in RESOLVED_STATUSES for x in tests):blocked.append("tests")
@@ -192,10 +194,10 @@ def _v8_validate(content,c,context):
     if nb["status"] not in RESOLVED_STATUSES:blocked.append("narrowest_boundary")
     allb=[auth,ri,io,*tests,gr,nb]
     if any(x["status"]=="CONFLICT" for x in allb): verdict="CONFLICT"
-    elif not p["flow_edges"] and all(x["status"]=="UNKNOWN" for x in allb): verdict="UNKNOWN"
+    elif not flow_values and all(x["status"]=="UNKNOWN" for x in allb): verdict="UNKNOWN"
     elif not blocked: verdict="SUPPORTED"
     else: verdict="PARTIAL"
-    out=dict(p);out["resolved_flow_edges"]=[{"id":x,**flows[x]} for x in p["flow_edges"]];out["derived_blocked_claims"]=blocked;out["derived_impact_verdict"]=verdict;return out
+    out=dict(p);out["resolved_flow_edges"]=[{"id":x,**flows[x]} for x in flow_values];out["derived_blocked_claims"]=blocked;out["derived_impact_verdict"]=verdict;return out
 
 def _blocks(context):
     bs=context.get("blocks")

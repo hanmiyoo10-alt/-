@@ -93,27 +93,55 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertIsNone(contract_mod.load_contract(ROOT / "local-response-contracts.json", "plugin-impact-scope", "narrow-negative"))
         self.assertIsNone(contract_mod.load_contract(ROOT / "local-response-contracts.json", "plugin-authority-scan", "1"))
 
-    def test_contract_uses_evidence_ids_and_singleton_scope(self):
+    def test_contract_uses_claim_compatible_evidence_ids_and_singleton_scope(self):
         contract = self.contract()
-        self.assertEqual(contract["id"], "impact-scope-evidence-id-v3")
+        self.assertEqual(contract["id"], "impact-scope-evidence-compat-v4")
         self.assertEqual(set(contract["evidence_registry"]), {f"E{i}" for i in range(1, 9)})
+        self.assertEqual(
+            contract["claim_evidence_allowlist"],
+            {
+                "authority": ["E1"],
+                "flow_edges": ["E2", "E3", "E4", "E7"],
+                "request_identity": ["E5"],
+                "no_extra_io": ["E6"],
+                "tests": ["E5", "E6", "E8"],
+                "generated_release": ["E1"],
+                "narrowest_boundary": ["E2", "E3", "E4", "E7"],
+            },
+        )
         props = contract["schema"]["properties"]
         self.assertEqual(props["scope"]["enum"], ["plugin:usage-dashboard"])
         self.assertEqual(props["flow_edges"]["maxItems"], 3)
         self.assertEqual(props["tests"]["maxItems"], 2)
         self.assertEqual(props["blocked_claims"]["maxItems"], 2)
-        schema_text = json.dumps(contract["schema"], sort_keys=True)
-        self.assertNotIn("source_path", schema_text)
-        self.assertNotIn("source_anchor", schema_text)
         self.assertIn("DIRECT:E1", props["authority"]["enum"])
-        self.assertIn("UNKNOWN", props["authority"]["enum"])
+        self.assertNotIn("DIRECT:E8", props["authority"]["enum"])
+        self.assertEqual(
+            props["request_identity"]["enum"],
+            ["UNKNOWN", "DIRECT:E5", "SUPPORTED_LIKELY:E5", "CONFLICT:E5"],
+        )
         self.assertNotIn("UNKNOWN:E1", props["authority"]["enum"])
 
-    def test_response_format_uses_schema_constraint(self):
+    def test_raw_contract_has_no_duplicated_static_schema(self):
+        raw = json.loads((ROOT / "local-response-contracts.json").read_text(encoding="utf-8"))
+        case = raw["contracts"]["plugin-impact-scope"]["service-tier-fidelity"]
+        self.assertNotIn("schema", case)
+        self.assertIn("claim_evidence_allowlist", case)
+
+    def test_response_format_uses_derived_schema_constraint(self):
         contract = self.contract()
         fmt = contract_mod.response_format(contract)
         self.assertEqual(fmt["type"], "json_object")
         self.assertEqual(fmt["schema"], contract["schema"])
+        self.assertEqual(
+            contract["schema"]["properties"]["tests"]["items"]["enum"],
+            [
+                "UNKNOWN",
+                "DIRECT:E5", "DIRECT:E6", "DIRECT:E8",
+                "SUPPORTED_LIKELY:E5", "SUPPORTED_LIKELY:E6", "SUPPORTED_LIKELY:E8",
+                "CONFLICT:E5", "CONFLICT:E6", "CONFLICT:E8",
+            ],
+        )
 
     def test_registry_is_revalidated_against_supplied_context(self):
         contract = self.contract()
@@ -121,6 +149,9 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertEqual(registry["E5"]["source_anchor"], "P50 selection source must never enter request identity")
         legend = contract_mod.evidence_legend(contract, self.context())
         self.assertIn("E5 = plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs :: P50 selection source must never enter request identity", legend)
+        compatibility = contract_mod.claim_evidence_legend(contract)
+        self.assertIn("request_identity = E5", compatibility)
+        self.assertIn("flow_edges = E2,E3,E4,E7", compatibility)
 
     def test_registry_anchor_missing_from_context_fails_closed(self):
         context = self.context()
@@ -128,7 +159,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(self.valid_payload()), self.contract(), context)
 
-    def test_valid_evidence_id_payload_passes(self):
+    def test_valid_claim_compatible_payload_passes(self):
         payload = self.valid_payload()
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
         self.assertEqual(out["scope"], "plugin:usage-dashboard")
@@ -147,6 +178,32 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
+    def test_cross_claim_evidence_reuse_fails_closed(self):
+        cases = [
+            ("authority", lambda p: p.__setitem__("authority", "CONFLICT:E8")),
+            ("request_identity", lambda p: p.__setitem__("request_identity", "DIRECT:E8")),
+            ("no_extra_io", lambda p: p.__setitem__("no_extra_io", "DIRECT:E5")),
+            ("tests", lambda p: p.__setitem__("tests", ["DIRECT:E1"])),
+            ("generated_release", lambda p: p.__setitem__("generated_release", "DIRECT:E8")),
+            ("narrowest_boundary", lambda p: p.__setitem__("narrowest_boundary", "DIRECT:E8")),
+            ("flow_edges", lambda p: p["flow_edges"][0].__setitem__("basis", "DIRECT:E5")),
+        ]
+        for label, mutate in cases:
+            with self.subTest(label=label):
+                payload = self.valid_payload()
+                mutate(payload)
+                with self.assertRaises(contract_mod.ResponseContractError):
+                    contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+
+    def test_allowlist_cannot_reference_unregistered_evidence(self):
+        raw = json.loads((ROOT / "local-response-contracts.json").read_text(encoding="utf-8"))
+        raw["contracts"]["plugin-impact-scope"]["service-tier-fidelity"]["claim_evidence_allowlist"]["authority"] = ["E99"]
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "contracts.json"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            with self.assertRaises(contract_mod.ResponseContractError):
+                contract_mod.load_contract(path, "plugin-impact-scope", "service-tier-fidelity")
+
     def test_duplicate_flow_edge_is_rejected(self):
         payload = self.valid_payload()
         payload["flow_edges"] = [payload["flow_edges"][0], dict(payload["flow_edges"][0])]
@@ -155,7 +212,7 @@ class StructuredOutputContractTests(unittest.TestCase):
 
     def test_flow_edge_cap_is_enforced(self):
         payload = self.valid_payload()
-        payload["flow_edges"].append({"from": "diagnostics", "to": "test", "basis": "DIRECT:E8"})
+        payload["flow_edges"].append({"from": "diagnostics", "to": "test", "basis": "DIRECT:E4"})
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
@@ -174,7 +231,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
         self.assertEqual(out["verdict"], "CONFLICT")
 
-    def test_pair_prompt_shares_contract_hash_instruction_and_evidence_legend(self):
+    def test_pair_prompt_shares_contract_hash_instruction_evidence_and_compatibility_legends(self):
         contract = self.contract()
         matrix = {
             "eval_kind": "output",
@@ -196,10 +253,13 @@ class StructuredOutputContractTests(unittest.TestCase):
         legend_line = "E5 = plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs :: P50 selection source must never enter request identity"
         self.assertIn(legend_line, with_prompt)
         self.assertIn(legend_line, base_prompt)
-        self.assertIn("use only an evidence ID", with_prompt)
+        self.assertIn("CLAIM EVIDENCE COMPATIBILITY", with_prompt)
+        self.assertIn("authority = E1", with_prompt)
+        self.assertIn("request_identity = E5", base_prompt)
+        self.assertIn("permitted for that claim", with_prompt)
         self.assertIn("do not write or invent source paths or anchors in the output", base_prompt)
 
-    def test_chat_payload_carries_same_response_schema(self):
+    def test_chat_payload_carries_same_derived_response_schema(self):
         contract = self.contract()
         generation = server_mod.validate_generation({
             "temperature": 0,

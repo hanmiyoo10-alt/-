@@ -1,6 +1,6 @@
 # Agent Skill Zero-Credit Eval — Candidate Compact Wire v10 Design
 
-Status: **DESIGN FROZEN AFTER FIRST v9 EXECUTION FAILURE · IMPLEMENTATION IN PROGRESS**
+Status: **IMPLEMENTED · POST-MERGE REGRESSION VALIDATED · STABILIZATION COMPLETE**
 
 Date: 2026-09-02
 
@@ -127,3 +127,33 @@ Before any new prospective model output:
 After merge, a fresh Usage Dashboard v8 3B regression must remain `PAIR_VALID` with with-skill `SUPPORTED` before any new candidate proof.
 
 Retired SimCore, Termux, Voyage, and DevPass held-outs are diagnostic only and are not reused as fresh independent proof.
+
+## Final stabilization evidence
+
+Implementation and regression gates are complete.
+
+- v10 implementation PR: #1235
+- v10 merge SHA: `62f9f05f7bdd2391304d7f412529983075d17dc9`
+- post-merge Agent Skills CI #77 / run `33547234756`: `SUCCESS`
+- post-merge SimCore CI #5804 / run `33547233913`: `SUCCESS`
+- final regression target main: `b3c7df738438c779b8ed6635a3778f1440a8ae97`
+- final request commit: `cb4a97af71f56adfe5d81c7963324c35d9416327`
+- zero-credit run #34: `33553089182` — `SUCCESS`
+- artifact ID: `9818457660`
+- artifact SHA256: `52e7f989264ff810e1fe3ae7208a7f7242fb255e69cb98791db5aca91ead282f`
+- execution surface: `LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS`
+- model profile: `qwen2.5-3b-instruct-q4_k_m`
+- pair status: `PAIR_VALID`
+- response contract: `impact-scope-grounded-flow-v8`
+- fixture class: `standard`; candidate scope/projection: none
+- with-skill finish reason: `stop`
+- with-skill flow edges: `F1`, `F2`, `F3`
+- with-skill blockers: `[]`
+- with-skill derived verdict: `SUPPORTED`
+- baseline finish reason: `stop`
+- baseline flow edges: `F1`
+- baseline blockers: `flow:F2`, `flow:F3`
+- baseline derived verdict: `PARTIAL`
+- issue evidence record: #1120 comment `5499800839`
+
+Conclusion: v10 stabilization is complete. The additive v10 candidate wire is implemented and mechanically covered while the validated Usage Dashboard v8 lane remains intact. No candidate scope promotion occurred, and no product/runtime/release/device change was part of this stabilization. Any next independent generalization proof must be a newly frozen held-out observed only after its task, assertions, source snapshot, and bounded context are committed.

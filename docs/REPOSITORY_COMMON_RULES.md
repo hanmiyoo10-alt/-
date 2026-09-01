@@ -352,6 +352,14 @@ When a writer, compatibility surface, projection, lazy/externalized view, or par
 
 Do not let externalization, lazy hydration, projection, compatibility adaptation, or partial reads silently widen omission semantics into deletion authority. Projects retain ownership of completeness proofs, field/write ownership, merge behavior, and explicit clear/replace APIs.
 
+### RCR-C11 – Late effects require current operation authority
+
+**Class:** `CONDITIONAL`
+
+When operations can overlap, be superseded, or complete after their target or lifecycle state has advanced, an operation must not apply a late mutation merely because it started earlier, completed successfully, failed, or still observes the same value. Before an effect can overwrite, roll back, restore, repopulate, retarget, or otherwise reverse or replace shared or authoritative state, the operation must still satisfy the owning contract's current operation/target authority for that effect.
+
+Projects retain ownership of the proof mechanism and revocation semantics. Depending on the system, valid mechanisms may include serialization, an operation token/generation, epoch or revision checks, compare-and-swap/preconditions, stable captured target identity, or another owner-defined currentness guard. This rule does not require a token system when operations cannot race or when late effects are explicitly safe under the owning contract, such as properly defined idempotent, commutative, or append-only effects. Temporal recency alone does not manufacture semantic authority.
+
 ## 7. Deliberately project-only rules
 
 The following categories remain `PROJECT_ONLY` unless separately promoted after a cross-project review:

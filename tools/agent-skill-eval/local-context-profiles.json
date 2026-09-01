@@ -36,6 +36,78 @@
       ]
     },
     "plugin-impact-scope": {
+      "service-tier-fidelity": [
+        {
+          "ref": "HEAD",
+          "path": "docs/REPO_PROJECT_CATALOG.md",
+          "mode": "needle_windows",
+          "needles": ["plugin:usage-dashboard"],
+          "radius": 5,
+          "max_bytes": 8000
+        },
+        {
+          "ref": "HEAD",
+          "path": ".github/plugin-control-plane/registry.json",
+          "mode": "needle_windows",
+          "needles": ["\"usage-dashboard\": {", "\"releaseBranch\": \"release-usage-dashboard\""],
+          "radius": 8,
+          "max_bytes": 10000
+        },
+        {
+          "ref": "refs/remotes/origin/release-usage-dashboard",
+          "path": "plugins/usage-dashboard/runtime/product-manifest.json",
+          "mode": "full",
+          "max_bytes": 16000
+        },
+        {
+          "ref": "HEAD",
+          "path": "plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs",
+          "mode": "needle_windows",
+          "needles": ["logField(row, ['routingMetadata.serviceTierSource'])", "serviceTierSelectionSource: ['request','coding-plan-default'].includes"],
+          "radius": 8,
+          "max_bytes": 10000
+        },
+        {
+          "ref": "HEAD",
+          "path": "plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs",
+          "mode": "needle_windows",
+          "needles": ["const serviceTierSelectionSource = ['request','coding-plan-default'].includes", "serviceTierSelectionSource,"],
+          "radius": 7,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "HEAD",
+          "path": "plugins/usage-dashboard/src/12-service-tier.part.js",
+          "mode": "needle_windows",
+          "needles": ["function normalizeServiceTierSelectionSource(value)", "function requestServiceTierSelectionSourceText(row)"],
+          "radius": 8,
+          "max_bytes": 10000
+        },
+        {
+          "ref": "HEAD",
+          "path": "plugins/usage-dashboard/src/14-request-ledger.part.js",
+          "mode": "needle_windows",
+          "needles": ["const serviceTierSelectionSource = normalizeServiceTierSelectionSource", "serviceTierSelectionSource:preferKnownServiceTierSelectionSource", "function requestLedgerKey(row) {"],
+          "radius": 8,
+          "max_bytes": 12000
+        },
+        {
+          "ref": "HEAD",
+          "path": "plugins/usage-dashboard/src/40-diagnostics.part.js",
+          "mode": "needle_windows",
+          "needles": ["Service tier selection source:", "Service tier source fields:"],
+          "radius": 7,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "HEAD",
+          "path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
+          "mode": "needle_windows",
+          "needles": ["selection source must never enter request identity", "selection-source path must not add", "UNKNOWN preserved"],
+          "radius": 10,
+          "max_bytes": 14000
+        }
+      ],
       "narrow-negative": []
     }
   }

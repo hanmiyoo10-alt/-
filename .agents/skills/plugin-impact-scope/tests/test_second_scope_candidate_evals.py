@@ -12,6 +12,7 @@ DISCOVERY = SKILL_ROOT / "scripts" / "discover_impact.py"
 VALIDATOR = SKILL_ROOT / "scripts" / "validate_impact_map.py"
 TERMUX_FROZEN_MAIN = "f01c2ef304656de9254191ec2fb9a2c046642f21"
 VOYAGE_FROZEN_MAIN = "3908f71122f267375ee5eccb3fa3ca85564c634e"
+DEVPASS_FROZEN_MAIN = "3869b454daa6ddc04d72317e22e063784e086f0b"
 
 
 def load_module(name: str, path: Path):
@@ -36,6 +37,7 @@ class SecondScopeCandidateEvalTests(unittest.TestCase):
             "plugin:simcore",
             "plugin:termux-large-doc-editor",
             "plugin:voyage-token-check",
+            "plugin:devpass",
         ):
             self.assertNotIn(scope, discovery.PILOT_VALIDATED_SCOPES)
             self.assertNotIn(scope, validator.PILOT_VALIDATED_SCOPES)
@@ -72,7 +74,7 @@ class SecondScopeCandidateEvalTests(unittest.TestCase):
         self.assertGreaterEqual(len(heldout["assertions"]), 7)
         self.assertNotIn("expected_output", heldout)
 
-    def test_voyage_heldout_is_new_prospective_per_case_scope(self):
+    def test_voyage_heldout_is_retained_per_case_scope(self):
         heldout = next(
             case for case in self.data["evals"]
             if case["id"] == "voyage-token-check-visible-refresh-heldout"
@@ -85,7 +87,22 @@ class SecondScopeCandidateEvalTests(unittest.TestCase):
         self.assertIn("release/deployment 설계는 쓰지 마", heldout["prompt"])
         self.assertGreaterEqual(len(heldout["assertions"]), 7)
         self.assertNotIn("expected_output", heldout)
-        self.assertIn("Voyage Token Check visible refresh is a new prospective held-out", self.data["note"])
+        self.assertIn("Voyage visible-refresh held-outs are retained only as diagnostic/training evidence", self.data["note"])
+
+    def test_devpass_heldout_is_new_prospective_per_case_scope(self):
+        heldout = next(
+            case for case in self.data["evals"]
+            if case["id"] == "devpass-missing-artifact-recovery-heldout"
+        )
+        self.assertEqual(heldout["kind"], "PROSPECTIVE_HELD_OUT")
+        self.assertEqual(heldout["candidate_scope"], "plugin:devpass")
+        self.assertEqual(heldout["frozen_source_snapshot"], {"main": DEVPASS_FROZEN_MAIN})
+        self.assertIn("impact scope만", heldout["prompt"])
+        self.assertIn("placeholder artifact", heldout["prompt"])
+        self.assertIn("deployment plan은 쓰지 마", heldout["prompt"])
+        self.assertGreaterEqual(len(heldout["assertions"]), 7)
+        self.assertNotIn("expected_output", heldout)
+        self.assertIn("DevPass missing-artifact recovery is a new prospective v9 held-out", self.data["note"])
 
     def test_retrospective_cases_are_not_mislabeled_as_prospective(self):
         retrospective = [

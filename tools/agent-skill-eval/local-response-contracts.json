@@ -7,127 +7,43 @@
         "expected_scope": "plugin:usage-dashboard",
         "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For flow_edges, select only registered F# edge IDs from FLOW EDGE REGISTRY; never invent from/to endpoints and never use test evidence as a flow edge. For every non-UNKNOWN preservation/test claim basis, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY. UNKNOWN means no evidence and must not carry an evidence suffix. Never write source paths or anchors in the output. Do not emit a verdict field; the evaluator derives the impact-map verdict mechanically from validated evidence bases and registered-flow coverage. blocked_claims is a compatibility-only field and must be an empty array; the evaluator derives unresolved blockers mechanically. Do not emit CONFLICT unless the compatibility legend explicitly permits a CONFLICT:E# pair. Bounds: at most 3 distinct registered flow edges and 2 tests. Do not add prose before or after the JSON.",
         "evidence_registry": {
-          "E1": {
-            "source_path": "docs/REPO_PROJECT_CATALOG.md",
-            "source_anchor": "plugin:usage-dashboard"
-          },
-          "E2": {
-            "source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs",
-            "source_anchor": "serviceTierSelectionSource"
-          },
-          "E3": {
-            "source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs",
-            "source_anchor": "serviceTierSelectionSource"
-          },
-          "E4": {
-            "source_path": "plugins/usage-dashboard/src/14-request-ledger.part.js",
-            "source_anchor": "serviceTierSelectionSource:preferKnownServiceTierSelectionSource"
-          },
-          "E5": {
-            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
-            "source_anchor": "P50 selection source must never enter request identity"
-          },
-          "E6": {
-            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
-            "source_anchor": "P50 selection-source path must not add"
-          },
-          "E7": {
-            "source_path": "plugins/usage-dashboard/src/40-diagnostics.part.js",
-            "source_anchor": "Service tier selection source:"
-          },
-          "E8": {
-            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
-            "source_anchor": "P50 Service Tier Selection-Source Fidelity"
-          }
+          "E1": {"source_path": "docs/REPO_PROJECT_CATALOG.md", "source_anchor": "plugin:usage-dashboard"},
+          "E2": {"source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs", "source_anchor": "serviceTierSelectionSource"},
+          "E3": {"source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs", "source_anchor": "serviceTierSelectionSource"},
+          "E4": {"source_path": "plugins/usage-dashboard/src/14-request-ledger.part.js", "source_anchor": "serviceTierSelectionSource:preferKnownServiceTierSelectionSource"},
+          "E5": {"source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs", "source_anchor": "P50 selection source must never enter request identity"},
+          "E6": {"source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs", "source_anchor": "P50 selection-source path must not add"},
+          "E7": {"source_path": "plugins/usage-dashboard/src/40-diagnostics.part.js", "source_anchor": "Service tier selection source:"},
+          "E8": {"source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs", "source_anchor": "P50 Service Tier Selection-Source Fidelity"}
         },
         "flow_edge_registry": {
-          "F1": {
-            "from": "bridge.capture.serviceTierSelectionSource",
-            "to": "bridge.normalizedRecentLogs.serviceTierSelectionSource",
-            "evidence_ids": [
-              "E2",
-              "E3"
-            ]
-          },
-          "F2": {
-            "from": "bridge.normalizedRecentLogs.serviceTierSelectionSource",
-            "to": "plugin.recentRequests.serviceTierSelectionSource",
-            "evidence_ids": [
-              "E3",
-              "E4"
-            ]
-          },
-          "F3": {
-            "from": "plugin.recentRequests.serviceTierSelectionSource",
-            "to": "plugin.diagnostics.selectionSource",
-            "evidence_ids": [
-              "E4",
-              "E7"
-            ]
-          }
+          "F1": {"from": "bridge.capture.serviceTierSelectionSource", "to": "bridge.normalizedRecentLogs.serviceTierSelectionSource", "evidence_ids": ["E2", "E3"]},
+          "F2": {"from": "bridge.normalizedRecentLogs.serviceTierSelectionSource", "to": "plugin.recentRequests.serviceTierSelectionSource", "evidence_ids": ["E3", "E4"]},
+          "F3": {"from": "plugin.recentRequests.serviceTierSelectionSource", "to": "plugin.diagnostics.selectionSource", "evidence_ids": ["E4", "E7"]}
         },
-        "required_flow_edge_ids": [
-          "F1",
-          "F2",
-          "F3"
-        ],
+        "required_flow_edge_ids": ["F1", "F2", "F3"],
         "claim_evidence_status_allowlist": {
-          "authority": {
-            "E1": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ]
-          },
-          "request_identity": {
-            "E5": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ]
-          },
-          "no_extra_io": {
-            "E6": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ]
-          },
+          "authority": {"E1": ["DIRECT", "SUPPORTED_LIKELY"]},
+          "request_identity": {"E5": ["DIRECT", "SUPPORTED_LIKELY"]},
+          "no_extra_io": {"E6": ["DIRECT", "SUPPORTED_LIKELY"]},
           "tests": {
-            "E5": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ],
-            "E6": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ],
-            "E8": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ]
+            "E5": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E6": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E8": ["DIRECT", "SUPPORTED_LIKELY"]
           },
-          "generated_release": {
-            "E1": [
-              "SUPPORTED_LIKELY"
-            ]
-          },
+          "generated_release": {"E1": ["SUPPORTED_LIKELY"]},
           "narrowest_boundary": {
-            "E2": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ],
-            "E3": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ],
-            "E4": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ],
-            "E7": [
-              "DIRECT",
-              "SUPPORTED_LIKELY"
-            ]
+            "E2": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E3": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E4": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E7": ["DIRECT", "SUPPORTED_LIKELY"]
           }
         }
+      },
+      "devpass-missing-artifact-recovery-heldout": {
+        "id": "candidate-grounded-impact-report-v9",
+        "expected_scope": "plugin:devpass",
+        "prompt_instruction": "Return exactly one compact JSON object matching the candidate grounded-report schema. Propose semantic owners and flow edges from the supplied source evidence; do not select hidden expected answers. Every non-UNKNOWN affirmative claim must cite 1-3 sourceRefs using only an opaque sourceBlockId from SOURCE BLOCK LEGEND plus a short verbatim sourceAnchor that occurs in that supplied block. UNKNOWN claims must use an empty sourceRefs array and no affirmative value. Use empty arrays to represent unresolved array categories. Do not emit source paths, evaluator blockers, a final verdict, implementation code, release/version choices, or prose outside the JSON."
       }
     }
   }

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "plugin-impact-scope",
+  "case_id": "voyage-token-check-visible-refresh-heldout",
+  "target_repository_sha": "2295064444a28d93884099e8ab35defcb03df95e",
+  "model_profile": "qwen2.5-3b-instruct-q4_k_m"
+}

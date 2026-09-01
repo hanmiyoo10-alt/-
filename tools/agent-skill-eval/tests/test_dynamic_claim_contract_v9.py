@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parents[1]
 SKILL_ROOT = REPO_ROOT / ".agents" / "skills" / "plugin-impact-scope"
-FROZEN_DEVPASS_MAIN = "3869b454daa6ddc04d72317e22e063784e086f0b"
 CASE_ID = "devpass-missing-artifact-recovery-heldout"
+FROZEN_MAIN = "3869b454daa6ddc04d72317e22e063784e086f0b"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -25,18 +25,18 @@ def load(name: str, path: Path):
     return module
 
 
-contract_mod = load("local_response_contract_v9_test", ROOT / "local_response_contract.py")
-receipt_mod = load("validate_local_receipt_v9_test", ROOT / "validate_local_receipt.py")
+contract_mod = load("candidate_grounded_contract_v9_test", ROOT / "local_response_contract.py")
+prompt_mod = load("candidate_grounded_prompt_v9_test", ROOT / "compose_local_prompt.py")
+receipt_mod = load("candidate_grounded_receipt_v9_test", ROOT / "validate_local_receipt.py")
 
 
-class DynamicClaimContractV9Tests(unittest.TestCase):
+class CandidateGroundedReportV9Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.contracts_path = ROOT / "local-response-contracts.json"
+        cls.contract_doc = json.loads(cls.contracts_path.read_text(encoding="utf-8"))
         cls.contract = contract_mod.load_contract(
-            cls.contracts_path,
-            "plugin-impact-scope",
-            CASE_ID,
+            cls.contracts_path, "plugin-impact-scope", CASE_ID
         )
         assert cls.contract is not None
         cls.candidates = json.loads(
@@ -49,14 +49,22 @@ class DynamicClaimContractV9Tests(unittest.TestCase):
         )
 
     def context(self) -> dict:
-        by_path: dict[str, list[str]] = {}
-        for entry in self.contract["evidence_registry"].values():
-            by_path.setdefault(entry["source_path"], []).append(entry["source_anchor"])
         blocks = [
-            {"path": path, "text": "\n".join(anchors)}
-            for path, anchors in sorted(by_path.items())
+            {
+                "index": 1,
+                "ref": FROZEN_MAIN,
+                "path": "a.txt",
+                "text": "auth owner request-id no-extra release",
+            },
+            {
+                "index": 2,
+                "ref": FROZEN_MAIN,
+                "path": "b.txt",
+                "text": "flow test narrow conflict",
+            },
         ]
         return {
+            "schema_version": 1,
             "skill": "plugin-impact-scope",
             "case_id": CASE_ID,
             "blocks": blocks,
@@ -64,49 +72,98 @@ class DynamicClaimContractV9Tests(unittest.TestCase):
             "context_sha256": "e" * 64,
         }
 
-    def resolved_payload(self) -> dict:
-        claims: dict[str, str] = {}
-        for claim_id, entry in self.contract["claim_registry"].items():
-            allowed = entry["evidence_status_allowlist"]
-            chosen = None
-            for status in ("DIRECT", "SUPPORTED_LIKELY"):
-                for evidence_id, statuses in allowed.items():
-                    if status in statuses:
-                        chosen = f"{status}:{evidence_id}"
-                        break
-                if chosen is not None:
-                    break
-            self.assertIsNotNone(chosen, claim_id)
-            claims[claim_id] = str(chosen)
+    def ref(self, block: str, anchor: str) -> dict:
+        return {"sourceBlockId": block, "sourceAnchor": anchor}
+
+    def supported_payload(self) -> dict:
         return {
             "scope": "plugin:devpass",
-            "flow_edges": list(self.contract["required_flow_edge_ids"]),
-            "claims": claims,
+            "authority": {
+                "status": "DIRECT",
+                "value": "declared authority",
+                "sourceRefs": [self.ref("S1", "auth")],
+            },
+            "semanticOwners": [
+                {
+                    "label": "source owner",
+                    "status": "DIRECT",
+                    "sourceRefs": [self.ref("S1", "owner")],
+                }
+            ],
+            "flowEdges": [
+                {
+                    "from": "source owner",
+                    "to": "consumer",
+                    "status": "SUPPORTED_LIKELY",
+                    "sourceRefs": [self.ref("S2", "flow")],
+                }
+            ],
+            "preservation": {
+                "requestIdentity": {
+                    "status": "DIRECT",
+                    "sourceRefs": [self.ref("S1", "request-id")],
+                },
+                "noExtraIo": {
+                    "status": "DIRECT",
+                    "sourceRefs": [self.ref("S1", "no-extra")],
+                },
+                "otherBoundaries": [],
+            },
+            "testsContracts": [
+                {
+                    "boundary": "validation boundary",
+                    "status": "DIRECT",
+                    "sourceRefs": [self.ref("S2", "test")],
+                }
+            ],
+            "generatedRelease": {
+                "status": "SUPPORTED_LIKELY",
+                "value": "release boundary",
+                "sourceRefs": [self.ref("S1", "release")],
+            },
+            "narrowestBoundary": {
+                "status": "DIRECT",
+                "value": "narrow owner",
+                "sourceRefs": [self.ref("S2", "narrow")],
+            },
         }
 
-    def test_devpass_case_is_prospectively_frozen_and_prior_cases_are_diagnostic(self):
-        heldout = next(case for case in self.candidates["evals"] if case["id"] == CASE_ID)
+    def test_contract_contains_no_hidden_devpass_answer_registry(self):
+        raw = self.contract_doc["contracts"]["plugin-impact-scope"][CASE_ID]
+        self.assertEqual(
+            set(raw), {"id", "expected_scope", "prompt_instruction"}
+        )
+        text = json.dumps(raw, ensure_ascii=False)
+        for forbidden in (
+            "plugins/devpass/latest.js",
+            "DECLARED_MISSING",
+            "C1",
+            "F1",
+            "source_path",
+            "source_anchor",
+            "flow_edge_registry",
+            "claim_registry",
+        ):
+            self.assertNotIn(forbidden, text)
+        self.assertEqual(raw["id"], "candidate-grounded-impact-report-v9")
+
+    def test_devpass_fixture_remains_prospectively_frozen(self):
+        heldout = next(
+            case for case in self.candidates["evals"] if case["id"] == CASE_ID
+        )
         self.assertEqual(heldout["kind"], "PROSPECTIVE_HELD_OUT")
         self.assertEqual(heldout["candidate_scope"], "plugin:devpass")
-        self.assertEqual(
-            heldout["frozen_source_snapshot"],
-            {"main": FROZEN_DEVPASS_MAIN},
-        )
+        self.assertEqual(heldout["frozen_source_snapshot"], {"main": FROZEN_MAIN})
         self.assertNotIn("expected_output", heldout)
         self.assertGreaterEqual(len(heldout["assertions"]), 7)
-        note = self.candidates["note"]
-        self.assertIn("DevPass missing-artifact recovery is a new prospective v9 held-out", note)
-        self.assertIn("Voyage visible-refresh held-outs are retained only as diagnostic/training evidence", note)
 
-    def test_devpass_profile_and_contract_share_exact_frozen_sources(self):
+    def test_devpass_context_is_exactly_frozen_but_separate_from_contract(self):
         specs = self.profiles["profiles"]["plugin-impact-scope"][CASE_ID]
-        self.assertEqual({spec["ref"] for spec in specs}, {FROZEN_DEVPASS_MAIN})
+        self.assertEqual({spec["ref"] for spec in specs}, {FROZEN_MAIN})
         self.assertTrue(all(spec["ref"] != "HEAD" for spec in specs))
-        self.assertTrue(all(spec["mode"] == "needle_windows" for spec in specs))
-        self.assertLessEqual(len(specs), 5)
-        by_path = {spec["path"]: spec for spec in specs}
+        self.assertLessEqual(len(specs), 4)
         self.assertEqual(
-            set(by_path),
+            {spec["path"] for spec in specs},
             {
                 "docs/REPO_PROJECT_CATALOG.md",
                 ".github/plugin-control-plane/registry.json",
@@ -114,177 +171,142 @@ class DynamicClaimContractV9Tests(unittest.TestCase):
                 "docs/DEVPASS_GUIDELINES.md",
             },
         )
-        for evidence_id, evidence in self.contract["evidence_registry"].items():
-            self.assertIn(evidence["source_path"], by_path, evidence_id)
-            self.assertIn(
-                evidence["source_anchor"],
-                by_path[evidence["source_path"]]["needles"],
-                evidence_id,
-            )
 
-    def test_v9_schema_is_dynamic_and_model_does_not_own_verdict_or_blockers(self):
-        self.assertEqual(self.contract["id"], "impact-scope-grounded-claims-v9")
-        self.assertEqual(self.contract["expected_scope"], "plugin:devpass")
-        self.assertEqual(
-            set(self.contract["claim_registry"]),
-            {f"C{i}" for i in range(1, 8)},
-        )
-        self.assertEqual(
-            self.contract["required_claim_ids"],
-            [f"C{i}" for i in range(1, 8)],
-        )
+    def test_v9_schema_has_generic_report_categories_only(self):
         schema = self.contract["schema"]
-        self.assertEqual(set(schema["properties"]), {"scope", "flow_edges", "claims"})
-        self.assertEqual(schema["required"], ["scope", "flow_edges", "claims"])
         self.assertEqual(
-            schema["properties"]["claims"]["required"],
-            [f"C{i}" for i in range(1, 8)],
+            set(schema["properties"]),
+            {
+                "scope",
+                "authority",
+                "semanticOwners",
+                "flowEdges",
+                "preservation",
+                "testsContracts",
+                "generatedRelease",
+                "narrowestBoundary",
+            },
         )
         self.assertNotIn("verdict", schema["properties"])
         self.assertNotIn("blocked_claims", schema["properties"])
+        self.assertNotIn("expectedOwner", json.dumps(schema))
 
-    def test_v9_full_required_grounding_derives_supported(self):
+    def test_supported_is_evaluator_derived_from_generic_completeness(self):
         out = contract_mod.validate_content(
-            json.dumps(self.resolved_payload()),
-            self.contract,
-            self.context(),
+            json.dumps(self.supported_payload()), self.contract, self.context()
         )
         self.assertEqual(out["derived_blocked_claims"], [])
         self.assertEqual(out["derived_impact_verdict"], "SUPPORTED")
-        self.assertEqual(
-            [edge["id"] for edge in out["resolved_flow_edges"]],
-            ["F1", "F2", "F3"],
-        )
-        self.assertEqual(
-            [claim["id"] for claim in out["resolved_claims"]],
-            [f"C{i}" for i in range(1, 8)],
-        )
 
-    def test_v9_unknown_required_claim_derives_partial(self):
-        payload = self.resolved_payload()
-        payload["claims"]["C3"] = "UNKNOWN"
-        out = contract_mod.validate_content(
-            json.dumps(payload), self.contract, self.context()
-        )
-        self.assertEqual(out["derived_blocked_claims"], ["claim:C3"])
-        self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
-
-    def test_v9_missing_required_flow_derives_partial(self):
-        payload = self.resolved_payload()
-        payload["flow_edges"] = ["F2", "F3"]
-        out = contract_mod.validate_content(
-            json.dumps(payload), self.contract, self.context()
-        )
-        self.assertEqual(out["derived_blocked_claims"], ["flow:F1"])
-        self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
-
-    def test_v9_all_unknown_and_no_flow_derives_unknown(self):
-        payload = self.resolved_payload()
-        payload["flow_edges"] = []
-        payload["claims"] = {claim_id: "UNKNOWN" for claim_id in payload["claims"]}
+    def test_unknown_authority_or_missing_grounded_flow_derives_unknown(self):
+        payload = self.supported_payload()
+        payload["authority"] = {"status": "UNKNOWN", "value": "", "sourceRefs": []}
         out = contract_mod.validate_content(
             json.dumps(payload), self.contract, self.context()
         )
         self.assertEqual(out["derived_impact_verdict"], "UNKNOWN")
-        self.assertEqual(
-            out["derived_blocked_claims"],
-            ["flow:F1", "flow:F2", "flow:F3"]
-            + [f"claim:C{i}" for i in range(1, 8)],
+        self.assertIn("authority", out["derived_blocked_claims"])
+
+        payload = self.supported_payload()
+        payload["flowEdges"] = []
+        out = contract_mod.validate_content(
+            json.dumps(payload), self.contract, self.context()
         )
+        self.assertEqual(out["derived_impact_verdict"], "UNKNOWN")
+        self.assertIn("flow", out["derived_blocked_claims"])
 
-    def test_v9_cross_claim_evidence_and_model_owned_fields_fail_closed(self):
-        payload = self.resolved_payload()
-        payload["claims"]["C3"] = "DIRECT:E1"
-        with self.assertRaises(contract_mod.ResponseContractError):
-            contract_mod.validate_content(
-                json.dumps(payload), self.contract, self.context()
-            )
+    def test_resolved_flow_with_unresolved_required_category_derives_partial(self):
+        payload = self.supported_payload()
+        payload["preservation"]["requestIdentity"] = {
+            "status": "UNKNOWN",
+            "sourceRefs": [],
+        }
+        out = contract_mod.validate_content(
+            json.dumps(payload), self.contract, self.context()
+        )
+        self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
+        self.assertEqual(out["derived_blocked_claims"], ["request_identity"])
 
-        payload = self.resolved_payload()
-        payload["verdict"] = "SUPPORTED"
-        with self.assertRaises(contract_mod.ResponseContractError):
-            contract_mod.validate_content(
-                json.dumps(payload), self.contract, self.context()
-            )
-
-    def test_v9_conflict_is_contract_allowlisted_and_evaluator_derived(self):
-        raw = {
-            "schema_version": 1,
-            "contracts": {
-                "plugin-impact-scope": {
-                    "synthetic": {
-                        "id": "impact-scope-grounded-claims-v9",
-                        "expected_scope": "plugin:synthetic",
-                        "prompt_instruction": "Return JSON only.",
-                        "evidence_registry": {
-                            "E1": {"source_path": "x.txt", "source_anchor": "anchor"}
-                        },
-                        "flow_edge_registry": {
-                            "F1": {
-                                "from": "a",
-                                "to": "b",
-                                "evidence_ids": ["E1"]
-                            }
-                        },
-                        "required_flow_edge_ids": ["F1"],
-                        "claim_registry": {
-                            "C1": {
-                                "label": "synthetic conflict boundary",
-                                "evidence_status_allowlist": {
-                                    "E1": ["DIRECT", "CONFLICT"]
-                                }
-                            }
-                        },
-                        "required_claim_ids": ["C1"]
-                    }
-                }
-            }
+    def test_conflict_is_evaluator_derived(self):
+        payload = self.supported_payload()
+        payload["authority"] = {
+            "status": "CONFLICT",
+            "value": "conflicting authority",
+            "sourceRefs": [self.ref("S2", "conflict")],
         }
-        with tempfile.TemporaryDirectory() as td:
-            path = Path(td) / "contracts.json"
-            path.write_text(json.dumps(raw), encoding="utf-8")
-            contract = contract_mod.load_contract(
-                path, "plugin-impact-scope", "synthetic"
-            )
-        context = {
-            "blocks": [{"path": "x.txt", "text": "anchor"}],
-            "context_text": "anchor",
-            "context_sha256": "a" * 64,
-        }
-        payload = {
-            "scope": "plugin:synthetic",
-            "flow_edges": ["F1"],
-            "claims": {"C1": "CONFLICT:E1"},
-        }
-        out = contract_mod.validate_content(json.dumps(payload), contract, context)
+        out = contract_mod.validate_content(
+            json.dumps(payload), self.contract, self.context()
+        )
         self.assertEqual(out["derived_impact_verdict"], "CONFLICT")
-        self.assertEqual(out["derived_blocked_claims"], ["claim:C1"])
+        self.assertIn("conflict", out["derived_blocked_claims"])
 
-    def test_v9_claim_legend_is_data_driven(self):
-        legend = contract_mod.claim_evidence_legend(self.contract)
-        self.assertIn("C1 declared update-channel authority =", legend)
-        self.assertIn("C7 writable automation migration boundary =", legend)
-        self.assertIn("DIRECT:E5", legend)
-        self.assertNotIn("plugin:usage-dashboard", legend)
+    def test_non_unknown_claim_requires_real_anchor_in_exact_source_block(self):
+        payload = self.supported_payload()
+        payload["flowEdges"][0]["sourceRefs"] = [self.ref("S1", "flow")]
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(
+                json.dumps(payload), self.contract, self.context()
+            )
+        payload = self.supported_payload()
+        payload["authority"]["sourceRefs"] = [self.ref("S9", "auth")]
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(
+                json.dumps(payload), self.contract, self.context()
+            )
 
-    def test_v9_receipt_revalidation_carries_evaluator_verdict_and_blockers(self):
-        payload = self.resolved_payload()
-        payload["claims"]["C6"] = "UNKNOWN"
+    def test_unknown_claim_cannot_smuggle_affirmative_value_or_source(self):
+        payload = self.supported_payload()
+        payload["generatedRelease"] = {
+            "status": "UNKNOWN",
+            "value": "invented release",
+            "sourceRefs": [],
+        }
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(
+                json.dumps(payload), self.contract, self.context()
+            )
+
+    def test_candidate_prompt_uses_opaque_source_ids_without_hidden_flow_registry(self):
+        matrix = {
+            "eval_kind": "output",
+            "skill": "plugin-impact-scope",
+            "case_id": CASE_ID,
+            "fixture_class": "second_scope_candidate",
+            "candidate_scope": "plugin:devpass",
+            "candidate_frozen_source_snapshot": {"main": FROZEN_MAIN},
+            "prompt": "impact scope only",
+        }
+        prompt, _ = prompt_mod.compose(
+            matrix,
+            self.context(),
+            SKILL_ROOT / "SKILL.md",
+            "with_skill",
+            self.contract,
+        )
+        self.assertIn("SOURCE BLOCK LEGEND", prompt)
+        self.assertIn("S1 = SOURCE 1", prompt)
+        self.assertNotIn("FLOW EDGE REGISTRY", prompt)
+        self.assertNotIn("CLAIM EVIDENCE STATUS COMPATIBILITY", prompt)
+        self.assertNotIn("C1 =", prompt)
+        self.assertIn("Source-anchor occurrence proves grounding only, not semantic correctness", prompt)
+
+    def test_receipt_revalidates_evaluator_owned_verdict(self):
+        payload = self.supported_payload()
+        payload["testsContracts"] = []
         contract_hash = contract_mod.contract_sha256(self.contract)
-        self.assertIsNotNone(contract_hash)
         with tempfile.TemporaryDirectory() as td:
-            eval_root = Path(td)
-            mode_dir = eval_root / "with_skill"
-            mode_dir.mkdir(parents=True)
-            response_path = mode_dir / "response.txt"
-            response_path.write_text(json.dumps(payload), encoding="utf-8")
-            (eval_root / "response-contract.json").write_text(
+            root = Path(td)
+            mode = root / "with_skill"
+            mode.mkdir(parents=True)
+            response = mode / "response.txt"
+            response.write_text(json.dumps(payload), encoding="utf-8")
+            (root / "response-contract.json").write_text(
                 json.dumps(self.contract), encoding="utf-8"
             )
-            (eval_root / "context.json").write_text(
+            (root / "context.json").write_text(
                 json.dumps(self.context()), encoding="utf-8"
             )
-            (mode_dir / "structured-validation.json").write_text(
+            (mode / "structured-validation.json").write_text(
                 json.dumps(
                     {
                         "status": "VALID",
@@ -295,40 +317,19 @@ class DynamicClaimContractV9Tests(unittest.TestCase):
                 encoding="utf-8",
             )
             verdict, blockers = receipt_mod._derive_structured_impact_evidence(
-                response_path,
-                str(contract_hash),
-                0,
+                response, str(contract_hash), 0
             )
             self.assertEqual(verdict, "PARTIAL")
-            self.assertEqual(blockers, ["claim:C6"])
-            validation = json.loads(
-                (mode_dir / "structured-validation.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(validation["derived_impact_verdict"], "PARTIAL")
-            self.assertEqual(validation["derived_blocked_claims"], ["claim:C6"])
+            self.assertEqual(blockers, ["tests_contracts"])
 
-    def test_existing_v8_contract_shape_remains_supported(self):
+    def test_existing_v8_contract_still_loads_with_original_shape(self):
         v8 = contract_mod.load_contract(
-            self.contracts_path,
-            "plugin-impact-scope",
-            "service-tier-fidelity",
+            self.contracts_path, "plugin-impact-scope", "service-tier-fidelity"
         )
         self.assertEqual(v8["id"], "impact-scope-grounded-flow-v8")
-        self.assertEqual(
-            set(v8["schema"]["properties"]),
-            {
-                "scope",
-                "authority",
-                "flow_edges",
-                "request_identity",
-                "no_extra_io",
-                "tests",
-                "generated_release",
-                "narrowest_boundary",
-                "blocked_claims",
-            },
-        )
-        self.assertNotIn("claims", v8["schema"]["properties"])
+        self.assertIn("flow_edges", v8["schema"]["properties"])
+        self.assertIn("blocked_claims", v8["schema"]["properties"])
+        self.assertNotIn("semanticOwners", v8["schema"]["properties"])
 
 
 if __name__ == "__main__":

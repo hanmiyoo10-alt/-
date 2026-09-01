@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parents[1]
 
 
 def load(name: str, filename: str):
@@ -90,6 +91,30 @@ class ServerCaptureTests(unittest.TestCase):
         self.assertIn("--alias local-eval", joined)
         self.assertIn("--n-gpu-layers 0", joined)
         self.assertNotIn("0.0.0.0", joined)
+
+
+class ServerWorkflowContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.workflow = (REPO_ROOT / ".github" / "workflows" / "agent-skill-zero-credit-eval.yml").read_text(encoding="utf-8")
+        cls.ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
+
+    def test_workflow_uses_loopback_llama_server_generated_content_capture(self):
+        self.assertIn("find extracted -type f -name llama-server", self.workflow)
+        self.assertIn("run_local_server_pair.py", self.workflow)
+        self.assertIn("llama-server-v1-chat-completions", self.workflow)
+        self.assertIn("SERVER_PORT: '39127'", self.workflow)
+        self.assertNotIn("-cnv -st", self.workflow)
+        self.assertNotIn('>"$response_file"', self.workflow)
+
+    def test_workflow_keeps_zero_credit_and_bounded_generation(self):
+        self.assertIn("permissions:\n  contents: read", self.workflow)
+        self.assertNotIn("copilot-requests", self.workflow.lower())
+        self.assertIn('"n_predict":768', self.workflow)
+        self.assertIn('"gpu_layers":0', self.workflow)
+        self.assertNotIn("0.0.0.0", self.workflow)
+        self.assertNotIn("qwen2.5-1.5b-instruct-q4_k_m.gguf", self.ci)
+        self.assertNotIn("llama-server", self.ci)
 
 
 if __name__ == "__main__":

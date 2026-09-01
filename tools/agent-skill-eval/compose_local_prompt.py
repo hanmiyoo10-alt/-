@@ -65,6 +65,10 @@ def compose(matrix: dict[str, Any], context: dict[str, Any], skill_path: Path, m
         "For mutable repository facts, use only the supplied SOURCE EVIDENCE.\n"
         "If evidence is insufficient, preserve UNKNOWN instead of guessing.\n"
         "Do not claim you ran tools or changed repository state.\n"
+        "Synthesize the supplied guidance and evidence before writing the answer.\n"
+        "Return only the compact final answer; do not restate, quote, summarize, or reproduce TARGET SKILL GUIDANCE, its procedure/completion criteria, or raw SOURCE EVIDENCE.\n"
+        "Do not use generic placeholders such as 'producer -> request/state metadata -> consumer' when SOURCE EVIDENCE names exact paths or symbols.\n"
+        "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
         "Keep the answer concise and source-grounded."
     )
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"

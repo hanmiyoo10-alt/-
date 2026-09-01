@@ -1,0 +1,50 @@
+{
+  "skill_name": "plugin-impact-scope",
+  "status": "CANDIDATE_ONLY_NOT_PROMOTED",
+  "candidate_scope": "plugin:simcore",
+  "frozen_source_snapshot": {
+    "main": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+    "release-simcore": "861100f4771967aa5b8ab8811d06f11702c0d3ff"
+  },
+  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. The prospective 3M-3 case is frozen before any human 3M-3 impact-scope answer is written; future execution must use the frozen source snapshot or an equivalently isolated source bundle so later answer documents cannot leak into the test context.",
+  "evals": [
+    {
+      "id": "simcore-context-projection-retrospective",
+      "kind": "RETROSPECTIVE_COMPATIBILITY",
+      "prompt": "SimCore의 Mode C long-chat context projection을 설계하기 전에 현재 production/runtime 기준으로 impact scope만 잡아줘. 어떤 semantic owner와 request/source boundary가 영향을 받을 수 있는지, 무엇을 보호해야 하는지 조사하고 구현안은 쓰지 마.",
+      "assertions": [
+        "Distinguishes main design/evidence authority from release-simcore deployed runtime authority.",
+        "Builds a source-backed owner/caller/dependent flow rather than a file inventory.",
+        "Keeps search hits candidate-only until exact owning source is reread.",
+        "Preserves UNKNOWN for semantic dependencies that structure alone cannot prove absent.",
+        "Stops before selecting or implementing a context-pruning mechanism."
+      ]
+    },
+    {
+      "id": "simcore-exposure-retrospective",
+      "kind": "RETROSPECTIVE_COMPATIBILITY",
+      "prompt": "SimCore의 COMMUNITY exposure knowledge 경계를 더 구체화하기 전에 현재 production/runtime 기준으로 impact scope만 잡아줘. source provenance와 audience exposure가 어디서 갈리는지 관련 owner/validator/prompt surface를 조사하고 구현안은 쓰지 마.",
+      "assertions": [
+        "Distinguishes source authenticity/provenance from audience exposure authority.",
+        "Separates Lifecycle, Lineage, Handoff, Evidence, Prompt, Community/Reaction and Structure responsibilities when current source supports them.",
+        "Does not promote Knowledge/reference availability into public-knowledge authority.",
+        "Keeps semantic fact-checking outside deterministic structure validation unless separately proven.",
+        "Performs no mutation or production prompt change."
+      ]
+    },
+    {
+      "id": "simcore-3m3-structured-sidecar-validation-heldout",
+      "kind": "PROSPECTIVE_HELD_OUT",
+      "prompt": "SimCore 3M-3 Structured Sidecar + Validation을 설계하기 전에 impact scope만 해줘. 현재 authority를 먼저 확인하고, 3M-1의 SourceProjectionEnvelope와 3M-2의 assertion/exposure policy가 실제 structured sidecar/validator로 이어질 때 영향을 받을 semantic owners, producer-consumer flow, validation/persistence/context/release 경계, 필요한 tests/contracts를 현재 source 기준으로 조사해. 구현안이나 최종 schema 설계는 쓰지 마.",
+      "assertions": [
+        "Uses the frozen split authority correctly: main for design/evidence contracts and release-simcore for deployed runtime facts.",
+        "Traces a connected semantic flow from existing source/community facts through proposed derived sidecar and validation consumers without inventing a new canonical truth owner.",
+        "Identifies preservation boundaries for request identity, no-extra-I/O, prompt bytes/placement, persistence, history/context re-entry and shipped runtime/release surfaces when evidence makes them material; unresolved boundaries remain UNKNOWN.",
+        "Treats claim-specific evidence compatibility and validator-derived disposition as candidate validation concerns without assuming the model owns final authority.",
+        "Reads relevant current contracts/tests before claiming they protect a boundary.",
+        "Does not choose the final sidecar schema, module placement, implementation mechanism, release version or deployment plan.",
+        "Performs no repository mutation as part of the eval answer."
+      ]
+    }
+  ]
+}

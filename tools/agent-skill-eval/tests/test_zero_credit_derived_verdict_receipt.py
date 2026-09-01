@@ -20,8 +20,8 @@ def load(name: str, filename: str):
     return module
 
 
-contract_mod = load("local_response_contract_receipt_v7", "local_response_contract.py")
-receipt_mod = load("validate_local_receipt_v7", "validate_local_receipt.py")
+contract_mod = load("local_response_contract_receipt_v8", "local_response_contract.py")
+receipt_mod = load("validate_local_receipt_v8", "validate_local_receipt.py")
 
 
 class DerivedVerdictReceiptTests(unittest.TestCase):
@@ -78,7 +78,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             "tests": ["DIRECT:E8"],
             "generated_release": "UNKNOWN",
             "narrowest_boundary": "DIRECT:E2",
-            "blocked_claims": ["generated/release ownership unresolved"],
+            "blocked_claims": [],
         }
 
     def alternate_partial_payload(self):
@@ -91,7 +91,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             "tests": ["SUPPORTED_LIKELY:E5", "SUPPORTED_LIKELY:E6"],
             "generated_release": "SUPPORTED_LIKELY:E1",
             "narrowest_boundary": "SUPPORTED_LIKELY:E2",
-            "blocked_claims": ["request identity remains unresolved"],
+            "blocked_claims": [],
         }
 
     def invalid_free_form_flow_payload(self):
@@ -175,7 +175,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
         )
         return receipt, response_path
 
-    def test_receipt_revalidates_grounded_flow_and_persists_derived_verdict(self):
+    def test_receipt_revalidates_grounded_flow_and_persists_derived_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             receipt, response_path = self.make_receipt(
                 Path(td),
@@ -185,8 +185,10 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
                 "2" * 64,
             )
             self.assertEqual(receipt["derived_impact_verdict"], "PARTIAL")
+            self.assertEqual(receipt["derived_blocked_claims"], ["generated_release"])
             validation = json.loads((response_path.parent / "structured-validation.json").read_text(encoding="utf-8"))
             self.assertEqual(validation["derived_impact_verdict"], "PARTIAL")
+            self.assertEqual(validation["derived_blocked_claims"], ["generated_release"])
             self.assertEqual(validation["validated_response_sha256"], receipt["response_sha256"])
 
     def test_free_form_flow_relation_fails_before_receipt(self):
@@ -218,7 +220,9 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
                 None,
             )
             self.assertEqual(with_receipt["derived_impact_verdict"], "PARTIAL")
+            self.assertEqual(with_receipt["derived_blocked_claims"], ["generated_release"])
             self.assertEqual(base_receipt["derived_impact_verdict"], "PARTIAL")
+            self.assertEqual(base_receipt["derived_blocked_claims"], ["flow:F1", "request_identity"])
             pair = receipt_mod.validate_pair(with_receipt, base_receipt)
             self.assertEqual(pair["status"], "PAIR_VALID")
             self.assertEqual(
@@ -226,6 +230,13 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
                 {
                     "with_skill": "PARTIAL",
                     "baseline_without_target_skill": "PARTIAL",
+                },
+            )
+            self.assertEqual(
+                pair["mode_derived_blocked_claims"],
+                {
+                    "with_skill": ["generated_release"],
+                    "baseline_without_target_skill": ["flow:F1", "request_identity"],
                 },
             )
             self.assertIsNone(pair["qualitative_verdict"])

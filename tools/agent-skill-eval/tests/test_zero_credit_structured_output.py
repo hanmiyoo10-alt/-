@@ -80,7 +80,7 @@ class StructuredOutputContractTests(unittest.TestCase):
             "tests": ["DIRECT:E8"],
             "generated_release": "UNKNOWN",
             "narrowest_boundary": "DIRECT:E2",
-            "blocked_claims": ["generated/release ownership unresolved"],
+            "blocked_claims": [],
         }
 
     def test_contract_is_scoped_to_positive_case_only(self):
@@ -90,7 +90,7 @@ class StructuredOutputContractTests(unittest.TestCase):
 
     def test_contract_uses_grounded_flow_registry_and_singleton_scope(self):
         contract = self.contract()
-        self.assertEqual(contract["id"], "impact-scope-grounded-flow-v7")
+        self.assertEqual(contract["id"], "impact-scope-grounded-flow-v8")
         self.assertEqual(set(contract["evidence_registry"]), {f"E{i}" for i in range(1, 9)})
         self.assertEqual(
             contract["flow_edge_registry"],
@@ -119,6 +119,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertEqual(props["flow_edges"]["items"]["enum"], ["F1", "F2", "F3"])
         self.assertEqual(props["flow_edges"]["minItems"], 0)
         self.assertEqual(props["flow_edges"]["maxItems"], 3)
+        self.assertEqual(props["blocked_claims"]["maxItems"], 0)
         self.assertNotIn("verdict", props)
         self.assertEqual(
             props["request_identity"]["enum"],
@@ -134,6 +135,8 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertNotIn("flow_edges", case["claim_evidence_status_allowlist"])
         self.assertIn("select only registered F# edge IDs", case["prompt_instruction"])
         self.assertIn("never invent from/to endpoints", case["prompt_instruction"])
+        self.assertIn("blocked_claims is a compatibility-only field and must be an empty array", case["prompt_instruction"])
+        self.assertNotIn("derived_blocked_claims", case["prompt_instruction"])
 
     def test_flow_registry_is_revalidated_through_registered_evidence(self):
         contract = self.contract()
@@ -175,21 +178,30 @@ class StructuredOutputContractTests(unittest.TestCase):
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
         self.assertEqual(out["flow_edges"], ["F1", "F2", "F3"])
         self.assertEqual([edge["id"] for edge in out["resolved_flow_edges"]], ["F1", "F2", "F3"])
+        self.assertEqual(out["derived_blocked_claims"], ["generated_release"])
         self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
 
     def test_full_chain_and_resolved_preservation_derives_supported(self):
         payload = self.valid_payload()
         payload["generated_release"] = "SUPPORTED_LIKELY:E1"
-        payload["blocked_claims"] = []
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["derived_blocked_claims"], [])
         self.assertEqual(out["derived_impact_verdict"], "SUPPORTED")
 
     def test_partial_flow_chain_cannot_derive_supported(self):
         payload = self.valid_payload()
         payload["flow_edges"] = ["F2", "F3"]
         payload["generated_release"] = "SUPPORTED_LIKELY:E1"
-        payload["blocked_claims"] = []
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["derived_blocked_claims"], ["flow:F1"])
+        self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
+
+    def test_missing_source_backed_test_derives_test_blocker(self):
+        payload = self.valid_payload()
+        payload["tests"] = []
+        payload["generated_release"] = "SUPPORTED_LIKELY:E1"
+        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["derived_blocked_claims"], ["tests"])
         self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
 
     def test_empty_flow_and_all_unknown_derives_unknown(self):
@@ -201,9 +213,28 @@ class StructuredOutputContractTests(unittest.TestCase):
         payload["tests"] = []
         payload["generated_release"] = "UNKNOWN"
         payload["narrowest_boundary"] = "UNKNOWN"
-        payload["blocked_claims"] = []
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(
+            out["derived_blocked_claims"],
+            [
+                "authority",
+                "flow:F1",
+                "flow:F2",
+                "flow:F3",
+                "request_identity",
+                "no_extra_io",
+                "tests",
+                "generated_release",
+                "narrowest_boundary",
+            ],
+        )
         self.assertEqual(out["derived_impact_verdict"], "UNKNOWN")
+
+    def test_non_empty_model_owned_blocker_is_rejected(self):
+        payload = self.valid_payload()
+        payload["blocked_claims"] = ["SUPPORTED_LIKELY:E3"]
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
     def test_free_form_or_test_flow_edges_fail_closed(self):
         for bad in (
@@ -318,6 +349,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertEqual(payload["response_format"], contract_mod.response_format(contract))
         flow_items = payload["response_format"]["schema"]["properties"]["flow_edges"]["items"]
         self.assertEqual(flow_items["enum"], ["F1", "F2", "F3"])
+        self.assertEqual(payload["response_format"]["schema"]["properties"]["blocked_claims"]["maxItems"], 0)
         self.assertNotIn("verdict", payload["response_format"]["schema"]["properties"])
 
 

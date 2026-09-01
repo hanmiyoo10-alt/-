@@ -35,6 +35,7 @@ BASIS_CLAIMS = (
 EVIDENCE_ID_RE = re.compile(r"E[1-9][0-9]*\Z")
 FLOW_ID_RE = re.compile(r"F[1-9][0-9]*\Z")
 DERIVED_IMPACT_VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
+RESOLVED_STATUSES = {"DIRECT", "SUPPORTED_LIKELY"}
 
 
 class ResponseContractError(ValueError):
@@ -211,7 +212,7 @@ def build_schema(contract: dict[str, Any]) -> dict[str, Any]:
             },
             "blocked_claims": {
                 "type": "array",
-                "maxItems": 2,
+                "maxItems": 0,
                 "items": {"type": "string", "maxLength": 120},
             },
         },
@@ -477,6 +478,36 @@ def _validate_basis(
     return {"basis": basis, "status": status, "evidence_id": evidence_id}
 
 
+def _derive_blocked_claims(
+    authority: dict[str, Any],
+    selected_flow_edge_ids: list[str],
+    required_flow_edge_ids: list[str],
+    request_identity: dict[str, Any],
+    no_extra_io: dict[str, Any],
+    test_bases: list[dict[str, Any]],
+    generated_release: dict[str, Any],
+    narrowest_boundary: dict[str, Any],
+) -> list[str]:
+    blocked: list[str] = []
+    if authority["status"] not in RESOLVED_STATUSES:
+        blocked.append("authority")
+    selected = set(selected_flow_edge_ids)
+    for flow_id in required_flow_edge_ids:
+        if flow_id not in selected:
+            blocked.append(f"flow:{flow_id}")
+    if request_identity["status"] not in RESOLVED_STATUSES:
+        blocked.append("request_identity")
+    if no_extra_io["status"] not in RESOLVED_STATUSES:
+        blocked.append("no_extra_io")
+    if not any(item["status"] in RESOLVED_STATUSES for item in test_bases):
+        blocked.append("tests")
+    if generated_release["status"] not in RESOLVED_STATUSES:
+        blocked.append("generated_release")
+    if narrowest_boundary["status"] not in RESOLVED_STATUSES:
+        blocked.append("narrowest_boundary")
+    return blocked
+
+
 def _derive_impact_verdict(
     authority: dict[str, Any],
     selected_flow_edge_ids: list[str],
@@ -486,7 +517,7 @@ def _derive_impact_verdict(
     test_bases: list[dict[str, Any]],
     generated_release: dict[str, Any],
     narrowest_boundary: dict[str, Any],
-    blocked_claims: list[str],
+    derived_blocked_claims: list[str],
 ) -> str:
     all_bases = [
         authority,
@@ -512,21 +543,19 @@ def _derive_impact_verdict(
         narrowest_boundary,
     )
     required_resolved = all(
-        item["status"] in {"DIRECT", "SUPPORTED_LIKELY"}
-        for item in required_preservation
+        item["status"] in RESOLVED_STATUSES for item in required_preservation
     )
     has_required_flow_chain = set(required_flow_edge_ids).issubset(
         set(selected_flow_edge_ids)
     )
     has_source_backed_test = any(
-        item["status"] in {"DIRECT", "SUPPORTED_LIKELY"}
-        for item in test_bases
+        item["status"] in RESOLVED_STATUSES for item in test_bases
     )
     if (
         required_resolved
         and has_required_flow_chain
         and has_source_backed_test
-        and not blocked_claims
+        and not derived_blocked_claims
     ):
         return "SUPPORTED"
     return "PARTIAL"
@@ -621,16 +650,22 @@ def validate_impact_scope_output(
     )
 
     blocked = payload.get("blocked_claims")
-    if not isinstance(blocked, list) or len(blocked) > 2:
-        raise ResponseContractError(
-            "blocked_claims must contain at most 2 entries"
-        )
-    for index, item in enumerate(blocked):
-        _bounded_string(item, f"blocked_claims[{index}]", 120)
+    if not isinstance(blocked, list) or blocked:
+        raise ResponseContractError("blocked_claims is a compatibility shell and must be empty")
 
     required_flow_edge_ids = contract.get("required_flow_edge_ids")
     if not isinstance(required_flow_edge_ids, list):
         raise ResponseContractError("required_flow_edge_ids missing")
+    derived_blocked_claims = _derive_blocked_claims(
+        authority,
+        selected_flow_edge_ids,
+        required_flow_edge_ids,
+        request_identity,
+        no_extra_io,
+        test_bases,
+        generated_release,
+        narrowest_boundary,
+    )
     derived_verdict = _derive_impact_verdict(
         authority,
         selected_flow_edge_ids,
@@ -640,7 +675,7 @@ def validate_impact_scope_output(
         test_bases,
         generated_release,
         narrowest_boundary,
-        blocked,
+        derived_blocked_claims,
     )
     if derived_verdict not in DERIVED_IMPACT_VERDICTS:
         raise ResponseContractError("derived impact verdict invalid")
@@ -653,6 +688,7 @@ def validate_impact_scope_output(
         }
         for flow_id in selected_flow_edge_ids
     ]
+    result["derived_blocked_claims"] = derived_blocked_claims
     result["derived_impact_verdict"] = derived_verdict
     return result
 
@@ -664,7 +700,7 @@ def validate_content(
 ) -> dict[str, Any] | None:
     if contract is None:
         return None
-    if contract.get("id") != "impact-scope-grounded-flow-v7":
+    if contract.get("id") != "impact-scope-grounded-flow-v8":
         raise ResponseContractError(
             f"unsupported response contract id: {contract.get('id')}"
         )

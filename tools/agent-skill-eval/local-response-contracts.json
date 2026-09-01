@@ -3,9 +3,9 @@
   "contracts": {
     "plugin-impact-scope": {
       "service-tier-fidelity": {
-        "id": "impact-scope-grounded-flow-v7",
+        "id": "impact-scope-grounded-flow-v8",
         "expected_scope": "plugin:usage-dashboard",
-        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For flow_edges, select only registered F# edge IDs from FLOW EDGE REGISTRY; never invent from/to endpoints and never use test evidence as a flow edge. For every non-UNKNOWN preservation/test claim basis, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY. UNKNOWN means no evidence and must not carry an evidence suffix. Never write source paths or anchors in the output. Do not emit a verdict field; the evaluator derives the impact-map verdict mechanically from validated evidence bases and registered-flow coverage. Do not emit CONFLICT unless the compatibility legend explicitly permits a CONFLICT:E# pair. Bounds: at most 3 distinct registered flow edges, 2 tests, and 2 blocked claims. Do not add prose before or after the JSON.",
+        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For flow_edges, select only registered F# edge IDs from FLOW EDGE REGISTRY; never invent from/to endpoints and never use test evidence as a flow edge. For every non-UNKNOWN preservation/test claim basis, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY. UNKNOWN means no evidence and must not carry an evidence suffix. Never write source paths or anchors in the output. Do not emit a verdict field; the evaluator derives the impact-map verdict mechanically from validated evidence bases and registered-flow coverage. blocked_claims is a compatibility-only field and must be an empty array; the evaluator derives unresolved blockers mechanically. Do not emit CONFLICT unless the compatibility legend explicitly permits a CONFLICT:E# pair. Bounds: at most 3 distinct registered flow edges and 2 tests. Do not add prose before or after the JSON.",
         "evidence_registry": {
           "E1": {
             "source_path": "docs/REPO_PROJECT_CATALOG.md",

@@ -166,12 +166,14 @@ def compose(
     )
     user_block = f"USER TASK\n{user_task}\n"
     if prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT:
+        late_compatibility_section = (
+            compatibility_block + "\n" if compatibility_block else ""
+        )
         full_prompt = (
             system_section
             + evidence_block
             + guidance_block
-            + compatibility_block
-            + "\n"
+            + late_compatibility_section
             + user_block
         )
     elif prompt_layout == GUIDANCE_AFTER_EVIDENCE_LAYOUT:

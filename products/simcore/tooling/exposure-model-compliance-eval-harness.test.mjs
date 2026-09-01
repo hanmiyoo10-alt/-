@@ -3,6 +3,7 @@ import {
   buildComplianceEvalHarness,
   buildBlindReviewPacket,
   assertHarnessIntegrity,
+  assessReviewEligibility,
   candidateContractHash,
   createLockedReviewRecord,
   fixtureCorpusHash,
@@ -10,6 +11,25 @@ import {
 } from './exposure-model-compliance-eval-harness.mjs';
 import { EXPOSURE_LINES } from './exposure-prompt-contract-offline-evaluator.mjs';
 import { EXPOSURE_SEMANTIC_CASES } from './exposure-semantic-adversarial-fixture-corpus.mjs';
+
+const sha = (ch) => ch.repeat(64);
+
+function validExecutedRun(run, suffix = 'a') {
+  return {
+    ...run,
+    executionStatus: 'VALID_GENERATION',
+    harnessInvalidReason: null,
+    hostCapture: {
+      ...run.hostCapture,
+      modelIdentifier: 'same-model',
+      modelSettingsFingerprint: sha('b'),
+      characterReferenceFingerprint: sha('c'),
+      actualHostRequestFingerprint: sha('d'),
+      generatedOutput: `generated-${suffix}`,
+      outputStructuralStatus: 'STRUCTURE_VALID',
+    },
+  };
+}
 
 const m1 = buildComplianceEvalHarness({ stage: 'M1' });
 assert.equal(m1.fixtureCount, 12);
@@ -48,13 +68,25 @@ for (const pair of m2.pairs) {
   assert.ok(e6.scenario.syntheticScenarioFingerprint);
 }
 
-const packet = buildBlindReviewPacket(m2.runs[0]);
+assert.equal(assessReviewEligibility(m2.runs[0]).pass, false);
+assert.throws(() => buildBlindReviewPacket(m2.runs[0]), /RUN_NOT_REVIEW_ELIGIBLE/);
+assert.throws(() => createLockedReviewRecord(m2.runs[0], {
+  primaryDisposition: 'PASS_ALLOWED',
+  naturalness: 4,
+  reactivity: 5,
+  epistemicClarity: 4,
+  rationale: 'Unexecuted rows must never become review evidence.',
+}), /RUN_NOT_REVIEW_ELIGIBLE/);
+
+const sample = validExecutedRun(m2.runs[0]);
+assert.deepEqual(assessReviewEligibility(sample), { pass: true, failures: [] });
+const packet = buildBlindReviewPacket(sample);
 assert.equal('conditionActualId' in packet, false);
 assert.equal('candidateContractHash' in packet, false);
 assert.equal('candidateOverlay' in packet, false);
 assert.equal(packet.conditionOpaqueId === 'X' || packet.conditionOpaqueId === 'Y', true);
+assert.equal(packet.generatedOutput, 'generated-a');
 
-const sample = { ...m2.runs[0], executionStatus: 'VALID_GENERATION' };
 const locked = createLockedReviewRecord(sample, {
   primaryDisposition: 'PASS_ALLOWED',
   naturalness: 4,
@@ -75,7 +107,24 @@ assert.throws(() => createLockedReviewRecord(sample, {
 
 const summary = summarizeLockedReviews([locked]);
 assert.equal(summary.usableLockedRuns, 1);
+assert.equal(summary.ineligibleLockedRuns, 0);
 assert.equal(summary.finalDisposition, 'NOT_COMPUTED_UNTIL_COMPLETE_M2_AND_COMPARATIVE_REVIEW');
+
+const manuallyForgedLockedNotRun = {
+  ...m2.runs[1],
+  review: { ...m2.runs[1].review, locked: true, primaryDisposition: 'PASS_ALLOWED', naturalness: 5, reactivity: 5, epistemicClarity: 5, rationale: 'forged' },
+};
+const guardedSummary = summarizeLockedReviews([locked, manuallyForgedLockedNotRun]);
+assert.equal(guardedSummary.usableLockedRuns, 1);
+assert.equal(guardedSummary.ineligibleLockedRuns, 1);
+assert.ok(guardedSummary.ineligibleLockedReasons[0].failures.includes('EXECUTION_STATUS_NOT_VALID_GENERATION'));
+
+const missingOutput = validExecutedRun(m2.runs[2]);
+missingOutput.hostCapture.generatedOutput = '';
+assert.equal(assessReviewEligibility(missingOutput).pass, false);
+assert.throws(() => createLockedReviewRecord(missingOutput, {
+  primaryDisposition: 'PASS_ALLOWED', naturalness: 4, reactivity: 4, epistemicClarity: 4, rationale: 'x',
+}), /GENERATED_OUTPUT_MISSING/);
 
 const m2Again = buildComplianceEvalHarness({ stage: 'M2' });
 assert.equal(m2Again.candidateContractHash, m2.candidateContractHash);

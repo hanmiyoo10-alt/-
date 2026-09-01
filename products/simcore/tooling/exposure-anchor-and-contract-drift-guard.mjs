@@ -13,7 +13,7 @@ import {
 } from './exposure-model-compliance-m1-execution-prep.mjs';
 import {
   ADAPTER_VERSION,
-  EXPECTED_CANDIDATE_HASH,
+  EXPECTED_CANDIDATE_HASH as PREFLIGHT_EXPECTED_CANDIDATE_HASH,
   EXPECTED_REQUEST_STAGE,
   PREFLIGHT_VERSION,
 } from './exposure-model-compliance-m1-target-host-preflight.mjs';
@@ -80,15 +80,11 @@ function hostAdapterContractFailures(hostAdapterSource) {
   if (countSubstring(source, `const ADAPTER_VERSION = '${ADAPTER_VERSION}'`) !== 1) failures.push('HOST_ADAPTER_VERSION_DRIFT');
   if (countSubstring(source, `const EXPECTED_CANDIDATE_HASH = '${EXPECTED_CANDIDATE_HASH}'`) !== 1) failures.push('HOST_ADAPTER_CANDIDATE_HASH_DRIFT');
   if (countSubstring(source, `'${SOURCE_PROVENANCE_ANCHOR}'`) !== 1) failures.push('HOST_ADAPTER_ANCHOR_DRIFT');
-  if (countSubstring(source, `requestStage: '${EXPECTED_REQUEST_STAGE}'`) < 1 && countSubstring(source, `requestStage: '${EXPECTED_REQUEST_STAGE}'`) < 1) {
-    failures.push('HOST_ADAPTER_REQUEST_STAGE_DRIFT');
-  }
+  if (!source.includes(`requestStage: '${EXPECTED_REQUEST_STAGE}'`)) failures.push('HOST_ADAPTER_REQUEST_STAGE_DRIFT');
   for (const line of EXPOSURE_LINES) {
     if (countSubstring(source, `'${line}'`) !== 1) failures.push(`HOST_ADAPTER_CANDIDATE_LINE_DRIFT:${sha256Utf8(line).slice(0, 12)}`);
   }
-  if (!source.includes("mutationScope: 'REQUEST_LOCAL_BEFORE_REQUEST_MESSAGE_ARRAY_ONLY'") && !source.includes(EXPECTED_MUTATION_SCOPE)) {
-    failures.push('HOST_ADAPTER_MUTATION_SCOPE_DRIFT');
-  }
+  if (!source.includes(EXPECTED_MUTATION_SCOPE)) failures.push('HOST_ADAPTER_MUTATION_SCOPE_DRIFT');
   return failures;
 }
 
@@ -111,7 +107,7 @@ export function assessExposureAnchorAndContractDrift({
   if (new Set(EXPOSURE_LINES).size !== 6) failures.push('CANDIDATE_LINE_UNIQUENESS_DRIFT');
   if (!EXPOSURE_LINES.every((line) => line.startsWith('short_community_b_'))) failures.push('CANDIDATE_LINE_PREFIX_DRIFT');
   if (actualCandidateHash !== EXPECTED_CANDIDATE_HASH) failures.push('CANDIDATE_HASH_DRIFT');
-  if (EXPECTED_CANDIDATE_HASH !== EXPECTED_CANDIDATE_HASH) failures.push('PREFLIGHT_CANDIDATE_HASH_DRIFT');
+  if (PREFLIGHT_EXPECTED_CANDIDATE_HASH !== EXPECTED_CANDIDATE_HASH) failures.push('PREFLIGHT_CANDIDATE_HASH_DRIFT');
 
   if (HOST_ADAPTER_CANDIDATE.insertionContract !== EXPECTED_INSERTION_CONTRACT) failures.push('PREP_INSERTION_CONTRACT_DRIFT');
   if (HOST_ADAPTER_CANDIDATE.mutationScope !== EXPECTED_MUTATION_SCOPE) failures.push('PREP_MUTATION_SCOPE_DRIFT');

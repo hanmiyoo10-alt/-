@@ -25,6 +25,10 @@ from local_response_contract import (
 
 SCHEMA_VERSION = 1
 MODES = {"with_skill", "baseline_without_target_skill"}
+PROMPT_LAYOUT_SCHEMA_VERSION = 1
+DEFAULT_PROMPT_LAYOUT = "guidance_before_evidence"
+PROMPT_LAYOUTS = {DEFAULT_PROMPT_LAYOUT, "guidance_after_evidence"}
+DEFAULT_PROMPT_LAYOUTS_PATH = MODULE_DIR / "local-prompt-layouts.json"
 
 
 class PromptError(ValueError):
@@ -45,6 +49,30 @@ def _load(path: Path) -> dict[str, Any]:
     return data
 
 
+def resolve_prompt_layout(
+    skill: str,
+    case_id: str,
+    path: Path = DEFAULT_PROMPT_LAYOUTS_PATH,
+) -> str:
+    if not path.is_file():
+        return DEFAULT_PROMPT_LAYOUT
+    data = _load(path)
+    if data.get("schema_version") != PROMPT_LAYOUT_SCHEMA_VERSION:
+        raise PromptError("unsupported prompt-layout schema_version")
+    layouts = data.get("layouts")
+    if not isinstance(layouts, dict):
+        raise PromptError("prompt layouts map missing")
+    skill_map = layouts.get(str(skill))
+    if skill_map is None:
+        return DEFAULT_PROMPT_LAYOUT
+    if not isinstance(skill_map, dict):
+        raise PromptError("skill prompt-layout map must be an object")
+    layout = skill_map.get(str(case_id), DEFAULT_PROMPT_LAYOUT)
+    if layout not in PROMPT_LAYOUTS:
+        raise PromptError(f"unsupported prompt layout: {layout}")
+    return layout
+
+
 def compose(
     matrix: dict[str, Any],
     context: dict[str, Any],
@@ -58,6 +86,7 @@ def compose(
         raise PromptError("local zero-credit lane supports output evals only")
     skill = matrix.get("skill")
     case_id = str(matrix.get("case_id"))
+    prompt_layout = resolve_prompt_layout(str(skill), case_id)
     if context.get("skill") != skill or str(context.get("case_id")) != case_id:
         raise PromptError("context does not match matrix skill/case")
     user_task = matrix.get("prompt")
@@ -117,17 +146,23 @@ def compose(
         )
 
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"
-    full_prompt = (
-        f"SYSTEM FRAME\n{system_frame}{contract_section}\n\n"
-        f"TARGET SKILL GUIDANCE\n{guidance_section}\n\n"
-        f"SOURCE EVIDENCE\n{context_text if context_text else '(no source evidence required by profile)'}\n\n"
-        f"USER TASK\n{user_task}\n"
+    system_section = f"SYSTEM FRAME\n{system_frame}{contract_section}\n\n"
+    guidance_block = f"TARGET SKILL GUIDANCE\n{guidance_section}\n\n"
+    evidence_block = (
+        "SOURCE EVIDENCE\n"
+        f"{context_text if context_text else '(no source evidence required by profile)'}\n\n"
     )
+    user_block = f"USER TASK\n{user_task}\n"
+    if prompt_layout == "guidance_after_evidence":
+        full_prompt = system_section + evidence_block + guidance_block + user_block
+    else:
+        full_prompt = system_section + guidance_block + evidence_block + user_block
     meta = {
         "schema_version": SCHEMA_VERSION,
         "mode": mode,
         "skill": skill,
         "case_id": case_id,
+        "prompt_layout": prompt_layout,
         "user_task_sha256": sha256_bytes(user_task.encode("utf-8")),
         "evidence_context_sha256": context_hash,
         "skill_guidance_sha256": skill_guidance_sha256,

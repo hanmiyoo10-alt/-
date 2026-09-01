@@ -6,7 +6,7 @@
     "main": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
     "release-simcore": "861100f4771967aa5b8ab8811d06f11702c0d3ff"
   },
-  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. The prospective 3M-3 case is frozen before any human 3M-3 impact-scope answer is written; future execution must use the frozen source snapshot or an equivalently isolated source bundle so later answer documents cannot leak into the test context.",
+  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. Top-level scope/snapshot remain the legacy SimCore defaults. The SimCore 3M-3 held-out is retained only as diagnostic/training evidence after tuning and must not be reused as independent generalization proof. The Termux Large Doc Editor background-autosave case is a new prospective held-out with its own per-case scope/snapshot frozen before any model or human impact-map answer is read.",
   "evals": [
     {
       "id": "simcore-context-projection-retrospective",
@@ -44,6 +44,24 @@
         "Reads relevant current contracts/tests before claiming they protect a boundary.",
         "Does not choose the final sidecar schema, module placement, implementation mechanism, release version or deployment plan.",
         "Performs no repository mutation as part of the eval answer."
+      ]
+    },
+    {
+      "id": "termux-large-doc-background-autosave-heldout",
+      "kind": "PROSPECTIVE_HELD_OUT",
+      "candidate_scope": "plugin:termux-large-doc-editor",
+      "frozen_source_snapshot": {
+        "main": "f01c2ef304656de9254191ec2fb9a2c046642f21"
+      },
+      "prompt": "Termux Large Doc Editor에서 브라우저/앱이 background로 갈 때 현재처럼 current chunk를 server memory에만 flush하는 대신 현재 편집 내용을 disk에 자동 저장하도록 바꾸기 전에 impact scope만 해줘. 현재 authority를 먼저 확인하고, browser → API/session → chunk store/filesystem의 source-backed flow와 dirty-state, atomic-save/external-change, I/O, lifecycle/background, tests, production/release 경계를 현재 source 기준으로 조사해. autosave timing/debounce/retry/queueing/module placement 같은 구현안이나 release/deployment 설계는 쓰지 마.",
+      "assertions": [
+        "Uses the frozen main prototype evidence as current authority and preserves production/release as UNKNOWN or not established instead of inventing a production release surface.",
+        "Distinguishes current browser background behavior, which flushes the current chunk through /api/chunk into session memory, from explicit disk save through /api/save and DocumentSession.save.",
+        "Traces a connected browser dirty-state to API/session to chunk-store/filesystem boundary rather than treating file or document ordering as semantic flow.",
+        "Treats automatic disk save on backgrounding as a material observable filesystem-I/O/lifecycle change and does not claim no-extra-I/O preservation when the new behavior would add a save write.",
+        "Identifies atomic replacement and external-change fail-closed behavior as preservation boundaries when current source supports them.",
+        "Reads existing tests before claiming coverage and keeps missing browser/server integration coverage UNKNOWN or explicitly needed rather than claiming test_chunk_store.py protects every layer.",
+        "Does not choose autosave timing, debounce, retry, queueing, module placement, release version, or deployment plan and performs no repository mutation as part of the eval answer."
       ]
     }
   ]

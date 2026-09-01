@@ -20,8 +20,8 @@ def load(name: str, filename: str):
     return module
 
 
-contract_mod = load("local_response_contract_receipt_v5", "local_response_contract.py")
-receipt_mod = load("validate_local_receipt_v5", "validate_local_receipt.py")
+contract_mod = load("local_response_contract_receipt_v6", "local_response_contract.py")
+receipt_mod = load("validate_local_receipt_v6", "validate_local_receipt.py")
 
 
 class DerivedVerdictReceiptTests(unittest.TestCase):
@@ -84,20 +84,28 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             "blocked_claims": ["generated/release ownership unresolved"],
         }
 
-    def conflict_payload(self):
+    def alternate_partial_payload(self):
         return {
             "scope": "plugin:usage-dashboard",
-            "authority": "CONFLICT:E1",
+            "authority": "SUPPORTED_LIKELY:E1",
             "flow_edges": [
-                {"from": "ledger", "to": "diagnostics", "basis": "CONFLICT:E7"},
+                {"from": "ledger", "to": "diagnostics", "basis": "SUPPORTED_LIKELY:E7"},
             ],
             "request_identity": "UNKNOWN",
-            "no_extra_io": "UNKNOWN",
-            "tests": ["CONFLICT:E5", "CONFLICT:E6"],
-            "generated_release": "UNKNOWN",
-            "narrowest_boundary": "CONFLICT:E2",
-            "blocked_claims": ["baseline conflict"],
+            "no_extra_io": "SUPPORTED_LIKELY:E6",
+            "tests": ["SUPPORTED_LIKELY:E5", "SUPPORTED_LIKELY:E6"],
+            "generated_release": "SUPPORTED_LIKELY:E1",
+            "narrowest_boundary": "SUPPORTED_LIKELY:E2",
+            "blocked_claims": ["request identity remains unresolved"],
         }
+
+    def r12_invalid_conflict_payload(self):
+        payload = self.partial_payload()
+        payload["authority"] = "CONFLICT:E1"
+        payload["request_identity"] = "UNKNOWN"
+        payload["no_extra_io"] = "UNKNOWN"
+        payload["tests"] = ["CONFLICT:E5", "CONFLICT:E6"]
+        return payload
 
     def write_mode(self, eval_root: Path, mode: str, payload: dict, contract_hash: str) -> Path:
         mode_dir = eval_root / mode
@@ -187,7 +195,18 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             self.assertEqual(validation["derived_impact_verdict"], "PARTIAL")
             self.assertEqual(validation["validated_response_sha256"], receipt["response_sha256"])
 
-    def test_r11_style_conflict_baseline_can_form_pair_without_qualitative_winner(self):
+    def test_r12_style_unsupported_conflict_fails_before_receipt(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(contract_mod.ResponseContractError):
+                self.make_receipt(
+                    Path(td),
+                    "with_skill",
+                    self.r12_invalid_conflict_payload(),
+                    "1" * 64,
+                    "2" * 64,
+                )
+
+    def test_valid_pair_still_has_no_qualitative_winner(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             with_receipt, _ = self.make_receipt(
@@ -200,19 +219,19 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             base_receipt, _ = self.make_receipt(
                 root,
                 "baseline_without_target_skill",
-                self.conflict_payload(),
+                self.alternate_partial_payload(),
                 "3" * 64,
                 None,
             )
             self.assertEqual(with_receipt["derived_impact_verdict"], "PARTIAL")
-            self.assertEqual(base_receipt["derived_impact_verdict"], "CONFLICT")
+            self.assertEqual(base_receipt["derived_impact_verdict"], "PARTIAL")
             pair = receipt_mod.validate_pair(with_receipt, base_receipt)
             self.assertEqual(pair["status"], "PAIR_VALID")
             self.assertEqual(
                 pair["mode_derived_impact_verdicts"],
                 {
                     "with_skill": "PARTIAL",
-                    "baseline_without_target_skill": "CONFLICT",
+                    "baseline_without_target_skill": "PARTIAL",
                 },
             )
             self.assertIsNone(pair["qualitative_verdict"])

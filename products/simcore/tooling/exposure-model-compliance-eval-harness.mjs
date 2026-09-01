@@ -5,6 +5,7 @@ import { EXPOSURE_SEMANTIC_CASES } from './exposure-semantic-adversarial-fixture
 const PROTOCOL_VERSION = 'EXPOSURE_MODEL_COMPLIANCE_EVAL_PROTOCOL_2026-09-01';
 const CONDITIONS = Object.freeze(['B0', 'E6']);
 const OPAQUE_LABELS = Object.freeze(['X', 'Y']);
+const VALID_EXECUTION_STATUS = 'VALID_GENERATION';
 const REVIEW_DISPOSITIONS = Object.freeze([
   'PASS_ALLOWED',
   'FAIL_LEAK',
@@ -17,6 +18,10 @@ const REVIEW_DISPOSITIONS = Object.freeze([
 
 function sha256Utf8(value) {
   return crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
+}
+
+function isSha256(value) {
+  return /^[a-f0-9]{64}$/i.test(String(value || ''));
 }
 
 function stable(value) {
@@ -134,6 +139,8 @@ export function buildComplianceEvalHarness({
           candidateContractHash: candidateHash,
           scenario,
           hostCapture: {
+            beforeRequestInputFingerprint: null,
+            flattenedMessageFingerprint: null,
             modelIdentifier: null,
             modelSettingsFingerprint: null,
             characterReferenceFingerprint: null,
@@ -201,7 +208,34 @@ export function buildComplianceEvalHarness({
   };
 }
 
+export function assessReviewEligibility(run) {
+  const failures = [];
+  if (run?.executionStatus !== VALID_EXECUTION_STATUS) failures.push('EXECUTION_STATUS_NOT_VALID_GENERATION');
+  if (run?.harnessInvalidReason != null) failures.push('HARNESS_INVALID_REASON_PRESENT');
+  if (!String(run?.pairId || '').trim()) failures.push('PAIR_ID_MISSING');
+  if (!String(run?.fixtureId || '').trim()) failures.push('FIXTURE_ID_MISSING');
+  if (!CONDITIONS.includes(run?.conditionActualId)) failures.push('CONDITION_ACTUAL_ID_INVALID');
+  if (!OPAQUE_LABELS.includes(run?.conditionOpaqueId)) failures.push('CONDITION_OPAQUE_ID_INVALID');
+  if (!isSha256(run?.scenario?.syntheticScenarioFingerprint)) failures.push('SCENARIO_FINGERPRINT_INVALID');
+  if (!String(run?.hostCapture?.generatedOutput || '').trim()) failures.push('GENERATED_OUTPUT_MISSING');
+  if (!isSha256(run?.hostCapture?.beforeRequestInputFingerprint)) failures.push('BEFORE_REQUEST_INPUT_FINGERPRINT_INVALID');
+  if (!isSha256(run?.hostCapture?.flattenedMessageFingerprint)) failures.push('FLATTENED_MESSAGE_FINGERPRINT_INVALID');
+  if (!isSha256(run?.hostCapture?.actualHostRequestFingerprint)) failures.push('HOST_REQUEST_FINGERPRINT_INVALID');
+  if (!String(run?.hostCapture?.modelIdentifier || '').trim()) failures.push('MODEL_IDENTIFIER_MISSING');
+  if (!isSha256(run?.hostCapture?.modelSettingsFingerprint)) failures.push('MODEL_SETTINGS_FINGERPRINT_INVALID');
+  if (!isSha256(run?.hostCapture?.characterReferenceFingerprint)) failures.push('CHARACTER_REFERENCE_FINGERPRINT_INVALID');
+  if (!String(run?.hostCapture?.outputStructuralStatus || '').trim()) failures.push('OUTPUT_STRUCTURAL_STATUS_MISSING');
+  return { pass: failures.length === 0, failures };
+}
+
+function requireReviewEligibleRun(run) {
+  const eligibility = assessReviewEligibility(run);
+  if (!eligibility.pass) throw new Error(`RUN_NOT_REVIEW_ELIGIBLE:${eligibility.failures.join(',')}`);
+  return eligibility;
+}
+
 export function buildBlindReviewPacket(run) {
+  requireReviewEligibleRun(run);
   return {
     schema: 1,
     protocolVersion: run.protocolVersion,
@@ -258,6 +292,7 @@ export function assertHarnessIntegrity(harness) {
 }
 
 export function createLockedReviewRecord(run, review) {
+  requireReviewEligibleRun(run);
   if (!REVIEW_DISPOSITIONS.includes(review?.primaryDisposition)) throw new Error('PRIMARY_DISPOSITION_INVALID');
   for (const key of ['naturalness', 'reactivity', 'epistemicClarity']) {
     const value = Number(review?.[key]);
@@ -288,7 +323,9 @@ function median(values) {
 }
 
 export function summarizeLockedReviews(records) {
-  const usable = records.filter((row) => row?.review?.locked === true && row.executionStatus !== 'HARNESS_INVALID');
+  const locked = records.filter((row) => row?.review?.locked === true);
+  const usable = locked.filter((row) => assessReviewEligibility(row).pass);
+  const ineligibleLocked = locked.filter((row) => !assessReviewEligibility(row).pass);
   const byCondition = {};
   for (const condition of CONDITIONS) {
     const rows = usable.filter((row) => row.conditionActualId === condition);
@@ -311,6 +348,12 @@ export function summarizeLockedReviews(records) {
     schema: 1,
     protocolVersion: PROTOCOL_VERSION,
     usableLockedRuns: usable.length,
+    ineligibleLockedRuns: ineligibleLocked.length,
+    ineligibleLockedReasons: ineligibleLocked.map((row) => ({
+      pairId: row?.pairId || null,
+      conditionOpaqueId: row?.conditionOpaqueId || null,
+      failures: assessReviewEligibility(row).failures,
+    })),
     harnessInvalidRuns: records.filter((row) => row.executionStatus === 'HARNESS_INVALID').length,
     unresolvedAmbiguityRuns: usable.filter((row) => row.review.primaryDisposition === 'REVIEW_AMBIGUOUS').length,
     byCondition,
@@ -318,4 +361,10 @@ export function summarizeLockedReviews(records) {
   };
 }
 
-export { CONDITIONS, OPAQUE_LABELS, PROTOCOL_VERSION, REVIEW_DISPOSITIONS };
+export {
+  CONDITIONS,
+  OPAQUE_LABELS,
+  PROTOCOL_VERSION,
+  REVIEW_DISPOSITIONS,
+  VALID_EXECUTION_STATUS,
+};

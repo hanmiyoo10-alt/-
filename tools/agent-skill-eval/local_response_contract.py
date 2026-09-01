@@ -12,6 +12,7 @@ from typing import Any
 SCHEMA_VERSION = 1
 CLAIM_STATUSES = {"DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"}
 EVIDENCE_STATUSES = CLAIM_STATUSES - {"UNKNOWN"}
+EVIDENCE_STATUS_ORDER = ("DIRECT", "SUPPORTED_LIKELY", "CONFLICT")
 VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
 EDGE_KEYS = {"from", "to", "basis"}
 TOP_LEVEL_KEYS = {
@@ -26,6 +27,15 @@ TOP_LEVEL_KEYS = {
     "blocked_claims",
     "verdict",
 }
+BASIS_CLAIMS = (
+    "authority",
+    "flow_edges",
+    "request_identity",
+    "no_extra_io",
+    "tests",
+    "generated_release",
+    "narrowest_boundary",
+)
 EVIDENCE_ID_RE = re.compile(r"E[1-9][0-9]*\Z")
 
 
@@ -53,6 +63,95 @@ def contract_sha256(contract: dict[str, Any] | None) -> str | None:
     return hashlib.sha256(canonical_json(contract).encode("utf-8")).hexdigest()
 
 
+def _basis_enum(evidence_ids: list[str]) -> list[str]:
+    return ["UNKNOWN", *(f"{status}:{evidence_id}" for status in EVIDENCE_STATUS_ORDER for evidence_id in evidence_ids)]
+
+
+def _validate_claim_evidence_allowlist(
+    value: Any,
+    registry: dict[str, Any],
+) -> dict[str, list[str]]:
+    if not isinstance(value, dict) or set(value) != set(BASIS_CLAIMS):
+        raise ResponseContractError(
+            "claim_evidence_allowlist must contain exactly " + ", ".join(BASIS_CLAIMS)
+        )
+    result: dict[str, list[str]] = {}
+    for claim in BASIS_CLAIMS:
+        evidence_ids = value.get(claim)
+        if not isinstance(evidence_ids, list) or not evidence_ids:
+            raise ResponseContractError(f"claim_evidence_allowlist.{claim} must be a non-empty list")
+        if len(evidence_ids) != len(set(evidence_ids)):
+            raise ResponseContractError(f"claim_evidence_allowlist.{claim} contains duplicates")
+        normalized: list[str] = []
+        for evidence_id in evidence_ids:
+            if not isinstance(evidence_id, str) or evidence_id not in registry:
+                raise ResponseContractError(
+                    f"claim_evidence_allowlist.{claim} references unknown evidence id: {evidence_id}"
+                )
+            normalized.append(evidence_id)
+        result[claim] = normalized
+    return result
+
+
+def build_schema(contract: dict[str, Any]) -> dict[str, Any]:
+    allowlist = contract.get("claim_evidence_allowlist")
+    if not isinstance(allowlist, dict):
+        raise ResponseContractError("claim_evidence_allowlist missing")
+    expected_scope = contract.get("expected_scope")
+    if not isinstance(expected_scope, str) or not expected_scope:
+        raise ResponseContractError("expected_scope missing")
+    return {
+        "type": "object",
+        "properties": {
+            "scope": {"type": "string", "enum": [expected_scope]},
+            "authority": {"type": "string", "enum": _basis_enum(allowlist["authority"])},
+            "flow_edges": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "from": {"type": "string", "minLength": 1, "maxLength": 80},
+                        "to": {"type": "string", "minLength": 1, "maxLength": 80},
+                        "basis": {"type": "string", "enum": _basis_enum(allowlist["flow_edges"])},
+                    },
+                    "required": ["from", "to", "basis"],
+                    "additionalProperties": False,
+                },
+            },
+            "request_identity": {"type": "string", "enum": _basis_enum(allowlist["request_identity"])},
+            "no_extra_io": {"type": "string", "enum": _basis_enum(allowlist["no_extra_io"])},
+            "tests": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {"type": "string", "enum": _basis_enum(allowlist["tests"])},
+            },
+            "generated_release": {"type": "string", "enum": _basis_enum(allowlist["generated_release"])},
+            "narrowest_boundary": {"type": "string", "enum": _basis_enum(allowlist["narrowest_boundary"])},
+            "blocked_claims": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {"type": "string", "maxLength": 120},
+            },
+            "verdict": {"type": "string", "enum": ["SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"]},
+        },
+        "required": [
+            "scope",
+            "authority",
+            "flow_edges",
+            "request_identity",
+            "no_extra_io",
+            "tests",
+            "generated_release",
+            "narrowest_boundary",
+            "blocked_claims",
+            "verdict",
+        ],
+        "additionalProperties": False,
+    }
+
+
 def load_contract(path: Path, skill: str, case_id: str) -> dict[str, Any] | None:
     data = _load_json(path)
     if data.get("schema_version") != SCHEMA_VERSION:
@@ -65,20 +164,26 @@ def load_contract(path: Path, skill: str, case_id: str) -> dict[str, Any] | None
         return None
     if not isinstance(skill_map, dict):
         raise ResponseContractError("skill response-contract map must be an object")
-    contract = skill_map.get(str(case_id))
-    if contract is None:
+    raw_contract = skill_map.get(str(case_id))
+    if raw_contract is None:
         return None
-    if not isinstance(contract, dict):
+    if not isinstance(raw_contract, dict):
         raise ResponseContractError("response contract must be an object")
-    expected = {"id", "expected_scope", "prompt_instruction", "evidence_registry", "schema"}
-    if set(contract) != expected:
+    expected = {
+        "id",
+        "expected_scope",
+        "prompt_instruction",
+        "evidence_registry",
+        "claim_evidence_allowlist",
+    }
+    if set(raw_contract) != expected:
         raise ResponseContractError(
-            "response contract must contain exactly id, expected_scope, prompt_instruction, evidence_registry, schema"
+            "response contract must contain exactly id, expected_scope, prompt_instruction, evidence_registry, claim_evidence_allowlist"
         )
     for key in ("id", "expected_scope", "prompt_instruction"):
-        if not isinstance(contract.get(key), str) or not contract[key].strip():
+        if not isinstance(raw_contract.get(key), str) or not raw_contract[key].strip():
             raise ResponseContractError(f"response contract {key} missing")
-    registry = contract.get("evidence_registry")
+    registry = raw_contract.get("evidence_registry")
     if not isinstance(registry, dict) or not 1 <= len(registry) <= 16:
         raise ResponseContractError("response contract evidence_registry must contain 1-16 entries")
     for evidence_id, entry in registry.items():
@@ -89,8 +194,10 @@ def load_contract(path: Path, skill: str, case_id: str) -> dict[str, Any] | None
         for key in ("source_path", "source_anchor"):
             if not isinstance(entry.get(key), str) or not entry[key].strip():
                 raise ResponseContractError(f"evidence {evidence_id} {key} missing")
-    if not isinstance(contract.get("schema"), dict):
-        raise ResponseContractError("response contract schema missing")
+    allowlist = _validate_claim_evidence_allowlist(raw_contract.get("claim_evidence_allowlist"), registry)
+    contract = dict(raw_contract)
+    contract["claim_evidence_allowlist"] = allowlist
+    contract["schema"] = build_schema(contract)
     return contract
 
 
@@ -161,7 +268,19 @@ def evidence_legend(contract: dict[str, Any], context: dict[str, Any]) -> str:
     )
 
 
-def _validate_basis(value: Any, label: str, registry: dict[str, dict[str, str]]) -> dict[str, Any]:
+def claim_evidence_legend(contract: dict[str, Any]) -> str:
+    allowlist = contract.get("claim_evidence_allowlist")
+    if not isinstance(allowlist, dict) or set(allowlist) != set(BASIS_CLAIMS):
+        raise ResponseContractError("claim_evidence_allowlist missing or malformed")
+    return "\n".join(f"{claim} = {','.join(allowlist[claim])}" for claim in BASIS_CLAIMS)
+
+
+def _validate_basis(
+    value: Any,
+    label: str,
+    registry: dict[str, dict[str, str]],
+    allowed_ids: list[str],
+) -> dict[str, Any]:
     basis = _bounded_string(value, label, 40, allow_empty=False)
     if basis == "UNKNOWN":
         return {"basis": basis, "status": "UNKNOWN", "evidence_id": None}
@@ -172,16 +291,23 @@ def _validate_basis(value: Any, label: str, registry: dict[str, dict[str, str]])
         raise ResponseContractError(f"{label} status invalid")
     if evidence_id not in registry:
         raise ResponseContractError(f"{label} references unknown evidence id: {evidence_id}")
+    if evidence_id not in allowed_ids:
+        raise ResponseContractError(f"{label} evidence id not compatible with claim: {evidence_id}")
     return {"basis": basis, "status": status, "evidence_id": evidence_id}
 
 
-def _validate_edge(value: Any, index: int, registry: dict[str, dict[str, str]]) -> dict[str, Any]:
+def _validate_edge(
+    value: Any,
+    index: int,
+    registry: dict[str, dict[str, str]],
+    allowed_ids: list[str],
+) -> dict[str, Any]:
     label = f"flow_edges[{index}]"
     if not isinstance(value, dict) or set(value) != EDGE_KEYS:
         raise ResponseContractError(f"{label} must contain exactly {sorted(EDGE_KEYS)}")
     _bounded_string(value.get("from"), f"{label}.from", 80, allow_empty=False)
     _bounded_string(value.get("to"), f"{label}.to", 80, allow_empty=False)
-    return _validate_basis(value.get("basis"), f"{label}.basis", registry)
+    return _validate_basis(value.get("basis"), f"{label}.basis", registry, allowed_ids)
 
 
 def validate_impact_scope_output(content: str, contract: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -196,27 +322,40 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
         raise ResponseContractError(f"scope mismatch: expected {contract['expected_scope']}, got {scope}")
 
     registry = validate_evidence_registry(contract, context)
-    authority = _validate_basis(payload.get("authority"), "authority", registry)
+    allowlist = contract.get("claim_evidence_allowlist")
+    if not isinstance(allowlist, dict):
+        raise ResponseContractError("claim_evidence_allowlist missing")
+
+    authority = _validate_basis(payload.get("authority"), "authority", registry, allowlist["authority"])
     edges = payload.get("flow_edges")
     if not isinstance(edges, list) or not 1 <= len(edges) <= 3:
         raise ResponseContractError("flow_edges must contain 1-3 entries")
     seen_edges: set[tuple[str, str, str]] = set()
     edge_bases: list[dict[str, Any]] = []
     for index, edge in enumerate(edges):
-        edge_bases.append(_validate_edge(edge, index, registry))
+        edge_bases.append(_validate_edge(edge, index, registry, allowlist["flow_edges"]))
         identity = (str(edge["from"]), str(edge["to"]), str(edge["basis"]))
         if identity in seen_edges:
             raise ResponseContractError("duplicate flow edge rejected")
         seen_edges.add(identity)
 
-    request_identity = _validate_basis(payload.get("request_identity"), "request_identity", registry)
-    no_extra_io = _validate_basis(payload.get("no_extra_io"), "no_extra_io", registry)
+    request_identity = _validate_basis(
+        payload.get("request_identity"), "request_identity", registry, allowlist["request_identity"]
+    )
+    no_extra_io = _validate_basis(payload.get("no_extra_io"), "no_extra_io", registry, allowlist["no_extra_io"])
     tests = payload.get("tests")
     if not isinstance(tests, list) or len(tests) > 2:
         raise ResponseContractError("tests must contain at most 2 entries")
-    test_bases = [_validate_basis(item, f"tests[{index}]", registry) for index, item in enumerate(tests)]
-    generated_release = _validate_basis(payload.get("generated_release"), "generated_release", registry)
-    narrowest_boundary = _validate_basis(payload.get("narrowest_boundary"), "narrowest_boundary", registry)
+    test_bases = [
+        _validate_basis(item, f"tests[{index}]", registry, allowlist["tests"])
+        for index, item in enumerate(tests)
+    ]
+    generated_release = _validate_basis(
+        payload.get("generated_release"), "generated_release", registry, allowlist["generated_release"]
+    )
+    narrowest_boundary = _validate_basis(
+        payload.get("narrowest_boundary"), "narrowest_boundary", registry, allowlist["narrowest_boundary"]
+    )
 
     blocked = payload.get("blocked_claims")
     if not isinstance(blocked, list) or len(blocked) > 2:
@@ -240,6 +379,6 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
 def validate_content(content: str, contract: dict[str, Any] | None, context: dict[str, Any]) -> dict[str, Any] | None:
     if contract is None:
         return None
-    if contract.get("id") != "impact-scope-evidence-id-v3":
+    if contract.get("id") != "impact-scope-evidence-compat-v4":
         raise ResponseContractError(f"unsupported response contract id: {contract.get('id')}")
     return validate_impact_scope_output(content, contract, context)

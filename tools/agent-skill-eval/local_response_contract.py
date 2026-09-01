@@ -13,7 +13,6 @@ SCHEMA_VERSION = 1
 CLAIM_STATUSES = {"DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"}
 EVIDENCE_STATUSES = CLAIM_STATUSES - {"UNKNOWN"}
 EVIDENCE_STATUS_ORDER = ("DIRECT", "SUPPORTED_LIKELY", "CONFLICT")
-VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
 EDGE_KEYS = {"from", "to", "basis"}
 TOP_LEVEL_KEYS = {
     "scope",
@@ -25,7 +24,6 @@ TOP_LEVEL_KEYS = {
     "generated_release",
     "narrowest_boundary",
     "blocked_claims",
-    "verdict",
 }
 BASIS_CLAIMS = (
     "authority",
@@ -37,6 +35,7 @@ BASIS_CLAIMS = (
     "narrowest_boundary",
 )
 EVIDENCE_ID_RE = re.compile(r"E[1-9][0-9]*\Z")
+DERIVED_IMPACT_VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
 
 
 class ResponseContractError(ValueError):
@@ -134,7 +133,6 @@ def build_schema(contract: dict[str, Any]) -> dict[str, Any]:
                 "maxItems": 2,
                 "items": {"type": "string", "maxLength": 120},
             },
-            "verdict": {"type": "string", "enum": ["SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"]},
         },
         "required": [
             "scope",
@@ -146,7 +144,6 @@ def build_schema(contract: dict[str, Any]) -> dict[str, Any]:
             "generated_release",
             "narrowest_boundary",
             "blocked_claims",
-            "verdict",
         ],
         "additionalProperties": False,
     }
@@ -310,6 +307,45 @@ def _validate_edge(
     return _validate_basis(value.get("basis"), f"{label}.basis", registry, allowed_ids)
 
 
+def _derive_impact_verdict(
+    authority: dict[str, Any],
+    edge_bases: list[dict[str, Any]],
+    request_identity: dict[str, Any],
+    no_extra_io: dict[str, Any],
+    test_bases: list[dict[str, Any]],
+    generated_release: dict[str, Any],
+    narrowest_boundary: dict[str, Any],
+    blocked_claims: list[str],
+) -> str:
+    all_bases = [
+        authority,
+        *edge_bases,
+        request_identity,
+        no_extra_io,
+        *test_bases,
+        generated_release,
+        narrowest_boundary,
+    ]
+    if any(item["status"] == "CONFLICT" for item in all_bases):
+        return "CONFLICT"
+    if not any(item["status"] != "UNKNOWN" for item in all_bases):
+        return "UNKNOWN"
+
+    required_preservation = (
+        authority,
+        request_identity,
+        no_extra_io,
+        generated_release,
+        narrowest_boundary,
+    )
+    required_resolved = all(item["status"] in {"DIRECT", "SUPPORTED_LIKELY"} for item in required_preservation)
+    has_source_backed_flow = any(item["status"] in {"DIRECT", "SUPPORTED_LIKELY"} for item in edge_bases)
+    has_source_backed_test = any(item["status"] in {"DIRECT", "SUPPORTED_LIKELY"} for item in test_bases)
+    if required_resolved and has_source_backed_flow and has_source_backed_test and not blocked_claims:
+        return "SUPPORTED"
+    return "PARTIAL"
+
+
 def validate_impact_scope_output(content: str, contract: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     try:
         payload = json.loads(content)
@@ -363,22 +399,27 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
     for index, item in enumerate(blocked):
         _bounded_string(item, f"blocked_claims[{index}]", 120)
 
-    verdict = payload.get("verdict")
-    if verdict not in VERDICTS:
-        raise ResponseContractError("verdict invalid")
-    required_preservation = (request_identity, no_extra_io, generated_release, narrowest_boundary)
-    if verdict == "SUPPORTED" and any(item["status"] in {"UNKNOWN", "CONFLICT"} for item in required_preservation):
-        raise ResponseContractError("SUPPORTED verdict conflicts with unresolved required preservation claim")
+    derived_verdict = _derive_impact_verdict(
+        authority,
+        edge_bases,
+        request_identity,
+        no_extra_io,
+        test_bases,
+        generated_release,
+        narrowest_boundary,
+        blocked,
+    )
+    if derived_verdict not in DERIVED_IMPACT_VERDICTS:
+        raise ResponseContractError("derived impact verdict invalid")
 
-    all_bases = [authority, *edge_bases, request_identity, no_extra_io, *test_bases, generated_release, narrowest_boundary]
-    if any(item["status"] == "CONFLICT" for item in all_bases) and verdict != "CONFLICT":
-        raise ResponseContractError("CONFLICT evidence basis requires CONFLICT verdict")
-    return payload
+    result = dict(payload)
+    result["derived_impact_verdict"] = derived_verdict
+    return result
 
 
 def validate_content(content: str, contract: dict[str, Any] | None, context: dict[str, Any]) -> dict[str, Any] | None:
     if contract is None:
         return None
-    if contract.get("id") != "impact-scope-evidence-compat-v4":
+    if contract.get("id") != "impact-scope-derived-verdict-v5":
         raise ResponseContractError(f"unsupported response contract id: {contract.get('id')}")
     return validate_impact_scope_output(content, contract, context)

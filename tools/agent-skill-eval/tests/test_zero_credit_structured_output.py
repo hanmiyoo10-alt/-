@@ -85,7 +85,6 @@ class StructuredOutputContractTests(unittest.TestCase):
             "generated_release": "UNKNOWN",
             "narrowest_boundary": "DIRECT:E4",
             "blocked_claims": ["generated/release ownership unresolved"],
-            "verdict": "PARTIAL",
         }
 
     def test_contract_is_scoped_to_positive_case_only(self):
@@ -95,7 +94,7 @@ class StructuredOutputContractTests(unittest.TestCase):
 
     def test_contract_uses_claim_compatible_evidence_ids_and_singleton_scope(self):
         contract = self.contract()
-        self.assertEqual(contract["id"], "impact-scope-evidence-compat-v4")
+        self.assertEqual(contract["id"], "impact-scope-derived-verdict-v5")
         self.assertEqual(set(contract["evidence_registry"]), {f"E{i}" for i in range(1, 9)})
         self.assertEqual(
             contract["claim_evidence_allowlist"],
@@ -114,6 +113,8 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertEqual(props["flow_edges"]["maxItems"], 3)
         self.assertEqual(props["tests"]["maxItems"], 2)
         self.assertEqual(props["blocked_claims"]["maxItems"], 2)
+        self.assertNotIn("verdict", props)
+        self.assertNotIn("verdict", contract["schema"]["required"])
         self.assertIn("DIRECT:E1", props["authority"]["enum"])
         self.assertNotIn("DIRECT:E8", props["authority"]["enum"])
         self.assertEqual(
@@ -127,6 +128,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         case = raw["contracts"]["plugin-impact-scope"]["service-tier-fidelity"]
         self.assertNotIn("schema", case)
         self.assertIn("claim_evidence_allowlist", case)
+        self.assertIn("Do not emit a verdict field", case["prompt_instruction"])
 
     def test_response_format_uses_derived_schema_constraint(self):
         contract = self.contract()
@@ -159,12 +161,45 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(self.valid_payload()), self.contract(), context)
 
-    def test_valid_claim_compatible_payload_passes(self):
+    def test_valid_claim_compatible_payload_derives_partial(self):
         payload = self.valid_payload()
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
         self.assertEqual(out["scope"], "plugin:usage-dashboard")
         self.assertEqual(out["request_identity"], "DIRECT:E5")
-        self.assertEqual(out["verdict"], "PARTIAL")
+        self.assertEqual(out["derived_impact_verdict"], "PARTIAL")
+        self.assertNotIn("verdict", payload)
+
+    def test_model_owned_verdict_field_is_rejected(self):
+        payload = self.valid_payload()
+        payload["verdict"] = "PARTIAL"
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+
+    def test_conflict_basis_derives_conflict(self):
+        payload = self.valid_payload()
+        payload["authority"] = "CONFLICT:E1"
+        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["derived_impact_verdict"], "CONFLICT")
+
+    def test_all_unknown_evidence_derives_unknown(self):
+        payload = self.valid_payload()
+        payload["authority"] = "UNKNOWN"
+        payload["flow_edges"] = [{"from": "producer", "to": "consumer", "basis": "UNKNOWN"}]
+        payload["request_identity"] = "UNKNOWN"
+        payload["no_extra_io"] = "UNKNOWN"
+        payload["tests"] = []
+        payload["generated_release"] = "UNKNOWN"
+        payload["narrowest_boundary"] = "UNKNOWN"
+        payload["blocked_claims"] = []
+        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["derived_impact_verdict"], "UNKNOWN")
+
+    def test_fully_resolved_unblocked_evidence_derives_supported(self):
+        payload = self.valid_payload()
+        payload["generated_release"] = "DIRECT:E1"
+        payload["blocked_claims"] = []
+        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["derived_impact_verdict"], "SUPPORTED")
 
     def test_unknown_cannot_carry_an_evidence_suffix(self):
         payload = self.valid_payload()
@@ -216,21 +251,6 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
-    def test_supported_verdict_cannot_hide_unknown_preservation(self):
-        payload = self.valid_payload()
-        payload["verdict"] = "SUPPORTED"
-        with self.assertRaises(contract_mod.ResponseContractError):
-            contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
-
-    def test_conflict_basis_requires_conflict_verdict(self):
-        payload = self.valid_payload()
-        payload["authority"] = "CONFLICT:E1"
-        with self.assertRaises(contract_mod.ResponseContractError):
-            contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
-        payload["verdict"] = "CONFLICT"
-        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
-        self.assertEqual(out["verdict"], "CONFLICT")
-
     def test_pair_prompt_shares_contract_hash_instruction_evidence_and_compatibility_legends(self):
         contract = self.contract()
         matrix = {
@@ -257,6 +277,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertIn("authority = E1", with_prompt)
         self.assertIn("request_identity = E5", base_prompt)
         self.assertIn("permitted for that claim", with_prompt)
+        self.assertIn("Do not emit a verdict field", base_prompt)
         self.assertIn("do not write or invent source paths or anchors in the output", base_prompt)
 
     def test_chat_payload_carries_same_derived_response_schema(self):
@@ -271,6 +292,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         })
         payload = server_mod.build_chat_payload("task", generation, contract)
         self.assertEqual(payload["response_format"], contract_mod.response_format(contract))
+        self.assertNotIn("verdict", payload["response_format"]["schema"]["properties"])
 
 
 class StructuredWorkflowContractTests(unittest.TestCase):

@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+MODULE_DIR = Path(__file__).resolve().parent
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
+
+from local_response_contract import ResponseContractError, validate_content
+
 SCHEMA_VERSION = 1
 MODES = {"with_skill", "baseline_without_target_skill"}
 PAIR_FIELDS = (
@@ -34,6 +40,7 @@ PAIR_FIELDS = (
     "generation",
 )
 FORBIDDEN = {"winner", "skill_better", "quality_score", "promoted"}
+DERIVED_IMPACT_VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
 
 
 class LocalReceiptError(ValueError):
@@ -52,6 +59,47 @@ def _load(path: Path) -> dict[str, Any]:
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _derive_structured_impact_verdict(
+    response_path: Path,
+    response_contract_hash: str,
+    exit_code: int,
+) -> str | None:
+    if response_contract_hash == "NONE":
+        return None
+    if exit_code != 0:
+        return None
+    if not response_path.is_file():
+        raise LocalReceiptError("structured successful execution requires response file")
+
+    eval_root = response_path.parent.parent
+    contract = _load(eval_root / "response-contract.json")
+    context = _load(eval_root / "context.json")
+    validation_path = response_path.parent / "structured-validation.json"
+    validation = _load(validation_path)
+    if validation.get("status") != "VALID":
+        raise LocalReceiptError("successful structured execution requires VALID structured-validation")
+    if validation.get("response_contract_sha256") != response_contract_hash:
+        raise LocalReceiptError("structured-validation response-contract hash mismatch")
+
+    try:
+        result = validate_content(response_path.read_text(encoding="utf-8"), contract, context)
+    except (OSError, UnicodeError, ResponseContractError) as exc:
+        raise LocalReceiptError(f"structured response revalidation failed: {exc}") from exc
+    if not isinstance(result, dict):
+        raise LocalReceiptError("structured response revalidation result missing")
+    derived = result.get("derived_impact_verdict")
+    if derived not in DERIVED_IMPACT_VERDICTS:
+        raise LocalReceiptError("structured response derived impact verdict missing or invalid")
+
+    validation["derived_impact_verdict"] = derived
+    validation["validated_response_sha256"] = _sha(response_path)
+    validation_path.write_text(
+        json.dumps(validation, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return str(derived)
 
 
 def make_receipt(
@@ -107,6 +155,13 @@ def make_receipt(
     response_hash = _sha(response_path) if exists else None
     if exit_code == 0 and not response_hash:
         raise LocalReceiptError("successful execution requires response hash")
+
+    derived_impact_verdict = _derive_structured_impact_verdict(
+        response_path,
+        response_contract_hash,
+        int(exit_code),
+    )
+
     return {
         "schema_version": SCHEMA_VERSION,
         "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
@@ -135,6 +190,7 @@ def make_receipt(
         "generation": generation,
         "response_sha256": response_hash,
         "process_exit_code": int(exit_code),
+        "derived_impact_verdict": derived_impact_verdict,
         "executed_at_utc": datetime.now(timezone.utc).isoformat(),
         "trigger_observability": "UNOBSERVABLE_WITH_LOCAL_CONTEXT_INJECTION",
         "qualitative_verdict": None,
@@ -159,12 +215,23 @@ def _validate(receipt: dict[str, Any]) -> None:
     for key in receipt:
         if key.lower() in FORBIDDEN:
             raise LocalReceiptError(f"forbidden verdict key: {key}")
-    if int(receipt.get("process_exit_code", -999)) == 0 and not receipt.get("response_sha256"):
+    exit_code = int(receipt.get("process_exit_code", -999))
+    if exit_code == 0 and not receipt.get("response_sha256"):
         raise LocalReceiptError("successful receipt missing response hash")
     if receipt["mode"] == "with_skill" and not receipt.get("skill_guidance_sha256"):
         raise LocalReceiptError("with_skill receipt missing skill guidance hash")
     if receipt["mode"] == "baseline_without_target_skill" and receipt.get("skill_guidance_sha256") not in (None, ""):
         raise LocalReceiptError("baseline receipt contains skill guidance hash")
+
+    contract_hash = receipt.get("response_contract_sha256")
+    derived = receipt.get("derived_impact_verdict")
+    if contract_hash == "NONE":
+        if derived not in (None, ""):
+            raise LocalReceiptError("unstructured receipt must not carry derived impact verdict")
+    elif exit_code == 0 and derived not in DERIVED_IMPACT_VERDICTS:
+        raise LocalReceiptError("successful structured receipt missing derived impact verdict")
+    elif derived not in (None, "") and derived not in DERIVED_IMPACT_VERDICTS:
+        raise LocalReceiptError("derived impact verdict invalid")
 
 
 def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -178,6 +245,10 @@ def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     if a.get("full_prompt_sha256") == b.get("full_prompt_sha256"):
         raise LocalReceiptError("paired full prompts must differ because only with_skill includes target guidance")
     complete = int(a["process_exit_code"]) == 0 and int(b["process_exit_code"]) == 0
+    mode_verdicts = {
+        a["mode"]: a.get("derived_impact_verdict"),
+        b["mode"]: b.get("derived_impact_verdict"),
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "PAIR_VALID" if complete else "EXECUTION_INCOMPLETE",
@@ -190,6 +261,7 @@ def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "response_contract_sha256": a["response_contract_sha256"],
         "model_sha256": a["model_sha256"],
         "llama_artifact_sha256": a["llama_artifact_sha256"],
+        "mode_derived_impact_verdicts": mode_verdicts,
         "trigger_observability": "UNOBSERVABLE_WITH_LOCAL_CONTEXT_INJECTION",
         "qualitative_verdict": None,
     }

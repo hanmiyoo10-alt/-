@@ -14,7 +14,12 @@ MODULE_DIR = Path(__file__).resolve().parent
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
-from local_response_contract import ResponseContractError, contract_sha256, load_contract
+from local_response_contract import (
+    ResponseContractError,
+    contract_sha256,
+    evidence_legend,
+    load_contract,
+)
 
 SCHEMA_VERSION = 1
 MODES = {"with_skill", "baseline_without_target_skill"}
@@ -72,6 +77,12 @@ def compose(
             raise PromptError("skill guidance is empty")
         skill_guidance_sha256 = sha256_bytes(skill_guidance.encode("utf-8"))
 
+    structured = response_contract is not None
+    grounding_frame = (
+        "For every non-UNKNOWN semantic edge or preservation claim, use only an evidence ID from the supplied EVIDENCE ID LEGEND; do not write or invent source paths or anchors in the output.\n"
+        if structured
+        else "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
+    )
     system_frame = (
         "You are evaluating a repository Agent Skill. Answer the USER TASK only.\n"
         "For mutable repository facts, use only the supplied SOURCE EVIDENCE.\n"
@@ -80,15 +91,23 @@ def compose(
         "Synthesize the supplied guidance and evidence before writing the answer.\n"
         "Return only the compact final answer; do not restate, quote, summarize, or reproduce TARGET SKILL GUIDANCE, its procedure/completion criteria, or raw SOURCE EVIDENCE.\n"
         "Do not use generic placeholders such as 'producer -> request/state metadata -> consumer' when SOURCE EVIDENCE names exact paths or symbols.\n"
-        "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
+        f"{grounding_frame}"
         "Keep the answer concise and source-grounded."
     )
+
     contract_section = ""
     if response_contract is not None:
         instruction = response_contract.get("prompt_instruction")
         if not isinstance(instruction, str) or not instruction.strip():
             raise PromptError("response contract prompt_instruction missing")
-        contract_section = f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}"
+        legend = evidence_legend(response_contract, context)
+        contract_section = (
+            f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
+            "EVIDENCE ID LEGEND\n"
+            f"{legend}\n"
+            "Use the ID token in JSON basis fields; the path and anchor shown here are grounding references only."
+        )
+
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"
     full_prompt = (
         f"SYSTEM FRAME\n{system_frame}{contract_section}\n\n"

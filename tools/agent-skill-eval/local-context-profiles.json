@@ -108,6 +108,99 @@
           "max_bytes": 14000
         }
       ],
+      "simcore-3m3-structured-sidecar-validation-heldout": [
+        {
+          "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+          "path": "docs/SIMCORE_GUIDELINES.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Current production behavior and production code",
+            "TAIL_AFTER_CURRENT_USER",
+            "Diagnostic code should not materially alter runtime behavior.",
+            "Persistent vs Memory-Only State"
+          ],
+          "radius": 4,
+          "max_bytes": 8000
+        },
+        {
+          "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+          "path": "docs/SIMCORE_CONTRACTS_V2.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Runtime source authority remains exact `release-simcore`.",
+            "Structure judge-only acceptance / COMMUNITY quarantine",
+            "persistent Core schema",
+            "network/timer/provider-routing policy"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+          "path": "docs/SIMCORE_3M_SOURCE_INTELLIGENCE_MASTER_DESIGN_2026-09-01.md",
+          "mode": "needle_windows",
+          "needles": [
+            "release-simcore = production runtime authority",
+            "SOURCE PROJECTION ENVELOPE",
+            "STRUCTURED SOURCE SIDECAR PAYLOAD",
+            "derived source payload"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+          "path": "docs/SIMCORE_3M_1_SOURCE_PROJECTION_ENVELOPE_LEGACY_COMMUNITY_COMPATIBILITY_DESIGN_2026-09-01.md",
+          "mode": "needle_windows",
+          "needles": [
+            "`expectedCommunityBlocks(mode)` owns the count contract.",
+            "Current Structure validation owns",
+            "3M-1 must not scan history independently",
+            "PROMPT_BYTES_DELTA = 0"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+          "path": "docs/SIMCORE_3M_2_SOURCE_ASSERTION_EXPOSURE_BOUNDARY_DESIGN_2026-09-01.md",
+          "mode": "needle_windows",
+          "needles": [
+            "3M-3 = structured sidecar + validator ownership",
+            "SourceAssertionPolicyReceipt",
+            "HANDOFF_EVIDENCE proves source relationship",
+            "legacy <COMMUNITY> prose"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+          "path": "docs/SIMCORE_B_SOURCE_MODE_C_EXPOSURE_RESTRAINT_CONTRACT_2026-09-01.md",
+          "mode": "needle_windows",
+          "needles": [
+            "CURRENT SOURCE AUTHORITY",
+            "communitySourceHandoffEligible == true",
+            "EVENT_FACT_SUPPORTED",
+            "UNKNOWN"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+          "path": "plugins/simcore/latest.js",
+          "mode": "needle_windows",
+          "needles": [
+            "// - Handoff: short-C source/parent-shift detection/state only",
+            "// - Evidence: authoritative request-message resolution + safe request-only source fencing",
+            "function expectedCommunityBlocks(mode) {",
+            "if (p.mode === 'C' && p.communitySourceHandoffEligible) {"
+          ],
+          "radius": 4,
+          "max_bytes": 10000
+        }
+      ],
       "narrow-negative": []
     }
   }

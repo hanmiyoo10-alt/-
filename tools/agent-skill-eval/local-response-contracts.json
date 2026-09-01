@@ -3,9 +3,9 @@
   "contracts": {
     "plugin-impact-scope": {
       "service-tier-fidelity": {
-        "id": "impact-scope-evidence-compat-v4",
+        "id": "impact-scope-derived-verdict-v5",
         "expected_scope": "plugin:usage-dashboard",
-        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For every non-UNKNOWN claim basis, use only an evidence ID permitted for that claim by CLAIM EVIDENCE COMPATIBILITY. UNKNOWN means no evidence. Never write source paths or anchors in the output. Use the fewest entries needed: at most 3 distinct flow edges, 2 tests, and 2 blocked claims. Do not add prose before or after the JSON.",
+        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For every non-UNKNOWN claim basis, use only an evidence ID permitted for that claim by CLAIM EVIDENCE COMPATIBILITY. UNKNOWN means no evidence. Never write source paths or anchors in the output. Do not emit a verdict field; the evaluator derives the impact-map verdict mechanically from validated evidence bases. Use the fewest entries needed: at most 3 distinct flow edges, 2 tests, and 2 blocked claims. Do not add prose before or after the JSON.",
         "evidence_registry": {
           "E1": {
             "source_path": "docs/REPO_PROJECT_CATALOG.md",

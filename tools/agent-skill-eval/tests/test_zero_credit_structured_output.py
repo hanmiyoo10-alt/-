@@ -57,7 +57,6 @@ class StructuredOutputContractTests(unittest.TestCase):
                 "status": "DIRECT",
                 "source_path": "docs/REPO_PROJECT_CATALOG.md",
                 "source_anchor": "plugin:usage-dashboard",
-                "note": "current catalog scope",
             },
             "flow_edges": [
                 {
@@ -66,7 +65,6 @@ class StructuredOutputContractTests(unittest.TestCase):
                     "status": "DIRECT",
                     "source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs",
                     "source_anchor": "serviceTierSelectionSource",
-                    "note": "selection source captured into request metadata",
                 },
                 {
                     "from": "request metadata",
@@ -74,42 +72,36 @@ class StructuredOutputContractTests(unittest.TestCase):
                     "status": "DIRECT",
                     "source_path": "plugins/usage-dashboard/src/40-diagnostics.part.js",
                     "source_anchor": "requestServiceTierSelectionSourceText",
-                    "note": "consumer formatting surface",
                 },
             ],
             "request_identity": {
                 "status": "DIRECT",
                 "source_path": "plugins/usage-dashboard/src/14-request-ledger.part.js",
                 "source_anchor": "requestLedgerKey",
-                "note": "preserve ledger identity key",
             },
             "no_extra_io": {
                 "status": "DIRECT",
                 "source_path": "plugins/usage-dashboard/src/14-request-ledger.part.js",
                 "source_anchor": "noExtraIoGuard",
-                "note": "preserve no-extra-I/O boundary",
             },
             "tests": [
                 {
                     "status": "DIRECT",
                     "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
                     "source_anchor": "P50_SERVICE_TIER_SELECTION_SOURCE_FIDELITY",
-                    "note": "existing fidelity regression surface",
                 }
             ],
             "generated_release": {
                 "status": "UNKNOWN",
                 "source_path": "",
                 "source_anchor": "",
-                "note": "not established by bounded evidence",
             },
             "narrowest_boundary": {
                 "status": "DIRECT",
                 "source_path": "plugins/usage-dashboard/src/40-diagnostics.part.js",
                 "source_anchor": "diagnosticsSelectionSource",
-                "note": "bounded to capture plus existing request presentation consumers",
             },
-            "blocked_claims": ["generated/release ownership remains unresolved"],
+            "blocked_claims": ["generated/release ownership unresolved"],
             "verdict": "PARTIAL",
         }
 
@@ -117,6 +109,17 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertIsNotNone(self.contract())
         self.assertIsNone(contract_mod.load_contract(ROOT / "local-response-contracts.json", "plugin-impact-scope", "narrow-negative"))
         self.assertIsNone(contract_mod.load_contract(ROOT / "local-response-contracts.json", "plugin-authority-scan", "1"))
+
+    def test_contract_stays_compact_for_768_lane(self):
+        contract = self.contract()
+        self.assertEqual(contract["id"], "impact-scope-source-linked-v2")
+        props = contract["schema"]["properties"]
+        self.assertEqual(props["flow_edges"]["maxItems"], 3)
+        self.assertEqual(props["tests"]["maxItems"], 2)
+        self.assertEqual(props["blocked_claims"]["maxItems"], 2)
+        self.assertNotIn("note", props["authority"]["properties"])
+        self.assertNotIn("note", props["flow_edges"]["items"]["properties"])
+        self.assertIn("fewest entries needed", contract["prompt_instruction"])
 
     def test_response_format_uses_schema_constraint(self):
         contract = self.contract()
@@ -146,6 +149,25 @@ class StructuredOutputContractTests(unittest.TestCase):
     def test_duplicate_flow_edge_is_rejected(self):
         payload = self.valid_payload()
         payload["flow_edges"].append(dict(payload["flow_edges"][0]))
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+
+    def test_flow_edge_cap_is_enforced(self):
+        payload = self.valid_payload()
+        payload["flow_edges"].append({
+            "from": "ledger",
+            "to": "diagnostics",
+            "status": "DIRECT",
+            "source_path": "plugins/usage-dashboard/src/14-request-ledger.part.js",
+            "source_anchor": "requestIdentityStable",
+        })
+        payload["flow_edges"].append({
+            "from": "diagnostics",
+            "to": "test",
+            "status": "DIRECT",
+            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
+            "source_anchor": "noExtraIoGuard",
+        })
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 

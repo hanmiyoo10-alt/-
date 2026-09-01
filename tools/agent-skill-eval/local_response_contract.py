@@ -11,8 +11,8 @@ from typing import Any
 SCHEMA_VERSION = 1
 CLAIM_STATUSES = {"DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"}
 VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
-CLAIM_KEYS = {"status", "source_path", "source_anchor", "note"}
-EDGE_KEYS = {"from", "to", "status", "source_path", "source_anchor", "note"}
+CLAIM_KEYS = {"status", "source_path", "source_anchor"}
+EDGE_KEYS = {"from", "to", "status", "source_path", "source_anchor"}
 TOP_LEVEL_KEYS = {
     "scope",
     "authority",
@@ -120,8 +120,7 @@ def _validate_claim(value: Any, label: str, sources: dict[str, str]) -> dict[str
     if status not in CLAIM_STATUSES:
         raise ResponseContractError(f"{label}.status invalid")
     source_path = _bounded_string(value.get("source_path"), f"{label}.source_path", 180)
-    source_anchor = _bounded_string(value.get("source_anchor"), f"{label}.source_anchor", 120)
-    _bounded_string(value.get("note"), f"{label}.note", 220)
+    source_anchor = _bounded_string(value.get("source_anchor"), f"{label}.source_anchor", 100)
     if status == "UNKNOWN":
         if source_path or source_anchor:
             raise ResponseContractError(f"{label} UNKNOWN must not invent source_path/source_anchor")
@@ -140,8 +139,8 @@ def _validate_edge(value: Any, index: int, sources: dict[str, str]) -> dict[str,
     label = f"flow_edges[{index}]"
     if not isinstance(value, dict) or set(value) != EDGE_KEYS:
         raise ResponseContractError(f"{label} must contain exactly {sorted(EDGE_KEYS)}")
-    _bounded_string(value.get("from"), f"{label}.from", 120, allow_empty=False)
-    _bounded_string(value.get("to"), f"{label}.to", 120, allow_empty=False)
+    _bounded_string(value.get("from"), f"{label}.from", 100, allow_empty=False)
+    _bounded_string(value.get("to"), f"{label}.to", 100, allow_empty=False)
     _validate_claim({key: value[key] for key in CLAIM_KEYS}, label, sources)
     return value
 
@@ -159,8 +158,8 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
     sources = _source_map(context)
     _validate_claim(payload.get("authority"), "authority", sources)
     edges = payload.get("flow_edges")
-    if not isinstance(edges, list) or not 1 <= len(edges) <= 5:
-        raise ResponseContractError("flow_edges must contain 1-5 entries")
+    if not isinstance(edges, list) or not 1 <= len(edges) <= 3:
+        raise ResponseContractError("flow_edges must contain 1-3 entries")
     seen_edges: set[tuple[str, ...]] = set()
     for index, edge in enumerate(edges):
         _validate_edge(edge, index, sources)
@@ -171,17 +170,17 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
     request_identity = _validate_claim(payload.get("request_identity"), "request_identity", sources)
     no_extra_io = _validate_claim(payload.get("no_extra_io"), "no_extra_io", sources)
     tests = payload.get("tests")
-    if not isinstance(tests, list) or len(tests) > 4:
-        raise ResponseContractError("tests must contain at most 4 entries")
+    if not isinstance(tests, list) or len(tests) > 2:
+        raise ResponseContractError("tests must contain at most 2 entries")
     for index, item in enumerate(tests):
         _validate_claim(item, f"tests[{index}]", sources)
     generated_release = _validate_claim(payload.get("generated_release"), "generated_release", sources)
     narrowest_boundary = _validate_claim(payload.get("narrowest_boundary"), "narrowest_boundary", sources)
     blocked = payload.get("blocked_claims")
-    if not isinstance(blocked, list) or len(blocked) > 4:
-        raise ResponseContractError("blocked_claims must contain at most 4 entries")
+    if not isinstance(blocked, list) or len(blocked) > 2:
+        raise ResponseContractError("blocked_claims must contain at most 2 entries")
     for index, item in enumerate(blocked):
-        _bounded_string(item, f"blocked_claims[{index}]", 180)
+        _bounded_string(item, f"blocked_claims[{index}]", 120)
     verdict = payload.get("verdict")
     if verdict not in VERDICTS:
         raise ResponseContractError("verdict invalid")
@@ -194,6 +193,6 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
 def validate_content(content: str, contract: dict[str, Any] | None, context: dict[str, Any]) -> dict[str, Any] | None:
     if contract is None:
         return None
-    if contract.get("id") != "impact-scope-source-linked-v1":
+    if contract.get("id") != "impact-scope-source-linked-v2":
         raise ResponseContractError(f"unsupported response contract id: {contract.get('id')}")
     return validate_impact_scope_output(content, contract, context)

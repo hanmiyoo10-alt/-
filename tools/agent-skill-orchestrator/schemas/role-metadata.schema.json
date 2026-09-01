@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "role-metadata.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role_id", "purpose", "allowed_record_types", "can_self_verdict", "can_mutate", "accepts_raw_upstream_prose"],
+  "properties": {
+    "role_id": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]},
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 256},
+    "allowed_record_types": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["claim", "flow_edge", "boundary", "blocker", "conflict"]}
+    },
+    "can_self_verdict": {"type": "boolean", "const": false},
+    "can_mutate": {"type": "boolean", "const": false},
+    "accepts_raw_upstream_prose": {"type": "boolean", "const": false}
+  }
+}

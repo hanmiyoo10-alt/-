@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "profile_id": "qwen2.5-1.5b-instruct-q4_k_m",
+      "local_model_id": "qwen2.5-1.5b-instruct-q4_k_m-local",
+      "family": "qwen2.5",
+      "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+      "revision": "a615a81362316d7b9f5a7a9c4313adfdf9b54588",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "license": {
+        "id": "apache-2.0",
+        "status": "verified_metadata",
+        "source": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+      },
+      "access": {
+        "class": "public_unauthenticated_https",
+        "source": ".github/workflows/agent-skill-zero-credit-eval.yml#Download and verify pinned local model"
+      },
+      "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
+      "enabled": true
+    },
+    {
+      "profile_id": "qwen2.5-3b-instruct-q4_k_m",
+      "local_model_id": "qwen2.5-3b-instruct-q4_k_m-local",
+      "family": "qwen2.5",
+      "repository": "Qwen/Qwen2.5-3B-Instruct-GGUF",
+      "revision": "af75b7aaf5bb163ce4c5dab4e6b84d844e96265d",
+      "file": "qwen2.5-3b-instruct-q4_k_m.gguf",
+      "sha256": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d",
+      "license": {
+        "id": "qwen-research",
+        "status": "verified_metadata",
+        "source": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF"
+      },
+      "access": {
+        "class": "public_unauthenticated_https",
+        "source": ".github/workflows/agent-skill-zero-credit-eval.yml#Download and verify pinned local model"
+      },
+      "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
+      "enabled": true
+    }
+  ]
+}

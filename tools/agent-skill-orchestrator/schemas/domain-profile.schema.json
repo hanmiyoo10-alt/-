@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "domain-profile.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["domain_id", "scope", "name", "lifecycle", "primary_path", "authority_refs", "guidelines_path", "registration_semantics"],
+  "properties": {
+    "domain_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "scope": {"type": "string", "pattern": "^(plugin|product):[a-z0-9][a-z0-9._-]{0,127}$"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "lifecycle": {"type": "string", "minLength": 1, "maxLength": 64},
+    "primary_path": {"type": "string", "minLength": 1, "maxLength": 256},
+    "authority_refs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "value"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["release_branch", "manifest", "artifact", "release_spec_dir", "declared_by", "evidence", "current_state"]},
+          "value": {"type": "string", "minLength": 1, "maxLength": 256}
+        }
+      }
+    },
+    "guidelines_path": {"type": "string", "minLength": 1, "maxLength": 256},
+    "registration_semantics": {"type": "string", "const": "domain_metadata_only_no_skill_promotion"}
+  }
+}

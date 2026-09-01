@@ -20,8 +20,8 @@ def load(name: str, filename: str):
     return module
 
 
-contract_mod = load("local_response_contract_receipt_v6", "local_response_contract.py")
-receipt_mod = load("validate_local_receipt_v6", "validate_local_receipt.py")
+contract_mod = load("local_response_contract_receipt_v7", "local_response_contract.py")
+receipt_mod = load("validate_local_receipt_v7", "validate_local_receipt.py")
 
 
 class DerivedVerdictReceiptTests(unittest.TestCase):
@@ -72,10 +72,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
         return {
             "scope": "plugin:usage-dashboard",
             "authority": "DIRECT:E1",
-            "flow_edges": [
-                {"from": "capture", "to": "ledger", "basis": "DIRECT:E4"},
-                {"from": "ledger", "to": "diagnostics", "basis": "DIRECT:E7"},
-            ],
+            "flow_edges": ["F1", "F2", "F3"],
             "request_identity": "DIRECT:E5",
             "no_extra_io": "DIRECT:E6",
             "tests": ["DIRECT:E8"],
@@ -88,9 +85,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
         return {
             "scope": "plugin:usage-dashboard",
             "authority": "SUPPORTED_LIKELY:E1",
-            "flow_edges": [
-                {"from": "ledger", "to": "diagnostics", "basis": "SUPPORTED_LIKELY:E7"},
-            ],
+            "flow_edges": ["F2", "F3"],
             "request_identity": "UNKNOWN",
             "no_extra_io": "SUPPORTED_LIKELY:E6",
             "tests": ["SUPPORTED_LIKELY:E5", "SUPPORTED_LIKELY:E6"],
@@ -99,12 +94,11 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             "blocked_claims": ["request identity remains unresolved"],
         }
 
-    def r12_invalid_conflict_payload(self):
+    def invalid_free_form_flow_payload(self):
         payload = self.partial_payload()
-        payload["authority"] = "CONFLICT:E1"
-        payload["request_identity"] = "UNKNOWN"
-        payload["no_extra_io"] = "UNKNOWN"
-        payload["tests"] = ["CONFLICT:E5", "CONFLICT:E6"]
+        payload["flow_edges"] = [
+            {"from": "ledger", "to": "test", "basis": "DIRECT:E7"}
+        ]
         return payload
 
     def write_mode(self, eval_root: Path, mode: str, payload: dict, contract_hash: str) -> Path:
@@ -181,7 +175,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
         )
         return receipt, response_path
 
-    def test_receipt_revalidates_and_persists_derived_verdict(self):
+    def test_receipt_revalidates_grounded_flow_and_persists_derived_verdict(self):
         with tempfile.TemporaryDirectory() as td:
             receipt, response_path = self.make_receipt(
                 Path(td),
@@ -195,13 +189,13 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
             self.assertEqual(validation["derived_impact_verdict"], "PARTIAL")
             self.assertEqual(validation["validated_response_sha256"], receipt["response_sha256"])
 
-    def test_r12_style_unsupported_conflict_fails_before_receipt(self):
+    def test_free_form_flow_relation_fails_before_receipt(self):
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaises(receipt_mod.LocalReceiptError):
                 self.make_receipt(
                     Path(td),
                     "with_skill",
-                    self.r12_invalid_conflict_payload(),
+                    self.invalid_free_form_flow_payload(),
                     "1" * 64,
                     "2" * 64,
                 )

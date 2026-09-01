@@ -1,0 +1,202 @@
+name: Agent Skill Zero-Credit Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: Agent Skill to evaluate locally
+        required: true
+        type: choice
+        options:
+          - plugin-authority-scan
+          - plugin-impact-scope
+      case_id:
+        description: Exact output eval case id
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  local-output-pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EVAL_ROOT: .agent-skill-zero-credit-eval
+      LOCAL_MODEL_ID: qwen2.5-1.5b-instruct-q4_k_m-local
+      MODEL_REPOSITORY: Qwen/Qwen2.5-1.5B-Instruct-GGUF
+      MODEL_REVISION: a615a81362316d7b9f5a7a9c4313adfdf9b54588
+      MODEL_FILE: qwen2.5-1.5b-instruct-q4_k_m.gguf
+      MODEL_SHA256: 6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e
+      LLAMA_RELEASE: b10516
+      LLAMA_SOURCE_DIGEST: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      GENERATION_JSON: '{"temperature":0,"seed":42,"n_predict":512,"ctx_size":16384,"threads":4,"gpu_layers":0}'
+    steps:
+      - name: Checkout exact repository SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Fetch read-only Usage Dashboard release authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin \
+            release-usage-dashboard:refs/remotes/origin/release-usage-dashboard
+          git rev-parse refs/remotes/origin/release-usage-dashboard^{commit}
+
+      - name: Prepare output eval and bounded source context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVAL_ROOT/with_skill" "$EVAL_ROOT/baseline_without_target_skill"
+          python tools/agent-skill-eval/prepare_local_eval.py \
+            --repo-root . \
+            --skill '${{ inputs.skill }}' \
+            --case-id '${{ inputs.case_id }}' \
+            --repository-sha "$GITHUB_SHA" \
+            --output "$EVAL_ROOT/matrix.json"
+          python tools/agent-skill-eval/build_local_context.py \
+            --repo-root . \
+            --profile tools/agent-skill-eval/local-context-profiles.json \
+            --skill '${{ inputs.skill }}' \
+            --case-id '${{ inputs.case_id }}' \
+            --output "$EVAL_ROOT/context.json"
+          for mode in with_skill baseline_without_target_skill; do
+            python tools/agent-skill-eval/compose_local_prompt.py \
+              --matrix "$EVAL_ROOT/matrix.json" \
+              --context "$EVAL_ROOT/context.json" \
+              --skill-file ".agents/skills/${{ inputs.skill }}/SKILL.md" \
+              --mode "$mode" \
+              --prompt-output "$EVAL_ROOT/$mode/prompt.txt" \
+              --meta-output "$EVAL_ROOT/$mode/prompt-meta.json"
+          done
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zero-credit-runtime"
+          cd "$RUNNER_TEMP/zero-credit-runtime"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" > llama.sha256
+          sha256sum -c llama.sha256
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_cli="$(find extracted -type f -name llama-cli -perm -u+x -print -quit)"
+          if [[ -z "$llama_cli" ]]; then
+            echo 'ZERO_CREDIT_LLAMA_CLI:MISSING'
+            exit 2
+          fi
+          printf '%s\n' "$(realpath "$llama_cli")" > "$GITHUB_WORKSPACE/$EVAL_ROOT/llama-cli-path.txt"
+          "$llama_cli" --version > "$GITHUB_WORKSPACE/$EVAL_ROOT/llama-runtime-version.txt" 2>&1
+
+      - name: Download and verify pinned local model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zero-credit-model"
+          cd "$RUNNER_TEMP/zero-credit-model"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$MODEL_FILE" \
+            "https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
+          printf '%s  %s\n' "$MODEL_SHA256" "$MODEL_FILE" > model.sha256
+          sha256sum -c model.sha256
+          printf '%s\n' "$(realpath "$MODEL_FILE")" > "$GITHUB_WORKSPACE/$EVAL_ROOT/model-path.txt"
+
+      - name: Run zero-credit local pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          llama_cli="$(cat "$EVAL_ROOT/llama-cli-path.txt")"
+          model_path="$(cat "$EVAL_ROOT/model-path.txt")"
+          for mode in with_skill baseline_without_target_skill; do
+            prompt_file="$EVAL_ROOT/$mode/prompt.txt"
+            response_file="$EVAL_ROOT/$mode/response.txt"
+            stderr_file="$EVAL_ROOT/$mode/stderr.txt"
+            set +e
+            "$llama_cli" \
+              -m "$model_path" \
+              -cnv -st \
+              -p "$(cat "$prompt_file")" \
+              --temp 0 \
+              --seed 42 \
+              -n 512 \
+              -c 16384 \
+              -t 4 \
+              -ngl 0 \
+              --no-display-prompt \
+              --no-show-timings \
+              -co off \
+              >"$response_file" 2>"$stderr_file"
+            code=$?
+            set -e
+            printf '%s\n' "$code" > "$EVAL_ROOT/$mode/exit-code.txt"
+            echo "ZERO_CREDIT_MODE_EXIT:$mode:$code"
+          done
+
+      - name: Build and validate zero-credit receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_version="$(tr '\n' ' ' < "$EVAL_ROOT/llama-runtime-version.txt" | sed 's/[[:space:]]*$//')"
+          if [[ -z "$runtime_version" ]]; then
+            echo 'ZERO_CREDIT_RUNTIME_VERSION:MISSING'
+            exit 2
+          fi
+          for mode in with_skill baseline_without_target_skill; do
+            code="$(cat "$EVAL_ROOT/$mode/exit-code.txt")"
+            python tools/agent-skill-eval/validate_local_receipt.py make \
+              --matrix "$EVAL_ROOT/matrix.json" \
+              --context "$EVAL_ROOT/context.json" \
+              --prompt-meta "$EVAL_ROOT/$mode/prompt-meta.json" \
+              --response "$EVAL_ROOT/$mode/response.txt" \
+              --exit-code "$code" \
+              --mode "$mode" \
+              --model-repository "$MODEL_REPOSITORY" \
+              --model-revision "$MODEL_REVISION" \
+              --model-file "$MODEL_FILE" \
+              --model-sha256 "$MODEL_SHA256" \
+              --llama-release "$LLAMA_RELEASE" \
+              --llama-source-digest "$LLAMA_SOURCE_DIGEST" \
+              --llama-artifact "$LLAMA_ARTIFACT" \
+              --llama-artifact-sha256 "$LLAMA_ARTIFACT_SHA256" \
+              --llama-runtime-version "$runtime_version" \
+              --generation-json "$GENERATION_JSON" \
+              --workflow-run-id "$GITHUB_RUN_ID" \
+              --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --output "$EVAL_ROOT/$mode/receipt.json"
+          done
+          python tools/agent-skill-eval/validate_local_receipt.py pair \
+            --with-receipt "$EVAL_ROOT/with_skill/receipt.json" \
+            --baseline-receipt "$EVAL_ROOT/baseline_without_target_skill/receipt.json" \
+            --output "$EVAL_ROOT/pair-validation.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('.agent-skill-zero-credit-eval/pair-validation.json').read_text(encoding='utf-8'))
+          print('ZERO_CREDIT_PAIR_STATUS:' + str(data.get('status')))
+          print('ZERO_CREDIT_TRIGGER_OBSERVABILITY:' + str(data.get('trigger_observability')))
+          if data.get('status') != 'PAIR_VALID':
+              raise SystemExit(3)
+          PY
+
+      - name: Upload bounded zero-credit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-zero-credit-eval-${{ inputs.skill }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-zero-credit-eval/
+          if-no-files-found: error
+          retention-days: 7

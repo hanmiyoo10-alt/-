@@ -109,6 +109,32 @@ class PromptTests(unittest.TestCase):
         self.assertIn("UNIQUE_TARGET_RULE_123", with_prompt)
         self.assertNotIn("UNIQUE_TARGET_RULE_123", base_prompt)
 
+    def test_pair_shares_synthesis_first_anti_echo_frame(self):
+        matrix = {"eval_kind": "output", "skill": "plugin-impact-scope", "case_id": "service-tier-fidelity", "prompt": "trace it"}
+        evidence = "SOURCE_PATH plugins/example.js SYMBOL requestKey"
+        context = {
+            "skill": "plugin-impact-scope",
+            "case_id": "service-tier-fidelity",
+            "context_text": evidence,
+            "context_sha256": context_mod.sha256_bytes(evidence.encode("utf-8")),
+        }
+        with tempfile.TemporaryDirectory() as td:
+            skill = Path(td) / "SKILL.md"
+            skill.write_text("target guidance", encoding="utf-8")
+            with_prompt, with_meta = prompt_mod.compose(matrix, context, skill, "with_skill")
+            base_prompt, base_meta = prompt_mod.compose(matrix, context, skill, "baseline_without_target_skill")
+        required = [
+            "Return only the compact final answer",
+            "do not restate, quote, summarize, or reproduce TARGET SKILL GUIDANCE",
+            "Do not use generic placeholders",
+            "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path",
+        ]
+        for phrase in required:
+            self.assertIn(phrase, with_prompt)
+            self.assertIn(phrase, base_prompt)
+        self.assertEqual(with_meta["user_task_sha256"], base_meta["user_task_sha256"])
+        self.assertEqual(with_meta["evidence_context_sha256"], base_meta["evidence_context_sha256"])
+
 
 class ReceiptTests(unittest.TestCase):
     def make_receipt(self, mode: str, prompt_hash: str, guidance_hash):

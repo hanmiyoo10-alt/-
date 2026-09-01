@@ -1,162 +1,90 @@
-# Agent Skill Zero-Credit Eval — Dynamic Claim Contract v9 Design
+# Agent Skill Zero-Credit Eval — Candidate Grounded Report v9 Implementation Note
 
-Status: **DESIGN FROZEN BEFORE IMPLEMENTATION**
+Status: **RECONCILED WITH CURRENT MAIN DESIGN BEFORE ANY DEVPASS MODEL OUTPUT**
 
 Date: 2026-09-02
 
-Baseline main: `3869b454daa6ddc04d72317e22e063784e086f0b`
+Original implementation baseline: `3869b454daa6ddc04d72317e22e063784e086f0b`
+Current design authority after concurrent main advance: `docs/REPOSITORY_PLUGIN_IMPACT_SCOPE_CANDIDATE_GROUNDED_REPORT_CONTRACT_DESIGN_2026-09-02.md` on main `813ad6c906267c32eba123eec941f9297721af24`.
 
-## Problem statement
+## Reconciliation
 
-The current structured zero-credit response contract proves a useful pattern for `plugin-impact-scope`, but only the `service-tier-fidelity` Usage Dashboard case has a structured contract. Candidate scopes without a contract fall back to free-form output. That free-form lane can be mechanically `PAIR_VALID` while still allowing a small local model to declare `Blocked claims: none` / an impact-scoped conclusion without proving source-specific authority, flow, preservation, security, lifecycle, completeness, validation, or release boundaries.
+An initial branch-only v9 draft proposed pre-registered case-specific C#/F# semantic claims. Before any DevPass model output was produced, current main added the repository design that explicitly forbids hidden expected owner/path/edge answers in a new candidate contract. The pre-registered C#/F# approach is therefore withdrawn and must not be used for the prospective DevPass proof.
 
-The failure is not candidate frozen-ref materialization. Termux and Voyage both materialized frozen candidate evidence successfully. The missing control is a fixture-agnostic structured grounding surface with evaluator-owned blockers and verdict.
+The implementation follows the repository design seam:
 
-## Design goal
-
-Add a new response-contract family that can represent the essential claims of any impact-scope case without hard-coding Usage Dashboard field names into evaluator code.
-
-The evaluator, not the model, remains the final authority for:
-
-- whether required source-backed flow edges were selected;
-- whether required claim slots were grounded in compatible evidence;
-- unresolved blockers; and
-- the derived impact verdict.
-
-## Non-goals
-
-- Do not alter `PILOT_VALIDATED_SCOPES`.
-- Do not promote SimCore, Termux, Voyage, DevPass, or any other scope.
-- Do not change normal plugin-impact-scope invocation authority.
-- Do not change product/runtime/release code.
-- Do not rerun Termux or Voyage and relabel them as independent generalization proof; their previous outputs are diagnostic/training evidence only.
-- Do not put answer-specific source paths, claim IDs, or expected values into generic Python control flow.
-- Do not let the model emit the final verdict or authoritative blocker list.
+`CANDIDATE_GROUNDED_REPORT_VALIDATION_GATE`
 
 ## Compatibility boundary
 
-`impact-scope-grounded-flow-v8` remains supported exactly as-is for the existing Usage Dashboard `service-tier-fidelity` case.
+`impact-scope-grounded-flow-v8` remains unchanged for the validated Usage Dashboard `service-tier-fidelity` case. Candidate v9 is additive and evaluation-only. It does not expand `PILOT_VALIDATED_SCOPES`, normal invocation authority, product/runtime/release authority, or deployment behavior.
 
-For v8:
+## Candidate v9 model-visible contract
 
-- schema shape remains unchanged;
-- prompt wording/layout remains unchanged;
-- claim-status compatibility remains unchanged;
-- derived-verdict behavior remains unchanged.
+The candidate model proposes generic semantic content rather than selecting hidden expected answers. The output contains the canonical generic categories:
 
-The new contract is additive and uses a distinct ID: `impact-scope-grounded-claims-v9`.
+- scope;
+- authority;
+- semantic owners;
+- flow edges;
+- request-identity preservation;
+- no-extra-I/O preservation;
+- other preservation boundaries;
+- tests/contracts/validation;
+- generated/release boundary;
+- narrowest supported impact boundary.
 
-## v9 raw contract shape
+Every affirmative non-`UNKNOWN` claim carries only bounded source references:
 
-A v9 case contains:
+- opaque `sourceBlockId` (`S#` assigned from the supplied context bundle);
+- short verbatim `sourceAnchor` occurring in that exact supplied block.
 
-- `id`
-- `expected_scope`
-- `prompt_instruction`
-- `evidence_registry`
-- `flow_edge_registry`
-- `required_flow_edge_ids`
-- `claim_registry`
-- `required_claim_ids`
+No case-specific expected owner names, expected flow endpoints, expected source paths, expected semantic claim IDs, blocker text, or final verdict are injected into the v9 response contract.
 
-### Evidence registry
+## Deterministic evaluator authority
 
-Same fail-closed `E# -> {source_path, source_anchor}` contract as v8. Every anchor must exist verbatim in the bounded source context.
+The evaluator checks only bounded mechanical properties:
 
-### Flow registry
+- source block ID exists;
+- anchor occurs verbatim in that supplied block;
+- status is valid;
+- required generic report categories are represented;
+- non-UNKNOWN claims are grounded;
+- unresolved required generic categories produce blockers;
+- final impact verdict follows mechanically.
 
-Same fail-closed registered `F#` edge contract as v8. Model output may select only registered IDs. Required flow coverage is evaluator-owned.
+It does **not** infer that an anchor semantically proves a model-proposed owner/edge. Semantic correctness remains post-run qualitative held-out scoring authority.
 
-### Dynamic claim registry
+Generic derived blockers are limited to category classes such as:
 
-Each `C#` entry contains:
+`authority`, `semantic_owners`, `flow`, `request_identity`, `no_extra_io`, `tests_contracts`, `generated_release`, `narrowest_boundary`, `conflict`.
 
-- `label`: short neutral semantic boundary name used only in the prompt legend;
-- `evidence_status_allowlist`: one or more compatible `E# -> [DIRECT|SUPPORTED_LIKELY|CONFLICT]` mappings.
+Verdict:
 
-Generic evaluator code must not know what a claim means. Meaning and evidence compatibility live in the case contract.
+- any grounded conflict -> `CONFLICT`;
+- unresolved authority or no useful grounded flow -> `UNKNOWN`;
+- useful grounding with unresolved required categories -> `PARTIAL`;
+- all required generic categories mechanically grounded and no blockers -> `SUPPORTED`.
 
-`required_claim_ids` determines which claim slots must resolve for a fully supported verdict. Every registered claim still appears in the JSON schema; non-required claims may remain `UNKNOWN` without blocking the final verdict.
+`SUPPORTED` is only mechanical report completeness. It is not semantic correctness and never promotes the candidate scope.
 
-## v9 model output shape
+## Prospective DevPass proof
 
-The model returns exactly:
+DevPass remains the first unseen prospective case. The task, hidden qualitative assertions, and exact source snapshot were frozen before any model output:
 
-```json
-{
-  "scope": "<expected scope>",
-  "flow_edges": ["F1"],
-  "claims": {
-    "C1": "DIRECT:E1",
-    "C2": "UNKNOWN"
-  }
-}
-```
+- candidate scope: `plugin:devpass`;
+- frozen source snapshot: `3869b454daa6ddc04d72317e22e063784e086f0b`;
+- bounded source surfaces: catalog, control-plane registry, DevPass README, DevPass guidelines;
+- issue #1120 freeze record created before model execution.
 
-Rules:
+The DevPass source profile is model-visible evidence, but the v9 structured contract does not pre-encode the expected semantic answer extracted from those sources.
 
-- no source paths or anchors in model output;
-- no free-form flow endpoints;
-- no unregistered claim IDs;
-- no model-owned verdict;
-- no model-owned blocker list;
-- `UNKNOWN` has no evidence suffix;
-- non-UNKNOWN bases must be a claim-compatible `STATUS:E#` pair.
+Termux, Voyage, and the prior SimCore held-out remain retired diagnostic/training evidence and cannot be reused as independent proof.
 
-## Mechanical derivation
+Before DevPass execution:
 
-For each required `C#`:
+1. implementation PR CI must pass;
+2. merged-main Agent Skills + SimCore Required must pass;
+3. existing Usage Dashboard v8 zero-credit regression must remain green.
 
-- `DIRECT` and `SUPPORTED_LIKELY` are resolved;
-- `UNKNOWN` blocks `claim:C#`;
-- `CONFLICT` is allowed only when explicitly listed for that claim/evidence and forces final `CONFLICT`.
-
-For each required `F#` not selected, derive `flow:F#`.
-
-Derived verdict:
-
-1. any grounded required/optional claim with `CONFLICT` -> `CONFLICT`;
-2. no selected flow edge and every claim is `UNKNOWN` -> `UNKNOWN`;
-3. every required claim resolved, every required flow edge selected, and no derived blockers -> `SUPPORTED`;
-4. otherwise -> `PARTIAL`.
-
-The structured-validation file and pair receipts continue to carry evaluator-derived verdict/blockers. `PAIR_VALID` remains execution/provenance validity, not a quality winner declaration.
-
-## Prompt compatibility
-
-Prompt composition must dispatch by contract ID.
-
-- v8 uses its existing wording byte-for-byte.
-- v9 receives a dynamic `CLAIM REGISTRY` / claim-compatibility legend and generic wording such as “registered claim basis”.
-- candidate scope projection remains unchanged and remains evaluation-only.
-
-## Mechanical regression plan
-
-Add tests that prove:
-
-1. existing v8 contract/prompt/derivation remains unchanged;
-2. v9 rejects malformed claim IDs, unknown evidence, invalid status compatibility, duplicate/unknown flow IDs, and model-owned extra fields;
-3. v9 derives `SUPPORTED`, `PARTIAL`, `UNKNOWN`, and `CONFLICT` mechanically from synthetic neutral contracts;
-4. v9 claim labels and evidence compatibility are contract data, not hard-coded Python branches;
-5. receipts revalidate v9 output and carry derived verdict/blockers;
-6. candidate scopes remain unpromoted.
-
-## First prospective proof after merge
-
-The first independent v9 proof must use a scope whose model output has not already been observed in this lane. DevPass is selected because it is already registered but not pilot-promoted, and current source exposes a bounded declared-update-channel / missing-artifact boundary.
-
-Prospective source snapshot for the DevPass case will be frozen before any DevPass model output is produced. The case will test source-backed impact scoping around a missing declared `plugins/devpass/latest.js` update artifact without creating a placeholder or inventing a new release authority.
-
-The prospective case/contract must preserve, at minimum:
-
-- declared update-channel authority on `main`;
-- the difference between an artifact locator and artifact presence (`DECLARED_MISSING`);
-- the fixed GitHub HTTPS update URL;
-- no placeholder artifact merely to make validation green;
-- secret-material exclusion;
-- no invented published behavior/version while the artifact is missing;
-- validation of the real artifact if it later exists;
-- no new publisher/release authority/writable durable-memory path inferred from bootstrap metadata;
-- no implementation/release-version/deployment choice in the eval answer.
-
-If the first DevPass v9 output is `PARTIAL`, `UNKNOWN`, `CONFLICT`, or execution-invalid, stop at evidence freeze + diagnosis. Do not tune and rerun the same held-out as independent proof.
+The first successful DevPass v9 execution is one-shot independent evidence. If mechanical with-skill verdict is not `SUPPORTED`, or later qualitative hidden assertions fail, freeze evidence and diagnose only; do not tune and reuse the same held-out as independent proof.

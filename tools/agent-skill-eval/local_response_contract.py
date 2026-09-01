@@ -13,7 +13,6 @@ SCHEMA_VERSION = 1
 CLAIM_STATUSES = {"DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"}
 EVIDENCE_STATUSES = CLAIM_STATUSES - {"UNKNOWN"}
 EVIDENCE_STATUS_ORDER = ("DIRECT", "SUPPORTED_LIKELY", "CONFLICT")
-EDGE_KEYS = {"from", "to", "basis"}
 TOP_LEVEL_KEYS = {
     "scope",
     "authority",
@@ -27,7 +26,6 @@ TOP_LEVEL_KEYS = {
 }
 BASIS_CLAIMS = (
     "authority",
-    "flow_edges",
     "request_identity",
     "no_extra_io",
     "tests",
@@ -35,6 +33,7 @@ BASIS_CLAIMS = (
     "narrowest_boundary",
 )
 EVIDENCE_ID_RE = re.compile(r"E[1-9][0-9]*\Z")
+FLOW_ID_RE = re.compile(r"F[1-9][0-9]*\Z")
 DERIVED_IMPACT_VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
 
 
@@ -102,6 +101,62 @@ def _validate_claim_evidence_status_allowlist(
     return result
 
 
+def _validate_flow_edge_registry(
+    value: Any,
+    evidence_registry: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, dict) or not 1 <= len(value) <= 8:
+        raise ResponseContractError("flow_edge_registry must contain 1-8 entries")
+    normalized: dict[str, dict[str, Any]] = {}
+    for flow_id, raw in value.items():
+        if not isinstance(flow_id, str) or FLOW_ID_RE.fullmatch(flow_id) is None:
+            raise ResponseContractError(f"invalid flow edge id: {flow_id}")
+        if not isinstance(raw, dict) or set(raw) != {"from", "to", "evidence_ids"}:
+            raise ResponseContractError(
+                f"flow edge {flow_id} must contain exactly from, to, evidence_ids"
+            )
+        source = raw.get("from")
+        target = raw.get("to")
+        evidence_ids = raw.get("evidence_ids")
+        if not isinstance(source, str) or not source.strip() or len(source) > 120:
+            raise ResponseContractError(f"flow edge {flow_id}.from invalid")
+        if not isinstance(target, str) or not target.strip() or len(target) > 120:
+            raise ResponseContractError(f"flow edge {flow_id}.to invalid")
+        if source == target:
+            raise ResponseContractError(f"flow edge {flow_id} must connect distinct endpoints")
+        if not isinstance(evidence_ids, list) or not 1 <= len(evidence_ids) <= 4:
+            raise ResponseContractError(f"flow edge {flow_id}.evidence_ids must contain 1-4 ids")
+        if len(evidence_ids) != len(set(evidence_ids)):
+            raise ResponseContractError(f"flow edge {flow_id}.evidence_ids contains duplicates")
+        for evidence_id in evidence_ids:
+            if not isinstance(evidence_id, str) or evidence_id not in evidence_registry:
+                raise ResponseContractError(
+                    f"flow edge {flow_id} references unknown evidence id: {evidence_id}"
+                )
+        normalized[flow_id] = {
+            "from": source.strip(),
+            "to": target.strip(),
+            "evidence_ids": list(evidence_ids),
+        }
+    return normalized
+
+
+def _validate_required_flow_edge_ids(
+    value: Any,
+    flow_registry: dict[str, Any],
+) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ResponseContractError("required_flow_edge_ids must be a non-empty list")
+    if len(value) != len(set(value)):
+        raise ResponseContractError("required_flow_edge_ids contains duplicates")
+    for flow_id in value:
+        if not isinstance(flow_id, str) or flow_id not in flow_registry:
+            raise ResponseContractError(
+                f"required_flow_edge_ids references unknown flow edge: {flow_id}"
+            )
+    return list(value)
+
+
 def _basis_enum(allowed: dict[str, list[str]]) -> list[str]:
     values = ["UNKNOWN"]
     for status in EVIDENCE_STATUS_ORDER:
@@ -115,9 +170,13 @@ def build_schema(contract: dict[str, Any]) -> dict[str, Any]:
     allowlist = contract.get("claim_evidence_status_allowlist")
     if not isinstance(allowlist, dict):
         raise ResponseContractError("claim_evidence_status_allowlist missing")
+    flow_registry = contract.get("flow_edge_registry")
+    if not isinstance(flow_registry, dict) or not flow_registry:
+        raise ResponseContractError("flow_edge_registry missing")
     expected_scope = contract.get("expected_scope")
     if not isinstance(expected_scope, str) or not expected_scope:
         raise ResponseContractError("expected_scope missing")
+    flow_ids = sorted(flow_registry, key=lambda value: int(value[1:]))
     return {
         "type": "object",
         "properties": {
@@ -125,21 +184,9 @@ def build_schema(contract: dict[str, Any]) -> dict[str, Any]:
             "authority": {"type": "string", "enum": _basis_enum(allowlist["authority"])},
             "flow_edges": {
                 "type": "array",
-                "minItems": 1,
-                "maxItems": 3,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "from": {"type": "string", "minLength": 1, "maxLength": 80},
-                        "to": {"type": "string", "minLength": 1, "maxLength": 80},
-                        "basis": {
-                            "type": "string",
-                            "enum": _basis_enum(allowlist["flow_edges"]),
-                        },
-                    },
-                    "required": ["from", "to", "basis"],
-                    "additionalProperties": False,
-                },
+                "minItems": 0,
+                "maxItems": min(3, len(flow_ids)),
+                "items": {"type": "string", "enum": flow_ids},
             },
             "request_identity": {
                 "type": "string",
@@ -206,12 +253,15 @@ def load_contract(path: Path, skill: str, case_id: str) -> dict[str, Any] | None
         "expected_scope",
         "prompt_instruction",
         "evidence_registry",
+        "flow_edge_registry",
+        "required_flow_edge_ids",
         "claim_evidence_status_allowlist",
     }
     if set(raw_contract) != expected:
         raise ResponseContractError(
             "response contract must contain exactly id, expected_scope, prompt_instruction, "
-            "evidence_registry, claim_evidence_status_allowlist"
+            "evidence_registry, flow_edge_registry, required_flow_edge_ids, "
+            "claim_evidence_status_allowlist"
         )
     for key in ("id", "expected_scope", "prompt_instruction"):
         if not isinstance(raw_contract.get(key), str) or not raw_contract[key].strip():
@@ -233,11 +283,21 @@ def load_contract(path: Path, skill: str, case_id: str) -> dict[str, Any] | None
             if not isinstance(entry.get(key), str) or not entry[key].strip():
                 raise ResponseContractError(f"evidence {evidence_id} {key} missing")
 
+    flow_registry = _validate_flow_edge_registry(
+        raw_contract.get("flow_edge_registry"),
+        registry,
+    )
+    required_flow_edge_ids = _validate_required_flow_edge_ids(
+        raw_contract.get("required_flow_edge_ids"),
+        flow_registry,
+    )
     allowlist = _validate_claim_evidence_status_allowlist(
         raw_contract.get("claim_evidence_status_allowlist"),
         registry,
     )
     contract = dict(raw_contract)
+    contract["flow_edge_registry"] = flow_registry
+    contract["required_flow_edge_ids"] = required_flow_edge_ids
     contract["claim_evidence_status_allowlist"] = allowlist
     contract["schema"] = build_schema(contract)
     return contract
@@ -329,11 +389,45 @@ def validate_evidence_registry(
     return validated
 
 
+def validate_flow_edge_registry(
+    contract: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    registry = validate_evidence_registry(contract, context)
+    flow_registry = contract.get("flow_edge_registry")
+    if not isinstance(flow_registry, dict) or not flow_registry:
+        raise ResponseContractError("flow_edge_registry missing")
+    validated: dict[str, dict[str, Any]] = {}
+    for flow_id in sorted(flow_registry, key=lambda value: int(value[1:])):
+        entry = flow_registry[flow_id]
+        if not isinstance(entry, dict) or set(entry) != {"from", "to", "evidence_ids"}:
+            raise ResponseContractError(f"flow edge {flow_id} malformed")
+        for evidence_id in entry["evidence_ids"]:
+            if evidence_id not in registry:
+                raise ResponseContractError(
+                    f"flow edge {flow_id} references unavailable evidence id: {evidence_id}"
+                )
+        validated[flow_id] = {
+            "from": entry["from"],
+            "to": entry["to"],
+            "evidence_ids": list(entry["evidence_ids"]),
+        }
+    return validated
+
+
 def evidence_legend(contract: dict[str, Any], context: dict[str, Any]) -> str:
     registry = validate_evidence_registry(contract, context)
     return "\n".join(
         f"{evidence_id} = {entry['source_path']} :: {entry['source_anchor']}"
         for evidence_id, entry in registry.items()
+    )
+
+
+def flow_edge_legend(contract: dict[str, Any], context: dict[str, Any]) -> str:
+    flow_registry = validate_flow_edge_registry(contract, context)
+    return "\n".join(
+        f"{flow_id} = {entry['from']} -> {entry['to']} :: {','.join(entry['evidence_ids'])}"
+        for flow_id, entry in flow_registry.items()
     )
 
 
@@ -383,30 +477,10 @@ def _validate_basis(
     return {"basis": basis, "status": status, "evidence_id": evidence_id}
 
 
-def _validate_edge(
-    value: Any,
-    index: int,
-    registry: dict[str, dict[str, str]],
-    allowed: dict[str, list[str]],
-) -> dict[str, Any]:
-    label = f"flow_edges[{index}]"
-    if not isinstance(value, dict) or set(value) != EDGE_KEYS:
-        raise ResponseContractError(
-            f"{label} must contain exactly {sorted(EDGE_KEYS)}"
-        )
-    _bounded_string(value.get("from"), f"{label}.from", 80, allow_empty=False)
-    _bounded_string(value.get("to"), f"{label}.to", 80, allow_empty=False)
-    return _validate_basis(
-        value.get("basis"),
-        f"{label}.basis",
-        registry,
-        allowed,
-    )
-
-
 def _derive_impact_verdict(
     authority: dict[str, Any],
-    edge_bases: list[dict[str, Any]],
+    selected_flow_edge_ids: list[str],
+    required_flow_edge_ids: list[str],
     request_identity: dict[str, Any],
     no_extra_io: dict[str, Any],
     test_bases: list[dict[str, Any]],
@@ -416,7 +490,6 @@ def _derive_impact_verdict(
 ) -> str:
     all_bases = [
         authority,
-        *edge_bases,
         request_identity,
         no_extra_io,
         *test_bases,
@@ -425,7 +498,10 @@ def _derive_impact_verdict(
     ]
     if any(item["status"] == "CONFLICT" for item in all_bases):
         return "CONFLICT"
-    if not any(item["status"] != "UNKNOWN" for item in all_bases):
+    has_any_grounding = bool(selected_flow_edge_ids) or any(
+        item["status"] != "UNKNOWN" for item in all_bases
+    )
+    if not has_any_grounding:
         return "UNKNOWN"
 
     required_preservation = (
@@ -439,9 +515,8 @@ def _derive_impact_verdict(
         item["status"] in {"DIRECT", "SUPPORTED_LIKELY"}
         for item in required_preservation
     )
-    has_source_backed_flow = any(
-        item["status"] in {"DIRECT", "SUPPORTED_LIKELY"}
-        for item in edge_bases
+    has_required_flow_chain = set(required_flow_edge_ids).issubset(
+        set(selected_flow_edge_ids)
     )
     has_source_backed_test = any(
         item["status"] in {"DIRECT", "SUPPORTED_LIKELY"}
@@ -449,7 +524,7 @@ def _derive_impact_verdict(
     )
     if (
         required_resolved
-        and has_source_backed_flow
+        and has_required_flow_chain
         and has_source_backed_test
         and not blocked_claims
     ):
@@ -479,6 +554,7 @@ def validate_impact_scope_output(
         )
 
     registry = validate_evidence_registry(contract, context)
+    flow_registry = validate_flow_edge_registry(contract, context)
     allowlist = contract.get("claim_evidence_status_allowlist")
     if not isinstance(allowlist, dict):
         raise ResponseContractError("claim_evidence_status_allowlist missing")
@@ -489,23 +565,21 @@ def validate_impact_scope_output(
         registry,
         allowlist["authority"],
     )
+
     edges = payload.get("flow_edges")
-    if not isinstance(edges, list) or not 1 <= len(edges) <= 3:
-        raise ResponseContractError("flow_edges must contain 1-3 entries")
-    seen_edges: set[tuple[str, str, str]] = set()
-    edge_bases: list[dict[str, Any]] = []
-    for index, edge in enumerate(edges):
-        edge_bases.append(
-            _validate_edge(edge, index, registry, allowlist["flow_edges"])
-        )
-        identity = (
-            str(edge["from"]),
-            str(edge["to"]),
-            str(edge["basis"]),
-        )
-        if identity in seen_edges:
-            raise ResponseContractError("duplicate flow edge rejected")
-        seen_edges.add(identity)
+    if not isinstance(edges, list) or len(edges) > min(3, len(flow_registry)):
+        raise ResponseContractError("flow_edges must contain at most 3 registered F# ids")
+    if any(not isinstance(flow_id, str) for flow_id in edges):
+        raise ResponseContractError("flow_edges must contain only registered F# ids")
+    if len(edges) != len(set(edges)):
+        raise ResponseContractError("duplicate flow edge id rejected")
+    selected_flow_edge_ids: list[str] = []
+    for index, flow_id in enumerate(edges):
+        if flow_id not in flow_registry:
+            raise ResponseContractError(
+                f"flow_edges[{index}] must reference a registered flow edge id"
+            )
+        selected_flow_edge_ids.append(flow_id)
 
     request_identity = _validate_basis(
         payload.get("request_identity"),
@@ -554,9 +628,13 @@ def validate_impact_scope_output(
     for index, item in enumerate(blocked):
         _bounded_string(item, f"blocked_claims[{index}]", 120)
 
+    required_flow_edge_ids = contract.get("required_flow_edge_ids")
+    if not isinstance(required_flow_edge_ids, list):
+        raise ResponseContractError("required_flow_edge_ids missing")
     derived_verdict = _derive_impact_verdict(
         authority,
-        edge_bases,
+        selected_flow_edge_ids,
+        required_flow_edge_ids,
         request_identity,
         no_extra_io,
         test_bases,
@@ -568,6 +646,13 @@ def validate_impact_scope_output(
         raise ResponseContractError("derived impact verdict invalid")
 
     result = dict(payload)
+    result["resolved_flow_edges"] = [
+        {
+            "id": flow_id,
+            **flow_registry[flow_id],
+        }
+        for flow_id in selected_flow_edge_ids
+    ]
     result["derived_impact_verdict"] = derived_verdict
     return result
 
@@ -579,7 +664,7 @@ def validate_content(
 ) -> dict[str, Any] | None:
     if contract is None:
         return None
-    if contract.get("id") != "impact-scope-evidence-status-compat-v6":
+    if contract.get("id") != "impact-scope-grounded-flow-v7":
         raise ResponseContractError(
             f"unsupported response contract id: {contract.get('id')}"
         )

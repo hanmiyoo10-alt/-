@@ -6,6 +6,7 @@ on:
       - '.agents/skills/**'
       - 'tools/agent-skill-eval/**'
       - '.github/workflows/agent-skill-live-eval.yml'
+      - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skills-ci.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - '.agents/skills/**'
       - 'tools/agent-skill-eval/**'
       - '.github/workflows/agent-skill-live-eval.yml'
+      - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skills-ci.yml'
 
 permissions:

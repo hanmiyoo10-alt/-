@@ -956,3 +956,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
 - Event ID: `04f96e03d188f4f6e41e7a8c9a17a2e0d5543e723614c3eb7ccdf815b0af3f1d`
 <!-- canonical-main-doc-promoted:04f96e03d188f4f6e41e7a8c9a17a2e0d5543e723614c3eb7ccdf815b0af3f1d -->
+
+### 2026-09-01 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `118adc91f08c2ef1cb0aa266d0a54db4e8502fbda042be00e27633bf3b90350f`
+<!-- canonical-main-doc-promoted:118adc91f08c2ef1cb0aa266d0a54db4e8502fbda042be00e27633bf3b90350f -->

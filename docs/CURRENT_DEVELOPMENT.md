@@ -962,7 +962,7 @@ output:
 SILENT_COMPAT
 CANONICAL 4180:931843fc
 FRESH 4100:ee834c48
-Δchars -80
+Δ -80
 OUTPUT_MISMATCH
 
 next request:
@@ -1202,10 +1202,9 @@ product runtime work
 → publish through the existing release authority only after qualification
 
 release-system work
-→ existing R2.8/R2.9/R2.10 authority remains unchanged
-→ current R v2 development wave is closed; new R work requires new operational evidence
+→ existing R2.8/R2.9 authority remains unchanged
+→ remain non-runtime and separately attributable
 → preserve the single publisher and existing main-write authority
-→ observe R2.10 naturally on the next genuine runtime release; this deferred proof is non-blocking
 
 parked performance work
 → v0.70.2 Cache Observer Cold-Path Attribution remains reserved / PARKED

@@ -201,6 +201,89 @@
           "max_bytes": 10000
         }
       ],
+      "termux-large-doc-background-autosave-heldout": [
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "docs/REPO_PROJECT_CATALOG.md",
+          "mode": "needle_windows",
+          "needles": ["plugin:termux-large-doc-editor"],
+          "radius": 3,
+          "max_bytes": 5000
+        },
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Production release branch: `UNKNOWN — not established yet`",
+            "state persistence",
+            "unnecessary network calls"
+          ],
+          "radius": 3,
+          "max_bytes": 7000
+        },
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "plugins/termux/large-doc-editor/README.md",
+          "mode": "needle_windows",
+          "needles": [
+            "This is **not** a Google Docs replacement, production release, or APK patch.",
+            "explicit atomic file save",
+            "fail-closed save if the source changed outside the editor"
+          ],
+          "radius": 3,
+          "max_bytes": 6000
+        },
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "plugins/termux/large-doc-editor/web/app.js",
+          "mode": "needle_windows",
+          "needles": [
+            "async function flushChunk()",
+            "async function saveDocument()",
+            "document.addEventListener(\"visibilitychange\"",
+            "state.dirtyChunk = true"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "plugins/termux/large-doc-editor/server.py",
+          "mode": "needle_windows",
+          "needles": [
+            "session.update_chunk(index, text)",
+            "if parsed.path == \"/api/save\":",
+            "\"code\": \"SOURCE_CHANGED\""
+          ],
+          "radius": 4,
+          "max_bytes": 8000
+        },
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "plugins/termux/large-doc-editor/chunk_store.py",
+          "mode": "needle_windows",
+          "needles": [
+            "self.dirty = True",
+            "if current_mtime_ns != self.original_mtime_ns:",
+            "os.replace(tmp_path, self.path)",
+            "self.dirty = False"
+          ],
+          "radius": 4,
+          "max_bytes": 8000
+        },
+        {
+          "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
+          "path": "plugins/termux/large-doc-editor/tests/test_chunk_store.py",
+          "mode": "needle_windows",
+          "needles": [
+            "def test_edit_and_atomic_save(self):",
+            "def test_external_change_fails_closed(self):"
+          ],
+          "radius": 4,
+          "max_bytes": 7000
+        }
+      ],
       "narrow-negative": []
     }
   }

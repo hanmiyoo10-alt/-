@@ -185,6 +185,25 @@ def load_cases(repo_root: Path, skill: str, eval_kind: str) -> tuple[Path, list[
     return fixture, cases
 
 
+def _normalize_candidate_scope(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise EvalPreparationError(f"{label} candidate_scope missing")
+    return value.strip()
+
+
+def _normalize_frozen_source_snapshot(value: Any, *, label: str) -> dict[str, str]:
+    if not isinstance(value, dict) or not value:
+        raise EvalPreparationError(f"{label} frozen_source_snapshot missing")
+    normalized: dict[str, str] = {}
+    for source_label, sha in value.items():
+        if not isinstance(source_label, str) or not source_label.strip():
+            raise EvalPreparationError(f"{label} frozen source label invalid")
+        if not isinstance(sha, str) or SHA_RE.fullmatch(sha) is None:
+            raise EvalPreparationError(f"{label} frozen source SHA invalid: {source_label}")
+        normalized[source_label] = sha
+    return normalized
+
+
 def _load_second_scope_candidate(
     repo_root: Path,
     skill: str,
@@ -198,25 +217,38 @@ def _load_second_scope_candidate(
     declared = payload.get("skill_name", payload.get("skill"))
     if declared != skill:
         raise EvalPreparationError(f"candidate fixture skill mismatch: {declared!r} != {skill!r}")
-    candidate_scope = payload.get("candidate_scope")
-    if not isinstance(candidate_scope, str) or not candidate_scope.strip():
-        raise EvalPreparationError("candidate_scope missing")
-    frozen = payload.get("frozen_source_snapshot")
-    if not isinstance(frozen, dict) or not frozen:
-        raise EvalPreparationError("candidate frozen_source_snapshot missing")
-    normalized_frozen: dict[str, str] = {}
-    for label, value in frozen.items():
-        if not isinstance(label, str) or not label.strip():
-            raise EvalPreparationError("candidate frozen source label invalid")
-        if not isinstance(value, str) or SHA_RE.fullmatch(value) is None:
-            raise EvalPreparationError(f"candidate frozen source SHA invalid: {label}")
-        normalized_frozen[label] = value
+
+    default_scope = _normalize_candidate_scope(
+        payload.get("candidate_scope"), label="candidate fixture"
+    )
+    default_frozen = _normalize_frozen_source_snapshot(
+        payload.get("frozen_source_snapshot"), label="candidate fixture"
+    )
     cases = _normalize_output_fixture(payload, skill)
-    meta = {
-        "fixture_class": "second_scope_candidate",
-        "candidate_scope": candidate_scope.strip(),
-        "candidate_frozen_source_snapshot": normalized_frozen,
-    }
+    raw_cases = payload.get("evals")
+    if raw_cases is None:
+        raw_cases = payload.get("cases")
+    assert isinstance(raw_cases, list)
+
+    for case, raw in zip(cases, raw_cases, strict=True):
+        has_scope_override = "candidate_scope" in raw
+        has_frozen_override = "frozen_source_snapshot" in raw
+        if has_scope_override != has_frozen_override:
+            raise EvalPreparationError(
+                f"candidate case {case['id']} must override candidate_scope and frozen_source_snapshot together"
+            )
+        if has_scope_override:
+            case["candidate_scope"] = _normalize_candidate_scope(
+                raw.get("candidate_scope"), label=f"candidate case {case['id']}"
+            )
+            case["candidate_frozen_source_snapshot"] = _normalize_frozen_source_snapshot(
+                raw.get("frozen_source_snapshot"), label=f"candidate case {case['id']}"
+            )
+        else:
+            case["candidate_scope"] = default_scope
+            case["candidate_frozen_source_snapshot"] = dict(default_frozen)
+
+    meta = {"fixture_class": "second_scope_candidate"}
     return fixture, cases, meta
 
 
@@ -282,8 +314,8 @@ def build_matrix(
         "modes": ["with_skill", "baseline_without_target_skill"],
     }
     if fixture_meta["fixture_class"] == "second_scope_candidate":
-        result["candidate_scope"] = fixture_meta["candidate_scope"]
-        result["candidate_frozen_source_snapshot"] = fixture_meta[
+        result["candidate_scope"] = selected["candidate_scope"]
+        result["candidate_frozen_source_snapshot"] = selected[
             "candidate_frozen_source_snapshot"
         ]
     return result

@@ -46,7 +46,7 @@ class PrepareEvalTests(unittest.TestCase):
         self.assertNotIn("candidate_scope", matrix)
         self.assertTrue(matrix["assertions"])
 
-    def test_second_scope_candidate_resolves_only_from_candidate_fixture(self):
+    def test_second_scope_candidate_resolves_legacy_default(self):
         matrix = prepare_eval.build_matrix(
             REPO_ROOT,
             "plugin-impact-scope",
@@ -64,6 +64,22 @@ class PrepareEvalTests(unittest.TestCase):
                 "main": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
                 "release-simcore": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
             },
+        )
+
+    def test_second_scope_candidate_resolves_termux_case_override(self):
+        matrix = prepare_eval.build_matrix(
+            REPO_ROOT,
+            "plugin-impact-scope",
+            "output",
+            "termux-large-doc-background-autosave-heldout",
+            "gpt-5.4",
+            "b" * 40,
+        )
+        self.assertEqual(matrix["fixture_class"], "second_scope_candidate")
+        self.assertEqual(matrix["candidate_scope"], "plugin:termux-large-doc-editor")
+        self.assertEqual(
+            matrix["candidate_frozen_source_snapshot"],
+            {"main": "f01c2ef304656de9254191ec2fb9a2c046642f21"},
         )
 
     def test_candidate_fixture_requires_explicit_not_promoted_status(self):
@@ -85,6 +101,95 @@ class PrepareEvalTests(unittest.TestCase):
             )
             with self.assertRaises(prepare_eval.EvalPreparationError):
                 prepare_eval._load_second_scope_candidate(root, "plugin-impact-scope")
+
+    def test_candidate_case_overrides_scope_and_snapshot_as_a_pair(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            eval_dir = root / ".agents/skills/plugin-impact-scope/evals"
+            eval_dir.mkdir(parents=True)
+            (eval_dir / "second_scope_candidate_evals.json").write_text(
+                json.dumps(
+                    {
+                        "skill_name": "plugin-impact-scope",
+                        "status": "CANDIDATE_ONLY_NOT_PROMOTED",
+                        "candidate_scope": "plugin:simcore",
+                        "frozen_source_snapshot": {"main": "a" * 40},
+                        "evals": [
+                            {"id": "legacy", "prompt": "legacy"},
+                            {
+                                "id": "override",
+                                "prompt": "override",
+                                "candidate_scope": "plugin:termux-large-doc-editor",
+                                "frozen_source_snapshot": {"main": "b" * 40},
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _, cases, meta = prepare_eval._load_second_scope_candidate(
+                root, "plugin-impact-scope"
+            )
+            self.assertEqual(meta, {"fixture_class": "second_scope_candidate"})
+            self.assertEqual(cases[0]["candidate_scope"], "plugin:simcore")
+            self.assertEqual(cases[0]["candidate_frozen_source_snapshot"], {"main": "a" * 40})
+            self.assertEqual(cases[1]["candidate_scope"], "plugin:termux-large-doc-editor")
+            self.assertEqual(cases[1]["candidate_frozen_source_snapshot"], {"main": "b" * 40})
+
+    def test_candidate_case_partial_override_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            eval_dir = root / ".agents/skills/plugin-impact-scope/evals"
+            eval_dir.mkdir(parents=True)
+            (eval_dir / "second_scope_candidate_evals.json").write_text(
+                json.dumps(
+                    {
+                        "skill_name": "plugin-impact-scope",
+                        "status": "CANDIDATE_ONLY_NOT_PROMOTED",
+                        "candidate_scope": "plugin:simcore",
+                        "frozen_source_snapshot": {"main": "a" * 40},
+                        "evals": [
+                            {
+                                "id": "partial",
+                                "prompt": "partial",
+                                "candidate_scope": "plugin:termux-large-doc-editor",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(prepare_eval.EvalPreparationError) as ctx:
+                prepare_eval._load_second_scope_candidate(root, "plugin-impact-scope")
+            self.assertIn("must override candidate_scope and frozen_source_snapshot together", str(ctx.exception))
+
+    def test_candidate_case_malformed_snapshot_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            eval_dir = root / ".agents/skills/plugin-impact-scope/evals"
+            eval_dir.mkdir(parents=True)
+            (eval_dir / "second_scope_candidate_evals.json").write_text(
+                json.dumps(
+                    {
+                        "skill_name": "plugin-impact-scope",
+                        "status": "CANDIDATE_ONLY_NOT_PROMOTED",
+                        "candidate_scope": "plugin:simcore",
+                        "frozen_source_snapshot": {"main": "a" * 40},
+                        "evals": [
+                            {
+                                "id": "bad",
+                                "prompt": "bad",
+                                "candidate_scope": "plugin:termux-large-doc-editor",
+                                "frozen_source_snapshot": {"main": "not-a-sha"},
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(prepare_eval.EvalPreparationError) as ctx:
+                prepare_eval._load_second_scope_candidate(root, "plugin-impact-scope")
+            self.assertIn("frozen source SHA invalid", str(ctx.exception))
 
     def test_authority_trigger_array_schema_normalizes(self):
         _, cases = prepare_eval.load_cases(REPO_ROOT, "plugin-authority-scan", "trigger")

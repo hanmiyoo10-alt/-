@@ -132,18 +132,34 @@ jobs:
             release-usage-dashboard:refs/remotes/origin/release-usage-dashboard
           git rev-parse refs/remotes/origin/release-usage-dashboard^{commit}
 
-          if [[ "$EVAL_SKILL" == 'plugin-impact-scope' && "$EVAL_CASE_ID" == 'simcore-3m3-structured-sidecar-validation-heldout' ]]; then
-            for frozen_sha in \
-              e4daaa427ed902ca6f8368c45d509f7fd0f26d42 \
-              861100f4771967aa5b8ab8811d06f11702c0d3ff
-            do
-              if ! git cat-file -e "${frozen_sha}^{commit}" 2>/dev/null; then
-                git fetch --no-tags --depth=1 origin "$frozen_sha"
-              fi
-              test "$(git rev-parse "${frozen_sha}^{commit}")" = "$frozen_sha"
-              echo "ZERO_CREDIT_FROZEN_AUTHORITY_SHA:$frozen_sha"
-            done
-          fi
+          preflight_matrix="$EVAL_ROOT/frozen-ref-preflight-matrix.json"
+          python tools/agent-skill-eval/prepare_local_eval.py \
+            --repo-root . \
+            --skill "$EVAL_SKILL" \
+            --case-id "$EVAL_CASE_ID" \
+            --repository-sha "$EVAL_REPOSITORY_SHA" \
+            --model-id "$LOCAL_MODEL_ID" \
+            --output "$preflight_matrix"
+
+          mapfile -t frozen_shas < <(python - <<'PY'
+          import json
+          from pathlib import Path
+          matrix = json.loads(Path('.agent-skill-zero-credit-eval/frozen-ref-preflight-matrix.json').read_text(encoding='utf-8'))
+          snapshot = matrix.get('candidate_frozen_source_snapshot') or {}
+          if not isinstance(snapshot, dict):
+              raise SystemExit('candidate_frozen_source_snapshot must be an object')
+          for sha in sorted(set(snapshot.values())):
+              print(sha)
+          PY
+          )
+          for frozen_sha in "${frozen_shas[@]}"; do
+            if ! git cat-file -e "${frozen_sha}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$frozen_sha"
+            fi
+            test "$(git rev-parse "${frozen_sha}^{commit}")" = "$frozen_sha"
+            echo "ZERO_CREDIT_FROZEN_AUTHORITY_SHA:$frozen_sha"
+          done
+          rm -f "$preflight_matrix"
 
       - name: Prepare output eval and bounded source context
         shell: bash

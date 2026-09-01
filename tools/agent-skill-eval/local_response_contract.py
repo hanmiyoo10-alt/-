@@ -5,14 +5,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 1
 CLAIM_STATUSES = {"DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"}
+EVIDENCE_STATUSES = CLAIM_STATUSES - {"UNKNOWN"}
 VERDICTS = {"SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"}
-CLAIM_KEYS = {"status", "source_path", "source_anchor"}
-EDGE_KEYS = {"from", "to", "status", "source_path", "source_anchor"}
+EDGE_KEYS = {"from", "to", "basis"}
 TOP_LEVEL_KEYS = {
     "scope",
     "authority",
@@ -25,6 +26,7 @@ TOP_LEVEL_KEYS = {
     "blocked_claims",
     "verdict",
 }
+EVIDENCE_ID_RE = re.compile(r"E[1-9][0-9]*\Z")
 
 
 class ResponseContractError(ValueError):
@@ -68,12 +70,25 @@ def load_contract(path: Path, skill: str, case_id: str) -> dict[str, Any] | None
         return None
     if not isinstance(contract, dict):
         raise ResponseContractError("response contract must be an object")
-    expected = {"id", "expected_scope", "prompt_instruction", "schema"}
+    expected = {"id", "expected_scope", "prompt_instruction", "evidence_registry", "schema"}
     if set(contract) != expected:
-        raise ResponseContractError("response contract must contain exactly id, expected_scope, prompt_instruction, schema")
+        raise ResponseContractError(
+            "response contract must contain exactly id, expected_scope, prompt_instruction, evidence_registry, schema"
+        )
     for key in ("id", "expected_scope", "prompt_instruction"):
         if not isinstance(contract.get(key), str) or not contract[key].strip():
             raise ResponseContractError(f"response contract {key} missing")
+    registry = contract.get("evidence_registry")
+    if not isinstance(registry, dict) or not 1 <= len(registry) <= 16:
+        raise ResponseContractError("response contract evidence_registry must contain 1-16 entries")
+    for evidence_id, entry in registry.items():
+        if not isinstance(evidence_id, str) or EVIDENCE_ID_RE.fullmatch(evidence_id) is None:
+            raise ResponseContractError(f"invalid evidence id: {evidence_id}")
+        if not isinstance(entry, dict) or set(entry) != {"source_path", "source_anchor"}:
+            raise ResponseContractError(f"evidence {evidence_id} must contain exactly source_path and source_anchor")
+        for key in ("source_path", "source_anchor"):
+            if not isinstance(entry.get(key), str) or not entry[key].strip():
+                raise ResponseContractError(f"evidence {evidence_id} {key} missing")
     if not isinstance(contract.get("schema"), dict):
         raise ResponseContractError("response contract schema missing")
     return contract
@@ -113,36 +128,60 @@ def _source_map(context: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-def _validate_claim(value: Any, label: str, sources: dict[str, str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != CLAIM_KEYS:
-        raise ResponseContractError(f"{label} must contain exactly {sorted(CLAIM_KEYS)}")
-    status = value.get("status")
-    if status not in CLAIM_STATUSES:
-        raise ResponseContractError(f"{label}.status invalid")
-    source_path = _bounded_string(value.get("source_path"), f"{label}.source_path", 180)
-    source_anchor = _bounded_string(value.get("source_anchor"), f"{label}.source_anchor", 100)
-    if status == "UNKNOWN":
-        if source_path or source_anchor:
-            raise ResponseContractError(f"{label} UNKNOWN must not invent source_path/source_anchor")
-        return value
-    if not source_path or not source_anchor:
-        raise ResponseContractError(f"{label} non-UNKNOWN requires source_path/source_anchor")
-    source_text = sources.get(source_path)
-    if source_text is None:
-        raise ResponseContractError(f"{label}.source_path is not a supplied context path: {source_path}")
-    if source_anchor not in source_text:
-        raise ResponseContractError(f"{label}.source_anchor not found verbatim in {source_path}: {source_anchor}")
-    return value
+def validate_evidence_registry(contract: dict[str, Any], context: dict[str, Any]) -> dict[str, dict[str, str]]:
+    registry = contract.get("evidence_registry")
+    if not isinstance(registry, dict) or not registry:
+        raise ResponseContractError("response contract evidence_registry missing")
+    sources = _source_map(context)
+    validated: dict[str, dict[str, str]] = {}
+    for evidence_id in sorted(registry, key=lambda value: int(value[1:])):
+        entry = registry[evidence_id]
+        if not isinstance(evidence_id, str) or EVIDENCE_ID_RE.fullmatch(evidence_id) is None:
+            raise ResponseContractError(f"invalid evidence id: {evidence_id}")
+        if not isinstance(entry, dict) or set(entry) != {"source_path", "source_anchor"}:
+            raise ResponseContractError(f"evidence {evidence_id} malformed")
+        source_path = _bounded_string(entry.get("source_path"), f"evidence {evidence_id}.source_path", 180, allow_empty=False)
+        source_anchor = _bounded_string(entry.get("source_anchor"), f"evidence {evidence_id}.source_anchor", 120, allow_empty=False)
+        source_text = sources.get(source_path)
+        if source_text is None:
+            raise ResponseContractError(f"evidence {evidence_id}.source_path is not a supplied context path: {source_path}")
+        if source_anchor not in source_text:
+            raise ResponseContractError(
+                f"evidence {evidence_id}.source_anchor not found verbatim in {source_path}: {source_anchor}"
+            )
+        validated[evidence_id] = {"source_path": source_path, "source_anchor": source_anchor}
+    return validated
 
 
-def _validate_edge(value: Any, index: int, sources: dict[str, str]) -> dict[str, Any]:
+def evidence_legend(contract: dict[str, Any], context: dict[str, Any]) -> str:
+    registry = validate_evidence_registry(contract, context)
+    return "\n".join(
+        f"{evidence_id} = {entry['source_path']} :: {entry['source_anchor']}"
+        for evidence_id, entry in registry.items()
+    )
+
+
+def _validate_basis(value: Any, label: str, registry: dict[str, dict[str, str]]) -> dict[str, Any]:
+    basis = _bounded_string(value, label, 40, allow_empty=False)
+    if basis == "UNKNOWN":
+        return {"basis": basis, "status": "UNKNOWN", "evidence_id": None}
+    if ":" not in basis:
+        raise ResponseContractError(f"{label} must be UNKNOWN or STATUS:E#")
+    status, evidence_id = basis.split(":", 1)
+    if status not in EVIDENCE_STATUSES:
+        raise ResponseContractError(f"{label} status invalid")
+    if evidence_id not in registry:
+        raise ResponseContractError(f"{label} references unknown evidence id: {evidence_id}")
+    return {"basis": basis, "status": status, "evidence_id": evidence_id}
+
+
+def _validate_edge(value: Any, index: int, registry: dict[str, dict[str, str]]) -> dict[str, Any]:
     label = f"flow_edges[{index}]"
     if not isinstance(value, dict) or set(value) != EDGE_KEYS:
         raise ResponseContractError(f"{label} must contain exactly {sorted(EDGE_KEYS)}")
-    _bounded_string(value.get("from"), f"{label}.from", 100, allow_empty=False)
-    _bounded_string(value.get("to"), f"{label}.to", 100, allow_empty=False)
-    _validate_claim({key: value[key] for key in CLAIM_KEYS}, label, sources)
-    return value
+    _bounded_string(value.get("from"), f"{label}.from", 80, allow_empty=False)
+    _bounded_string(value.get("to"), f"{label}.to", 80, allow_empty=False)
+    return _validate_basis(value.get("basis"), f"{label}.basis", registry)
 
 
 def validate_impact_scope_output(content: str, contract: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -155,44 +194,52 @@ def validate_impact_scope_output(content: str, contract: dict[str, Any], context
     scope = _bounded_string(payload.get("scope"), "scope", 80, allow_empty=False)
     if scope != contract["expected_scope"]:
         raise ResponseContractError(f"scope mismatch: expected {contract['expected_scope']}, got {scope}")
-    sources = _source_map(context)
-    _validate_claim(payload.get("authority"), "authority", sources)
+
+    registry = validate_evidence_registry(contract, context)
+    authority = _validate_basis(payload.get("authority"), "authority", registry)
     edges = payload.get("flow_edges")
     if not isinstance(edges, list) or not 1 <= len(edges) <= 3:
         raise ResponseContractError("flow_edges must contain 1-3 entries")
-    seen_edges: set[tuple[str, ...]] = set()
+    seen_edges: set[tuple[str, str, str]] = set()
+    edge_bases: list[dict[str, Any]] = []
     for index, edge in enumerate(edges):
-        _validate_edge(edge, index, sources)
-        identity = tuple(str(edge[key]) for key in ("from", "to", "status", "source_path", "source_anchor"))
+        edge_bases.append(_validate_edge(edge, index, registry))
+        identity = (str(edge["from"]), str(edge["to"]), str(edge["basis"]))
         if identity in seen_edges:
             raise ResponseContractError("duplicate flow edge rejected")
         seen_edges.add(identity)
-    request_identity = _validate_claim(payload.get("request_identity"), "request_identity", sources)
-    no_extra_io = _validate_claim(payload.get("no_extra_io"), "no_extra_io", sources)
+
+    request_identity = _validate_basis(payload.get("request_identity"), "request_identity", registry)
+    no_extra_io = _validate_basis(payload.get("no_extra_io"), "no_extra_io", registry)
     tests = payload.get("tests")
     if not isinstance(tests, list) or len(tests) > 2:
         raise ResponseContractError("tests must contain at most 2 entries")
-    for index, item in enumerate(tests):
-        _validate_claim(item, f"tests[{index}]", sources)
-    generated_release = _validate_claim(payload.get("generated_release"), "generated_release", sources)
-    narrowest_boundary = _validate_claim(payload.get("narrowest_boundary"), "narrowest_boundary", sources)
+    test_bases = [_validate_basis(item, f"tests[{index}]", registry) for index, item in enumerate(tests)]
+    generated_release = _validate_basis(payload.get("generated_release"), "generated_release", registry)
+    narrowest_boundary = _validate_basis(payload.get("narrowest_boundary"), "narrowest_boundary", registry)
+
     blocked = payload.get("blocked_claims")
     if not isinstance(blocked, list) or len(blocked) > 2:
         raise ResponseContractError("blocked_claims must contain at most 2 entries")
     for index, item in enumerate(blocked):
         _bounded_string(item, f"blocked_claims[{index}]", 120)
+
     verdict = payload.get("verdict")
     if verdict not in VERDICTS:
         raise ResponseContractError("verdict invalid")
     required_preservation = (request_identity, no_extra_io, generated_release, narrowest_boundary)
     if verdict == "SUPPORTED" and any(item["status"] in {"UNKNOWN", "CONFLICT"} for item in required_preservation):
         raise ResponseContractError("SUPPORTED verdict conflicts with unresolved required preservation claim")
+
+    all_bases = [authority, *edge_bases, request_identity, no_extra_io, *test_bases, generated_release, narrowest_boundary]
+    if any(item["status"] == "CONFLICT" for item in all_bases) and verdict != "CONFLICT":
+        raise ResponseContractError("CONFLICT evidence basis requires CONFLICT verdict")
     return payload
 
 
 def validate_content(content: str, contract: dict[str, Any] | None, context: dict[str, Any]) -> dict[str, Any] | None:
     if contract is None:
         return None
-    if contract.get("id") != "impact-scope-source-linked-v2":
+    if contract.get("id") != "impact-scope-evidence-id-v3":
         raise ResponseContractError(f"unsupported response contract id: {contract.get('id')}")
     return validate_impact_scope_output(content, contract, context)

@@ -10,7 +10,9 @@ description: >-
 
 # Plugin Impact Scope
 
-Read-only pilot for `plugin:usage-dashboard` / Local Usage Dashboard.
+Current normal validated pilot scope: `plugin:usage-dashboard` / Local Usage Dashboard.
+
+The analysis procedure below is written against a verified plugin scope and bounded project root. Scope-specific examples must not become semantic truth for another project.
 
 This skill answers one question:
 
@@ -21,6 +23,7 @@ It is an analysis module between authority resolution and later design/implement
 ## Hard boundaries
 
 - Pilot validation is limited to `plugin:usage-dashboard`.
+- An explicitly isolated candidate evaluation may authorize a different scope for evaluation only. That bypasses only the validated-scope gate; it does not promote the scope, change normal invocation authority, or relax any rule below.
 - Resolve current authority before impact claims. Prefer a current `VERIFIED` `plugin-authority-scan` report when already available in the same workflow.
 - Do not use conversation memory as authority for versions, SHAs, deployment state, source ownership, or runtime state.
 - Do not edit source, docs, issues, branches, pull requests, releases, production state, or device state.
@@ -51,11 +54,15 @@ A mechanical helper result is always `CANDIDATE_ONLY`; it cannot directly produc
 
 ### 1. Confirm scope and authority input
 
-The requested scope must resolve to `plugin:usage-dashboard` for this pilot.
+Let `<verified-plugin-scope>` be the plugin scope established by current authority evidence.
 
-If the scope is another plugin/product, return:
+For normal invocation, `<verified-plugin-scope>` must resolve to `plugin:usage-dashboard` for this pilot.
+
+If the normal requested scope is another plugin/product, return:
 
 `UNVALIDATED_SCOPE — plugin-impact-scope pilot currently validates only plugin:usage-dashboard.`
+
+An isolated candidate evaluation may explicitly supply evaluation authority for another scope. In that case, analyze that exact candidate scope while preserving every other boundary in this skill. Candidate evaluation authority is not validated-scope promotion.
 
 Before mutable/source ownership claims, either:
 
@@ -70,10 +77,10 @@ Use impact scoping when the proposed change is broad, architectural, cross-layer
 
 Typical signals:
 
-- Engine -> request metadata -> Plugin UI/Diagnostics;
-- Manager provisioning -> Engine identity -> Diagnostics -> manifest/materializer;
+- request/event producer -> request/state metadata -> presentation or diagnostics consumer;
+- provisioning/configuration owner -> runtime identity -> diagnostics -> manifest/release surface;
 - state writer -> persistence -> state reader -> presentation;
-- source -> deterministic build -> generated artifact -> release identity;
+- canonical source -> deterministic build -> generated artifact -> release identity;
 - lifecycle owner -> listener/timer/cache/in-flight cleanup -> diagnostics/tests.
 
 If the task is a narrow typo/copy edit or authority-only lookup, stop with a compact `NARROW_TASK` handoff rather than broad repository archaeology.
@@ -94,13 +101,13 @@ Do not start with a repository-wide sweep merely because it is available.
 
 ### 4. Discover candidate references mechanically
 
-For repeated text/reference discovery, the bundled helper may be used:
+For repeated text/reference discovery, the bundled helper may be used with the verified scope/root:
 
 ```bash
 python3 .agents/skills/plugin-impact-scope/scripts/discover_impact.py \
   --repo-root . \
-  --scope plugin:usage-dashboard \
-  --root plugins/usage-dashboard \
+  --scope <verified-plugin-scope> \
+  --root <bounded-project-root> \
   --seed <symbol-or-path> \
   --json
 ```
@@ -129,8 +136,8 @@ For a cross-layer scalar, request-metadata field, identity value, diagnostics va
 ```text
 producer capture/write
 -> request/state metadata propagation
--> Recent Requests or equivalent presentation consumer
--> Diagnostics or equivalent diagnostic consumer
+-> presentation consumer
+-> diagnostic or validation consumer
 ```
 
 Each non-`UNKNOWN` edge must include its evidence class and the exact current source basis. If the current source does not prove one link, mark that link `UNKNOWN`; do not skip the edge or replace it with a path list.
@@ -157,7 +164,7 @@ Identify current tests/contracts that protect the affected boundaries, including
 
 Do not claim a test protects a boundary merely because its filename sounds related.
 
-For a change that adds or propagates data through an existing request, ledger, diagnostics, refresh, source, CLI, or network path, explicitly check these preservation boundaries when current source/contracts make them relevant:
+For a change that adds or propagates data through an existing request, ledger/state, diagnostics, refresh, source, CLI, or network path, explicitly check these preservation boundaries when current source/contracts make them relevant:
 
 - **Request identity** — whether existing request identity/dedupe/correlation semantics must remain unchanged. State the current source basis, or `UNKNOWN` if not proven.
 - **No-extra-I/O** — whether the proposed data can travel on an existing source/read/refresh path without adding an extra network request, CLI invocation, source fetch, refresh, or other observable I/O. State the current source basis, or `UNKNOWN` if not proven.
@@ -181,7 +188,7 @@ A repository-only audit/documentation change may legitimately have no shipped-by
 
 Summarize the smallest current source-backed boundary that a later design must consider.
 
-For a source-proven cross-layer change, do not collapse the boundary to one generated entry file or one convenient path when the semantic impact spans multiple owners/consumers. Name the minimal connected semantic boundary instead, such as producer capture + request metadata + affected presentation/diagnostic consumers + the preservation/test surfaces required by current contracts.
+For a source-proven cross-layer change, do not collapse the boundary to one generated entry file or one convenient path when the semantic impact spans multiple owners/consumers. Name the minimal connected semantic boundary instead, such as producer + propagated state/data + affected consumers + the preservation/test surfaces required by current contracts.
 
 Do not turn this into a solution recommendation. The result should say what must be preserved/validated, not how to implement the change.
 
@@ -204,13 +211,13 @@ Use this shape:
 ```markdown
 ## Impact scope
 
-- Scope: `plugin:usage-dashboard`
+- Scope: `<verified-plugin-scope>`
 - Question/change class: `<bounded description>`
 - Authority input: `<current verified report or exact owning reads>`
 - Semantic owners:
   - `<owner/path/symbol>`
 - State/data/effect flow:
-  - `<producer> -> <request/state metadata> -> <consumer>` — `DIRECT | SUPPORTED_LIKELY | UNKNOWN | CONFLICT` — basis: `<source>`
+  - `<producer> -> <state/data boundary> -> <consumer>` — `DIRECT | SUPPORTED_LIKELY | UNKNOWN | CONFLICT` — basis: `<source>`
 - Preservation boundaries:
   - Request identity: `<preserved boundary + source basis, not applicable, or UNKNOWN>`
   - No-extra-I/O: `<preserved boundary + source basis, not applicable, or UNKNOWN>`
@@ -238,7 +245,7 @@ For broad cross-layer questions, do not substitute a list of candidate files for
 
 The impact scope is complete only when:
 
-- pilot scope is valid;
+- the normal validated-scope gate passed, or explicit isolated candidate-eval authority supplied the evaluation scope without promotion;
 - mutable/current authority inputs were freshly verified;
 - search roots/seeds stayed bounded;
 - mechanical hits remained candidate-only until exact reread;

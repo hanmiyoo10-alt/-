@@ -61,15 +61,15 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _derive_structured_impact_verdict(
+def _derive_structured_impact_evidence(
     response_path: Path,
     response_contract_hash: str,
     exit_code: int,
-) -> str | None:
+) -> tuple[str | None, list[str] | None]:
     if response_contract_hash == "NONE":
-        return None
+        return None, None
     if exit_code != 0:
-        return None
+        return None, None
     if not response_path.is_file():
         raise LocalReceiptError("structured successful execution requires response file")
 
@@ -92,14 +92,18 @@ def _derive_structured_impact_verdict(
     derived = result.get("derived_impact_verdict")
     if derived not in DERIVED_IMPACT_VERDICTS:
         raise LocalReceiptError("structured response derived impact verdict missing or invalid")
+    blockers = result.get("derived_blocked_claims")
+    if not isinstance(blockers, list) or any(not isinstance(item, str) or not item for item in blockers):
+        raise LocalReceiptError("structured response derived blockers missing or invalid")
 
     validation["derived_impact_verdict"] = derived
+    validation["derived_blocked_claims"] = blockers
     validation["validated_response_sha256"] = _sha(response_path)
     validation_path.write_text(
         json.dumps(validation, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    return str(derived)
+    return str(derived), list(blockers)
 
 
 def make_receipt(
@@ -156,7 +160,7 @@ def make_receipt(
     if exit_code == 0 and not response_hash:
         raise LocalReceiptError("successful execution requires response hash")
 
-    derived_impact_verdict = _derive_structured_impact_verdict(
+    derived_impact_verdict, derived_blocked_claims = _derive_structured_impact_evidence(
         response_path,
         response_contract_hash,
         int(exit_code),
@@ -191,6 +195,7 @@ def make_receipt(
         "response_sha256": response_hash,
         "process_exit_code": int(exit_code),
         "derived_impact_verdict": derived_impact_verdict,
+        "derived_blocked_claims": derived_blocked_claims,
         "executed_at_utc": datetime.now(timezone.utc).isoformat(),
         "trigger_observability": "UNOBSERVABLE_WITH_LOCAL_CONTEXT_INJECTION",
         "qualitative_verdict": None,
@@ -225,13 +230,25 @@ def _validate(receipt: dict[str, Any]) -> None:
 
     contract_hash = receipt.get("response_contract_sha256")
     derived = receipt.get("derived_impact_verdict")
+    blockers = receipt.get("derived_blocked_claims")
     if contract_hash == "NONE":
         if derived not in (None, ""):
             raise LocalReceiptError("unstructured receipt must not carry derived impact verdict")
-    elif exit_code == 0 and derived not in DERIVED_IMPACT_VERDICTS:
-        raise LocalReceiptError("successful structured receipt missing derived impact verdict")
-    elif derived not in (None, "") and derived not in DERIVED_IMPACT_VERDICTS:
-        raise LocalReceiptError("derived impact verdict invalid")
+        if blockers not in (None, []):
+            raise LocalReceiptError("unstructured receipt must not carry derived blockers")
+    elif exit_code == 0:
+        if derived not in DERIVED_IMPACT_VERDICTS:
+            raise LocalReceiptError("successful structured receipt missing derived impact verdict")
+        if not isinstance(blockers, list) or any(not isinstance(item, str) or not item for item in blockers):
+            raise LocalReceiptError("successful structured receipt missing derived blockers")
+    else:
+        if derived not in (None, "") and derived not in DERIVED_IMPACT_VERDICTS:
+            raise LocalReceiptError("derived impact verdict invalid")
+        if blockers is not None and (
+            not isinstance(blockers, list)
+            or any(not isinstance(item, str) or not item for item in blockers)
+        ):
+            raise LocalReceiptError("derived blockers invalid")
 
 
 def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -249,6 +266,10 @@ def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         a["mode"]: a.get("derived_impact_verdict"),
         b["mode"]: b.get("derived_impact_verdict"),
     }
+    mode_blockers = {
+        a["mode"]: a.get("derived_blocked_claims"),
+        b["mode"]: b.get("derived_blocked_claims"),
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "PAIR_VALID" if complete else "EXECUTION_INCOMPLETE",
@@ -262,6 +283,7 @@ def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "model_sha256": a["model_sha256"],
         "llama_artifact_sha256": a["llama_artifact_sha256"],
         "mode_derived_impact_verdicts": mode_verdicts,
+        "mode_derived_blocked_claims": mode_blockers,
         "trigger_observability": "UNOBSERVABLE_WITH_LOCAL_CONTEXT_INJECTION",
         "qualitative_verdict": None,
     }

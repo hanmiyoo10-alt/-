@@ -19,14 +19,17 @@ class ZeroCreditPromptNeutralityTests(unittest.TestCase):
         self.assertNotIn("fewest entries needed", instruction)
         self.assertNotIn("Use the fewest", instruction)
         self.assertIn(
-            "Bounds: at most 3 distinct registered flow edges, 2 tests, and 2 blocked claims.",
+            "Bounds: at most 3 distinct registered flow edges and 2 tests.",
             instruction,
         )
+        self.assertIn("blocked_claims is a compatibility-only field and must be an empty array", instruction)
+        for forbidden in ("flow:F1", "flow:F2", "flow:F3", "derived_blocked_claims"):
+            self.assertNotIn(forbidden, instruction)
 
-    def test_grounded_flow_contract_remains_unchanged(self):
+    def test_grounded_flow_contract_only_hardens_blocker_ownership(self):
         case = self.contract_case()
 
-        self.assertEqual(case["id"], "impact-scope-grounded-flow-v7")
+        self.assertEqual(case["id"], "impact-scope-grounded-flow-v8")
         self.assertEqual(case["required_flow_edge_ids"], ["F1", "F2", "F3"])
         self.assertEqual(set(case["flow_edge_registry"]), {"F1", "F2", "F3"})
         self.assertIn("select only registered F# edge IDs", case["prompt_instruction"])

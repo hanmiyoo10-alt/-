@@ -34,6 +34,8 @@ PROMPT_LAYOUTS = {
     GUIDANCE_AFTER_EVIDENCE_LAYOUT,
     CLAIM_SLOT_RECENCY_LAYOUT,
 }
+FIXTURE_CLASSES = {"standard", "second_scope_candidate"}
+CANDIDATE_DEFAULT_PROMPT_LAYOUT = GUIDANCE_AFTER_EVIDENCE_LAYOUT
 DEFAULT_PROMPT_LAYOUTS_PATH = MODULE_DIR / "local-prompt-layouts.json"
 CANDIDATE_GUIDANCE_PROJECTION_ID = "second_scope_candidate_scope_gate_v1"
 
@@ -78,9 +80,17 @@ def resolve_prompt_layout(
     skill: str,
     case_id: str,
     path: Path = DEFAULT_PROMPT_LAYOUTS_PATH,
+    fixture_class: str = "standard",
 ) -> str:
+    if fixture_class not in FIXTURE_CLASSES:
+        raise PromptError(f"unsupported fixture_class: {fixture_class}")
+    fallback = (
+        CANDIDATE_DEFAULT_PROMPT_LAYOUT
+        if fixture_class == "second_scope_candidate"
+        else DEFAULT_PROMPT_LAYOUT
+    )
     if not path.is_file():
-        return DEFAULT_PROMPT_LAYOUT
+        return fallback
     data = _load(path)
     if data.get("schema_version") != PROMPT_LAYOUT_SCHEMA_VERSION:
         raise PromptError("unsupported prompt-layout schema_version")
@@ -89,10 +99,10 @@ def resolve_prompt_layout(
         raise PromptError("prompt layouts map missing")
     skill_map = layouts.get(str(skill))
     if skill_map is None:
-        return DEFAULT_PROMPT_LAYOUT
+        return fallback
     if not isinstance(skill_map, dict):
         raise PromptError("skill prompt-layout map must be an object")
-    layout = skill_map.get(str(case_id), DEFAULT_PROMPT_LAYOUT)
+    layout = skill_map.get(str(case_id), fallback)
     if layout not in PROMPT_LAYOUTS:
         raise PromptError(f"unsupported prompt layout: {layout}")
     return layout
@@ -180,7 +190,12 @@ def compose(
         raise PromptError("local zero-credit lane supports output evals only")
     skill = matrix.get("skill")
     case_id = str(matrix.get("case_id"))
-    prompt_layout = resolve_prompt_layout(str(skill), case_id)
+    fixture_class = str(matrix.get("fixture_class", "standard"))
+    prompt_layout = resolve_prompt_layout(
+        str(skill),
+        case_id,
+        fixture_class=fixture_class,
+    )
     if context.get("skill") != skill or str(context.get("case_id")) != case_id:
         raise PromptError("context does not match matrix skill/case")
     user_task = matrix.get("prompt")
@@ -285,7 +300,7 @@ def compose(
         "mode": mode,
         "skill": skill,
         "case_id": case_id,
-        "fixture_class": matrix.get("fixture_class", "standard"),
+        "fixture_class": fixture_class,
         "candidate_scope": matrix.get("candidate_scope"),
         "prompt_layout": prompt_layout,
         "user_task_sha256": sha256_bytes(user_task.encode("utf-8")),

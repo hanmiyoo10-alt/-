@@ -14,6 +14,11 @@ on:
         description: Exact output eval case id
         required: true
         type: string
+  push:
+    branches:
+      - 'agent-skill-zero-credit-request/**'
+    paths:
+      - '.agent-skill-zero-credit-requests/*.json'
 
 permissions:
   contents: read
@@ -35,16 +40,54 @@ jobs:
       LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
       GENERATION_JSON: '{"temperature":0,"seed":42,"n_predict":512,"ctx_size":16384,"threads":4,"gpu_layers":0}'
     steps:
-      - name: Checkout exact repository SHA
+      - name: Checkout event commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          fetch-depth: 1
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Set up Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
+
+      - name: Resolve bounded evaluation request and checkout target
+        shell: bash
+        env:
+          DISPATCH_SKILL: ${{ github.event.inputs.skill || '' }}
+          DISPATCH_CASE_ID: ${{ github.event.inputs.case_id || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVAL_ROOT"
+          python tools/agent-skill-eval/resolve_zero_credit_request.py \
+            --repo-root . \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --github-ref "$GITHUB_REF" \
+            --github-sha "$GITHUB_SHA" \
+            --dispatch-skill "$DISPATCH_SKILL" \
+            --dispatch-case-id "$DISPATCH_CASE_ID" \
+            --output "$EVAL_ROOT/request-provenance.json"
+
+          EVAL_SKILL="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["skill"])')"
+          EVAL_CASE_ID="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["case_id"])')"
+          EVAL_REPOSITORY_SHA="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["target_repository_sha"])')"
+          EVAL_REQUEST_SHA="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["request_commit_sha"])')"
+          EVAL_EXECUTION_TRIGGER="$(python -c 'import json; print(json.load(open(".agent-skill-zero-credit-eval/request-provenance.json"))["execution_trigger"])')"
+
+          printf 'EVAL_SKILL=%s\n' "$EVAL_SKILL" >> "$GITHUB_ENV"
+          printf 'EVAL_CASE_ID=%s\n' "$EVAL_CASE_ID" >> "$GITHUB_ENV"
+          printf 'EVAL_REPOSITORY_SHA=%s\n' "$EVAL_REPOSITORY_SHA" >> "$GITHUB_ENV"
+          printf 'EVAL_REQUEST_SHA=%s\n' "$EVAL_REQUEST_SHA" >> "$GITHUB_ENV"
+          printf 'EVAL_EXECUTION_TRIGGER=%s\n' "$EVAL_EXECUTION_TRIGGER" >> "$GITHUB_ENV"
+
+          if ! git cat-file -e "${EVAL_REPOSITORY_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$EVAL_REPOSITORY_SHA"
+          fi
+          git checkout --detach "$EVAL_REPOSITORY_SHA"
+          test "$(git rev-parse HEAD)" = "$EVAL_REPOSITORY_SHA"
+          echo "ZERO_CREDIT_REQUEST_SHA:$EVAL_REQUEST_SHA"
+          echo "ZERO_CREDIT_TARGET_SHA:$EVAL_REPOSITORY_SHA"
+          echo "ZERO_CREDIT_EXECUTION_TRIGGER:$EVAL_EXECUTION_TRIGGER"
 
       - name: Fetch read-only Usage Dashboard release authority
         shell: bash
@@ -61,21 +104,21 @@ jobs:
           mkdir -p "$EVAL_ROOT/with_skill" "$EVAL_ROOT/baseline_without_target_skill"
           python tools/agent-skill-eval/prepare_local_eval.py \
             --repo-root . \
-            --skill '${{ inputs.skill }}' \
-            --case-id '${{ inputs.case_id }}' \
-            --repository-sha "$GITHUB_SHA" \
+            --skill "$EVAL_SKILL" \
+            --case-id "$EVAL_CASE_ID" \
+            --repository-sha "$EVAL_REPOSITORY_SHA" \
             --output "$EVAL_ROOT/matrix.json"
           python tools/agent-skill-eval/build_local_context.py \
             --repo-root . \
             --profile tools/agent-skill-eval/local-context-profiles.json \
-            --skill '${{ inputs.skill }}' \
-            --case-id '${{ inputs.case_id }}' \
+            --skill "$EVAL_SKILL" \
+            --case-id "$EVAL_CASE_ID" \
             --output "$EVAL_ROOT/context.json"
           for mode in with_skill baseline_without_target_skill; do
             python tools/agent-skill-eval/compose_local_prompt.py \
               --matrix "$EVAL_ROOT/matrix.json" \
               --context "$EVAL_ROOT/context.json" \
-              --skill-file ".agents/skills/${{ inputs.skill }}/SKILL.md" \
+              --skill-file ".agents/skills/$EVAL_SKILL/SKILL.md" \
               --mode "$mode" \
               --prompt-output "$EVAL_ROOT/$mode/prompt.txt" \
               --meta-output "$EVAL_ROOT/$mode/prompt-meta.json"
@@ -196,7 +239,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: agent-skill-zero-credit-eval-${{ inputs.skill }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: agent-skill-zero-credit-eval-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-skill-zero-credit-eval/
           if-no-files-found: error
           retention-days: 7

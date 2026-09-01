@@ -197,7 +197,7 @@ class DerivedVerdictReceiptTests(unittest.TestCase):
 
     def test_r12_style_unsupported_conflict_fails_before_receipt(self):
         with tempfile.TemporaryDirectory() as td:
-            with self.assertRaises(contract_mod.ResponseContractError):
+            with self.assertRaises(receipt_mod.ResponseContractError):
                 self.make_receipt(
                     Path(td),
                     "with_skill",

@@ -149,11 +149,29 @@ When an authority, policy, ownership, or evidence conflict cannot be resolved fr
 
 ## 5. Repository-wide defaults
 
-### RCR-D01 — Stable first; prefer small explainable changes
+### RCR-D01 — Preserve working baselines; repair only proven gaps
 
 **Class:** `DEFAULT`
 
-Start from the currently verified baseline. Preserve healthy behavior unless the goal requires touching it, and prefer a small, explainable diff over a broad rewrite.
+Start from the currently verified baseline. Healthy behavior is an asset. Do not redesign, rewrite, optimize, or broaden a working area merely because a change is nearby. Preserve working behavior unless the explicit goal or current evidence proves that area must change.
+
+Use this default state transition:
+
+```text
+WORKING + VERIFIED
+→ PRESERVE
+
+UNKNOWN
+→ OBSERVE / ATTRIBUTE / VERIFY
+
+BROKEN OR MISSING
+→ TARGETED REPAIR AT THE NARROWEST CORRECT OWNER/BOUNDARY
+
+REPAIR VERIFIED
+→ PROMOTE THE REPAIRED RESULT INTO THE NEW PRESERVED BASELINE
+```
+
+When a repair is required, change the narrowest correct owner/effect surface, keep unaffected working behavior stable, and verify both the intended fix and preservation of neighboring healthy behavior. Broad rewrites, opportunistic cleanup, or unrelated optimization require independent justification; they must not hitchhike on a bounded repair.
 
 ### RCR-D02 — One primary goal per bounded work unit
 

@@ -66,6 +66,7 @@ export function classifyPath(input){
   const p=String(input||'').replaceAll('\\','/').replace(/^\.\//,'');
   const out=new Set(exact[p]||[]);
   if(p==='.github/workflows/simcore-ci.yml'||p.startsWith('products/simcore/tooling/ci/')||p.startsWith('products/simcore/ci/'))out.add('CI_SELF');
+  if(/^products\/simcore\/tooling\/exposure-[^/]+\.(?:mjs|js)$/.test(p))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/tests/'))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/releases/'))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/releases/live-evidence/'))out.add('STATE_SYNC');

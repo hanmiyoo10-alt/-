@@ -569,11 +569,13 @@ def validate_impact_scope_output(
     edges = payload.get("flow_edges")
     if not isinstance(edges, list) or len(edges) > min(3, len(flow_registry)):
         raise ResponseContractError("flow_edges must contain at most 3 registered F# ids")
+    if any(not isinstance(flow_id, str) for flow_id in edges):
+        raise ResponseContractError("flow_edges must contain only registered F# ids")
     if len(edges) != len(set(edges)):
         raise ResponseContractError("duplicate flow edge id rejected")
     selected_flow_edge_ids: list[str] = []
     for index, flow_id in enumerate(edges):
-        if not isinstance(flow_id, str) or flow_id not in flow_registry:
+        if flow_id not in flow_registry:
             raise ResponseContractError(
                 f"flow_edges[{index}] must reference a registered flow edge id"
             )

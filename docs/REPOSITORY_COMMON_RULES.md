@@ -344,6 +344,14 @@ observe/scan
 
 This does not prohibit ordinary project-local source edits or already-authorized writers. It applies when creating or replacing an authority-bearing mechanism.
 
+### RCR-C10 — Incomplete/projected views do not own deletion-by-omission
+
+**Class:** `CONDITIONAL`
+
+When a writer, compatibility surface, projection, lazy/externalized view, or partial snapshot is not proven complete and authoritative for the affected state, omitted fields or keys mean unspecified, not delete. Destructive clear or replacement requires explicit destructive intent or an owning contract that proves the incoming representation is complete and authoritative for that replacement scope.
+
+Do not let externalization, lazy hydration, projection, compatibility adaptation, or partial reads silently widen omission semantics into deletion authority. Projects retain ownership of completeness proofs, field/write ownership, merge behavior, and explicit clear/replace APIs.
+
 ## 7. Deliberately project-only rules
 
 The following categories remain `PROJECT_ONLY` unless separately promoted after a cross-project review:

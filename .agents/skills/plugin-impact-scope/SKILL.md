@@ -33,6 +33,8 @@ It is an analysis module between authority resolution and later design/implement
 - Preserve `UNKNOWN` and `CONFLICT` rather than inventing edges.
 - Derived impact maps are context-management artifacts, not mutable project truth.
 - A cross-layer impact map is not complete when it only lists files. It must state source-backed producer/consumer edges and preservation boundaries when those boundaries are material to the proposed change.
+- Evidence bundle order, file order, document order, roadmap succession, or section adjacency never proves a producer/consumer edge by itself.
+- A negative authority or exclusion statement constrains claims; it must not be inverted into a positive runtime, generated-artifact, materializer, or release-surface claim.
 - Narrow one-file copy edits or authority-only questions normally do not justify this skill.
 
 These boundaries compose with `docs/REPOSITORY_COMMON_RULES.md`, especially RCR-H01/H02/H03/H08, RCR-D07/D08/D12/D13, and RCR-C08.
@@ -49,6 +51,8 @@ Use only these impact evidence classes:
 Do not invent numeric confidence scores.
 
 A mechanical helper result is always `CANDIDATE_ONLY`; it cannot directly produce `DIRECT` or `SUPPORTED_LIKELY` impact edges.
+
+Evidence-document ordering is also candidate context only. Never classify a chain of files or documents as `DIRECT` merely because the files were supplied together or describe successive roadmap stages.
 
 ## Procedure
 
@@ -82,6 +86,8 @@ Typical signals:
 - state writer -> persistence -> state reader -> presentation;
 - canonical source -> deterministic build -> generated artifact -> release identity;
 - lifecycle owner -> listener/timer/cache/in-flight cleanup -> diagnostics/tests.
+
+These are relationship shapes, not literal answers. Do not substitute supplied file names or documentation order into these shapes unless current owning source proves each semantic edge.
 
 If the task is a narrow typo/copy edit or authority-only lookup, stop with a compact `NARROW_TASK` handoff rather than broad repository archaeology.
 
@@ -142,6 +148,8 @@ producer capture/write
 
 Each non-`UNKNOWN` edge must include its evidence class and the exact current source basis. If the current source does not prove one link, mark that link `UNKNOWN`; do not skip the edge or replace it with a path list.
 
+Semantic flow endpoints should represent actual owners, state/data/effect boundaries, or consumers established by current source. Do not turn the sequence of evidence files, design documents, or roadmap documents into flow endpoints merely because those documents were supplied together. A document may be a semantic owner only when the question concerns that document contract itself or current source/authority establishes the document as the owning contract for the relationship.
+
 Classify each edge conservatively.
 
 Examples:
@@ -162,7 +170,7 @@ Identify current tests/contracts that protect the affected boundaries, including
 - full project regression registry;
 - physical acceptance surfaces when the owning project requires device evidence.
 
-Do not claim a test protects a boundary merely because its filename sounds related.
+Do not claim a test protects a boundary merely because its filename sounds related. Do not repeat an instruction phrase from this skill as the claimed boundary; state the grounded boundary or `UNKNOWN`.
 
 For a change that adds or propagates data through an existing request, ledger/state, diagnostics, refresh, source, CLI, or network path, explicitly check these preservation boundaries when current source/contracts make them relevant:
 
@@ -183,6 +191,8 @@ Only when the current project contract makes them relevant, identify whether the
 - production promotion/parity checks.
 
 A repository-only audit/documentation change may legitimately have no shipped-byte impact. Preserve that as a bounded conclusion only when current source/contracts support it.
+
+Treat authority exclusions as exclusions. If current evidence says a path or branch is not production/runtime/release authority, that statement cannot by itself support listing the excluded path as a generated, shipped, materialized, or release surface.
 
 ### 8. State the narrowest supported impact boundary
 
@@ -206,29 +216,22 @@ The validator checks shape, evidence-class/provenance requirements, fail-closed 
 
 ### 10. Return a compact impact report
 
-Use this shape:
+Return a compact report containing these fields in this order:
 
-```markdown
-## Impact scope
+1. `Impact scope` — the actual verified/evaluation scope and a compact change class.
+2. `Authority input` — the actual verified authority report or exact owning reads used. If not established, write `UNKNOWN`.
+3. `Semantic owners` — only source-backed semantic owners; do not list every evidence file.
+4. `State/data/effect flow` — source-backed producer/consumer edges with evidence class and concrete source basis. If a material edge is unproven, write `UNKNOWN` for that edge.
+5. `Preservation boundaries` — request identity and no-extra-I/O when material, each with grounded basis or `UNKNOWN`.
+6. `Tests/contracts/validation` — only surfaces whose protecting relationship was actually read; state the protected boundary or `UNKNOWN`.
+7. `Generated/release/materializer surfaces` — only positively supported surfaces; otherwise `none proven` or `UNKNOWN`.
+8. `Narrowest supported impact boundary` — the smallest connected semantic boundary supported by current evidence.
+9. `Blocked claims` — unresolved material claims, or `none`.
+10. `Verdict` — exactly one of `IMPACT_SCOPED`, `PARTIAL`, `UNKNOWN`, or `CONFLICT`.
 
-- Scope: `<verified-plugin-scope>`
-- Question/change class: `<bounded description>`
-- Authority input: `<current verified report or exact owning reads>`
-- Semantic owners:
-  - `<owner/path/symbol>`
-- State/data/effect flow:
-  - `<producer> -> <state/data boundary> -> <consumer>` — `DIRECT | SUPPORTED_LIKELY | UNKNOWN | CONFLICT` — basis: `<source>`
-- Preservation boundaries:
-  - Request identity: `<preserved boundary + source basis, not applicable, or UNKNOWN>`
-  - No-extra-I/O: `<preserved boundary + source basis, not applicable, or UNKNOWN>`
-- Tests/contracts/validation:
-  - `<surface>` — `<what boundary it protects>`
-- Generated/release/materializer surfaces:
-  - `<surface or none proven>`
-- Narrowest supported impact boundary: `<minimal connected semantic boundary, not merely a file list>`
-- Blocked claims: `<none or unresolved claims>`
-- Verdict: `IMPACT_SCOPED | PARTIAL | UNKNOWN | CONFLICT`
-```
+Never emit report-template placeholder or instruction text as a field value. In particular, do not copy phrases that describe what a field should contain. If a value cannot be grounded from current evidence, emit `UNKNOWN` instead.
+
+Keep the report bounded: normally no more than 4 semantic owners, 4 flow edges, and 3 validation surfaces. Prefer the minimal material subset over exhaustive enumeration. If output budget is tight, shorten inventories first and always reserve enough space to emit `Blocked claims` and `Verdict`.
 
 Every non-`UNKNOWN` edge must name a concrete current source basis.
 
@@ -250,11 +253,15 @@ The impact scope is complete only when:
 - search roots/seeds stayed bounded;
 - mechanical hits remained candidate-only until exact reread;
 - semantic owner and cross-layer edges are evidence-classified;
+- evidence/document ordering was not promoted into a semantic flow;
+- negative authority/exclusion statements were not inverted into positive runtime/release/generated surfaces;
 - cross-layer scalar/request-metadata changes are traced as connected producer -> metadata -> consumer edges rather than only a file inventory;
 - material request-identity and no-extra-I/O preservation boundaries are explicitly checked, with `UNKNOWN` preserved when current evidence cannot prove them;
 - relevant tests/contracts were read rather than inferred from names;
 - generated/release/materializer impact is bounded rather than assumed;
 - unresolved dynamic edges remain `UNKNOWN`;
+- report-template instruction text was not emitted as an answer value;
+- `Blocked claims` and `Verdict` are present even when output budget is tight;
 - no design, repair, implementation, or repository mutation occurred.
 
 Then stop and hand off to the next workflow stage.

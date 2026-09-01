@@ -67,7 +67,6 @@ class SkillContractTests(unittest.TestCase):
         for required in (
             "--scope <verified-plugin-scope>",
             "--root <bounded-project-root>",
-            "- Scope: `<verified-plugin-scope>`",
             "request/event producer -> request/state metadata -> presentation or diagnostics consumer",
             "producer capture/write",
             "-> presentation consumer",
@@ -98,12 +97,34 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("a file inventory is not a completed flow", text)
         self.assertIn("producer capture/write", text)
         self.assertIn("request/state metadata propagation", text)
-        self.assertIn("Preservation boundaries:", text)
-        self.assertIn("Request identity:", text)
-        self.assertIn("No-extra-I/O:", text)
+        self.assertIn("Preservation boundaries", text)
+        self.assertIn("Request identity", text)
+        self.assertIn("No-extra-I/O", text)
         self.assertIn("minimal connected semantic boundary", text)
         self.assertIn("do not substitute a list of candidate files", text)
         self.assertIn("request-identity and no-extra-I/O preservation boundaries are explicitly checked", text)
+
+    def test_grounding_hardening_rejects_document_order_placeholders_and_authority_inversion(self):
+        text = SKILL.read_text(encoding="utf-8")
+
+        for required in (
+            "Evidence bundle order, file order, document order, roadmap succession, or section adjacency never proves a producer/consumer edge by itself.",
+            "Evidence-document ordering is also candidate context only.",
+            "Do not turn the sequence of evidence files, design documents, or roadmap documents into flow endpoints",
+            "A negative authority or exclusion statement constrains claims; it must not be inverted into a positive runtime, generated-artifact, materializer, or release-surface claim.",
+            "Treat authority exclusions as exclusions.",
+            "Never emit report-template placeholder or instruction text as a field value.",
+            "If a value cannot be grounded from current evidence, emit `UNKNOWN` instead.",
+            "always reserve enough space to emit `Blocked claims` and `Verdict`",
+        ):
+            self.assertIn(required, text)
+
+        for forbidden in (
+            "current verified report or exact owning reads",
+            "preserved boundary + source basis, not applicable, or UNKNOWN",
+            "what boundary it protects",
+        ):
+            self.assertNotIn(forbidden, text)
 
 
 if __name__ == "__main__":

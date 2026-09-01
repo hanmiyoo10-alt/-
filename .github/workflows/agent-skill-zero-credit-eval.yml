@@ -242,4 +242,5 @@ jobs:
           name: agent-skill-zero-credit-eval-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-skill-zero-credit-eval/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7

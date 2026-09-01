@@ -38,7 +38,8 @@ jobs:
       LLAMA_SOURCE_DIGEST: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
       LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
       LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
-      GENERATION_JSON: '{"temperature":0,"seed":42,"n_predict":512,"ctx_size":16384,"threads":4,"gpu_layers":0}'
+      SERVER_PORT: '39127'
+      GENERATION_JSON: '{"temperature":0,"seed":42,"n_predict":768,"ctx_size":16384,"threads":4,"gpu_layers":0,"transport":"llama-server-v1-chat-completions"}'
     steps:
       - name: Checkout event commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -137,13 +138,13 @@ jobs:
           sha256sum -c llama.sha256
           mkdir extracted
           tar -xzf "$LLAMA_ARTIFACT" -C extracted
-          llama_cli="$(find extracted -type f -name llama-cli -perm -u+x -print -quit)"
-          if [[ -z "$llama_cli" ]]; then
-            echo 'ZERO_CREDIT_LLAMA_CLI:MISSING'
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          if [[ -z "$llama_server" ]]; then
+            echo 'ZERO_CREDIT_LLAMA_SERVER:MISSING'
             exit 2
           fi
-          printf '%s\n' "$(realpath "$llama_cli")" > "$GITHUB_WORKSPACE/$EVAL_ROOT/llama-cli-path.txt"
-          "$llama_cli" --version > "$GITHUB_WORKSPACE/$EVAL_ROOT/llama-runtime-version.txt" 2>&1
+          printf '%s\n' "$(realpath "$llama_server")" > "$GITHUB_WORKSPACE/$EVAL_ROOT/llama-server-path.txt"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/$EVAL_ROOT/llama-runtime-version.txt" 2>&1
 
       - name: Download and verify pinned local model
         shell: bash
@@ -162,32 +163,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          llama_cli="$(cat "$EVAL_ROOT/llama-cli-path.txt")"
+          llama_server="$(cat "$EVAL_ROOT/llama-server-path.txt")"
           model_path="$(cat "$EVAL_ROOT/model-path.txt")"
-          for mode in with_skill baseline_without_target_skill; do
-            prompt_file="$EVAL_ROOT/$mode/prompt.txt"
-            response_file="$EVAL_ROOT/$mode/response.txt"
-            stderr_file="$EVAL_ROOT/$mode/stderr.txt"
-            set +e
-            "$llama_cli" \
-              -m "$model_path" \
-              -cnv -st \
-              -p "$(cat "$prompt_file")" \
-              --temp 0 \
-              --seed 42 \
-              -n 512 \
-              -c 16384 \
-              -t 4 \
-              -ngl 0 \
-              --no-display-prompt \
-              --no-show-timings \
-              -co off \
-              >"$response_file" 2>"$stderr_file"
-            code=$?
-            set -e
-            printf '%s\n' "$code" > "$EVAL_ROOT/$mode/exit-code.txt"
-            echo "ZERO_CREDIT_MODE_EXIT:$mode:$code"
-          done
+          python tools/agent-skill-eval/run_local_server_pair.py \
+            --server-binary "$llama_server" \
+            --model-path "$model_path" \
+            --eval-root "$EVAL_ROOT" \
+            --generation-json "$GENERATION_JSON" \
+            --port "$SERVER_PORT"
 
       - name: Build and validate zero-credit receipts
         shell: bash

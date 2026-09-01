@@ -51,7 +51,7 @@ This block is the terminal administrative state backed by accepted real long-cha
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The current production is v0.70.1 `Cold First-Turn Tail Attribution`, and its real-long-chat gate is durably closed as `LIVE_PASS` through R2.8 HUMAN_EVIDENCE terminal convergence. The authorized 2.0M structural program is complete and the M2 architecture is frozen at M2-6. The immediate product action is the separately frozen `S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION` lane, which converges the completed S1–S6 simplification checkpoints into the v0.70.3 candidate without reusing parked v0.70.2. v0.70.2 `Cache Observer Cold-Path Attribution` remains preserved and PARKED for later cache-attribution work. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item.
+The machine-managed production snapshot and terminal release-state block above are the sole current production identity authorities. The current live gate is durably closed as `LIVE_PASS` through accepted HUMAN_EVIDENCE terminal convergence, and the authorized 2.0M structural program is complete with the M2 architecture frozen at its terminal checkpoint. The immediate product action is the separately frozen S7 post-M2 simplification convergence implementation lane. The reserved cache-attribution release lane remains PARKED and must not be reused by S7. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item.
 
 ## Historical validated precursor — v0.63.55
 
@@ -487,7 +487,7 @@ MANUAL_EDIT_REBUILT 4.091 s
 C output:
 CANONICAL 4180:931843fc
 FRESH_CHAT 4100:ee834c48
-Δchars -80
+Δ -80
 OUTPUT_MISMATCH
 setChat 0
 

@@ -6,7 +6,7 @@
     "main": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
     "release-simcore": "861100f4771967aa5b8ab8811d06f11702c0d3ff"
   },
-  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. Top-level scope/snapshot remain the legacy SimCore defaults. The SimCore 3M-3 held-out is retained only as diagnostic/training evidence after tuning and must not be reused as independent generalization proof. The Termux Large Doc Editor background-autosave case is a new prospective held-out with its own per-case scope/snapshot frozen before any model or human impact-map answer is read.",
+  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. Top-level scope/snapshot remain the legacy SimCore defaults. The SimCore 3M-3 and Termux background-autosave held-outs are retained only as diagnostic/training evidence after their prior execution and must not be reused as independent generalization proof. Voyage Token Check visible refresh is a new prospective held-out with its own per-case scope/snapshot frozen before any model or human impact-map answer is read.",
   "evals": [
     {
       "id": "simcore-context-projection-retrospective",
@@ -62,6 +62,24 @@
         "Identifies atomic replacement and external-change fail-closed behavior as preservation boundaries when current source supports them.",
         "Reads existing tests before claiming coverage and keeps missing browser/server integration coverage UNKNOWN or explicitly needed rather than claiming test_chunk_store.py protects every layer.",
         "Does not choose autosave timing, debounce, retry, queueing, module placement, release version, or deployment plan and performs no repository mutation as part of the eval answer."
+      ]
+    },
+    {
+      "id": "voyage-token-check-visible-refresh-heldout",
+      "kind": "PROSPECTIVE_HELD_OUT",
+      "candidate_scope": "plugin:voyage-token-check",
+      "frozen_source_snapshot": {
+        "main": "3908f71122f267375ee5eccb3fa3ca85564c634e"
+      },
+      "prompt": "Voyage Token Check에서 Risu-observed usage의 visible-only live refresh를 첫 구현으로 옮기기 전에 impact scope만 해줘. 현재 authority를 먼저 확인하고, plugin-visible fetch-log evidence → source adapter → parse/validate/normalize → VoyageSnapshot → summary/detail/diagnostics의 source-backed semantic flow와 permission/security, observed-vs-authoritative fidelity, 20-entry retention/completeness, visibility/lifecycle, refresh I/O/performance, persistence, real-device validation, production/release 경계를 현재 레포 기준으로 조사해. 구현 코드, polling interval, module placement, final schema, production path, release/deployment 설계는 쓰지 마.",
+      "assertions": [
+        "Uses the frozen Voyage design/evidence authority correctly and preserves canonical production plugin path, production release branch/source/version as UNKNOWN rather than treating the control/design root as deployed plugin source.",
+        "Traces a connected semantic flow from plugin-visible evidence through source adapter and parse/validate/normalize into normalized VoyageSnapshot consumers/UI/diagnostics without inventing a current production-runtime implementation.",
+        "Preserves the fidelity boundary that permission-gated Risu getFetchLogs() observed usage is not authoritative account/project remaining quota; absent/unknown remains distinct from known zero and important values retain source/fidelity/scope provenance.",
+        "Identifies the visible-only bounded local refresh boundary: no Voyage/dashboard network request merely to refresh observed usage, no permanent closed-view loop, and the host 20-entry window means persistent complete cumulative accounting remains UNKNOWN until deterministic miss/dedupe behavior is validated.",
+        "Treats permission denial, secret/raw-log minimization, lifecycle stop/unload behavior, unchanged-state render avoidance, bounded host/CPU/render work, and minimum normalized persistence as material preservation/security/performance boundaries when current contracts support them.",
+        "Keeps real-device Stage 0 / validation requirements explicit and does not claim design documents or nonexistent production tests prove actual Voyage log shape, lifecycle completeness, final refresh interval/cost, or deployable behavior.",
+        "Stops before choosing implementation code, polling interval, retry/debounce mechanism, module placement, final snapshot schema, canonical production path, release version, or deployment plan; performs no repository/product/release mutation as part of the eval answer."
       ]
     }
   ]

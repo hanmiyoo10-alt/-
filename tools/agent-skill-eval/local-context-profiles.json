@@ -284,6 +284,90 @@
           "max_bytes": 7000
         }
       ],
+      "voyage-token-check-visible-refresh-heldout": [
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "docs/REPO_PROJECT_CATALOG.md",
+          "mode": "needle_windows",
+          "needles": ["plugin:voyage-token-check"],
+          "radius": 3,
+          "max_bytes": 5000
+        },
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Current authority class: design/evidence",
+            "Durable-memory profile: `check-only`",
+            "unknown production fields remain UNKNOWN"
+          ],
+          "radius": 3,
+          "max_bytes": 6500
+        },
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "voyage-token-check/DESIGN_STATUS.md",
+          "mode": "needle_windows",
+          "needles": [
+            "This does **not** mean production implementation is complete.",
+            "canonical production source path/build/release artifact",
+            "real-device evidence"
+          ],
+          "radius": 3,
+          "max_bytes": 6500
+        },
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "voyage-token-check/PROJECT_MEMORY.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Canonical plugin path: `UNKNOWN — verify from production evidence before the first development change`",
+            "Production release branch: `UNKNOWN — read the actual repository and production release state first`",
+            "Known zero and unknown are different states"
+          ],
+          "radius": 3,
+          "max_bytes": 7500
+        },
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "voyage-token-check/ARCHITECTURE.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Voyage / Host / Risu evidence sources",
+            "Risu-observed usage != account-wide remaining quota",
+            "known zero is distinct from unknown",
+            "Persist only the minimum normalized state required for UX continuity."
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "voyage-token-check/LIVE_REFRESH_CONTRACT.md",
+          "mode": "needle_windows",
+          "needles": [
+            "refresh only while the relevant plugin view is visible",
+            "do not perform Voyage network requests just to drive the live UI",
+            "host retains only the newest 20 fetch entries",
+            "no continuous loop when the quota view is closed"
+          ],
+          "radius": 4,
+          "max_bytes": 9000
+        },
+        {
+          "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
+          "path": "voyage-token-check/SECURITY_CONTRACT.md",
+          "mode": "needle_windows",
+          "needles": [
+            "Sensitive authentication material must never be included",
+            "Do not persist raw credentials in plugin-owned cache or telemetry.",
+            "Store and display only the minimum account/quota metadata required for the product goal."
+          ],
+          "radius": 3,
+          "max_bytes": 7000
+        }
+      ],
       "narrow-negative": []
     }
   }

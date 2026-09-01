@@ -124,13 +124,26 @@ jobs:
           echo "ZERO_CREDIT_EXECUTION_TRIGGER:$EVAL_EXECUTION_TRIGGER"
           echo "ZERO_CREDIT_MODEL_PROFILE:$EVAL_MODEL_PROFILE"
 
-      - name: Fetch read-only Usage Dashboard release authority
+      - name: Fetch read-only eval authority refs
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin \
             release-usage-dashboard:refs/remotes/origin/release-usage-dashboard
           git rev-parse refs/remotes/origin/release-usage-dashboard^{commit}
+
+          if [[ "$EVAL_SKILL" == 'plugin-impact-scope' && "$EVAL_CASE_ID" == 'simcore-3m3-structured-sidecar-validation-heldout' ]]; then
+            for frozen_sha in \
+              e4daaa427ed902ca6f8368c45d509f7fd0f26d42 \
+              861100f4771967aa5b8ab8811d06f11702c0d3ff
+            do
+              if ! git cat-file -e "${frozen_sha}^{commit}" 2>/dev/null; then
+                git fetch --no-tags --depth=1 origin "$frozen_sha"
+              fi
+              test "$(git rev-parse "${frozen_sha}^{commit}")" = "$frozen_sha"
+              echo "ZERO_CREDIT_FROZEN_AUTHORITY_SHA:$frozen_sha"
+            done
+          fi
 
       - name: Prepare output eval and bounded source context
         shell: bash

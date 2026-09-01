@@ -139,6 +139,8 @@ export function buildComplianceEvalHarness({
           candidateContractHash: candidateHash,
           scenario,
           hostCapture: {
+            beforeRequestInputFingerprint: null,
+            flattenedMessageFingerprint: null,
             modelIdentifier: null,
             modelSettingsFingerprint: null,
             characterReferenceFingerprint: null,
@@ -216,6 +218,8 @@ export function assessReviewEligibility(run) {
   if (!OPAQUE_LABELS.includes(run?.conditionOpaqueId)) failures.push('CONDITION_OPAQUE_ID_INVALID');
   if (!isSha256(run?.scenario?.syntheticScenarioFingerprint)) failures.push('SCENARIO_FINGERPRINT_INVALID');
   if (!String(run?.hostCapture?.generatedOutput || '').trim()) failures.push('GENERATED_OUTPUT_MISSING');
+  if (!isSha256(run?.hostCapture?.beforeRequestInputFingerprint)) failures.push('BEFORE_REQUEST_INPUT_FINGERPRINT_INVALID');
+  if (!isSha256(run?.hostCapture?.flattenedMessageFingerprint)) failures.push('FLATTENED_MESSAGE_FINGERPRINT_INVALID');
   if (!isSha256(run?.hostCapture?.actualHostRequestFingerprint)) failures.push('HOST_REQUEST_FINGERPRINT_INVALID');
   if (!String(run?.hostCapture?.modelIdentifier || '').trim()) failures.push('MODEL_IDENTIFIER_MISSING');
   if (!isSha256(run?.hostCapture?.modelSettingsFingerprint)) failures.push('MODEL_SETTINGS_FINGERPRINT_INVALID');

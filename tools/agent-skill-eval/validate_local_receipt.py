@@ -21,6 +21,7 @@ PAIR_FIELDS = (
     "case_id",
     "user_task_sha256",
     "evidence_context_sha256",
+    "response_contract_sha256",
     "model_repository",
     "model_revision",
     "model_file",
@@ -91,6 +92,9 @@ def make_receipt(
         raise LocalReceiptError("with_skill prompt missing skill guidance hash")
     if mode == "baseline_without_target_skill" and prompt_meta.get("skill_guidance_sha256") not in (None, ""):
         raise LocalReceiptError("baseline prompt unexpectedly contains skill guidance hash")
+    response_contract_hash = prompt_meta.get("response_contract_sha256") or "NONE"
+    if response_contract_hash != "NONE" and (not isinstance(response_contract_hash, str) or len(response_contract_hash) != 64):
+        raise LocalReceiptError("response contract hash is malformed")
     required_strings = [
         model_repository, model_revision, model_file, model_sha256, llama_release,
         llama_source_digest, llama_artifact, llama_artifact_sha256, llama_runtime_version,
@@ -116,6 +120,7 @@ def make_receipt(
         "mode": mode,
         "user_task_sha256": prompt_meta.get("user_task_sha256"),
         "evidence_context_sha256": prompt_meta.get("evidence_context_sha256"),
+        "response_contract_sha256": response_contract_hash,
         "full_prompt_sha256": prompt_meta.get("full_prompt_sha256"),
         "skill_guidance_sha256": prompt_meta.get("skill_guidance_sha256"),
         "model_repository": model_repository,
@@ -182,6 +187,7 @@ def validate_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "case_id": a["case_id"],
         "user_task_sha256": a["user_task_sha256"],
         "evidence_context_sha256": a["evidence_context_sha256"],
+        "response_contract_sha256": a["response_contract_sha256"],
         "model_sha256": a["model_sha256"],
         "llama_artifact_sha256": a["llama_artifact_sha256"],
         "trigger_observability": "UNOBSERVABLE_WITH_LOCAL_CONTEXT_INJECTION",

@@ -54,6 +54,37 @@ class SkillContractTests(unittest.TestCase):
         self.assertEqual(discovery.PILOT_VALIDATED_SCOPES, {"plugin:usage-dashboard"})
         self.assertEqual(validator.PILOT_VALIDATED_SCOPES, {"plugin:usage-dashboard"})
 
+    def test_generic_procedure_is_parameterized_without_scope_promotion(self):
+        text = SKILL.read_text(encoding="utf-8")
+
+        self.assertIn("Pilot validation is limited to `plugin:usage-dashboard`.", text)
+        self.assertIn(
+            "UNVALIDATED_SCOPE — plugin-impact-scope pilot currently validates only plugin:usage-dashboard.",
+            text,
+        )
+        self.assertIn("Candidate evaluation authority is not validated-scope promotion.", text)
+
+        for required in (
+            "--scope <verified-plugin-scope>",
+            "--root <bounded-project-root>",
+            "- Scope: `<verified-plugin-scope>`",
+            "request/event producer -> request/state metadata -> presentation or diagnostics consumer",
+            "producer capture/write",
+            "-> presentation consumer",
+            "-> diagnostic or validation consumer",
+        ):
+            self.assertIn(required, text)
+
+        for forbidden in (
+            "--scope plugin:usage-dashboard",
+            "--root plugins/usage-dashboard",
+            "- Scope: `plugin:usage-dashboard`",
+            "Engine -> request metadata -> Plugin UI/Diagnostics",
+            "Manager provisioning -> Engine identity -> Diagnostics -> manifest/materializer",
+            "Recent Requests or equivalent presentation consumer",
+        ):
+            self.assertNotIn(forbidden, text)
+
     def test_skill_assets_contain_no_frozen_product_version_or_sha(self):
         combined = "\n".join(
             path.read_text(encoding="utf-8") for path in [SKILL, DISCOVERY, VALIDATOR]

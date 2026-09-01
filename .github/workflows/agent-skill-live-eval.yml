@@ -1,0 +1,258 @@
+name: Agent Skill Live Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: Agent Skill to evaluate
+        required: true
+        type: choice
+        options:
+          - plugin-authority-scan
+          - plugin-impact-scope
+      eval_kind:
+        description: Evaluation fixture kind
+        required: true
+        default: output
+        type: choice
+        options:
+          - output
+          - trigger
+      case_id:
+        description: Exact normalized case id from the selected fixture
+        required: true
+        type: string
+      model:
+        description: Explicit Copilot model for both paired runs
+        required: true
+        default: claude-haiku-4.5
+        type: choice
+        options:
+          - claude-haiku-4.5
+          - claude-sonnet-4.6
+          - gpt-5.4
+      credit_ack:
+        description: Type I_UNDERSTAND_COPILOT_AI_CREDITS_MAY_BE_USED to authorize this bounded live run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  copilot-requests: write
+
+jobs:
+  live-eval:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      COPILOT_PACKAGE_VERSION: '1.0.82'
+      COPILOT_AUTO_UPDATE: 'false'
+      GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS: 'false'
+      GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS: 'false'
+      GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP: 'false'
+      EVAL_ROOT: .agent-skill-live-eval
+    steps:
+      - name: Checkout exact repository SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Credit acknowledgement gate
+        shell: bash
+        env:
+          CREDIT_ACK: ${{ inputs.credit_ack }}
+        run: |
+          set -euo pipefail
+          required='I_UNDERSTAND_COPILOT_AI_CREDITS_MAY_BE_USED'
+          if [[ "$CREDIT_ACK" != "$required" ]]; then
+            echo 'LIVE_EVAL_BLOCKED:CREDIT_ACK_REQUIRED'
+            exit 2
+          fi
+          echo 'LIVE_EVAL_CREDIT_ACK:ACCEPTED'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Prepare exact eval matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVAL_ROOT"
+          python tools/agent-skill-eval/prepare_eval.py matrix \
+            --repo-root . \
+            --skill '${{ inputs.skill }}' \
+            --eval-kind '${{ inputs.eval_kind }}' \
+            --case-id '${{ inputs.case_id }}' \
+            --model '${{ inputs.model }}' \
+            --repository-sha "$GITHUB_SHA" \
+            --output "$EVAL_ROOT/matrix.json"
+
+      - name: Prepare isolated workspaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          work_root="$RUNNER_TEMP/agent-skill-live-eval"
+          with_root="$work_root/with_skill"
+          baseline_root="$work_root/baseline_without_target_skill"
+          rm -rf "$work_root"
+          mkdir -p "$with_root" "$baseline_root"
+          git archive "$GITHUB_SHA" | tar -x -C "$with_root"
+          git archive "$GITHUB_SHA" | tar -x -C "$baseline_root"
+
+          mkdir -p "$baseline_root/.eval-quarantine"
+          mv "$baseline_root/.agents/skills/${{ inputs.skill }}" \
+             "$baseline_root/.eval-quarantine/${{ inputs.skill }}"
+
+          mkdir -p "$EVAL_ROOT/with_skill" "$EVAL_ROOT/baseline_without_target_skill"
+          python tools/agent-skill-eval/prepare_eval.py prove \
+            --workspace-root "$with_root" \
+            --skill '${{ inputs.skill }}' \
+            --mode with_skill \
+            --output "$EVAL_ROOT/with_skill/proof.json"
+          python tools/agent-skill-eval/prepare_eval.py prove \
+            --workspace-root "$baseline_root" \
+            --skill '${{ inputs.skill }}' \
+            --mode baseline_without_target_skill \
+            --output "$EVAL_ROOT/baseline_without_target_skill/proof.json"
+
+          printf '%s\n' "$with_root" > "$EVAL_ROOT/with_skill/workspace-path.txt"
+          printf '%s\n' "$baseline_root" > "$EVAL_ROOT/baseline_without_target_skill/workspace-path.txt"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+          cache: ''
+
+      - name: Install pinned Copilot CLI package
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global "@github/copilot@${COPILOT_PACKAGE_VERSION}"
+
+      - name: Record Copilot runtime identity
+        id: copilot_identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_version="$(copilot --version | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+          if [[ -z "$runtime_version" ]]; then
+            echo 'COPILOT_RUNTIME_IDENTITY:MISSING'
+            exit 2
+          fi
+          printf '%s\n' "$runtime_version" > "$EVAL_ROOT/copilot-runtime-version.txt"
+          printf '%s\n' "$COPILOT_PACKAGE_VERSION" > "$EVAL_ROOT/copilot-package-version.txt"
+          {
+            echo 'runtime_version<<EOF'
+            echo "$runtime_version"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          echo "COPILOT_RUNTIME_IDENTITY:$runtime_version"
+
+      - name: Run paired Copilot eval
+        id: paired_run
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prompt="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('.agent-skill-live-eval/matrix.json').read_text(encoding='utf-8'))
+          print(data['prompt'], end='')
+          PY
+          )"
+
+          with_root="$(cat "$EVAL_ROOT/with_skill/workspace-path.txt")"
+          baseline_root="$(cat "$EVAL_ROOT/baseline_without_target_skill/workspace-path.txt")"
+
+          run_one() {
+            local mode="$1"
+            local root="$2"
+            local response="$GITHUB_WORKSPACE/$EVAL_ROOT/$mode/response.jsonl"
+            local stderr="$GITHUB_WORKSPACE/$EVAL_ROOT/$mode/stderr.txt"
+            set +e
+            (
+              cd "$root"
+              copilot \
+                --no-auto-update \
+                --no-custom-instructions \
+                --disable-builtin-mcps \
+                --no-remote \
+                --no-remote-export \
+                --no-ask-user \
+                --output-format=json \
+                --model='${{ inputs.model }}' \
+                --available-tools='view,glob,grep,skill' \
+                --allow-tool=read \
+                -p "$prompt"
+            ) >"$response" 2>"$stderr"
+            local code=$?
+            set -e
+            printf '%s\n' "$code" > "$GITHUB_WORKSPACE/$EVAL_ROOT/$mode/exit-code.txt"
+            echo "LIVE_EVAL_MODE_EXIT:$mode:$code"
+          }
+
+          run_one with_skill "$with_root"
+          run_one baseline_without_target_skill "$baseline_root"
+
+      - name: Build receipts and validate pair
+        shell: bash
+        env:
+          COPILOT_RUNTIME_VERSION: ${{ steps.copilot_identity.outputs.runtime_version }}
+        run: |
+          set -euo pipefail
+          with_code="$(cat "$EVAL_ROOT/with_skill/exit-code.txt")"
+          baseline_code="$(cat "$EVAL_ROOT/baseline_without_target_skill/exit-code.txt")"
+
+          python tools/agent-skill-eval/validate_receipt.py make \
+            --matrix "$EVAL_ROOT/matrix.json" \
+            --proof "$EVAL_ROOT/with_skill/proof.json" \
+            --response "$EVAL_ROOT/with_skill/response.jsonl" \
+            --exit-code "$with_code" \
+            --mode with_skill \
+            --copilot-package-version "$COPILOT_PACKAGE_VERSION" \
+            --copilot-runtime-version "$COPILOT_RUNTIME_VERSION" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$EVAL_ROOT/with_skill/receipt.json"
+
+          python tools/agent-skill-eval/validate_receipt.py make \
+            --matrix "$EVAL_ROOT/matrix.json" \
+            --proof "$EVAL_ROOT/baseline_without_target_skill/proof.json" \
+            --response "$EVAL_ROOT/baseline_without_target_skill/response.jsonl" \
+            --exit-code "$baseline_code" \
+            --mode baseline_without_target_skill \
+            --copilot-package-version "$COPILOT_PACKAGE_VERSION" \
+            --copilot-runtime-version "$COPILOT_RUNTIME_VERSION" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$EVAL_ROOT/baseline_without_target_skill/receipt.json"
+
+          python tools/agent-skill-eval/validate_receipt.py pair \
+            --with-receipt "$EVAL_ROOT/with_skill/receipt.json" \
+            --baseline-receipt "$EVAL_ROOT/baseline_without_target_skill/receipt.json" \
+            --output "$EVAL_ROOT/pair-validation.json"
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('.agent-skill-live-eval/pair-validation.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          print('LIVE_EVAL_PAIR_STATUS:' + str(data.get('status')))
+          if data.get('status') != 'PAIR_VALID':
+              raise SystemExit(3)
+          PY
+
+      - name: Upload bounded live eval evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-live-eval-${{ inputs.skill }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-live-eval/
+          if-no-files-found: error
+          retention-days: 7

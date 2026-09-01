@@ -35,6 +35,25 @@ PROMPT_LAYOUTS = {
     CLAIM_SLOT_RECENCY_LAYOUT,
 }
 DEFAULT_PROMPT_LAYOUTS_PATH = MODULE_DIR / "local-prompt-layouts.json"
+CANDIDATE_GUIDANCE_PROJECTION_ID = "second_scope_candidate_scope_gate_v1"
+
+_CANDIDATE_GATE_REPLACEMENTS = (
+    (
+        "Current normal validated pilot scope: `plugin:usage-dashboard` / Local Usage Dashboard.\n\n",
+        "",
+    ),
+    (
+        "- Pilot validation is limited to `plugin:usage-dashboard`.\n",
+        "",
+    ),
+    (
+        "For normal invocation, `<verified-plugin-scope>` must resolve to `plugin:usage-dashboard` for this pilot.\n\n"
+        "If the normal requested scope is another plugin/product, return:\n\n"
+        "`UNVALIDATED_SCOPE — plugin-impact-scope pilot currently validates only plugin:usage-dashboard.`\n\n"
+        "An isolated candidate evaluation may explicitly supply evaluation authority for another scope. In that case, analyze that exact candidate scope while preserving every other boundary in this skill. Candidate evaluation authority is not validated-scope promotion.\n\n",
+        "For this isolated candidate evaluation, `<verified-plugin-scope>` is the exact candidate scope supplied by evaluation authority. Do not apply the normal validated-scope rejection inside this projected guidance. This is procedure evaluation only and does not promote the scope or change normal invocation authority.\n\n",
+    ),
+)
 
 
 class PromptError(ValueError):
@@ -89,6 +108,8 @@ def _candidate_eval_frame(matrix: dict[str, Any]) -> str:
     frozen = matrix.get("candidate_frozen_source_snapshot")
     if not isinstance(candidate_scope, str) or not candidate_scope.strip():
         raise PromptError("second-scope candidate matrix missing candidate_scope")
+    if "\n" in candidate_scope or "\r" in candidate_scope:
+        raise PromptError("second-scope candidate scope must be one line")
     if not isinstance(frozen, dict) or not frozen:
         raise PromptError("second-scope candidate matrix missing frozen source snapshot")
     if any(not isinstance(k, str) or not isinstance(v, str) for k, v in frozen.items()):
@@ -100,6 +121,50 @@ def _candidate_eval_frame(matrix: dict[str, Any]) -> str:
         "Preserve every other read-only, source-grounding, UNKNOWN/CONFLICT, no-design, no-implementation, and no-mutation boundary. "
         "This is evaluation authority only; it is not normal invocation authority, validated-scope promotion, production authority, or release authorization.\n"
     )
+
+
+def _project_candidate_guidance(
+    skill_guidance: str,
+    matrix: dict[str, Any],
+) -> tuple[str, str | None]:
+    if matrix.get("fixture_class", "standard") != "second_scope_candidate":
+        return skill_guidance, None
+    if matrix.get("skill") != "plugin-impact-scope":
+        raise PromptError("candidate guidance projection is only defined for plugin-impact-scope")
+    candidate_scope = matrix.get("candidate_scope")
+    if not isinstance(candidate_scope, str) or not candidate_scope.strip():
+        raise PromptError("second-scope candidate matrix missing candidate_scope")
+
+    projected = skill_guidance
+    for old, new in _CANDIDATE_GATE_REPLACEMENTS:
+        count = projected.count(old)
+        if count != 1:
+            raise PromptError(
+                "candidate guidance projection contract drift: "
+                f"expected exactly one gate block, found {count}"
+            )
+        projected = projected.replace(old, new, 1)
+
+    neutral = (
+        f"Isolated candidate evaluation scope: `{candidate_scope.strip()}`. "
+        "This scope is supplied by evaluation authority for procedure evaluation only; "
+        "it is not validated-scope promotion or normal invocation authority.\n\n"
+    )
+    heading = "# Plugin Impact Scope\n\n"
+    if projected.count(heading) != 1:
+        raise PromptError("candidate guidance projection contract drift: skill heading missing")
+    projected = projected.replace(heading, heading + neutral, 1)
+
+    forbidden = (
+        "Current normal validated pilot scope: `plugin:usage-dashboard`",
+        "Pilot validation is limited to `plugin:usage-dashboard`.",
+        "must resolve to `plugin:usage-dashboard` for this pilot",
+        "UNVALIDATED_SCOPE — plugin-impact-scope pilot currently validates only plugin:usage-dashboard.",
+    )
+    leaked = [text for text in forbidden if text in projected]
+    if leaked:
+        raise PromptError(f"candidate guidance projection leaked normal scope gate: {leaked}")
+    return projected, CANDIDATE_GUIDANCE_PROJECTION_ID
 
 
 def compose(
@@ -128,14 +193,24 @@ def compose(
 
     skill_guidance = ""
     skill_guidance_sha256 = None
+    canonical_skill_guidance_sha256 = None
+    guidance_projection_id = None
+    guidance_projection_sha256 = None
     if mode == "with_skill":
         try:
-            skill_guidance = skill_path.read_text(encoding="utf-8")
+            canonical_skill_guidance = skill_path.read_text(encoding="utf-8")
         except OSError as exc:
             raise PromptError(f"cannot read skill guidance: {exc}") from exc
-        if not skill_guidance.strip():
+        if not canonical_skill_guidance.strip():
             raise PromptError("skill guidance is empty")
+        canonical_skill_guidance_sha256 = sha256_bytes(canonical_skill_guidance.encode("utf-8"))
+        skill_guidance, guidance_projection_id = _project_candidate_guidance(
+            canonical_skill_guidance,
+            matrix,
+        )
         skill_guidance_sha256 = sha256_bytes(skill_guidance.encode("utf-8"))
+        if guidance_projection_id is not None:
+            guidance_projection_sha256 = skill_guidance_sha256
 
     structured = response_contract is not None
     grounding_frame = (
@@ -216,6 +291,9 @@ def compose(
         "user_task_sha256": sha256_bytes(user_task.encode("utf-8")),
         "evidence_context_sha256": context_hash,
         "skill_guidance_sha256": skill_guidance_sha256,
+        "canonical_skill_guidance_sha256": canonical_skill_guidance_sha256,
+        "guidance_projection_id": guidance_projection_id,
+        "guidance_projection_sha256": guidance_projection_sha256,
         "response_contract_sha256": contract_sha256(response_contract),
         "full_prompt_sha256": sha256_bytes(full_prompt.encode("utf-8")),
     }

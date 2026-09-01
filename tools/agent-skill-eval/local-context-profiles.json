@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "plugin-authority-scan": {
+      "1": [
+        {
+          "ref": "HEAD",
+          "path": "docs/REPO_PROJECT_CATALOG.md",
+          "mode": "needle_windows",
+          "needles": ["plugin:usage-dashboard"],
+          "radius": 8,
+          "max_bytes": 12000
+        },
+        {
+          "ref": "HEAD",
+          "path": ".github/plugin-control-plane/registry.json",
+          "mode": "needle_windows",
+          "needles": ["plugin:usage-dashboard"],
+          "radius": 12,
+          "max_bytes": 16000
+        },
+        {
+          "ref": "HEAD",
+          "path": "docs/USAGE_DASHBOARD_GUIDELINES.md",
+          "mode": "needle_windows",
+          "needles": ["Production release branch: `release-usage-dashboard`", "Never infer the current production version from conversation memory."],
+          "radius": 10,
+          "max_bytes": 16000
+        },
+        {
+          "ref": "refs/remotes/origin/release-usage-dashboard",
+          "path": "plugins/usage-dashboard/runtime/product-manifest.json",
+          "mode": "full",
+          "max_bytes": 16000
+        }
+      ]
+    },
+    "plugin-impact-scope": {
+      "narrow-negative": []
+    }
+  }
+}

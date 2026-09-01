@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.1-new-01",
+  "productionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "productionBlob": "8f332cfceed316d35954e353c2eaca38c2f34d95",
+  "liveScenarioId": "07001_COLD_FIRST_TURN_TAIL_ATTRIBUTION_REAL_LONG_CHAT",
+  "decision": "LIVE_PASS",
+  "checkpoint": "M2-6",
+  "nextPriority": "S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION",
+  "humanEvidence": [
+    "docs/SIMCORE_LIVE_07001_RELEASE_CLOSE_2026-09-01.md",
+    "docs/SIMCORE_LIVE_07001_FORMAL_STAGE_A_2026-08-31.md",
+    "docs/SIMCORE_LIVE_07001_FORMAL_STAGE_B_2026-08-31.md",
+    "docs/SIMCORE_LIVE_07001_FORMAL_STAGE_C_AND_ATTRIBUTION_VERDICT_2026-08-31.md"
+  ],
+  "authorityConfirmation": "HUMAN_EVIDENCE"
+}

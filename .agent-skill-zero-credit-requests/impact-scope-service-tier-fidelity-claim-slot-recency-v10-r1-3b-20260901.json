@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "plugin-impact-scope",
+  "case_id": "service-tier-fidelity",
+  "target_repository_sha": "f20db69a3126c350e56037d9ba74eb9f011b68cc",
+  "model_profile": "qwen2.5-3b-instruct-q4_k_m"
+}

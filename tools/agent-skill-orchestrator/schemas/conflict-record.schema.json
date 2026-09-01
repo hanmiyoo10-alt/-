@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conflict-record.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "subject", "left_claim_id", "right_claim_id", "resolution"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^conflict-[A-Za-z0-9._-]+$"},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 512},
+    "left_claim_id": {"type": "string", "pattern": "^claim-[A-Za-z0-9._-]+$"},
+    "right_claim_id": {"type": "string", "pattern": "^claim-[A-Za-z0-9._-]+$"},
+    "resolution": {"type": "string", "enum": ["UNRESOLVED", "RESOLVED"]}
+  }
+}

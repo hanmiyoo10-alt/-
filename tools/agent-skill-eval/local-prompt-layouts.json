@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "layouts": {
+    "plugin-impact-scope": {
+      "service-tier-fidelity": "guidance_after_evidence"
+    }
+  }
+}

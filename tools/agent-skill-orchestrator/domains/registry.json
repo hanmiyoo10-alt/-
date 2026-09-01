@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "domains": [
+    {
+      "domain_id": "usage-dashboard",
+      "scope": "plugin:usage-dashboard",
+      "name": "Local Usage Dashboard",
+      "lifecycle": "production",
+      "primary_path": "plugins/usage-dashboard/**",
+      "authority_refs": [
+        {"kind": "release_branch", "value": "release-usage-dashboard"},
+        {"kind": "manifest", "value": "plugins/usage-dashboard/runtime/product-manifest.json"},
+        {"kind": "artifact", "value": "plugins/usage-dashboard/latest.js"},
+        {"kind": "release_spec_dir", "value": ".github/usage-dashboard/releases"}
+      ],
+      "guidelines_path": "docs/USAGE_DASHBOARD_GUIDELINES.md",
+      "registration_semantics": "domain_metadata_only_no_skill_promotion"
+    }
+  ]
+}

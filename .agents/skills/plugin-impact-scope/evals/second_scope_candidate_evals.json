@@ -6,7 +6,7 @@
     "main": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
     "release-simcore": "861100f4771967aa5b8ab8811d06f11702c0d3ff"
   },
-  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. Top-level scope/snapshot remain the legacy SimCore defaults. The SimCore 3M-3 and Termux background-autosave held-outs are retained only as diagnostic/training evidence after their prior execution and must not be reused as independent generalization proof. Voyage Token Check visible refresh is a new prospective held-out with its own per-case scope/snapshot frozen before any model or human impact-map answer is read.",
+  "note": "These candidate evals do not change trigger expectations or PILOT_VALIDATED_SCOPES. Top-level scope/snapshot remain the legacy SimCore defaults. The SimCore 3M-3, Termux background-autosave, and Voyage visible-refresh held-outs are retained only as diagnostic/training evidence after their prior execution and must not be reused as independent generalization proof. DevPass missing-artifact recovery is a new prospective v9 held-out with its own per-case scope/snapshot frozen before any DevPass model impact-map answer is read.",
   "evals": [
     {
       "id": "simcore-context-projection-retrospective",
@@ -80,6 +80,24 @@
         "Treats permission denial, secret/raw-log minimization, lifecycle stop/unload behavior, unchanged-state render avoidance, bounded host/CPU/render work, and minimum normalized persistence as material preservation/security/performance boundaries when current contracts support them.",
         "Keeps real-device Stage 0 / validation requirements explicit and does not claim design documents or nonexistent production tests prove actual Voyage log shape, lifecycle completeness, final refresh interval/cost, or deployable behavior.",
         "Stops before choosing implementation code, polling interval, retry/debounce mechanism, module placement, final snapshot schema, canonical production path, release version, or deployment plan; performs no repository/product/release mutation as part of the eval answer."
+      ]
+    },
+    {
+      "id": "devpass-missing-artifact-recovery-heldout",
+      "kind": "PROSPECTIVE_HELD_OUT",
+      "candidate_scope": "plugin:devpass",
+      "frozen_source_snapshot": {
+        "main": "3869b454daa6ddc04d72317e22e063784e086f0b"
+      },
+      "prompt": "DevPass declared update channel에서 현재 `plugins/devpass/latest.js`가 missing인 상태를 복구하기 전에 impact scope만 해줘. 현재 authority를 먼저 확인하고, README의 fixed GitHub HTTPS update declaration → registry artifact locator/ref → observed DECLARED_MISSING state → future artifact validation/publisher boundary의 source-backed flow와 placeholder, secret material, release authority, version/published-behavior, writable automation, tests/validation 경계를 현재 source 기준으로 조사해. 구현 코드, placeholder artifact, publisher, release branch/version, deployment plan은 쓰지 마.",
+      "assertions": [
+        "Uses the frozen DevPass declared-update-channel authority correctly: main is the declared channel, not a separately registered release authority.",
+        "Traces the connected fixed GitHub HTTPS update declaration to the registry artifact locator/ref and then to the observed DECLARED_MISSING artifact state without inventing a current runtime artifact.",
+        "Distinguishes artifact declaration from artifact presence, forbids creating a placeholder merely to make validation green, and does not claim current published behavior/version while latest.js is missing.",
+        "Preserves the credential/update-channel security boundary, including secret-material exclusion and the fixed GitHub HTTPS update channel rather than localhost HTTP.",
+        "Does not infer a new publisher, release branch/authority, main writer, or writable durable-memory path from bootstrap metadata.",
+        "Keeps actual-artifact validation explicit if latest.js later exists and preserves current implementation/test behavior as UNKNOWN where the missing artifact provides no source evidence.",
+        "Stops before choosing implementation code, placeholder contents, publisher, release branch/version, or deployment plan and performs no repository/product/release mutation as part of the eval answer."
       ]
     }
   ]

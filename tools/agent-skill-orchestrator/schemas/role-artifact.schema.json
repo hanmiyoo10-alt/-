@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "role-artifact.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "role", "model_profile_id", "model_digest", "target_repository_sha", "evidence_sha256", "prompt_sha256", "structured_response_sha256", "upstream_artifact_sha256", "records"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]},
+    "model_profile_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "model_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "target_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "structured_response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "upstream_artifact_sha256": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "records": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claims", "flow_edges", "boundaries", "blockers", "conflicts"],
+      "properties": {
+        "claims": {"type": "array", "maxItems": 64, "items": {"$ref": "claim.schema.json"}},
+        "flow_edges": {"type": "array", "maxItems": 64, "items": {"$ref": "flow-edge.schema.json"}},
+        "boundaries": {"type": "array", "maxItems": 64, "items": {"$ref": "boundary.schema.json"}},
+        "blockers": {"type": "array", "maxItems": 64, "items": {"$ref": "blocker.schema.json"}},
+        "conflicts": {"type": "array", "maxItems": 64, "items": {"$ref": "conflict-record.schema.json"}}
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "blocker.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "subject", "origin_role", "refs"],
+  "properties": {
+    "kind": {"type": "string", "enum": ["missing_evidence", "invalid_ref", "unknown", "conflict", "budget", "execution_incomplete", "other"]},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 512},
+    "origin_role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer", "deterministic"]},
+    "refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^S[1-9][0-9]*@L[1-9][0-9]*$", "x-known-source-ref": true}}
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orchestration-receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "target_repository_sha", "authority_profile", "evidence_sha256", "execution_plan_sha256", "generation_profile_sha256", "role_artifact_sha256", "final_verdict"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "target_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "authority_profile": {"type": "string", "minLength": 1, "maxLength": 128},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generation_profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "role_artifact_sha256": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "final_verdict": {"type": "string", "enum": ["SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT", "EXECUTION_INCOMPLETE", "INVALID", "NOT_EVALUATED"]}
+  }
+}

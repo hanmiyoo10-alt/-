@@ -5,6 +5,7 @@ on:
     paths:
       - '.agents/skills/**'
       - 'tools/agent-skill-eval/**'
+      - 'tools/agent-skill-orchestrator/**'
       - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skills-ci.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - '.agents/skills/**'
       - 'tools/agent-skill-eval/**'
+      - 'tools/agent-skill-orchestrator/**'
       - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skills-ci.yml'
@@ -36,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' files < <(find .agents/skills tools/agent-skill-eval -type f -name '*.py' -print0 | sort -z)
+          mapfile -d '' files < <(find .agents/skills tools/agent-skill-eval tools/agent-skill-orchestrator -type f -name '*.py' -print0 | sort -z)
           if (( ${#files[@]} == 0 )); then
             echo 'AGENT_SKILLS_PYTHON_FILES:none'
             exit 0
@@ -65,3 +67,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s tools/agent-skill-eval/tests -p 'test_*.py' -v
+
+      - name: Run orchestrator contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tools/agent-skill-orchestrator/tests -p 'test_*.py' -v

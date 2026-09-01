@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "skill": "plugin-authority-scan",
+  "case_id": "1",
+  "target_repository_sha": "bf1aad4915ba50077b6a444dec298446ee3f5df2"
+}

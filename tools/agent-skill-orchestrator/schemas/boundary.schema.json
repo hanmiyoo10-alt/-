@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "boundary.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "subject", "status", "refs", "role"],
+  "properties": {
+    "kind": {"type": "string", "enum": ["request_identity", "no_extra_io", "lifecycle", "security", "persistence", "release", "test", "device", "other"]},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 512},
+    "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+    "refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^S[1-9][0-9]*@L[1-9][0-9]*$", "x-known-source-ref": true}},
+    "role": {"type": "string", "enum": ["critic", "synthesizer"]}
+  }
+}

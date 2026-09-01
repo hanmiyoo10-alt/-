@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "claim.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "status", "value", "refs", "role"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^claim-[A-Za-z0-9._-]+$"},
+    "kind": {"type": "string", "enum": ["authority", "semantic_owner", "preservation", "test", "release", "generated", "device", "other"]},
+    "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+    "value": {"type": "string", "minLength": 1, "maxLength": 512},
+    "refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^S[1-9][0-9]*@L[1-9][0-9]*$", "x-known-source-ref": true}},
+    "role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]}
+  }
+}

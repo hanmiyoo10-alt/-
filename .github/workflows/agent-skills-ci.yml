@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - '.agents/skills/**'
+      - 'tools/agent-skill-eval/**'
+      - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skills-ci.yml'
   push:
     branches: [main]
     paths:
       - '.agents/skills/**'
+      - 'tools/agent-skill-eval/**'
+      - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skills-ci.yml'
 
 permissions:
@@ -30,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' files < <(find .agents/skills -type f -name '*.py' -print0 | sort -z)
+          mapfile -d '' files < <(find .agents/skills tools/agent-skill-eval -type f -name '*.py' -print0 | sort -z)
           if (( ${#files[@]} == 0 )); then
             echo 'AGENT_SKILLS_PYTHON_FILES:none'
             exit 0
@@ -53,3 +57,9 @@ jobs:
             exit 1
           fi
           echo "AGENT_SKILLS_TEST_PASS:${count}"
+
+      - name: Run live-eval harness contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tools/agent-skill-eval/tests -p 'test_*.py' -v

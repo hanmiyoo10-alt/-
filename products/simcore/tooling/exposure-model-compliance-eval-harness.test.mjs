@@ -21,6 +21,8 @@ function validExecutedRun(run, suffix = 'a') {
     harnessInvalidReason: null,
     hostCapture: {
       ...run.hostCapture,
+      beforeRequestInputFingerprint: sha('a'),
+      flattenedMessageFingerprint: run.conditionActualId === 'E6' ? sha('e') : sha('a'),
       modelIdentifier: 'same-model',
       modelSettingsFingerprint: sha('b'),
       characterReferenceFingerprint: sha('c'),
@@ -125,6 +127,13 @@ assert.equal(assessReviewEligibility(missingOutput).pass, false);
 assert.throws(() => createLockedReviewRecord(missingOutput, {
   primaryDisposition: 'PASS_ALLOWED', naturalness: 4, reactivity: 4, epistemicClarity: 4, rationale: 'x',
 }), /GENERATED_OUTPUT_MISSING/);
+
+const missingBaseRequestIdentity = validExecutedRun(m2.runs[3]);
+missingBaseRequestIdentity.hostCapture.beforeRequestInputFingerprint = null;
+assert.equal(assessReviewEligibility(missingBaseRequestIdentity).pass, false);
+assert.throws(() => createLockedReviewRecord(missingBaseRequestIdentity, {
+  primaryDisposition: 'PASS_ALLOWED', naturalness: 4, reactivity: 4, epistemicClarity: 4, rationale: 'x',
+}), /BEFORE_REQUEST_INPUT_FINGERPRINT_INVALID/);
 
 const m2Again = buildComplianceEvalHarness({ stage: 'M2' });
 assert.equal(m2Again.candidateContractHash, m2.candidateContractHash);

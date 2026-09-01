@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "plugin-impact-scope",
+  "case_id": "devpass-missing-artifact-recovery-heldout",
+  "target_repository_sha": "1ad93e7be4e4f77479d161eb3ea8cfec70af84cc",
+  "model_profile": "qwen2.5-3b-instruct-q4_k_m"
+}

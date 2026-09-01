@@ -3,9 +3,9 @@
   "contracts": {
     "plugin-impact-scope": {
       "service-tier-fidelity": {
-        "id": "impact-scope-derived-verdict-v5",
+        "id": "impact-scope-evidence-status-compat-v6",
         "expected_scope": "plugin:usage-dashboard",
-        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For every non-UNKNOWN claim basis, use only an evidence ID permitted for that claim by CLAIM EVIDENCE COMPATIBILITY. UNKNOWN means no evidence. Never write source paths or anchors in the output. Do not emit a verdict field; the evaluator derives the impact-map verdict mechanically from validated evidence bases. Use the fewest entries needed: at most 3 distinct flow edges, 2 tests, and 2 blocked claims. Do not add prose before or after the JSON.",
+        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For every non-UNKNOWN claim basis, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY. UNKNOWN means no evidence and must not carry an evidence suffix. Never write source paths or anchors in the output. Do not emit a verdict field; the evaluator derives the impact-map verdict mechanically from validated evidence bases. Do not emit CONFLICT unless the compatibility legend explicitly permits a CONFLICT:E# pair. Use the fewest entries needed: at most 3 distinct flow edges, 2 tests, and 2 blocked claims. Do not add prose before or after the JSON.",
         "evidence_registry": {
           "E1": {
             "source_path": "docs/REPO_PROJECT_CATALOG.md",
@@ -40,14 +40,36 @@
             "source_anchor": "P50 Service Tier Selection-Source Fidelity"
           }
         },
-        "claim_evidence_allowlist": {
-          "authority": ["E1"],
-          "flow_edges": ["E2", "E3", "E4", "E7"],
-          "request_identity": ["E5"],
-          "no_extra_io": ["E6"],
-          "tests": ["E5", "E6", "E8"],
-          "generated_release": ["E1"],
-          "narrowest_boundary": ["E2", "E3", "E4", "E7"]
+        "claim_evidence_status_allowlist": {
+          "authority": {
+            "E1": ["DIRECT", "SUPPORTED_LIKELY"]
+          },
+          "flow_edges": {
+            "E2": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E3": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E4": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E7": ["DIRECT", "SUPPORTED_LIKELY"]
+          },
+          "request_identity": {
+            "E5": ["DIRECT", "SUPPORTED_LIKELY"]
+          },
+          "no_extra_io": {
+            "E6": ["DIRECT", "SUPPORTED_LIKELY"]
+          },
+          "tests": {
+            "E5": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E6": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E8": ["DIRECT", "SUPPORTED_LIKELY"]
+          },
+          "generated_release": {
+            "E1": ["SUPPORTED_LIKELY"]
+          },
+          "narrowest_boundary": {
+            "E2": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E3": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E4": ["DIRECT", "SUPPORTED_LIKELY"],
+            "E7": ["DIRECT", "SUPPORTED_LIKELY"]
+          }
         }
       }
     }

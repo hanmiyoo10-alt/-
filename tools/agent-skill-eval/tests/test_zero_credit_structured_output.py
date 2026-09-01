@@ -92,20 +92,34 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertIsNone(contract_mod.load_contract(ROOT / "local-response-contracts.json", "plugin-impact-scope", "narrow-negative"))
         self.assertIsNone(contract_mod.load_contract(ROOT / "local-response-contracts.json", "plugin-authority-scan", "1"))
 
-    def test_contract_uses_claim_compatible_evidence_ids_and_singleton_scope(self):
+    def test_contract_uses_claim_evidence_status_pairs_and_singleton_scope(self):
         contract = self.contract()
-        self.assertEqual(contract["id"], "impact-scope-derived-verdict-v5")
+        self.assertEqual(contract["id"], "impact-scope-evidence-status-compat-v6")
         self.assertEqual(set(contract["evidence_registry"]), {f"E{i}" for i in range(1, 9)})
         self.assertEqual(
-            contract["claim_evidence_allowlist"],
+            contract["claim_evidence_status_allowlist"],
             {
-                "authority": ["E1"],
-                "flow_edges": ["E2", "E3", "E4", "E7"],
-                "request_identity": ["E5"],
-                "no_extra_io": ["E6"],
-                "tests": ["E5", "E6", "E8"],
-                "generated_release": ["E1"],
-                "narrowest_boundary": ["E2", "E3", "E4", "E7"],
+                "authority": {"E1": ["DIRECT", "SUPPORTED_LIKELY"]},
+                "flow_edges": {
+                    "E2": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E3": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E4": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E7": ["DIRECT", "SUPPORTED_LIKELY"],
+                },
+                "request_identity": {"E5": ["DIRECT", "SUPPORTED_LIKELY"]},
+                "no_extra_io": {"E6": ["DIRECT", "SUPPORTED_LIKELY"]},
+                "tests": {
+                    "E5": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E6": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E8": ["DIRECT", "SUPPORTED_LIKELY"],
+                },
+                "generated_release": {"E1": ["SUPPORTED_LIKELY"]},
+                "narrowest_boundary": {
+                    "E2": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E3": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E4": ["DIRECT", "SUPPORTED_LIKELY"],
+                    "E7": ["DIRECT", "SUPPORTED_LIKELY"],
+                },
             },
         )
         props = contract["schema"]["properties"]
@@ -115,22 +129,27 @@ class StructuredOutputContractTests(unittest.TestCase):
         self.assertEqual(props["blocked_claims"]["maxItems"], 2)
         self.assertNotIn("verdict", props)
         self.assertNotIn("verdict", contract["schema"]["required"])
-        self.assertIn("DIRECT:E1", props["authority"]["enum"])
-        self.assertNotIn("DIRECT:E8", props["authority"]["enum"])
         self.assertEqual(
             props["request_identity"]["enum"],
-            ["UNKNOWN", "DIRECT:E5", "SUPPORTED_LIKELY:E5", "CONFLICT:E5"],
+            ["UNKNOWN", "DIRECT:E5", "SUPPORTED_LIKELY:E5"],
         )
+        self.assertEqual(
+            props["generated_release"]["enum"],
+            ["UNKNOWN", "SUPPORTED_LIKELY:E1"],
+        )
+        self.assertNotIn("CONFLICT:E1", props["authority"]["enum"])
         self.assertNotIn("UNKNOWN:E1", props["authority"]["enum"])
 
     def test_raw_contract_has_no_duplicated_static_schema(self):
         raw = json.loads((ROOT / "local-response-contracts.json").read_text(encoding="utf-8"))
         case = raw["contracts"]["plugin-impact-scope"]["service-tier-fidelity"]
         self.assertNotIn("schema", case)
-        self.assertIn("claim_evidence_allowlist", case)
+        self.assertIn("claim_evidence_status_allowlist", case)
+        self.assertNotIn("claim_evidence_allowlist", case)
         self.assertIn("Do not emit a verdict field", case["prompt_instruction"])
+        self.assertIn("Do not emit CONFLICT unless", case["prompt_instruction"])
 
-    def test_response_format_uses_derived_schema_constraint(self):
+    def test_response_format_uses_status_constrained_schema(self):
         contract = self.contract()
         fmt = contract_mod.response_format(contract)
         self.assertEqual(fmt["type"], "json_object")
@@ -141,8 +160,18 @@ class StructuredOutputContractTests(unittest.TestCase):
                 "UNKNOWN",
                 "DIRECT:E5", "DIRECT:E6", "DIRECT:E8",
                 "SUPPORTED_LIKELY:E5", "SUPPORTED_LIKELY:E6", "SUPPORTED_LIKELY:E8",
-                "CONFLICT:E5", "CONFLICT:E6", "CONFLICT:E8",
             ],
+        )
+        self.assertFalse(
+            any(
+                value.startswith("CONFLICT:")
+                for prop in contract["schema"]["properties"].values()
+                for value in (
+                    prop.get("enum", [])
+                    if isinstance(prop, dict)
+                    else []
+                )
+            )
         )
 
     def test_registry_is_revalidated_against_supplied_context(self):
@@ -152,8 +181,9 @@ class StructuredOutputContractTests(unittest.TestCase):
         legend = contract_mod.evidence_legend(contract, self.context())
         self.assertIn("E5 = plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs :: P50 selection source must never enter request identity", legend)
         compatibility = contract_mod.claim_evidence_legend(contract)
-        self.assertIn("request_identity = E5", compatibility)
-        self.assertIn("flow_edges = E2,E3,E4,E7", compatibility)
+        self.assertIn("request_identity = DIRECT:E5,SUPPORTED_LIKELY:E5", compatibility)
+        self.assertIn("authority = DIRECT:E1,SUPPORTED_LIKELY:E1", compatibility)
+        self.assertNotIn("CONFLICT:E5", compatibility)
 
     def test_registry_anchor_missing_from_context_fails_closed(self):
         context = self.context()
@@ -161,7 +191,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(self.valid_payload()), self.contract(), context)
 
-    def test_valid_claim_compatible_payload_derives_partial(self):
+    def test_valid_status_compatible_payload_derives_partial(self):
         payload = self.valid_payload()
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
         self.assertEqual(out["scope"], "plugin:usage-dashboard")
@@ -175,11 +205,20 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
-    def test_conflict_basis_derives_conflict(self):
-        payload = self.valid_payload()
-        payload["authority"] = "CONFLICT:E1"
-        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
-        self.assertEqual(out["derived_impact_verdict"], "CONFLICT")
+    def test_r12_unsupported_conflict_statuses_fail_closed(self):
+        mutations = [
+            lambda p: p.__setitem__("authority", "CONFLICT:E1"),
+            lambda p: p.__setitem__("request_identity", "CONFLICT:E5"),
+            lambda p: p.__setitem__("no_extra_io", "CONFLICT:E6"),
+            lambda p: p.__setitem__("tests", ["CONFLICT:E5"]),
+            lambda p: p["flow_edges"][0].__setitem__("basis", "CONFLICT:E2"),
+            lambda p: p.__setitem__("narrowest_boundary", "CONFLICT:E4"),
+        ]
+        for mutate in mutations:
+            payload = self.valid_payload()
+            mutate(payload)
+            with self.assertRaises(contract_mod.ResponseContractError):
+                contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
     def test_all_unknown_evidence_derives_unknown(self):
         payload = self.valid_payload()
@@ -196,10 +235,19 @@ class StructuredOutputContractTests(unittest.TestCase):
 
     def test_fully_resolved_unblocked_evidence_derives_supported(self):
         payload = self.valid_payload()
-        payload["generated_release"] = "DIRECT:E1"
+        payload["generated_release"] = "SUPPORTED_LIKELY:E1"
         payload["blocked_claims"] = []
         out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
         self.assertEqual(out["derived_impact_verdict"], "SUPPORTED")
+
+    def test_generated_release_rejects_direct_but_accepts_supported_likely(self):
+        payload = self.valid_payload()
+        payload["generated_release"] = "DIRECT:E1"
+        with self.assertRaises(contract_mod.ResponseContractError):
+            contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        payload["generated_release"] = "SUPPORTED_LIKELY:E1"
+        out = contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
+        self.assertEqual(out["generated_release"], "SUPPORTED_LIKELY:E1")
 
     def test_unknown_cannot_carry_an_evidence_suffix(self):
         payload = self.valid_payload()
@@ -215,11 +263,11 @@ class StructuredOutputContractTests(unittest.TestCase):
 
     def test_cross_claim_evidence_reuse_fails_closed(self):
         cases = [
-            ("authority", lambda p: p.__setitem__("authority", "CONFLICT:E8")),
+            ("authority", lambda p: p.__setitem__("authority", "DIRECT:E8")),
             ("request_identity", lambda p: p.__setitem__("request_identity", "DIRECT:E8")),
             ("no_extra_io", lambda p: p.__setitem__("no_extra_io", "DIRECT:E5")),
             ("tests", lambda p: p.__setitem__("tests", ["DIRECT:E1"])),
-            ("generated_release", lambda p: p.__setitem__("generated_release", "DIRECT:E8")),
+            ("generated_release", lambda p: p.__setitem__("generated_release", "SUPPORTED_LIKELY:E8")),
             ("narrowest_boundary", lambda p: p.__setitem__("narrowest_boundary", "DIRECT:E8")),
             ("flow_edges", lambda p: p["flow_edges"][0].__setitem__("basis", "DIRECT:E5")),
         ]
@@ -230,14 +278,25 @@ class StructuredOutputContractTests(unittest.TestCase):
                 with self.assertRaises(contract_mod.ResponseContractError):
                     contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
-    def test_allowlist_cannot_reference_unregistered_evidence(self):
-        raw = json.loads((ROOT / "local-response-contracts.json").read_text(encoding="utf-8"))
-        raw["contracts"]["plugin-impact-scope"]["service-tier-fidelity"]["claim_evidence_allowlist"]["authority"] = ["E99"]
-        with tempfile.TemporaryDirectory() as td:
-            path = Path(td) / "contracts.json"
-            path.write_text(json.dumps(raw), encoding="utf-8")
-            with self.assertRaises(contract_mod.ResponseContractError):
-                contract_mod.load_contract(path, "plugin-impact-scope", "service-tier-fidelity")
+    def test_status_allowlist_rejects_unregistered_invalid_duplicate_unknown_and_empty(self):
+        base = json.loads((ROOT / "local-response-contracts.json").read_text(encoding="utf-8"))
+        mutations = [
+            lambda case: case["claim_evidence_status_allowlist"]["authority"].__setitem__("E99", ["DIRECT"]),
+            lambda case: case["claim_evidence_status_allowlist"]["authority"]["E1"].append("DIRECT"),
+            lambda case: case["claim_evidence_status_allowlist"]["authority"]["E1"].append("UNKNOWN"),
+            lambda case: case["claim_evidence_status_allowlist"]["authority"]["E1"].append("BOGUS"),
+            lambda case: case["claim_evidence_status_allowlist"].__setitem__("authority", {}),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                raw = json.loads(json.dumps(base))
+                case = raw["contracts"]["plugin-impact-scope"]["service-tier-fidelity"]
+                mutate(case)
+                with tempfile.TemporaryDirectory() as td:
+                    path = Path(td) / "contracts.json"
+                    path.write_text(json.dumps(raw), encoding="utf-8")
+                    with self.assertRaises(contract_mod.ResponseContractError):
+                        contract_mod.load_contract(path, "plugin-impact-scope", "service-tier-fidelity")
 
     def test_duplicate_flow_edge_is_rejected(self):
         payload = self.valid_payload()
@@ -251,7 +310,7 @@ class StructuredOutputContractTests(unittest.TestCase):
         with self.assertRaises(contract_mod.ResponseContractError):
             contract_mod.validate_content(json.dumps(payload), self.contract(), self.context())
 
-    def test_pair_prompt_shares_contract_hash_instruction_evidence_and_compatibility_legends(self):
+    def test_pair_prompt_shares_contract_hash_instruction_evidence_and_status_legends(self):
         contract = self.contract()
         matrix = {
             "eval_kind": "output",
@@ -273,14 +332,14 @@ class StructuredOutputContractTests(unittest.TestCase):
         legend_line = "E5 = plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs :: P50 selection source must never enter request identity"
         self.assertIn(legend_line, with_prompt)
         self.assertIn(legend_line, base_prompt)
-        self.assertIn("CLAIM EVIDENCE COMPATIBILITY", with_prompt)
-        self.assertIn("authority = E1", with_prompt)
-        self.assertIn("request_identity = E5", base_prompt)
-        self.assertIn("permitted for that claim", with_prompt)
+        self.assertIn("CLAIM EVIDENCE STATUS COMPATIBILITY", with_prompt)
+        self.assertIn("authority = DIRECT:E1,SUPPORTED_LIKELY:E1", with_prompt)
+        self.assertIn("request_identity = DIRECT:E5,SUPPORTED_LIKELY:E5", base_prompt)
+        self.assertIn("STATUS:E# pair", with_prompt)
         self.assertIn("Do not emit a verdict field", base_prompt)
         self.assertIn("do not write or invent source paths or anchors in the output", base_prompt)
 
-    def test_chat_payload_carries_same_derived_response_schema(self):
+    def test_chat_payload_carries_same_status_constrained_response_schema(self):
         contract = self.contract()
         generation = server_mod.validate_generation({
             "temperature": 0,

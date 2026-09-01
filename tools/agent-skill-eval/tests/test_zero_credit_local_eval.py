@@ -124,6 +124,8 @@ class PromptTests(unittest.TestCase):
             base_prompt, base_meta = prompt_mod.compose(matrix, context, skill, "baseline_without_target_skill")
         self.assertEqual(with_meta["user_task_sha256"], base_meta["user_task_sha256"])
         self.assertEqual(with_meta["evidence_context_sha256"], base_meta["evidence_context_sha256"])
+        self.assertEqual(with_meta["response_contract_sha256"], base_meta["response_contract_sha256"])
+        self.assertIsNone(with_meta["response_contract_sha256"])
         self.assertNotEqual(with_meta["full_prompt_sha256"], base_meta["full_prompt_sha256"])
         self.assertIn("UNIQUE_TARGET_RULE_123", with_prompt)
         self.assertNotIn("UNIQUE_TARGET_RULE_123", base_prompt)
@@ -156,7 +158,7 @@ class PromptTests(unittest.TestCase):
 
 
 class ReceiptTests(unittest.TestCase):
-    def make_receipt(self, mode: str, prompt_hash: str, guidance_hash):
+    def make_receipt(self, mode: str, prompt_hash: str, guidance_hash, contract_hash="NONE"):
         return {
             "schema_version": 1,
             "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
@@ -168,6 +170,7 @@ class ReceiptTests(unittest.TestCase):
             "mode": mode,
             "user_task_sha256": "d" * 64,
             "evidence_context_sha256": "e" * 64,
+            "response_contract_sha256": contract_hash,
             "full_prompt_sha256": prompt_hash,
             "skill_guidance_sha256": guidance_hash,
             "model_repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
@@ -193,11 +196,18 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(result["status"], "PAIR_VALID")
         self.assertIsNone(result["qualitative_verdict"])
         self.assertEqual(result["trigger_observability"], "UNOBSERVABLE_WITH_LOCAL_CONTEXT_INJECTION")
+        self.assertEqual(result["response_contract_sha256"], "NONE")
 
     def test_shared_evidence_mismatch_rejected(self):
         a = self.make_receipt("with_skill", "1" * 64, "2" * 64)
         b = self.make_receipt("baseline_without_target_skill", "3" * 64, None)
         b["evidence_context_sha256"] = "9" * 64
+        with self.assertRaises(receipt_mod.LocalReceiptError):
+            receipt_mod.validate_pair(a, b)
+
+    def test_response_contract_mismatch_rejected(self):
+        a = self.make_receipt("with_skill", "1" * 64, "2" * 64, "4" * 64)
+        b = self.make_receipt("baseline_without_target_skill", "3" * 64, None, "5" * 64)
         with self.assertRaises(receipt_mod.LocalReceiptError):
             receipt_mod.validate_pair(a, b)
 

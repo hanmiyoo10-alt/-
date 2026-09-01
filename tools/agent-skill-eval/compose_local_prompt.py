@@ -7,6 +7,10 @@ import json
 import sys
 from pathlib import Path
 
+MODULE_DIR = Path(__file__).resolve().parent
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
+
 import compose_local_prompt_legacy as _legacy
 from local_response_contract import (
     V10_CONTRACT_ID,
@@ -92,7 +96,6 @@ def _compose_v10(matrix, context, skill_path: Path, mode: str, response_contract
     if prompt_layout == _legacy.GUIDANCE_AFTER_EVIDENCE_LAYOUT:
         full_prompt = system_section + evidence_block + guidance_block + user_block
     elif prompt_layout == _legacy.CLAIM_SLOT_RECENCY_LAYOUT:
-        # Candidate v10 has no case-specific compatibility registry; recency reduces to guidance-after-evidence.
         full_prompt = system_section + evidence_block + guidance_block + user_block
     else:
         full_prompt = system_section + guidance_block + evidence_block + user_block

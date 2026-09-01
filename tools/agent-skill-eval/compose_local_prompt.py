@@ -27,7 +27,13 @@ SCHEMA_VERSION = 1
 MODES = {"with_skill", "baseline_without_target_skill"}
 PROMPT_LAYOUT_SCHEMA_VERSION = 1
 DEFAULT_PROMPT_LAYOUT = "guidance_before_evidence"
-PROMPT_LAYOUTS = {DEFAULT_PROMPT_LAYOUT, "guidance_after_evidence"}
+GUIDANCE_AFTER_EVIDENCE_LAYOUT = "guidance_after_evidence"
+CLAIM_SLOT_RECENCY_LAYOUT = "guidance_after_evidence_claim_compatibility_before_task"
+PROMPT_LAYOUTS = {
+    DEFAULT_PROMPT_LAYOUT,
+    GUIDANCE_AFTER_EVIDENCE_LAYOUT,
+    CLAIM_SLOT_RECENCY_LAYOUT,
+}
 DEFAULT_PROMPT_LAYOUTS_PATH = MODULE_DIR / "local-prompt-layouts.json"
 
 
@@ -127,6 +133,7 @@ def compose(
     )
 
     contract_section = ""
+    compatibility_block = ""
     if response_contract is not None:
         instruction = response_contract.get("prompt_instruction")
         if not isinstance(instruction, str) or not instruction.strip():
@@ -134,14 +141,19 @@ def compose(
         legend = evidence_legend(response_contract, context)
         flow_legend = flow_edge_legend(response_contract, context)
         compatibility = claim_evidence_legend(response_contract)
+        compatibility_block = (
+            "CLAIM EVIDENCE STATUS COMPATIBILITY\n"
+            f"{compatibility}\n"
+        )
+        late_compatibility = prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT
+        compatibility_in_contract = "" if late_compatibility else compatibility_block + "\n"
         contract_section = (
             f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
             "EVIDENCE ID LEGEND\n"
             f"{legend}\n\n"
             "FLOW EDGE REGISTRY\n"
             f"{flow_legend}\n\n"
-            "CLAIM EVIDENCE STATUS COMPATIBILITY\n"
-            f"{compatibility}\n"
+            f"{compatibility_in_contract}"
             "Use only registered F# values in flow_edges. Use only a listed STATUS:E# pair in preservation/test basis fields for that claim; the paths, anchors, and flow endpoints shown here are grounding references only."
         )
 
@@ -153,7 +165,16 @@ def compose(
         f"{context_text if context_text else '(no source evidence required by profile)'}\n\n"
     )
     user_block = f"USER TASK\n{user_task}\n"
-    if prompt_layout == "guidance_after_evidence":
+    if prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT:
+        full_prompt = (
+            system_section
+            + evidence_block
+            + guidance_block
+            + compatibility_block
+            + "\n"
+            + user_block
+        )
+    elif prompt_layout == GUIDANCE_AFTER_EVIDENCE_LAYOUT:
         full_prompt = system_section + evidence_block + guidance_block + user_block
     else:
         full_prompt = system_section + guidance_block + evidence_block + user_block

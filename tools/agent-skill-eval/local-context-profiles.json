@@ -15,7 +15,7 @@
           "ref": "HEAD",
           "path": ".github/plugin-control-plane/registry.json",
           "mode": "needle_windows",
-          "needles": ["plugin:usage-dashboard"],
+          "needles": ["\"usage-dashboard\": {", "\"releaseBranch\": \"release-usage-dashboard\""],
           "radius": 12,
           "max_bytes": 16000
         },

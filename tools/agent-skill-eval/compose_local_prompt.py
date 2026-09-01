@@ -10,6 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+MODULE_DIR = Path(__file__).resolve().parent
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
+
 from local_response_contract import ResponseContractError, contract_sha256, load_contract
 
 SCHEMA_VERSION = 1

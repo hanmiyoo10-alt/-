@@ -22,7 +22,10 @@ ALLOWED_SKILLS = frozenset({"plugin-authority-scan", "plugin-impact-scope"})
 ALLOWED_MODELS = frozenset({"claude-haiku-4.5", "claude-sonnet-4.6", "gpt-5.4"})
 ALLOWED_EVAL_KINDS = frozenset({"output", "trigger"})
 SKILL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MAX_CASES_PER_FIXTURE = 64
+SECOND_SCOPE_FIXTURE = "second_scope_candidate_evals.json"
+SECOND_SCOPE_STATUS = "CANDIDATE_ONLY_NOT_PROMOTED"
 
 
 class EvalPreparationError(ValueError):
@@ -182,6 +185,41 @@ def load_cases(repo_root: Path, skill: str, eval_kind: str) -> tuple[Path, list[
     return fixture, cases
 
 
+def _load_second_scope_candidate(
+    repo_root: Path,
+    skill: str,
+) -> tuple[Path, list[dict[str, Any]], dict[str, Any]]:
+    fixture = repo_root / ".agents" / "skills" / skill / "evals" / SECOND_SCOPE_FIXTURE
+    payload = _read_json(fixture)
+    if not isinstance(payload, dict):
+        raise EvalPreparationError("second-scope candidate fixture must be an object")
+    if payload.get("status") != SECOND_SCOPE_STATUS:
+        raise EvalPreparationError("second-scope candidate fixture is not candidate-only")
+    declared = payload.get("skill_name", payload.get("skill"))
+    if declared != skill:
+        raise EvalPreparationError(f"candidate fixture skill mismatch: {declared!r} != {skill!r}")
+    candidate_scope = payload.get("candidate_scope")
+    if not isinstance(candidate_scope, str) or not candidate_scope.strip():
+        raise EvalPreparationError("candidate_scope missing")
+    frozen = payload.get("frozen_source_snapshot")
+    if not isinstance(frozen, dict) or not frozen:
+        raise EvalPreparationError("candidate frozen_source_snapshot missing")
+    normalized_frozen: dict[str, str] = {}
+    for label, value in frozen.items():
+        if not isinstance(label, str) or not label.strip():
+            raise EvalPreparationError("candidate frozen source label invalid")
+        if not isinstance(value, str) or SHA_RE.fullmatch(value) is None:
+            raise EvalPreparationError(f"candidate frozen source SHA invalid: {label}")
+        normalized_frozen[label] = value
+    cases = _normalize_output_fixture(payload, skill)
+    meta = {
+        "fixture_class": "second_scope_candidate",
+        "candidate_scope": candidate_scope.strip(),
+        "candidate_frozen_source_snapshot": normalized_frozen,
+    }
+    return fixture, cases, meta
+
+
 def select_case(cases: list[dict[str, Any]], case_id: str) -> dict[str, Any]:
     wanted = str(case_id).strip()
     matches = [case for case in cases if case["id"] == wanted]
@@ -206,10 +244,26 @@ def build_matrix(
     skill_dir = repo_root / ".agents" / "skills" / skill
     if not (skill_dir / "SKILL.md").is_file():
         raise EvalPreparationError(f"missing SKILL.md for {skill}")
+
     fixture, cases = load_cases(repo_root, skill, eval_kind)
-    selected = select_case(cases, case_id)
+    fixture_meta: dict[str, Any] = {"fixture_class": "standard"}
+    wanted = str(case_id).strip()
+    matches = [case for case in cases if case["id"] == wanted]
+    if len(matches) == 1:
+        selected = matches[0]
+    elif eval_kind == "output":
+        candidate_fixture, candidate_cases, candidate_meta = _load_second_scope_candidate(
+            repo_root,
+            skill,
+        )
+        selected = select_case(candidate_cases, wanted)
+        fixture = candidate_fixture
+        fixture_meta = candidate_meta
+    else:
+        selected = select_case(cases, wanted)
+
     prompt_bytes = selected["prompt"].encode("utf-8")
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "repository_sha": repository_sha.lower(),
         "skill": skill,
@@ -217,6 +271,7 @@ def build_matrix(
         "eval_kind": eval_kind,
         "fixture_path": fixture.relative_to(repo_root).as_posix(),
         "fixture_sha256": sha256_file(fixture),
+        "fixture_class": fixture_meta["fixture_class"],
         "case_id": selected["id"],
         "prompt": selected["prompt"],
         "prompt_sha256": sha256_bytes(prompt_bytes),
@@ -226,6 +281,12 @@ def build_matrix(
         "requested_model": model,
         "modes": ["with_skill", "baseline_without_target_skill"],
     }
+    if fixture_meta["fixture_class"] == "second_scope_candidate":
+        result["candidate_scope"] = fixture_meta["candidate_scope"]
+        result["candidate_frozen_source_snapshot"] = fixture_meta[
+            "candidate_frozen_source_snapshot"
+        ]
+    return result
 
 
 def prove_workspace(workspace_root: Path, skill: str, mode: str) -> dict[str, Any]:

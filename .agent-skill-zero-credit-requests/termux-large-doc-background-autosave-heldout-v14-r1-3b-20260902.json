@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "plugin-impact-scope",
+  "case_id": "termux-large-doc-background-autosave-heldout",
+  "target_repository_sha": "aa57d1fb3436fc75d98b3f7d7d7c05913569d9af",
+  "model_profile": "qwen2.5-3b-instruct-q4_k_m"
+}

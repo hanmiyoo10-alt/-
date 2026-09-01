@@ -31,7 +31,8 @@ export const registry = Object.freeze([
   { id: 'release-system-r2-8-terminal-convergence', module: './suites/release-system-r2-8-terminal-convergence.test.mjs', fixtureDir: 'release-system-r2-8-terminal-convergence', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'release-system-r2-9-validation-contract-projection', module: './suites/release-system-r2-9-validation-contract-projection.test.mjs', fixtureDir: 'release-system-r2-9-validation-contract-projection', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'release-system-r2-10-context-coherent-validation', module: './suites/release-system-r2-10-context-coherent-validation.test.mjs', fixtureDir: 'release-system-r2-10-context-coherent-validation', coverage: 'EXECUTABLE', required: true, goldenGate: true },
-  { id: 'architecture-contract-select-v06900', module: './suites/architecture-contract-select-v06900.test.mjs', fixtureDir: 'architecture-contract-select-v06900', coverage: 'EXECUTABLE', required: true, goldenGate: true }
+  { id: 'architecture-contract-select-v06900', module: './suites/architecture-contract-select-v06900.test.mjs', fixtureDir: 'architecture-contract-select-v06900', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'exposure-contract-drift-guard', module: './suites/exposure-contract-drift-guard.test.mjs', fixtureDir: 'exposure-contract-drift-guard', coverage: 'EXECUTABLE', required: true, goldenGate: true }
 ]);
 
 export const packAliases = Object.freeze({

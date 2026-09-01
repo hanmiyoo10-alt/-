@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "exposure-drift-guard-static-contract",
+  "suite": "exposure-contract-drift-guard",
+  "input": {
+    "mode": "SYNTHETIC_CONTRACT_REGRESSION_ONLY"
+  },
+  "expected": {
+    "status": "PASS"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

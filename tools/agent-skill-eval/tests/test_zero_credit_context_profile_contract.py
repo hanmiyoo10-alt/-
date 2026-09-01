@@ -57,6 +57,34 @@ class ZeroCreditContextProfileContractTests(unittest.TestCase):
         self.assertIn("function requestLedgerKey(row) {", by_path["plugins/usage-dashboard/src/14-request-ledger.part.js"]["needles"])
         self.assertIn("selection-source path must not add", by_path["plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs"]["needles"])
 
+    def test_simcore_heldout_profile_is_frozen_before_human_answer(self):
+        specs = self.profile["profiles"]["plugin-impact-scope"][
+            "simcore-3m3-structured-sidecar-validation-heldout"
+        ]
+        self.assertLessEqual(len(specs), 8)
+        refs = {spec["ref"] for spec in specs}
+        self.assertEqual(
+            refs,
+            {
+                "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+                "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+            },
+        )
+        paths = {spec["path"] for spec in specs}
+        self.assertIn("docs/SIMCORE_GUIDELINES.md", paths)
+        self.assertIn("docs/SIMCORE_CONTRACTS_V2.md", paths)
+        self.assertIn("docs/SIMCORE_3M_SOURCE_INTELLIGENCE_MASTER_DESIGN_2026-09-01.md", paths)
+        self.assertIn("plugins/simcore/latest.js", paths)
+        self.assertNotIn("docs/SIMCORE_3M_3_STRUCTURED_SIDECAR_VALIDATION_IMPACT_SCOPE_2026-09-01.md", paths)
+        self.assertNotIn("docs/SIMCORE_3M_3_STRUCTURED_SIDECAR_VALIDATION_DESIGN_2026-09-01.md", paths)
+        self.assertTrue(all(spec["ref"] != "HEAD" for spec in specs))
+        self.assertTrue(all("refs/remotes/origin/release-simcore" not in spec["ref"] for spec in specs))
+
+    def test_workflow_fetches_exact_simcore_heldout_refs_not_moving_release_branch(self):
+        self.assertIn("e4daaa427ed902ca6f8368c45d509f7fd0f26d42", self.workflow)
+        self.assertIn("861100f4771967aa5b8ab8811d06f11702c0d3ff", self.workflow)
+        self.assertNotIn("release-simcore:refs/remotes/origin/release-simcore", self.workflow)
+
     def test_failure_artifacts_include_hidden_eval_directory(self):
         self.assertIn("path: .agent-skill-zero-credit-eval/", self.workflow)
         self.assertIn("include-hidden-files: true", self.workflow)

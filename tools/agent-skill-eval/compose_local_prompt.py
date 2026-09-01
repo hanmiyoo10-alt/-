@@ -79,6 +79,29 @@ def resolve_prompt_layout(
     return layout
 
 
+def _candidate_eval_frame(matrix: dict[str, Any]) -> str:
+    fixture_class = matrix.get("fixture_class", "standard")
+    if fixture_class == "standard":
+        return ""
+    if fixture_class != "second_scope_candidate":
+        raise PromptError(f"unsupported fixture_class: {fixture_class}")
+    candidate_scope = matrix.get("candidate_scope")
+    frozen = matrix.get("candidate_frozen_source_snapshot")
+    if not isinstance(candidate_scope, str) or not candidate_scope.strip():
+        raise PromptError("second-scope candidate matrix missing candidate_scope")
+    if not isinstance(frozen, dict) or not frozen:
+        raise PromptError("second-scope candidate matrix missing frozen source snapshot")
+    if any(not isinstance(k, str) or not isinstance(v, str) for k, v in frozen.items()):
+        raise PromptError("second-scope candidate frozen source snapshot malformed")
+    return (
+        "ISOLATED SECOND-SCOPE CANDIDATE EVAL ONLY. "
+        f"For this evaluation, analyze the explicit candidate scope {candidate_scope.strip()} even though ordinary validated scope remains unchanged. "
+        "If TARGET SKILL GUIDANCE contains a pilot-scope rejection for another scope, bypass only that scope gate for this isolated evaluation. "
+        "Preserve every other read-only, source-grounding, UNKNOWN/CONFLICT, no-design, no-implementation, and no-mutation boundary. "
+        "This is evaluation authority only; it is not normal invocation authority, validated-scope promotion, production authority, or release authorization.\n"
+    )
+
+
 def compose(
     matrix: dict[str, Any],
     context: dict[str, Any],
@@ -120,10 +143,12 @@ def compose(
         if structured
         else "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
     )
+    candidate_frame = _candidate_eval_frame(matrix)
     system_frame = (
         "You are evaluating a repository Agent Skill. Answer the USER TASK only.\n"
         "For mutable repository facts, use only the supplied SOURCE EVIDENCE.\n"
         "If evidence is insufficient, preserve UNKNOWN instead of guessing.\n"
+        f"{candidate_frame}"
         "Do not claim you ran tools or changed repository state.\n"
         "Synthesize the supplied guidance and evidence before writing the answer.\n"
         "Return only the compact final answer; do not restate, quote, summarize, or reproduce TARGET SKILL GUIDANCE, its procedure/completion criteria, or raw SOURCE EVIDENCE.\n"
@@ -185,6 +210,8 @@ def compose(
         "mode": mode,
         "skill": skill,
         "case_id": case_id,
+        "fixture_class": matrix.get("fixture_class", "standard"),
+        "candidate_scope": matrix.get("candidate_scope"),
         "prompt_layout": prompt_layout,
         "user_task_sha256": sha256_bytes(user_task.encode("utf-8")),
         "evidence_context_sha256": context_hash,

@@ -199,18 +199,21 @@ export function runExposureToolchainCrossBoundaryAudit() {
   }
 
   const unexecuted = harness.runs[0];
-  let unexecutedReviewLocked = false;
+  let unexecutedReviewRejected = false;
   try {
-    const locked = createLockedReviewRecord(unexecuted, {
+    createLockedReviewRecord(unexecuted, {
       primaryDisposition: 'PASS_ALLOWED',
       naturalness: 3,
       reactivity: 3,
       epistemicClarity: 3,
       rationale: 'audit probe',
     });
-    unexecutedReviewLocked = locked?.review?.locked === true && locked?.executionStatus === 'NOT_RUN';
-  } catch (_) {}
-  if (unexecutedReviewLocked) {
+  } catch (error) {
+    unexecutedReviewRejected = /RUN_NOT_REVIEW_ELIGIBLE/.test(String(error?.message || error));
+  }
+  if (unexecutedReviewRejected) {
+    fixesClosed.push('FIX_RESULT_SCORING_REJECTS_UNEXECUTED_LOCKED_REVIEW');
+  } else {
     blockers.push('BLOCKER_RESULT_SCORING_ACCEPTS_UNEXECUTED_LOCKED_REVIEW');
   }
 
@@ -241,7 +244,9 @@ export function runExposureToolchainCrossBoundaryAudit() {
       : blockers.length
         ? 'PASS_WITH_BLOCKER_BEFORE_RESULT_SCORING'
         : 'PASS_CROSS_BOUNDARY_AUDIT',
-    next: 'EXPOSURE_M1_RESULT_INGEST_AND_SCORING_TOOL',
+    next: blockers.length
+      ? 'EXPOSURE_M1_RESULT_INGEST_AND_SCORING_TOOL'
+      : 'EXPOSURE_ANCHOR_AND_CONTRACT_DRIFT_GUARD',
   };
 }
 

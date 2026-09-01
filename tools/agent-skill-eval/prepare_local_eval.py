@@ -10,7 +10,11 @@ import os
 import sys
 from pathlib import Path
 
-LOCAL_MODEL_ID = "qwen2.5-1.5b-instruct-q4_k_m-local"
+DEFAULT_LOCAL_MODEL_ID = "qwen2.5-1.5b-instruct-q4_k_m-local"
+LOCAL_MODEL_IDS = frozenset({
+    DEFAULT_LOCAL_MODEL_ID,
+    "qwen2.5-3b-instruct-q4_k_m-local",
+})
 
 
 def _load_base():
@@ -29,17 +33,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skill", required=True)
     parser.add_argument("--case-id", required=True)
     parser.add_argument("--repository-sha", default=os.environ.get("GITHUB_SHA", ""))
+    parser.add_argument("--model-id", default=os.environ.get("LOCAL_MODEL_ID", DEFAULT_LOCAL_MODEL_ID))
     parser.add_argument("--output")
     args = parser.parse_args(argv)
     base = _load_base()
     try:
-        base.ALLOWED_MODELS = frozenset({LOCAL_MODEL_ID})
+        base.ALLOWED_MODELS = LOCAL_MODEL_IDS
         payload = base.build_matrix(
             Path(args.repo_root).resolve(),
             args.skill,
             "output",
             args.case_id,
-            LOCAL_MODEL_ID,
+            args.model_id,
             args.repository_sha,
         )
         payload["execution_surface"] = "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS"

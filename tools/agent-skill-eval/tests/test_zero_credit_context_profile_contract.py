@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parents[1]
 TERMUX_FROZEN_MAIN = "f01c2ef304656de9254191ec2fb9a2c046642f21"
+VOYAGE_FROZEN_MAIN = "3908f71122f267375ee5eccb3fa3ca85564c634e"
 
 
 class ZeroCreditContextProfileContractTests(unittest.TestCase):
@@ -98,6 +99,28 @@ class ZeroCreditContextProfileContractTests(unittest.TestCase):
                 "plugins/termux/large-doc-editor/server.py",
                 "plugins/termux/large-doc-editor/chunk_store.py",
                 "plugins/termux/large-doc-editor/tests/test_chunk_store.py",
+            },
+        )
+        self.assertTrue(all(spec["mode"] == "needle_windows" for spec in specs))
+        self.assertTrue(all(spec["max_bytes"] <= 9000 for spec in specs))
+
+    def test_voyage_heldout_profile_is_compact_and_exactly_frozen(self):
+        specs = self.profile["profiles"]["plugin-impact-scope"][
+            "voyage-token-check-visible-refresh-heldout"
+        ]
+        self.assertLessEqual(len(specs), 7)
+        self.assertEqual({spec["ref"] for spec in specs}, {VOYAGE_FROZEN_MAIN})
+        self.assertTrue(all(spec["ref"] != "HEAD" for spec in specs))
+        self.assertEqual(
+            {spec["path"] for spec in specs},
+            {
+                "docs/REPO_PROJECT_CATALOG.md",
+                "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+                "voyage-token-check/DESIGN_STATUS.md",
+                "voyage-token-check/PROJECT_MEMORY.md",
+                "voyage-token-check/ARCHITECTURE.md",
+                "voyage-token-check/LIVE_REFRESH_CONTRACT.md",
+                "voyage-token-check/SECURITY_CONTRACT.md",
             },
         )
         self.assertTrue(all(spec["mode"] == "needle_windows" for spec in specs))

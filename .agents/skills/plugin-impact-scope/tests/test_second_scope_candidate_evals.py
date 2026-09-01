@@ -11,6 +11,7 @@ CANDIDATES = SKILL_ROOT / "evals" / "second_scope_candidate_evals.json"
 DISCOVERY = SKILL_ROOT / "scripts" / "discover_impact.py"
 VALIDATOR = SKILL_ROOT / "scripts" / "validate_impact_map.py"
 TERMUX_FROZEN_MAIN = "f01c2ef304656de9254191ec2fb9a2c046642f21"
+VOYAGE_FROZEN_MAIN = "3908f71122f267375ee5eccb3fa3ca85564c634e"
 
 
 def load_module(name: str, path: Path):
@@ -31,7 +32,11 @@ class SecondScopeCandidateEvalTests(unittest.TestCase):
         validator = load_module("impact_scope_candidate_validator", VALIDATOR)
         self.assertEqual(self.data["status"], "CANDIDATE_ONLY_NOT_PROMOTED")
         self.assertEqual(self.data["candidate_scope"], "plugin:simcore")
-        for scope in ("plugin:simcore", "plugin:termux-large-doc-editor"):
+        for scope in (
+            "plugin:simcore",
+            "plugin:termux-large-doc-editor",
+            "plugin:voyage-token-check",
+        ):
             self.assertNotIn(scope, discovery.PILOT_VALIDATED_SCOPES)
             self.assertNotIn(scope, validator.PILOT_VALIDATED_SCOPES)
 
@@ -54,7 +59,7 @@ class SecondScopeCandidateEvalTests(unittest.TestCase):
         self.assertNotIn("expected_output", heldout)
         self.assertIn("diagnostic/training evidence", self.data["note"])
 
-    def test_termux_heldout_is_new_prospective_per_case_scope(self):
+    def test_termux_heldout_is_retained_per_case_scope(self):
         heldout = next(
             case for case in self.data["evals"]
             if case["id"] == "termux-large-doc-background-autosave-heldout"
@@ -66,6 +71,21 @@ class SecondScopeCandidateEvalTests(unittest.TestCase):
         self.assertIn("구현안이나 release/deployment 설계는 쓰지 마", heldout["prompt"])
         self.assertGreaterEqual(len(heldout["assertions"]), 7)
         self.assertNotIn("expected_output", heldout)
+
+    def test_voyage_heldout_is_new_prospective_per_case_scope(self):
+        heldout = next(
+            case for case in self.data["evals"]
+            if case["id"] == "voyage-token-check-visible-refresh-heldout"
+        )
+        self.assertEqual(heldout["kind"], "PROSPECTIVE_HELD_OUT")
+        self.assertEqual(heldout["candidate_scope"], "plugin:voyage-token-check")
+        self.assertEqual(heldout["frozen_source_snapshot"], {"main": VOYAGE_FROZEN_MAIN})
+        self.assertIn("impact scope만", heldout["prompt"])
+        self.assertIn("production path", heldout["prompt"])
+        self.assertIn("release/deployment 설계는 쓰지 마", heldout["prompt"])
+        self.assertGreaterEqual(len(heldout["assertions"]), 7)
+        self.assertNotIn("expected_output", heldout)
+        self.assertIn("Voyage Token Check visible refresh is a new prospective held-out", self.data["note"])
 
     def test_retrospective_cases_are_not_mislabeled_as_prospective(self):
         retrospective = [

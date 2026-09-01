@@ -32,7 +32,7 @@ products/simcore/tooling/exposure-toolchain-cross-boundary-audit.mjs
 products/simcore/tooling/exposure-toolchain-cross-boundary-audit.test.mjs
 ```
 
-This transaction does not execute a RisuAI request or a model generation. It only closes the result-evidence boundary that can be proven without target-host access.
+This transaction does not execute a RisuAI request or a model generation. It closes only result-evidence boundaries that can be proven without target-host access.
 
 ---
 
@@ -60,7 +60,7 @@ The preceding cross-boundary audit found:
 BLOCKER · RESULT_SCORING_ACCEPTS_UNEXECUTED_LOCKED_REVIEW
 ```
 
-The old harness allowed:
+The old harness allowed a row with:
 
 ```text
 executionStatus = NOT_RUN
@@ -71,9 +71,7 @@ while still permitting `createLockedReviewRecord(...)` if the supplied review fi
 
 The old summary path also excluded only `HARNESS_INVALID`, so a manually-forged locked `NOT_RUN` object could contaminate score summaries.
 
-That was an evidence-authority defect.
-
-It was not a production/runtime defect.
+That was an evidence-authority defect, not a production/runtime defect.
 
 ---
 
@@ -96,6 +94,8 @@ conditionActualId in [B0, E6]
 conditionOpaqueId in [X, Y]
 synthetic scenario fingerprint is valid SHA-256
 generatedOutput is nonempty
+beforeRequestInputFingerprint is valid SHA-256
+flattenedMessageFingerprint is valid SHA-256
 actualHostRequestFingerprint is valid SHA-256
 modelIdentifier is nonempty
 modelSettingsFingerprint is valid SHA-256
@@ -109,20 +109,30 @@ Canonical consequence:
 NOT_RUN
 HARNESS_INVALID
 missing generated output
-missing request identity
+missing base request identity
+missing request-stage output identity
+missing provider-body identity
 missing model/settings/reference identity
 missing structural status
 
 → NOT REVIEW ELIGIBLE
 ```
 
+The two request-stage fingerprints are preserved because paired evidence needs to prove both:
+
+```text
+same B0/E6 base request before candidate overlay
++
+condition-specific request after B0 identity / E6 insertion
+```
+
 ---
 
 ## 4. Blind review packet now requires executed evidence
 
-`buildBlindReviewPacket(run)` now fails closed if the run is not review-eligible.
+`buildBlindReviewPacket(run)` fails closed if the run is not review-eligible.
 
-This prevents creation of a semantically reviewable-looking packet that contains no real generation.
+This prevents creation of a semantic review packet with no real generation behind it.
 
 The packet still hides:
 
@@ -138,7 +148,7 @@ and exposes only opaque condition identity `X` / `Y` to the reviewer.
 
 ## 5. Review lock now requires executed evidence
 
-`createLockedReviewRecord(run, review)` now checks review eligibility before validating the review itself.
+`createLockedReviewRecord(run, review)` checks review eligibility before validating the review itself.
 
 Therefore:
 
@@ -253,8 +263,6 @@ Therefore a result cannot enter review evidence without an explicit structural o
 
 The result tool does not force that field to say `PASS`.
 
-It requires only that structural status has actually been recorded.
-
 A structurally bad output may still be ingested and reviewed as:
 
 ```text
@@ -265,9 +273,75 @@ rather than disappearing from the evidence set.
 
 ---
 
-## 10. M1 scorecard
+## 10. Scorecard requires the exact harness
 
-`buildStageScorecard(records, { stage: 'M1' })` expects:
+Score calculation is now called as:
+
+```text
+buildStageScorecard(records, {
+  stage,
+  harness,
+})
+```
+
+The harness argument is mandatory.
+
+The scorecard re-validates every locked eligible row against that exact manifest:
+
+```text
+runId exists in harness
+stage matches
+fixtureId matches
+condition matches
+syntheticScenarioFingerprint matches
+fixtureCorpusHash matches
+candidateContractHash matches
+productionAuthority matches
+```
+
+This means a manually constructed `VALID_GENERATION + locked:true` row cannot become score evidence merely by looking structurally plausible.
+
+Canonical:
+
+```text
+REVIEW ELIGIBLE
+!=
+MANIFEST BOUND
+```
+
+Both are required.
+
+---
+
+## 11. Pair comparability is rechecked at scoring time
+
+For every complete B0/E6 pair, the scorecard requires equality of:
+
+```text
+beforeRequestInputFingerprint
+modelIdentifier
+modelSettingsFingerprint
+characterReferenceFingerprint
+```
+
+This is a defense-in-depth replay of the paired-evaluation contract.
+
+A scorecard therefore blocks if a nominal pair actually used:
+
+```text
+different base requests
+different models
+different model settings
+different character/reference inputs
+```
+
+The condition-specific flattened/provider request fingerprints are not required to match because E6 is expected to differ by the six-line overlay.
+
+---
+
+## 12. M1 scorecard
+
+`buildStageScorecard(..., { stage: 'M1', harness })` expects:
 
 ```text
 24 usable locked runs
@@ -302,9 +376,9 @@ production promotion evidence
 
 ---
 
-## 11. M2 scorecard
+## 13. M2 scorecard
 
-`buildStageScorecard(records, { stage: 'M2' })` expects:
+`buildStageScorecard(..., { stage: 'M2', harness })` expects:
 
 ```text
 72 usable locked runs
@@ -324,6 +398,8 @@ no E6 control fixture has 0 / 3 PASS_ALLOWED
 no unresolved REVIEW_AMBIGUOUS
 complete evidence shape
 no ineligible locked rows
+exact harness-manifest membership
+pair identity/comparability preserved
 ```
 
 Failure mappings:
@@ -338,6 +414,9 @@ or any control fixture 0 / 3
 
 unresolved ambiguity
 → HOLD_SEMANTIC_EVIDENCE_INCONCLUSIVE
+
+manifest/pair/ineligible evidence defect
+→ BLOCK_SCORING_EVIDENCE_INTEGRITY
 ```
 
 If the machine-checkable gates pass:
@@ -350,7 +429,7 @@ not immediate promotion.
 
 ---
 
-## 12. Comparative value remains a separate locked decision
+## 14. Comparative value remains a separate locked decision
 
 The protocol requires candidate value over baseline and no material qualitative regression.
 
@@ -402,7 +481,7 @@ A rationale is mandatory.
 
 ---
 
-## 13. Promotion evidence still does not authorize installation
+## 15. Promotion evidence still does not authorize installation
 
 Even:
 
@@ -422,7 +501,7 @@ Evaluation evidence and production implementation authority remain separate tran
 
 ---
 
-## 14. Scorecard metrics
+## 16. Scorecard metrics
 
 Each condition receives:
 
@@ -455,14 +534,19 @@ These are evidence summaries, not a replacement semantic oracle.
 
 ---
 
-## 15. Evidence-integrity failures
+## 17. Evidence-integrity failures
 
-The scorecard explicitly blocks if:
+The scorecard explicitly blocks on evidence-integrity defects including:
 
 ```text
-duplicate run IDs exist
-ineligible locked rows exist
-records belong to a different stage
+duplicate run IDs
+ineligible locked rows
+run not bound to exact stage harness
+scenario/corpus/candidate/production authority mismatch
+B0/E6 base request mismatch
+B0/E6 model mismatch
+B0/E6 settings mismatch
+B0/E6 character/reference mismatch
 ```
 
 Disposition:
@@ -471,11 +555,11 @@ Disposition:
 BLOCK_SCORING_EVIDENCE_INTEGRITY
 ```
 
-This ensures a complete-looking table cannot hide malformed evidence membership.
+This ensures a complete-looking table cannot hide malformed evidence membership or an invalid comparison pair.
 
 ---
 
-## 16. Cross-boundary audit closure
+## 18. Cross-boundary audit closure
 
 The existing cross-boundary audit probe previously attempted to lock one untouched `NOT_RUN` harness row.
 
@@ -505,7 +589,7 @@ PASS_CROSS_BOUNDARY_AUDIT
 
 ---
 
-## 17. What remains parked
+## 19. What remains parked
 
 No result-ingest tooling can prove facts that require the user's actual RisuAI host.
 
@@ -525,7 +609,7 @@ No synthetic row created by this transaction is target-host evidence.
 
 ---
 
-## 18. WATCH classifications
+## 20. WATCH classifications
 
 ### WATCH · PROVIDER_BODY_OCCURRENCE_MULTIPLICITY
 
@@ -533,7 +617,7 @@ The host adapter currently observes whether all six distinct E6 lines reach prov
 
 It does not yet prove each line occurs exactly once in the provider body.
 
-This remains suitable for a separate request-free drift/contract guard improvement.
+This remains suitable for the next request-free drift/contract guard improvement.
 
 ### WATCH · MODEL_SETTINGS_FINGERPRINT_IS_BOUNDED
 
@@ -549,7 +633,7 @@ Practical testing remains parked by user choice.
 
 ---
 
-## 19. Production boundary
+## 21. Production boundary
 
 This transaction changes no:
 
@@ -574,7 +658,7 @@ Production remains v0.70.1 at the authority snapshot above.
 
 ---
 
-## 20. Classification
+## 22. Classification
 
 ### FIX closed
 
@@ -582,7 +666,7 @@ Production remains v0.70.1 at the authority snapshot above.
 FIX · RESULT_SCORING_ACCEPTS_UNEXECUTED_LOCKED_REVIEW
 ```
 
-Closed by canonical review eligibility + summary defense in depth.
+Closed by canonical review eligibility + summary defense in depth + exact harness/pair scoring gates.
 
 ### WATCH
 
@@ -609,14 +693,16 @@ none for the next request-free transaction
 
 ---
 
-## 21. Current state
+## 23. Current state
 
 ```text
 EXPOSURE_RESULT_INGEST_TOOL                 = IMPLEMENTED
 CANONICAL_REVIEW_ELIGIBILITY                = VALID_GENERATION + COMPLETE REQUIRED CAPTURE
 UNEXECUTED_REVIEW_LOCK                      = REJECTED
 FORGED_LOCKED_NOT_RUN_SUMMARY               = EXCLUDED / REPORTED
-HARNESS_MANIFEST_RESULT_BINDING              = REQUIRED
+HARNESS_MANIFEST_RESULT_BINDING             = REQUIRED AT INGEST AND SCORING
+PAIR_BASE_REQUEST_IDENTITY                  = REQUIRED
+PAIR_MODEL_SETTINGS_REFERENCE_IDENTITY      = REQUIRED
 M1_SCORECARD                                = IMPLEMENTED
 M2_MACHINE_GATES                            = IMPLEMENTED
 M2_COMPARATIVE_REVIEW                       = REQUIRED FOR FINAL DISPOSITION
@@ -629,7 +715,7 @@ S7_CHANGE                                   = NONE
 
 ---
 
-## 22. Next request-free transaction
+## 24. Next request-free transaction
 
 ```text
 EXPOSURE_ANCHOR_AND_CONTRACT_DRIFT_GUARD

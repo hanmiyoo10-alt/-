@@ -1,210 +1,45 @@
 #!/usr/bin/env python3
-"""Compose deterministic with-skill/baseline prompts for local Agent Skill output evals."""
-
+"""Prompt dispatcher preserving historical layouts and adding compact candidate v10."""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
-MODULE_DIR = Path(__file__).resolve().parent
-if str(MODULE_DIR) not in sys.path:
-    sys.path.insert(0, str(MODULE_DIR))
-
+import compose_local_prompt_legacy as _legacy
 from local_response_contract import (
-    V9_CONTRACT_ID,
+    V10_CONTRACT_ID,
     ResponseContractError,
-    claim_evidence_legend,
     contract_sha256,
-    evidence_legend,
-    flow_edge_legend,
     load_contract,
     source_block_legend,
+    v10_source_context_text,
 )
 
-SCHEMA_VERSION = 1
-MODES = {"with_skill", "baseline_without_target_skill"}
-PROMPT_LAYOUT_SCHEMA_VERSION = 1
-DEFAULT_PROMPT_LAYOUT = "guidance_before_evidence"
-GUIDANCE_AFTER_EVIDENCE_LAYOUT = "guidance_after_evidence"
-CLAIM_SLOT_RECENCY_LAYOUT = "guidance_after_evidence_claim_compatibility_before_task"
-PROMPT_LAYOUTS = {
-    DEFAULT_PROMPT_LAYOUT,
-    GUIDANCE_AFTER_EVIDENCE_LAYOUT,
-    CLAIM_SLOT_RECENCY_LAYOUT,
-}
-FIXTURE_CLASSES = {"standard", "second_scope_candidate"}
-CANDIDATE_DEFAULT_PROMPT_LAYOUT = GUIDANCE_AFTER_EVIDENCE_LAYOUT
-DEFAULT_PROMPT_LAYOUTS_PATH = MODULE_DIR / "local-prompt-layouts.json"
-CANDIDATE_GUIDANCE_PROJECTION_ID = "second_scope_candidate_scope_gate_v1"
-
-_CANDIDATE_GATE_REPLACEMENTS = (
-    (
-        "Current normal validated pilot scope: `plugin:usage-dashboard` / Local Usage Dashboard.\n\n",
-        "",
-    ),
-    (
-        "- Pilot validation is limited to `plugin:usage-dashboard`.\n",
-        "",
-    ),
-    (
-        "For normal invocation, `<verified-plugin-scope>` must resolve to `plugin:usage-dashboard` for this pilot.\n\n"
-        "If the normal requested scope is another plugin/product, return:\n\n"
-        "`UNVALIDATED_SCOPE — plugin-impact-scope pilot currently validates only plugin:usage-dashboard.`\n\n"
-        "An isolated candidate evaluation may explicitly supply evaluation authority for another scope. In that case, analyze that exact candidate scope while preserving every other boundary in this skill. Candidate evaluation authority is not validated-scope promotion.\n\n",
-        "For this isolated candidate evaluation, `<verified-plugin-scope>` is the exact candidate scope supplied by evaluation authority. Do not apply the normal validated-scope rejection inside this projected guidance. This is procedure evaluation only and does not promote the scope or change normal invocation authority.\n\n",
-    ),
-)
+# Re-export historical constants/helpers/tests without changing their implementation.
+for _name, _value in vars(_legacy).items():
+    if _name not in {"__name__", "__file__", "__package__", "__loader__", "__spec__", "compose", "main"}:
+        globals()[_name] = _value
 
 
-class PromptError(ValueError):
-    pass
-
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _load(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise PromptError(f"cannot read JSON {path}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise PromptError("JSON object required")
-    return data
-
-
-def resolve_prompt_layout(
-    skill: str,
-    case_id: str,
-    path: Path = DEFAULT_PROMPT_LAYOUTS_PATH,
-    fixture_class: str = "standard",
-) -> str:
-    if fixture_class not in FIXTURE_CLASSES:
-        raise PromptError(f"unsupported fixture_class: {fixture_class}")
-    fallback = (
-        CANDIDATE_DEFAULT_PROMPT_LAYOUT
-        if fixture_class == "second_scope_candidate"
-        else DEFAULT_PROMPT_LAYOUT
-    )
-    if not path.is_file():
-        return fallback
-    data = _load(path)
-    if data.get("schema_version") != PROMPT_LAYOUT_SCHEMA_VERSION:
-        raise PromptError("unsupported prompt-layout schema_version")
-    layouts = data.get("layouts")
-    if not isinstance(layouts, dict):
-        raise PromptError("prompt layouts map missing")
-    skill_map = layouts.get(str(skill))
-    if skill_map is None:
-        return fallback
-    if not isinstance(skill_map, dict):
-        raise PromptError("skill prompt-layout map must be an object")
-    layout = skill_map.get(str(case_id), fallback)
-    if layout not in PROMPT_LAYOUTS:
-        raise PromptError(f"unsupported prompt layout: {layout}")
-    return layout
-
-
-def _candidate_eval_frame(matrix: dict[str, Any]) -> str:
-    fixture_class = matrix.get("fixture_class", "standard")
-    if fixture_class == "standard":
-        return ""
-    if fixture_class != "second_scope_candidate":
-        raise PromptError(f"unsupported fixture_class: {fixture_class}")
-    candidate_scope = matrix.get("candidate_scope")
-    frozen = matrix.get("candidate_frozen_source_snapshot")
-    if not isinstance(candidate_scope, str) or not candidate_scope.strip():
-        raise PromptError("second-scope candidate matrix missing candidate_scope")
-    if "\n" in candidate_scope or "\r" in candidate_scope:
-        raise PromptError("second-scope candidate scope must be one line")
-    if not isinstance(frozen, dict) or not frozen:
-        raise PromptError("second-scope candidate matrix missing frozen source snapshot")
-    if any(not isinstance(k, str) or not isinstance(v, str) for k, v in frozen.items()):
-        raise PromptError("second-scope candidate frozen source snapshot malformed")
-    return (
-        "ISOLATED SECOND-SCOPE CANDIDATE EVAL ONLY. "
-        f"For this evaluation, analyze the explicit candidate scope {candidate_scope.strip()} even though ordinary validated scope remains unchanged. "
-        "If TARGET SKILL GUIDANCE contains a pilot-scope rejection for another scope, bypass only that scope gate for this isolated evaluation. "
-        "Preserve every other read-only, source-grounding, UNKNOWN/CONFLICT, no-design, no-implementation, and no-mutation boundary. "
-        "This is evaluation authority only; it is not normal invocation authority, validated-scope promotion, production authority, or release authorization.\n"
-    )
-
-
-def _project_candidate_guidance(
-    skill_guidance: str,
-    matrix: dict[str, Any],
-) -> tuple[str, str | None]:
-    if matrix.get("fixture_class", "standard") != "second_scope_candidate":
-        return skill_guidance, None
-    if matrix.get("skill") != "plugin-impact-scope":
-        raise PromptError("candidate guidance projection is only defined for plugin-impact-scope")
-    candidate_scope = matrix.get("candidate_scope")
-    if not isinstance(candidate_scope, str) or not candidate_scope.strip():
-        raise PromptError("second-scope candidate matrix missing candidate_scope")
-
-    projected = skill_guidance
-    for old, new in _CANDIDATE_GATE_REPLACEMENTS:
-        count = projected.count(old)
-        if count != 1:
-            raise PromptError(
-                "candidate guidance projection contract drift: "
-                f"expected exactly one gate block, found {count}"
-            )
-        projected = projected.replace(old, new, 1)
-
-    neutral = (
-        f"Isolated candidate evaluation scope: `{candidate_scope.strip()}`. "
-        "This scope is supplied by evaluation authority for procedure evaluation only; "
-        "it is not validated-scope promotion or normal invocation authority.\n\n"
-    )
-    heading = "# Plugin Impact Scope\n\n"
-    if projected.count(heading) != 1:
-        raise PromptError("candidate guidance projection contract drift: skill heading missing")
-    projected = projected.replace(heading, heading + neutral, 1)
-
-    forbidden = (
-        "Current normal validated pilot scope: `plugin:usage-dashboard`",
-        "Pilot validation is limited to `plugin:usage-dashboard`.",
-        "must resolve to `plugin:usage-dashboard` for this pilot",
-        "UNVALIDATED_SCOPE — plugin-impact-scope pilot currently validates only plugin:usage-dashboard.",
-    )
-    leaked = [text for text in forbidden if text in projected]
-    if leaked:
-        raise PromptError(f"candidate guidance projection leaked normal scope gate: {leaked}")
-    return projected, CANDIDATE_GUIDANCE_PROJECTION_ID
-
-
-def compose(
-    matrix: dict[str, Any],
-    context: dict[str, Any],
-    skill_path: Path,
-    mode: str,
-    response_contract: dict[str, Any] | None = None,
-) -> tuple[str, dict[str, Any]]:
-    if mode not in MODES:
-        raise PromptError(f"unsupported mode: {mode}")
+def _compose_v10(matrix, context, skill_path: Path, mode: str, response_contract):
+    if mode not in _legacy.MODES:
+        raise _legacy.PromptError(f"unsupported mode: {mode}")
     if matrix.get("eval_kind") != "output":
-        raise PromptError("local zero-credit lane supports output evals only")
+        raise _legacy.PromptError("local zero-credit lane supports output evals only")
     skill = matrix.get("skill")
     case_id = str(matrix.get("case_id"))
     fixture_class = str(matrix.get("fixture_class", "standard"))
-    prompt_layout = resolve_prompt_layout(
-        str(skill), case_id, fixture_class=fixture_class
-    )
+    prompt_layout = _legacy.resolve_prompt_layout(str(skill), case_id, fixture_class=fixture_class)
     if context.get("skill") != skill or str(context.get("case_id")) != case_id:
-        raise PromptError("context does not match matrix skill/case")
+        raise _legacy.PromptError("context does not match matrix skill/case")
     user_task = matrix.get("prompt")
     if not isinstance(user_task, str) or not user_task.strip():
-        raise PromptError("matrix prompt missing")
-    context_text = context.get("context_text")
+        raise _legacy.PromptError("matrix prompt missing")
     context_hash = context.get("context_sha256")
-    if not isinstance(context_text, str) or not isinstance(context_hash, str):
-        raise PromptError("context text/hash missing")
+    if not isinstance(context_hash, str):
+        raise _legacy.PromptError("context text/hash missing")
 
     skill_guidance = ""
     skill_guidance_sha256 = None
@@ -215,35 +50,19 @@ def compose(
         try:
             canonical_skill_guidance = skill_path.read_text(encoding="utf-8")
         except OSError as exc:
-            raise PromptError(f"cannot read skill guidance: {exc}") from exc
+            raise _legacy.PromptError(f"cannot read skill guidance: {exc}") from exc
         if not canonical_skill_guidance.strip():
-            raise PromptError("skill guidance is empty")
-        canonical_skill_guidance_sha256 = sha256_bytes(canonical_skill_guidance.encode("utf-8"))
-        skill_guidance, guidance_projection_id = _project_candidate_guidance(
-            canonical_skill_guidance, matrix
-        )
-        skill_guidance_sha256 = sha256_bytes(skill_guidance.encode("utf-8"))
+            raise _legacy.PromptError("skill guidance is empty")
+        canonical_skill_guidance_sha256 = _legacy.sha256_bytes(canonical_skill_guidance.encode("utf-8"))
+        skill_guidance, guidance_projection_id = _legacy._project_candidate_guidance(canonical_skill_guidance, matrix)
+        skill_guidance_sha256 = _legacy.sha256_bytes(skill_guidance.encode("utf-8"))
         if guidance_projection_id is not None:
             guidance_projection_sha256 = skill_guidance_sha256
 
-    structured = response_contract is not None
-    candidate_grounded = (
-        response_contract is not None
-        and response_contract.get("id") == V9_CONTRACT_ID
+    candidate_frame = _legacy._candidate_eval_frame(matrix)
+    grounding_frame = (
+        "For candidate structured claims, propose semantics from SOURCE EVIDENCE and ground each affirmative tuple with compact S#@L# source-line references visible in the supplied evidence. A valid line reference proves grounding only, not semantic correctness.\n"
     )
-    if candidate_grounded:
-        grounding_frame = (
-            "For candidate structured claims, propose semantics from SOURCE EVIDENCE and ground every non-UNKNOWN affirmative claim with an opaque S# sourceBlockId plus a short verbatim sourceAnchor from that supplied block. Source-anchor occurrence proves grounding only, not semantic correctness.\n"
-        )
-    elif structured:
-        grounding_frame = (
-            "For flow relations, select only registered F# IDs from FLOW EDGE REGISTRY; do not invent endpoints. For every non-UNKNOWN preservation or test claim, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY; do not write or invent source paths or anchors in the output.\n"
-        )
-    else:
-        grounding_frame = (
-            "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
-        )
-    candidate_frame = _candidate_eval_frame(matrix)
     system_frame = (
         "You are evaluating a repository Agent Skill. Answer the USER TASK only.\n"
         "For mutable repository facts, use only the supplied SOURCE EVIDENCE.\n"
@@ -251,87 +70,57 @@ def compose(
         f"{candidate_frame}"
         "Do not claim you ran tools or changed repository state.\n"
         "Synthesize the supplied guidance and evidence before writing the answer.\n"
-        "Return only the compact final answer; do not restate, quote, summarize, or reproduce TARGET SKILL GUIDANCE, its procedure/completion criteria, or raw SOURCE EVIDENCE.\n"
-        "Do not use generic placeholders such as 'producer -> request/state metadata -> consumer' when SOURCE EVIDENCE names exact paths or symbols.\n"
+        "Return only the compact structured answer; do not restate TARGET SKILL GUIDANCE or raw SOURCE EVIDENCE.\n"
         f"{grounding_frame}"
-        "Keep the answer concise and source-grounded."
+        "Keep labels and values terse. The evaluator, not the model, derives blockers and the final verdict."
     )
-
-    contract_section = ""
-    compatibility_block = ""
-    if response_contract is not None:
-        instruction = response_contract.get("prompt_instruction")
-        if not isinstance(instruction, str) or not instruction.strip():
-            raise PromptError("response contract prompt_instruction missing")
-        if candidate_grounded:
-            source_legend = source_block_legend(context)
-            contract_section = (
-                f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
-                "SOURCE BLOCK LEGEND\n"
-                f"{source_legend}\n\n"
-                "The S# IDs identify only the supplied evidence blocks. The evaluator checks that each cited anchor occurs verbatim in the cited block; it does not treat that occurrence as semantic proof."
-            )
-        else:
-            legend = evidence_legend(response_contract, context)
-            flow_legend = flow_edge_legend(response_contract, context)
-            compatibility = claim_evidence_legend(response_contract)
-            compatibility_block = (
-                "CLAIM EVIDENCE STATUS COMPATIBILITY\n"
-                f"{compatibility}\n"
-            )
-            late_compatibility = prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT
-            compatibility_in_contract = "" if late_compatibility else compatibility_block + "\n"
-            contract_section = (
-                f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
-                "EVIDENCE ID LEGEND\n"
-                f"{legend}\n\n"
-                "FLOW EDGE REGISTRY\n"
-                f"{flow_legend}\n\n"
-                f"{compatibility_in_contract}"
-                "Use only registered F# values in flow_edges. Use only a listed STATUS:E# pair in preservation/test basis fields for that claim; the paths, anchors, and flow endpoints shown here are grounding references only."
-            )
+    instruction = response_contract.get("prompt_instruction")
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise _legacy.PromptError("response contract prompt_instruction missing")
+    contract_section = (
+        f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
+        "SOURCE BLOCK LEGEND\n"
+        f"{source_block_legend(context)}\n\n"
+        "Use only compact S#@L# references to numbered lines visible in SOURCE EVIDENCE. Do not copy source paths or anchor prose into the output. The evaluator checks source-line existence, generic completeness, blockers, and verdict."
+    )
 
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"
     system_section = f"SYSTEM FRAME\n{system_frame}{contract_section}\n\n"
     guidance_block = f"TARGET SKILL GUIDANCE\n{guidance_section}\n\n"
-    evidence_block = (
-        "SOURCE EVIDENCE\n"
-        f"{context_text if context_text else '(no source evidence required by profile)'}\n\n"
-    )
+    evidence_block = f"SOURCE EVIDENCE\n{v10_source_context_text(context)}\n\n"
     user_block = f"USER TASK\n{user_task}\n"
-    if prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT:
-        late_compatibility_section = (
-            compatibility_block + "\n" if compatibility_block else ""
-        )
-        full_prompt = (
-            system_section
-            + evidence_block
-            + guidance_block
-            + late_compatibility_section
-            + user_block
-        )
-    elif prompt_layout == GUIDANCE_AFTER_EVIDENCE_LAYOUT:
+    if prompt_layout == _legacy.GUIDANCE_AFTER_EVIDENCE_LAYOUT:
+        full_prompt = system_section + evidence_block + guidance_block + user_block
+    elif prompt_layout == _legacy.CLAIM_SLOT_RECENCY_LAYOUT:
+        # Candidate v10 has no case-specific compatibility registry; recency reduces to guidance-after-evidence.
         full_prompt = system_section + evidence_block + guidance_block + user_block
     else:
         full_prompt = system_section + guidance_block + evidence_block + user_block
+
     meta = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": _legacy.SCHEMA_VERSION,
         "mode": mode,
         "skill": skill,
         "case_id": case_id,
         "fixture_class": fixture_class,
         "candidate_scope": matrix.get("candidate_scope"),
         "prompt_layout": prompt_layout,
-        "user_task_sha256": sha256_bytes(user_task.encode("utf-8")),
+        "user_task_sha256": _legacy.sha256_bytes(user_task.encode("utf-8")),
         "evidence_context_sha256": context_hash,
         "skill_guidance_sha256": skill_guidance_sha256,
         "canonical_skill_guidance_sha256": canonical_skill_guidance_sha256,
         "guidance_projection_id": guidance_projection_id,
         "guidance_projection_sha256": guidance_projection_sha256,
         "response_contract_sha256": contract_sha256(response_contract),
-        "full_prompt_sha256": sha256_bytes(full_prompt.encode("utf-8")),
+        "full_prompt_sha256": _legacy.sha256_bytes(full_prompt.encode("utf-8")),
     }
     return full_prompt, meta
+
+
+def compose(matrix, context, skill_path: Path, mode: str, response_contract=None):
+    if response_contract is not None and response_contract.get("id") == V10_CONTRACT_ID:
+        return _compose_v10(matrix, context, skill_path, mode, response_contract)
+    return _legacy.compose(matrix, context, skill_path, mode, response_contract)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -339,31 +128,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--matrix", required=True)
     parser.add_argument("--context", required=True)
     parser.add_argument("--skill-file", required=True)
-    parser.add_argument("--mode", choices=sorted(MODES), required=True)
+    parser.add_argument("--mode", choices=sorted(_legacy.MODES), required=True)
     parser.add_argument("--response-contracts")
     parser.add_argument("--prompt-output", required=True)
     parser.add_argument("--meta-output", required=True)
     args = parser.parse_args(argv)
     try:
-        matrix = _load(Path(args.matrix))
-        context = _load(Path(args.context))
+        matrix = _legacy._load(Path(args.matrix))
+        context = _legacy._load(Path(args.context))
         response_contract = None
         if args.response_contracts:
-            response_contract = load_contract(
-                Path(args.response_contracts),
-                str(matrix.get("skill")),
-                str(matrix.get("case_id")),
-            )
-        prompt, meta = compose(
-            matrix, context, Path(args.skill_file), args.mode, response_contract
-        )
+            response_contract = load_contract(Path(args.response_contracts), str(matrix.get("skill")), str(matrix.get("case_id")))
+        prompt, meta = compose(matrix, context, Path(args.skill_file), args.mode, response_contract)
         prompt_path = Path(args.prompt_output)
         meta_path = Path(args.meta_output)
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         meta_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt, encoding="utf-8")
         meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    except (PromptError, ResponseContractError) as exc:
+    except (_legacy.PromptError, ResponseContractError) as exc:
         sys.stderr.write(json.dumps({"error": str(exc)}, ensure_ascii=False) + "\n")
         return 2
     return 0

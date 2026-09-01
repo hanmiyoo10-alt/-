@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parents[1]
+TERMUX_FROZEN_MAIN = "f01c2ef304656de9254191ec2fb9a2c046642f21"
 
 
 class ZeroCreditContextProfileContractTests(unittest.TestCase):
@@ -80,10 +81,37 @@ class ZeroCreditContextProfileContractTests(unittest.TestCase):
         self.assertTrue(all(spec["ref"] != "HEAD" for spec in specs))
         self.assertTrue(all("refs/remotes/origin/release-simcore" not in spec["ref"] for spec in specs))
 
-    def test_workflow_fetches_exact_simcore_heldout_refs_not_moving_release_branch(self):
-        self.assertIn("e4daaa427ed902ca6f8368c45d509f7fd0f26d42", self.workflow)
-        self.assertIn("861100f4771967aa5b8ab8811d06f11702c0d3ff", self.workflow)
+    def test_termux_heldout_profile_is_compact_and_exactly_frozen(self):
+        specs = self.profile["profiles"]["plugin-impact-scope"][
+            "termux-large-doc-background-autosave-heldout"
+        ]
+        self.assertLessEqual(len(specs), 7)
+        self.assertEqual({spec["ref"] for spec in specs}, {TERMUX_FROZEN_MAIN})
+        self.assertTrue(all(spec["ref"] != "HEAD" for spec in specs))
+        self.assertEqual(
+            {spec["path"] for spec in specs},
+            {
+                "docs/REPO_PROJECT_CATALOG.md",
+                "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
+                "plugins/termux/large-doc-editor/README.md",
+                "plugins/termux/large-doc-editor/web/app.js",
+                "plugins/termux/large-doc-editor/server.py",
+                "plugins/termux/large-doc-editor/chunk_store.py",
+                "plugins/termux/large-doc-editor/tests/test_chunk_store.py",
+            },
+        )
+        self.assertTrue(all(spec["mode"] == "needle_windows" for spec in specs))
+        self.assertTrue(all(spec["max_bytes"] <= 9000 for spec in specs))
+
+    def test_workflow_materializes_candidate_frozen_refs_generically(self):
+        self.assertIn("frozen-ref-preflight-matrix.json", self.workflow)
+        self.assertIn("candidate_frozen_source_snapshot", self.workflow)
+        self.assertIn("mapfile -t frozen_shas", self.workflow)
+        self.assertIn('git fetch --no-tags --depth=1 origin "$frozen_sha"', self.workflow)
+        self.assertIn('ZERO_CREDIT_FROZEN_AUTHORITY_SHA:$frozen_sha', self.workflow)
         self.assertNotIn("release-simcore:refs/remotes/origin/release-simcore", self.workflow)
+        self.assertNotIn("EVAL_CASE_ID' == 'simcore-3m3", self.workflow)
+        self.assertNotIn("simcore-3m3-structured-sidecar-validation-heldout' ]]; then", self.workflow)
 
     def test_failure_artifacts_include_hidden_eval_directory(self):
         self.assertIn("path: .agent-skill-zero-credit-eval/", self.workflow)

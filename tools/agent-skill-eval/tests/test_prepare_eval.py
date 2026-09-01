@@ -28,6 +28,7 @@ class PrepareEvalTests(unittest.TestCase):
         )
         self.assertEqual(matrix["skill"], "plugin-authority-scan")
         self.assertEqual(matrix["case_id"], "1")
+        self.assertEqual(matrix["fixture_class"], "standard")
         self.assertEqual(len(matrix["prompt_sha256"]), 64)
         self.assertEqual(matrix["modes"], ["with_skill", "baseline_without_target_skill"])
 
@@ -41,7 +42,49 @@ class PrepareEvalTests(unittest.TestCase):
             "b" * 40,
         )
         self.assertEqual(matrix["case_id"], "service-tier-fidelity")
+        self.assertEqual(matrix["fixture_class"], "standard")
+        self.assertNotIn("candidate_scope", matrix)
         self.assertTrue(matrix["assertions"])
+
+    def test_second_scope_candidate_resolves_only_from_candidate_fixture(self):
+        matrix = prepare_eval.build_matrix(
+            REPO_ROOT,
+            "plugin-impact-scope",
+            "output",
+            "simcore-3m3-structured-sidecar-validation-heldout",
+            "gpt-5.4",
+            "b" * 40,
+        )
+        self.assertEqual(matrix["fixture_class"], "second_scope_candidate")
+        self.assertEqual(matrix["candidate_scope"], "plugin:simcore")
+        self.assertTrue(matrix["fixture_path"].endswith("second_scope_candidate_evals.json"))
+        self.assertEqual(
+            matrix["candidate_frozen_source_snapshot"],
+            {
+                "main": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
+                "release-simcore": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+            },
+        )
+
+    def test_candidate_fixture_requires_explicit_not_promoted_status(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            eval_dir = root / ".agents/skills/plugin-impact-scope/evals"
+            eval_dir.mkdir(parents=True)
+            (eval_dir / "second_scope_candidate_evals.json").write_text(
+                json.dumps(
+                    {
+                        "skill_name": "plugin-impact-scope",
+                        "status": "PROMOTED",
+                        "candidate_scope": "plugin:simcore",
+                        "frozen_source_snapshot": {"main": "a" * 40},
+                        "evals": [{"id": "x", "prompt": "x"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(prepare_eval.EvalPreparationError):
+                prepare_eval._load_second_scope_candidate(root, "plugin-impact-scope")
 
     def test_authority_trigger_array_schema_normalizes(self):
         _, cases = prepare_eval.load_cases(REPO_ROOT, "plugin-authority-scan", "trigger")

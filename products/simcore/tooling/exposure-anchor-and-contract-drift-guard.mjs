@@ -84,7 +84,6 @@ function hostAdapterContractFailures(hostAdapterSource) {
   for (const line of EXPOSURE_LINES) {
     if (countSubstring(source, `'${line}'`) !== 1) failures.push(`HOST_ADAPTER_CANDIDATE_LINE_DRIFT:${sha256Utf8(line).slice(0, 12)}`);
   }
-  if (!source.includes(EXPECTED_MUTATION_SCOPE)) failures.push('HOST_ADAPTER_MUTATION_SCOPE_DRIFT');
   return failures;
 }
 

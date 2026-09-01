@@ -169,10 +169,12 @@ class WorkflowContractTests(unittest.TestCase):
         cls.workflow = (ROOT.parents[1] / ".github" / "workflows" / "agent-skill-zero-credit-eval.yml").read_text(encoding="utf-8")
         cls.ci = (ROOT.parents[1] / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
 
-    def test_zero_credit_workflow_is_dispatch_only_and_contents_read(self):
+    def test_zero_credit_workflow_has_bounded_explicit_triggers_and_contents_read(self):
         self.assertIn("workflow_dispatch:", self.workflow)
+        self.assertIn("\n  push:\n", self.workflow)
+        self.assertIn("'agent-skill-zero-credit-request/**'", self.workflow)
+        self.assertIn("'.agent-skill-zero-credit-requests/*.json'", self.workflow)
         self.assertNotIn("pull_request:", self.workflow)
-        self.assertNotIn("\n  push:", self.workflow)
         self.assertIn("permissions:\n  contents: read", self.workflow)
         self.assertNotIn("copilot-requests", self.workflow.lower())
 

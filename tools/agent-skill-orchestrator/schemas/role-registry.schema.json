@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "role-registry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "roles"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "roles": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "role-metadata.schema.json"}}
+  }
+}

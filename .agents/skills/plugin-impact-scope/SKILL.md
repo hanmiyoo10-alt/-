@@ -29,6 +29,7 @@ It is an analysis module between authority resolution and later design/implement
 - Do not infer that an absent static reference proves no runtime/dynamic dependency exists.
 - Preserve `UNKNOWN` and `CONFLICT` rather than inventing edges.
 - Derived impact maps are context-management artifacts, not mutable project truth.
+- A cross-layer impact map is not complete when it only lists files. It must state source-backed producer/consumer edges and preservation boundaries when those boundaries are material to the proposed change.
 - Narrow one-file copy edits or authority-only questions normally do not justify this skill.
 
 These boundaries compose with `docs/REPOSITORY_COMMON_RULES.md`, especially RCR-H01/H02/H03/H08, RCR-D07/D08/D12/D13, and RCR-C08.
@@ -123,6 +124,17 @@ input/event
 -> validation surface
 ```
 
+For a cross-layer scalar, request-metadata field, identity value, diagnostics value, or similar producer/consumer change, a file inventory is not a completed flow. Explicitly trace every source-backed edge that is material to the question, for example:
+
+```text
+producer capture/write
+-> request/state metadata propagation
+-> Recent Requests or equivalent presentation consumer
+-> Diagnostics or equivalent diagnostic consumer
+```
+
+Each non-`UNKNOWN` edge must include its evidence class and the exact current source basis. If the current source does not prove one link, mark that link `UNKNOWN`; do not skip the edge or replace it with a path list.
+
 Classify each edge conservatively.
 
 Examples:
@@ -131,7 +143,7 @@ Examples:
 - sibling test mentions the same feature but does not execute the boundary -> at most `SUPPORTED_LIKELY` until the test contract is re-read;
 - dynamic listener/callback may be connected but static evidence cannot prove registration path -> `UNKNOWN` until source/runtime evidence resolves it.
 
-### 6. Map validation surfaces
+### 6. Map validation and preservation surfaces
 
 Identify current tests/contracts that protect the affected boundaries, including where relevant:
 
@@ -144,6 +156,13 @@ Identify current tests/contracts that protect the affected boundaries, including
 - physical acceptance surfaces when the owning project requires device evidence.
 
 Do not claim a test protects a boundary merely because its filename sounds related.
+
+For a change that adds or propagates data through an existing request, ledger, diagnostics, refresh, source, CLI, or network path, explicitly check these preservation boundaries when current source/contracts make them relevant:
+
+- **Request identity** — whether existing request identity/dedupe/correlation semantics must remain unchanged. State the current source basis, or `UNKNOWN` if not proven.
+- **No-extra-I/O** — whether the proposed data can travel on an existing source/read/refresh path without adding an extra network request, CLI invocation, source fetch, refresh, or other observable I/O. State the current source basis, or `UNKNOWN` if not proven.
+
+These are preservation checks, not implementation instructions. Do not invent a new identity rule or I/O mechanism merely to fill the report.
 
 ### 7. Map generated/release/materializer surfaces
 
@@ -161,6 +180,8 @@ A repository-only audit/documentation change may legitimately have no shipped-by
 ### 8. State the narrowest supported impact boundary
 
 Summarize the smallest current source-backed boundary that a later design must consider.
+
+For a source-proven cross-layer change, do not collapse the boundary to one generated entry file or one convenient path when the semantic impact spans multiple owners/consumers. Name the minimal connected semantic boundary instead, such as producer capture + request metadata + affected presentation/diagnostic consumers + the preservation/test surfaces required by current contracts.
 
 Do not turn this into a solution recommendation. The result should say what must be preserved/validated, not how to implement the change.
 
@@ -189,17 +210,22 @@ Use this shape:
 - Semantic owners:
   - `<owner/path/symbol>`
 - State/data/effect flow:
-  - `<from> -> <to>` — `DIRECT | SUPPORTED_LIKELY | UNKNOWN | CONFLICT` — basis: `<source>`
+  - `<producer> -> <request/state metadata> -> <consumer>` — `DIRECT | SUPPORTED_LIKELY | UNKNOWN | CONFLICT` — basis: `<source>`
+- Preservation boundaries:
+  - Request identity: `<preserved boundary + source basis, not applicable, or UNKNOWN>`
+  - No-extra-I/O: `<preserved boundary + source basis, not applicable, or UNKNOWN>`
 - Tests/contracts/validation:
   - `<surface>` — `<what boundary it protects>`
 - Generated/release/materializer surfaces:
   - `<surface or none proven>`
-- Narrowest supported impact boundary: `<bounded statement>`
+- Narrowest supported impact boundary: `<minimal connected semantic boundary, not merely a file list>`
 - Blocked claims: `<none or unresolved claims>`
 - Verdict: `IMPACT_SCOPED | PARTIAL | UNKNOWN | CONFLICT`
 ```
 
 Every non-`UNKNOWN` edge must name a concrete current source basis.
+
+For broad cross-layer questions, do not substitute a list of candidate files for `State/data/effect flow` or `Preservation boundaries`. If either material boundary cannot be proven, keep it `UNKNOWN` and choose a fail-closed verdict rather than omitting it.
 
 ## Verdict rules
 
@@ -217,6 +243,8 @@ The impact scope is complete only when:
 - search roots/seeds stayed bounded;
 - mechanical hits remained candidate-only until exact reread;
 - semantic owner and cross-layer edges are evidence-classified;
+- cross-layer scalar/request-metadata changes are traced as connected producer -> metadata -> consumer edges rather than only a file inventory;
+- material request-identity and no-extra-I/O preservation boundaries are explicitly checked, with `UNKNOWN` preserved when current evidence cannot prove them;
 - relevant tests/contracts were read rather than inferred from names;
 - generated/release/materializer impact is bounded rather than assumed;
 - unresolved dynamic edges remain `UNKNOWN`;

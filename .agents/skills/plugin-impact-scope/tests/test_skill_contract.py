@@ -62,6 +62,18 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotRegex(combined, r"\b[0-9a-f]{40}\b")
         self.assertNotRegex(combined, r"\b[0-9a-f]{64}\b")
 
+    def test_cross_layer_output_contract_requires_flow_and_preservation_boundaries(self):
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("a file inventory is not a completed flow", text)
+        self.assertIn("producer capture/write", text)
+        self.assertIn("request/state metadata propagation", text)
+        self.assertIn("Preservation boundaries:", text)
+        self.assertIn("Request identity:", text)
+        self.assertIn("No-extra-I/O:", text)
+        self.assertIn("minimal connected semantic boundary", text)
+        self.assertIn("do not substitute a list of candidate files", text)
+        self.assertIn("request-identity and no-extra-I/O preservation boundaries are explicitly checked", text)
+
 
 if __name__ == "__main__":
     unittest.main()

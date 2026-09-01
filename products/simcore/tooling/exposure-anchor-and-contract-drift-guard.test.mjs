@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { classifyPaths } from './ci/classify.mjs';
 import { EXPOSURE_LINES } from './exposure-prompt-contract-offline-evaluator.mjs';
 import {
   ADAPTER_VERSION,
@@ -62,6 +63,16 @@ function baseInput() {
     hostAdapterSource: hostAdapterSource(),
   };
 }
+
+const mixedScope = classifyPaths([
+  'products/simcore/tooling/exposure-anchor-and-contract-drift-guard.mjs',
+  'products/simcore/tooling/exposure-anchor-and-contract-drift-guard.test.mjs',
+  'docs/SIMCORE_EXPOSURE_ANCHOR_AND_CONTRACT_DRIFT_GUARD_2026-09-01.md',
+]);
+assert.equal(mixedScope.docOnly, false, JSON.stringify(mixedScope));
+assert.ok(mixedScope.labels.includes('CI_SELF'), JSON.stringify(mixedScope));
+assert.ok(mixedScope.labels.includes('HARNESS'), JSON.stringify(mixedScope));
+assert.ok(mixedScope.labels.includes('SIMCORE_DOC_ONLY'), JSON.stringify(mixedScope));
 
 const pass = assessExposureAnchorAndContractDrift(baseInput());
 assert.equal(pass.status, 'PASS_EXPOSURE_EVAL_CONTRACT_DRIFT_GUARD', pass.failures.join('\n'));

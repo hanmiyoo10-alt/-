@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "plugin-impact-scope",
+  "case_id": "simcore-3m3-structured-sidecar-validation-heldout",
+  "target_repository_sha": "197cfff67a9b59e8c9f7cf0cb27009adf64381d8",
+  "model_profile": "qwen2.5-3b-instruct-q4_k_m"
+}

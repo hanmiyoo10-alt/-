@@ -4,6 +4,7 @@ import {
   VALID_EXECUTION_STATUS,
   assessReviewEligibility,
   assertHarnessIntegrity,
+  buildComplianceEvalHarness,
   createLockedReviewRecord,
   summarizeLockedReviews,
 } from './exposure-model-compliance-eval-harness.mjs';
@@ -37,6 +38,14 @@ function requireString(value, code) {
 function requireSha(value, code) {
   if (!isSha256(value)) throw new Error(code);
   return String(value).toLowerCase();
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function manifestRunById(harness, runId) {
@@ -75,6 +84,8 @@ export function ingestExecutionRecord(harness, capture = {}) {
     harnessInvalidReason,
     hostCapture: {
       ...clone(manifestRun.hostCapture),
+      beforeRequestInputFingerprint: capture.beforeRequestInputFingerprint ?? null,
+      flattenedMessageFingerprint: capture.flattenedMessageFingerprint ?? null,
       modelIdentifier: capture.modelIdentifier ?? null,
       modelSettingsFingerprint: capture.modelSettingsFingerprint ?? null,
       characterReferenceFingerprint: capture.characterReferenceFingerprint ?? null,
@@ -93,6 +104,8 @@ export function ingestExecutionRecord(harness, capture = {}) {
 
   if (executionStatus === VALID_EXECUTION_STATUS) {
     requireString(row.hostCapture.generatedOutput, 'GENERATED_OUTPUT_REQUIRED');
+    requireSha(row.hostCapture.beforeRequestInputFingerprint, 'BEFORE_REQUEST_INPUT_FINGERPRINT_REQUIRED');
+    requireSha(row.hostCapture.flattenedMessageFingerprint, 'FLATTENED_MESSAGE_FINGERPRINT_REQUIRED');
     requireSha(row.hostCapture.actualHostRequestFingerprint, 'HOST_REQUEST_FINGERPRINT_REQUIRED');
     requireString(row.hostCapture.modelIdentifier, 'MODEL_IDENTIFIER_REQUIRED');
     requireSha(row.hostCapture.modelSettingsFingerprint, 'MODEL_SETTINGS_FINGERPRINT_REQUIRED');
@@ -160,8 +173,59 @@ function perFixtureMetrics(records, condition) {
   });
 }
 
-export function buildStageScorecard(records = [], { stage } = {}) {
+function assessScorecardManifestBinding(records, harness, stage) {
+  const failures = [];
+  const harnessIntegrity = assertHarnessIntegrity(harness);
+  if (!harnessIntegrity.pass) return [`SCORING_HARNESS_INTEGRITY:${harnessIntegrity.failures.join('|')}`];
+  if (harness.stage !== stage) failures.push('SCORING_HARNESS_STAGE_MISMATCH');
+
+  for (const row of records) {
+    let manifestRun;
+    try {
+      manifestRun = manifestRunById(harness, runIdOf(row));
+    } catch (_) {
+      failures.push(`RUN_NOT_STAGE_MANIFEST_BOUND:${runIdOf(row)}`);
+      continue;
+    }
+    if (row.stage !== manifestRun.stage) failures.push(`RUN_STAGE_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    if (row.fixtureId !== manifestRun.fixtureId) failures.push(`RUN_FIXTURE_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    if (row.conditionActualId !== manifestRun.conditionActualId) failures.push(`RUN_CONDITION_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    if (row.scenario?.syntheticScenarioFingerprint !== manifestRun.scenario?.syntheticScenarioFingerprint) {
+      failures.push(`RUN_SCENARIO_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    }
+    if (row.fixtureCorpusHash !== manifestRun.fixtureCorpusHash) failures.push(`RUN_CORPUS_HASH_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    if (row.candidateContractHash !== manifestRun.candidateContractHash) failures.push(`RUN_CANDIDATE_HASH_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    if (stableJson(row.productionAuthority) !== stableJson(manifestRun.productionAuthority)) {
+      failures.push(`RUN_PRODUCTION_AUTHORITY_MANIFEST_MISMATCH:${runIdOf(row)}`);
+    }
+  }
+  return failures;
+}
+
+function assessPairComparability(records) {
+  const failures = [];
+  const pairIds = [...new Set(records.map((row) => row.pairId))];
+  for (const pairId of pairIds) {
+    const rows = records.filter((row) => row.pairId === pairId);
+    if (rows.length !== 2) continue;
+    const b0 = rows.find((row) => row.conditionActualId === 'B0');
+    const e6 = rows.find((row) => row.conditionActualId === 'E6');
+    if (!b0 || !e6) continue;
+    if (b0.hostCapture.beforeRequestInputFingerprint !== e6.hostCapture.beforeRequestInputFingerprint) {
+      failures.push(`PAIR_BASE_REQUEST_INPUT_MISMATCH:${pairId}`);
+    }
+    if (b0.hostCapture.modelIdentifier !== e6.hostCapture.modelIdentifier) failures.push(`PAIR_MODEL_MISMATCH:${pairId}`);
+    if (b0.hostCapture.modelSettingsFingerprint !== e6.hostCapture.modelSettingsFingerprint) failures.push(`PAIR_MODEL_SETTINGS_MISMATCH:${pairId}`);
+    if (b0.hostCapture.characterReferenceFingerprint !== e6.hostCapture.characterReferenceFingerprint) {
+      failures.push(`PAIR_CHARACTER_REFERENCE_MISMATCH:${pairId}`);
+    }
+  }
+  return failures;
+}
+
+export function buildStageScorecard(records = [], { stage, harness } = {}) {
   const shape = expectedStageShape(stage);
+  if (!harness) throw new Error('SCORING_HARNESS_REQUIRED');
   const summary = summarizeLockedReviews(records);
   const lockedEligible = records.filter((row) => row?.review?.locked === true && assessReviewEligibility(row).pass);
   const runIds = lockedEligible.map(runIdOf);
@@ -176,7 +240,8 @@ export function buildStageScorecard(records = [], { stage } = {}) {
   const structuralFailures = [];
   if (duplicates.length) structuralFailures.push('DUPLICATE_RUN_IDS');
   if (summary.ineligibleLockedRuns > 0) structuralFailures.push('INELIGIBLE_LOCKED_REVIEWS_PRESENT');
-  if (lockedEligible.some((row) => row.stage !== stage)) structuralFailures.push('STAGE_MISMATCH');
+  structuralFailures.push(...assessScorecardManifestBinding(lockedEligible, harness, stage));
+  structuralFailures.push(...assessPairComparability(lockedEligible));
 
   const complete = structuralFailures.length === 0
     && lockedEligible.length === shape.runs
@@ -209,6 +274,11 @@ export function buildStageScorecard(records = [], { stage } = {}) {
     resultToolVersion: RESULT_TOOL_VERSION,
     stage,
     expectedShape: shape,
+    harnessIdentity: {
+      candidateContractHash: harness.candidateContractHash,
+      fixtureCorpusHash: harness.fixtureCorpusHash,
+      productionAuthority: clone(harness.productionAuthority),
+    },
     complete,
     structuralFailures,
     duplicateRunIds: [...new Set(duplicates)],
@@ -260,6 +330,7 @@ export function assertResultToolIntegrity(scorecard) {
   if (scorecard?.productionImplementationAuthorized !== false) failures.push('PRODUCTION_AUTH');
   if (scorecard?.modelComplianceExecutedByThisTool !== false) failures.push('MODEL_EXECUTION_FLAG');
   if (!CONDITIONS.every((condition) => scorecard?.byCondition?.[condition])) failures.push('CONDITION_METRICS');
+  if (!scorecard?.harnessIdentity?.candidateContractHash) failures.push('HARNESS_IDENTITY');
   return { pass: failures.length === 0, failures };
 }
 

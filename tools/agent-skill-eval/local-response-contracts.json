@@ -3,44 +3,81 @@
   "contracts": {
     "plugin-impact-scope": {
       "service-tier-fidelity": {
-        "id": "impact-scope-source-linked-v2",
+        "id": "impact-scope-evidence-id-v3",
         "expected_scope": "plugin:usage-dashboard",
-        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. Use the fewest entries needed: at most 3 distinct flow edges, 2 tests, and 2 blocked claims. For every non-UNKNOWN claim, source_path must exactly match a SOURCE EVIDENCE path and source_anchor must be a short verbatim symbol or contract substring from that same source. For UNKNOWN claims, use empty source_path and source_anchor. Do not add prose before or after the JSON.",
+        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. For claim fields, use only a basis value allowed by the schema: UNKNOWN means no evidence; DIRECT:E#, SUPPORTED_LIKELY:E#, or CONFLICT:E# means the named evidence ID is the basis. Never write source paths or anchors in the output. Use the fewest entries needed: at most 3 distinct flow edges, 2 tests, and 2 blocked claims. Do not add prose before or after the JSON.",
+        "evidence_registry": {
+          "E1": {
+            "source_path": "docs/REPO_PROJECT_CATALOG.md",
+            "source_anchor": "plugin:usage-dashboard"
+          },
+          "E2": {
+            "source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs",
+            "source_anchor": "serviceTierSelectionSource"
+          },
+          "E3": {
+            "source_path": "plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs",
+            "source_anchor": "serviceTierSelectionSource"
+          },
+          "E4": {
+            "source_path": "plugins/usage-dashboard/src/14-request-ledger.part.js",
+            "source_anchor": "serviceTierSelectionSource:preferKnownServiceTierSelectionSource"
+          },
+          "E5": {
+            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
+            "source_anchor": "P50 selection source must never enter request identity"
+          },
+          "E6": {
+            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
+            "source_anchor": "P50 selection-source path must not add"
+          },
+          "E7": {
+            "source_path": "plugins/usage-dashboard/src/40-diagnostics.part.js",
+            "source_anchor": "Service tier selection source:"
+          },
+          "E8": {
+            "source_path": "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
+            "source_anchor": "P50 Service Tier Selection-Source Fidelity"
+          }
+        },
         "schema": {
           "type": "object",
           "properties": {
             "scope": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 80
+              "enum": [
+                "plugin:usage-dashboard"
+              ]
             },
             "authority": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "DIRECT",
-                    "SUPPORTED_LIKELY",
-                    "UNKNOWN",
-                    "CONFLICT"
-                  ]
-                },
-                "source_path": {
-                  "type": "string",
-                  "maxLength": 180
-                },
-                "source_anchor": {
-                  "type": "string",
-                  "maxLength": 100
-                }
-              },
-              "required": [
-                "status",
-                "source_path",
-                "source_anchor"
-              ],
-              "additionalProperties": false
+              "type": "string",
+              "enum": [
+                "UNKNOWN",
+                "DIRECT:E1",
+                "DIRECT:E2",
+                "DIRECT:E3",
+                "DIRECT:E4",
+                "DIRECT:E5",
+                "DIRECT:E6",
+                "DIRECT:E7",
+                "DIRECT:E8",
+                "SUPPORTED_LIKELY:E1",
+                "SUPPORTED_LIKELY:E2",
+                "SUPPORTED_LIKELY:E3",
+                "SUPPORTED_LIKELY:E4",
+                "SUPPORTED_LIKELY:E5",
+                "SUPPORTED_LIKELY:E6",
+                "SUPPORTED_LIKELY:E7",
+                "SUPPORTED_LIKELY:E8",
+                "CONFLICT:E1",
+                "CONFLICT:E2",
+                "CONFLICT:E3",
+                "CONFLICT:E4",
+                "CONFLICT:E5",
+                "CONFLICT:E6",
+                "CONFLICT:E7",
+                "CONFLICT:E8"
+              ]
             },
             "flow_edges": {
               "type": "array",
@@ -52,184 +89,205 @@
                   "from": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 100
+                    "maxLength": 80
                   },
                   "to": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 100
+                    "maxLength": 80
                   },
-                  "status": {
+                  "basis": {
                     "type": "string",
                     "enum": [
-                      "DIRECT",
-                      "SUPPORTED_LIKELY",
                       "UNKNOWN",
-                      "CONFLICT"
+                      "DIRECT:E1",
+                      "DIRECT:E2",
+                      "DIRECT:E3",
+                      "DIRECT:E4",
+                      "DIRECT:E5",
+                      "DIRECT:E6",
+                      "DIRECT:E7",
+                      "DIRECT:E8",
+                      "SUPPORTED_LIKELY:E1",
+                      "SUPPORTED_LIKELY:E2",
+                      "SUPPORTED_LIKELY:E3",
+                      "SUPPORTED_LIKELY:E4",
+                      "SUPPORTED_LIKELY:E5",
+                      "SUPPORTED_LIKELY:E6",
+                      "SUPPORTED_LIKELY:E7",
+                      "SUPPORTED_LIKELY:E8",
+                      "CONFLICT:E1",
+                      "CONFLICT:E2",
+                      "CONFLICT:E3",
+                      "CONFLICT:E4",
+                      "CONFLICT:E5",
+                      "CONFLICT:E6",
+                      "CONFLICT:E7",
+                      "CONFLICT:E8"
                     ]
-                  },
-                  "source_path": {
-                    "type": "string",
-                    "maxLength": 180
-                  },
-                  "source_anchor": {
-                    "type": "string",
-                    "maxLength": 100
                   }
                 },
                 "required": [
                   "from",
                   "to",
-                  "status",
-                  "source_path",
-                  "source_anchor"
+                  "basis"
                 ],
                 "additionalProperties": false
               }
             },
             "request_identity": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "DIRECT",
-                    "SUPPORTED_LIKELY",
-                    "UNKNOWN",
-                    "CONFLICT"
-                  ]
-                },
-                "source_path": {
-                  "type": "string",
-                  "maxLength": 180
-                },
-                "source_anchor": {
-                  "type": "string",
-                  "maxLength": 100
-                }
-              },
-              "required": [
-                "status",
-                "source_path",
-                "source_anchor"
-              ],
-              "additionalProperties": false
+              "type": "string",
+              "enum": [
+                "UNKNOWN",
+                "DIRECT:E1",
+                "DIRECT:E2",
+                "DIRECT:E3",
+                "DIRECT:E4",
+                "DIRECT:E5",
+                "DIRECT:E6",
+                "DIRECT:E7",
+                "DIRECT:E8",
+                "SUPPORTED_LIKELY:E1",
+                "SUPPORTED_LIKELY:E2",
+                "SUPPORTED_LIKELY:E3",
+                "SUPPORTED_LIKELY:E4",
+                "SUPPORTED_LIKELY:E5",
+                "SUPPORTED_LIKELY:E6",
+                "SUPPORTED_LIKELY:E7",
+                "SUPPORTED_LIKELY:E8",
+                "CONFLICT:E1",
+                "CONFLICT:E2",
+                "CONFLICT:E3",
+                "CONFLICT:E4",
+                "CONFLICT:E5",
+                "CONFLICT:E6",
+                "CONFLICT:E7",
+                "CONFLICT:E8"
+              ]
             },
             "no_extra_io": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "DIRECT",
-                    "SUPPORTED_LIKELY",
-                    "UNKNOWN",
-                    "CONFLICT"
-                  ]
-                },
-                "source_path": {
-                  "type": "string",
-                  "maxLength": 180
-                },
-                "source_anchor": {
-                  "type": "string",
-                  "maxLength": 100
-                }
-              },
-              "required": [
-                "status",
-                "source_path",
-                "source_anchor"
-              ],
-              "additionalProperties": false
+              "type": "string",
+              "enum": [
+                "UNKNOWN",
+                "DIRECT:E1",
+                "DIRECT:E2",
+                "DIRECT:E3",
+                "DIRECT:E4",
+                "DIRECT:E5",
+                "DIRECT:E6",
+                "DIRECT:E7",
+                "DIRECT:E8",
+                "SUPPORTED_LIKELY:E1",
+                "SUPPORTED_LIKELY:E2",
+                "SUPPORTED_LIKELY:E3",
+                "SUPPORTED_LIKELY:E4",
+                "SUPPORTED_LIKELY:E5",
+                "SUPPORTED_LIKELY:E6",
+                "SUPPORTED_LIKELY:E7",
+                "SUPPORTED_LIKELY:E8",
+                "CONFLICT:E1",
+                "CONFLICT:E2",
+                "CONFLICT:E3",
+                "CONFLICT:E4",
+                "CONFLICT:E5",
+                "CONFLICT:E6",
+                "CONFLICT:E7",
+                "CONFLICT:E8"
+              ]
             },
             "tests": {
               "type": "array",
               "maxItems": 2,
               "items": {
-                "type": "object",
-                "properties": {
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "DIRECT",
-                      "SUPPORTED_LIKELY",
-                      "UNKNOWN",
-                      "CONFLICT"
-                    ]
-                  },
-                  "source_path": {
-                    "type": "string",
-                    "maxLength": 180
-                  },
-                  "source_anchor": {
-                    "type": "string",
-                    "maxLength": 100
-                  }
-                },
-                "required": [
-                  "status",
-                  "source_path",
-                  "source_anchor"
-                ],
-                "additionalProperties": false
+                "type": "string",
+                "enum": [
+                  "UNKNOWN",
+                  "DIRECT:E1",
+                  "DIRECT:E2",
+                  "DIRECT:E3",
+                  "DIRECT:E4",
+                  "DIRECT:E5",
+                  "DIRECT:E6",
+                  "DIRECT:E7",
+                  "DIRECT:E8",
+                  "SUPPORTED_LIKELY:E1",
+                  "SUPPORTED_LIKELY:E2",
+                  "SUPPORTED_LIKELY:E3",
+                  "SUPPORTED_LIKELY:E4",
+                  "SUPPORTED_LIKELY:E5",
+                  "SUPPORTED_LIKELY:E6",
+                  "SUPPORTED_LIKELY:E7",
+                  "SUPPORTED_LIKELY:E8",
+                  "CONFLICT:E1",
+                  "CONFLICT:E2",
+                  "CONFLICT:E3",
+                  "CONFLICT:E4",
+                  "CONFLICT:E5",
+                  "CONFLICT:E6",
+                  "CONFLICT:E7",
+                  "CONFLICT:E8"
+                ]
               }
             },
             "generated_release": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "DIRECT",
-                    "SUPPORTED_LIKELY",
-                    "UNKNOWN",
-                    "CONFLICT"
-                  ]
-                },
-                "source_path": {
-                  "type": "string",
-                  "maxLength": 180
-                },
-                "source_anchor": {
-                  "type": "string",
-                  "maxLength": 100
-                }
-              },
-              "required": [
-                "status",
-                "source_path",
-                "source_anchor"
-              ],
-              "additionalProperties": false
+              "type": "string",
+              "enum": [
+                "UNKNOWN",
+                "DIRECT:E1",
+                "DIRECT:E2",
+                "DIRECT:E3",
+                "DIRECT:E4",
+                "DIRECT:E5",
+                "DIRECT:E6",
+                "DIRECT:E7",
+                "DIRECT:E8",
+                "SUPPORTED_LIKELY:E1",
+                "SUPPORTED_LIKELY:E2",
+                "SUPPORTED_LIKELY:E3",
+                "SUPPORTED_LIKELY:E4",
+                "SUPPORTED_LIKELY:E5",
+                "SUPPORTED_LIKELY:E6",
+                "SUPPORTED_LIKELY:E7",
+                "SUPPORTED_LIKELY:E8",
+                "CONFLICT:E1",
+                "CONFLICT:E2",
+                "CONFLICT:E3",
+                "CONFLICT:E4",
+                "CONFLICT:E5",
+                "CONFLICT:E6",
+                "CONFLICT:E7",
+                "CONFLICT:E8"
+              ]
             },
             "narrowest_boundary": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "DIRECT",
-                    "SUPPORTED_LIKELY",
-                    "UNKNOWN",
-                    "CONFLICT"
-                  ]
-                },
-                "source_path": {
-                  "type": "string",
-                  "maxLength": 180
-                },
-                "source_anchor": {
-                  "type": "string",
-                  "maxLength": 100
-                }
-              },
-              "required": [
-                "status",
-                "source_path",
-                "source_anchor"
-              ],
-              "additionalProperties": false
+              "type": "string",
+              "enum": [
+                "UNKNOWN",
+                "DIRECT:E1",
+                "DIRECT:E2",
+                "DIRECT:E3",
+                "DIRECT:E4",
+                "DIRECT:E5",
+                "DIRECT:E6",
+                "DIRECT:E7",
+                "DIRECT:E8",
+                "SUPPORTED_LIKELY:E1",
+                "SUPPORTED_LIKELY:E2",
+                "SUPPORTED_LIKELY:E3",
+                "SUPPORTED_LIKELY:E4",
+                "SUPPORTED_LIKELY:E5",
+                "SUPPORTED_LIKELY:E6",
+                "SUPPORTED_LIKELY:E7",
+                "SUPPORTED_LIKELY:E8",
+                "CONFLICT:E1",
+                "CONFLICT:E2",
+                "CONFLICT:E3",
+                "CONFLICT:E4",
+                "CONFLICT:E5",
+                "CONFLICT:E6",
+                "CONFLICT:E7",
+                "CONFLICT:E8"
+              ]
             },
             "blocked_claims": {
               "type": "array",

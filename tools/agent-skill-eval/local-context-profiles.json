@@ -113,12 +113,7 @@
           "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
           "path": "docs/SIMCORE_GUIDELINES.md",
           "mode": "needle_windows",
-          "needles": [
-            "Current production behavior and production code",
-            "TAIL_AFTER_CURRENT_USER",
-            "Diagnostic code should not materially alter runtime behavior.",
-            "Persistent vs Memory-Only State"
-          ],
+          "needles": ["Current production behavior and production code", "TAIL_AFTER_CURRENT_USER", "Diagnostic code should not materially alter runtime behavior.", "Persistent vs Memory-Only State"],
           "radius": 4,
           "max_bytes": 8000
         },
@@ -126,12 +121,7 @@
           "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
           "path": "docs/SIMCORE_CONTRACTS_V2.md",
           "mode": "needle_windows",
-          "needles": [
-            "Runtime source authority remains exact `release-simcore`.",
-            "Structure judge-only acceptance / COMMUNITY quarantine",
-            "persistent Core schema",
-            "network/timer/provider-routing policy"
-          ],
+          "needles": ["Runtime source authority remains exact `release-simcore`.", "Structure judge-only acceptance / COMMUNITY quarantine", "persistent Core schema", "network/timer/provider-routing policy"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -139,12 +129,7 @@
           "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
           "path": "docs/SIMCORE_3M_SOURCE_INTELLIGENCE_MASTER_DESIGN_2026-09-01.md",
           "mode": "needle_windows",
-          "needles": [
-            "release-simcore = production runtime authority",
-            "SOURCE PROJECTION ENVELOPE",
-            "STRUCTURED SOURCE SIDECAR PAYLOAD",
-            "derived source payload"
-          ],
+          "needles": ["release-simcore = production runtime authority", "SOURCE PROJECTION ENVELOPE", "STRUCTURED SOURCE SIDECAR PAYLOAD", "derived source payload"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -152,12 +137,7 @@
           "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
           "path": "docs/SIMCORE_3M_1_SOURCE_PROJECTION_ENVELOPE_LEGACY_COMMUNITY_COMPATIBILITY_DESIGN_2026-09-01.md",
           "mode": "needle_windows",
-          "needles": [
-            "`expectedCommunityBlocks(mode)` owns the count contract.",
-            "Current Structure validation owns",
-            "3M-1 must not scan history independently",
-            "PROMPT_BYTES_DELTA = 0"
-          ],
+          "needles": ["`expectedCommunityBlocks(mode)` owns the count contract.", "Current Structure validation owns", "3M-1 must not scan history independently", "PROMPT_BYTES_DELTA = 0"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -165,12 +145,7 @@
           "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
           "path": "docs/SIMCORE_3M_2_SOURCE_ASSERTION_EXPOSURE_BOUNDARY_DESIGN_2026-09-01.md",
           "mode": "needle_windows",
-          "needles": [
-            "3M-3 = structured sidecar + validator ownership",
-            "SourceAssertionPolicyReceipt",
-            "HANDOFF_EVIDENCE proves source relationship",
-            "legacy <COMMUNITY> prose"
-          ],
+          "needles": ["3M-3 = structured sidecar + validator ownership", "SourceAssertionPolicyReceipt", "HANDOFF_EVIDENCE proves source relationship", "legacy <COMMUNITY> prose"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -178,12 +153,7 @@
           "ref": "e4daaa427ed902ca6f8368c45d509f7fd0f26d42",
           "path": "docs/SIMCORE_B_SOURCE_MODE_C_EXPOSURE_RESTRAINT_CONTRACT_2026-09-01.md",
           "mode": "needle_windows",
-          "needles": [
-            "CURRENT SOURCE AUTHORITY",
-            "communitySourceHandoffEligible == true",
-            "EVENT_FACT_SUPPORTED",
-            "UNKNOWN"
-          ],
+          "needles": ["CURRENT SOURCE AUTHORITY", "communitySourceHandoffEligible == true", "EVENT_FACT_SUPPORTED", "UNKNOWN"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -191,12 +161,7 @@
           "ref": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
           "path": "plugins/simcore/latest.js",
           "mode": "needle_windows",
-          "needles": [
-            "// - Handoff: short-C source/parent-shift detection/state only",
-            "// - Evidence: authoritative request-message resolution + safe request-only source fencing",
-            "function expectedCommunityBlocks(mode) {",
-            "if (p.mode === 'C' && p.communitySourceHandoffEligible) {"
-          ],
+          "needles": ["// - Handoff: short-C source/parent-shift detection/state only", "// - Evidence: authoritative request-message resolution + safe request-only source fencing", "function expectedCommunityBlocks(mode) {", "if (p.mode === 'C' && p.communitySourceHandoffEligible) {"],
           "radius": 4,
           "max_bytes": 10000
         }
@@ -214,11 +179,7 @@
           "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
           "path": "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
           "mode": "needle_windows",
-          "needles": [
-            "Production release branch: `UNKNOWN — not established yet`",
-            "state persistence",
-            "unnecessary network calls"
-          ],
+          "needles": ["Production release branch: `UNKNOWN — not established yet`", "state persistence", "unnecessary network calls"],
           "radius": 3,
           "max_bytes": 7000
         },
@@ -226,11 +187,7 @@
           "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
           "path": "plugins/termux/large-doc-editor/README.md",
           "mode": "needle_windows",
-          "needles": [
-            "This is **not** a Google Docs replacement, production release, or APK patch.",
-            "explicit atomic file save",
-            "fail-closed save if the source changed outside the editor"
-          ],
+          "needles": ["This is **not** a Google Docs replacement, production release, or APK patch.", "explicit atomic file save", "fail-closed save if the source changed outside the editor"],
           "radius": 3,
           "max_bytes": 6000
         },
@@ -238,12 +195,7 @@
           "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
           "path": "plugins/termux/large-doc-editor/web/app.js",
           "mode": "needle_windows",
-          "needles": [
-            "async function flushChunk()",
-            "async function saveDocument()",
-            "document.addEventListener(\"visibilitychange\"",
-            "state.dirtyChunk = true"
-          ],
+          "needles": ["async function flushChunk()", "async function saveDocument()", "document.addEventListener(\"visibilitychange\"", "state.dirtyChunk = true"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -251,11 +203,7 @@
           "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
           "path": "plugins/termux/large-doc-editor/server.py",
           "mode": "needle_windows",
-          "needles": [
-            "session.update_chunk(index, text)",
-            "if parsed.path == \"/api/save\":",
-            "\"code\": \"SOURCE_CHANGED\""
-          ],
+          "needles": ["session.update_chunk(index, text)", "if parsed.path == \"/api/save\":", "\"code\": \"SOURCE_CHANGED\""],
           "radius": 4,
           "max_bytes": 8000
         },
@@ -263,12 +211,7 @@
           "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
           "path": "plugins/termux/large-doc-editor/chunk_store.py",
           "mode": "needle_windows",
-          "needles": [
-            "self.dirty = True",
-            "if current_mtime_ns != self.original_mtime_ns:",
-            "os.replace(tmp_path, self.path)",
-            "self.dirty = False"
-          ],
+          "needles": ["self.dirty = True", "if current_mtime_ns != self.original_mtime_ns:", "os.replace(tmp_path, self.path)", "self.dirty = False"],
           "radius": 4,
           "max_bytes": 8000
         },
@@ -276,10 +219,7 @@
           "ref": "f01c2ef304656de9254191ec2fb9a2c046642f21",
           "path": "plugins/termux/large-doc-editor/tests/test_chunk_store.py",
           "mode": "needle_windows",
-          "needles": [
-            "def test_edit_and_atomic_save(self):",
-            "def test_external_change_fails_closed(self):"
-          ],
+          "needles": ["def test_edit_and_atomic_save(self):", "def test_external_change_fails_closed(self):"],
           "radius": 4,
           "max_bytes": 7000
         }
@@ -297,11 +237,7 @@
           "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
           "path": "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
           "mode": "needle_windows",
-          "needles": [
-            "Current authority class: design/evidence",
-            "Durable-memory profile: `check-only`",
-            "unknown production fields remain UNKNOWN"
-          ],
+          "needles": ["Current authority class: design/evidence", "Durable-memory profile: `check-only`", "unknown production fields remain UNKNOWN"],
           "radius": 3,
           "max_bytes": 6500
         },
@@ -309,11 +245,7 @@
           "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
           "path": "voyage-token-check/DESIGN_STATUS.md",
           "mode": "needle_windows",
-          "needles": [
-            "This does **not** mean production implementation is complete.",
-            "canonical production source path/build/release artifact",
-            "real-device evidence"
-          ],
+          "needles": ["This does **not** mean production implementation is complete.", "canonical production source path/build/release artifact", "real-device evidence"],
           "radius": 3,
           "max_bytes": 6500
         },
@@ -321,11 +253,7 @@
           "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
           "path": "voyage-token-check/PROJECT_MEMORY.md",
           "mode": "needle_windows",
-          "needles": [
-            "Canonical plugin path: `UNKNOWN — verify from production evidence before the first development change`",
-            "Production release branch: `UNKNOWN — read the actual repository and production release state first`",
-            "Known zero and unknown are different states"
-          ],
+          "needles": ["Canonical plugin path: `UNKNOWN — verify from production evidence before the first development change`", "Production release branch: `UNKNOWN — read the actual repository and production release state first`", "Known zero and unknown are different states"],
           "radius": 3,
           "max_bytes": 7500
         },
@@ -333,12 +261,7 @@
           "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
           "path": "voyage-token-check/ARCHITECTURE.md",
           "mode": "needle_windows",
-          "needles": [
-            "Voyage / Host / Risu evidence sources",
-            "Risu-observed usage != account-wide remaining quota",
-            "known zero is distinct from unknown",
-            "Persist only the minimum normalized state required for UX continuity."
-          ],
+          "needles": ["Voyage / Host / Risu evidence sources", "Risu-observed usage != account-wide remaining quota", "known zero is distinct from unknown", "Persist only the minimum normalized state required for UX continuity."],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -346,12 +269,7 @@
           "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
           "path": "voyage-token-check/LIVE_REFRESH_CONTRACT.md",
           "mode": "needle_windows",
-          "needles": [
-            "refresh only while the relevant plugin view is visible",
-            "do not perform Voyage network requests just to drive the live UI",
-            "host retains only the newest 20 fetch entries",
-            "no continuous loop when the quota view is closed"
-          ],
+          "needles": ["refresh only while the relevant plugin view is visible", "do not perform Voyage network requests just to drive the live UI", "host retains only the newest 20 fetch entries", "no continuous loop when the quota view is closed"],
           "radius": 4,
           "max_bytes": 9000
         },
@@ -359,13 +277,43 @@
           "ref": "3908f71122f267375ee5eccb3fa3ca85564c634e",
           "path": "voyage-token-check/SECURITY_CONTRACT.md",
           "mode": "needle_windows",
-          "needles": [
-            "Sensitive authentication material must never be included",
-            "Do not persist raw credentials in plugin-owned cache or telemetry.",
-            "Store and display only the minimum account/quota metadata required for the product goal."
-          ],
+          "needles": ["Sensitive authentication material must never be included", "Do not persist raw credentials in plugin-owned cache or telemetry.", "Store and display only the minimum account/quota metadata required for the product goal."],
           "radius": 3,
           "max_bytes": 7000
+        }
+      ],
+      "devpass-missing-artifact-recovery-heldout": [
+        {
+          "ref": "3869b454daa6ddc04d72317e22e063784e086f0b",
+          "path": "docs/REPO_PROJECT_CATALOG.md",
+          "mode": "needle_windows",
+          "needles": ["plugin:devpass"],
+          "radius": 3,
+          "max_bytes": 5000
+        },
+        {
+          "ref": "3869b454daa6ddc04d72317e22e063784e086f0b",
+          "path": ".github/plugin-control-plane/registry.json",
+          "mode": "needle_windows",
+          "needles": ["\"devpass\": {", "\"artifact\": \"plugins/devpass/latest.js\"", "\"ref\": \"main\""],
+          "radius": 5,
+          "max_bytes": 7000
+        },
+        {
+          "ref": "3869b454daa6ddc04d72317e22e063784e086f0b",
+          "path": "plugins/devpass/README.md",
+          "mode": "needle_windows",
+          "needles": ["https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/devpass/latest.js", "API Key, 세션/쿠키, Bridge Token, 개인 조직·프로젝트 ID 등 비밀값 금지", "localhost HTTP `//@update-url` 사용 금지"],
+          "radius": 5,
+          "max_bytes": 7000
+        },
+        {
+          "ref": "3869b454daa6ddc04d72317e22e063784e086f0b",
+          "path": "docs/DEVPASS_GUIDELINES.md",
+          "mode": "needle_windows",
+          "needles": ["Current observed artifact state: `DECLARED_MISSING`", "Never create a placeholder artifact merely to make bootstrap validation green.", "Release branch: `main` (declared update channel, not a separately registered release authority)", "If `latest.js` later exists, validate the actual artifact before making claims about current published behavior/version.", "Any future writable durable-memory profile requires an explicit migration", "it does not create the currently missing artifact, a new release branch, publisher, or main writer."],
+          "radius": 5,
+          "max_bytes": 10000
         }
       ],
       "narrow-negative": []

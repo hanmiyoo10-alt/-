@@ -24,9 +24,7 @@ The failure is at the candidate grounded-report serialization/completion-budget 
 
 Do not repair this by increasing `n_predict` or by rerunning DevPass as fresh independent proof.
 
-The repair is additive under a new contract ID:
-
-`candidate-grounded-impact-report-v10`
+The repair is additive under a new contract ID: `candidate-grounded-impact-report-v10`.
 
 No hidden project answer may be introduced. The model still chooses authority interpretation, semantic owners, semantic flow edges, preservation boundaries, tests/contracts, generated/release boundary, and narrowest supported boundary. The evaluator owns source-locator validity, generic category completion, blockers, and final verdict.
 
@@ -35,8 +33,11 @@ No hidden project answer may be introduced. The model still chooses authority in
 Replace copied anchor prose with opaque source-line references such as `S4@L8`.
 
 - `S4` is the supplied source-block ID.
-- `L8` is an original line number already present in that exact extracted block.
-- The evaluator proves only that the referenced supplied line exists; it does not treat line existence as semantic correctness.
+- `L8` is an original line number in the exact extracted block.
+- Valid refs are bounded to `S1..S16@L1..L9999999`.
+- The evaluator proves only that the supplied line exists; it does not treat line existence as semantic correctness.
+- `needle_windows` blocks already contain original line prefixes and use them directly.
+- `full` blocks keep their stored context bytes/hash unchanged; only the v10 prompt view adds 1-based line prefixes for citation. v8/v9 prompt/context rendering is untouched.
 - No expected owner, edge, path, line, assertion, or status is encoded in a v10 case contract.
 
 ## Compact wire
@@ -71,11 +72,17 @@ For `UNKNOWN` simple claims, affirmative value/reference must be empty. Optional
 - tests/contracts: max 2
 - source refs per flow: 1–2
 - source refs per non-flow affirmative claim: exactly 1
-- label/from/to/value: max 48 characters
-- source ref grammar: `S1..S16@L<positive integer>`
+- label/from/to/value: max **48 UTF-8 bytes**
+- source ref grammar: `S1..S16@L1..L9999999`
 - minified maximum-wire regression ceiling: `2400` UTF-8 bytes
 
+The UTF-8 byte bound replaces the earlier draft wording “48 characters”. That correction was made before any v10 model output because multibyte text could otherwise satisfy a code-point limit while violating the frozen byte ceiling.
+
 Generation remains unchanged: `n_predict=768`, `ctx_size=16384`, `seed=42`, `temperature=0`.
+
+## Compatibility implementation
+
+The exact pre-v10 `local_response_contract.py` and `compose_local_prompt.py` blobs are preserved as `*_legacy.py`. Thin dispatchers delegate all v8/v9 behavior to those exact historical implementations and route only the new contract ID through the v10 implementation. This avoids accidental formatting or semantic drift in historical evidence paths.
 
 ## Mechanical validation
 
@@ -98,6 +105,7 @@ Rules:
 
 - v8 remains byte/meaning compatible for validated Usage Dashboard.
 - v9 remains loadable/revalidatable unchanged; consumed DevPass remains bound to v9.
+- historical DevPass v9 contract SHA remains `90808228a42eb509cd16daefc3748684d01837ae9064ba5562bcee08521afc89`.
 - only future newly frozen candidate cases may opt into v10.
 - `PILOT_VALIDATED_SCOPES` remains unchanged.
 
@@ -108,8 +116,8 @@ Before any new prospective model output:
 2. all Agent Skill tests;
 3. all live-eval harness tests;
 4. v8 behavior unchanged;
-5. v9 DevPass contract identity/shape unchanged;
-6. v10 source-line accept/reject tests;
+5. v9 DevPass contract identity/hash unchanged;
+6. v10 source-line accept/reject tests, including full and needle-window extraction;
 7. tuple/cardinality/UNKNOWN fail-closed tests;
 8. deterministic SUPPORTED/PARTIAL/UNKNOWN/CONFLICT tests;
 9. receipt persistence of v10 derived blockers/verdict;

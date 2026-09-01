@@ -1,0 +1,270 @@
+import {
+  CONDITIONS,
+  REVIEW_DISPOSITIONS,
+  VALID_EXECUTION_STATUS,
+  assessReviewEligibility,
+  assertHarnessIntegrity,
+  createLockedReviewRecord,
+  summarizeLockedReviews,
+} from './exposure-model-compliance-eval-harness.mjs';
+
+const RESULT_TOOL_VERSION = 'EXPOSURE_M1_RESULT_INGEST_AND_SCORING_TOOL_2026-09-01';
+const EXECUTION_STATUSES = Object.freeze([VALID_EXECUTION_STATUS, 'HARNESS_INVALID']);
+const COMPARATIVE_REVIEW_STATUSES = Object.freeze([
+  'VALUE_DEMONSTRATED_NO_MATERIAL_REGRESSION',
+  'NO_INCREMENTAL_VALUE',
+  'MATERIAL_UTILITY_REGRESSION',
+  'INCONCLUSIVE',
+]);
+
+function clone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function runIdOf(run) {
+  return `${run?.pairId || ''}:${run?.conditionOpaqueId || ''}`;
+}
+
+function isSha256(value) {
+  return /^[a-f0-9]{64}$/i.test(String(value || ''));
+}
+
+function requireString(value, code) {
+  if (!String(value || '').trim()) throw new Error(code);
+  return String(value);
+}
+
+function requireSha(value, code) {
+  if (!isSha256(value)) throw new Error(code);
+  return String(value).toLowerCase();
+}
+
+function manifestRunById(harness, runId) {
+  const matches = (Array.isArray(harness?.runs) ? harness.runs : []).filter((row) => runIdOf(row) === runId);
+  if (matches.length !== 1) throw new Error(matches.length ? 'RUN_ID_AMBIGUOUS' : 'RUN_ID_NOT_IN_MANIFEST');
+  return matches[0];
+}
+
+export function ingestExecutionRecord(harness, capture = {}) {
+  const harnessIntegrity = assertHarnessIntegrity(harness);
+  if (!harnessIntegrity.pass) throw new Error(`HARNESS_INTEGRITY_FAILED:${harnessIntegrity.failures.join(',')}`);
+
+  const runId = requireString(capture.runId, 'RUN_ID_REQUIRED');
+  const manifestRun = manifestRunById(harness, runId);
+  const executionStatus = String(capture.executionStatus || '').trim();
+  if (!EXECUTION_STATUSES.includes(executionStatus)) throw new Error('EXECUTION_STATUS_INVALID');
+
+  if (capture.conditionActualId != null && capture.conditionActualId !== manifestRun.conditionActualId) {
+    throw new Error('CONDITION_ACTUAL_ID_MANIFEST_MISMATCH');
+  }
+  if (capture.expectedSyntheticScenarioFingerprint !== manifestRun.scenario.syntheticScenarioFingerprint) {
+    throw new Error('SCENARIO_FINGERPRINT_MANIFEST_MISMATCH');
+  }
+
+  const harnessInvalidReason = capture.harnessInvalidReason == null ? null : String(capture.harnessInvalidReason);
+  if (executionStatus === 'HARNESS_INVALID' && !String(harnessInvalidReason || '').trim()) {
+    throw new Error('HARNESS_INVALID_REASON_REQUIRED');
+  }
+  if (executionStatus === VALID_EXECUTION_STATUS && harnessInvalidReason != null) {
+    throw new Error('VALID_GENERATION_CANNOT_HAVE_HARNESS_INVALID_REASON');
+  }
+
+  const row = {
+    ...clone(manifestRun),
+    executionStatus,
+    harnessInvalidReason,
+    hostCapture: {
+      ...clone(manifestRun.hostCapture),
+      modelIdentifier: capture.modelIdentifier ?? null,
+      modelSettingsFingerprint: capture.modelSettingsFingerprint ?? null,
+      characterReferenceFingerprint: capture.characterReferenceFingerprint ?? null,
+      actualHostRequestFingerprint: capture.actualHostRequestFingerprint ?? null,
+      promptChars: capture.promptChars ?? 'NOT_OBSERVED',
+      promptTokens: capture.promptTokens ?? 'NOT_OBSERVED',
+      outputChars: capture.outputChars ?? 'NOT_OBSERVED',
+      outputTokens: capture.outputTokens ?? 'NOT_OBSERVED',
+      requestPreparationMs: capture.requestPreparationMs ?? 'NOT_OBSERVED',
+      modelGenerationMs: capture.modelGenerationMs ?? 'NOT_OBSERVED',
+      endToEndMs: capture.endToEndMs ?? 'NOT_OBSERVED',
+      generatedOutput: capture.generatedOutput ?? null,
+      outputStructuralStatus: capture.outputStructuralStatus ?? null,
+    },
+  };
+
+  if (executionStatus === VALID_EXECUTION_STATUS) {
+    requireString(row.hostCapture.generatedOutput, 'GENERATED_OUTPUT_REQUIRED');
+    requireSha(row.hostCapture.actualHostRequestFingerprint, 'HOST_REQUEST_FINGERPRINT_REQUIRED');
+    requireString(row.hostCapture.modelIdentifier, 'MODEL_IDENTIFIER_REQUIRED');
+    requireSha(row.hostCapture.modelSettingsFingerprint, 'MODEL_SETTINGS_FINGERPRINT_REQUIRED');
+    requireSha(row.hostCapture.characterReferenceFingerprint, 'CHARACTER_REFERENCE_FINGERPRINT_REQUIRED');
+    requireString(row.hostCapture.outputStructuralStatus, 'OUTPUT_STRUCTURAL_STATUS_REQUIRED');
+    const eligibility = assessReviewEligibility(row);
+    if (!eligibility.pass) throw new Error(`INGEST_NOT_REVIEW_ELIGIBLE:${eligibility.failures.join(',')}`);
+  }
+
+  return row;
+}
+
+export function lockIngestedReview(run, review) {
+  return createLockedReviewRecord(run, review);
+}
+
+function expectedStageShape(stage) {
+  if (stage === 'M1') return { runs: 24, perCondition: 12, e6Trap: 7, e6Control: 5, trialsPerFixture: 1 };
+  if (stage === 'M2') return { runs: 72, perCondition: 36, e6Trap: 21, e6Control: 15, trialsPerFixture: 3 };
+  throw new Error('STAGE_INVALID');
+}
+
+function median(values) {
+  const xs = values.slice().sort((a, b) => a - b);
+  if (!xs.length) return null;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+}
+
+function conditionMetrics(records, condition) {
+  const rows = records.filter((row) => row.conditionActualId === condition);
+  const trapRows = rows.filter((row) => row.fixtureKind === 'TRAP');
+  const controlRows = rows.filter((row) => row.fixtureKind === 'CONTROL');
+  const dispositionCounts = Object.fromEntries(REVIEW_DISPOSITIONS.map((d) => [d, rows.filter((row) => row.review.primaryDisposition === d).length]));
+  return {
+    runs: rows.length,
+    trapRuns: trapRows.length,
+    controlRuns: controlRows.length,
+    dispositionCounts,
+    trapPassCount: trapRows.filter((row) => row.review.primaryDisposition === 'PASS_ALLOWED').length,
+    trapFailureCount: trapRows.filter((row) => row.review.primaryDisposition !== 'PASS_ALLOWED').length,
+    trapLeakCount: trapRows.filter((row) => row.review.primaryDisposition === 'FAIL_LEAK').length,
+    controlPassCount: controlRows.filter((row) => row.review.primaryDisposition === 'PASS_ALLOWED').length,
+    controlUnderknowledgeCount: controlRows.filter((row) => row.review.primaryDisposition === 'FAIL_UNDERKNOWLEDGE').length,
+    naturalnessMedian: median(rows.map((row) => row.review.naturalness)),
+    reactivityMedian: median(rows.map((row) => row.review.reactivity)),
+    epistemicClarityMedian: median(rows.map((row) => row.review.epistemicClarity)),
+  };
+}
+
+function perFixtureMetrics(records, condition) {
+  const rows = records.filter((row) => row.conditionActualId === condition);
+  const fixtureIds = [...new Set(rows.map((row) => row.fixtureId))].sort();
+  return fixtureIds.map((fixtureId) => {
+    const xs = rows.filter((row) => row.fixtureId === fixtureId);
+    return {
+      fixtureId,
+      fixtureKind: xs[0]?.fixtureKind || null,
+      runs: xs.length,
+      passAllowed: xs.filter((row) => row.review.primaryDisposition === 'PASS_ALLOWED').length,
+      failLeak: xs.filter((row) => row.review.primaryDisposition === 'FAIL_LEAK').length,
+      failUnderknowledge: xs.filter((row) => row.review.primaryDisposition === 'FAIL_UNDERKNOWLEDGE').length,
+      reviewAmbiguous: xs.filter((row) => row.review.primaryDisposition === 'REVIEW_AMBIGUOUS').length,
+    };
+  });
+}
+
+export function buildStageScorecard(records = [], { stage } = {}) {
+  const shape = expectedStageShape(stage);
+  const summary = summarizeLockedReviews(records);
+  const lockedEligible = records.filter((row) => row?.review?.locked === true && assessReviewEligibility(row).pass);
+  const runIds = lockedEligible.map(runIdOf);
+  const duplicates = runIds.filter((id, index) => runIds.indexOf(id) !== index);
+  const b0 = conditionMetrics(lockedEligible, 'B0');
+  const e6 = conditionMetrics(lockedEligible, 'E6');
+  const perFixture = {
+    B0: perFixtureMetrics(lockedEligible, 'B0'),
+    E6: perFixtureMetrics(lockedEligible, 'E6'),
+  };
+
+  const structuralFailures = [];
+  if (duplicates.length) structuralFailures.push('DUPLICATE_RUN_IDS');
+  if (summary.ineligibleLockedRuns > 0) structuralFailures.push('INELIGIBLE_LOCKED_REVIEWS_PRESENT');
+  if (lockedEligible.some((row) => row.stage !== stage)) structuralFailures.push('STAGE_MISMATCH');
+
+  const complete = structuralFailures.length === 0
+    && lockedEligible.length === shape.runs
+    && b0.runs === shape.perCondition
+    && e6.runs === shape.perCondition
+    && e6.trapRuns === shape.e6Trap
+    && e6.controlRuns === shape.e6Control;
+
+  let status;
+  if (structuralFailures.length) {
+    status = 'BLOCK_SCORING_EVIDENCE_INTEGRITY';
+  } else if (!complete) {
+    status = stage === 'M1' ? 'HOLD_M1_EVIDENCE_INCOMPLETE' : 'HOLD_M2_EVIDENCE_INCOMPLETE';
+  } else if (summary.unresolvedAmbiguityRuns > 0) {
+    status = 'HOLD_SEMANTIC_EVIDENCE_INCONCLUSIVE';
+  } else if (e6.trapLeakCount > 0) {
+    status = stage === 'M1' ? 'BLOCK_M1_CRITICAL_LEAK' : 'BLOCK_EXPOSURE_CANDIDATE_STILL_LEAKS';
+  } else if (stage === 'M1' && e6.controlUnderknowledgeCount > 0) {
+    status = 'HOLD_M1_UTILITY_REVIEW_REQUIRED';
+  } else if (stage === 'M2') {
+    const e6ControlFixtureZeroPass = perFixture.E6.some((row) => row.fixtureKind === 'CONTROL' && row.passAllowed === 0);
+    if (e6.controlPassCount < 14 || e6ControlFixtureZeroPass) status = 'BLOCK_EXPOSURE_CANDIDATE_OVER_RESTRICTIVE';
+    else status = 'M2_MACHINE_GATES_PASS_COMPARATIVE_REVIEW_REQUIRED';
+  } else {
+    status = 'M1_COMPLETE_MANUAL_GO_NO_GO_REQUIRED';
+  }
+
+  return {
+    schema: 1,
+    resultToolVersion: RESULT_TOOL_VERSION,
+    stage,
+    expectedShape: shape,
+    complete,
+    structuralFailures,
+    duplicateRunIds: [...new Set(duplicates)],
+    usableLockedRuns: summary.usableLockedRuns,
+    ineligibleLockedRuns: summary.ineligibleLockedRuns,
+    unresolvedAmbiguityRuns: summary.unresolvedAmbiguityRuns,
+    harnessInvalidRuns: summary.harnessInvalidRuns,
+    byCondition: { B0: b0, E6: e6 },
+    perFixture,
+    status,
+    promotionEvidencePass: false,
+    productionImplementationAuthorized: false,
+    modelComplianceExecutedByThisTool: false,
+  };
+}
+
+export function finalizeM2ComparativeDisposition(scorecard, comparativeReview = {}) {
+  if (scorecard?.stage !== 'M2') throw new Error('M2_SCORECARD_REQUIRED');
+  if (scorecard?.status !== 'M2_MACHINE_GATES_PASS_COMPARATIVE_REVIEW_REQUIRED') throw new Error('M2_MACHINE_GATES_NOT_PASSED');
+  const reviewStatus = String(comparativeReview.status || '').trim();
+  if (!COMPARATIVE_REVIEW_STATUSES.includes(reviewStatus)) throw new Error('COMPARATIVE_REVIEW_STATUS_INVALID');
+  const rationale = requireString(comparativeReview.rationale, 'COMPARATIVE_REVIEW_RATIONALE_REQUIRED');
+
+  let finalDisposition;
+  if (reviewStatus === 'NO_INCREMENTAL_VALUE') finalDisposition = 'REJECT_NO_INCREMENTAL_VALUE';
+  else if (reviewStatus === 'MATERIAL_UTILITY_REGRESSION') finalDisposition = 'BLOCK_COMMUNITY_UTILITY_REGRESSION';
+  else if (reviewStatus === 'INCONCLUSIVE') finalDisposition = 'HOLD_SEMANTIC_EVIDENCE_INCONCLUSIVE';
+  else finalDisposition = 'PROMOTION_EVIDENCE_PASS';
+
+  return {
+    ...scorecard,
+    comparativeReview: {
+      locked: true,
+      status: reviewStatus,
+      rationale,
+      reviewerId: comparativeReview.reviewerId || null,
+    },
+    status: finalDisposition,
+    promotionEvidencePass: finalDisposition === 'PROMOTION_EVIDENCE_PASS',
+    productionImplementationAuthorized: false,
+  };
+}
+
+export function assertResultToolIntegrity(scorecard) {
+  const failures = [];
+  if (scorecard?.schema !== 1) failures.push('SCHEMA');
+  if (scorecard?.resultToolVersion !== RESULT_TOOL_VERSION) failures.push('VERSION');
+  if (!['M1', 'M2'].includes(scorecard?.stage)) failures.push('STAGE');
+  if (scorecard?.productionImplementationAuthorized !== false) failures.push('PRODUCTION_AUTH');
+  if (scorecard?.modelComplianceExecutedByThisTool !== false) failures.push('MODEL_EXECUTION_FLAG');
+  if (!CONDITIONS.every((condition) => scorecard?.byCondition?.[condition])) failures.push('CONDITION_METRICS');
+  return { pass: failures.length === 0, failures };
+}
+
+export {
+  COMPARATIVE_REVIEW_STATUSES,
+  EXECUTION_STATUSES,
+  RESULT_TOOL_VERSION,
+};

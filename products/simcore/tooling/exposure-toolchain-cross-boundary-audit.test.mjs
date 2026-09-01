@@ -19,9 +19,10 @@ assert.equal(result.m1RunCount, 24);
 assert.ok(result.fixesClosed.includes('FIX_PREP_BEFORE_REQUEST_STAGE_SCOPE_DRIFT'));
 assert.ok(result.fixesClosed.includes('FIX_PAIR_IDENTITY_AMENDMENT_CANONICALIZED'));
 assert.ok(result.fixesClosed.includes('FIX_HARNESS_RECEIPT_MANIFEST_BINDING_GUARD'));
-assert.ok(result.blockers.includes('BLOCKER_RESULT_SCORING_ACCEPTS_UNEXECUTED_LOCKED_REVIEW'));
-assert.equal(result.disposition, 'PASS_WITH_BLOCKER_BEFORE_RESULT_SCORING');
-assert.equal(result.next, 'EXPOSURE_M1_RESULT_INGEST_AND_SCORING_TOOL');
+assert.ok(result.fixesClosed.includes('FIX_RESULT_SCORING_REJECTS_UNEXECUTED_LOCKED_REVIEW'));
+assert.deepEqual(result.blockers, []);
+assert.equal(result.disposition, 'PASS_CROSS_BOUNDARY_AUDIT');
+assert.equal(result.next, 'EXPOSURE_ANCHOR_AND_CONTRACT_DRIFT_GUARD');
 
 const prep = buildM1ExecutionPrep();
 const firstPairId = prep.executionSheet[0].pairId;
@@ -57,4 +58,4 @@ const wrongRunResult = assessM1ManifestBinding(prep, wrongRun);
 assert.equal(wrongRunResult.pass, false);
 assert.ok(wrongRunResult.failures.includes('B0_RUN_NOT_IN_M1_MANIFEST'));
 
-console.log(`exposure-toolchain-cross-boundary-audit: PASS (${result.m1RunCount} runs, ${result.m1PairCount} pairs, ${result.blockers.length} deferred blocker)`);
+console.log(`exposure-toolchain-cross-boundary-audit: PASS (${result.m1RunCount} runs, ${result.m1PairCount} pairs, ${result.blockers.length} blockers)`);

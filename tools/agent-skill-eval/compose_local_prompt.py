@@ -15,12 +15,14 @@ if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
 from local_response_contract import (
+    V9_CONTRACT_ID,
     ResponseContractError,
     claim_evidence_legend,
     contract_sha256,
     evidence_legend,
     flow_edge_legend,
     load_contract,
+    source_block_legend,
 )
 
 SCHEMA_VERSION = 1
@@ -192,9 +194,7 @@ def compose(
     case_id = str(matrix.get("case_id"))
     fixture_class = str(matrix.get("fixture_class", "standard"))
     prompt_layout = resolve_prompt_layout(
-        str(skill),
-        case_id,
-        fixture_class=fixture_class,
+        str(skill), case_id, fixture_class=fixture_class
     )
     if context.get("skill") != skill or str(context.get("case_id")) != case_id:
         raise PromptError("context does not match matrix skill/case")
@@ -220,19 +220,29 @@ def compose(
             raise PromptError("skill guidance is empty")
         canonical_skill_guidance_sha256 = sha256_bytes(canonical_skill_guidance.encode("utf-8"))
         skill_guidance, guidance_projection_id = _project_candidate_guidance(
-            canonical_skill_guidance,
-            matrix,
+            canonical_skill_guidance, matrix
         )
         skill_guidance_sha256 = sha256_bytes(skill_guidance.encode("utf-8"))
         if guidance_projection_id is not None:
             guidance_projection_sha256 = skill_guidance_sha256
 
     structured = response_contract is not None
-    grounding_frame = (
-        "For flow relations, select only registered F# IDs from FLOW EDGE REGISTRY; do not invent endpoints. For every non-UNKNOWN preservation or test claim, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY; do not write or invent source paths or anchors in the output.\n"
-        if structured
-        else "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
+    candidate_grounded = (
+        response_contract is not None
+        and response_contract.get("id") == V9_CONTRACT_ID
     )
+    if candidate_grounded:
+        grounding_frame = (
+            "For candidate structured claims, propose semantics from SOURCE EVIDENCE and ground every non-UNKNOWN affirmative claim with an opaque S# sourceBlockId plus a short verbatim sourceAnchor from that supplied block. Source-anchor occurrence proves grounding only, not semantic correctness.\n"
+        )
+    elif structured:
+        grounding_frame = (
+            "For flow relations, select only registered F# IDs from FLOW EDGE REGISTRY; do not invent endpoints. For every non-UNKNOWN preservation or test claim, use only a STATUS:E# pair permitted for that claim by CLAIM EVIDENCE STATUS COMPATIBILITY; do not write or invent source paths or anchors in the output.\n"
+        )
+    else:
+        grounding_frame = (
+            "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
+        )
     candidate_frame = _candidate_eval_frame(matrix)
     system_frame = (
         "You are evaluating a repository Agent Skill. Answer the USER TASK only.\n"
@@ -253,24 +263,33 @@ def compose(
         instruction = response_contract.get("prompt_instruction")
         if not isinstance(instruction, str) or not instruction.strip():
             raise PromptError("response contract prompt_instruction missing")
-        legend = evidence_legend(response_contract, context)
-        flow_legend = flow_edge_legend(response_contract, context)
-        compatibility = claim_evidence_legend(response_contract)
-        compatibility_block = (
-            "CLAIM EVIDENCE STATUS COMPATIBILITY\n"
-            f"{compatibility}\n"
-        )
-        late_compatibility = prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT
-        compatibility_in_contract = "" if late_compatibility else compatibility_block + "\n"
-        contract_section = (
-            f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
-            "EVIDENCE ID LEGEND\n"
-            f"{legend}\n\n"
-            "FLOW EDGE REGISTRY\n"
-            f"{flow_legend}\n\n"
-            f"{compatibility_in_contract}"
-            "Use only registered F# values in flow_edges. Use only a listed STATUS:E# pair in preservation/test basis fields for that claim; the paths, anchors, and flow endpoints shown here are grounding references only."
-        )
+        if candidate_grounded:
+            source_legend = source_block_legend(context)
+            contract_section = (
+                f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
+                "SOURCE BLOCK LEGEND\n"
+                f"{source_legend}\n\n"
+                "The S# IDs identify only the supplied evidence blocks. The evaluator checks that each cited anchor occurs verbatim in the cited block; it does not treat that occurrence as semantic proof."
+            )
+        else:
+            legend = evidence_legend(response_contract, context)
+            flow_legend = flow_edge_legend(response_contract, context)
+            compatibility = claim_evidence_legend(response_contract)
+            compatibility_block = (
+                "CLAIM EVIDENCE STATUS COMPATIBILITY\n"
+                f"{compatibility}\n"
+            )
+            late_compatibility = prompt_layout == CLAIM_SLOT_RECENCY_LAYOUT
+            compatibility_in_contract = "" if late_compatibility else compatibility_block + "\n"
+            contract_section = (
+                f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}\n\n"
+                "EVIDENCE ID LEGEND\n"
+                f"{legend}\n\n"
+                "FLOW EDGE REGISTRY\n"
+                f"{flow_legend}\n\n"
+                f"{compatibility_in_contract}"
+                "Use only registered F# values in flow_edges. Use only a listed STATUS:E# pair in preservation/test basis fields for that claim; the paths, anchors, and flow endpoints shown here are grounding references only."
+            )
 
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"
     system_section = f"SYSTEM FRAME\n{system_frame}{contract_section}\n\n"
@@ -336,11 +355,7 @@ def main(argv: list[str] | None = None) -> int:
                 str(matrix.get("case_id")),
             )
         prompt, meta = compose(
-            matrix,
-            context,
-            Path(args.skill_file),
-            args.mode,
-            response_contract,
+            matrix, context, Path(args.skill_file), args.mode, response_contract
         )
         prompt_path = Path(args.prompt_output)
         meta_path = Path(args.meta_output)

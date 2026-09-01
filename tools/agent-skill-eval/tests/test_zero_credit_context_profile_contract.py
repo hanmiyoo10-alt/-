@@ -35,6 +35,28 @@ class ZeroCreditContextProfileContractTests(unittest.TestCase):
         self.assertIn('"usage-dashboard": {', registry["needles"])
         self.assertNotIn("plugin:usage-dashboard", registry["needles"])
 
+    def test_impact_positive_profile_covers_required_boundaries(self):
+        specs = self.profile["profiles"]["plugin-impact-scope"]["service-tier-fidelity"]
+        self.assertLessEqual(len(specs), 12)
+        by_path = {spec["path"]: spec for spec in specs}
+        required = {
+            "docs/REPO_PROJECT_CATALOG.md",
+            ".github/plugin-control-plane/registry.json",
+            "plugins/usage-dashboard/runtime/product-manifest.json",
+            "plugins/usage-dashboard/runtime-src/bridge-engine/35-request-provenance-capture.part.mjs",
+            "plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.part.mjs",
+            "plugins/usage-dashboard/src/12-service-tier.part.js",
+            "plugins/usage-dashboard/src/14-request-ledger.part.js",
+            "plugins/usage-dashboard/src/40-diagnostics.part.js",
+            "plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs",
+        }
+        self.assertEqual(set(by_path), required)
+        release_manifest = by_path["plugins/usage-dashboard/runtime/product-manifest.json"]
+        self.assertEqual(release_manifest["ref"], "refs/remotes/origin/release-usage-dashboard")
+        self.assertEqual(release_manifest["mode"], "full")
+        self.assertIn("function requestLedgerKey(row) {", by_path["plugins/usage-dashboard/src/14-request-ledger.part.js"]["needles"])
+        self.assertIn("selection-source path must not add", by_path["plugins/usage-dashboard/tests/p50-service-tier-selection-source-fidelity.cjs"]["needles"])
+
     def test_failure_artifacts_include_hidden_eval_directory(self):
         self.assertIn("path: .agent-skill-zero-credit-eval/", self.workflow)
         self.assertIn("include-hidden-files: true", self.workflow)

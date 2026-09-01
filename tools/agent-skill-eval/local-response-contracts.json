@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "contracts": {
+    "plugin-impact-scope": {
+      "service-tier-fidelity": {
+        "id": "impact-scope-source-linked-v1",
+        "expected_scope": "plugin:usage-dashboard",
+        "prompt_instruction": "Return exactly one compact JSON object matching the response contract. Use each flow edge at most once. For every non-UNKNOWN claim, source_path must exactly match a SOURCE EVIDENCE path and source_anchor must be a short verbatim symbol or contract substring from that same source. For UNKNOWN claims, use empty source_path and source_anchor. Do not add prose before or after the JSON.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "authority": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                "source_path": {"type": "string", "maxLength": 180},
+                "source_anchor": {"type": "string", "maxLength": 120},
+                "note": {"type": "string", "maxLength": 220}
+              },
+              "required": ["status", "source_path", "source_anchor", "note"],
+              "additionalProperties": false
+            },
+            "flow_edges": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 5,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {"type": "string", "minLength": 1, "maxLength": 120},
+                  "to": {"type": "string", "minLength": 1, "maxLength": 120},
+                  "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                  "source_path": {"type": "string", "maxLength": 180},
+                  "source_anchor": {"type": "string", "maxLength": 120},
+                  "note": {"type": "string", "maxLength": 220}
+                },
+                "required": ["from", "to", "status", "source_path", "source_anchor", "note"],
+                "additionalProperties": false
+              }
+            },
+            "request_identity": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                "source_path": {"type": "string", "maxLength": 180},
+                "source_anchor": {"type": "string", "maxLength": 120},
+                "note": {"type": "string", "maxLength": 220}
+              },
+              "required": ["status", "source_path", "source_anchor", "note"],
+              "additionalProperties": false
+            },
+            "no_extra_io": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                "source_path": {"type": "string", "maxLength": 180},
+                "source_anchor": {"type": "string", "maxLength": 120},
+                "note": {"type": "string", "maxLength": 220}
+              },
+              "required": ["status", "source_path", "source_anchor", "note"],
+              "additionalProperties": false
+            },
+            "tests": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                  "source_path": {"type": "string", "maxLength": 180},
+                  "source_anchor": {"type": "string", "maxLength": 120},
+                  "note": {"type": "string", "maxLength": 220}
+                },
+                "required": ["status", "source_path", "source_anchor", "note"],
+                "additionalProperties": false
+              }
+            },
+            "generated_release": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                "source_path": {"type": "string", "maxLength": 180},
+                "source_anchor": {"type": "string", "maxLength": 120},
+                "note": {"type": "string", "maxLength": 220}
+              },
+              "required": ["status", "source_path", "source_anchor", "note"],
+              "additionalProperties": false
+            },
+            "narrowest_boundary": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["DIRECT", "SUPPORTED_LIKELY", "UNKNOWN", "CONFLICT"]},
+                "source_path": {"type": "string", "maxLength": 180},
+                "source_anchor": {"type": "string", "maxLength": 120},
+                "note": {"type": "string", "maxLength": 220}
+              },
+              "required": ["status", "source_path", "source_anchor", "note"],
+              "additionalProperties": false
+            },
+            "blocked_claims": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {"type": "string", "maxLength": 180}
+            },
+            "verdict": {
+              "type": "string",
+              "enum": ["SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT"]
+            }
+          },
+          "required": ["scope", "authority", "flow_edges", "request_identity", "no_extra_io", "tests", "generated_release", "narrowest_boundary", "blocked_claims", "verdict"],
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+}

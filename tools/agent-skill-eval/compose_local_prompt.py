@@ -10,6 +10,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+MODULE_DIR = Path(__file__).resolve().parent
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
+
+from local_response_contract import ResponseContractError, contract_sha256, load_contract
+
 SCHEMA_VERSION = 1
 MODES = {"with_skill", "baseline_without_target_skill"}
 
@@ -32,7 +38,13 @@ def _load(path: Path) -> dict[str, Any]:
     return data
 
 
-def compose(matrix: dict[str, Any], context: dict[str, Any], skill_path: Path, mode: str) -> tuple[str, dict[str, Any]]:
+def compose(
+    matrix: dict[str, Any],
+    context: dict[str, Any],
+    skill_path: Path,
+    mode: str,
+    response_contract: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
     if mode not in MODES:
         raise PromptError(f"unsupported mode: {mode}")
     if matrix.get("eval_kind") != "output":
@@ -71,9 +83,15 @@ def compose(matrix: dict[str, Any], context: dict[str, Any], skill_path: Path, m
         "For every non-UNKNOWN semantic edge or preservation claim, name the exact source path and relevant symbol or contract basis from SOURCE EVIDENCE.\n"
         "Keep the answer concise and source-grounded."
     )
+    contract_section = ""
+    if response_contract is not None:
+        instruction = response_contract.get("prompt_instruction")
+        if not isinstance(instruction, str) or not instruction.strip():
+            raise PromptError("response contract prompt_instruction missing")
+        contract_section = f"\n\nSTRUCTURED OUTPUT CONTRACT\n{instruction.strip()}"
     guidance_section = skill_guidance if skill_guidance else "(no target skill guidance in baseline mode)"
     full_prompt = (
-        f"SYSTEM FRAME\n{system_frame}\n\n"
+        f"SYSTEM FRAME\n{system_frame}{contract_section}\n\n"
         f"TARGET SKILL GUIDANCE\n{guidance_section}\n\n"
         f"SOURCE EVIDENCE\n{context_text if context_text else '(no source evidence required by profile)'}\n\n"
         f"USER TASK\n{user_task}\n"
@@ -86,6 +104,7 @@ def compose(matrix: dict[str, Any], context: dict[str, Any], skill_path: Path, m
         "user_task_sha256": sha256_bytes(user_task.encode("utf-8")),
         "evidence_context_sha256": context_hash,
         "skill_guidance_sha256": skill_guidance_sha256,
+        "response_contract_sha256": contract_sha256(response_contract),
         "full_prompt_sha256": sha256_bytes(full_prompt.encode("utf-8")),
     }
     return full_prompt, meta
@@ -97,15 +116,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--context", required=True)
     parser.add_argument("--skill-file", required=True)
     parser.add_argument("--mode", choices=sorted(MODES), required=True)
+    parser.add_argument("--response-contracts")
     parser.add_argument("--prompt-output", required=True)
     parser.add_argument("--meta-output", required=True)
     args = parser.parse_args(argv)
     try:
+        matrix = _load(Path(args.matrix))
+        context = _load(Path(args.context))
+        response_contract = None
+        if args.response_contracts:
+            response_contract = load_contract(
+                Path(args.response_contracts),
+                str(matrix.get("skill")),
+                str(matrix.get("case_id")),
+            )
         prompt, meta = compose(
-            _load(Path(args.matrix)),
-            _load(Path(args.context)),
+            matrix,
+            context,
             Path(args.skill_file),
             args.mode,
+            response_contract,
         )
         prompt_path = Path(args.prompt_output)
         meta_path = Path(args.meta_output)
@@ -113,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         meta_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt, encoding="utf-8")
         meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    except PromptError as exc:
+    except (PromptError, ResponseContractError) as exc:
         sys.stderr.write(json.dumps({"error": str(exc)}, ensure_ascii=False) + "\n")
         return 2
     return 0

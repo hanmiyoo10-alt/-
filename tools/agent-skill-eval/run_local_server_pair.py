@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -14,6 +15,18 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+MODULE_DIR = Path(__file__).resolve().parent
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
+
+from local_response_contract import (
+    ResponseContractError,
+    contract_sha256,
+    load_contract,
+    response_format,
+    validate_content,
+)
+
 MODES = ("with_skill", "baseline_without_target_skill")
 HOST = "127.0.0.1"
 MODEL_ALIAS = "local-eval"
@@ -23,6 +36,16 @@ MAX_RESPONSE_BYTES = 128_000
 
 class ServerPairError(ValueError):
     pass
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ServerPairError(f"cannot read JSON {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ServerPairError(f"JSON object required: {path}")
+    return data
 
 
 def validate_generation(value: dict[str, Any]) -> dict[str, Any]:
@@ -75,10 +98,14 @@ def build_server_command(server_binary: Path, model_path: Path, generation: dict
     ]
 
 
-def build_chat_payload(prompt: str, generation: dict[str, Any]) -> dict[str, Any]:
+def build_chat_payload(
+    prompt: str,
+    generation: dict[str, Any],
+    response_contract: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if not prompt.strip():
         raise ServerPairError("prompt is empty")
-    return {
+    payload: dict[str, Any] = {
         "model": MODEL_ALIAS,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": generation["temperature"],
@@ -86,6 +113,10 @@ def build_chat_payload(prompt: str, generation: dict[str, Any]) -> dict[str, Any
         "max_tokens": generation["n_predict"],
         "stream": False,
     }
+    fmt = response_format(response_contract)
+    if fmt is not None:
+        payload["response_format"] = fmt
+    return payload
 
 
 def extract_chat_content(payload: dict[str, Any]) -> tuple[str, str]:
@@ -146,6 +177,50 @@ def wait_for_health(base_url: str, process: subprocess.Popen[Any], timeout_secon
     raise ServerPairError(f"llama-server health timeout: {last_error}")
 
 
+def _resolve_response_contract(
+    eval_root: Path,
+    response_contracts_path: Path | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    matrix = _load_json(eval_root / "matrix.json")
+    context = _load_json(eval_root / "context.json")
+    contract = None
+    if response_contracts_path is not None:
+        try:
+            contract = load_contract(
+                response_contracts_path,
+                str(matrix.get("skill")),
+                str(matrix.get("case_id")),
+            )
+        except ResponseContractError as exc:
+            raise ServerPairError(str(exc)) from exc
+    expected_hash = contract_sha256(contract)
+    for mode in MODES:
+        meta = _load_json(eval_root / mode / "prompt-meta.json")
+        if meta.get("response_contract_sha256") != expected_hash:
+            raise ServerPairError(f"prompt response-contract hash mismatch for {mode}")
+    if contract is not None:
+        (eval_root / "response-contract.json").write_text(
+            json.dumps(contract, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (eval_root / "response-contract-sha256.txt").write_text(expected_hash + "\n", encoding="utf-8")
+    return contract, context
+
+
+def _write_structured_validation(
+    path: Path,
+    status: str,
+    contract_hash: str | None,
+    error: str | None = None,
+) -> None:
+    payload = {
+        "status": status,
+        "response_contract_sha256": contract_hash,
+        "error": error,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def run_pair(
     server_binary: Path,
     model_path: Path,
@@ -154,15 +229,20 @@ def run_pair(
     port: int,
     startup_timeout: float,
     request_timeout: float,
+    response_contracts_path: Path | None = None,
 ) -> dict[str, Any]:
     generation = validate_generation(generation)
     eval_root.mkdir(parents=True, exist_ok=True)
+    response_contract, context = _resolve_response_contract(eval_root, response_contracts_path)
+    response_contract_hash = contract_sha256(response_contract)
     server_log_path = eval_root / "llama-server.log"
     command = build_server_command(server_binary, model_path, generation, port)
     base_url = f"http://{HOST}:{port}"
     results: dict[str, Any] = {
         "transport": TRANSPORT,
         "base_url": base_url,
+        "response_contract_id": response_contract.get("id") if response_contract else None,
+        "response_contract_sha256": response_contract_hash,
         "modes": {},
     }
 
@@ -177,11 +257,12 @@ def run_pair(
                 response_path = mode_dir / "response.txt"
                 envelope_path = mode_dir / "response-envelope.json"
                 finish_path = mode_dir / "finish-reason.txt"
+                validation_path = mode_dir / "structured-validation.json"
                 error_path = mode_dir / "request-error.txt"
                 exit_path = mode_dir / "exit-code.txt"
                 try:
                     prompt = prompt_path.read_text(encoding="utf-8")
-                    request_payload = build_chat_payload(prompt, generation)
+                    request_payload = build_chat_payload(prompt, generation, response_contract)
                     status, response_payload = _post_json(
                         base_url + "/v1/chat/completions",
                         request_payload,
@@ -196,8 +277,26 @@ def run_pair(
                     content, finish_reason = extract_chat_content(response_payload)
                     response_path.write_text(content.rstrip() + "\n", encoding="utf-8")
                     finish_path.write_text(finish_reason + "\n", encoding="utf-8")
+                    if response_contract is not None:
+                        if finish_reason != "stop":
+                            raise ResponseContractError(f"structured response must finish with stop, got {finish_reason}")
+                        validate_content(content, response_contract, context)
+                        _write_structured_validation(validation_path, "VALID", response_contract_hash)
                     exit_path.write_text("0\n", encoding="utf-8")
-                    results["modes"][mode] = {"exit_code": 0, "finish_reason": finish_reason}
+                    results["modes"][mode] = {
+                        "exit_code": 0,
+                        "finish_reason": finish_reason,
+                        "structured_validation": "VALID" if response_contract is not None else None,
+                    }
+                except ResponseContractError as exc:
+                    _write_structured_validation(validation_path, "INVALID", response_contract_hash, str(exc))
+                    error_path.write_text(str(exc) + "\n", encoding="utf-8")
+                    exit_path.write_text("1\n", encoding="utf-8")
+                    results["modes"][mode] = {
+                        "exit_code": 1,
+                        "error": str(exc),
+                        "structured_validation": "INVALID",
+                    }
                 except (OSError, UnicodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, ServerPairError) as exc:
                     error_path.write_text(str(exc) + "\n", encoding="utf-8")
                     exit_path.write_text("1\n", encoding="utf-8")
@@ -223,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model-path", required=True)
     parser.add_argument("--eval-root", required=True)
     parser.add_argument("--generation-json", required=True)
+    parser.add_argument("--response-contracts")
     parser.add_argument("--port", type=int, default=39127)
     parser.add_argument("--startup-timeout", type=float, default=120.0)
     parser.add_argument("--request-timeout", type=float, default=600.0)
@@ -237,14 +337,19 @@ def main(argv: list[str] | None = None) -> int:
             args.port,
             args.startup_timeout,
             args.request_timeout,
+            Path(args.response_contracts).resolve() if args.response_contracts else None,
         )
         for mode in MODES:
             info = results["modes"].get(mode, {})
             print(f"ZERO_CREDIT_MODE_EXIT:{mode}:{info.get('exit_code', 1)}")
             if info.get("finish_reason"):
                 print(f"ZERO_CREDIT_MODE_FINISH:{mode}:{info['finish_reason']}")
+            if info.get("structured_validation"):
+                print(f"ZERO_CREDIT_MODE_STRUCTURED:{mode}:{info['structured_validation']}")
+        if results.get("response_contract_sha256"):
+            print("ZERO_CREDIT_RESPONSE_CONTRACT_SHA256:" + str(results["response_contract_sha256"]))
         return 0
-    except (ServerPairError, OSError, json.JSONDecodeError) as exc:
+    except (ServerPairError, ResponseContractError, OSError, json.JSONDecodeError) as exc:
         sys.stderr.write(json.dumps({"error": str(exc)}, ensure_ascii=False) + "\n")
         return 2
 

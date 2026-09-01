@@ -128,6 +128,173 @@
             ]
           }
         }
+      },
+      "devpass-missing-artifact-recovery-heldout": {
+        "id": "impact-scope-grounded-claims-v9",
+        "expected_scope": "plugin:devpass",
+        "prompt_instruction": "Return exactly one compact JSON object matching the response contract with scope, flow_edges, and claims only. Select only registered F# edge IDs from FLOW EDGE REGISTRY. claims must contain every registered C# exactly once. For each C#, choose UNKNOWN or one STATUS:E# pair explicitly permitted for that C# by CLAIM EVIDENCE STATUS COMPATIBILITY. UNKNOWN must not carry an evidence suffix. Never write source paths, anchors, free-form endpoints, blocker text, or a verdict in the output. The evaluator derives blockers and the final impact verdict mechanically from required F#/C# coverage. Do not emit CONFLICT unless that exact C#/E# compatibility explicitly allows it. Do not add prose before or after the JSON.",
+        "evidence_registry": {
+          "E1": {
+            "source_path": "docs/REPO_PROJECT_CATALOG.md",
+            "source_anchor": "plugin:devpass"
+          },
+          "E2": {
+            "source_path": "plugins/devpass/README.md",
+            "source_anchor": "https://raw.githubusercontent.com/hanmiyoo10-alt/-/main/plugins/devpass/latest.js"
+          },
+          "E3": {
+            "source_path": ".github/plugin-control-plane/registry.json",
+            "source_anchor": "\"artifact\": \"plugins/devpass/latest.js\""
+          },
+          "E4": {
+            "source_path": "docs/DEVPASS_GUIDELINES.md",
+            "source_anchor": "Current observed artifact state: `DECLARED_MISSING`"
+          },
+          "E5": {
+            "source_path": "docs/DEVPASS_GUIDELINES.md",
+            "source_anchor": "Never create a placeholder artifact merely to make bootstrap validation green."
+          },
+          "E6": {
+            "source_path": "plugins/devpass/README.md",
+            "source_anchor": "API Key, 세션/쿠키, Bridge Token, 개인 조직·프로젝트 ID 등 비밀값 금지"
+          },
+          "E7": {
+            "source_path": "docs/DEVPASS_GUIDELINES.md",
+            "source_anchor": "Release branch: `main` (declared update channel, not a separately registered release authority)"
+          },
+          "E8": {
+            "source_path": "docs/DEVPASS_GUIDELINES.md",
+            "source_anchor": "If `latest.js` later exists, validate the actual artifact before making claims about current published behavior/version."
+          },
+          "E9": {
+            "source_path": "docs/DEVPASS_GUIDELINES.md",
+            "source_anchor": "Any future writable durable-memory profile requires an explicit migration"
+          },
+          "E10": {
+            "source_path": "docs/DEVPASS_GUIDELINES.md",
+            "source_anchor": "it does not create the currently missing artifact, a new release branch, publisher, or main writer."
+          }
+        },
+        "flow_edge_registry": {
+          "F1": {
+            "from": "devpass.readme.fixedUpdateUrl",
+            "to": "registry.devpass.artifactLocator",
+            "evidence_ids": [
+              "E2",
+              "E3"
+            ]
+          },
+          "F2": {
+            "from": "registry.devpass.artifactLocator",
+            "to": "controlPlane.observedArtifactState",
+            "evidence_ids": [
+              "E3",
+              "E4"
+            ]
+          },
+          "F3": {
+            "from": "controlPlane.observedArtifactState",
+            "to": "futureArtifact.validationGate",
+            "evidence_ids": [
+              "E4",
+              "E8"
+            ]
+          }
+        },
+        "required_flow_edge_ids": [
+          "F1",
+          "F2",
+          "F3"
+        ],
+        "claim_registry": {
+          "C1": {
+            "label": "declared update-channel authority",
+            "evidence_status_allowlist": {
+              "E1": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ],
+              "E7": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          },
+          "C2": {
+            "label": "artifact declaration versus presence",
+            "evidence_status_allowlist": {
+              "E3": [
+                "SUPPORTED_LIKELY"
+              ],
+              "E4": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          },
+          "C3": {
+            "label": "placeholder fail-closed boundary",
+            "evidence_status_allowlist": {
+              "E5": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          },
+          "C4": {
+            "label": "credential and update-url security boundary",
+            "evidence_status_allowlist": {
+              "E2": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ],
+              "E6": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          },
+          "C5": {
+            "label": "release publisher authority boundary",
+            "evidence_status_allowlist": {
+              "E7": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ],
+              "E10": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          },
+          "C6": {
+            "label": "published behavior and version validation boundary",
+            "evidence_status_allowlist": {
+              "E8": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          },
+          "C7": {
+            "label": "writable automation migration boundary",
+            "evidence_status_allowlist": {
+              "E9": [
+                "DIRECT",
+                "SUPPORTED_LIKELY"
+              ]
+            }
+          }
+        },
+        "required_claim_ids": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C5",
+          "C6",
+          "C7"
+        ]
       }
     }
   }

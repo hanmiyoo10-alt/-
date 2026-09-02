@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "mode": "o3d_parallel_retrospective_live",
+  "harness_repository_sha": "281c50531c0cd44f808a901ada2afb458154c528",
+  "evidence_repository_sha": "7bd212b496111a628d249946d3a98b8c55d001ae",
+  "release_repository_sha": "82c4f900cf548068d1eada957c982a5d78f1347b"
+}

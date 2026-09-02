@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "role-execution-receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "role", "execution_status", "model_profile_id",
+    "model_repository", "model_revision", "model_file", "model_sha256",
+    "runtime_release", "runtime_source_digest", "runtime_artifact",
+    "runtime_artifact_sha256", "runtime_version", "transport", "generation",
+    "evidence_sha256", "prompt_sha256", "response_sha256",
+    "role_artifact_sha256", "finish_reason", "model_call_count", "hosted_ai_call_count"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "role": {"type": "string", "const": "scout"},
+    "execution_status": {"type": "string", "enum": ["COMPLETED", "EXECUTION_INCOMPLETE", "INVALID"]},
+    "model_profile_id": {"type": "string", "const": "qwen2.5-3b-instruct-q4_k_m"},
+    "model_repository": {"type": "string", "minLength": 1, "maxLength": 256},
+    "model_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "model_file": {"type": "string", "minLength": 1, "maxLength": 256},
+    "model_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "runtime_release": {"type": "string", "minLength": 1, "maxLength": 64},
+    "runtime_source_digest": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "runtime_artifact": {"type": "string", "minLength": 1, "maxLength": 256},
+    "runtime_artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "runtime_version": {"type": "string", "minLength": 1, "maxLength": 512},
+    "transport": {"type": "string", "const": "llama-server-v1-chat-completions"},
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature", "seed", "n_predict", "ctx_size", "threads", "gpu_layers"],
+      "properties": {
+        "temperature": {"type": "integer", "const": 0},
+        "seed": {"type": "integer", "const": 42},
+        "n_predict": {"type": "integer", "const": 768},
+        "ctx_size": {"type": "integer", "const": 16384},
+        "threads": {"type": "integer", "const": 4},
+        "gpu_layers": {"type": "integer", "const": 0}
+      }
+    },
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "role_artifact_sha256": {"type": "string", "pattern": "^(?:[0-9a-f]{64}|NONE)$"},
+    "finish_reason": {"type": "string", "minLength": 1, "maxLength": 64},
+    "model_call_count": {"type": "integer", "const": 1},
+    "hosted_ai_call_count": {"type": "integer", "const": 0}
+  }
+}

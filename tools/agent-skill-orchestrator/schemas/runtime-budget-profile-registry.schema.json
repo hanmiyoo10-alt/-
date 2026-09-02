@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "properties": {
+          "profile_id": {"type": "string", "minLength": 4, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9-]*-v[1-9][0-9]*$"},
+          "model_profile_id": {"type": "string", "minLength": 1, "maxLength": 128},
+          "transport": {"type": "string", "minLength": 1, "maxLength": 128},
+          "runtime_release": {"type": "string", "minLength": 1, "maxLength": 64},
+          "temperature": {"type": "integer"},
+          "seed": {"type": "integer"},
+          "n_predict": {"type": "integer"},
+          "threads": {"type": "integer"},
+          "gpu_layers": {"type": "integer"},
+          "max_total_role_calls": {"type": "integer"},
+          "max_hosted_ai_calls": {"type": "integer"},
+          "max_concurrent_model_workers": {"type": "integer"}
+        },
+        "required": [
+          "profile_id",
+          "model_profile_id",
+          "transport",
+          "runtime_release",
+          "temperature",
+          "seed",
+          "n_predict",
+          "threads",
+          "gpu_layers",
+          "max_total_role_calls",
+          "max_hosted_ai_calls",
+          "max_concurrent_model_workers"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["schema_version", "profiles"],
+  "additionalProperties": false
+}

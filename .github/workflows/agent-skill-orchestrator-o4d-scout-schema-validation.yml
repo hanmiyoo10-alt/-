@@ -59,6 +59,7 @@ jobs:
           ref: ${{ steps.resolve.outputs.target_sha }}
           fetch-depth: 1
           persist-credentials: false
+          clean: false
 
       - name: Enforce exact main target and zero-credential boundary
         shell: bash
@@ -67,6 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -f "$BENCH_ROOT/request-provenance.json"
           git fetch --no-tags --depth=64 origin main
           git merge-base --is-ancestor "$TARGET_SHA" origin/main
           for name in HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACEHUB_API_TOKEN; do

@@ -9,22 +9,20 @@ if str(PACKAGE) not in sys.path:
 
 from authority import resolve_authority
 from evidence import build_evidence_package, evidence_package_sha256
+from roles._compact import RoleContractError
 from roles.critic import (
-    CriticContractError,
     build_critic_prompt,
     critic_input_projection,
     critic_response_schema,
     validate_critic_wire,
 )
 from roles.mapper import (
-    MapperContractError,
     build_mapper_prompt,
     mapper_input_projection,
     mapper_response_schema,
     validate_mapper_wire,
 )
 from roles.synthesizer import (
-    SynthesizerContractError,
     build_synthesizer_prompt,
     synthesizer_input_projection,
     synthesizer_response_schema,
@@ -137,7 +135,7 @@ class O2BRoleContractTests(unittest.TestCase):
             '{"o":[],"e":[{"f":"runtime","t":"runtime","r":["S2@L10"]}]}',
         ]
         for content in invalid:
-            with self.subTest(content=content), self.assertRaises(MapperContractError):
+            with self.subTest(content=content), self.assertRaises(RoleContractError):
                 validate_mapper_wire(content, evidence)
 
     def test_mapper_projection_and_prompt_use_typed_scout_records_not_raw_response(self):
@@ -182,7 +180,7 @@ class O2BRoleContractTests(unittest.TestCase):
             '{"b":[],"q":[],"u":[],"verdict":"SUPPORTED"}',
         ]
         for content in invalid:
-            with self.subTest(content=content), self.assertRaises(CriticContractError):
+            with self.subTest(content=content), self.assertRaises(RoleContractError):
                 validate_critic_wire(content, evidence, mapper)
 
     def test_critic_projection_preserves_upstream_uncertainty_surfaces_and_no_raw_response(self):
@@ -225,7 +223,7 @@ class O2BRoleContractTests(unittest.TestCase):
             '{"s":[],"verdict":"SUPPORTED"}',
         ]
         for content in invalid:
-            with self.subTest(content=content), self.assertRaises(SynthesizerContractError):
+            with self.subTest(content=content), self.assertRaises(RoleContractError):
                 validate_synthesizer_wire(content, evidence, upstream)
 
     def test_synthesizer_prompt_contains_typed_index_only_and_schema_is_closed(self):
@@ -243,11 +241,11 @@ class O2BRoleContractTests(unittest.TestCase):
         evidence = self.evidence()
         scout = self.scout_artifact()
         scout["target_repository_sha"] = "f" * 40
-        with self.assertRaises(MapperContractError):
+        with self.assertRaises(RoleContractError):
             mapper_input_projection(evidence, scout)
         mapper = self.mapper_artifact()
         mapper["evidence_sha256"] = "f" * 64
-        with self.assertRaises(CriticContractError):
+        with self.assertRaises(RoleContractError):
             critic_input_projection(evidence, mapper)
 
 

@@ -90,11 +90,12 @@
     "generation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["temperature", "seed", "max_tokens"],
+      "required": ["temperature", "seed", "n_predict", "ctx_size"],
       "properties": {
         "temperature": {"type": "integer", "const": 0},
         "seed": {"type": "integer", "const": 42},
-        "max_tokens": {"type": "integer", "const": 32}
+        "n_predict": {"type": "integer", "const": 768},
+        "ctx_size": {"type": "integer", "const": 16384}
       }
     },
     "transport_result": {

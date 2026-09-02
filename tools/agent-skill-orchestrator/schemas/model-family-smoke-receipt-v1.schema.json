@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "model-family-smoke-receipt-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "workflow_repository_sha",
+    "workflow_run_id",
+    "workflow_run_attempt",
+    "candidate_sha256",
+    "candidate",
+    "download",
+    "license",
+    "access",
+    "runtime",
+    "generation",
+    "transport_result",
+    "local_model_call_count",
+    "hosted_ai_call_count",
+    "prompt_sha256",
+    "response_sha256",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "status": {"type": "string", "enum": ["PASS", "FAIL"]},
+    "workflow_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "workflow_run_id": {"type": "integer"},
+    "workflow_run_attempt": {"type": "integer"},
+    "candidate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "repository", "revision", "file", "expected_size_bytes", "expected_sha256"],
+      "properties": {
+        "profile_id": {"type": "string"},
+        "repository": {"type": "string"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "file": {"type": "string"},
+        "expected_size_bytes": {"type": "integer"},
+        "expected_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "download": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measured_size_bytes", "measured_sha256", "url_uses_frozen_revision"],
+      "properties": {
+        "measured_size_bytes": {"type": "integer"},
+        "measured_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "url_uses_frozen_revision": {"type": "boolean"}
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "source"],
+      "properties": {
+        "id": {"type": "string"},
+        "status": {"type": "string"},
+        "source": {"type": "string"}
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "proof_mode", "credential_env_present"],
+      "properties": {
+        "class": {"type": "string", "const": "public_unauthenticated_https"},
+        "proof_mode": {"type": "string", "const": "fresh_github_hosted_runner_no_model_credentials"},
+        "credential_env_present": {"type": "boolean", "const": false}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release", "source_digest", "artifact", "artifact_sha256", "runtime_version", "threads", "gpu_layers"],
+      "properties": {
+        "release": {"type": "string", "const": "b10516"},
+        "source_digest": {"type": "string", "const": "b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9"},
+        "artifact": {"type": "string", "const": "llama-b10516-bin-ubuntu-x64.tar.gz"},
+        "artifact_sha256": {"type": "string", "const": "f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35"},
+        "runtime_version": {"type": "string"},
+        "threads": {"type": "integer", "const": 4},
+        "gpu_layers": {"type": "integer", "const": 0}
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature", "seed", "n_predict", "ctx_size"],
+      "properties": {
+        "temperature": {"type": "integer", "const": 0},
+        "seed": {"type": "integer", "const": 42},
+        "n_predict": {"type": "integer", "const": 768},
+        "ctx_size": {"type": "integer", "const": 16384}
+      }
+    },
+    "transport_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["http_status", "finish_reason", "content_nonempty"],
+      "properties": {
+        "http_status": {"type": "integer", "const": 200},
+        "finish_reason": {"type": "string", "const": "stop"},
+        "content_nonempty": {"type": "boolean", "const": true}
+      }
+    },
+    "local_model_call_count": {"type": "integer", "const": 1},
+    "hosted_ai_call_count": {"type": "integer", "const": 0},
+    "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

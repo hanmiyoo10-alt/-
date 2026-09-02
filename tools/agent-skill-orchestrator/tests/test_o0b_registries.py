@@ -1,4 +1,5 @@
 import copy
+import json
 import runpy
 import sys
 import unittest
@@ -26,31 +27,56 @@ class ModelRegistryTests(unittest.TestCase):
     def setUp(self):
         self.registry = load_model_registry()
 
-    def test_profiles_match_current_zero_credit_allowlist(self):
+    def test_zero_credit_allowlist_is_bounded_subset_of_capability_registry(self):
         source = runpy.run_path(str(REPO_ROOT / "tools/agent-skill-eval/resolve_zero_credit_request.py"))
-        expected = set(source["ALLOWED_MODEL_PROFILES"])
-        actual = {item["profile_id"] for item in self.registry["profiles"]}
-        self.assertEqual(actual, expected)
+        zero_credit = set(source["ALLOWED_MODEL_PROFILES"])
+        registered = {item["profile_id"] for item in self.registry["profiles"]}
+        self.assertEqual(
+            zero_credit,
+            {"qwen2.5-1.5b-instruct-q4_k_m", "qwen2.5-3b-instruct-q4_k_m"},
+        )
+        self.assertLessEqual(zero_credit, registered)
+        self.assertNotIn("ministral-3-3b-instruct-2512-q4_k_m", zero_credit)
 
-    def test_pinned_model_identity_matches_current_workflow(self):
-        workflow = (REPO_ROOT / ".github/workflows/agent-skill-zero-credit-eval.yml").read_text(encoding="utf-8")
+    def test_registered_model_identity_matches_its_frozen_proof_surface(self):
+        zero_credit_workflow = (REPO_ROOT / ".github/workflows/agent-skill-zero-credit-eval.yml").read_text(encoding="utf-8")
+        smoke_workflow = (REPO_ROOT / ".github/workflows/agent-skill-orchestrator-model-family-smoke.yml").read_text(encoding="utf-8")
+        candidate = json.loads(
+            (PACKAGE / "models/candidates/ministral-3-3b-instruct-2512-q4_k_m.json").read_text(encoding="utf-8")
+        )
         for profile in self.registry["profiles"]:
-            for token in (
-                profile["profile_id"],
-                profile["local_model_id"],
-                profile["repository"],
-                profile["revision"],
-                profile["file"],
-                profile["sha256"],
-            ):
-                self.assertIn(token, workflow)
-        self.assertIn('curl -L --fail --retry 3 --retry-all-errors', workflow)
-        self.assertIn('https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true', workflow)
+            if profile["profile_id"].startswith("qwen2.5-"):
+                for token in (
+                    profile["profile_id"],
+                    profile["local_model_id"],
+                    profile["repository"],
+                    profile["revision"],
+                    profile["file"],
+                    profile["sha256"],
+                ):
+                    self.assertIn(token, zero_credit_workflow)
+                continue
+
+            self.assertEqual(profile["profile_id"], "ministral-3-3b-instruct-2512-q4_k_m")
+            for key in ("profile_id", "local_model_id", "repository", "revision", "file", "sha256"):
+                self.assertEqual(profile[key], candidate[key])
+            self.assertEqual(profile["license"], candidate["license"])
+            self.assertEqual(profile["access"]["class"], candidate["access"]["target_class"])
+            self.assertIn("agent-skill-orchestrator-model-family-smoke.yml", profile["access"]["source"])
+            self.assertIn("model_family_smoke.py resolve", smoke_workflow)
+            self.assertIn("candidate-resolved.json", smoke_workflow)
+
+        self.assertIn('curl -L --fail --retry 3 --retry-all-errors', zero_credit_workflow)
+        self.assertIn('https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true', zero_credit_workflow)
 
     def test_current_profiles_are_mechanically_eligible(self):
         self.assertEqual(
             set(eligible_model_profiles(self.registry)),
-            {"qwen2.5-1.5b-instruct-q4_k_m", "qwen2.5-3b-instruct-q4_k_m"},
+            {
+                "qwen2.5-1.5b-instruct-q4_k_m",
+                "qwen2.5-3b-instruct-q4_k_m",
+                "ministral-3-3b-instruct-2512-q4_k_m",
+            },
         )
 
     def test_missing_license_or_access_fails_closed(self):

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "candidate_id": "o4b-ministral-3-3b-instruct-2512-q4_k_m-v1",
+  "profile_id": "ministral-3-3b-instruct-2512-q4_k_m",
+  "local_model_id": "ministral-3-3b-instruct-2512-q4_k_m-local",
+  "family": "ministral-3",
+  "repository": "mistralai/Ministral-3-3B-Instruct-2512-GGUF",
+  "revision": "fc774f009f0c62a186f48e870fd6295b36f63779",
+  "file": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+  "size_bytes": 2147023008,
+  "sha256": "9ed150d4367e68df0ac8e1540f6ddc65b42d0ee26378329d1ecbca60f93fc5f8",
+  "license": {
+    "id": "apache-2.0",
+    "status": "verified_metadata",
+    "source": "https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512-GGUF"
+  },
+  "access": {
+    "target_class": "public_unauthenticated_https",
+    "proof_status": "pending_smoke"
+  },
+  "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS"
+}

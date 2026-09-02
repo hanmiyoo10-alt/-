@@ -29,7 +29,12 @@ LLAMA_RUNTIME = {
     "threads": 4,
     "gpu_layers": 0,
 }
-GENERATION = {"temperature": 0, "seed": 42, "max_tokens": 32}
+GENERATION = {
+    "temperature": 0,
+    "seed": 42,
+    "n_predict": 768,
+    "ctx_size": 16384,
+}
 MODEL_CREDENTIAL_ENV_NAMES = (
     "HF_TOKEN",
     "HUGGING_FACE_HUB_TOKEN",
@@ -171,8 +176,6 @@ def validate_receipt(receipt: dict[str, Any]) -> None:
         raise ModelFamilySmokeError("license metadata mismatch")
     if receipt["access"]["credential_env_present"] is not False:
         raise ModelFamilySmokeError("model credential environment was present")
-    if receipt["runtime"] | {} != receipt["runtime"]:
-        raise ModelFamilySmokeError("runtime malformed")
     for key, expected in LLAMA_RUNTIME.items():
         if receipt["runtime"].get(key) != expected:
             raise ModelFamilySmokeError(f"runtime {key} mismatch")
@@ -190,8 +193,7 @@ def validate_receipt(receipt: dict[str, Any]) -> None:
         raise ModelFamilySmokeError("call counts violate O4-B smoke boundary")
     if receipt["receipt_sha256"] != receipt_sha256(receipt):
         raise ModelFamilySmokeError("receipt SHA256 mismatch")
-    expected_status = "PASS"
-    if receipt["status"] != expected_status:
+    if receipt["status"] != "PASS":
         raise ModelFamilySmokeError("receipt status mismatch")
 
 

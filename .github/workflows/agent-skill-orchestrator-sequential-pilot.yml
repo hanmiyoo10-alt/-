@@ -1,0 +1,228 @@
+name: Agent Skill Orchestrator Sequential Pilot
+
+on:
+  push:
+    branches:
+      - 'agent-skill-orchestrator-sequential-pilot-request/**'
+    paths:
+      - '.agent-skill-orchestrator-sequential-pilot-requests/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  retrospective-sequential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PILOT_ROOT: .agent-skill-orchestrator-sequential-pilot
+      LLAMA_RELEASE: b10516
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      MODEL_REPOSITORY: Qwen/Qwen2.5-3B-Instruct-GGUF
+      MODEL_REVISION: af75b7aaf5bb163ce4c5dab4e6b84d844e96265d
+      MODEL_FILE: qwen2.5-3b-instruct-q4_k_m.gguf
+      MODEL_SHA256: 626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d
+      SERVER_PORT: '39131'
+
+    steps:
+      - name: Checkout request commit and O2-D harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Resolve exact O2-D sequential request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | sort)
+          if (( ${#changed[@]} != 1 )); then
+            echo "O2D_REQUEST_CHANGE_COUNT:${#changed[@]}"
+            exit 2
+          fi
+          request_path="${changed[0]}"
+          case "$request_path" in
+            .agent-skill-orchestrator-sequential-pilot-requests/*.json) ;;
+            *) echo "O2D_REQUEST_PATH:INVALID:$request_path"; exit 2 ;;
+          esac
+          request_copy="$RUNNER_TEMP/o2d-sequential-request.json"
+          python tools/agent-skill-orchestrator/runtime/resolve_sequential_pilot_request.py \
+            --request "$request_path" \
+            --output "$request_copy"
+          harness_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["harness_repository_sha"])' "$request_copy")"
+          evidence_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["evidence_repository_sha"])' "$request_copy")"
+          release_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_repository_sha"])' "$request_copy")"
+          parent_sha="$(git rev-parse HEAD^)"
+          test "$parent_sha" = "$harness_sha"
+          printf 'HARNESS_REPOSITORY_SHA=%s\n' "$harness_sha" >> "$GITHUB_ENV"
+          printf 'EVIDENCE_REPOSITORY_SHA=%s\n' "$evidence_sha" >> "$GITHUB_ENV"
+          printf 'RELEASE_REPOSITORY_SHA=%s\n' "$release_sha" >> "$GITHUB_ENV"
+          printf 'REQUEST_COPY=%s\n' "$request_copy" >> "$GITHUB_ENV"
+          echo "O2D_REQUEST_PARENT_SHA:$parent_sha"
+          echo "O2D_EVIDENCE_SHA:$evidence_sha"
+          echo "O2D_RELEASE_SHA:$release_sha"
+
+      - name: Prepare frozen retrospective evidence worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "${EVIDENCE_REPOSITORY_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$EVIDENCE_REPOSITORY_SHA"
+          fi
+          git fetch --no-tags --depth=1 origin \
+            release-usage-dashboard:refs/remotes/origin/release-usage-dashboard
+          test "$(git rev-parse refs/remotes/origin/release-usage-dashboard^{commit})" = "$RELEASE_REPOSITORY_SHA"
+          evidence_worktree="$RUNNER_TEMP/o2d-evidence-repository"
+          rm -rf "$evidence_worktree"
+          git worktree add --detach "$evidence_worktree" "$EVIDENCE_REPOSITORY_SHA"
+          test "$(git -C "$evidence_worktree" rev-parse HEAD)" = "$EVIDENCE_REPOSITORY_SHA"
+          printf 'EVIDENCE_WORKTREE=%s\n' "$evidence_worktree" >> "$GITHUB_ENV"
+          echo "O2D_EVIDENCE_WORKTREE_SHA:$(git -C "$evidence_worktree" rev-parse HEAD)"
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/o2d-runtime"
+          mkdir -p "$runtime_root"
+          cd "$runtime_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" | sha256sum -c -
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          test -n "$llama_server"
+          llama_server="$(realpath "$llama_server")"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/o2d-runtime-version.txt" 2>&1
+          printf 'LLAMA_SERVER=%s\n' "$llama_server" >> "$GITHUB_ENV"
+
+      - name: Download and verify pinned local model
+        shell: bash
+        run: |
+          set -euo pipefail
+          model_root="$RUNNER_TEMP/o2d-model"
+          mkdir -p "$model_root"
+          cd "$model_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$MODEL_FILE" \
+            "https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
+          printf '%s  %s\n' "$MODEL_SHA256" "$MODEL_FILE" | sha256sum -c -
+          printf 'MODEL_PATH=%s\n' "$(realpath "$MODEL_FILE")" >> "$GITHUB_ENV"
+
+      - name: Run retrospective sequential four-role pilot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$PILOT_ROOT"
+          mkdir -p "$PILOT_ROOT"
+          cp "$REQUEST_COPY" "$PILOT_ROOT/request.json"
+          cp o2d-runtime-version.txt "$PILOT_ROOT/llama-runtime-version.txt"
+          set +e
+          python tools/agent-skill-orchestrator/runtime/run_sequential_pilot.py \
+            --harness-repo-root . \
+            --evidence-repo-root "$EVIDENCE_WORKTREE" \
+            --harness-sha "$HARNESS_REPOSITORY_SHA" \
+            --evidence-sha "$EVIDENCE_REPOSITORY_SHA" \
+            --release-sha "$RELEASE_REPOSITORY_SHA" \
+            --server-binary "$LLAMA_SERVER" \
+            --model-path "$MODEL_PATH" \
+            --runtime-version-file "$PILOT_ROOT/llama-runtime-version.txt" \
+            --output-dir "$PILOT_ROOT" \
+            --port "$SERVER_PORT"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$PILOT_ROOT/pilot-exit-code.txt"
+          echo "O2D_PROCESS_EXIT:$code"
+
+      - name: Upload bounded O2-D evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-orchestrator-sequential-pilot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-orchestrator-sequential-pilot/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Gate mechanical O2-D sequential success
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat "$PILOT_ROOT/pilot-exit-code.txt")" = "0"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.agent-skill-orchestrator-sequential-pilot')
+          summary = json.loads((root / 'summary.json').read_text(encoding='utf-8'))
+          plan = json.loads((root / 'execution-plan.json').read_text(encoding='utf-8'))
+          expected_order = ['scout', 'mapper', 'critic', 'synthesizer']
+          expected_dependencies = {
+              'scout': [],
+              'mapper': ['scout'],
+              'critic': ['mapper'],
+              'synthesizer': ['mapper', 'critic'],
+          }
+          expected_stages = [
+              {'stage_id': role, 'role_id': role, 'depends_on': expected_dependencies[role]}
+              for role in expected_order
+          ]
+          if summary.get('overall_execution_status') != 'COMPLETED':
+              raise SystemExit('O2-D sequential pilot did not complete')
+          if summary.get('role_order') != expected_order:
+              raise SystemExit('O2-D role order drifted')
+          if summary.get('direct_dependencies') != expected_dependencies:
+              raise SystemExit('O2-D direct dependency summary drifted')
+          if plan.get('role_stages') != expected_stages:
+              raise SystemExit('O2-D persisted router plan drifted')
+          if summary.get('total_model_call_count') != 4:
+              raise SystemExit('O2-D local model call count must be exactly four')
+          if summary.get('total_hosted_ai_call_count') != 0:
+              raise SystemExit('O2-D hosted AI call count must be zero')
+
+          role_receipts = {}
+          for role in expected_order:
+              role_summary = summary['roles'][role]
+              if role_summary.get('execution_status') != 'COMPLETED':
+                  raise SystemExit(f'O2-D role did not complete: {role}')
+              if role_summary.get('finish_reason') != 'stop':
+                  raise SystemExit(f'O2-D role did not finish with stop: {role}')
+              if not role_summary.get('role_artifact_present'):
+                  raise SystemExit(f'O2-D RoleArtifact missing: {role}')
+              if role_summary.get('model_call_count') != 1 or role_summary.get('hosted_ai_call_count') != 0:
+                  raise SystemExit(f'O2-D per-role call accounting invalid: {role}')
+              role_dir = root / 'roles' / role
+              if not (role_dir / 'prompt.txt').is_file() or not (role_dir / 'response.txt').is_file():
+                  raise SystemExit(f'O2-D prompt/response evidence missing: {role}')
+              if not (role_dir / 'role-artifact.json').is_file():
+                  raise SystemExit(f'O2-D RoleArtifact file missing: {role}')
+              receipt_name = 'role-execution-receipt.json' if role == 'scout' else 'semantic-role-execution-receipt.json'
+              receipt = json.loads((role_dir / receipt_name).read_text(encoding='utf-8'))
+              role_receipts[role] = receipt
+              if receipt.get('model_call_count') != 1 or receipt.get('hosted_ai_call_count') != 0:
+                  raise SystemExit(f'O2-D receipt accounting invalid: {role}')
+
+          scout_sha = summary['roles']['scout']['role_artifact_sha256']
+          mapper_sha = summary['roles']['mapper']['role_artifact_sha256']
+          critic_sha = summary['roles']['critic']['role_artifact_sha256']
+          synth_sha = summary['roles']['synthesizer']['role_artifact_sha256']
+          if role_receipts['mapper'].get('upstream_artifact_sha256') != [scout_sha]:
+              raise SystemExit('O2-D Mapper upstream digest mismatch')
+          if role_receipts['critic'].get('upstream_artifact_sha256') != [mapper_sha]:
+              raise SystemExit('O2-D Critic upstream digest mismatch')
+          if role_receipts['synthesizer'].get('upstream_artifact_sha256') != [scout_sha, mapper_sha, critic_sha]:
+              raise SystemExit('O2-D Synthesizer canonical provenance digest mismatch')
+          if synth_sha == 'NONE' or summary.get('final_synthesizer_role_artifact_sha256') != synth_sha:
+              raise SystemExit('O2-D final Synthesizer artifact missing')
+
+          print('O2D_SEQUENTIAL_GATE:PASS')
+          print('O2D_FINAL_SYNTH_SHA:' + synth_sha)
+          PY

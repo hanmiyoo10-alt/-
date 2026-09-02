@@ -105,7 +105,7 @@ def _route_topology(task_kind: str, roles: dict[str, Any]) -> tuple[str, list[st
             [
                 _role_stage("scout", []),
                 _role_stage("mapper", ["scout"]),
-                _role_stage("critic", ["scout"]),
+                _role_stage("critic", ["mapper"]),
                 _role_stage("synthesizer", ["mapper", "critic"]),
             ],
         )

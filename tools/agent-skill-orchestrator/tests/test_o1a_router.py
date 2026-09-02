@@ -51,7 +51,7 @@ class O1ADeterministicRouterTests(unittest.TestCase):
             [{"stage_id": "scout", "role_id": "scout", "depends_on": []}],
         )
 
-    def test_impact_analysis_has_parallel_mapper_critic_fanout(self):
+    def test_impact_analysis_has_sequential_o2_critic_dependency(self):
         plan = route_task(self.request("impact_analysis"))
         self.assertEqual(plan["execution_class"], "standard")
         self.assertEqual(plan["deterministic_actions"], ["resolve_domain_registration"])
@@ -60,7 +60,7 @@ class O1ADeterministicRouterTests(unittest.TestCase):
             [
                 {"stage_id": "scout", "role_id": "scout", "depends_on": []},
                 {"stage_id": "mapper", "role_id": "mapper", "depends_on": ["scout"]},
-                {"stage_id": "critic", "role_id": "critic", "depends_on": ["scout"]},
+                {"stage_id": "critic", "role_id": "critic", "depends_on": ["mapper"]},
                 {
                     "stage_id": "synthesizer",
                     "role_id": "synthesizer",

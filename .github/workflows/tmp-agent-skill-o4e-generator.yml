@@ -1,0 +1,170 @@
+name: Temporary Agent Skill O4-E Harness Generator
+
+on:
+  push:
+    branches:
+      - 'feat/agent-skill-orchestrator-o4e-authority-schema-validation-20260903'
+    paths:
+      - '.agent-skill-dev/o4e-generate.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout O4-E branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/agent-skill-orchestrator-o4e-authority-schema-validation-20260903
+          fetch-depth: 0
+
+      - name: Generate bounded O4-E harness from proven O4-D structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          copies = {
+              'tools/agent-skill-orchestrator/benchmarks/resolve_o4d_request.py':
+                  'tools/agent-skill-orchestrator/benchmarks/resolve_o4e_request.py',
+              'tools/agent-skill-orchestrator/benchmarks/run_o4d_scout_cell.py':
+                  'tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_cell.py',
+              'tools/agent-skill-orchestrator/benchmarks/run_o4d_scout_schema_validation.py':
+                  'tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_schema_validation.py',
+              'tools/agent-skill-orchestrator/tests/test_o4d_scout_schema_validation.py':
+                  'tools/agent-skill-orchestrator/tests/test_o4e_scout_schema_validation.py',
+              '.github/workflows/agent-skill-orchestrator-o4d-scout-schema-validation.yml':
+                  '.github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml',
+          }
+          for source, target in copies.items():
+              text = Path(source).read_text(encoding='utf-8')
+              text = text.replace('O4-D', 'O4-E').replace('O4D', 'O4E').replace('o4d', 'o4e')
+              Path(target).write_text(text, encoding='utf-8')
+
+          # Runner: only O4-E generation uses the new evidence-aware schema.
+          path = Path('tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_cell.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'from roles.scout import build_scout_prompt, scout_response_schema\n'
+          new = ('from roles.scout import build_scout_prompt\n'
+                 'from roles.scout_evidence_schema import scout_response_schema_for_evidence\n')
+          if text.count(old) != 1:
+              raise SystemExit('O4-E runner Scout import shape drifted')
+          text = text.replace(old, new, 1)
+          if text.count('response_schema = scout_response_schema()') != 1:
+              raise SystemExit('O4-E runner static schema call shape drifted')
+          text = text.replace(
+              'response_schema = scout_response_schema()',
+              'response_schema = scout_response_schema_for_evidence(evidence)',
+              1,
+          )
+          path.write_text(text, encoding='utf-8')
+
+          # Matrix: bind and archive the evidence-aware schema before inference.
+          path = Path('tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_schema_validation.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'MATRIX_ID = "o4e-scout-schema-hardening-validation-v1"',
+              'MATRIX_ID = "o4e-scout-authority-schema-validation-v1"',
+              1,
+          )
+          old = 'from roles.scout import build_scout_prompt, prompt_sha256, scout_response_schema\n'
+          new = ('from roles.scout import build_scout_prompt, prompt_sha256\n'
+                 'from roles.scout_evidence_schema import scout_response_schema_for_evidence\n')
+          if text.count(old) != 1:
+              raise SystemExit('O4-E matrix Scout import shape drifted')
+          text = text.replace(old, new, 1)
+          if text.count('response_schema = scout_response_schema()') != 1:
+              raise SystemExit('O4-E matrix build static schema call drifted')
+          text = text.replace(
+              'response_schema = scout_response_schema()',
+              'response_schema = scout_response_schema_for_evidence(evidence)',
+              1,
+          )
+          old_prepare = '''    _write_json(frozen / "scout-response-schema.json", scout_response_schema())\n    case, evidence = load_case_and_evidence()\n    del case\n'''
+          new_prepare = '''    case, evidence = load_case_and_evidence()\n    _write_json(\n        frozen / "scout-response-schema.json",\n        scout_response_schema_for_evidence(evidence),\n    )\n    del case\n'''
+          if text.count(old_prepare) != 1:
+              raise SystemExit('O4-E matrix prepare static schema shape drifted')
+          text = text.replace(old_prepare, new_prepare, 1)
+          needle = '        "historical_o4c_result_sha256": deepcopy(HISTORICAL_O4C_RESULTS),\n'
+          replacement = (
+              needle
+              + '        "predecessor_o4d_summary_sha256": '
+                '"24474cca92045afc8590dd828927b0ab62f7db657b4671603d9d3aa496960171",\n'
+          )
+          if text.count(needle) != 1:
+              raise SystemExit('O4-E predecessor insertion point drifted')
+          text = text.replace(needle, replacement, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Tests: keep O4-D tests intact and make O4-E assertions evidence-aware.
+          path = Path('tools/agent-skill-orchestrator/tests/test_o4e_scout_schema_validation.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'from roles.scout import build_scout_prompt, prompt_sha256, scout_response_schema\n'
+          new = ('from roles.scout import build_scout_prompt, prompt_sha256, scout_response_schema\n'
+                 'from roles.scout_evidence_schema import scout_response_schema_for_evidence\n')
+          if text.count(old) != 1:
+              raise SystemExit('O4-E test Scout import shape drifted')
+          text = text.replace(old, new, 1)
+          old_assert = 'self.assertEqual(manifest["response_schema_sha256"], canonical_sha256(scout_response_schema()))'
+          new_assert = '''self.assertEqual(\n            manifest["response_schema_sha256"],\n            canonical_sha256(scout_response_schema_for_evidence(evidence)),\n        )\n        self.assertNotEqual(manifest["response_schema_sha256"], canonical_sha256(scout_response_schema()))'''
+          if text.count(old_assert) != 1:
+              raise SystemExit('O4-E manifest schema assertion drifted')
+          text = text.replace(old_assert, new_assert, 1)
+          old_meta = '"response_schema_sha256": canonical_sha256(scout_response_schema()),'
+          new_meta = '"response_schema_sha256": canonical_sha256(scout_response_schema_for_evidence(evidence)),'
+          if text.count(old_meta) != 1:
+              raise SystemExit('O4-E test metadata schema assertion drifted')
+          text = text.replace(old_meta, new_meta, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Workflow uses a new port and new matrix identity produced by the O4-E resolver.
+          path = Path('.github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('SERVER_PORT: \'39139\'', 'SERVER_PORT: \'39141\'', 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Ordinary mechanical CI must cover workflow-only O4-E changes.
+          path = Path('.github/workflows/agent-skills-ci.yml')
+          text = path.read_text(encoding='utf-8')
+          anchor = "      - '.github/workflows/agent-skill-orchestrator-o4d-scout-schema-validation.yml'\n"
+          addition = anchor + "      - '.github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml'\n"
+          if text.count(anchor) != 2:
+              raise SystemExit('Agent Skills CI O4-D path coverage shape drifted')
+          text = text.replace(anchor, addition)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Run O4-E focused mechanical regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONDONTWRITEBYTECODE=1
+          python -m unittest discover -s tools/agent-skill-orchestrator/tests -p 'test_o4e_scout_schema_validation.py' -v
+          python -m unittest discover -s tools/agent-skill-orchestrator/tests -p 'test_scout_evidence_aware_authority_schema.py' -v
+          find tools/agent-skill-orchestrator -type d -name __pycache__ -prune -exec rm -rf {} +
+          find tools/agent-skill-orchestrator -type f -name '*.pyc' -delete
+
+      - name: Remove one-shot control surface and commit generated harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .agent-skill-dev/o4e-generate.txt
+          rmdir .agent-skill-dev 2>/dev/null || true
+          rm -f .github/workflows/tmp-agent-skill-o4e-generator.yml
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+          find . -type f -name '*.pyc' -delete
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          if git diff --cached --name-only | grep -E '(__pycache__|\.pyc$|tmp-agent-skill-o4e-generator|\.agent-skill-dev)'; then
+            echo 'O4E_TEMP_OR_BYTECODE_LEAK'
+            exit 2
+          fi
+          git commit -m 'feat(agent-skill): add O4-E Scout authority schema validation'
+          git push origin HEAD:feat/agent-skill-orchestrator-o4e-authority-schema-validation-20260903

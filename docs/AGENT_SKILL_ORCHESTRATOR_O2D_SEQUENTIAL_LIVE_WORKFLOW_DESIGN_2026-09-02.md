@@ -7,6 +7,7 @@ FROZEN_BEFORE_IMPLEMENTATION
 Branch baseline main: `dad86753042fa7829f8bf79bfdec928ee1068939`.
 Prerequisite O2 dependency-alignment merge: `5abed347fac709863a580913996af16d69dfdfb7`.
 Acceptance freeze: #1120 comment `5507048794`.
+Direct-dependency correction before implementation/model calls: #1120 comment `5507114592`.
 
 O2-D adds one retrospective sequential live workflow over the already merged O2-A/O2-B/O2-C contracts. It does not create a new semantic contract, new model family, parallel scheduler, product behavior, release behavior, or validated scope.
 
@@ -56,14 +57,14 @@ The candidate scope remains exactly `plugin:usage-dashboard`.
 
 ## Sequential execution plan
 
-Deterministic role stages are exactly:
+Deterministic role stages and **direct** dependencies are exactly the current router graph:
 
 1. Scout — depends on none.
 2. Mapper — depends on Scout.
 3. Critic — depends on Mapper.
-4. Synthesizer — depends on Scout, Mapper, and Critic in canonical role order.
+4. Synthesizer — depends on Mapper and Critic.
 
-The runtime must persist this same plan and validate it against the router-generated plan before the first model call. A disagreement is a pre-inference failure.
+Scout is a transitive ancestor of Synthesizer, not an additional direct dependency. The runtime must persist this same direct plan and validate it against the router-generated plan before the first model call. A disagreement is a pre-inference failure.
 
 ## Role execution
 
@@ -91,21 +92,23 @@ Input surfaces are only:
 - validated Mapper RoleArtifact;
 - frozen Critic compact contract/prompt policy.
 
-Raw Scout or Mapper response prose must not appear in the Critic prompt. Its upstream artifact digest is exactly Mapper.
+Raw Scout or Mapper response prose must not appear in the Critic prompt. Its direct upstream artifact digest is exactly Mapper.
 
 ### Synthesizer
+
+Its direct dependency gate requires completed Mapper and Critic artifacts. Its validated typed provenance/input bundle may additionally include the transitive Scout ancestor, yielding canonical validated artifact order Scout, Mapper, Critic.
 
 Input surfaces are only:
 
 - frozen bounded evidence package;
-- validated RoleArtifacts in canonical order Scout, Mapper, Critic;
+- validated typed RoleArtifacts in canonical order;
 - frozen Synthesizer compact selection contract/prompt policy.
 
-It may select existing validated IDs only. It does not author new semantic facts. Mandatory UNKNOWN/CONFLICT/blocker/unresolved-conflict preservation remains evaluator-owned as already frozen in O2-B/O2-C.
+It may select existing validated IDs only. It does not author new semantic facts. Mandatory UNKNOWN/CONFLICT/blocker/unresolved-conflict preservation remains evaluator-owned as already frozen in O2-B/O2-C. Supplying Scout as transitive typed provenance does not change the router direct dependency graph.
 
 ## Fail-closed scheduler semantics
 
-Each role is called only after every declared dependency has a validated `COMPLETED` RoleArtifact.
+Each role is called only after every declared direct dependency has a validated `COMPLETED` RoleArtifact.
 
 If a role is `EXECUTION_INCOMPLETE` or `INVALID`:
 
@@ -119,7 +122,7 @@ No retry, fallback model, or alternate prompt is allowed in the first O2-D retro
 
 ## Request contract
 
-Use a new closed request mode, e.g. `o2d_sequential_retrospective_mechanical`, with exactly:
+Use a new closed request mode, `o2d_sequential_retrospective_mechanical`, with exactly:
 
 - `schema_version: 1`
 - `mode`
@@ -145,7 +148,7 @@ Retain enough immutable material to recompute orchestration provenance:
 - authority snapshot and bounded evidence package;
 - runtime/model identity and runtime version;
 - for every role: prompt, prompt SHA, raw response, response SHA, finish reason, execution status, RoleArtifact if completed, RoleArtifact SHA, receipt;
-- deterministic summary containing role order, dependencies, total local model calls, total hosted AI calls, final Synthesizer artifact SHA, and overall execution status.
+- deterministic summary containing role order, direct dependencies, total local model calls, total hosted AI calls, final Synthesizer artifact SHA, and overall execution status.
 
 Raw response prose is evidence-only and must never become a downstream model input.
 
@@ -158,9 +161,10 @@ The first O2-D live run passes mechanically only if all of the following hold:
 - all four roles are `COMPLETED` and finish `stop`;
 - all four compact responses validate under their already frozen contracts;
 - Scout/Mapper/Critic/Synthesizer RoleArtifacts all exist;
-- upstream artifact SHA chains exactly match the frozen dependency graph;
+- direct execution dependencies exactly match router semantics: `scout:[]`, `mapper:[scout]`, `critic:[mapper]`, `synthesizer:[mapper,critic]`;
+- Mapper RoleArtifact chains to Scout and Critic chains to Mapper;
+- Synthesizer canonical upstream artifact list contains validated supplied artifacts in canonical role order; when Scout transitive provenance is supplied it is hash-validated and included without becoming a direct dependency;
 - final Synthesizer receipt and RoleArtifact are present;
-- execution-plan provenance exactly matches `Scout -> Mapper -> Critic -> Synthesizer` dependency semantics;
 - no raw upstream response prose was used downstream;
 - no product/plugin runtime/release/device byte changes and no validated-scope change occurred.
 
@@ -170,10 +174,10 @@ A mechanically valid retrospective run is not a new prospective skill-quality pr
 
 - exact closed request schema and harness/evidence/release separation;
 - request-parent must match harness SHA, not evidence SHA;
-- router plan equals runtime plan;
+- router direct plan equals runtime direct plan;
 - Mapper prompt accepts typed Scout artifact and rejects raw response input;
 - Critic prompt accepts typed Mapper artifact and rejects raw response input;
-- Synthesizer prompt accepts canonical validated Scout/Mapper/Critic artifacts only;
+- Synthesizer direct gate is Mapper+Critic while its canonical typed provenance bundle may include Scout+Mapper+Critic;
 - dependency failure suppresses all downstream model calls;
 - completed four-role synthetic sequence reports exactly four local calls and zero hosted calls;
 - per-role receipt versions remain Scout v1 and semantic v2 respectively;

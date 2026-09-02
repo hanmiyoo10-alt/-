@@ -1,0 +1,168 @@
+name: Agent Skill Orchestrator Scout Pilot
+
+on:
+  push:
+    branches:
+      - 'agent-skill-orchestrator-scout-pilot-request/**'
+    paths:
+      - '.agent-skill-orchestrator-scout-pilot-requests/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  retrospective-scout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PILOT_ROOT: .agent-skill-orchestrator-scout-pilot
+      LLAMA_RELEASE: b10516
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      MODEL_REPOSITORY: Qwen/Qwen2.5-3B-Instruct-GGUF
+      MODEL_REVISION: af75b7aaf5bb163ce4c5dab4e6b84d844e96265d
+      MODEL_FILE: qwen2.5-3b-instruct-q4_k_m.gguf
+      MODEL_SHA256: 626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d
+      SERVER_PORT: '39129'
+    steps:
+      - name: Checkout request commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Resolve exact Scout pilot request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | sort)
+          if (( ${#changed[@]} != 1 )); then
+            echo "SCOUT_PILOT_REQUEST_CHANGE_COUNT:${#changed[@]}"
+            exit 2
+          fi
+          request_path="${changed[0]}"
+          case "$request_path" in
+            .agent-skill-orchestrator-scout-pilot-requests/*.json) ;;
+            *) echo "SCOUT_PILOT_REQUEST_PATH:INVALID:$request_path"; exit 2 ;;
+          esac
+          request_copy="$RUNNER_TEMP/scout-pilot-request.json"
+          python tools/agent-skill-orchestrator/runtime/resolve_scout_pilot_request.py \
+            --request "$request_path" \
+            --output "$request_copy"
+          target_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["target_repository_sha"])' "$request_copy")"
+          release_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_repository_sha"])' "$request_copy")"
+          parent_sha="$(git rev-parse HEAD^)"
+          test "$parent_sha" = "$target_sha"
+          printf 'TARGET_REPOSITORY_SHA=%s\n' "$target_sha" >> "$GITHUB_ENV"
+          printf 'RELEASE_REPOSITORY_SHA=%s\n' "$release_sha" >> "$GITHUB_ENV"
+          printf 'REQUEST_COPY=%s\n' "$request_copy" >> "$GITHUB_ENV"
+          echo "SCOUT_PILOT_REQUEST_PARENT_SHA:$parent_sha"
+
+      - name: Checkout frozen target and release authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "${TARGET_REPOSITORY_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$TARGET_REPOSITORY_SHA"
+          fi
+          git checkout --detach "$TARGET_REPOSITORY_SHA"
+          test "$(git rev-parse HEAD)" = "$TARGET_REPOSITORY_SHA"
+          git fetch --no-tags --depth=1 origin \
+            release-usage-dashboard:refs/remotes/origin/release-usage-dashboard
+          test "$(git rev-parse refs/remotes/origin/release-usage-dashboard^{commit})" = "$RELEASE_REPOSITORY_SHA"
+          echo "SCOUT_PILOT_TARGET_SHA:$TARGET_REPOSITORY_SHA"
+          echo "SCOUT_PILOT_RELEASE_SHA:$RELEASE_REPOSITORY_SHA"
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/o2a-scout-runtime"
+          mkdir -p "$runtime_root"
+          cd "$runtime_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" | sha256sum -c -
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          test -n "$llama_server"
+          llama_server="$(realpath "$llama_server")"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/$PILOT_ROOT-runtime-version.txt" 2>&1
+          printf 'LLAMA_SERVER=%s\n' "$llama_server" >> "$GITHUB_ENV"
+
+      - name: Download and verify pinned local Scout model
+        shell: bash
+        run: |
+          set -euo pipefail
+          model_root="$RUNNER_TEMP/o2a-scout-model"
+          mkdir -p "$model_root"
+          cd "$model_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$MODEL_FILE" \
+            "https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
+          printf '%s  %s\n' "$MODEL_SHA256" "$MODEL_FILE" | sha256sum -c -
+          printf 'MODEL_PATH=%s\n' "$(realpath "$MODEL_FILE")" >> "$GITHUB_ENV"
+
+      - name: Run one retrospective Scout model call
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$PILOT_ROOT"
+          mkdir -p "$PILOT_ROOT"
+          cp "$REQUEST_COPY" "$PILOT_ROOT/request.json"
+          cp "$PILOT_ROOT-runtime-version.txt" "$PILOT_ROOT/llama-runtime-version.txt"
+          set +e
+          python tools/agent-skill-orchestrator/runtime/run_scout_pilot.py \
+            --repo-root . \
+            --target-sha "$TARGET_REPOSITORY_SHA" \
+            --release-sha "$RELEASE_REPOSITORY_SHA" \
+            --server-binary "$LLAMA_SERVER" \
+            --model-path "$MODEL_PATH" \
+            --runtime-version-file "$PILOT_ROOT/llama-runtime-version.txt" \
+            --output-dir "$PILOT_ROOT" \
+            --port "$SERVER_PORT"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$PILOT_ROOT/pilot-exit-code.txt"
+          echo "SCOUT_PILOT_PROCESS_EXIT:$code"
+
+      - name: Upload bounded Scout pilot evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-orchestrator-scout-pilot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-orchestrator-scout-pilot/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Gate mechanical Scout pilot success
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat "$PILOT_ROOT/pilot-exit-code.txt")" = "0"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.agent-skill-orchestrator-scout-pilot')
+          summary = json.loads((root / 'summary.json').read_text(encoding='utf-8'))
+          receipt = json.loads((root / 'role-execution-receipt.json').read_text(encoding='utf-8'))
+          if summary.get('execution_status') != 'COMPLETED':
+              raise SystemExit('Scout pilot did not complete')
+          if summary.get('finish_reason') != 'stop':
+              raise SystemExit('Scout pilot did not finish with stop')
+          if not summary.get('role_artifact_present') or not (root / 'role-artifact.json').is_file():
+              raise SystemExit('Scout pilot RoleArtifact missing')
+          if int(summary.get('wire_bytes', 999999)) > 2400:
+              raise SystemExit('Scout compact wire exceeds byte ceiling')
+          if receipt.get('model_call_count') != 1 or receipt.get('hosted_ai_call_count') != 0:
+              raise SystemExit('Scout pilot call accounting invalid')
+          print('SCOUT_PILOT_GATE:PASS')
+          print('SCOUT_PILOT_RECEIPT_SHA256:' + str(summary.get('receipt_sha256')))
+          PY

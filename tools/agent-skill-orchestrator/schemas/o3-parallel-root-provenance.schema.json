@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "o3-parallel-root-provenance.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "mode", "target_repository_sha", "evidence_sha256",
+    "budget_profile", "runner_memory_policy_id", "canonical_role_order", "jobs",
+    "synthesizer_dependency_gate", "total_model_call_count",
+    "total_hosted_ai_call_count", "telemetry"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "mode": {"type": "string", "const": "o3c_parallel_scheduler_synthetic"},
+    "target_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "budget_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id", "profile_sha256", "max_total_role_calls",
+        "max_hosted_ai_calls", "max_concurrent_model_workers"
+      ],
+      "properties": {
+        "profile_id": {"type": "string", "const": "standard-cpu-v1"},
+        "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "max_total_role_calls": {"type": "integer"},
+        "max_hosted_ai_calls": {"type": "integer"},
+        "max_concurrent_model_workers": {"type": "integer"}
+      }
+    },
+    "runner_memory_policy_id": {
+      "type": "string",
+      "const": "standard-cpu-two-worker-ceiling-v1"
+    },
+    "canonical_role_order": {
+      "type": "array",
+      "const": ["scout", "mapper", "critic", "synthesizer"]
+    },
+    "jobs": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role", "terminal_state", "evidence_sha256", "upstream_artifact_sha256",
+          "attempts", "receipt_sha256", "role_artifact_sha256", "telemetry"
+        ],
+        "properties": {
+          "role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]},
+          "terminal_state": {
+            "type": "string",
+            "enum": ["COMPLETED", "INVALID", "EXECUTION_INCOMPLETE", "FAILED", "BLOCKED_DEPENDENCY"]
+          },
+          "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "upstream_artifact_sha256": {
+            "type": "array",
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          },
+          "attempts": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "attempt", "role", "terminal_state", "evidence_sha256",
+                "upstream_artifact_sha256", "receipt_sha256", "role_artifact_sha256",
+                "model_call_count", "hosted_ai_call_count", "telemetry"
+              ],
+              "properties": {
+                "attempt": {"type": "integer"},
+                "role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]},
+                "terminal_state": {
+                  "type": "string",
+                  "enum": ["COMPLETED", "INVALID", "EXECUTION_INCOMPLETE", "FAILED"]
+                },
+                "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "upstream_artifact_sha256": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "uniqueItems": true,
+                  "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                },
+                "receipt_sha256": {"type": "string", "pattern": "^(?:[0-9a-f]{64}|NONE)$"},
+                "role_artifact_sha256": {"type": "string", "pattern": "^(?:[0-9a-f]{64}|NONE)$"},
+                "model_call_count": {"type": "integer"},
+                "hosted_ai_call_count": {"type": "integer"},
+                "telemetry": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["wall_clock_ms", "cpu_ms", "peak_rss_bytes"],
+                  "properties": {
+                    "wall_clock_ms": {},
+                    "cpu_ms": {},
+                    "peak_rss_bytes": {}
+                  }
+                }
+              }
+            }
+          },
+          "receipt_sha256": {"type": "string", "pattern": "^(?:[0-9a-f]{64}|NONE)$"},
+          "role_artifact_sha256": {"type": "string", "pattern": "^(?:[0-9a-f]{64}|NONE)$"},
+          "telemetry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["wall_clock_ms", "cpu_ms", "peak_rss_bytes"],
+            "properties": {
+              "wall_clock_ms": {},
+              "cpu_ms": {},
+              "peak_rss_bytes": {}
+            }
+          }
+        }
+      }
+    },
+    "synthesizer_dependency_gate": {"type": "string", "enum": ["READY", "BLOCKED"]},
+    "total_model_call_count": {"type": "integer"},
+    "total_hosted_ai_call_count": {"type": "integer"},
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_clock_ms", "summed_worker_cpu_ms", "peak_rss_bytes"],
+      "properties": {
+        "wall_clock_ms": {},
+        "summed_worker_cpu_ms": {},
+        "peak_rss_bytes": {}
+      }
+    }
+  }
+}

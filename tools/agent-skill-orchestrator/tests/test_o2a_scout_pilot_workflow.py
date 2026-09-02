@@ -81,6 +81,13 @@ class O2AScoutPilotWorkflowTests(unittest.TestCase):
         self.assertIn("if: always()", text)
         self.assertIn("SCOUT_PILOT_GATE:PASS", text)
 
+    def test_hidden_pilot_evidence_is_explicitly_included_in_artifact_upload(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("PILOT_ROOT: .agent-skill-orchestrator-scout-pilot", text)
+        self.assertIn("path: .agent-skill-orchestrator-scout-pilot/", text)
+        self.assertIn("include-hidden-files: true", text)
+        self.assertIn("if-no-files-found: error", text)
+
     def test_normal_agent_skills_ci_watches_workflow_but_does_not_run_model(self):
         ci = AGENT_CI.read_text(encoding="utf-8")
         self.assertIn(".github/workflows/agent-skill-orchestrator-scout-pilot.yml", ci)

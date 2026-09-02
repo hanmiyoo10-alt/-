@@ -53,8 +53,8 @@ class O2AScoutRuntimeTests(unittest.TestCase):
 
     def valid_content(self):
         return json.dumps({"r": [
-            {"k": "a", "s": "D", "v": "domain_primary", "r": ["S2@L10"]},
-            {"k": "s", "s": "D", "v": "relevant_source", "r": ["S1@L1"]},
+            {"k": "a", "v": "domain_primary", "r": ["S2@L10"]},
+            {"k": "s", "v": "relevant_source", "r": ["S1@L1"]},
         ]}, separators=(",", ":"))
 
     def test_scout_profile_is_frozen_to_existing_qwen_3b_not_selected_by_order(self):
@@ -71,7 +71,7 @@ class O2AScoutRuntimeTests(unittest.TestCase):
         self.assertEqual(LLAMA_RUNTIME["release"], "b10516")
         self.assertEqual(LLAMA_RUNTIME["artifact_sha256"], "f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35")
 
-    def test_valid_compact_wire_builds_real_role_artifact_with_deterministic_provenance(self):
+    def test_valid_compact_wire_builds_direct_role_artifact_with_deterministic_provenance(self):
         evidence = self.evidence()
         prompt = build_scout_prompt(evidence)
         content = self.valid_content()
@@ -88,55 +88,62 @@ class O2AScoutRuntimeTests(unittest.TestCase):
         self.assertEqual(artifact["records"]["boundaries"], [])
         self.assertEqual(artifact["records"]["blockers"], [])
         self.assertEqual(artifact["records"]["conflicts"], [])
-        self.assertEqual(artifact["records"]["claims"][0]["kind"], "authority")
-        self.assertEqual(artifact["records"]["claims"][1]["value"], "relevant_source")
+        claims = artifact["records"]["claims"]
+        self.assertEqual(claims[0]["kind"], "authority")
+        self.assertEqual(claims[0]["status"], "DIRECT")
+        self.assertEqual(claims[1]["status"], "DIRECT")
+        self.assertEqual(claims[1]["value"], "relevant_source")
 
-    def test_unknown_preserved_without_refs(self):
+    def test_empty_selection_is_valid_and_deterministically_preserves_unknown(self):
         evidence = self.evidence()
-        artifact = build_role_artifact('{"r":[{"k":"a","s":"U","v":"unknown","r":[]}]}', evidence, build_scout_prompt(evidence))
-        claim = artifact["records"]["claims"][0]
-        self.assertEqual(claim["status"], "UNKNOWN")
-        self.assertEqual(claim["refs"], [])
+        parsed = validate_scout_wire('{"r":[]}', evidence)
+        artifact = build_role_artifact('{"r":[]}', evidence, build_scout_prompt(evidence))
+        self.assertEqual(parsed, {"r": []})
+        claims = artifact["records"]["claims"]
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0]["kind"], "other")
+        self.assertEqual(claims[0]["status"], "UNKNOWN")
+        self.assertEqual(claims[0]["value"], "unknown")
+        self.assertEqual(claims[0]["refs"], [])
 
-    def test_unknown_with_refs_is_rejected(self):
+    def test_legacy_model_selected_status_field_fails_closed(self):
+        evidence = self.evidence()
         with self.assertRaises(ScoutContractError):
-            validate_scout_wire('{"r":[{"k":"a","s":"U","v":"unknown","r":["S2@L10"]}]}', self.evidence())
+            validate_scout_wire(
+                '{"r":[{"k":"a","s":"U","v":"guidelines","r":["S1@L1"]}]}',
+                evidence,
+            )
+        schema = scout_response_schema()
+        record_properties = schema["properties"]["r"]["items"]["properties"]
+        self.assertNotIn("s", record_properties)
+        self.assertEqual(set(record_properties), {"k", "v", "r"})
+
+    def test_placeholder_unknown_record_and_zero_ref_grounded_record_fail_closed(self):
+        evidence = self.evidence()
+        with self.assertRaises(ScoutContractError):
+            validate_scout_wire('{"r":[{"k":"a","v":"unknown","r":[]}]}', evidence)
+        with self.assertRaises(ScoutContractError):
+            validate_scout_wire('{"r":[{"k":"s","v":"relevant_source","r":[]}]}', evidence)
 
     def test_unknown_source_ref_is_rejected(self):
         with self.assertRaises(ScoutContractError):
-            validate_scout_wire('{"r":[{"k":"s","s":"D","v":"relevant_source","r":["S9@L9"]}]}', self.evidence())
+            validate_scout_wire('{"r":[{"k":"s","v":"relevant_source","r":["S9@L9"]}]}', self.evidence())
 
     def test_authority_value_must_come_from_supplied_authority_metadata(self):
         with self.assertRaises(ScoutContractError):
-            validate_scout_wire('{"r":[{"k":"a","s":"D","v":"release_spec_dir","r":["S2@L10"]}]}', self.evidence())
-
-    def test_scout_v2_rejects_conflict_status_and_prompt_forbids_conflict_inference(self):
-        evidence = self.evidence()
-        schema = scout_response_schema()
-        statuses = schema["properties"]["r"]["items"]["properties"]["s"]["enum"]
-        self.assertEqual(statuses, ["D", "L", "U"])
-        with self.assertRaises(ScoutContractError):
-            validate_scout_wire(
-                '{"r":[{"k":"a","s":"C","v":"conflict","r":["S1@L1","S2@L10"]}]}',
-                evidence,
-            )
-        prompt = build_scout_prompt(evidence)
-        self.assertIn('"s":"D|L|U"', prompt)
-        self.assertIn("Different classes do not by themselves mean conflict", prompt)
-        self.assertIn("do not report authority conflict", prompt)
-        self.assertNotIn('"s":"D|L|U|C"', prompt)
+            validate_scout_wire('{"r":[{"k":"a","v":"release_spec_dir","r":["S2@L10"]}]}', self.evidence())
 
     def test_multiple_authority_classes_require_separate_authority_records(self):
         evidence = self.evidence()
         with self.assertRaises(ScoutContractError):
             validate_scout_wire(
-                '{"r":[{"k":"a","s":"D","v":"manifest","r":["S1@L1","S2@L10"]}]}',
+                '{"r":[{"k":"a","v":"manifest","r":["S1@L1","S2@L10"]}]}',
                 evidence,
             )
         parsed = validate_scout_wire(
             '{"r":['
-            '{"k":"a","s":"D","v":"manifest","r":["S1@L1"]},'
-            '{"k":"a","s":"D","v":"domain_primary","r":["S2@L10"]}'
+            '{"k":"a","v":"manifest","r":["S1@L1"]},'
+            '{"k":"a","v":"domain_primary","r":["S2@L10"]}'
             ']}',
             evidence,
         )
@@ -145,7 +152,7 @@ class O2AScoutRuntimeTests(unittest.TestCase):
     def test_semantic_prose_and_forbidden_top_level_fields_are_rejected(self):
         evidence = self.evidence()
         with self.assertRaises(ScoutContractError):
-            validate_scout_wire('{"r":[{"k":"s","s":"D","v":"runtime owns release flow","r":["S2@L10"]}]}', evidence)
+            validate_scout_wire('{"r":[{"k":"s","v":"runtime owns release flow","r":["S2@L10"]}]}', evidence)
         with self.assertRaises(ScoutContractError):
             validate_scout_wire('{"r":[],"verdict":"SUPPORTED"}', evidence)
 
@@ -156,20 +163,26 @@ class O2AScoutRuntimeTests(unittest.TestCase):
         with self.assertRaises(ScoutContractError):
             validate_scout_wire('{"r":[]}' + (" " * 2401), evidence)
 
-    def test_prompt_exposes_supplied_evidence_but_no_upstream_role_prose(self):
+    def test_prompt_exposes_supplied_evidence_and_removes_model_status_discretion(self):
         prompt = build_scout_prompt(self.evidence())
         self.assertIn("REF S2@L10", prompt)
         self.assertIn("authority_class=domain_primary", prompt)
         self.assertIn("Do not infer semantic owners", prompt)
+        self.assertIn("Do not output status letters", prompt)
+        self.assertIn('return exactly {"r":[]}', prompt)
+        self.assertIn("validator preserves that empty result as UNKNOWN", prompt)
+        self.assertNotIn('"s":"D|L|U"', prompt)
         self.assertNotIn("mapper output", prompt.lower())
         self.assertNotIn("critic output", prompt.lower())
 
-    def test_response_schema_is_closed_and_compact(self):
+    def test_response_schema_is_closed_compact_and_requires_refs_for_records(self):
         schema = scout_response_schema()
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(schema["properties"]["r"]["maxItems"], 12)
         record = schema["properties"]["r"]["items"]
         self.assertFalse(record["additionalProperties"])
+        self.assertEqual(record["required"], ["k", "v", "r"])
+        self.assertEqual(record["properties"]["r"]["minItems"], 1)
         self.assertEqual(record["properties"]["r"]["maxItems"], 3)
 
     def test_finish_reason_stop_only_is_completed(self):
@@ -193,6 +206,15 @@ class O2AScoutRuntimeTests(unittest.TestCase):
         self.assertEqual(result["receipt"]["execution_status"], "INVALID")
         self.assertEqual(result["receipt"]["role_artifact_sha256"], "NONE")
         self.assertIsNotNone(result["error"])
+
+    def test_completed_empty_selection_receipt_is_unknown_role_artifact_not_invalid(self):
+        evidence = self.evidence()
+        result = build_scout_execution_result(content='{"r":[]}', finish_reason="stop", evidence_package=evidence, prompt=build_scout_prompt(evidence), runtime_version="llama.cpp test-runtime")
+        self.assertEqual(result["receipt"]["execution_status"], "COMPLETED")
+        self.assertIsNotNone(result["artifact"])
+        claim = result["artifact"]["records"]["claims"][0]
+        self.assertEqual(claim["status"], "UNKNOWN")
+        self.assertEqual(claim["refs"], [])
 
     def test_completed_receipt_is_reproducible_and_zero_hosted_ai(self):
         evidence = self.evidence()

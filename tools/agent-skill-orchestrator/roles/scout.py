@@ -26,13 +26,15 @@ def _load_contract(path: Path | str = CONTRACT_PATH) -> dict[str, Any]:
         raise ScoutContractError("Scout contract must be a JSON object")
     required = {
         "schema_version", "contract_id", "role", "max_wire_bytes", "max_records",
-        "max_refs_per_record", "record_kinds", "statuses", "source_selection_value",
-        "unknown_value"
+        "max_refs_per_record", "record_kinds", "source_selection_value",
+        "grounded_status", "empty_result_status", "unknown_value"
     }
     if set(data) != required:
         raise ScoutContractError("Scout contract fields changed")
-    if data["schema_version"] != 1 or data["contract_id"] != "scout-compact-wire-v2" or data["role"] != "scout":
+    if data["schema_version"] != 1 or data["contract_id"] != "scout-compact-wire-v3" or data["role"] != "scout":
         raise ScoutContractError("Scout contract identity changed")
+    if data["grounded_status"] != "DIRECT" or data["empty_result_status"] != "UNKNOWN":
+        raise ScoutContractError("Scout deterministic status projection changed")
     return data
 
 
@@ -48,16 +50,16 @@ def scout_response_schema(contract: dict[str, Any] | None = None) -> dict[str, A
                     "type": "object",
                     "properties": {
                         "k": {"type": "string", "enum": sorted(c["record_kinds"])},
-                        "s": {"type": "string", "enum": sorted(c["statuses"])},
-                        "v": {"type": "string", "maxLength": 64},
+                        "v": {"type": "string", "minLength": 1, "maxLength": 64},
                         "r": {
                             "type": "array",
+                            "minItems": 1,
                             "maxItems": int(c["max_refs_per_record"]),
                             "uniqueItems": True,
                             "items": {"type": "string", "pattern": "^S[1-9][0-9]*@L[1-9][0-9]*$"},
                         },
                     },
-                    "required": ["k", "s", "v", "r"],
+                    "required": ["k", "v", "r"],
                     "additionalProperties": False,
                 },
             }
@@ -102,38 +104,35 @@ def validate_scout_wire(content: str, evidence_package: dict[str, Any]) -> dict[
     normalized: list[dict[str, Any]] = []
     for index, record in enumerate(records):
         label = f"r[{index}]"
-        if not isinstance(record, dict) or set(record) != {"k", "s", "v", "r"}:
+        if not isinstance(record, dict) or set(record) != {"k", "v", "r"}:
             raise ScoutContractError(f"{label} fields invalid")
         kind = record["k"]
-        status = record["s"]
         value = record["v"]
         refs = record["r"]
-        if kind not in contract["record_kinds"] or status not in contract["statuses"]:
-            raise ScoutContractError(f"{label} kind/status invalid")
+        if kind not in contract["record_kinds"]:
+            raise ScoutContractError(f"{label} kind invalid")
         if not isinstance(value, str) or not value or len(value.encode("utf-8")) > 64:
             raise ScoutContractError(f"{label} value invalid")
-        if not isinstance(refs, list) or len(refs) > int(contract["max_refs_per_record"]):
-            raise ScoutContractError(f"{label} refs invalid")
+        if (
+            not isinstance(refs, list)
+            or not refs
+            or len(refs) > int(contract["max_refs_per_record"])
+        ):
+            raise ScoutContractError(f"{label} grounded selection requires 1-{contract['max_refs_per_record']} refs")
         if any(not isinstance(ref, str) or ref not in known for ref in refs):
             raise ScoutContractError(f"{label} references unknown evidence")
         if len(refs) != len(set(refs)):
             raise ScoutContractError(f"{label} refs must be unique")
 
-        if status == "U":
-            if refs or value != contract["unknown_value"]:
-                raise ScoutContractError(f"{label} UNKNOWN must have no refs and value=unknown")
-        else:
-            if not refs:
-                raise ScoutContractError(f"{label} non-UNKNOWN record requires evidence refs")
-            if kind == "s" and value != contract["source_selection_value"]:
-                raise ScoutContractError(f"{label} source selection cannot carry semantic prose")
-            if kind == "a":
-                classes = {str(by_ref[ref]["authority_class"]) for ref in refs}
-                if len(classes) != 1 or value not in classes:
-                    raise ScoutContractError(
-                        f"{label} authority record must reference exactly one supplied authority class"
-                    )
-        normalized.append({"k": kind, "s": status, "v": value, "r": list(refs)})
+        if kind == "s" and value != contract["source_selection_value"]:
+            raise ScoutContractError(f"{label} source selection cannot carry semantic prose")
+        if kind == "a":
+            classes = {str(by_ref[ref]["authority_class"]) for ref in refs}
+            if len(classes) != 1 or value not in classes:
+                raise ScoutContractError(
+                    f"{label} authority record must reference exactly one supplied authority class"
+                )
+        normalized.append({"k": kind, "v": value, "r": list(refs)})
 
     canonical = {"r": normalized}
     if len(canonical_json_bytes(canonical)) > int(contract["max_wire_bytes"]):
@@ -147,12 +146,15 @@ def build_scout_prompt(evidence_package: dict[str, Any]) -> str:
     lines = [
         "ROLE: scout",
         "Select only relevant supplied evidence and supplied authority classes.",
-        "Do not infer semantic owners, flows, release truth, device truth, patches, confidence, conflicts, or a final verdict.",
-        "Return compact JSON only: {\"r\":[{\"k\":\"a|s\",\"s\":\"D|L|U\",\"v\":\"...\",\"r\":[\"S#@L#\"]}]}",
+        "Do not infer semantic owners, flows, release truth, device truth, patches, confidence, statuses, conflicts, or a final verdict.",
+        "Return compact JSON only: {\"r\":[{\"k\":\"a|s\",\"v\":\"...\",\"r\":[\"S#@L#\"]}]}",
         f"Maximum response bytes: {contract['max_wire_bytes']}; maximum records: {contract['max_records']}.",
-        "For k=s use value relevant_source. For U use value unknown and no refs.",
+        "Every non-empty record is a positive grounded selection and must contain at least one supplied source ref.",
+        "Do not output status letters, confidence labels, UNKNOWN placeholder records, conflict markers, or extra fields.",
+        "For k=s use value relevant_source.",
         "For k=a use exactly one authority_class shown below per record; all refs in that record must share that class.",
-        "If multiple authority classes are relevant, emit separate k=a records. Different classes do not by themselves mean conflict; do not report authority conflict.",
+        "If multiple authority classes are relevant, emit separate k=a records. Different classes do not by themselves mean conflict.",
+        "If no supplied evidence can support any selection, return exactly {\"r\":[]}. The validator preserves that empty result as UNKNOWN.",
         f"SCOPE: {evidence_package['scope']}",
         "EVIDENCE:",
     ]
@@ -180,16 +182,26 @@ def build_role_artifact(
 ) -> dict[str, Any]:
     parsed = validate_scout_wire(content, evidence_package)
     profile = scout_model_profile(load_model_registry() if registry_data is None else registry_data)
-    statuses = _load_contract()["statuses"]
+    contract = _load_contract()
     claims: list[dict[str, Any]] = []
-    for index, item in enumerate(parsed["r"], start=1):
-        kind = "authority" if item["k"] == "a" else "other"
+    if parsed["r"]:
+        for index, item in enumerate(parsed["r"], start=1):
+            kind = "authority" if item["k"] == "a" else "other"
+            claims.append({
+                "id": f"claim-scout-{index:03d}",
+                "kind": kind,
+                "status": contract["grounded_status"],
+                "value": item["v"],
+                "refs": list(item["r"]),
+                "role": "scout",
+            })
+    else:
         claims.append({
-            "id": f"claim-scout-{index:03d}",
-            "kind": kind,
-            "status": statuses[item["s"]],
-            "value": item["v"],
-            "refs": list(item["r"]),
+            "id": "claim-scout-001",
+            "kind": "other",
+            "status": contract["empty_result_status"],
+            "value": contract["unknown_value"],
+            "refs": [],
             "role": "scout",
         })
     artifact = {

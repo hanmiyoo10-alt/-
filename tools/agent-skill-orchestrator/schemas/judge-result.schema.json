@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B2 Deterministic Judge Result",
+  "type": "object",
+  "required": ["schema_version", "evidence_sha256", "typed_bus_sha256", "budget_state_sha256", "final_verdict", "blockers"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "typed_bus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "budget_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "final_verdict": {"type": "string", "enum": ["SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT", "EXECUTION_INCOMPLETE", "INVALID"]},
+    "blockers": {"type": "array", "maxItems": 192, "items": {"$ref": "blocker.schema.json"}}
+  },
+  "additionalProperties": false
+}

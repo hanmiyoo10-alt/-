@@ -27,11 +27,11 @@ def _load_contract(path: Path | str = CONTRACT_PATH) -> dict[str, Any]:
     required = {
         "schema_version", "contract_id", "role", "max_wire_bytes", "max_records",
         "max_refs_per_record", "record_kinds", "statuses", "source_selection_value",
-        "unknown_value", "conflict_value"
+        "unknown_value"
     }
     if set(data) != required:
         raise ScoutContractError("Scout contract fields changed")
-    if data["schema_version"] != 1 or data["contract_id"] != "scout-compact-wire-v1" or data["role"] != "scout":
+    if data["schema_version"] != 1 or data["contract_id"] != "scout-compact-wire-v2" or data["role"] != "scout":
         raise ScoutContractError("Scout contract identity changed")
     return data
 
@@ -129,11 +129,10 @@ def validate_scout_wire(content: str, evidence_package: dict[str, Any]) -> dict[
                 raise ScoutContractError(f"{label} source selection cannot carry semantic prose")
             if kind == "a":
                 classes = {str(by_ref[ref]["authority_class"]) for ref in refs}
-                if status == "C":
-                    if value != contract["conflict_value"] or len(classes) < 2:
-                        raise ScoutContractError(f"{label} authority conflict requires conflicting supplied classes")
-                elif len(classes) != 1 or value not in classes:
-                    raise ScoutContractError(f"{label} authority value must equal supplied authority class")
+                if len(classes) != 1 or value not in classes:
+                    raise ScoutContractError(
+                        f"{label} authority record must reference exactly one supplied authority class"
+                    )
         normalized.append({"k": kind, "s": status, "v": value, "r": list(refs)})
 
     canonical = {"r": normalized}
@@ -148,11 +147,12 @@ def build_scout_prompt(evidence_package: dict[str, Any]) -> str:
     lines = [
         "ROLE: scout",
         "Select only relevant supplied evidence and supplied authority classes.",
-        "Do not infer semantic owners, flows, release truth, device truth, patches, confidence, or a final verdict.",
-        "Return compact JSON only: {\"r\":[{\"k\":\"a|s\",\"s\":\"D|L|U|C\",\"v\":\"...\",\"r\":[\"S#@L#\"]}]}",
+        "Do not infer semantic owners, flows, release truth, device truth, patches, confidence, conflicts, or a final verdict.",
+        "Return compact JSON only: {\"r\":[{\"k\":\"a|s\",\"s\":\"D|L|U\",\"v\":\"...\",\"r\":[\"S#@L#\"]}]}",
         f"Maximum response bytes: {contract['max_wire_bytes']}; maximum records: {contract['max_records']}.",
         "For k=s use value relevant_source. For U use value unknown and no refs.",
-        "For k=a non-conflict values must be an authority_class shown below; C uses value conflict and refs from at least two supplied classes.",
+        "For k=a use exactly one authority_class shown below per record; all refs in that record must share that class.",
+        "If multiple authority classes are relevant, emit separate k=a records. Different classes do not by themselves mean conflict; do not report authority conflict.",
         f"SCOPE: {evidence_package['scope']}",
         "EVIDENCE:",
     ]

@@ -9,6 +9,7 @@ on:
       - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skill-orchestrator-scout-pilot.yml'
+      - '.github/workflows/agent-skill-orchestrator-sequential-pilot.yml'
       - '.github/workflows/agent-skills-ci.yml'
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skill-orchestrator-scout-pilot.yml'
+      - '.github/workflows/agent-skill-orchestrator-sequential-pilot.yml'
       - '.github/workflows/agent-skills-ci.yml'
 
 permissions:

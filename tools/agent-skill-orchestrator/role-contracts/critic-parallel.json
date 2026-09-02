@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "contract_id": "critic-parallel-compact-wire-v2",
+  "role": "critic",
+  "max_wire_bytes": 2400,
+  "max_boundaries": 8,
+  "max_concerns": 8,
+  "max_unresolved": 8,
+  "max_refs_per_record": 3,
+  "max_value_bytes": 128,
+  "boundary_kinds": ["request_identity", "no_extra_io", "lifecycle", "security", "persistence", "release", "test", "device", "other"],
+  "blocker_kinds": ["missing_evidence", "unknown", "conflict", "other"],
+  "grounded_boundary_status": "SUPPORTED_LIKELY"
+}

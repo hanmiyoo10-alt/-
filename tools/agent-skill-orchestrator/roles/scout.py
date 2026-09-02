@@ -40,28 +40,47 @@ def _load_contract(path: Path | str = CONTRACT_PATH) -> dict[str, Any]:
 
 def scout_response_schema(contract: dict[str, Any] | None = None) -> dict[str, Any]:
     c = _load_contract() if contract is None else contract
+    refs_schema = {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": int(c["max_refs_per_record"]),
+        "uniqueItems": True,
+        "items": {"type": "string", "pattern": "^S[1-9][0-9]*@L[1-9][0-9]*$"},
+    }
+
+    def record_schema(kind_values: list[str], value_schema: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "k": {"type": "string", "enum": kind_values},
+                "v": value_schema,
+                "r": refs_schema,
+            },
+            "required": ["k", "v", "r"],
+            "additionalProperties": False,
+        }
+
+    broad_record = record_schema(
+        sorted(c["record_kinds"]),
+        {"type": "string", "minLength": 1, "maxLength": 64},
+    )
+    broad_record["oneOf"] = [
+        record_schema(
+            ["a"],
+            {"type": "string", "minLength": 1, "maxLength": 64},
+        ),
+        record_schema(
+            ["s"],
+            {"type": "string", "enum": [c["source_selection_value"]]},
+        ),
+    ]
     return {
         "type": "object",
         "properties": {
             "r": {
                 "type": "array",
                 "maxItems": int(c["max_records"]),
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "k": {"type": "string", "enum": sorted(c["record_kinds"])},
-                        "v": {"type": "string", "minLength": 1, "maxLength": 64},
-                        "r": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": int(c["max_refs_per_record"]),
-                            "uniqueItems": True,
-                            "items": {"type": "string", "pattern": "^S[1-9][0-9]*@L[1-9][0-9]*$"},
-                        },
-                    },
-                    "required": ["k", "v", "r"],
-                    "additionalProperties": False,
-                },
+                "items": broad_record,
             }
         },
         "required": ["r"],

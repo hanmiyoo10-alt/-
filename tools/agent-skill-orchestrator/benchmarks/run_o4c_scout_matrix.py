@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -93,8 +94,29 @@ def build_matrix_manifest(
     return manifest
 
 
-def aggregate_outputs(output_root: Path | str, *, case_path: Path | str = CASE_PATH) -> dict[str, Any]:
-    case, _ = load_case_and_evidence(case_path, EVIDENCE_PATH)
+def prepare_matrix(
+    *,
+    case_path: Path | str = CASE_PATH,
+    evidence_path: Path | str = EVIDENCE_PATH,
+    output_path: Path | str,
+) -> dict[str, Any]:
+    manifest = build_matrix_manifest(case_path, evidence_path)
+    output = Path(output_path)
+    _write_json(output, manifest)
+    frozen = output.parent / "frozen-inputs"
+    frozen.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(Path(case_path), frozen / "o4c-scout-service-tier-fidelity-v1.case.json")
+    shutil.copyfile(Path(evidence_path), frozen / "o4c-scout-service-tier-fidelity-v1.evidence.json")
+    return manifest
+
+
+def aggregate_outputs(
+    output_root: Path | str,
+    *,
+    case_path: Path | str = CASE_PATH,
+    evidence_path: Path | str = EVIDENCE_PATH,
+) -> dict[str, Any]:
+    case, _ = load_case_and_evidence(case_path, evidence_path)
     root = Path(output_root)
     rows: list[dict[str, Any]] = []
     prompt_digests: set[str] = set()
@@ -158,17 +180,25 @@ def main(argv: list[str] | None = None) -> int:
 
     aggregate = sub.add_parser("aggregate")
     aggregate.add_argument("--case", default=str(CASE_PATH))
+    aggregate.add_argument("--evidence", default=str(EVIDENCE_PATH))
     aggregate.add_argument("--output-root", required=True)
     aggregate.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
-            manifest = build_matrix_manifest(args.case, args.evidence)
-            _write_json(args.output, manifest)
+            manifest = prepare_matrix(
+                case_path=args.case,
+                evidence_path=args.evidence,
+                output_path=args.output,
+            )
             print("O4C_MATRIX_SHA256:" + manifest["matrix_sha256"])
             return 0
-        summary = aggregate_outputs(args.output_root, case_path=args.case)
+        summary = aggregate_outputs(
+            args.output_root,
+            case_path=args.case,
+            evidence_path=args.evidence,
+        )
         _write_json(args.output, summary)
         print("O4C_SUMMARY_SHA256:" + summary["summary_sha256"])
         return 0

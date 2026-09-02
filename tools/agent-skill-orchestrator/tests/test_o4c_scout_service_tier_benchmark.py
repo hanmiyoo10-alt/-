@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,8 +11,14 @@ REPO_ROOT = PACKAGE_ROOT.parents[1]
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
-from benchmarks.run_o4c_scout_matrix import O4C_MODEL_PROFILE_IDS, build_matrix_manifest
+from benchmarks.run_o4c_scout_matrix import (
+    O4C_MODEL_PROFILE_IDS,
+    build_matrix_manifest,
+    prepare_matrix,
+)
 from benchmarks.run_scout_cell import (
+    CASE_PATH,
+    EVIDENCE_PATH,
     benchmark_model_profile,
     load_case_and_evidence,
     scout_wire_to_atoms,
@@ -52,13 +59,15 @@ class O4CScoutServiceTierBenchmarkTests(unittest.TestCase):
             for item in self.case["expected_labels"]
             if item["kind"] == "source_ref"
         }
-        authority_refs = {
-            ref
+        authority_labels = [
+            item
             for item in self.case["expected_labels"]
             if item["kind"] == "authority"
-            for ref in item["refs"]
-        }
+        ]
+        authority_refs = {ref for item in authority_labels for ref in item["refs"]}
         self.assertEqual(len(relevant), 8)
+        self.assertEqual(len(authority_labels), 8)
+        self.assertTrue(all(len(item["refs"]) == 1 for item in authority_labels))
         self.assertEqual(authority_refs, relevant)
         self.assertEqual(known - relevant, {"S4@L90"})
 
@@ -123,6 +132,22 @@ class O4CScoutServiceTierBenchmarkTests(unittest.TestCase):
         self.assertEqual(len(standard), 1)
         self.assertEqual(standard[0]["model_profile_id"], "qwen2.5-3b-instruct-q4_k_m")
 
+    def test_prepare_preserves_exact_frozen_inputs_inside_artifact_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "matrix.json"
+            manifest = prepare_matrix(output_path=output)
+            frozen = output.parent / "frozen-inputs"
+            self.assertEqual(
+                (frozen / "o4c-scout-service-tier-fidelity-v1.case.json").read_bytes(),
+                CASE_PATH.read_bytes(),
+            )
+            self.assertEqual(
+                (frozen / "o4c-scout-service-tier-fidelity-v1.evidence.json").read_bytes(),
+                EVIDENCE_PATH.read_bytes(),
+            )
+            self.assertEqual(manifest["fixture_sha256"], self.case["fixture_sha256"])
+            self.assertEqual(manifest["evidence_sha256"], self.case["evidence_sha256"])
+
     def test_manifest_has_no_winner_or_assignment_semantics(self) -> None:
         manifest = build_matrix_manifest()
         self.assertEqual(manifest["model_profile_ids"], list(O4C_MODEL_PROFILE_IDS))
@@ -145,6 +170,14 @@ class O4CScoutServiceTierBenchmarkTests(unittest.TestCase):
         self.assertIn("hosted_ai_call_count", workflow)
         self.assertIn("qwen2.5-3b-instruct-q4_k_m", workflow)
         self.assertIn("ministral-3-3b-instruct-2512-q4_k_m", workflow)
+
+    def test_agent_skills_ci_mechanically_covers_benchmark_workflow_without_executing_it(self) -> None:
+        ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
+        benchmark_path = ".github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml"
+        self.assertEqual(ci.count(benchmark_path), 2)
+        self.assertNotIn("workflow_call", (
+            REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4c-scout-benchmark.yml"
+        ).read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

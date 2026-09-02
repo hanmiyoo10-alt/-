@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-A Evidence Source Input",
+  "type": "object",
+  "required": ["path", "source_sha", "start_line", "content"],
+  "properties": {
+    "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "start_line": {"type": "integer"},
+    "content": {"type": "string", "minLength": 1, "maxLength": 20000}
+  },
+  "additionalProperties": false
+}

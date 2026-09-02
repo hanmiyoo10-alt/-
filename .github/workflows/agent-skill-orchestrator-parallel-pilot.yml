@@ -1,0 +1,288 @@
+name: Agent Skill Orchestrator Parallel Pilot
+
+on:
+  push:
+    branches:
+      - 'agent-skill-orchestrator-parallel-pilot-request/**'
+    paths:
+      - '.agent-skill-orchestrator-parallel-pilot-requests/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  retrospective-parallel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PILOT_ROOT: .agent-skill-orchestrator-parallel-pilot
+      LLAMA_RELEASE: b10516
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      MODEL_REPOSITORY: Qwen/Qwen2.5-3B-Instruct-GGUF
+      MODEL_REVISION: af75b7aaf5bb163ce4c5dab4e6b84d844e96265d
+      MODEL_FILE: qwen2.5-3b-instruct-q4_k_m.gguf
+      MODEL_SHA256: 626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d
+      SERVER_PORT: '39132'
+      EXPECTED_EVIDENCE_SHA256: 88f85dd31748e80184152605b6be1b1e8faf49d30e7f6349c603bef23d8b7730
+
+    steps:
+      - name: Checkout request commit and O3-D harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Resolve exact O3-D parallel request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | sort)
+          if (( ${#changed[@]} != 1 )); then
+            echo "O3D_REQUEST_CHANGE_COUNT:${#changed[@]}"
+            exit 2
+          fi
+          request_path="${changed[0]}"
+          case "$request_path" in
+            .agent-skill-orchestrator-parallel-pilot-requests/*.json) ;;
+            *) echo "O3D_REQUEST_PATH:INVALID:$request_path"; exit 2 ;;
+          esac
+          request_copy="$RUNNER_TEMP/o3d-parallel-request.json"
+          python tools/agent-skill-orchestrator/runtime/resolve_parallel_pilot_request.py \
+            --request "$request_path" \
+            --output "$request_copy"
+          harness_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["harness_repository_sha"])' "$request_copy")"
+          evidence_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["evidence_repository_sha"])' "$request_copy")"
+          release_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_repository_sha"])' "$request_copy")"
+          parent_sha="$(git rev-parse HEAD^)"
+          test "$parent_sha" = "$harness_sha"
+          printf 'HARNESS_REPOSITORY_SHA=%s\n' "$harness_sha" >> "$GITHUB_ENV"
+          printf 'EVIDENCE_REPOSITORY_SHA=%s\n' "$evidence_sha" >> "$GITHUB_ENV"
+          printf 'RELEASE_REPOSITORY_SHA=%s\n' "$release_sha" >> "$GITHUB_ENV"
+          printf 'REQUEST_COPY=%s\n' "$request_copy" >> "$GITHUB_ENV"
+          echo "O3D_REQUEST_PARENT_SHA:$parent_sha"
+          echo "O3D_EVIDENCE_SHA:$evidence_sha"
+          echo "O3D_RELEASE_SHA:$release_sha"
+
+      - name: Prepare frozen retrospective evidence worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "${EVIDENCE_REPOSITORY_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$EVIDENCE_REPOSITORY_SHA"
+          fi
+          git fetch --no-tags --depth=1 origin \
+            release-usage-dashboard:refs/remotes/origin/release-usage-dashboard
+          test "$(git rev-parse refs/remotes/origin/release-usage-dashboard^{commit})" = "$RELEASE_REPOSITORY_SHA"
+          evidence_worktree="$RUNNER_TEMP/o3d-evidence-repository"
+          rm -rf "$evidence_worktree"
+          git worktree add --detach "$evidence_worktree" "$EVIDENCE_REPOSITORY_SHA"
+          test "$(git -C "$evidence_worktree" rev-parse HEAD)" = "$EVIDENCE_REPOSITORY_SHA"
+          printf 'EVIDENCE_WORKTREE=%s\n' "$evidence_worktree" >> "$GITHUB_ENV"
+          echo "O3D_EVIDENCE_WORKTREE_SHA:$(git -C "$evidence_worktree" rev-parse HEAD)"
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/o3d-runtime"
+          mkdir -p "$runtime_root"
+          cd "$runtime_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" | sha256sum -c -
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          test -n "$llama_server"
+          llama_server="$(realpath "$llama_server")"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/o3d-runtime-version.txt" 2>&1
+          "$llama_server" --help > "$GITHUB_WORKSPACE/o3d-runtime-help.txt" 2>&1
+          grep -Eq -- '(-np|--parallel).*number of server slots' "$GITHUB_WORKSPACE/o3d-runtime-help.txt"
+          printf 'LLAMA_SERVER=%s\n' "$llama_server" >> "$GITHUB_ENV"
+
+      - name: Download and verify pinned local model
+        shell: bash
+        run: |
+          set -euo pipefail
+          model_root="$RUNNER_TEMP/o3d-model"
+          mkdir -p "$model_root"
+          cd "$model_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$MODEL_FILE" \
+            "https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
+          printf '%s  %s\n' "$MODEL_SHA256" "$MODEL_FILE" | sha256sum -c -
+          printf 'MODEL_PATH=%s\n' "$(realpath "$MODEL_FILE")" >> "$GITHUB_ENV"
+
+      - name: Run retrospective live parallel four-role pilot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$PILOT_ROOT"
+          mkdir -p "$PILOT_ROOT"
+          cp "$REQUEST_COPY" "$PILOT_ROOT/request.json"
+          cp o3d-runtime-version.txt "$PILOT_ROOT/llama-runtime-version.txt"
+          cp o3d-runtime-help.txt "$PILOT_ROOT/llama-runtime-help.txt"
+          set +e
+          python tools/agent-skill-orchestrator/runtime/run_parallel_pilot.py \
+            --harness-repo-root . \
+            --evidence-repo-root "$EVIDENCE_WORKTREE" \
+            --harness-sha "$HARNESS_REPOSITORY_SHA" \
+            --evidence-sha "$EVIDENCE_REPOSITORY_SHA" \
+            --release-sha "$RELEASE_REPOSITORY_SHA" \
+            --server-binary "$LLAMA_SERVER" \
+            --model-path "$MODEL_PATH" \
+            --runtime-version-file "$PILOT_ROOT/llama-runtime-version.txt" \
+            --output-dir "$PILOT_ROOT" \
+            --port "$SERVER_PORT"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$PILOT_ROOT/pilot-exit-code.txt"
+          echo "O3D_PROCESS_EXIT:$code"
+
+      - name: Upload bounded O3-D evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-orchestrator-parallel-pilot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-orchestrator-parallel-pilot/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Gate mechanical O3-D live parallel success
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat "$PILOT_ROOT/pilot-exit-code.txt")" = "0"
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root_dir = Path('.agent-skill-orchestrator-parallel-pilot')
+          package_root = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package_root))
+
+          from canonical import canonical_sha256
+          from runtime.parallel_scheduler import (
+              parallel_root_provenance_sha256,
+              validate_parallel_root_provenance,
+          )
+
+          expected_evidence = '88f85dd31748e80184152605b6be1b1e8faf49d30e7f6349c603bef23d8b7730'
+          summary = json.loads((root_dir / 'summary.json').read_text(encoding='utf-8'))
+          concurrency = json.loads((root_dir / 'concurrency-summary.json').read_text(encoding='utf-8'))
+          grounding = json.loads((root_dir / 'grounding-summary.json').read_text(encoding='utf-8'))
+          provenance = json.loads((root_dir / 'parallel-root-provenance.json').read_text(encoding='utf-8'))
+          persisted_root_sha = (root_dir / 'parallel-root-provenance-sha256.txt').read_text(encoding='utf-8').strip()
+
+          expected_order = ['scout', 'mapper', 'critic', 'synthesizer']
+          expected_dependencies = {
+              'scout': [],
+              'mapper': ['scout'],
+              'critic': ['scout'],
+              'synthesizer': ['mapper', 'critic'],
+          }
+          if summary.get('overall_execution_status') != 'COMPLETED':
+              raise SystemExit('O3-D live pilot did not complete all roles')
+          if summary.get('o3d_acceptance_status') != 'PASS':
+              raise SystemExit('O3-D live acceptance status is not PASS')
+          if summary.get('evidence_sha256') != expected_evidence or not summary.get('exact_evidence_match'):
+              raise SystemExit('O3-D exact O2 evidence digest mismatch')
+          if summary.get('role_order') != expected_order:
+              raise SystemExit('O3-D canonical role order drifted')
+          if summary.get('direct_dependencies') != expected_dependencies:
+              raise SystemExit('O3-D direct dependency topology drifted')
+          if summary.get('total_model_call_count') != 4:
+              raise SystemExit('O3-D local model call count must be exactly four')
+          if summary.get('total_hosted_ai_call_count') != 0:
+              raise SystemExit('O3-D hosted AI call count must be zero')
+          if summary.get('server_parallel_slots') != 2:
+              raise SystemExit('O3-D server slot count must be exactly two')
+
+          receipts = {}
+          for role in expected_order:
+              role_summary = summary['roles'][role]
+              if role_summary.get('execution_status') != 'COMPLETED':
+                  raise SystemExit(f'O3-D role did not complete: {role}')
+              if role_summary.get('finish_reason') != 'stop':
+                  raise SystemExit(f'O3-D role did not finish with stop: {role}')
+              if not role_summary.get('role_artifact_present'):
+                  raise SystemExit(f'O3-D RoleArtifact missing: {role}')
+              if role_summary.get('model_call_count') != 1 or role_summary.get('hosted_ai_call_count') != 0:
+                  raise SystemExit(f'O3-D per-role call accounting invalid: {role}')
+              role_dir = root_dir / 'roles' / role
+              if not (role_dir / 'timing.json').is_file():
+                  raise SystemExit(f'O3-D timing evidence missing: {role}')
+              receipt_name = 'role-execution-receipt.json' if role == 'scout' else 'semantic-role-execution-receipt.json'
+              receipts[role] = json.loads((role_dir / receipt_name).read_text(encoding='utf-8'))
+
+          scout_sha = summary['roles']['scout']['role_artifact_sha256']
+          mapper_sha = summary['roles']['mapper']['role_artifact_sha256']
+          critic_sha = summary['roles']['critic']['role_artifact_sha256']
+          synth_sha = summary['roles']['synthesizer']['role_artifact_sha256']
+          if receipts['mapper'].get('upstream_artifact_sha256') != [scout_sha]:
+              raise SystemExit('O3-D Mapper must bind Scout directly')
+          if receipts['critic'].get('upstream_artifact_sha256') != [scout_sha]:
+              raise SystemExit('O3-D Critic v2 must bind Scout directly')
+          if receipts['synthesizer'].get('upstream_artifact_sha256') != [scout_sha, mapper_sha, critic_sha]:
+              raise SystemExit('O3-D Synthesizer canonical upstream digest mismatch')
+          if synth_sha == 'NONE' or summary.get('final_synthesizer_role_artifact_sha256') != synth_sha:
+              raise SystemExit('O3-D final Synthesizer artifact missing')
+
+          if concurrency.get('server_parallel_slots') != 2:
+              raise SystemExit('O3-D concurrency evidence server slots drifted')
+          if concurrency.get('overlap_ms', 0) < 1000 or not concurrency.get('overlap_pass'):
+              raise SystemExit('O3-D sibling overlap is below one second')
+          serial_ms = concurrency.get('serial_sibling_ms')
+          parallel_ms = concurrency.get('parallel_sibling_ms')
+          if not isinstance(serial_ms, int) or not isinstance(parallel_ms, int) or serial_ms <= 0:
+              raise SystemExit('O3-D sibling timing evidence invalid')
+          if parallel_ms * 10 > serial_ms * 9 or not concurrency.get('benefit_pass'):
+              raise SystemExit('O3-D sibling wall-clock benefit is below ten percent')
+          if not concurrency.get('acceptance_pass'):
+              raise SystemExit('O3-D concurrency acceptance failed')
+
+          ref_count = grounding.get('ref_bearing_record_count')
+          grounded_count = grounding.get('grounded_ref_bearing_record_count')
+          if not isinstance(ref_count, int) or ref_count <= 0:
+              raise SystemExit('O3-D grounding has no ref-bearing records')
+          if grounded_count != ref_count or grounding.get('grounding_ratio_basis_points') != 10000:
+              raise SystemExit('O3-D grounding regressed below 100 percent')
+          if grounding.get('failures') != [] or not grounding.get('acceptance_pass'):
+              raise SystemExit('O3-D grounding failure evidence is non-empty')
+
+          validate_parallel_root_provenance(provenance)
+          recomputed_root_sha = parallel_root_provenance_sha256(provenance)
+          if recomputed_root_sha != persisted_root_sha or canonical_sha256(provenance) != persisted_root_sha:
+              raise SystemExit('O3-D root provenance digest mismatch')
+          if provenance.get('evidence_sha256') != expected_evidence:
+              raise SystemExit('O3-D root evidence digest mismatch')
+          if provenance.get('canonical_role_order') != expected_order:
+              raise SystemExit('O3-D root role order drifted')
+          if provenance.get('total_model_call_count') != 4 or provenance.get('total_hosted_ai_call_count') != 0:
+              raise SystemExit('O3-D root call accounting invalid')
+          budget = provenance.get('budget_profile', {})
+          if budget.get('profile_id') != 'standard-cpu-v1' or budget.get('max_concurrent_model_workers') != 2:
+              raise SystemExit('O3-D root runtime budget binding drifted')
+          if provenance.get('telemetry', {}).get('peak_rss_bytes') is not None:
+              raise SystemExit('O3-D must not fabricate root RSS telemetry')
+          if provenance.get('telemetry', {}).get('summed_worker_cpu_ms') is not None:
+              raise SystemExit('O3-D must not fabricate worker CPU telemetry')
+
+          print('O3D_PARALLEL_GATE:PASS')
+          print('O3D_EVIDENCE_SHA:' + expected_evidence)
+          print('O3D_OVERLAP_MS:' + str(concurrency['overlap_ms']))
+          print('O3D_SERIAL_SIBLING_MS:' + str(serial_ms))
+          print('O3D_PARALLEL_SIBLING_MS:' + str(parallel_ms))
+          print('O3D_GROUNDING_BPS:10000')
+          print('O3D_ROOT_SHA:' + persisted_root_sha)
+          print('O3D_FINAL_SYNTH_SHA:' + synth_sha)
+          PY

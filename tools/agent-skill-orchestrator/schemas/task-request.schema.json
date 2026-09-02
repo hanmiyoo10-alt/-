@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-A Typed Task Request",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "scope",
+    "task_kind",
+    "intent",
+    "mutation_requested",
+    "device_truth_requested"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$"
+    },
+    "task_kind": {
+      "type": "string",
+      "enum": ["release_lookup", "source_locator", "impact_analysis"]
+    },
+    "intent": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "mutation_requested": {"type": "boolean"},
+    "device_truth_requested": {"type": "boolean"}
+  },
+  "additionalProperties": false
+}

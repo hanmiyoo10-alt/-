@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-A Deterministic Execution Plan",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "router_policy_version",
+    "task_id",
+    "scope",
+    "task_kind",
+    "execution_class",
+    "request_sha256",
+    "domain_registry_sha256",
+    "role_registry_sha256",
+    "deterministic_actions",
+    "role_stages",
+    "model_selection",
+    "mutation_allowed",
+    "device_truth_allowed",
+    "verdict_authority"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "router_policy_version": {"type": "integer", "const": 1},
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$"
+    },
+    "task_kind": {
+      "type": "string",
+      "enum": ["release_lookup", "source_locator", "impact_analysis"]
+    },
+    "execution_class": {
+      "type": "string",
+      "enum": ["deterministic_only", "fast", "standard"]
+    },
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "domain_registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "role_registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "deterministic_actions": {
+      "type": "array",
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["resolve_domain_registration", "resolve_release_authority"]
+      }
+    },
+    "role_stages": {
+      "type": "array",
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["stage_id", "role_id", "depends_on"],
+        "properties": {
+          "stage_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "role_id": {
+            "type": "string",
+            "enum": ["scout", "mapper", "critic", "synthesizer"]
+          },
+          "depends_on": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "model_selection": {"type": "string", "const": "deferred_to_later_phase"},
+    "mutation_allowed": {"type": "boolean", "const": false},
+    "device_truth_allowed": {"type": "boolean", "const": false},
+    "verdict_authority": {"type": "string", "const": "none_in_o1a"}
+  },
+  "additionalProperties": false
+}

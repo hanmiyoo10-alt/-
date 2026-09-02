@@ -35,6 +35,33 @@ def _contract() -> dict[str, Any]:
     return value
 
 
+def _short_text(value: Any, *, label: str, max_bytes: int) -> str:
+    try:
+        return validate_short_text(value, label=label, max_bytes=max_bytes)
+    except RoleContractError as exc:
+        raise ParallelCriticContractError(str(exc)) from exc
+
+
+def _refs(
+    value: Any,
+    *,
+    known_refs: frozenset[str],
+    label: str,
+    max_refs: int,
+    min_refs: int,
+) -> list[str]:
+    try:
+        return validate_refs(
+            value,
+            known_refs=known_refs,
+            label=label,
+            max_refs=max_refs,
+            min_refs=min_refs,
+        )
+    except RoleContractError as exc:
+        raise ParallelCriticContractError(str(exc)) from exc
+
+
 def parallel_critic_response_schema() -> dict[str, Any]:
     c = _contract()
     refs = {
@@ -114,10 +141,10 @@ def _validated_blocker_record(
     kind = item["k"]
     if kind not in frozenset(contract["blocker_kinds"]):
         raise ParallelCriticContractError(f"{label} blocker kind invalid")
-    value = validate_short_text(
+    value = _short_text(
         item["v"], label=f"{label}.v", max_bytes=int(contract["max_value_bytes"])
     )
-    refs = validate_refs(
+    refs = _refs(
         item["r"],
         known_refs=known_refs,
         label=label,
@@ -162,8 +189,8 @@ def validate_parallel_critic_wire(
         kind = item["k"]
         if kind not in boundary_kinds:
             raise ParallelCriticContractError(f"{label} boundary kind invalid")
-        value = validate_short_text(item["v"], label=f"{label}.v", max_bytes=int(c["max_value_bytes"]))
-        refs = validate_refs(
+        value = _short_text(item["v"], label=f"{label}.v", max_bytes=int(c["max_value_bytes"]))
+        refs = _refs(
             item["r"], known_refs=known, label=label,
             max_refs=int(c["max_refs_per_record"]), min_refs=1,
         )

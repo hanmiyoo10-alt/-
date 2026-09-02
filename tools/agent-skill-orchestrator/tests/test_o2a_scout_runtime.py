@@ -110,6 +110,38 @@ class O2AScoutRuntimeTests(unittest.TestCase):
         with self.assertRaises(ScoutContractError):
             validate_scout_wire('{"r":[{"k":"a","s":"D","v":"release_spec_dir","r":["S2@L10"]}]}', self.evidence())
 
+    def test_scout_v2_rejects_conflict_status_and_prompt_forbids_conflict_inference(self):
+        evidence = self.evidence()
+        schema = scout_response_schema()
+        statuses = schema["properties"]["r"]["items"]["properties"]["s"]["enum"]
+        self.assertEqual(statuses, ["D", "L", "U"])
+        with self.assertRaises(ScoutContractError):
+            validate_scout_wire(
+                '{"r":[{"k":"a","s":"C","v":"conflict","r":["S1@L1","S2@L10"]}]}',
+                evidence,
+            )
+        prompt = build_scout_prompt(evidence)
+        self.assertIn('"s":"D|L|U"', prompt)
+        self.assertIn("Different classes do not by themselves mean conflict", prompt)
+        self.assertIn("do not report authority conflict", prompt)
+        self.assertNotIn('"s":"D|L|U|C"', prompt)
+
+    def test_multiple_authority_classes_require_separate_authority_records(self):
+        evidence = self.evidence()
+        with self.assertRaises(ScoutContractError):
+            validate_scout_wire(
+                '{"r":[{"k":"a","s":"D","v":"manifest","r":["S1@L1","S2@L10"]}]}',
+                evidence,
+            )
+        parsed = validate_scout_wire(
+            '{"r":['
+            '{"k":"a","s":"D","v":"manifest","r":["S1@L1"]},'
+            '{"k":"a","s":"D","v":"domain_primary","r":["S2@L10"]}'
+            ']}',
+            evidence,
+        )
+        self.assertEqual([item["v"] for item in parsed["r"]], ["manifest", "domain_primary"])
+
     def test_semantic_prose_and_forbidden_top_level_fields_are_rejected(self):
         evidence = self.evidence()
         with self.assertRaises(ScoutContractError):

@@ -223,7 +223,8 @@ class O1B2BudgetJudgeReceiptTests(unittest.TestCase):
         states = {item["stage_id"]: item for item in result["budget_state"]["stage_states"]}
         self.assertEqual(states["mapper"]["status"], "FAILED")
         self.assertEqual(states["mapper"]["cause"], "execution")
-        self.assertEqual(states["critic"]["status"], "SUCCEEDED")
+        self.assertEqual(states["critic"]["status"], "BLOCKED_DEPENDENCY")
+        self.assertEqual(states["critic"]["cause"], "execution")
         self.assertEqual(states["synthesizer"]["status"], "BLOCKED_DEPENDENCY")
         self.assertEqual(states["synthesizer"]["cause"], "execution")
         self.assertEqual(result["judge_result"]["final_verdict"], "EXECUTION_INCOMPLETE")

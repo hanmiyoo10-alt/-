@@ -2,9 +2,9 @@
 
 This package is being introduced incrementally under the O0–O7 roadmap.
 
-## Current stage: O1-B1 typed bus and deterministic conflict
+## Current stage: O1-B2 synthetic budget, deterministic judge, and zero-model receipt
 
-O0 established typed interchange contracts, deterministic canonical JSON serialization/SHA-256 helpers, and metadata registries. O1-A added an **inert deterministic control plane** from a normalized typed task request through routing, explicit repository-authority adaptation, and bounded immutable evidence packaging. O1-B1 now adds a **synthetic-only typed evidence bus and deterministic unresolved-conflict derivation** for control-plane tests. It still does **not** execute or download models, run production role workers, spend a compute budget, judge final results, mutate repository content, release software, or claim device truth.
+O0 established typed interchange contracts, deterministic canonical JSON serialization/SHA-256 helpers, and metadata registries. O1-A added an **inert deterministic control plane** from a normalized typed task request through routing, explicit repository-authority adaptation, and bounded immutable evidence packaging. O1-B1 added a **synthetic-only typed evidence bus and deterministic unresolved-conflict derivation**. O1-B2 adds deterministic synthetic role-attempt budgeting, final analysis judging, and a separate zero-model receipt hash chain. It still does **not** execute or download models, run production role workers, schedule concurrency, assign models, mutate repository content, release software, or claim device truth.
 
 The existing `tools/agent-skill-eval/` lane remains the stable baseline and rollback path.
 
@@ -19,7 +19,7 @@ The existing `tools/agent-skill-eval/` lane remains the stable baseline and roll
 - `role-artifact.schema.json`
 - `orchestration-receipt.schema.json`
 
-The validator intentionally supports only the closed JSON-Schema subset used by these contracts. Local `$ref` resolution is limited to sibling schema filenames. Opaque source citations use `S#@L#`; when validating a role artifact, callers must supply the set of source references actually present in the bounded evidence package so unknown refs fail closed.
+The validator intentionally supports only the closed JSON-Schema subset used by these contracts. Local `$ref` resolution is limited to sibling schema filenames. Opaque source citations use `S#@L#`; callers validating source-bearing artifacts must supply the set of source references actually present in the bounded evidence package so unknown refs fail closed.
 
 ### O0-B registries
 
@@ -37,7 +37,7 @@ The validator intentionally supports only the closed JSON-Schema subset used by 
   - `source_locator` → fast, Scout only
   - `impact_analysis` → standard, Scout → (Mapper || Critic) → Synthesizer
 - Mutation requests, device-truth requests, unknown scopes, and release lookups without registered release-branch metadata fail closed.
-- Plans deliberately contain no model profile assignment. `model_selection` remains `deferred_to_later_phase`, and O1-A has no verdict authority.
+- Plans deliberately contain no model profile assignment. `model_selection` remains `deferred_to_later_phase`.
 
 ### O1-A authority adaptation
 
@@ -69,4 +69,33 @@ The validator intentionally supports only the closed JSON-Schema subset used by 
 - Same-value claims remain separate evidence records even when their status or refs differ, and they do not create a value-disagreement conflict.
 - Typed-bus read-back re-derives conflicts and deterministic conflict blockers, so changing a conflict to `RESOLVED` or inventing a deterministic blocker fails closed.
 
-O1-B2 compute-budget enforcement, deterministic judging, and the zero-model synthetic end-to-end receipt remain deferred until O1-B1 merges and main CI is green. Production role execution, model-role benchmarking/assignment, scheduling, runtime adapters, caching, mutation, release, and device truth remain later milestones.
+### O1-B2 deterministic synthetic budget
+
+- `synthetic-stage-state.schema.json` records each planned role stage as `SUCCEEDED`, `FAILED`, `MISSING_INPUT`, `BLOCKED_DEPENDENCY`, or `SKIPPED_BUDGET` plus a deterministic `none`, `execution`, or `budget` cause.
+- `budget-state.schema.json` binds the ExecutionPlan and EvidencePackage digests, synthetic role-attempt limit/count, exact stage states, deterministic blockers, and `model_call_count = 0`.
+- `budget.py` derives default limits only from execution class: deterministic-only `0`, fast `1`, standard `4`.
+- A test-only stricter integer limit may reduce but never increase the execution-class default.
+- Only `SUCCEEDED`/declared `FAILED` stages consume synthetic role attempts. Dependency-blocked, budget-skipped, and missing-input stages never fabricate calls.
+- Successful fixtures alone enter the typed bus. A downstream fixture cannot bypass an unsatisfied dependency.
+- Budget-caused downstream blocking remains budget-caused, preventing budget exhaustion from being mislabeled as an unrelated execution failure.
+
+### O1-B2 deterministic judge
+
+- `judge-result.schema.json` binds EvidencePackage, TypedBus, and BudgetState hashes. `judge.py` is the sole O1 analysis verdict authority.
+- The judge preserves blockers from both the EvidencePackage and TypedBus as well as budget/execution blockers, so UNKNOWN authority cannot disappear merely because the bus is otherwise clean.
+- Verdict precedence is deterministic: conflict → non-budget execution incomplete → budget PARTIAL/UNKNOWN → other blocker/UNKNOWN PARTIAL/UNKNOWN → clean positive material evidence SUPPORTED → otherwise UNKNOWN.
+- Any unresolved conflict, typed `CONFLICT`, or conflict blocker yields `CONFLICT`.
+- Budget exhaustion never yields `SUPPORTED`.
+- Empty/inert output never yields `SUPPORTED`.
+- No model confidence, majority vote, role-authored final verdict, or brand/model identity participates in judging.
+
+### O1-B2 zero-model synthetic receipt
+
+- `synthetic-orchestration-receipt.schema.json` is intentionally separate from production `orchestration-receipt.schema.json` and `role-artifact.schema.json`.
+- `synthetic.py` binds scope/target SHA, TaskRequest SHA from the plan, ExecutionPlan SHA, AuthoritySnapshot SHA, EvidencePackage SHA, TypedBus SHA, BudgetState SHA, JudgeResult SHA, and the exact successful synthetic fixture SHA map.
+- The receipt has `mode = o1_synthetic_zero_model` and `model_call_count = 0`.
+- Its closed schema has no model profile, model digest, prompt, generation, token, or model-response provenance fields; attempts to add them fail closed.
+- Receipt validation rechecks the entire supplied hash chain and verifies that successful stage fixtures exactly equal the typed-bus fixture map.
+- Identical immutable inputs, including different outer fixture handoff order, produce byte-identical canonical receipts.
+
+Production role execution, model-role benchmarking/assignment, scheduling/concurrency, runtime adapters, caching, mutation, release, and device truth remain later milestones. O2 stays blocked until O1-B2 is merged, merged-main CI is green, and the zero-model synthetic proof is recorded.

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B2 Synthetic Budget State",
+  "type": "object",
+  "required": ["schema_version", "execution_plan_sha256", "evidence_sha256", "profile_id", "max_role_attempts", "role_attempt_count", "model_call_count", "exhausted", "stage_states", "blockers"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "execution_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "profile_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+    "max_role_attempts": {"type": "integer"},
+    "role_attempt_count": {"type": "integer"},
+    "model_call_count": {"type": "integer", "const": 0},
+    "exhausted": {"type": "boolean"},
+    "stage_states": {"type": "array", "maxItems": 16, "items": {"$ref": "synthetic-stage-state.schema.json"}},
+    "blockers": {"type": "array", "maxItems": 64, "items": {"$ref": "blocker.schema.json"}}
+  },
+  "additionalProperties": false
+}

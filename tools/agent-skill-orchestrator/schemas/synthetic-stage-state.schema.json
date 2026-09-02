@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B2 Synthetic Stage State",
+  "type": "object",
+  "required": ["stage_id", "role", "status", "cause", "depends_on"],
+  "properties": {
+    "stage_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_-]*$"},
+    "role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]},
+    "status": {"type": "string", "enum": ["SUCCEEDED", "FAILED", "MISSING_INPUT", "BLOCKED_DEPENDENCY", "SKIPPED_BUDGET"]},
+    "cause": {"type": "string", "enum": ["none", "execution", "budget"]},
+    "depends_on": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_-]*$"}},
+    "fixture_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

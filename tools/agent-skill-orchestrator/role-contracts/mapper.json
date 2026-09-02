@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "contract_id": "mapper-compact-wire-v1",
+  "role": "mapper",
+  "max_wire_bytes": 2400,
+  "max_owners": 8,
+  "max_edges": 12,
+  "max_refs_per_record": 3,
+  "max_value_bytes": 96,
+  "grounded_status": "SUPPORTED_LIKELY"
+}

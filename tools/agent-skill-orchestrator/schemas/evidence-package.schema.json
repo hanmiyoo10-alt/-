@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-A Bounded Evidence Package",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "scope",
+    "target_repository_sha",
+    "execution_plan_sha256",
+    "authority_snapshot_sha256",
+    "domain_registry_sha256",
+    "sources",
+    "blockers"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "scope": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$"
+    },
+    "target_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "execution_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "domain_registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sources": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "path",
+          "source_sha",
+          "start_line",
+          "end_line",
+          "content",
+          "authority_class",
+          "source_ref"
+        ],
+        "properties": {
+          "source_id": {"type": "string", "pattern": "^S[1-9][0-9]*$"},
+          "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+          "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "start_line": {"type": "integer"},
+          "end_line": {"type": "integer"},
+          "content": {"type": "string", "minLength": 1, "maxLength": 20000},
+          "authority_class": {
+            "type": "string",
+            "enum": ["domain_primary", "guidelines", "manifest", "artifact", "release_spec_dir"]
+          },
+          "source_ref": {"$ref": "source-ref.schema.json"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "blocker.schema.json"}
+    }
+  },
+  "additionalProperties": false
+}

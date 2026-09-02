@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-A Authority Snapshot",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "scope",
+    "target_repository_sha",
+    "domain_registry_sha256",
+    "authority_profile",
+    "authorities",
+    "overall_status",
+    "blockers"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "scope": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$"
+    },
+    "target_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "domain_registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority_profile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "authorities": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["kind", "value", "status"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["release_branch", "manifest", "artifact", "release_spec_dir"]
+          },
+          "value": {"type": "string", "minLength": 1, "maxLength": 512},
+          "status": {"type": "string", "enum": ["OBSERVED", "MISSING", "UNKNOWN"]},
+          "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "overall_status": {"type": "string", "enum": ["RESOLVED", "PARTIAL", "UNKNOWN"]},
+    "blockers": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "blocker.schema.json"}
+    }
+  },
+  "additionalProperties": false
+}

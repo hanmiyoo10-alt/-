@@ -21,7 +21,8 @@ from roles.critic_parallel import (
     parallel_critic_response_schema,
 )
 from roles.mapper import build_mapper_prompt, mapper_response_schema
-from roles.scout import build_scout_prompt, scout_response_schema
+from roles.scout import build_scout_prompt
+from roles.scout_evidence_schema import scout_response_schema_for_evidence
 from roles.synthesizer import build_synthesizer_prompt, synthesizer_response_schema
 from runtime.budget_profile import runtime_budget_profile
 from runtime.generation import scout_generation, scout_model_profile
@@ -258,7 +259,7 @@ def run_parallel_calls(
         role="scout",
         port=port,
         prompt=scout_prompt,
-        schema=scout_response_schema(),
+        schema=scout_response_schema_for_evidence(evidence_package),
         invoke=invoke,
     )
     model_calls += 1

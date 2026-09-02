@@ -12,6 +12,7 @@ on:
       - '.github/workflows/agent-skill-orchestrator-sequential-pilot.yml'
       - '.github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml'
       - '.github/workflows/agent-skill-orchestrator-o4c-scout-continuation.yml'
+      - '.github/workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml'
       - '.github/workflows/agent-skills-ci.yml'
   push:
     branches: [main]
@@ -25,6 +26,7 @@ on:
       - '.github/workflows/agent-skill-orchestrator-sequential-pilot.yml'
       - '.github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml'
       - '.github/workflows/agent-skill-orchestrator-o4c-scout-continuation.yml'
+      - '.github/workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml'
       - '.github/workflows/agent-skills-ci.yml'
 
 permissions:

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "contract_id": "scout-compact-wire-v2",
+  "contract_id": "scout-compact-wire-v3",
   "role": "scout",
   "max_wire_bytes": 2400,
   "max_records": 12,
@@ -9,11 +9,8 @@
     "a": "authority",
     "s": "source_selection"
   },
-  "statuses": {
-    "D": "DIRECT",
-    "L": "SUPPORTED_LIKELY",
-    "U": "UNKNOWN"
-  },
   "source_selection_value": "relevant_source",
+  "grounded_status": "DIRECT",
+  "empty_result_status": "UNKNOWN",
   "unknown_value": "unknown"
 }

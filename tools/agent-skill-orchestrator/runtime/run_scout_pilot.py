@@ -15,7 +15,8 @@ if str(PACKAGE_ROOT) not in sys.path:
 
 from authority import resolve_authority
 from evidence import build_evidence_package
-from roles.scout import build_scout_prompt, scout_response_schema
+from roles.scout import build_scout_prompt
+from roles.scout_evidence_schema import scout_response_schema_for_evidence
 from router import route_task
 from runtime.generation import scout_generation, scout_model_profile
 from runtime.llama_cpp import start_server, stop_server, verify_file_sha256
@@ -201,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.port,
                     prompt,
                     scout_generation(),
-                    scout_response_schema(),
+                    scout_response_schema_for_evidence(control["evidence_package"]),
                 )
             finally:
                 stop_server(process)

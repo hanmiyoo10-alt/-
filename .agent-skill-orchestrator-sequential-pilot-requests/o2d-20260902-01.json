@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "mode": "o2d_sequential_retrospective_mechanical",
+  "harness_repository_sha": "83ea895ca20137587731aca7ba39b184d6561a4a",
+  "evidence_repository_sha": "7bd212b496111a628d249946d3a98b8c55d001ae",
+  "release_repository_sha": "82c4f900cf548068d1eada957c982a5d78f1347b"
+}

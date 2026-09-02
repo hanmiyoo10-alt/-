@@ -1,0 +1,339 @@
+name: Agent Skill Orchestrator O4-C Scout Continuation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  o4c-scout-ministral-continuation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BENCH_ROOT: .agent-skill-orchestrator-o4c-scout-continuation
+      SOURCE_ROOT: .agent-skill-orchestrator-o4c-source-run
+      TARGET_SHA: 79a034d0fd589d13e536f7d54291773287d7b06e
+      SOURCE_RUN_ID: '33643580938'
+      SOURCE_ARTIFACT_ID: '9852191711'
+      SOURCE_ARTIFACT_ZIP_SHA256: ecc57672bd1b092956a7b181cc1f9887231f3ec9a8b346aea659a8e284b0d9e0
+      QWEN_PROFILE_ID: qwen2.5-3b-instruct-q4_k_m
+      QWEN_RESULT_SHA256: eb7e87bad1dbccc899e18672a9fea528b52b920cf4a82bc4db637014b07fbc08
+      QWEN_SCORE_SHA256: 7741d4f44ca59079c56590f6aa0e0ff039688862928f998b2f8a6e1efc1966ad
+      CONTINUATION_PROFILE_ID: ministral-3-3b-instruct-2512-q4_k_m
+      EXPECTED_WORKFLOW_RUN_NUMBER: '1'
+      LLAMA_RELEASE: b10516
+      LLAMA_SOURCE_DIGEST: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      SERVER_PORT: '39138'
+    steps:
+      - name: Checkout exact original benchmark target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Enforce one-shot continuation and zero-credential boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git fetch --no-tags --depth=64 origin main
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          test "$GITHUB_RUN_NUMBER" = "$EXPECTED_WORKFLOW_RUN_NUMBER"
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          for name in HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACEHUB_API_TOKEN; do
+            if [[ -n "${!name:-}" ]]; then
+              echo "O4C_MODEL_CREDENTIAL_PRESENT:$name"
+              exit 2
+            fi
+          done
+          rm -rf "$BENCH_ROOT" "$SOURCE_ROOT"
+          mkdir -p "$BENCH_ROOT/cells" "$SOURCE_ROOT"
+          printf '%s\n' "$TARGET_SHA" > "$BENCH_ROOT/target-sha.txt"
+          echo 'O4C_CONTINUATION_ONE_SHOT:ENFORCED'
+          echo 'O4C_HOSTED_AI_BOUNDARY:ZERO'
+          echo 'O4C_MODEL_CREDENTIAL_ENV:ABSENT'
+
+      - name: Prepare exact original frozen matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/agent-skill-orchestrator/benchmarks/run_o4c_scout_matrix.py prepare \
+            --output "$BENCH_ROOT/matrix.json"
+          echo "O4C_MATRIX_SHA256:$(python -c 'import json; print(json.load(open(".agent-skill-orchestrator-o4c-scout-continuation/matrix.json"))["matrix_sha256"])')"
+
+      - name: Download and verify immutable Qwen source artifact
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_zip="$SOURCE_ROOT/source-run.zip"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -o "$source_zip" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip"
+          printf '%s  %s\n' "$SOURCE_ARTIFACT_ZIP_SHA256" "$source_zip" | sha256sum -c -
+          mkdir -p "$SOURCE_ROOT/extracted"
+          unzip -q "$source_zip" -d "$SOURCE_ROOT/extracted"
+          test "$(cat "$SOURCE_ROOT/extracted/target-sha.txt")" = "$TARGET_SHA"
+          cmp "$SOURCE_ROOT/extracted/matrix.json" "$BENCH_ROOT/matrix.json"
+          cmp \
+            "$SOURCE_ROOT/extracted/frozen-inputs/o4c-scout-service-tier-fidelity-v1.case.json" \
+            "$BENCH_ROOT/frozen-inputs/o4c-scout-service-tier-fidelity-v1.case.json"
+          cmp \
+            "$SOURCE_ROOT/extracted/frozen-inputs/o4c-scout-service-tier-fidelity-v1.evidence.json" \
+            "$BENCH_ROOT/frozen-inputs/o4c-scout-service-tier-fidelity-v1.evidence.json"
+          QWEN_CELL="$SOURCE_ROOT/extracted/cells/$QWEN_PROFILE_ID" \
+          QWEN_RESULT_SHA256="$QWEN_RESULT_SHA256" \
+          QWEN_SCORE_SHA256="$QWEN_SCORE_SHA256" \
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_scout_cell import load_case_and_evidence
+          from benchmarks.score_role_output import score_role_output, validate_result, validate_score
+
+          cell = Path(os.environ['QWEN_CELL'])
+          case, _ = load_case_and_evidence()
+          result = validate_result(json.loads((cell / 'result.json').read_text(encoding='utf-8')), case)
+          score = validate_score(json.loads((cell / 'score.json').read_text(encoding='utf-8')))
+          if score_role_output(case, result) != score:
+              raise SystemExit('O4-C recovered Qwen score does not recompute')
+          if result['result_sha256'] != os.environ['QWEN_RESULT_SHA256']:
+              raise SystemExit('O4-C recovered Qwen result identity drifted')
+          if score['score_sha256'] != os.environ['QWEN_SCORE_SHA256']:
+              raise SystemExit('O4-C recovered Qwen score identity drifted')
+          if result['model']['profile_id'] != 'qwen2.5-3b-instruct-q4_k_m':
+              raise SystemExit('O4-C recovered Qwen model identity drifted')
+          if result['model_call_count'] != 1 or result['hosted_ai_call_count'] != 0:
+              raise SystemExit('O4-C recovered Qwen call accounting drifted')
+          if result['execution_status'] != 'INVALID' or not result['parse_valid'] or result['contract_valid']:
+              raise SystemExit('O4-C recovered Qwen observed status drifted')
+          matrix = json.loads(Path('.agent-skill-orchestrator-o4c-scout-continuation/matrix.json').read_text(encoding='utf-8'))
+          if result['prompt_sha256'] != matrix['prompt_sha256']:
+              raise SystemExit('O4-C recovered Qwen prompt binding drifted')
+          print('O4C_RECOVERED_QWEN_RESULT_SHA256:' + result['result_sha256'])
+          print('O4C_RECOVERED_QWEN_SCORE_SHA256:' + score['score_sha256'])
+          PY
+          cp -a "$SOURCE_ROOT/extracted/cells/$QWEN_PROFILE_ID" "$BENCH_ROOT/cells/$QWEN_PROFILE_ID"
+          echo 'O4C_HISTORICAL_QWEN_LOCAL_MODEL_CALL_COUNT:1'
+          echo 'O4C_HISTORICAL_HOSTED_AI_CALL_COUNT:0'
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/o4c-continuation-runtime"
+          mkdir -p "$runtime_root"
+          cd "$runtime_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" | sha256sum -c -
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          test -n "$llama_server"
+          llama_server="$(realpath "$llama_server")"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-runtime-version.txt" 2>&1
+          runtime_binary_sha256="$(sha256sum "$llama_server" | awk '{print $1}')"
+          printf '%s\n' "$runtime_binary_sha256" > "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-server.sha256"
+          cmp "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-runtime-version.txt" "$GITHUB_WORKSPACE/$SOURCE_ROOT/extracted/llama-runtime-version.txt"
+          cmp "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-server.sha256" "$GITHUB_WORKSPACE/$SOURCE_ROOT/extracted/llama-server.sha256"
+          printf 'LLAMA_SERVER=%s\n' "$llama_server" >> "$GITHUB_ENV"
+
+      - name: Execute only the missing Ministral Scout cell once
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile_id="$CONTINUATION_PROFILE_ID"
+          cell_root="$BENCH_ROOT/cells/$profile_id"
+          mkdir -p "$cell_root"
+          PROFILE_ID="$profile_id" PROFILE_OUTPUT="$cell_root/profile.json" python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_scout_cell import benchmark_model_profile
+          profile = benchmark_model_profile(os.environ['PROFILE_ID'])
+          Path(os.environ['PROFILE_OUTPUT']).write_text(
+              json.dumps(profile, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          model_repository="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["repository"])')"
+          model_revision="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["revision"])')"
+          model_file="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["file"])')"
+          model_sha256="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["sha256"])')"
+
+          model_root="$RUNNER_TEMP/o4c-model-$profile_id"
+          rm -rf "$model_root"
+          mkdir -p "$model_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$model_root/$model_file" \
+            "https://huggingface.co/${model_repository}/resolve/${model_revision}/${model_file}?download=true"
+          printf '%s  %s\n' "$model_sha256" "$model_root/$model_file" | sha256sum -c -
+
+          set +e
+          PROFILE_ID="$profile_id" \
+          MODEL_PATH="$model_root/$model_file" \
+          CELL_ROOT="$cell_root" \
+          LLAMA_SERVER="$LLAMA_SERVER" \
+          SERVER_PORT="$SERVER_PORT" \
+          RUNTIME_VERSION_PATH="$BENCH_ROOT/llama-runtime-version.txt" \
+          RUNTIME_BINARY_SHA_PATH="$BENCH_ROOT/llama-server.sha256" \
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_scout_cell import main as run_cell
+          from runtime.generation import scout_generation
+          from runtime.llama_cpp import start_server, stop_server
+          from runtime.local_server import wait_for_health
+
+          port = int(os.environ['SERVER_PORT'])
+          cell_root = Path(os.environ['CELL_ROOT'])
+          log = (cell_root / 'llama-server.log').open('w', encoding='utf-8')
+          process = start_server(
+              Path(os.environ['LLAMA_SERVER']),
+              Path(os.environ['MODEL_PATH']),
+              scout_generation(),
+              port,
+              log,
+          )
+          try:
+              wait_for_health(port, process)
+              runtime_version = Path(os.environ['RUNTIME_VERSION_PATH']).read_text(encoding='utf-8').strip()
+              runtime_binary_sha256 = Path(os.environ['RUNTIME_BINARY_SHA_PATH']).read_text(encoding='utf-8').strip()
+              rc = run_cell([
+                  '--model-profile', os.environ['PROFILE_ID'],
+                  '--port', str(port),
+                  '--runtime-version', runtime_version,
+                  '--runtime-binary-sha256', runtime_binary_sha256,
+                  '--output-dir', str(cell_root),
+              ])
+          finally:
+              stop_server(process)
+              log.close()
+          raise SystemExit(rc)
+          PY
+          rc=$?
+          set -e
+          rm -rf "$model_root"
+          if [[ "$rc" -ne 0 && "$rc" -ne 3 ]]; then
+            echo "O4C_CONTINUATION_RUNNER_ERROR_RC:$rc"
+            exit "$rc"
+          fi
+          test -f "$cell_root/result.json"
+          test -f "$cell_root/score.json"
+          echo "O4C_CONTINUATION_MINISTRAL_CELL_RC:$rc"
+          echo 'O4C_CONTINUATION_NEW_LOCAL_MODEL_CALL_COUNT:1'
+          echo 'O4C_CONTINUATION_NEW_HOSTED_AI_CALL_COUNT:0'
+
+      - name: Deterministically aggregate recovered Qwen and new Ministral cells
+        shell: bash
+        env:
+          CONTINUATION_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python tools/agent-skill-orchestrator/benchmarks/run_o4c_scout_matrix.py aggregate \
+            --output-root "$BENCH_ROOT/cells" \
+            --output "$BENCH_ROOT/summary.json"
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from canonical import canonical_sha256
+
+          root = Path('.agent-skill-orchestrator-o4c-scout-continuation')
+          summary = json.loads((root / 'summary.json').read_text(encoding='utf-8'))
+          rows = {row['model_profile_id']: row for row in summary['rows']}
+          qwen_id = os.environ['QWEN_PROFILE_ID']
+          ministral_id = os.environ['CONTINUATION_PROFILE_ID']
+          if summary['model_profile_ids'] != [qwen_id, ministral_id]:
+              raise SystemExit('O4-C continuation matrix identity drifted')
+          if summary['local_model_call_count'] != 2 or summary['hosted_ai_call_count'] != 0:
+              raise SystemExit('O4-C continuation total call accounting invalid')
+          if set(rows) != {qwen_id, ministral_id}:
+              raise SystemExit('O4-C continuation row set invalid')
+          if rows[qwen_id]['result_sha256'] != os.environ['QWEN_RESULT_SHA256']:
+              raise SystemExit('O4-C aggregate lost recovered Qwen result identity')
+          if rows[qwen_id]['score_sha256'] != os.environ['QWEN_SCORE_SHA256']:
+              raise SystemExit('O4-C aggregate lost recovered Qwen score identity')
+          if rows[qwen_id]['execution_status'] != 'INVALID':
+              raise SystemExit('O4-C aggregate changed observed Qwen reliability status')
+          ministral_result = json.loads((root / 'cells' / ministral_id / 'result.json').read_text(encoding='utf-8'))
+          ministral_score = json.loads((root / 'cells' / ministral_id / 'score.json').read_text(encoding='utf-8'))
+          if ministral_result['model_call_count'] != 1 or ministral_result['hosted_ai_call_count'] != 0:
+              raise SystemExit('O4-C Ministral continuation call accounting invalid')
+          if rows[ministral_id]['result_sha256'] != ministral_result['result_sha256']:
+              raise SystemExit('O4-C Ministral aggregate result identity mismatch')
+          if rows[ministral_id]['score_sha256'] != ministral_score['score_sha256']:
+              raise SystemExit('O4-C Ministral aggregate score identity mismatch')
+          forbidden = {'winner', 'recommended_model', 'assignment', 'rank', 'ranking', 'tie_break'}
+          if forbidden.intersection(summary):
+              raise SystemExit('O4-C continuation summary contains forbidden winner semantics')
+          manifest = {
+              'schema_version': 1,
+              'recovery_kind': 'o4c_missing_cell_continuation',
+              'target_sha': os.environ['TARGET_SHA'],
+              'source_run_id': int(os.environ['SOURCE_RUN_ID']),
+              'source_artifact_id': int(os.environ['SOURCE_ARTIFACT_ID']),
+              'source_artifact_zip_sha256': os.environ['SOURCE_ARTIFACT_ZIP_SHA256'],
+              'continuation_run_id': int(os.environ['CONTINUATION_RUN_ID']),
+              'historical_qwen_local_model_call_count': 1,
+              'continuation_ministral_local_model_call_count': 1,
+              'total_local_model_call_count': 2,
+              'hosted_ai_call_count': 0,
+              'qwen_result_sha256': os.environ['QWEN_RESULT_SHA256'],
+              'qwen_score_sha256': os.environ['QWEN_SCORE_SHA256'],
+              'ministral_result_sha256': ministral_result['result_sha256'],
+              'ministral_score_sha256': ministral_score['score_sha256'],
+              'summary_sha256': summary['summary_sha256'],
+              'recovery_manifest_sha256': '0' * 64,
+          }
+          base = dict(manifest)
+          base.pop('recovery_manifest_sha256')
+          manifest['recovery_manifest_sha256'] = canonical_sha256(base)
+          (root / 'recovery-manifest.json').write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print('O4C_CONTINUATION_TOTAL_LOCAL_MODEL_CALL_COUNT:2')
+          print('O4C_CONTINUATION_TOTAL_HOSTED_AI_CALL_COUNT:0')
+          print('O4C_SUMMARY_SHA256:' + summary['summary_sha256'])
+          print('O4C_RECOVERY_MANIFEST_SHA256:' + manifest['recovery_manifest_sha256'])
+          PY
+
+      - name: Upload bounded O4-C continuation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-orchestrator-o4c-scout-continuation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-orchestrator-o4c-scout-continuation/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

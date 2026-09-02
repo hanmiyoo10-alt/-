@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "contract_id": "synthesizer-compact-wire-v1",
+  "role": "synthesizer",
+  "max_wire_bytes": 1200,
+  "max_selected_ids": 32,
+  "mandatory_statuses": ["UNKNOWN", "CONFLICT"],
+  "mandatory_all_blockers": true,
+  "mandatory_unresolved_conflicts": true
+}

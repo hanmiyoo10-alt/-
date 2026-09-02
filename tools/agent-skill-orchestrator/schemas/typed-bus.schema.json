@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B1 Typed Evidence Bus",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "evidence_sha256",
+    "fixture_sha256",
+    "claims",
+    "claim_subjects",
+    "flow_edges",
+    "boundaries",
+    "blockers",
+    "conflicts"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fixture_sha256": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "claims": {"type": "array", "maxItems": 256, "items": {"$ref": "claim.schema.json"}},
+    "claim_subjects": {"type": "array", "maxItems": 256, "items": {"$ref": "claim-subject.schema.json"}},
+    "flow_edges": {"type": "array", "maxItems": 256, "items": {"$ref": "flow-edge.schema.json"}},
+    "boundaries": {"type": "array", "maxItems": 256, "items": {"$ref": "boundary.schema.json"}},
+    "blockers": {"type": "array", "maxItems": 256, "items": {"$ref": "blocker.schema.json"}},
+    "conflicts": {"type": "array", "maxItems": 256, "items": {"$ref": "conflict-record.schema.json"}}
+  },
+  "additionalProperties": false
+}

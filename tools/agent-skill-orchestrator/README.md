@@ -2,9 +2,9 @@
 
 This package is being introduced incrementally under the O0–O7 roadmap.
 
-## Current stage: O1-A router, authority, bounded evidence
+## Current stage: O1-B1 typed bus and deterministic conflict
 
-O0 established typed interchange contracts, deterministic canonical JSON serialization/SHA-256 helpers, and metadata registries. O1-A now provides an **inert deterministic control plane** from a normalized typed task request through routing, explicit repository-authority adaptation, and bounded immutable evidence packaging. It still does **not** execute or download models, run role workers, merge a typed bus, judge results, spend a compute budget, mutate repository content, release software, or claim device truth.
+O0 established typed interchange contracts, deterministic canonical JSON serialization/SHA-256 helpers, and metadata registries. O1-A added an **inert deterministic control plane** from a normalized typed task request through routing, explicit repository-authority adaptation, and bounded immutable evidence packaging. O1-B1 now adds a **synthetic-only typed evidence bus and deterministic unresolved-conflict derivation** for control-plane tests. It still does **not** execute or download models, run production role workers, spend a compute budget, judge final results, mutate repository content, release software, or claim device truth.
 
 The existing `tools/agent-skill-eval/` lane remains the stable baseline and rollback path.
 
@@ -56,4 +56,17 @@ The validator intentionally supports only the closed JSON-Schema subset used by 
 - Blocks are deterministically sorted and assigned opaque `S#` IDs; refs reuse the existing `S#@L#` contract. `block_digest` is SHA-256 of the exact UTF-8 content bytes.
 - Evidence is bounded to 64 source blocks, 20,000 characters per block, and 120,000 characters total; overlapping blocks for one path are rejected.
 
-O1-B typed bus, deterministic conflict creation, budget accounting, synthetic judging, role execution, model-role benchmarking/assignment, scheduling, runtime adapters, and mutation remain deferred to later milestones.
+### O1-B1 synthetic typed bus
+
+- `synthetic-role-fixture.schema.json` is an O1 control-plane fixture only. It is deliberately separate from production `role-artifact.schema.json` and therefore cannot fabricate model profile, model digest, prompt, generation, or structured-response provenance.
+- Fixtures carry only typed `Claim`, explicit `claim_subjects`, `FlowEdge`, `Boundary`, and `Blocker` records. The closed schema rejects raw upstream prose and role-authored final verdict fields.
+- Every fixture is validated against the exact bounded evidence `S#@L#` set. Stage/role ownership, claim role ownership, blocker origin, duplicate claim ids, and missing/orphan subject mappings fail closed.
+- `claim-subject.schema.json` requires an explicit deterministic `subject_key`. `bus.py` performs no NLP, fuzzy matching, similarity grouping, confidence weighting, or majority voting.
+- `typed-bus.schema.json` preserves validated typed records and records the canonical SHA-256 of each exact synthetic fixture by stage.
+- Fixture handoff order does not affect the resulting bus or bus digest; exact fixture bytes remain provenance-sensitive through each fixture SHA.
+- Mechanically derived conflicts are created only among non-`UNKNOWN` claims with the same exact `subject_key` whose `value` fields disagree. Pair ordering and conflict ids are deterministic.
+- Every mechanically derived conflict remains `UNRESOLVED` in B1 and produces one deterministic conflict blocker per subject. A 2-vs-1 disagreement is still unresolved; no majority winner exists.
+- Same-value claims remain separate evidence records even when their status or refs differ, and they do not create a value-disagreement conflict.
+- Typed-bus read-back re-derives conflicts and deterministic conflict blockers, so changing a conflict to `RESOLVED` or inventing a deterministic blocker fails closed.
+
+O1-B2 compute-budget enforcement, deterministic judging, and the zero-model synthetic end-to-end receipt remain deferred until O1-B1 merges and main CI is green. Production role execution, model-role benchmarking/assignment, scheduling, runtime adapters, caching, mutation, release, and device truth remain later milestones.

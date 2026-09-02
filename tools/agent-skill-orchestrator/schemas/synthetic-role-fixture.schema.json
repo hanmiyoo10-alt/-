@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B1 Synthetic Role Fixture",
+  "type": "object",
+  "required": ["schema_version", "stage_id", "role", "evidence_sha256", "records"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "stage_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "role": {"type": "string", "enum": ["scout", "mapper", "critic", "synthesizer"]},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "records": {
+      "type": "object",
+      "required": ["claims", "claim_subjects", "flow_edges", "boundaries", "blockers"],
+      "properties": {
+        "claims": {"type": "array", "maxItems": 64, "items": {"$ref": "claim.schema.json"}},
+        "claim_subjects": {"type": "array", "maxItems": 64, "items": {"$ref": "claim-subject.schema.json"}},
+        "flow_edges": {"type": "array", "maxItems": 64, "items": {"$ref": "flow-edge.schema.json"}},
+        "boundaries": {"type": "array", "maxItems": 64, "items": {"$ref": "boundary.schema.json"}},
+        "blockers": {"type": "array", "maxItems": 64, "items": {"$ref": "blocker.schema.json"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

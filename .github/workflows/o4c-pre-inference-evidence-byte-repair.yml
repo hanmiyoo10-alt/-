@@ -1,0 +1,68 @@
+name: O4-C Pre-Inference Evidence Byte Repair
+
+on:
+  push:
+    branches:
+      - 'feat/agent-skill-orchestrator-o4c-scout-service-tier-20260902'
+    paths:
+      - '.o4c-evidence-byte-repair-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Repair only derived block digests and assert exact bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from canonical import canonical_json_bytes
+          from evidence import evidence_package_sha256, validate_evidence_package
+
+          path = Path('tools/agent-skill-orchestrator/benchmarks/evidence/o4c-scout-service-tier-fidelity-v1.evidence.json')
+          evidence = json.loads(path.read_text(encoding='utf-8'))
+          for source in evidence['sources']:
+              source['source_ref']['block_digest'] = hashlib.sha256(source['content'].encode('utf-8')).hexdigest()
+          validate_evidence_package(evidence)
+          if evidence_package_sha256(evidence) != '06c345cde924c8dc8e84d1c65a03d9ee8b2a477ea856f5abd0603444485b4d97':
+              raise SystemExit('O4-C canonical EvidencePackage SHA drifted')
+          path.write_bytes(canonical_json_bytes(evidence) + b'\n')
+          raw_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+          if raw_sha != 'd848d52481e4bb706acc0717dfee689c9997f8a47b8480d8416e9e0c8361701e':
+              raise SystemExit(f'O4-C corrected raw evidence bytes mismatch: {raw_sha}')
+          print('O4C_EVIDENCE_CANONICAL_SHA256:06c345cde924c8dc8e84d1c65a03d9ee8b2a477ea856f5abd0603444485b4d97')
+          print('O4C_EVIDENCE_RAW_SHA256:' + raw_sha)
+          print('O4C_MODEL_OUTPUT_COUNT:0')
+          PY
+
+      - name: Commit corrected frozen evidence to same branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/agent-skill-orchestrator/benchmarks/evidence/o4c-scout-service-tier-fidelity-v1.evidence.json
+          git diff --cached --quiet && { echo 'O4C_REPAIR_NO_CHANGE'; exit 2; }
+          git commit -m 'fix(agent-skill): repair O4-C frozen evidence bytes'
+          git push origin HEAD:feat/agent-skill-orchestrator-o4c-scout-service-tier-20260902

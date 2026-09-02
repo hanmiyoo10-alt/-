@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "model-family-smoke-candidate-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "profile_id",
+    "local_model_id",
+    "family",
+    "repository",
+    "revision",
+    "file",
+    "size_bytes",
+    "sha256",
+    "license",
+    "access",
+    "execution_surface"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "candidate_id": {"type": "string", "const": "o4b-ministral-3-3b-instruct-2512-q4_k_m-v1"},
+    "profile_id": {"type": "string", "const": "ministral-3-3b-instruct-2512-q4_k_m"},
+    "local_model_id": {"type": "string", "const": "ministral-3-3b-instruct-2512-q4_k_m-local"},
+    "family": {"type": "string", "const": "ministral-3"},
+    "repository": {"type": "string", "const": "mistralai/Ministral-3-3B-Instruct-2512-GGUF"},
+    "revision": {"type": "string", "const": "fc774f009f0c62a186f48e870fd6295b36f63779"},
+    "file": {"type": "string", "const": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf"},
+    "size_bytes": {"type": "integer", "const": 2147023008},
+    "sha256": {"type": "string", "const": "9ed150d4367e68df0ac8e1540f6ddc65b42d0ee26378329d1ecbca60f93fc5f8"},
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "source"],
+      "properties": {
+        "id": {"type": "string", "const": "apache-2.0"},
+        "status": {"type": "string", "const": "verified_metadata"},
+        "source": {"type": "string", "const": "https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512-GGUF"}
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_class", "proof_status"],
+      "properties": {
+        "target_class": {"type": "string", "const": "public_unauthenticated_https"},
+        "proof_status": {"type": "string", "const": "pending_smoke"}
+      }
+    },
+    "execution_surface": {"type": "string", "const": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS"}
+  }
+}

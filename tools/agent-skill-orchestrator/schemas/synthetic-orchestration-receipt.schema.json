@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B2 Zero-Model Synthetic Orchestration Receipt",
+  "type": "object",
+  "required": ["schema_version", "mode", "scope", "target_repository_sha", "request_sha256", "execution_plan_sha256", "authority_snapshot_sha256", "evidence_sha256", "typed_bus_sha256", "budget_state_sha256", "judge_result_sha256", "synthetic_fixture_sha256", "model_call_count", "final_verdict"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "mode": {"type": "string", "const": "o1_synthetic_zero_model"},
+    "scope": {"type": "string", "minLength": 1, "maxLength": 128},
+    "target_repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "typed_bus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "budget_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "judge_result_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "synthetic_fixture_sha256": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "model_call_count": {"type": "integer", "const": 0},
+    "final_verdict": {"type": "string", "enum": ["SUPPORTED", "PARTIAL", "UNKNOWN", "CONFLICT", "EXECUTION_INCOMPLETE", "INVALID"]}
+  },
+  "additionalProperties": false
+}

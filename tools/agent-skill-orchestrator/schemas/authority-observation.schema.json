@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-A Repository Authority Observation",
+  "type": "object",
+  "required": ["kind", "value", "status"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["release_branch", "manifest", "artifact", "release_spec_dir"]
+    },
+    "value": {"type": "string", "minLength": 1, "maxLength": 512},
+    "status": {"type": "string", "enum": ["OBSERVED", "MISSING"]},
+    "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+  },
+  "additionalProperties": false
+}

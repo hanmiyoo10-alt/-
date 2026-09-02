@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "profile_id": "standard-cpu-v1",
+      "model_profile_id": "qwen2.5-3b-instruct-q4_k_m",
+      "transport": "llama-server-v1-chat-completions",
+      "runtime_release": "b10516",
+      "temperature": 0,
+      "seed": 42,
+      "n_predict": 768,
+      "threads": 4,
+      "gpu_layers": 0,
+      "max_total_role_calls": 4,
+      "max_hosted_ai_calls": 0,
+      "max_concurrent_model_workers": 2
+    }
+  ]
+}

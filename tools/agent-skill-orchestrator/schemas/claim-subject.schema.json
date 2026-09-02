@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "O1-B1 Claim Subject Mapping",
+  "type": "object",
+  "required": ["claim_id", "subject_key"],
+  "properties": {
+    "claim_id": {"type": "string", "pattern": "^claim-[A-Za-z0-9._-]+$"},
+    "subject_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[a-z0-9][a-z0-9._:/-]{0,255}$"
+    }
+  },
+  "additionalProperties": false
+}

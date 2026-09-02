@@ -52,6 +52,23 @@ jobs:
           python -m py_compile "${files[@]}"
           echo "AGENT_SKILLS_PYTHON_COMPILE_PASS:${#files[@]}"
 
+      - name: Generate pre-inference O4-C freeze repair candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .o4c-freeze-repair
+          python tools/agent-skill-orchestrator/benchmarks/repair_o4c_freeze.py \
+            --output-dir .o4c-freeze-repair
+
+      - name: Upload pre-inference O4-C freeze repair candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: o4c-freeze-repair-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .o4c-freeze-repair/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Run skill unit tests
         shell: bash
         run: |

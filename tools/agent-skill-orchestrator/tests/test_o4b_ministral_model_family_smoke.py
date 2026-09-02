@@ -14,6 +14,7 @@ REPO_ROOT = ROOT.parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from benchmarks.score_role_output import SCORING_POLICY
 from models.model_family_smoke import (
     EXPECTED_CANDIDATE,
     GENERATION,
@@ -27,6 +28,8 @@ from models.model_family_smoke import (
     validate_receipt,
 )
 from registry import eligible_model_profiles, load_model_registry
+from runtime.budget_profile import runtime_budget_profile
+from runtime.generation import SCOUT_MODEL_PROFILE_ID
 
 CANDIDATE_PATH = ROOT / "models" / "candidates" / "ministral-3-3b-instruct-2512-q4_k_m.json"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-model-family-smoke.yml"
@@ -41,6 +44,7 @@ class O4BMinistralModelFamilySmokeTests(unittest.TestCase):
         self.assertEqual(candidate["size_bytes"], 2147023008)
         self.assertEqual(candidate["sha256"], "9ed150d4367e68df0ac8e1540f6ddc65b42d0ee26378329d1ecbca60f93fc5f8")
         self.assertEqual(candidate["license"]["id"], "apache-2.0")
+        # The candidate manifest is historical pre-registry evidence and stays immutable.
         self.assertEqual(candidate["access"]["proof_status"], "pending_smoke")
 
     def test_candidate_download_url_is_revision_scoped_not_main(self):
@@ -58,24 +62,60 @@ class O4BMinistralModelFamilySmokeTests(unittest.TestCase):
             with self.assertRaises(ModelFamilySmokeError):
                 load_candidate(path)
 
-    def test_pre_smoke_registry_contains_only_existing_qwen_family(self):
+    def test_post_smoke_registry_admits_exact_ministral_without_rebinding_o2(self):
         registry = load_model_registry()
-        profile_ids = {item["profile_id"] for item in registry["profiles"]}
+        profiles = {item["profile_id"]: item for item in registry["profiles"]}
         self.assertEqual(
-            profile_ids,
+            set(profiles),
             {
                 "qwen2.5-1.5b-instruct-q4_k_m",
                 "qwen2.5-3b-instruct-q4_k_m",
+                "ministral-3-3b-instruct-2512-q4_k_m",
             },
         )
-        self.assertNotIn("ministral-3-3b-instruct-2512-q4_k_m", profile_ids)
+        ministral = profiles["ministral-3-3b-instruct-2512-q4_k_m"]
+        self.assertEqual(
+            ministral,
+            {
+                "profile_id": "ministral-3-3b-instruct-2512-q4_k_m",
+                "local_model_id": "ministral-3-3b-instruct-2512-q4_k_m-local",
+                "family": "ministral-3",
+                "repository": "mistralai/Ministral-3-3B-Instruct-2512-GGUF",
+                "revision": "fc774f009f0c62a186f48e870fd6295b36f63779",
+                "file": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+                "sha256": "9ed150d4367e68df0ac8e1540f6ddc65b42d0ee26378329d1ecbca60f93fc5f8",
+                "license": {
+                    "id": "apache-2.0",
+                    "status": "verified_metadata",
+                    "source": "https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512-GGUF",
+                },
+                "access": {
+                    "class": "public_unauthenticated_https",
+                    "source": ".github/workflows/agent-skill-orchestrator-model-family-smoke.yml#Download and verify frozen Ministral GGUF without credentials",
+                },
+                "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
+                "enabled": True,
+            },
+        )
         self.assertEqual(
             eligible_model_profiles(registry),
             (
+                "ministral-3-3b-instruct-2512-q4_k_m",
                 "qwen2.5-1.5b-instruct-q4_k_m",
                 "qwen2.5-3b-instruct-q4_k_m",
             ),
         )
+
+        # Existing successful O2/O3 lane remains bound to Qwen 2.5 3B.
+        self.assertEqual(SCOUT_MODEL_PROFILE_ID, "qwen2.5-3b-instruct-q4_k_m")
+        self.assertEqual(runtime_budget_profile()["model_profile_id"], "qwen2.5-3b-instruct-q4_k_m")
+        self.assertEqual(profiles["qwen2.5-1.5b-instruct-q4_k_m"]["sha256"], "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e")
+        self.assertEqual(profiles["qwen2.5-3b-instruct-q4_k_m"]["sha256"], "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d")
+
+        # O4-B admission is capability eligibility only, never a winner or assignment.
+        self.assertIs(SCORING_POLICY["composite_score"], False)
+        self.assertNotIn("winner", SCORING_POLICY)
+        self.assertNotIn("role_assignment", SCORING_POLICY)
 
     def test_model_credential_environment_detection_is_fail_closed(self):
         clean = {name: "" for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN")}
@@ -164,6 +204,7 @@ class O4BMinistralModelFamilySmokeTests(unittest.TestCase):
         self.assertIn("O4B_HOSTED_AI_CALL_COUNT:0", text)
         self.assertIn("post_chat_completion", text)
         self.assertIn("scout_generation", text)
+        # Historical Phase-A smoke must prove it ran while the profile was absent.
         self.assertIn("O4-B pre-smoke registry boundary violated", text)
 
     def test_workflow_pins_existing_runtime_and_cpu_only_generation(self):

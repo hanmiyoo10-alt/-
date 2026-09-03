@@ -49,7 +49,7 @@
           "content": {"type": "string", "minLength": 1, "maxLength": 20000},
           "authority_class": {
             "type": "string",
-            "enum": ["domain_primary", "guidelines", "manifest", "artifact", "release_spec_dir"]
+            "enum": ["domain_primary", "guidelines", "manifest", "artifact", "release_spec_dir", "declared_by", "evidence", "current_state"]
           },
           "source_ref": {"$ref": "source-ref.schema.json"}
         },

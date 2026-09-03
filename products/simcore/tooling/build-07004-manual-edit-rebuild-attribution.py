@@ -134,12 +134,12 @@ def patch(text):
       const commitParts = [saveMetric.serializeMs, saveMetric.setMs, saveMetric.pruneMs];
       const commitKnown = commitParts.every((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
       const commitMs = commitKnown ? commitParts.reduce((sum, value) => sum + Number(value), 0) : null;
-      const named = commitMs == null ? null : prepareMs + recoveryMs + finalizeMs + commitMs;
+      const named = prepareMs + recoveryMs + finalizeMs + (commitMs == null ? 0 : commitMs);
       const closureValid = Number.isFinite(rebuildTotalMs) && rebuildTotalMs >= 0
         && Number.isFinite(prepareMs) && prepareMs >= 0
         && Number.isFinite(recoveryMs) && recoveryMs >= 0
         && Number.isFinite(finalizeMs) && finalizeMs >= 0
-        && commitMs != null && Number.isFinite(named) && named >= 0
+        && Number.isFinite(named) && named >= 0
         && named <= rebuildTotalMs + 0.5;
       if (closureValid) {
         detail.manualEditAttribution = Object.freeze({

@@ -70,7 +70,7 @@ def _classify_path(domain: dict[str, Any], path: str) -> tuple[str, tuple[str, s
     if path == domain["guidelines_path"]:
         return "guidelines", None
 
-    for kind in ("manifest", "artifact"):
+    for kind in ("manifest", "artifact", "declared_by", "evidence", "current_state"):
         values = _authority_refs(domain, kind)
         if path in values:
             return kind, (kind, path)

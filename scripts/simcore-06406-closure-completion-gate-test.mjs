@@ -64,6 +64,28 @@ const session = loadModule('session', {
   },
 });
 
+function resolvePreviousBEndInspector() {
+  if (typeof session.inspectPreviousBEndOutput === 'function') return session.inspectPreviousBEndOutput;
+
+  const sessionSource = moduleSlice('session');
+  const startMarker = 'function inspectPreviousBEndOutput(historyMessages, sendIndex) {';
+  const start = sessionSource.indexOf(startMarker);
+  if (start < 0) throw new Error('legacy fixture private Session inspector missing');
+  const end = sessionSource.indexOf('\nclass CoreRulesetSession', start);
+  if (end < 0) throw new Error('legacy fixture private Session inspector boundary missing');
+  const declaration = sessionSource.slice(start, end).trim();
+  const inspector = new Function(
+    'kernel',
+    'time',
+    'structure',
+    `${declaration}\nreturn inspectPreviousBEndOutput;`,
+  )(kernel, time, structure);
+  if (typeof inspector !== 'function') throw new Error('legacy fixture private Session inspector load failed');
+  return inspector;
+}
+
+const inspectPreviousBEndOutput = resolvePreviousBEndInspector();
+
 const oldNarr = '⏱️[2031-03-14 (Fri) 11:30 PM]';
 const terminal = '⏱️[2031-03-28 (Fri) 10:15 PM]';
 const laterNarr = '⏱️[2031-03-28 (Fri) 10:50 PM]';
@@ -214,11 +236,11 @@ const rows = [
   { role: 'assistant', content: validBEnd },
   { role: 'user', content: '[커뮤니티]' },
 ];
-const realFacts = session.inspectPreviousBEndOutput(rows, 2);
+const realFacts = inspectPreviousBEndOutput(rows, 2);
 
 // 19. real Structure rejects incomplete prior B_END and accepts bounded complete B_END
 const invalidRows = [rows[0], { role: 'assistant', content: validBEnd.replace(c2, '') }, rows[2]];
-const badFacts = session.inspectPreviousBEndOutput(invalidRows, 2);
+const badFacts = inspectPreviousBEndOutput(invalidRows, 2);
 assert(badFacts.available && !badFacts.closureComplete && (!badFacts.structureClean || !badFacts.terminalExplicit), `fixture19-invalid ${JSON.stringify(badFacts)}`);
 assert(realFacts.available && realFacts.structureClean && realFacts.terminalExplicit && realFacts.closureComplete && realFacts.terminalTimestamp === terminal, `fixture19-valid ${JSON.stringify(realFacts)}`);
 

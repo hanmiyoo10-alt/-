@@ -1,0 +1,183 @@
+name: Agent Skill Orchestrator O4-E Scout Schema Validation
+
+on:
+  push:
+    branches:
+      - 'agent-skill-o4e-request/**'
+    paths:
+      - '.agent-skill-o4e-requests/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  o4e-scout-schema-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      BENCH_ROOT: .agent-skill-orchestrator-o4e-scout-schema-validation
+      LLAMA_RELEASE: b10516
+      LLAMA_SOURCE_DIGEST: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      SERVER_PORT: '39141'
+    steps:
+      - name: Checkout exact O4-E request commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Resolve bounded request commit
+        id: resolve
+        shell: bash
+        env:
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rm -rf "$BENCH_ROOT"
+          mkdir -p "$BENCH_ROOT/cells"
+          python tools/agent-skill-orchestrator/benchmarks/resolve_o4e_request.py \
+            --repo-root . \
+            --github-ref "$EVENT_REF" \
+            --github-sha "$EVENT_SHA" \
+            --output "$BENCH_ROOT/request-provenance.json"
+          target_sha="$(python -c 'import json; print(json.load(open(".agent-skill-orchestrator-o4e-scout-schema-validation/request-provenance.json"))["target_repository_sha"])')"
+          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          echo "O4E_REQUEST_TARGET_SHA:$target_sha"
+
+      - name: Checkout exact evaluated target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.resolve.outputs.target_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          clean: false
+
+      - name: Enforce exact main target and zero-credential boundary
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -f "$BENCH_ROOT/request-provenance.json"
+          git fetch --no-tags --depth=64 origin main
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          for name in HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACEHUB_API_TOKEN; do
+            if [[ -n "${!name:-}" ]]; then
+              echo "O4E_MODEL_CREDENTIAL_PRESENT:$name"
+              exit 2
+            fi
+          done
+          echo 'O4E_HOSTED_AI_BOUNDARY:ZERO'
+          echo 'O4E_MODEL_CREDENTIAL_ENV:ABSENT'
+
+      - name: Prepare frozen O4-E execution inputs before inference
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          python tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_schema_validation.py prepare \
+            --target-sha "$TARGET_SHA" \
+            --output "$BENCH_ROOT/matrix.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.agent-skill-orchestrator-o4e-scout-schema-validation')
+          matrix = json.loads((root / 'matrix.json').read_text(encoding='utf-8'))
+          expected = [
+              'qwen2.5-3b-instruct-q4_k_m',
+              'ministral-3-3b-instruct-2512-q4_k_m',
+          ]
+          if matrix.get('model_profile_ids') != expected:
+              raise SystemExit('O4-E model matrix drifted')
+          if matrix.get('request_timeout_seconds') != 1800:
+              raise SystemExit('O4-E timeout drifted')
+          if matrix.get('local_model_call_ceiling') != 2 or matrix.get('hosted_ai_call_ceiling') != 0:
+              raise SystemExit('O4-E call ceiling drifted')
+          forbidden = {'winner','recommended_model','assignment','rank','ranking','tie_break'}
+          if forbidden.intersection(matrix):
+              raise SystemExit('O4-E matrix contains forbidden winner semantics')
+          print('O4E_MATRIX_SHA256:' + matrix['matrix_sha256'])
+          print('O4E_RESPONSE_SCHEMA_SHA256:' + matrix['response_schema_sha256'])
+          PY
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/o4e-runtime"
+          mkdir -p "$runtime_root"
+         Ù‰[[YWÜ›ÛÝ‚ˆÝ\›SKY˜Z[K\™]žHÈK\™]žKX[Y\œ›ÜœÈˆ[È‰SPWÐT•QPÕˆˆšÎ‹ËÙÚ]X‹˜ÛÛKÙÙÛ[[Ü™ËÛ[XK˜ÜÜ™[X\Ù\ËÙÝÛ›ØYÉÓSPWÔ‘SPTÑ_KÉÓSPWÐT•QPÕH‚ˆš[ˆ	É\È	\×‰È‰SPWÐT•QPÕÔÒLMˆˆ‰SPWÐT•QPÕˆÚLMœÝ[HXÈBˆZÙ\ˆ^˜XÝYˆ\ˆ^™ˆ‰SPWÐT•QPÕˆPÈ^˜XÝYˆ[XWÜÙ\™\H‰
+š[™^˜XÝY]\Hˆ[˜[YH[XK\Ù\™\ˆ\\›H]JÞ\š[\]Z]
+H‚ˆ\Ý[ˆ‰[XWÜÙ\™\ˆ‚ˆ[XWÜÙ\™\H‰
+™X[]‰[XWÜÙ\™\ˆŠH‚ˆ‰[XWÜÙ\™\ˆˆK]™\œÚ[Ûˆˆ‰ÒUP—ÕÓÔ’ÔÔPÑKÉ‘SÒÔ“ÓÕÛ[XK\[[YK]™\œÚ[Û‹ˆ‰ŒBˆ[[YWØš[˜\žWÜÚLMH‰
+ÚLMœÝ[H‰[XWÜÙ\™\ˆˆ]ÚÈ	ÞÜš[	_IÊH‚ˆš[ˆ	É\×‰È‰[[YWØš[˜\žWÜÚLMˆˆˆ‰ÒUP—ÕÓÔ’ÔÔPÑKÉ‘SÒÔ“ÓÕÛ[XK\Ù\™\‹œÚLMˆ‚ˆš[ˆ	ÓSPWÔÑT•‘TI\×‰È‰[XWÜÙ\™\ˆˆˆ‰ÒUP—ÑS•ˆ‚‚ˆH˜[YNˆ^XÝ]H^XÝHÛÈ[™\[™[ÍQHØØ[ØÛÝ]Ù[ÂˆÚ[ˆ˜\Úˆ[ŽˆˆÙ]Y][È\Y˜Z[ˆ›Üˆ›Ùš[WÚY[ˆˆ]Ù[Œ‹KLØ‹Z[œÝXÝ\MÚ×ÛHˆZ[š\Ý˜[LËLØ‹Z[œÝXÝLLL‹\MÚ×ÛBˆÂˆÙ[Ü›ÛÝH‰‘SÒÔ“ÓÕØÙ[ËÉ›Ùš[WÚY‚ˆZÙ\ˆ\‰Ù[Ü›ÛÝ‚ˆ“Ñ’SWÒQH‰›Ùš[WÚYˆ“Ñ’SWÓÕUUH‰Ù[Ü›ÛÝÜ›Ùš[KšœÛÛˆˆ]ÛˆH	ÔIÂˆ[\ÜœÛÛ‚ˆ[\ÜÜÂˆ[\ÜÞ\Âˆœ›ÛH]Xˆ[\Ü]ˆXÚØYÙHH]
+	ÝÛÛËØYÙ[\ÚÚ[[Ü˜Ú\Ý˜]Ü‰ÊKœ™\ÛÛ™J
+BˆÞ\Ëœ]š[œÙ\
+ÝŠXÚØYÙJJBˆœ›ÛH™[˜ÚX\šÜËœ[—ÜØÛÝ]ØÙ[[\Ü™[˜ÚX\š×Û[Ù[Ü›Ùš[Bˆ›Ùš[HH™[˜ÚX\š×Û[Ù[Ü›Ùš[JÜË™[š\›Û–ÉÔ“Ñ’SWÒQ	×JBˆ]
+ÜË™[š\›Û–ÉÔ“Ñ’SWÓÕUU	×JKÜš]WÝ^
+ˆœÛÛ‹™[\Ê›Ùš[K[œÝ\™WØ\ØÚZOQ˜[ÙK[™[L‹ÛÜÚÙ^\ÏUYJH
+È	×‰Ëˆ[˜ÛÙ[™ÏIÝ]‹N	Ëˆ
+BˆBˆ[Ù[Ü™\ÜÚ]ÜžOH‰
+“Ñ’SOH‰Ù[Ü›ÛÝÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
+œÛÛ‹›ØY
+Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈœ™\ÜÚ]ÜžH—JIÊH‚ˆ[Ù[Ü™]š\Ú[ÛH‰
+“Ñ’SOH‰Ù[Ü›ÛÝÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
+œÛÛ‹›ØY
+Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈœ™]š\Ú[Ûˆ—JIÊH‚ˆ[Ù[Ùš[OH‰
+“Ñ’SOH‰Ù[Ü›ÛÝÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
+œÛÛ‹›ØY
+Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈ™š[H—JIÊH‚ˆ[Ù[ÜÚLMH‰
+“Ñ’SOH‰Ù[Ü›ÛÝÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
+œÛÛ‹›ØY
+Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈœÚLMˆ—JIÊH‚‚ˆ[Ù[Ü›ÛÝH‰•S“‘T—ÕSTÛÍK[[Ù[I›Ùš[WÚY‚ˆ›H\™ˆ‰[Ù[Ü›ÛÝ‚ˆZÙ\ˆ\‰[Ù[Ü›ÛÝ‚ˆÝ\›SKY˜Z[K\™]žHÈK\™]žKX[Y\œ›ÜœÈˆ[È‰[Ù[ÜÚLMˆˆ‰[Ù[Ü›ÛÝÉ[Ù[Ùš[HˆÚLMœÝ[HXÈB‚ˆ“Ñ’SWÒQH‰›Ùš[WÚYˆˆSÑSÔUH‰[Ù[Ü›ÛÝÉ[Ù[Ùš[HˆˆÑSÔ“ÓÕH‰Ù[Ü›ÛÝˆˆSPWÔÑT•‘TH‰SPWÔÑT•‘TˆˆˆÑT•‘T—ÔÔ•H‰ÑT•‘T—ÔÔ•ˆˆ•S•SQWÕ‘T”ÒSÓ—ÔUH‰‘SÒÔ“ÓÕÛ[XK\[[YK]™\œÚ[Û‹ˆˆ•S•SQWÐ’ST–WÔÒWÔUH‰‘SÒÔ“ÓÕÛ[XK\Ù\™\‹œÚLMˆˆˆ]ÛˆH	ÔIÂˆ[\ÜÜÂˆ[\ÜÞ\Âˆœ›ÛH]Xˆ[\Ü]ˆXÚØYÙHH]
+	ÝÛÛËØYÙ[\ÚÚ[[Ü˜Ú\Ý˜]Ü‰ÊKœ™\ÛÛ™J
+BˆÞ\Ëœ]š[œÙ\
+ÝŠXÚØYÙJJBˆœ›ÛH™[˜ÚX\šÜËœ[—ÛÍWÜØÛÝ]ØÙ[[\ÜXZ[ˆ\È[—ØÙ[ˆœ›ÛH[[YK™Ù[™\˜][Ûˆ[\ÜØÛÝ]ÙÙ[™\˜][Û‚ˆœ›ÛH[[YK›[XWØÜ[\ÜÝ\ÜÙ\™\‹ÝÜÜÙ\™\‚ˆœ›ÛH[[YK›ØØ[ÜÙ\™\ˆ[\ÜØZ]Ù›Ü—ÚX[‚ˆÜH[
+ÜË™[š\›Û–ÉÔÑT•‘T—ÔÔ•	×JBˆÙ[Ü›ÛÝH]
+ÜË™[š\›Û–ÉÐÑSÔ“ÓÕ	×JBˆÙÈH
+Ù[Ü›ÛÝÈ	Û[XK\Ù\™\‹›ÙÉÊK›Ü[Š	ÝÉË[˜ÛÙ[™ÏIÝ]‹N	ÊBˆ›ØÙ\ÜÈHÝ\ÜÙ\™\Šˆ]
+ÜË™[š\›Û–ÉÓSPWÔÑT•‘T‰×JKˆ]
+ÜË™[š\›Û–ÉÓSÑSÔU	×JKˆØÛÝ]ÙÙ[™\˜][ÛŠ
+KˆÜˆÙËˆ
+BˆžN‚ˆØZ]Ù›Ü—ÚX[
+Ü›ØÙ\ÜÊBˆ[[YWÝ™\œÚ[ÛˆH]
+ÜË™[š\›Û–ÉÔ•S•SQWÕ‘T”ÒSÓ—ÔU	×JKœ™XYÝ^
+[˜ÛÙ[™ÏIÝ]‹N	ÊKœÝš\
+
+Bˆ[[YWØš[˜\žWÜÚLMˆH]
+ÜË™[š\›Û–ÉÔ•S•SQWÐ’ST–WÔÒWÔU	×JKœ™XYÝ^
+[˜ÛÙ[™ÏIÝ]‹N	ÊKœÝš\
+
+Bˆ˜ÈH[—ØÙ[
+Âˆ	ËK[[Ù[\›Ùš[IËÜË™[š\›Û–ÉÔ“Ñ’SWÒQ	×Kˆ	ËK\Ü	ËÝŠÜ
+Kˆ	ËK\[[YK]™\œÚ[Û‰Ë[[YWÝ™\œÚ[Û‹ˆ	ËK\[[YKXš[˜\žK\ÚLM‰Ë[[YWØš[˜\žWÜÚLM‹ˆ	ËK[Ý]]Y\‰ËÝŠÙ[Ü›ÛÝ
+KˆJBˆš[˜[N‚ˆÝÜÜÙ\™\Š›ØÙ\ÜÊBˆÙË˜ÛÜÙJ
+Bˆ˜Z\ÙHÞ\Ý[Q^]
+˜ÊBˆBˆ›H\™ˆ‰[Ù[Ü›ÛÝ‚ˆÛ™BˆXÚÈ	ÓÍWÓÐÐSÓSÑSÐÐSÐÑRSS‘ÎŒ‰ÂˆXÚÈ	ÓÍWÒÔÕQÐRWÐÐSÐÓÕS•Œ	Â‚ˆH˜[YNˆYÙÜ™YØ]H›Ý\›Z[˜[›ÝÜÈÚ]Ý]Ú[›™\ˆÙ[X[XÜÂˆÚ[ˆ˜\Úˆ[ŽˆˆÙ]Y][È\Y˜Z[ˆ]ÛˆÛÛËØYÙ[\ÚÚ[[Ü˜Ú\Ý˜]Ü‹Ø™[˜ÚX\šÜËÜ[—ÛÍWÜØÛÝ]ÜØÚ[XWÝ˜[Y][Û‹œHYÙÜ™YØ]HˆK[X]š^‰‘SÒÔ“ÓÕÛX]š^šœÛÛˆˆˆK[Ý]]\›ÛÝ‰‘SÒÔ“ÓÕØÙ[ÈˆˆK[Ý]]‰‘SÒÔ“ÓÕÜÝ[[X\žKšœÛÛˆ‚ˆ]ÛˆH	ÔIÂˆ[\ÜœÛÛ‚ˆœ›ÛH]Xˆ[\Ü]ˆ›ÛÝH]
+	Ë˜YÙ[\ÚÚ[[Ü˜Ú\Ý˜]Ü‹[ÍK\ØÛÝ]\ØÚ[XK]˜[Y][Û‰ÊBˆÝ[[X\žHHœÛÛ‹›ØYÊ
+›ÛÝÈ	ÜÝ[[X\žKšœÛÛ‰ÊKœ™XYÝ^
+[˜ÛÙ[™ÏIÝ]‹N	ÊJBˆYˆÝ[[X\žK™Ù]
+	ÛØØ[Û[Ù[ØØ[ØÛÝ[	ÊHOHˆÜˆÝ[[X\žK™Ù]
+	ÚÜÝYØZWØØ[ØÛÝ[	ÊHOH‚ˆ˜Z\ÙHÞ\Ý[Q^]
+	ÓÍQHÝ[[X\žHØ[XØÛÝ[[™È[˜[Y	ÊBˆYˆ[ŠÝ[[X\žK™Ù]
+	Ü›ÝÜÉË×JJHOHŽ‚ˆ˜Z\ÙHÞ\Ý[Q^]
+	ÓÍQHÝ[[X\žH›ÝÈÛÝ[[˜[Y	ÊBˆYˆÝ[[X\žK™Ù]
+	Ú\™[š[™×Ý™\™XÝ	ÊH›Ý[ˆÉÒT‘S’S‘×ÕSQUQ	Ë	ÒT‘S’S‘×Ó“ÕÕSQUQ	ßN‚ˆ˜Z\ÙHÞ\Ý[Q^]
+	ÓÍQH\™[š[™È™\™XÝ[˜[Y	ÊBˆ›Ü˜šY[ˆHÉÝÚ[›™\‰Ë	Ü™XÛÛ[Y[™YÛ[Ù[	Ë	Ø\ÜÚYÛ›Y[	Ë	Ü˜[šÉË	Ü˜[šÚ[™ÉË	ÝYWØœ™XZÉßBˆYˆ›Ü˜šY[‹š[\œÙXÝ[ÛŠÝ[[X\žJN‚ˆ˜Z\ÙHÞ\Ý[Q^]
+	ÓÍQHÝ[[X\žHÛÛZ[œÈ›Ü˜šY[ˆÚ[›™\ˆÙ[X[XÜÉÊBˆš[
+	ÓÍWÔÕSSPT–WÔÒLMŽ‰È
+ÈÝ[[X\žVÉÜÝ[[X\žWÜÚLM‰×JBˆš[
+	ÓÍWÒT‘S’S‘×Õ‘T‘PÕ‰È
+ÈÝ[[X\žVÉÚ\™[š[™×Ý™\™XÝ	×JBˆB‚ˆH˜[YNˆ\ØY›Ý[™YÍQHXYÛ›ÜÝXÈ]šY[˜ÙBˆYŽˆ[Ø^\Ê
+Bˆ\Ù\ÎˆXÝ[ÛœËÝ\ØYX\Y˜XÝXLMYŽX™MÍXMYNL˜™ÍŒÙ˜L‚ˆÚ]‚ˆ˜[YNˆYÙ[\ÚÚ[[Ü˜Ú\Ý˜]Ü‹[ÍK\ØÛÝ]\ØÚ[XK]˜[Y][Û‹IÞÈÚ]X‹œ[—ÚY_KIÞÈÚ]X‹œ[—Ø][\_Bˆ]ˆ˜YÙ[\ÚÚ[[Ü˜Ú\Ý˜]Ü‹[ÍK\ØÛÝ]\ØÚ[XK]˜[Y][Û‹Âˆ[˜ÛYKZY[‹Yš[\ÎˆYBˆY‹[›ËYš[\ËY›Ý[™ˆ\œ›Ü‚ˆ™][[Û‹Y^\ÎˆÌ

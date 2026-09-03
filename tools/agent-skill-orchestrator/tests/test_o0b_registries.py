@@ -104,9 +104,10 @@ class DomainRegistryTests(unittest.TestCase):
         self.registry = load_domain_registry()
 
     def test_usage_dashboard_projects_durable_catalog_authority(self):
-        self.assertEqual(len(self.registry["domains"]), 1)
-        domain = self.registry["domains"][0]
-        self.assertEqual(domain["scope"], "plugin:usage-dashboard")
+        domain = next(
+            item for item in self.registry["domains"]
+            if item["scope"] == "plugin:usage-dashboard"
+        )
         self.assertEqual(domain["name"], "Local Usage Dashboard")
         self.assertEqual(domain["lifecycle"], "production")
         self.assertEqual(domain["primary_path"], "plugins/usage-dashboard/**")
@@ -136,9 +137,12 @@ class DomainRegistryTests(unittest.TestCase):
             self.assertIn(token, row)
 
     def test_domain_registration_explicitly_does_not_promote_skill_scope(self):
-        self.assertEqual(
-            self.registry["domains"][0]["registration_semantics"],
-            "domain_metadata_only_no_skill_promotion",
+        self.assertGreaterEqual(len(self.registry["domains"]), 1)
+        self.assertTrue(
+            all(
+                item["registration_semantics"] == "domain_metadata_only_no_skill_promotion"
+                for item in self.registry["domains"]
+            )
         )
 
     def test_missing_authority_metadata_fails_closed(self):

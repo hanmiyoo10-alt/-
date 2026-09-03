@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.3-intent-13",
+  "releaseId": "simcore-v0.70.3-new-13",
+  "product": "SimCore",
+  "targetVersion": "0.70.3",
+  "releaseName": "Post-M2 Simplification Convergence",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "builderPath": "products/simcore/tooling/build-s7-post-m2-simplification-convergence.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "S7_CUMULATIVE_SIMPLIFICATION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_DESIGN_2026-08-31.md",
+    "docs/SIMCORE_S6_PROMPT_COMMUNITY_SEMANTIC_RESTRAINT_CLOSURE_2026-08-31.md",
+    "docs/SIMCORE_S5_1_STATE_RECONCILE_OPTIONAL_TRIMMED_STRING_CONVERGENCE_CLOSURE_2026-08-31.md",
+    "docs/SIMCORE_S5_1_STATE_RECONCILE_OPTIONAL_TRIMMED_STRING_CONVERGENCE_IMPLEMENTATION_EVIDENCE_2026-08-31.md",
+    "docs/SIMCORE_S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION_EVIDENCE_2026-09-03.md",
+    "docs/SIMCORE_CACHE_A2_EXACT_BYTE_ABI_FIXTURE_BASELINE_2026-09-03.md",
+    "docs/SIMCORE_CACHE_A3_CANONICAL_EQUIVALENCE_SHADOW_DESCRIPTOR_2026-09-03.md",
+    "docs/SIMCORE_07003_EXACT_APPROVAL_TRANSACTION_BLOCKER_2026-09-03.md"
+  ]
+}

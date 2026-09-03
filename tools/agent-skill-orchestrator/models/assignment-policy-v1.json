@@ -1,0 +1,109 @@
+{
+  "budget": {
+    "escalation_model_calls": 0,
+    "hosted_ai_calls": 0,
+    "mapper_critic_parallel": true,
+    "role_call_limits": {
+      "critic": 1,
+      "mapper": 1,
+      "scout": 1,
+      "synthesizer": 1
+    },
+    "semantic_reruns": 0,
+    "total_semantic_role_calls": 4
+  },
+  "exact_tie_behavior": "NO_ASSIGNMENT",
+  "family_diversity_bonus": false,
+  "generation": {
+    "ctx_size": 16384,
+    "gpu_layers": 0,
+    "n_predict": 768,
+    "seed": 42,
+    "temperature": 0,
+    "threads": 4
+  },
+  "minimum_distinct_cases": 2,
+  "minimum_model_families": 2,
+  "policy_id": "o5-deterministic-role-assignment-v1",
+  "policy_sha256": "c5b0a191698a31952a0ce1625484b726cf2f65848615539c01d276fae6317f9a",
+  "policy_version": "v1",
+  "quality_before_latency": true,
+  "role_rules": {
+    "critic": {
+      "quality_vector": [
+        {"direction": "higher", "metric": "required_uncertainty_preservation_recall"},
+        {"direction": "higher", "metric": "boundary_precision"},
+        {"direction": "higher", "metric": "blocker_precision"},
+        {"direction": "higher", "metric": "boundary_recall"},
+        {"direction": "higher", "metric": "blocker_recall"}
+      ],
+      "ratio_thresholds": [
+        {"metric": "boundary_precision", "minimum_basis_points": 9000},
+        {"metric": "boundary_recall", "minimum_basis_points": 5000},
+        {"metric": "blocker_precision", "minimum_basis_points": 9000},
+        {"metric": "blocker_recall", "minimum_basis_points": 5000},
+        {"metric": "required_uncertainty_preservation_recall", "minimum_basis_points": 10000}
+      ],
+      "true_boolean_metrics": [],
+      "zero_count_metrics": ["false_blocker_count", "optimism_violation_count", "invalid_ref_count"]
+    },
+    "mapper": {
+      "quality_vector": [
+        {"direction": "higher", "metric": "grounding_precision"},
+        {"direction": "higher", "metric": "edge_precision"},
+        {"direction": "higher", "metric": "owner_precision"},
+        {"direction": "higher", "metric": "edge_recall"},
+        {"direction": "higher", "metric": "owner_recall"}
+      ],
+      "ratio_thresholds": [
+        {"metric": "owner_precision", "minimum_basis_points": 9000},
+        {"metric": "owner_recall", "minimum_basis_points": 5000},
+        {"metric": "edge_precision", "minimum_basis_points": 9000},
+        {"metric": "edge_recall", "minimum_basis_points": 5000},
+        {"metric": "grounding_precision", "minimum_basis_points": 9000}
+      ],
+      "true_boolean_metrics": [],
+      "zero_count_metrics": ["false_edge_count", "invalid_ref_count"]
+    },
+    "scout": {
+      "quality_vector": [
+        {"direction": "higher", "metric": "authority_precision"},
+        {"direction": "higher", "metric": "source_selection_precision"},
+        {"direction": "higher", "metric": "authority_recall"},
+        {"direction": "higher", "metric": "source_selection_recall"}
+      ],
+      "ratio_thresholds": [
+        {"metric": "source_selection_precision", "minimum_basis_points": 9000},
+        {"metric": "source_selection_recall", "minimum_basis_points": 5000},
+        {"metric": "authority_precision", "minimum_basis_points": 9000},
+        {"metric": "authority_recall", "minimum_basis_points": 5000}
+      ],
+      "true_boolean_metrics": [],
+      "zero_count_metrics": ["invalid_ref_count", "authority_overclaim_count"]
+    },
+    "synthesizer": {
+      "quality_vector": [
+        {"direction": "higher", "metric": "required_blocker_conflict_preservation_recall"},
+        {"direction": "higher", "metric": "required_record_preservation_recall"},
+        {"direction": "higher", "metric": "compact_completion_rate"},
+        {"direction": "higher", "metric": "optional_useful_selection_recall"},
+        {"direction": "lower", "metric": "excess_optional_selection_count"}
+      ],
+      "ratio_thresholds": [
+        {"metric": "required_record_preservation_recall", "minimum_basis_points": 10000},
+        {"metric": "required_blocker_conflict_preservation_recall", "minimum_basis_points": 10000}
+      ],
+      "true_boolean_metrics": ["compact_completion_status"],
+      "zero_count_metrics": ["forbidden_new_claim_count", "invalid_ref_count"]
+    }
+  },
+  "runtime": {
+    "artifact": "llama-b10516-bin-ubuntu-x64.tar.gz",
+    "artifact_sha256": "f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35",
+    "release": "b10516",
+    "request_timeout_seconds": 1800,
+    "source_digest": "b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9"
+  },
+  "schema_version": 1,
+  "weighted_composite_score": false
+}

@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.1`
-- Release: `Cold First-Turn Tail Attribution`
+- Version: `0.70.3`
+- Release: `Post-M2 Simplification Convergence`
 - Release branch: `release-simcore`
-- Release commit: `861100f4771967aa5b8ab8811d06f11702c0d3ff`
-- Release blob: `8f332cfceed316d35954e353c2eaca38c2f34d95`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `4c618563f43b8a3ff0eeb18eeff5536bb287369b`
+- Release blob: `068df0d6b792b2878c0c745949e0b9d38fc667fa`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-6`
@@ -30,18 +30,17 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
-- Release transaction: `simcore-v0.70.1-new-01`
-- Production commit: `861100f4771967aa5b8ab8811d06f11702c0d3ff`
-- Validation status: `LIVE_PASS`
-- Current priority: `S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Release transaction: `simcore-v0.70.3-new-14`
+- Production commit: `4c618563f43b8a3ff0eeb18eeff5536bb287369b`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `S7_CUMULATIVE_SIMPLIFICATION_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

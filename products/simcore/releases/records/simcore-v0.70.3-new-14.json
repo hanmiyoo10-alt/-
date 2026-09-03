@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.3-new-14",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "525c0b695badda20403605788a6ac2e5c9e5d7d4",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.3-new-14.json",
+  "releaseSpecSha256": "11993dfffbf9a186e78f9b1010f408ff99e7ead2e851f69da54e6fcf4830aee4",
+  "productionCommit": "4c618563f43b8a3ff0eeb18eeff5536bb287369b",
+  "previousProductionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "productionBlob": "068df0d6b792b2878c0c745949e0b9d38fc667fa",
+  "version": "0.70.3",
+  "releaseName": "Post-M2 Simplification Convergence",
+  "verificationReportSha256": "6b56953b40a0f11a6db11dd173cb62e6f5442da09f8c8a72e2c499251e4b29b7",
+  "verifierCommit": "a3660d28b1c70bc58eedf4780d0b72620b50e37c",
+  "publisherRunId": "33770616355",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "S7_CUMULATIVE_SIMPLIFICATION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

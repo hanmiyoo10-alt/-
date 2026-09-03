@@ -169,12 +169,11 @@ def patch(text):
         "      editDeltaCanonical: edit.editDeltaCanonical == null ? null : Number(edit.editDeltaCanonical), editDeltaFresh: edit.editDeltaFresh == null ? null : Number(edit.editDeltaFresh), editDeltaShape: String(edit.editDeltaShape || 'UNCLASSIFIED'),\n      editClassifyMs: editNumber(manualEdit?.classifyMs), editRebuildTotalMs: editNumber(manualEdit?.rebuildTotalMs),\n      editRebuildPrepareMs: editNumber(manualEdit?.prepareMs), editRebuildRecoveryMs: editNumber(manualEdit?.recoveryMs), editRebuildFinalizeMs: editNumber(manualEdit?.finalizeMs),\n      editRebuildCommitMs: editNumber(manualEdit?.commitMs), editRebuildOtherMs: editNumber(manualEdit?.otherMs), editRebuildConfidence: String(manualEdit?.confidence || 'UNAVAILABLE'),\n    };",
         "diagnostic-manual-fields",
     )
-    text = one(
-        text,
-        "      `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,\n      `Prior representation:",
-        "      `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,\n      ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'\n        ? [`Manual edit breakdown: classify ${requestBreakdown.editClassifyMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editClassifyMs)} · prepare ${diagnosticFormatMs(requestBreakdown.editRebuildPrepareMs)} · recovery ${diagnosticFormatMs(requestBreakdown.editRebuildRecoveryMs)} · finalize ${diagnosticFormatMs(requestBreakdown.editRebuildFinalizeMs)} · commit ${requestBreakdown.editRebuildCommitMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitMs)} · other ${diagnosticFormatMs(requestBreakdown.editRebuildOtherMs)} · confidence ${requestBreakdown.editRebuildConfidence}`]\n        : []),\n      `Prior representation:",
-        "manual-diagnostic-line",
-    )
+    diagnostic_anchor = "      `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,"
+    diagnostic_insert = diagnostic_anchor + "\n" + """      ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'
+        ? [`Manual edit breakdown: classify ${requestBreakdown.editClassifyMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editClassifyMs)} · prepare ${diagnosticFormatMs(requestBreakdown.editRebuildPrepareMs)} · recovery ${diagnosticFormatMs(requestBreakdown.editRebuildRecoveryMs)} · finalize ${diagnosticFormatMs(requestBreakdown.editRebuildFinalizeMs)} · commit ${requestBreakdown.editRebuildCommitMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitMs)} · other ${diagnosticFormatMs(requestBreakdown.editRebuildOtherMs)} · confidence ${requestBreakdown.editRebuildConfidence}`]
+        : []),"""
+    text = one(text, diagnostic_anchor, diagnostic_insert, "manual-diagnostic-line")
 
     if module_names(text) != original_modules:
         fail("07004_MODULE_INVENTORY_CHANGED")

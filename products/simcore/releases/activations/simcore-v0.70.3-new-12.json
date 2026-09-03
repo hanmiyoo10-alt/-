@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.70.3-new-12",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.3-new-12.json",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.3-intent-12",
+  "authorityConfirmation": "RS2_4_RELEASE"
+}

@@ -10,6 +10,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+MODULE_DIR = Path(__file__).resolve().parent
+PACKAGE_ROOT = MODULE_DIR.parent
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
 from benchmarks.build_o4h_voyage_inputs import SOURCE_REPOSITORY_SHA
 from benchmarks.run_o4h_scout_cell import MEASUREMENT_ID
 

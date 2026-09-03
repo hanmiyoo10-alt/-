@@ -1,0 +1,292 @@
+name: Agent Skill Orchestrator O4-G Termux Scout Uniqueness Diagnostic
+
+on:
+  push:
+    branches:
+      - 'agent-skill-o4g-request/**'
+    paths:
+      - '.agent-skill-o4g-requests/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  o4g-termux-scout-uniqueness-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      BENCH_ROOT: .agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic
+      SOURCE_SHA: f01c2ef304656de9254191ec2fb9a2c046642f21
+      LLAMA_RELEASE: b10516
+      LLAMA_SOURCE_DIGEST: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
+      LLAMA_ARTIFACT: llama-b10516-bin-ubuntu-x64.tar.gz
+      LLAMA_ARTIFACT_SHA256: f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35
+      SERVER_PORT: '39144'
+    steps:
+      - name: Checkout exact O4-G request commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Resolve bounded diagnostic request commit
+        id: resolve
+        shell: bash
+        env:
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rm -rf "$BENCH_ROOT"
+          mkdir -p "$BENCH_ROOT/cells"
+          python tools/agent-skill-orchestrator/benchmarks/resolve_o4g_request.py \
+            --repo-root . \
+            --github-ref "$EVENT_REF" \
+            --github-sha "$EVENT_SHA" \
+            --output "$BENCH_ROOT/request-provenance.json"
+          target_sha="$(python -c 'import json; print(json.load(open(".agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic/request-provenance.json"))["target_repository_sha"])')"
+          source_sha="$(python -c 'import json; print(json.load(open(".agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic/request-provenance.json"))["source_repository_sha"])')"
+          diagnostic="$(python -c 'import json; print(str(json.load(open(".agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic/request-provenance.json"))["diagnostic_replay_only"]).lower())')"
+          test "$source_sha" = "$SOURCE_SHA"
+          test "$diagnostic" = 'true'
+          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          echo "O4G_REQUEST_TARGET_SHA:$target_sha"
+          echo "O4G_FROZEN_SOURCE_SHA:$source_sha"
+          echo 'O4G_DIAGNOSTIC_REPLAY_ONLY:true'
+
+      - name: Checkout exact evaluated target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.resolve.outputs.target_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          clean: false
+
+      - name: Enforce exact main target and zero-credential boundary
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -f "$BENCH_ROOT/request-provenance.json"
+          git fetch --no-tags --depth=64 origin main
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          for name in HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACEHUB_API_TOKEN; do
+            if [[ -n "${!name:-}" ]]; then
+              echo "O4G_MODEL_CREDENTIAL_PRESENT:$name"
+              exit 2
+            fi
+          done
+          echo 'O4G_HOSTED_AI_BOUNDARY:ZERO'
+          echo 'O4G_MODEL_CREDENTIAL_ENV:ABSENT'
+
+      - name: Verify frozen Termux source bytes before inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$SOURCE_SHA"
+          python tools/agent-skill-orchestrator/benchmarks/run_o4g_scout_matrix.py verify-source \
+            --repo-root .
+          echo 'O4G_FROZEN_SOURCE_COMMIT:'"$SOURCE_SHA"
+
+      - name: Prepare frozen O4-G diagnostic inputs before inference
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          python tools/agent-skill-orchestrator/benchmarks/run_o4g_scout_matrix.py prepare \
+            --target-sha "$TARGET_SHA" \
+            --output "$BENCH_ROOT/matrix.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic')
+          matrix = json.loads((root / 'matrix.json').read_text(encoding='utf-8'))
+          expected = [
+              'qwen2.5-3b-instruct-q4_k_m',
+              'ministral-3-3b-instruct-2512-q4_k_m',
+          ]
+          if matrix.get('model_profile_ids') != expected:
+              raise SystemExit('O4-G model matrix drifted')
+          if matrix.get('source_repository_sha') != 'f01c2ef304656de9254191ec2fb9a2c046642f21':
+              raise SystemExit('O4-G source SHA drifted')
+          if matrix.get('diagnostic_replay_only') is not True:
+              raise SystemExit('O4-G diagnostic boundary drifted')
+          if matrix.get('assignment_candidate_only') is not False:
+              raise SystemExit('O4-G assignment-candidate boundary drifted')
+          if matrix.get('independent_assignment_case') is not False:
+              raise SystemExit('O4-G independent-case boundary drifted')
+          if matrix.get('paired_assignment_eligible') is not False:
+              raise SystemExit('O4-G paired assignment boundary drifted')
+          if matrix.get('response_schema_mode') != 'STRICT_UNIQUE_REF_ARRAY_ENUM':
+              raise SystemExit('O4-G strict schema mode drifted')
+          if matrix.get('request_timeout_seconds') != 1800:
+              raise SystemExit('O4-G timeout drifted')
+          if matrix.get('local_model_call_ceiling') != 2 or matrix.get('hosted_ai_call_ceiling') != 0:
+              raise SystemExit('O4-G call ceiling drifted')
+          forbidden = {'winner','recommended_model','assignment','rank','ranking','tie_break'}
+          if forbidden.intersection(matrix):
+              raise SystemExit('O4-G matrix contains forbidden winner semantics')
+          print('O4G_MATRIX_SHA256:' + matrix['matrix_sha256'])
+          print('O4G_RESPONSE_SCHEMA_SHA256:' + matrix['response_schema_sha256'])
+          print('O4G_RESPONSE_SCHEMA_MODE:' + matrix['response_schema_mode'])
+          PY
+
+      - name: Download and verify pinned llama.cpp runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/o4g-runtime"
+          mkdir -p "$runtime_root"
+          cd "$runtime_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" | sha256sum -c -
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          test -n "$llama_server"
+          llama_server="$(realpath "$llama_server")"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-runtime-version.txt" 2>&1
+          runtime_binary_sha256="$(sha256sum "$llama_server" | awk '{print $1}')"
+          printf '%s\n' "$runtime_binary_sha256" > "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-server.sha256"
+          printf 'LLAMA_SERVER=%s\n' "$llama_server" >> "$GITHUB_ENV"
+
+      - name: Execute exactly two independent O4-G local Scout diagnostic cells
+        shell: bash
+        run: |
+          set -euo pipefail
+          for profile_id in \
+            qwen2.5-3b-instruct-q4_k_m \
+            ministral-3-3b-instruct-2512-q4_k_m
+          do
+            cell_root="$BENCH_ROOT/cells/$profile_id"
+            mkdir -p "$cell_root"
+            PROFILE_ID="$profile_id" PROFILE_OUTPUT="$cell_root/profile.json" python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_o4f_scout_cell import o4f_model_profile
+          profile = o4f_model_profile(os.environ['PROFILE_ID'])
+          Path(os.environ['PROFILE_OUTPUT']).write_text(
+              json.dumps(profile, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+            model_repository="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["repository"])')"
+            model_revision="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["revision"])')"
+            model_file="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["file"])')"
+            model_sha256="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["sha256"])')"
+
+            model_root="$RUNNER_TEMP/o4g-model-$profile_id"
+            rm -rf "$model_root"
+            mkdir -p "$model_root"
+            curl -L --fail --retry 3 --retry-all-errors \
+              -o "$model_root/$model_file" \
+              "https://huggingface.co/${model_repository}/resolve/${model_revision}/${model_file}?download=true"
+            printf '%s  %s\n' "$model_sha256" "$model_root/$model_file" | sha256sum -c -
+
+            PROFILE_ID="$profile_id" \
+            MODEL_PATH="$model_root/$model_file" \
+            CELL_ROOT="$cell_root" \
+            LLAMA_SERVER="$LLAMA_SERVER" \
+            SERVER_PORT="$SERVER_PORT" \
+            RUNTIME_VERSION_PATH="$BENCH_ROOT/llama-runtime-version.txt" \
+            RUNTIME_BINARY_SHA_PATH="$BENCH_ROOT/llama-server.sha256" \
+            python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_o4g_scout_cell import main as run_cell
+          from runtime.generation import scout_generation
+          from runtime.llama_cpp import start_server, stop_server
+          from runtime.local_server import wait_for_health
+
+          port = int(os.environ['SERVER_PORT'])
+          cell_root = Path(os.environ['CELL_ROOT'])
+          log = (cell_root / 'llama-server.log').open('w', encoding='utf-8')
+          process = start_server(
+              Path(os.environ['LLAMA_SERVER']),
+              Path(os.environ['MODEL_PATH']),
+              scout_generation(),
+              port,
+              log,
+          )
+          try:
+              wait_for_health(port, process)
+              runtime_version = Path(os.environ['RUNTIME_VERSION_PATH']).read_text(encoding='utf-8').strip()
+              runtime_binary_sha256 = Path(os.environ['RUNTIME_BINARY_SHA_PATH']).read_text(encoding='utf-8').strip()
+              rc = run_cell([
+                  '--model-profile', os.environ['PROFILE_ID'],
+                  '--port', str(port),
+                  '--runtime-version', runtime_version,
+                  '--runtime-binary-sha256', runtime_binary_sha256,
+                  '--output-dir', str(cell_root),
+              ])
+          finally:
+              stop_server(process)
+              log.close()
+          raise SystemExit(rc)
+          PY
+            rm -rf "$model_root"
+          done
+          echo 'O4G_LOCAL_MODEL_CALL_CEILING:2'
+          echo 'O4G_HOSTED_AI_CALL_COUNT:0'
+
+      - name: Aggregate both terminal rows as diagnostic-only evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/agent-skill-orchestrator/benchmarks/run_o4g_scout_matrix.py aggregate \
+            --matrix "$BENCH_ROOT/matrix.json" \
+            --output-root "$BENCH_ROOT/cells" \
+            --output "$BENCH_ROOT/summary.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic')
+          summary = json.loads((root / 'summary.json').read_text(encoding='utf-8'))
+          if summary.get('local_model_call_count') != 2 or summary.get('hosted_ai_call_count') != 0:
+              raise SystemExit('O4-G summary call accounting invalid')
+          if len(summary.get('rows', [])) != 2:
+              raise SystemExit('O4-G summary row count invalid')
+          if summary.get('diagnostic_replay_only') is not True:
+              raise SystemExit('O4-G summary diagnostic boundary drifted')
+          if summary.get('independent_assignment_case') is not False:
+              raise SystemExit('O4-G summary independent-case boundary drifted')
+          if summary.get('paired_assignment_eligible') is not False:
+              raise SystemExit('O4-G summary assignment eligibility drifted')
+          if any(row.get('assignment_eligible') is not False for row in summary['rows']):
+              raise SystemExit('O4-G row assignment eligibility drifted')
+          forbidden = {'winner','recommended_model','assignment','rank','ranking','tie_break'}
+          if forbidden.intersection(summary):
+              raise SystemExit('O4-G summary contains forbidden winner semantics')
+          print('O4G_SUMMARY_SHA256:' + summary['summary_sha256'])
+          print('O4G_PAIRED_CONTRACT_VALID:' + str(summary['paired_contract_valid']).lower())
+          print('O4G_PAIRED_ASSIGNMENT_ELIGIBLE:false')
+          print('O4G_DIAGNOSTIC_OBSERVATION:' + summary['diagnostic_observation'])
+          PY
+
+      - name: Upload bounded O4-G diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

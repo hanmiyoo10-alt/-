@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.1 — Cold First-Turn Tail Attribution
-Release commit: 861100f4771967aa5b8ab8811d06f11702c0d3ff
+SimCore v0.70.3 — Post-M2 Simplification Convergence
+Release commit: 4c618563f43b8a3ff0eeb18eeff5536bb287369b
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

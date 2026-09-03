@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.3-intent-12",
+  "releaseId": "simcore-v0.70.3-new-12",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "861100f4771967aa5b8ab8811d06f11702c0d3ff",
+  "sourceCommit": "7c7774a260561f3f9bd5ff74eba70ee27bf211ac",
+  "candidateCommit": "d37b9b4f03b0dee64d7fbcc1c6be6a62ea189e3f",
+  "candidateReleaseBlob": "068df0d6b792b2878c0c745949e0b9d38fc667fa",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.3-intent-12",
+  "builderPath": "products/simcore/tooling/build-s7-post-m2-simplification-convergence.py",
+  "builderSha256": "41ea96ca66a2b469f3501b40802196590b39c5d351de0edf5a4174571267eff1",
+  "verifierCommit": "7c7774a260561f3f9bd5ff74eba70ee27bf211ac",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "c37e1753bbfc17c0ad5f433c818abb62721ef528f6e7750baaec4c80fd1d13af",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

@@ -1,0 +1,772 @@
+{
+  "schema": "SimCoreCacheA2ExactByteFixtureBaselineV1",
+  "source": {
+    "authority": "release-simcore",
+    "sourcePath": ".cache-a2-production/plugins/simcore/latest.js",
+    "pluginVersion": "0.70.1",
+    "runtimeVersion": "0.70.1",
+    "promptCompilerVersion": 4,
+    "sourceSha256": "2d86adef490835e35e56e6135a35521a99029298f1a04b239cc9c96838037abf"
+  },
+  "invariants": {
+    "promptPlacement": "TAIL_AFTER_CURRENT_USER",
+    "runtimePromptPolicy": "OBSERVE_ONLY",
+    "providerCache": "UNVERIFIED",
+    "fixtureSemantics": "compiler-observation-only",
+    "runtimeMutation": "NONE"
+  },
+  "fixtures": [
+    {
+      "id": "F0_INACTIVE_PENDING",
+      "family": "F0 inactive pending",
+      "expectedChangeClass": "NONE",
+      "transportNoise": null,
+      "output": {
+        "text": "",
+        "byteLength": 0,
+        "lineCount": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stable": {
+          "text": "",
+          "byteLength": 0,
+          "lineCount": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "slow": {
+          "text": "",
+          "byteLength": 0,
+          "lineCount": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "volatile": {
+          "text": "",
+          "byteLength": 0,
+          "lineCount": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "inactive"
+        }
+      }
+    },
+    {
+      "id": "F1_MODE_A_ORDINARY",
+      "family": "F1 ordinary Mode A",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F2_MODE_B_START",
+      "family": "F2 Mode B START",
+      "expectedChangeClass": "T3+T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=1\nmode=B_START\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_b_timestamp_semantics=broadcast_airtime\nmode_b_timestamp_is_not=depicted_scene_or_event_time\nbroadcast_airtime_progression=advance_only_by_elapsed_program_runtime\ndepicted_scene_time_may_jump_hours_or_days_without_copying_that_jump_to_broadcast_airtime=1\nbroadcast_airtime_previous=unknown\nbroadcast_airtime_start=unknown\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\ncommunity_placement=after_broadcast_prose\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1868,
+        "lineCount": 40,
+        "sha256": "b33b14db7e01a49fd927fc5a95c85272e434099454d862dcc65f3e40ded49ec8",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=1",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "d9ef0323033f672a2e1859aa9c251be7c33140c4050570b3301901ba0062d987"
+        },
+        "volatile": {
+          "text": "mode=B_START\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_b_timestamp_semantics=broadcast_airtime\nmode_b_timestamp_is_not=depicted_scene_or_event_time\nbroadcast_airtime_progression=advance_only_by_elapsed_program_runtime\ndepicted_scene_time_may_jump_hours_or_days_without_copying_that_jump_to_broadcast_airtime=1\nbroadcast_airtime_previous=unknown\nbroadcast_airtime_start=unknown\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\ncommunity_placement=after_broadcast_prose\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 619,
+          "lineCount": 16,
+          "sha256": "eb0b4da31037e46a9c498e075f80daa6f212fda64130dafd8510a0f6f127d390"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F3_MODE_B_CONTINUE",
+      "family": "F3 Mode B CONTINUE",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=1\nmode=B_CONTINUE\nbroadcast_locked=1\ncommunity_blocks_expected=1\nbroadcast_session_state=OPEN\nbroadcast_end_authority=DENIED\nepisode_end_authority=DENIED\nbroadcast_end_requires_explicit_B_END_lifecycle=1\ndo_not_narrate_or_imply_broadcast_or_episode_end=1\nscene_segment_mission_vote_or_player_departure_completion_does_not_authorize_episode_end=1\nbroadcast_end_boundary_applies_to=broadcast_prose+COMMUNITY+Knowledge\nmode_b_timestamp_semantics=broadcast_airtime\nmode_b_timestamp_is_not=depicted_scene_or_event_time\nbroadcast_airtime_progression=advance_only_by_elapsed_program_runtime\ndepicted_scene_time_may_jump_hours_or_days_without_copying_that_jump_to_broadcast_airtime=1\nbroadcast_airtime_previous=⏱️[2031-03-28 (Fri) 09:55 PM]\nbroadcast_airtime_start=⏱️[2031-03-28 (Fri) 09:45 PM]\nbroadcast_airtime_must_not_precede_previous=1\nbroadcast_airtime_elapsed_program_minutes=10\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\ncommunity_placement=after_broadcast_prose\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 2365,
+        "lineCount": 49,
+        "sha256": "37ce65e02edd11ffc03de2903ec6b5216a4fd2e078be26814e5454e428e4c8d0",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=1",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "d9ef0323033f672a2e1859aa9c251be7c33140c4050570b3301901ba0062d987"
+        },
+        "volatile": {
+          "text": "mode=B_CONTINUE\nbroadcast_locked=1\ncommunity_blocks_expected=1\nbroadcast_session_state=OPEN\nbroadcast_end_authority=DENIED\nepisode_end_authority=DENIED\nbroadcast_end_requires_explicit_B_END_lifecycle=1\ndo_not_narrate_or_imply_broadcast_or_episode_end=1\nscene_segment_mission_vote_or_player_departure_completion_does_not_authorize_episode_end=1\nbroadcast_end_boundary_applies_to=broadcast_prose+COMMUNITY+Knowledge\nmode_b_timestamp_semantics=broadcast_airtime\nmode_b_timestamp_is_not=depicted_scene_or_event_time\nbroadcast_airtime_progression=advance_only_by_elapsed_program_runtime\ndepicted_scene_time_may_jump_hours_or_days_without_copying_that_jump_to_broadcast_airtime=1\nbroadcast_airtime_previous=⏱️[2031-03-28 (Fri) 09:55 PM]\nbroadcast_airtime_start=⏱️[2031-03-28 (Fri) 09:45 PM]\nbroadcast_airtime_must_not_precede_previous=1\nbroadcast_airtime_elapsed_program_minutes=10\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\ncommunity_placement=after_broadcast_prose\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 1116,
+          "lineCount": 25,
+          "sha256": "4817124b879ce19b539e3d97bae941964737c5c50d7c6541ab1113371ce14afa"
+        },
+        "endAuthority": {
+          "session": "OPEN",
+          "authority": "DENIED",
+          "reason": "active-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F4_MODE_B_END",
+      "family": "F4 Mode B END",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=1\nmode=B_END\nbroadcast_locked=1\ncommunity_blocks_expected=2\nbroadcast_session_state=ENDING\nbroadcast_end_authority=ALLOWED\nepisode_end_authority=ALLOWED\nbroadcast_end_basis=explicit_B_END_lifecycle\nmode_b_timestamp_semantics=broadcast_airtime\nmode_b_timestamp_is_not=depicted_scene_or_event_time\nbroadcast_airtime_progression=advance_only_by_elapsed_program_runtime\ndepicted_scene_time_may_jump_hours_or_days_without_copying_that_jump_to_broadcast_airtime=1\nbroadcast_airtime_previous=⏱️[2031-03-28 (Fri) 10:15 PM]\nbroadcast_airtime_start=⏱️[2031-03-28 (Fri) 09:45 PM]\nbroadcast_airtime_must_not_precede_previous=1\nbroadcast_airtime_elapsed_program_minutes=30\nbroadcast_end_closure_contract=1;broadcast_end_always_emit_terminal_canonical_timestamp_line=1\nbroadcast_terminal_timestamp_means_final_current_broadcast_airtime=1;do_not_leave_broadcast_end_time_only_in_prose=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\ncommunity_placement=after_broadcast_prose\nb_end_output_order=broadcast_prose_then_scene_community_then_episode_community\nb_end_communities_must_be_contiguous_at_end=1\nb_end_platform_groups_required=6_distinct_across_blocks\nb_end_cross_block_group_reuse_forbidden=1\nb_end_block_shape=2_community_blocks_x_3_platform_sections_each\nb_end_one_community_block_with_6_platform_sections_is_invalid=1\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:2,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 2710,
+        "lineCount": 54,
+        "sha256": "7daf95dc4c0661c5f173aa5cd40d97e8357eec7e29b01ac1d4e98bbd0f1bda16",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=1",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "d9ef0323033f672a2e1859aa9c251be7c33140c4050570b3301901ba0062d987"
+        },
+        "volatile": {
+          "text": "mode=B_END\nbroadcast_locked=1\ncommunity_blocks_expected=2\nbroadcast_session_state=ENDING\nbroadcast_end_authority=ALLOWED\nepisode_end_authority=ALLOWED\nbroadcast_end_basis=explicit_B_END_lifecycle\nmode_b_timestamp_semantics=broadcast_airtime\nmode_b_timestamp_is_not=depicted_scene_or_event_time\nbroadcast_airtime_progression=advance_only_by_elapsed_program_runtime\ndepicted_scene_time_may_jump_hours_or_days_without_copying_that_jump_to_broadcast_airtime=1\nbroadcast_airtime_previous=⏱️[2031-03-28 (Fri) 10:15 PM]\nbroadcast_airtime_start=⏱️[2031-03-28 (Fri) 09:45 PM]\nbroadcast_airtime_must_not_precede_previous=1\nbroadcast_airtime_elapsed_program_minutes=30\nbroadcast_end_closure_contract=1;broadcast_end_always_emit_terminal_canonical_timestamp_line=1\nbroadcast_terminal_timestamp_means_final_current_broadcast_airtime=1;do_not_leave_broadcast_end_time_only_in_prose=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\ncommunity_placement=after_broadcast_prose\nb_end_output_order=broadcast_prose_then_scene_community_then_episode_community\nb_end_communities_must_be_contiguous_at_end=1\nb_end_platform_groups_required=6_distinct_across_blocks\nb_end_cross_block_group_reuse_forbidden=1\nb_end_block_shape=2_community_blocks_x_3_platform_sections_each\nb_end_one_community_block_with_6_platform_sections_is_invalid=1\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:2,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 1461,
+          "lineCount": 30,
+          "sha256": "68518dfbf11777709117c6879435e2e478b15bdd944dc91f4e90848e6386604e"
+        },
+        "endAuthority": {
+          "session": "ENDING",
+          "authority": "ALLOWED",
+          "reason": "explicit-b-end"
+        }
+      }
+    },
+    {
+      "id": "F5_MODE_C_COMMUNITY",
+      "family": "F5 Mode C / Community",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1912,
+        "lineCount": 37,
+        "sha256": "d1cd4dcb3502709ac4264e666b996049054fe6f732893c3b9a6bb0f8cec0f727",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 663,
+          "lineCount": 13,
+          "sha256": "a4b00754df1a497abc6033558e773e160aa4c675726fe31da9322047076a9c1a"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F6_SECONDARY_CONFIGURED_INACTIVE",
+      "family": "F6 secondary configured inactive",
+      "expectedChangeClass": "T3",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=1\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "2b6e135b843f7fcd8499db7a8b3a7dbce96589c5c2afca942a50f9f9cf13fcb9",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=1\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "0e7a121d947d61407a6c36d05abad9e41cbd1a223980eade31ab62211a09a719"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F7_SECONDARY_ACTIVE",
+      "family": "F7 secondary active",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=1\nsecondary_active=1\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "0e4e8df0895e342c25f44a8000f22029601feb1c8180fd14f48181a18764fbe3",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=1\nsecondary_active=1\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "46b880c8d8cb04688525b152f2bcd6c9ea328a819986a35a64f23321cf4d7c86"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F8A_AGE_OFFSET_INACTIVE",
+      "family": "F8 age offset inactive",
+      "expectedChangeClass": "T3",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F8B_AGE_OFFSET_ACTIVE",
+      "family": "F8 age offset active",
+      "expectedChangeClass": "T3",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+2\ncurrent_korean_age=character_reference_age+2;past_event_age_not_current=1\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1754,
+        "lineCount": 33,
+        "sha256": "d4439a1fa1ab58dfa5ba303179a09f8c6da6f3bdfd9aa8909d9cf86c3db3711e",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+2\ncurrent_korean_age=character_reference_age+2;past_event_age_not_current=1\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 168,
+          "lineCount": 6,
+          "sha256": "11b286f79c7f89405a5bea65b39442c772c8f4c01649f5e9432a767de39c0642"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F9_NARRATIVE_TIMELINE_ANCHOR",
+      "family": "F9 narrative timeline anchor / world-year transition",
+      "expectedChangeClass": "T3+T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=2031\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\ncurrent_timeline_anchor=⏱️[2031-03-28 (Fri) 10:50 PM]\ncurrent_timeline_authority=1;historical_context_reference_only=1;explicit_user_requested_past_scene_or_flashback_may_depart=1\ncurrent_character_age_and_status_follow_current_timeline=1;past_event_age_or_status_not_current=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\ntimestamp_semantics=current_narrative_time\nembedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1\nnarrative_progression_hint=fixture-forward\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 2123,
+        "lineCount": 38,
+        "sha256": "ebca491c219c1efaaa7042e262d5647f395a8dba672067d60c84a7657ccaa3f2",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=2031\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 91,
+          "lineCount": 5,
+          "sha256": "c67ea0bf14a36da0be7b687b5e1399a08a9d2b835b2aec63d259fad6f2a2aeac"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\ncurrent_timeline_anchor=⏱️[2031-03-28 (Fri) 10:50 PM]\ncurrent_timeline_authority=1;historical_context_reference_only=1;explicit_user_requested_past_scene_or_flashback_may_depart=1\ncurrent_character_age_and_status_follow_current_timeline=1;past_event_age_or_status_not_current=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\ntimestamp_semantics=current_narrative_time\nembedded_preview_flashback_or_event_time_does_not_replace_current_timestamp=1\nnarrative_progression_hint=fixture-forward\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 877,
+          "lineCount": 14,
+          "sha256": "28f308a228d6075105773bd43a374ef166208abb1286eb712045050fa42f5dc6"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F10_RECURRENCE_REPEATED",
+      "family": "F10 recurrence repeated",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nrequest_template_recurs_from_prior_history=1\nrequest_template_mode_family=A\nprior_answer_is_not_a_content_template=1\npreserve_requested_fields_and_output_contract=1\nreevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1\ndo_not_mechanically_reuse_prior_answer_composition_or_wording=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 2003,
+        "lineCount": 38,
+        "sha256": "926cf60f1edb54a53e0a54634f8f4e854b379de3fadd9668fb5ca7cfd1821753",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nrequest_template_recurs_from_prior_history=1\nrequest_template_mode_family=A\nprior_answer_is_not_a_content_template=1\npreserve_requested_fields_and_output_contract=1\nreevaluate_current_event_and_current_context_before_choosing_emphasis_reactions_and_wording=1\ndo_not_mechanically_reuse_prior_answer_composition_or_wording=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 754,
+          "lineCount": 14,
+          "sha256": "831830be87cab22ad016b101a48b300efe169922464b499245b6693020ce92ec"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F11_SHORT_COMMUNITY_LINEAGE_HANDOFF",
+      "family": "F11 short-Community lineage handoff",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nshort_community_request_context_is_current_lineage=1\nshort_community_source_selector=current_lineage_root_turn\nshort_community_source_root_mode=A\nshort_community_source_root_index=11\nshort_community_source_is_authoritative=1\ncurrent_root_evidence=CURRENT_ROOT_EVIDENCE_when_present;root_explicit_facts_highest_authority=1\ncurrent_source_evidence=CURRENT_SOURCE_EVIDENCE_when_present;rendered_context_only_when_conflicting_with_root=1\nevent_fact_precedence=CURRENT_ROOT_EVIDENCE>current_lineage_root>CURRENT_SOURCE_EVIDENCE>prior_similar_history\ndo_not_substitute_prior_similar_source_or_prior_community_answer=1\nsource_event_identity_and_facts=current_root_first;do_not_import_prior_similar_event_details=1\nabstract_generalization_from_current_root_allowed=1;stable_character_world_background_allowed_as_context_not_event_evidence=1;reaction_opinion_joke_tone_emphasis_free=1\nspecific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support;CURRENT_SOURCE_EVIDENCE_may_support_only_nonconflicting_rendered_details=1;outside_root_specifics_omit=1\noutside_root_specific_event_evidence_only_if_current_user_explicitly_requests_prior_events_history_comparison_or_retrospective=1;boundary_applies_title_body_comments_descriptions_Knowledge=1\nshort_community_request_reused_with_new_source=A\nderive_reaction_from_current_source_not_prior_answer=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 3276,
+        "lineCount": 52,
+        "sha256": "463f1623ccfa2228e74f626dba693846f91b035a2d7384819050dc31222fd7d7",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nshort_community_request_context_is_current_lineage=1\nshort_community_source_selector=current_lineage_root_turn\nshort_community_source_root_mode=A\nshort_community_source_root_index=11\nshort_community_source_is_authoritative=1\ncurrent_root_evidence=CURRENT_ROOT_EVIDENCE_when_present;root_explicit_facts_highest_authority=1\ncurrent_source_evidence=CURRENT_SOURCE_EVIDENCE_when_present;rendered_context_only_when_conflicting_with_root=1\nevent_fact_precedence=CURRENT_ROOT_EVIDENCE>current_lineage_root>CURRENT_SOURCE_EVIDENCE>prior_similar_history\ndo_not_substitute_prior_similar_source_or_prior_community_answer=1\nsource_event_identity_and_facts=current_root_first;do_not_import_prior_similar_event_details=1\nabstract_generalization_from_current_root_allowed=1;stable_character_world_background_allowed_as_context_not_event_evidence=1;reaction_opinion_joke_tone_emphasis_free=1\nspecific_event_example_scene_action_item_quote_or_outcome_requires_current_root_support;CURRENT_SOURCE_EVIDENCE_may_support_only_nonconflicting_rendered_details=1;outside_root_specifics_omit=1\noutside_root_specific_event_evidence_only_if_current_user_explicitly_requests_prior_events_history_comparison_or_retrospective=1;boundary_applies_title_body_comments_descriptions_Knowledge=1\nshort_community_request_reused_with_new_source=A\nderive_reaction_from_current_source_not_prior_answer=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 2027,
+          "lineCount": 28,
+          "sha256": "2591df4eb17036b1b919d342e8e18aa59d4510374f632a2d195bc250cb1420e7"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F12A_REACTION_MAX_ORDER_ABC",
+      "family": "F12 Community reaction_max construction order A",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={\"X(EN)\":101,\"더쿠\":202,\"유튜브\":303}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1952,
+        "lineCount": 37,
+        "sha256": "4c556b519512d4e23b03ed81ac1fd5c4022fcd562ea638f0cb39f4dc7097f9e6",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={\"X(EN)\":101,\"더쿠\":202,\"유튜브\":303}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 703,
+          "lineCount": 13,
+          "sha256": "26b82b12bf34c854a16fce583f234b8d9d772f9eec92e80132b405484ce23404"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F12B_REACTION_MAX_ORDER_CBA",
+      "family": "F12 Community reaction_max construction order B",
+      "expectedChangeClass": "T5",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={\"X(EN)\":101,\"더쿠\":202,\"유튜브\":303}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1952,
+        "lineCount": 37,
+        "sha256": "4c556b519512d4e23b03ed81ac1fd5c4022fcd562ea638f0cb39f4dc7097f9e6",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=C\nbroadcast_locked=0\ncommunity_blocks_expected=1\nmode_c_after_frame=COMMUNITY_immediately;no_intent_analysis_narrative_action_or_dialogue_before_first_COMMUNITY=1\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nplatform_groups_required=3_distinct\nplatform_group_reuse_forbidden=1\nknowledge_after_last_community=1\nreaction_max={\"X(EN)\":101,\"더쿠\":202,\"유튜브\":303}\nfinal_required_blocks=COMMUNITY:1,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 703,
+          "lineCount": 13,
+          "sha256": "26b82b12bf34c854a16fce583f234b8d9d772f9eec92e80132b405484ce23404"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F13_RELOAD_EQUIVALENT_STATE",
+      "family": "F13 reload-equivalent semantic state",
+      "expectedChangeClass": "NONE",
+      "transportNoise": null,
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F14A_T6_NOISE_REQUEST_A",
+      "family": "F14 same semantics with T6 noise A",
+      "expectedChangeClass": "NONE",
+      "transportNoise": {
+        "requestId": "req-a",
+        "generatedAt": 111,
+        "latencyMs": 7
+      },
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    },
+    {
+      "id": "F14B_T6_NOISE_REQUEST_B",
+      "family": "F14 same semantics with T6 noise B",
+      "expectedChangeClass": "NONE",
+      "transportNoise": {
+        "requestId": "req-b",
+        "generatedAt": 999999,
+        "latencyMs": 987
+      },
+      "output": {
+        "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1\nkorean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0\nmode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+        "byteLength": 1680,
+        "lineCount": 32,
+        "sha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+        "stable": {
+          "text": "[SIMCORE CORE STATE — AUTHORITATIVE]\nrequired_frame=응답,볼륨,챕터,Chatindex,timestamp\nresponse_envelope=exactly_one_no_restart\nperiod_continuity=when_comparing_successive_periods_previous_terminal_state_is_next_baseline\ndo_not_replay_completed_prior_period_transition_as_current_period_transition=1\ncurrent_input_explicit_current_event_facts=authoritative_over_conflicting_prior_event_versions\ncurrent_input_task=primary_generation_authority\nprior_assistant_output=continuity_reference_context_not_current_task_authority\ndo_not_replay_completed_prior_response_frame_or_task_unless_current_input_explicitly_requests_continuation_recap_comparison_or_reuse=1\nreference_sources=character_card+currently_exposed_lore_if_present\ncharacter_world_facts_use_reference_sources=1\nknowledge_required=1\nknowledge_position=final_output_block\nrequired_knowledge_block=exactly_one_complete_<Knowledge>...</Knowledge>\ncommunity_format_contract_condition=community_blocks_expected>0\ncommunity_comment_shape=4_top_level+1_nested_reply_exactly\nreaction_required=each_comment_and_reply\nreaction_floor_scope=per_platform_family\nreaction_history_shared_across_modes=1",
+          "byteLength": 1153,
+          "lineCount": 19,
+          "sha256": "eb120b401add80522a802971d905ce00856849b7bbb353d00f361155678b6537"
+        },
+        "slow": {
+          "text": "korean_age_offset=+0\nworld_year=unknown\nsecondary_configured=0\nsecondary_active=0\nepisode_no=0",
+          "byteLength": 94,
+          "lineCount": 5,
+          "sha256": "c177094cd04c53f7b8be345ddb4d93552d5f607b36c147b03eab81f49b26ec55"
+        },
+        "volatile": {
+          "text": "mode=A\nbroadcast_locked=0\ncommunity_blocks_expected=0\nnarrative_tail_time_contract=1;current_scene_time_advancement_requires_canonical_timestamp_line=1\nterminal_current_time_must_be_explicit_when_changed_from_frame=1;do_not_leave_current_time_advancement_only_in_prose=1\nuser_stated_later_current_or_end_time_must_be_rendered_as_current_canonical_timestamp=1\nfinal_required_blocks=COMMUNITY:0,Knowledge:1_last\n[/SIMCORE CORE STATE]",
+          "byteLength": 431,
+          "lineCount": 8,
+          "sha256": "a48540608b5ef69bc3131626fea3be9617fcf14e72fe819c6c530fd9cd4c1727"
+        },
+        "endAuthority": {
+          "session": "CLOSED",
+          "authority": "NOT_APPLICABLE",
+          "reason": "no-open-broadcast"
+        }
+      }
+    }
+  ],
+  "changeMatrix": [
+    {
+      "baseId": "F1_MODE_A_ORDINARY",
+      "candidateId": "F6_SECONDARY_CONFIGURED_INACTIVE",
+      "expectedOwner": "T3 secondary configuration",
+      "expectedRelation": "slow tier only",
+      "samePromptBytes": false,
+      "sameStableTier": true,
+      "sameSlowTier": false,
+      "sameVolatileTier": true,
+      "firstChangedByte": 1215,
+      "firstChangedLine": 22,
+      "baseSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+      "candidateSha256": "2b6e135b843f7fcd8499db7a8b3a7dbce96589c5c2afca942a50f9f9cf13fcb9"
+    },
+    {
+      "baseId": "F6_SECONDARY_CONFIGURED_INACTIVE",
+      "candidateId": "F7_SECONDARY_ACTIVE",
+      "expectedOwner": "T5 current-turn secondary activation",
+      "expectedRelation": "slow tier only, current implementation placement",
+      "samePromptBytes": false,
+      "sameStableTier": true,
+      "sameSlowTier": false,
+      "sameVolatileTier": true,
+      "firstChangedByte": 1234,
+      "firstChangedLine": 23,
+      "baseSha256": "2b6e135b843f7fcd8499db7a8b3a7dbce96589c5c2afca942a50f9f9cf13fcb9",
+      "candidateSha256": "0e4e8df0895e342c25f44a8000f22029601feb1c8180fd14f48181a18764fbe3"
+    },
+    {
+      "baseId": "F8A_AGE_OFFSET_INACTIVE",
+      "candidateId": "F8B_AGE_OFFSET_ACTIVE",
+      "expectedOwner": "T3 age configuration",
+      "expectedRelation": "slow tier only",
+      "samePromptBytes": false,
+      "sameStableTier": true,
+      "sameSlowTier": false,
+      "sameVolatileTier": true,
+      "firstChangedByte": 1173,
+      "firstChangedLine": 20,
+      "baseSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+      "candidateSha256": "d4439a1fa1ab58dfa5ba303179a09f8c6da6f3bdfd9aa8909d9cf86c3db3711e"
+    },
+    {
+      "baseId": "F1_MODE_A_ORDINARY",
+      "candidateId": "F9_NARRATIVE_TIMELINE_ANCHOR",
+      "expectedOwner": "T3 world-year + T5 current timeline guidance",
+      "expectedRelation": "slow + volatile",
+      "samePromptBytes": false,
+      "sameStableTier": true,
+      "sameSlowTier": false,
+      "sameVolatileTier": false,
+      "firstChangedByte": 1186,
+      "firstChangedLine": 21,
+      "baseSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+      "candidateSha256": "ebca491c219c1efaaa7042e262d5647f395a8dba672067d60c84a7657ccaa3f2"
+    },
+    {
+      "baseId": "F1_MODE_A_ORDINARY",
+      "candidateId": "F2_MODE_B_START",
+      "expectedOwner": "T3 episode lifecycle + T5 current mode",
+      "expectedRelation": "slow + volatile",
+      "samePromptBytes": false,
+      "sameStableTier": true,
+      "sameSlowTier": false,
+      "sameVolatileTier": false,
+      "firstChangedByte": 1247,
+      "firstChangedLine": 24,
+      "baseSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+      "candidateSha256": "b33b14db7e01a49fd927fc5a95c85272e434099454d862dcc65f3e40ded49ec8"
+    },
+    {
+      "baseId": "F12A_REACTION_MAX_ORDER_ABC",
+      "candidateId": "F12B_REACTION_MAX_ORDER_CBA",
+      "expectedOwner": "serialization determinism",
+      "expectedRelation": "exact byte identity required",
+      "samePromptBytes": true,
+      "sameStableTier": true,
+      "sameSlowTier": true,
+      "sameVolatileTier": true,
+      "firstChangedByte": null,
+      "firstChangedLine": null,
+      "baseSha256": "4c556b519512d4e23b03ed81ac1fd5c4022fcd562ea638f0cb39f4dc7097f9e6",
+      "candidateSha256": "4c556b519512d4e23b03ed81ac1fd5c4022fcd562ea638f0cb39f4dc7097f9e6"
+    },
+    {
+      "baseId": "F1_MODE_A_ORDINARY",
+      "candidateId": "F13_RELOAD_EQUIVALENT_STATE",
+      "expectedOwner": "reload equivalence",
+      "expectedRelation": "exact byte identity required",
+      "samePromptBytes": true,
+      "sameStableTier": true,
+      "sameSlowTier": true,
+      "sameVolatileTier": true,
+      "firstChangedByte": null,
+      "firstChangedLine": null,
+      "baseSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+      "candidateSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834"
+    },
+    {
+      "baseId": "F14A_T6_NOISE_REQUEST_A",
+      "candidateId": "F14B_T6_NOISE_REQUEST_B",
+      "expectedOwner": "T6 observability firewall",
+      "expectedRelation": "exact byte identity required",
+      "samePromptBytes": true,
+      "sameStableTier": true,
+      "sameSlowTier": true,
+      "sameVolatileTier": true,
+      "firstChangedByte": null,
+      "firstChangedLine": null,
+      "baseSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834",
+      "candidateSha256": "dcc252301f36b25a9c59eed8ff8912a4d2c6dceb7d5c7a5fe3602dd844710834"
+    }
+  ]
+}

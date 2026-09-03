@@ -10,7 +10,7 @@ TARGET_VERSION = "0.70.4"
 RELEASE_NAME = "Manual Edit Rebuild Attribution"
 
 RELEASE_NOTE = """// v0.70.4 Manual Edit Rebuild Attribution:
-// - Adds bounded current-request timing decomposition only for genuine MANUAL_EDIT_REBUILT reconciliation
+// - Adds bounded current-request timing decomposition only for the genuine manual-edit rebuild reconciliation path
 // - Attributes classify, prepare, recovery, finalize, commit and conservative residual other without changing edit decisions or snapshot semantics
 // - Renders one Manual edit breakdown diagnostic line only for the genuine manual rebuild path; fast/carryover paths remain branch-only
 // - Adds no require edge, persistent schema, raw-body retention, history scan, timer, network, storage or chat operation beyond the already-required rebuild work

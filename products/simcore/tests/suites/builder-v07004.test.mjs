@@ -94,6 +94,22 @@ function manualSession(stubs) {
   };
 }
 
+function outerDeps({ relation, onDelegate }) {
+  return {
+    coreRules: { fingerprintText: (value) => `fp:${String(value)}` },
+    textMessageContent: (message) => String(message?.content || ''),
+    representationRegistry: { latest: () => ({ provenance: 'fixture' }) },
+    representationRules: { inspectCarryover: () => ({ ...relation }) },
+    coreLocationKey: 'test/location',
+    SIMCORE_LOG_PREFIX: '[test]',
+    reconcileSession: async (_index, _content, perfDetail) => {
+      if (onDelegate) onDelegate(perfDetail);
+      perfDetail.path = 'manual-edit-rebuilt';
+      return { changed: true, mode: 'A', revision: 3 };
+    },
+  };
+}
+
 export async function runSuite(ctx) {
   const version = ctx.source.match(/^\/\/@version\s+([^\s]+)\s*$/m)?.[1] || '';
   if (version !== '0.70.3') {
@@ -156,6 +172,7 @@ export async function runSuite(ctx) {
     assert(latest.includes('Manual edit breakdown: classify'), 'manual edit diagnostic line missing');
     equal(count(latest, 'Manual edit breakdown: classify'), 1, 'manual edit diagnostic line is singular');
     assert(latest.includes("requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'"), 'manual edit diagnostic must be branch-gated');
+    assert(latest.includes("commit ${requestBreakdown.editRebuildCommitMs == null ? 'n/a'"), 'unmapped commit must render n/a');
     assert(latest.includes('const editDetail = perf ? { editReconcileStart: t } : null;'), 'outer existing edit clock must seed attribution');
 
     const stubs = manualStubs();
@@ -196,35 +213,53 @@ export async function runSuite(ctx) {
     equal(fastDetail.path, 'same-fast', 'ordinary carryover remains same-fast');
     equal(fastDetail.manualEditAttribution, null, 'ordinary carryover has no manual breakdown attribution');
 
+    const representationDetail = { editReconcileStart: Date.now() };
+    let representationDelegated = 0;
+    await edit.reconcileVisiblePreviousAssistant(
+      { currentOutputIndex: 0, current: {}, trustedOutputFingerprint: 'fp:canonical-visible' },
+      { message: [{ role: 'assistant', content: 'fresh-visible' }] },
+      representationDetail,
+      outerDeps({
+        relation: {
+          priorCanonical: 'fp:canonical-visible', priorFresh: 'fp:fresh-visible', priorHostRaw: 'fp:host-visible', priorMatch: 'CANONICAL',
+          priorRepresentation: 'OUTPUT_MISMATCH', currentMatch: 'FRESH_CHAT', deltaCanonical: 1, deltaFresh: 0, deltaShape: 'FRESH_EXACT',
+        },
+        onDelegate: () => { representationDelegated += 1; },
+      }),
+    );
+    equal(representationDelegated, 0, 'representation-fast control must not delegate to rebuild');
+    equal(representationDetail.path, 'representation-fast-reconciled', 'representation-fast path preserved');
+    equal(representationDetail.compatibilitySource, 'fresh-exact-carryover', 'representation-fast compatibility source preserved');
+    equal(Object.prototype.hasOwnProperty.call(representationDetail, 'editClassifyMs'), false, 'representation-fast path pays no classify clock bucket');
+    equal(Object.prototype.hasOwnProperty.call(representationDetail, 'editRebuildStart'), false, 'representation-fast path has no rebuild clock handoff');
+
     const outerDetail = { editReconcileStart: Date.now() };
     let delegated = 0;
     await edit.reconcileVisiblePreviousAssistant(
-      { currentOutputIndex: 0, current: {}, trustedOutputFingerprint: null },
-      { message: [{ role: 'assistant', content: 'edited-visible-body' }] },
+      { currentOutputIndex: 0, current: {}, trustedOutputFingerprint: 'fp:canonical-visible' },
+      { message: [{ role: 'assistant', content: 'third-visible-body' }] },
       outerDetail,
-      {
-        coreRules: { fingerprintText: (value) => `fp:${String(value)}` },
-        textMessageContent: (message) => String(message?.content || ''),
-        representationRegistry: { latest: () => null },
-        representationRules: {
-          inspectCarryover: () => ({
-            priorCanonical: null, priorFresh: null, priorHostRaw: null, priorMatch: null,
-            priorRepresentation: 'UNAVAILABLE', currentMatch: 'NONE', deltaCanonical: null,
-            deltaFresh: null, deltaShape: 'UNCLASSIFIED',
-          }),
+      outerDeps({
+        relation: {
+          priorCanonical: 'fp:canonical-visible', priorFresh: 'fp:fresh-visible', priorHostRaw: 'fp:host-visible', priorMatch: 'NONE',
+          priorRepresentation: 'OUTPUT_MISMATCH', currentMatch: 'NONE', deltaCanonical: 1, deltaFresh: 1, deltaShape: 'THIRD_REPRESENTATION',
         },
-        coreLocationKey: 'test/location',
-        SIMCORE_LOG_PREFIX: '[test]',
-        reconcileSession: async (_index, _content, perfDetail) => {
-          delegated += 1;
-          perfDetail.path = 'manual-edit-rebuilt';
-          return { changed: true, mode: 'A', revision: 3 };
-        },
-      },
+        onDelegate: () => { delegated += 1; },
+      }),
     );
-    equal(delegated, 1, 'genuine outer edit delegates exactly once');
+    equal(delegated, 1, 'third representation remains conservative and delegates exactly once');
     assert(Number.isFinite(Number(outerDetail.editClassifyMs)) && Number(outerDetail.editClassifyMs) >= 0, 'outer classify bucket measured on delegated path');
     assert(Number.isFinite(Number(outerDetail.editRebuildStart)), 'outer rebuild start handed to edit owner');
+
+    const unmappedStubs = manualStubs({ commitMetric: {} });
+    const unmappedEdit = new BundleLoader(latest, { stubs: unmappedStubs }).load('edit-reconcile');
+    const unmappedSession = manualSession(unmappedStubs).session;
+    const unmappedDetail = { editClassifyMs: 0.1 };
+    const unmappedResult = await unmappedEdit.reconcileSessionEditedOutput(unmappedSession, 2, 'edited-visible-body', unmappedDetail);
+    equal(unmappedResult.changed, true, 'unmapped optional commit anchor cannot alter edit correctness');
+    assert(unmappedDetail.manualEditAttribution, 'unmapped optional commit retains bounded residual attribution');
+    equal(unmappedDetail.manualEditAttribution.commitMs, null, 'unmapped optional commit remains n/a instead of fabricated zero');
+    assert(unmappedDetail.manualEditAttribution.otherMs >= 0, 'unmapped optional commit time remains in residual');
 
     const badStubs = manualStubs({ commitMetric: { serializeMs: 1000, setMs: 1000, pruneMs: 1000 } });
     const badEdit = new BundleLoader(latest, { stubs: badStubs }).load('edit-reconcile');
@@ -245,8 +280,10 @@ export async function runSuite(ctx) {
         { id: 'v07004-module-and-require-graph-frozen', status: 'PASS' },
         { id: 'v07004-side-effect-surfaces-frozen', status: 'PASS' },
         { id: 'v07004-genuine-edit-path-executable-with-bounded-accounting', status: 'PASS' },
-        { id: 'v07004-fast-path-has-no-manual-attribution', status: 'PASS' },
-        { id: 'v07004-classification-boundary-measured-only-on-delegated-path', status: 'PASS' },
+        { id: 'v07004-same-fast-path-has-no-manual-attribution', status: 'PASS' },
+        { id: 'v07004-representation-fast-path-has-no-rebuild-attribution-work', status: 'PASS' },
+        { id: 'v07004-third-representation-remains-conservative', status: 'PASS' },
+        { id: 'v07004-unmapped-commit-is-na-and-residual', status: 'PASS' },
         { id: 'v07004-impossible-accounting-fails-closed', status: 'PASS' },
       ],
     };

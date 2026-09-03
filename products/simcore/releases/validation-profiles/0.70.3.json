@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.70.3",
-  "releaseName": "Runtime Cache Hash Primitive Convergence",
+  "releaseName": "Post-M2 Simplification Convergence",
   "contracts": {
     "reload-cache-continuity": {
       "mode": "INHERIT_BEHAVIOR",

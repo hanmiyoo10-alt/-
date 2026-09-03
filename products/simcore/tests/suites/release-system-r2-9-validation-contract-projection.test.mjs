@@ -36,7 +36,7 @@ const ACTIVE_R2_9_ROUTES = Object.freeze({
 const KNOWN_RELEASE_IDENTITIES = Object.freeze({
   '0.70.0': Object.freeze({ releaseName: 'Current Task Primacy Guard' }),
   '0.70.1': Object.freeze({ releaseName: 'Cold First-Turn Tail Attribution' }),
-  '0.70.3': Object.freeze({ releaseName: 'Runtime Cache Hash Primitive Convergence' }),
+  '0.70.3': Object.freeze({ releaseName: 'Post-M2 Simplification Convergence' }),
 });
 
 function readJson(url) {

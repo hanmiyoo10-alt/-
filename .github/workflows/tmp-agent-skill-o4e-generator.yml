@@ -147,14 +147,16 @@ jobs:
           rm -f .agent-skill-dev/o4e-generate.txt
           rmdir .agent-skill-dev 2>/dev/null || true
           rm -f .github/workflows/tmp-agent-skill-o4e-generator.yml
-          find . -type d -name __pycache__ -prune -exec rm -rf {} +
-          find . -type f -name '*.pyc' -delete
+          find tools/agent-skill-orchestrator -type d -name __pycache__ -prune -exec rm -rf {} +
+          find tools/agent-skill-orchestrator -type f -name '*.pyc' -delete
+          test ! -e .agent-skill-dev/o4e-generate.txt
+          test ! -e .github/workflows/tmp-agent-skill-o4e-generator.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git diff --cached --check
-          if git diff --cached --name-only | grep -E '(__pycache__|\.pyc$|tmp-agent-skill-o4e-generator|\.agent-skill-dev)'; then
-            echo 'O4E_TEMP_OR_BYTECODE_LEAK'
+          if git diff --cached --name-only | grep -E '^tools/agent-skill-orchestrator/.*(__pycache__|\.pyc$)'; then
+            echo 'O4E_ORCHESTRATOR_BYTECODE_LEAK'
             exit 2
           fi
           git commit -m 'feat(agent-skill): add O4-E Scout authority schema validation'

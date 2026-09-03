@@ -28,6 +28,19 @@
       ],
       "guidelines_path": "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
       "registration_semantics": "domain_metadata_only_no_skill_promotion"
+    },
+    {
+      "domain_id": "voyage-token-check",
+      "scope": "plugin:voyage-token-check",
+      "name": "Voyage Token Check",
+      "lifecycle": "design-evidence-validation",
+      "primary_path": "voyage-token-check/**",
+      "authority_refs": [
+        {"kind": "declared_by", "value": "docs/REPO_PROJECT_CATALOG.md"},
+        {"kind": "evidence", "value": "voyage-token-check/DESIGN_STATUS.md"}
+      ],
+      "guidelines_path": "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+      "registration_semantics": "domain_metadata_only_no_skill_promotion"
     }
   ]
 }

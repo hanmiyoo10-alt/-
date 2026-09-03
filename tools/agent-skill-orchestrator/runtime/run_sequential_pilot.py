@@ -20,7 +20,7 @@ from evidence import build_evidence_package, evidence_package_sha256
 from roles.critic import build_critic_prompt, critic_response_schema
 from roles.mapper import build_mapper_prompt, mapper_response_schema
 from roles.scout import build_scout_prompt
-from roles.scout_evidence_schema import scout_response_schema_for_evidence
+from roles.scout_evidence_schema import scout_response_schema_for_evidence_unique_refs
 from roles.synthesizer import build_synthesizer_prompt, synthesizer_response_schema
 from router import route_task
 from runtime.generation import scout_generation, scout_model_profile
@@ -334,7 +334,7 @@ def run_sequential_calls(
 
     scout_prompt = build_scout_prompt(evidence_package)
     content, finish, envelope = invoke(
-        port, scout_prompt, scout_response_schema_for_evidence(evidence_package)
+        port, scout_prompt, scout_response_schema_for_evidence_unique_refs(evidence_package)
     )
     model_calls += 1
     result = build_scout_execution_result(

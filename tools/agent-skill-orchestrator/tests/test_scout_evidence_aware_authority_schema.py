@@ -89,15 +89,18 @@ class ScoutEvidenceAwareAuthoritySchemaTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             scout_response_schema_for_evidence(invalid)
 
-    def test_live_runtime_uses_evidence_aware_builder_but_historical_benchmarks_do_not(self):
+    def test_live_runtime_uses_strict_builder_but_historical_benchmarks_do_not(self):
         live_expectations = {
-            "tools/agent-skill-orchestrator/runtime/run_scout_pilot.py": 'scout_response_schema_for_evidence(control["evidence_package"])',
-            "tools/agent-skill-orchestrator/runtime/run_sequential_pilot.py": "scout_response_schema_for_evidence(evidence_package)",
-            "tools/agent-skill-orchestrator/runtime/run_parallel_pilot.py": "scout_response_schema_for_evidence(evidence_package)",
+            "tools/agent-skill-orchestrator/runtime/run_scout_pilot.py": 'scout_response_schema_for_evidence_unique_refs(control["evidence_package"])',
+            "tools/agent-skill-orchestrator/runtime/run_sequential_pilot.py": "scout_response_schema_for_evidence_unique_refs(evidence_package)",
+            "tools/agent-skill-orchestrator/runtime/run_parallel_pilot.py": "scout_response_schema_for_evidence_unique_refs(evidence_package)",
         }
         for relative, expected in live_expectations.items():
             text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-            self.assertIn("from roles.scout_evidence_schema import scout_response_schema_for_evidence", text)
+            self.assertIn(
+                "from roles.scout_evidence_schema import scout_response_schema_for_evidence_unique_refs",
+                text,
+            )
             self.assertIn(expected, text)
 
         historical = [

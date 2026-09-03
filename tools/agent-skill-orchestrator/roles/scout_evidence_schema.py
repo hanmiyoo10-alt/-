@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from itertools import combinations
 from typing import Any
 
 from evidence import validate_evidence_package
 from roles.scout import scout_response_schema
+
+
+MAX_STRICT_REF_ARRAY_VARIANTS = 50_000
 
 
 class ScoutEvidenceSchemaError(ValueError):
@@ -103,3 +107,68 @@ def scout_response_schema_for_evidence(
     record_template["oneOf"] = branches
     static_schema["properties"]["r"]["items"] = record_template
     return static_schema
+
+
+def _strict_unique_ref_arrays(ref_schema: dict[str, Any]) -> list[list[str]]:
+    items = ref_schema.get("items")
+    refs = items.get("enum") if isinstance(items, dict) else None
+    if (
+        not isinstance(refs, list)
+        or not refs
+        or any(not isinstance(ref, str) or not ref for ref in refs)
+    ):
+        raise ScoutEvidenceSchemaError("strict Scout ref schema requires a non-empty supplied ref enum")
+    if refs != sorted(refs) or len(refs) != len(set(refs)):
+        raise ScoutEvidenceSchemaError("strict Scout ref enum must be sorted and unique")
+
+    min_items = ref_schema.get("minItems")
+    max_items = ref_schema.get("maxItems")
+    if (
+        not isinstance(min_items, int)
+        or isinstance(min_items, bool)
+        or not isinstance(max_items, int)
+        or isinstance(max_items, bool)
+        or min_items < 0
+        or max_items < min_items
+    ):
+        raise ScoutEvidenceSchemaError("strict Scout ref array bounds are invalid")
+
+    upper = min(max_items, len(refs))
+    variants: list[list[str]] = []
+    for size in range(min_items, upper + 1):
+        for values in combinations(refs, size):
+            variants.append(list(values))
+            if len(variants) > MAX_STRICT_REF_ARRAY_VARIANTS:
+                raise ScoutEvidenceSchemaError(
+                    "strict Scout ref array expansion exceeds deterministic variant bound"
+                )
+    if not variants:
+        raise ScoutEvidenceSchemaError("strict Scout ref schema has no representable unique arrays")
+    return variants
+
+
+def scout_response_schema_for_evidence_unique_refs(
+    evidence_package: dict[str, Any],
+    contract: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Narrow live Scout generation to unique, canonical ref arrays.
+
+    The historical evidence-aware builder above remains unchanged for O4-E/O4-F
+    provenance. This strict projection adds array-valued enums that the pinned
+    llama.cpp grammar converter can represent, while ``validate_scout_wire``
+    remains the final semantic and contract authority.
+    """
+
+    schema = scout_response_schema_for_evidence(evidence_package, contract)
+    record_schema = schema["properties"]["r"]["items"]
+    branches = record_schema.get("oneOf")
+    if not isinstance(branches, list) or not branches:
+        raise ScoutEvidenceSchemaError("strict Scout schema requires evidence-aware record branches")
+
+    for branch in branches:
+        properties = branch.get("properties")
+        ref_schema = properties.get("r") if isinstance(properties, dict) else None
+        if not isinstance(ref_schema, dict):
+            raise ScoutEvidenceSchemaError("strict Scout branch is missing ref schema")
+        ref_schema["enum"] = _strict_unique_ref_arrays(ref_schema)
+    return schema

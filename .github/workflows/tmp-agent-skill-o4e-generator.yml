@@ -144,7 +144,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .o4e-payload
+          rm -rf .o4e-payload o4e-payload.tar.gz
           mkdir -p .o4e-payload/.github/workflows
           mkdir -p .o4e-payload/tools/agent-skill-orchestrator/benchmarks
           mkdir -p .o4e-payload/tools/agent-skill-orchestrator/tests
@@ -155,11 +155,13 @@ jobs:
           cp tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_schema_validation.py .o4e-payload/tools/agent-skill-orchestrator/benchmarks/
           cp tools/agent-skill-orchestrator/tests/test_o4e_scout_schema_validation.py .o4e-payload/tools/agent-skill-orchestrator/tests/
           find .o4e-payload -type f -print | sort
+          tar -czf o4e-payload.tar.gz -C .o4e-payload .
+          test -s o4e-payload.tar.gz
 
       - name: Upload generated O4-E payload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: o4e-generated-payload-${{ github.run_id }}
-          path: .o4e-payload
+          path: o4e-payload.tar.gz
           if-no-files-found: error
           retention-days: 1

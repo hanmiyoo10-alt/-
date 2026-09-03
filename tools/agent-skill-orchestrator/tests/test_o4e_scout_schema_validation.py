@@ -138,14 +138,15 @@ class O4EScoutSchemaValidationTests(unittest.TestCase):
         case, evidence = load_case_and_evidence()
         prompt = build_scout_prompt(evidence)
         self.assertEqual(manifest["matrix_id"], MATRIX_ID)
-        self.assertEqual(manifest["fixture_sha256"], EXPECTED_FIXTURE_SHA256).       self.assertEqual(manifest["evidence_sha256"], EXPECTED_EVIDENCE_SHA256)
+        self.assertEqual(manifest["fixture_sha256"], EXPECTED_FIXTURE_SHA256)
+        self.assertEqual(manifest["evidence_sha256"], EXPECTED_EVIDENCE_SHA256)
         self.assertEqual(manifest["prompt_sha256"], EXPECTED_PROMPT_SHA256)
         self.assertEqual(prompt_sha256(prompt), EXPECTED_PROMPT_SHA256)
         self.assertEqual(case["fixture_sha256"], EXPECTED_FIXTURE_SHA256)
         self.assertEqual(
             manifest["response_schema_sha256"],
             canonical_sha256(scout_response_schema_for_evidence(evidence)),
-       )
+        )
         self.assertNotEqual(manifest["response_schema_sha256"], canonical_sha256(scout_response_schema()))
         self.assertEqual(manifest["request_timeout_seconds"], 1800)
         self.assertEqual(int(REQUEST_TIMEOUT_SECONDS), 1800)
@@ -175,4 +176,91 @@ class O4EScoutSchemaValidationTests(unittest.TestCase):
         cell.mkdir(parents=True, exist_ok=True)
         (cell / "result.json").write_text(json.dumps(result, sort_keys=True) + "\n", encoding="utf-8")
         (cell / "score.json").write_text(json.dumps(score, sort_keys=True) + "\n", encoding="utf-8")
-        (cell / "cellµµ•Ñ…‘…Ñ„¹©Í½¸ˆ¤¹İÉ¥Ñ•}Ñ•áĞ (€€€€€€€€€€€©Í½¸¹‘ÕµÁÌ (€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€‰Í¡•µ…}Ù•ÉÍ¥½¸ˆè€Ä°(€€€€€€€€€€€€€€€€€€€€‰µ½‘•±}ÁÉ½™¥±•}¥ˆèÁÉ½™¥±•}¥°(€€€€€€€€€€€€€€€€€€€€‰É•ÍÁ½¹Í•}Í¡•µ…}Í¡„ÈÔØˆè…¹½¹¥…±}Í¡„ÈÔØ¡Í½ÕÑ}É•ÍÁ½¹Í•}Í¡•µ…}™½É}•Ù¥‘•¹”¡•Ù¥‘•¹”¤¤°(€€€€€€€€€€€€€€€€€€€€‰É•ÅÕ•ÍÑ}Ñ¥µ•½ÕÑ}Í•½¹‘Ìˆè€ÄàÀÀ°(€€€€€€€€€€€€€€€€€€€€‰…¹½¹¥…±}Ñ•Éµ¥¹…±}É½ÜˆèQÉÕ”°(€€€€€€€€€€€€€€€€€€€€‰•á•ÕÑ¥½¹}ÍÑ…ÑÕÌˆèÉ•ÍÕ±Ñl‰•á•ÕÑ¥½¹}ÍÑ…ÑÕÌ‰t°(€€€€€€€€€€€€€€€€€€€€‰µ½‘•±}…±±}½Õ¹Ğˆè€Ä°(€€€€€€€€€€€€€€€€€€€€‰¡½ÍÑ•‘}…¥}…±±}½Õ¹Ğˆè€À°(€€€€€€€€€€€€€€€ô°(€€€€€€€€€€€€€€€Í½ÉÑ}­•åÌõQÉÕ”°(€€€€€€€€€€€€¤€¬€‰q¸ˆ°(€€€€€€€€€€€•¹½‘¥¹œô‰ÕÑ˜´àˆ°(€€€€€€€€¤((€€€‘•˜Ñ•ÍÑ}…É•…Ñ•}…•ÁÑÍ}Ñİ½}Ñ•Éµ¥¹…±}É½İÍ}…¹‘}É•Á½ÉÑÍ}½¹±å}¡…É‘•¹¥¹}Ù•É‘¥Ğ¡Í•±˜¤è(€€€€€€€İ¥Ñ Ñ•µÁ™¥±”¹Q•µÁ½É…Éå¥É•Ñ½Éä ¤…ÌÑ•µÀè(€€€€€€€€€€€É½½Ğ€ôA…Ñ ¡Ñ•µÀ¤(€€€€€€€€€€€µ…ÑÉ¥à€ô‰Õ¥±‘}µ…ÑÉ¥á}µ…¹¥™•ÍĞ ‰„ˆ€¨€ĞÀ¤(€€€€€€€€€€€µ…ÑÉ¥á}Á…Ñ €ôÉ½½Ğ€¼€‰µ…ÑÉ¥à¹©Í½¸ˆ(€€€€€€€€€€€µ…ÑÉ¥á}Á…Ñ ¹İÉ¥Ñ•}Ñ•áĞ¡©Í½¸¹‘ÕµÁÌ¡µ…ÑÉ¥à°Í½ÉÑ}­•åÌõQÉÕ”¤€¬€‰q¸ˆ°•¹½‘¥¹œô‰ÕÑ˜´àˆ¤(€€€€€€€€€€€Ù…±¥€ô€ì‰Èˆémì‰¬ˆè‰Ìˆ°‰Øˆè‰É•±•Ù…¹Ñ}Í½ÕÉ”ˆ°‰Èˆél‰LÅ0ÈÄ‰uõuôœ(€€€€€€€€€€€™½ÈÁÉ½™¥±•}¥¥¸<Ñ}5=1}AI=%1}%Lè(€€€€€€€€€€€€€€€Í•±˜¹}İÉ¥Ñ•}•±°¡É½½Ğ€¼€‰•±±Ìˆ°ÁÉ½™¥±•}¥°Ù…±¥¤(€€€€€€€€€€€ÍÕµµ…Éä€ô…É•…Ñ•}½ÕÑÁÕÑÌ¡É½½Ğ€¼€‰•±±Ìˆ°µ…ÑÉ¥á}Á…Ñ ¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑÅÕ…°¡ÍÕµµ…Éål‰¡…É‘•¹¥¹}Ù•É‘¥Ğ‰t°€‰!I9%9}Y1%Qˆ¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑÅÕ…°¡ÍÕµµ…Éål‰±½…±}µ½‘•±}…±±}½Õ¹Ğ‰t°€È¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑ…±Í”¡ì‰İ¥¹¹•Èˆ°€‰É…¹¬ˆ°€‰…ÍÍ¥¹µ•¹Ğˆ°€‰É•½µµ•¹‘•‘}µ½‘•°‰ô¹¥¹Ñ•ÉÍ•Ñ¥½¸¡ÍÕµµ…Éä¤¤((€€€€€€€€€€€¥¹Ù…±¥€ô€ì‰Èˆémì‰¬ˆè‰Ìˆ°‰Øˆè‰Í•µ…¹Ñ¥ŒÁÉ½Í”ˆ°‰Èˆél‰LÅ0ÈÄ‰uõuôœ(€€€€€€€€€€€Í•±˜¹}İÉ¥Ñ•}•±°¡É½½Ğ€¼€‰•±±Ìˆ°<Ñ}5=1}AI=%1}%MlÅt°¥¹Ù…±¥¤(€€€€€€€€€€€ÍÕµµ…Éä€ô…É•…Ñ•}½ÕÑÁÕÑÌ¡É½½Ğ€¼€‰•±±Ìˆ°µ…ÑÉ¥á}Á…Ñ ¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑÅÕ…°¡ÍÕµµ…Éål‰¡…É‘•¹¥¹}Ù•É‘¥Ğ‰t°€‰!I9%9}9=Q}Y1%Qˆ¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑÅÕ…°¡±•¸¡ÍÕµµ…Éål‰É½İÌ‰t¤°€È¤((€€€‘•˜Ñ•ÍÑ}•±±}µ…¥¹}É•ÑÕÉ¹Í}ÍÕ•ÍÍ}™½É}…¹½¹¥…±}¥¹Ù…±¥‘}Ñ•Éµ¥¹…±}•Ù¥‘•¹”¡Í•±˜¤è(€€€€€€€™…­•}É•ÍÕ±Ğ€ôì(€€€€€€€€€€€€‰•á•ÕÑ¥½¹}ÍÑ…ÑÕÌˆè€‰%9Y1%ˆ°(€€€€€€€€€€€€‰µ½‘•°ˆèì‰ÁÉ½™¥±•}¥ˆè<Ñ}5=1}AI=%1}%MlÁuô°(€€€€€€€€€€€€‰É•ÍÕ±Ñ}Í¡„ÈÔØˆè€ˆÄˆ€¨€ØĞ°(€€€€€€€ô(€€€€€€€™…­•}Í½É”€ôì‰Í½É•}Í¡„ÈÔØˆè€ˆÈˆ€¨€ØÑô(€€€€€€€™…­•}µ•Ñ…‘…Ñ„€ôì‰É•ÍÁ½¹Í•}Í¡•µ…}Í¡„ÈÔØˆè€ˆÌˆ€¨€ØÑô(€€€€€€€İ¥Ñ Ñ•µÁ™¥±”¹Q•µÁ½É…Éå¥É•Ñ½Éä ¤…ÌÑ•µÀ°Á…Ñ  (€€€€€€€€€€€€‰‰•¹¡µ…É­Ì¹ÉÕ¹}¼Ñ•}Í½ÕÑ}•±°¹•á•ÕÑ•}•±°ˆ°(€€€€€€€€€€€É•ÑÕÉ¹}Ù…±Õ”ô (€€€€€€€€€€€€€€€™…­•}É•ÍÕ±Ğ°(€€€€€€€€€€€€€€€™…­•}Í½É”°(€€€€€€€€€€€€€€€€‰ÁÉ½µÁĞˆ°(€€€€€€€€€€€€€€€€‰É•ÍÁ½¹Í”ˆ°(€€€€€€€€€€€€€€€íô°(€€€€€€€€€€€€€€€9½¹”°(€€€€€€€€€€€€€€€íô°(€€€€€€€€€€€€€€€™…­•}µ•Ñ…‘…Ñ„°(€€€€€€€€€€€€¤°(€€€€€€€€¤è(€€€€€€€€€€€ÉŒ€ô•±±}µ…¥¸¡l(€€€€€€€€€€€€€€€€ˆ´µµ½‘•°µÁÉ½™¥±”ˆ°<Ñ}5=1}AI=%1}%MlÁt°(€€€€€€€€€€€€€€€€ˆ´µÁ½ÉĞˆ°€ˆÌäÄÌäˆ°(€€€€€€€€€€€€€€€€ˆ´µÉÕ¹Ñ¥µ”µÙ•ÉÍ¥½¸ˆ°€‰Ñ•ÍĞˆ°(€€€€€€€€€€€€€€€€ˆ´µÉÕ¹Ñ¥µ”µ‰¥¹…ÉäµÍ¡„ÈÔØˆ°€‰ˆˆ€¨€ØĞ°(€€€€€€€€€€€€€€€€ˆ´µ½ÕÑÁÕĞµ‘¥Èˆ°Ñ•µÀ°(€€€€€€€€€€€t¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑÅÕ…°¡ÉŒ°€À¤(€€€€€€€€€€€Í•±˜¹…ÍÍ•ÉÑQÉÕ” ¡A…Ñ ¡Ñ•µÀ¤€¼€‰É•ÍÕ±Ğ¹©Í½¸ˆ¤¹•á¥ÍÑÌ ¤¤((€€€‘•˜Ñ•ÍÑ}İ½É­™±½İ}¥Í}É•ÅÕ•ÍÑ}½¹±å}é•É½}É•‘¥Ñ}…¹‘}½É‘¥¹…Éå}¥}½Ù•ÉÍ}¥Ğ¡Í•±˜¤è(€€€€€€€İ½É­™±½İ}Á…Ñ €ôIA=}I==P€¼€ˆ¹¥Ñ¡Õˆˆ€¼€‰İ½É­™±½İÌˆ€¼€‰…•¹ĞµÍ­¥±°µ½É¡•ÍÑÉ…Ñ½Èµ¼Ñ”µÍ½ÕĞµÍ¡•µ„µÙ…±¥‘…Ñ¥½¸¹åµ°ˆ(€€€€€€€İ½É­™±½Ü€ôİ½É­™±½İ}Á…Ñ ¹É•…‘}Ñ•áĞ¡•¹½‘¥¹œô‰ÕÑ˜´àˆ¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ%¸ ‰…•¹ĞµÍ­¥±°µ¼Ñ”µÉ•ÅÕ•ÍĞ¼¨¨ˆ°İ½É­™±½Ü¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ%¸ ˆ¹…•¹ĞµÍ­¥±°µ¼Ñ”µÉ•ÅÕ•ÍÑÌ¼¨¹©Í½¸ˆ°İ½É­™±½Ü¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ%¸ ‰Á•Éµ¥ÍÍ¥½¹Ìéq¸€½¹Ñ•¹ÑÌèÉ•…ˆ°İ½É­™±½Ü¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ9½Ñ%¸ ‰İ½É­™±½İ}‘¥ÍÁ…Ñ ˆ°İ½É­™±½Ü¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ9½Ñ%¸ ‰½Á¥±½ĞµÉ•ÅÕ•ÍÑÌˆ°İ½É­™±½Ü¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ%¸ ‰ÉÕ¹}¼Ñ•}Í½ÕÑ}•±°ˆ°İ½É­™±½Ü¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ%¸ ‰!I9%9}Y1%Qˆ°İ½É­™±½Ü¤((€€€€€€€¤€ô€¡IA=}I==P€¼€ˆ¹¥Ñ¡Õˆˆ€¼€‰İ½É­™±½İÌˆ€¼€‰…•¹ĞµÍ­¥±±Ìµ¤¹åµ°ˆ¤¹É•…‘}Ñ•áĞ¡•¹½‘¥¹œô‰ÕÑ˜´àˆ¤(€€€€€€€Á…Ñ €ô€ˆ¹¥Ñ¡Õˆ½İ½É­™±½İÌ½…•¹ĞµÍ­¥±°µ½É¡•ÍÑÉ…Ñ½Èµ¼Ñ”µÍ½ÕĞµÍ¡•µ„µÙ…±¥‘…Ñ¥½¸¹åµ°ˆ(€€€€€€€Í•±˜¹…ÍÍ•ÉÑÉ•…Ñ•ÉÅÕ…°¡¤¹½Õ¹Ğ¡Á…Ñ ¤°€È¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ9½Ñ%¸ ‰¡Õ¥¹™…”¹¼ˆ°¤¤(€€€€€€€Í•±˜¹…ÍÍ•ÉÑ9½Ñ%¸ ‰±±…µ„µÍ•ÉÙ•Èˆ°¤¤(()¥˜}}¹…µ•}|€ôô€‰}}µ…¥¹}|ˆè(€€€Õ¹¥ÑÑ•ÍĞ¹µ…¥¸ ¤(
+        (cell / "cell-metadata.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "model_profile_id": profile_id,
+                    "response_schema_sha256": canonical_sha256(scout_response_schema_for_evidence(evidence)),
+                    "request_timeout_seconds": 1800,
+                    "canonical_terminal_row": True,
+                    "execution_status": result["execution_status"],
+                    "model_call_count": 1,
+                    "hosted_ai_call_count": 0,
+                },
+                sort_keys=True,
+            ) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_aggregate_accepts_two_terminal_rows_and_reports_only_hardening_verdict(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            matrix = build_matrix_manifest("a" * 40)
+            matrix_path = root / "matrix.json"
+            matrix_path.write_text(json.dumps(matrix, sort_keys=True) + "\n", encoding="utf-8")
+            valid = '{"r":[{"k":"s","v":"relevant_source","r":["S1@L21"]}]}'
+            for profile_id in O4C_MODEL_PROFILE_IDS:
+                self._write_cell(root / "cells", profile_id, valid)
+            summary = aggregate_outputs(root / "cells", matrix_path)
+            self.assertEqual(summary["hardening_verdict"], "HARDENING_VALIDATED")
+            self.assertEqual(summary["local_model_call_count"], 2)
+            self.assertFalse({"winner", "rank", "assignment", "recommended_model"}.intersection(summary))
+
+            invalid = '{"r":[{"k":"s","v":"semantic prose","r":["S1@L21"]}]}'
+            self._write_cell(root / "cells", O4C_MODEL_PROFILE_IDS[1], invalid)
+            summary = aggregate_outputs(root / "cells", matrix_path)
+            self.assertEqual(summary["hardening_verdict"], "HARDENING_NOT_VALIDATED")
+            self.assertEqual(len(summary["rows"]), 2)
+
+    def test_cell_main_returns_success_for_canonical_invalid_terminal_evidence(self):
+        fake_result = {
+            "execution_status": "INVALID",
+            "model": {"profile_id": O4C_MODEL_PROFILE_IDS[0]},
+            "result_sha256": "1" * 64,
+        }
+        fake_score = {"score_sha256": "2" * 64}
+        fake_metadata = {"response_schema_sha256": "3" * 64}
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "benchmarks.run_o4e_scout_cell.execute_cell",
+            return_value=(
+                fake_result,
+                fake_score,
+                "prompt",
+                "response",
+                {},
+                None,
+                {},
+                fake_metadata,
+            ),
+        ):
+            rc = cell_main([
+                "--model-profile", O4C_MODEL_PROFILE_IDS[0],
+                "--port", "39139",
+                "--runtime-version", "test",
+                "--runtime-binary-sha256", "b" * 64,
+                "--output-dir", temp,
+            ])
+            self.assertEqual(rc, 0)
+            self.assertTrue((Path(temp) / "result.json").exists())
+
+    def test_workflow_is_request_only_zero_credit_and_ordinary_ci_covers_it(self):
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4e-scout-schema-validation.yml"
+        workflow = workflow_path.read_text(encoding="utf-8")
+        self.assertIn("agent-skill-o4e-request/**", workflow)
+        self.assertIn(".agent-skill-o4e-requests/*.json", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertNotIn("workflow_dispatch", workflow)
+        self.assertNotIn("copilot-requests", workflow)
+        self.assertIn("run_o4e_scout_cell", workflow)
+        self.assertIn("HARDENING_VALIDATED", workflow)
+
+        ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
+        path = ".github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml"
+        self.assertGreaterEqual(ci.count(path), 2)
+        self.assertNotIn("huggingface.co", ci)
+        self.assertNotIn("llama-server", ci)
+
+
+if __name__ == "__main__":
+    unittest.main()

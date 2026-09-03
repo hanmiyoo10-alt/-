@@ -117,67 +117,139 @@ jobs:
           set -euo pipefail
           runtime_root="$RUNNER_TEMP/o4e-runtime"
           mkdir -p "$runtime_root"
-         Ù‰[[YWÜ›Ûİ‚ˆİ\›SKY˜Z[K\™]HÈK\™]KX[Y\œ›ÜœÈˆ[È‰SPWĞT•QPÕˆˆšÎ‹ËÙÚ]X‹˜ÛÛKÙÙÛ[[Ü™ËÛ[XK˜ÜÜ™[X\Ù\ËÙİÛ›ØYÉÓSPWÔ‘SPTÑ_KÉÓSPWĞT•QPÕH‚ˆš[ˆ	É\È	\×‰È‰SPWĞT•QPÕÔÒLMˆˆ‰SPWĞT•QPÕˆÚLMœİ[HXÈBˆZÙ\ˆ^˜XİYˆ\ˆ^™ˆ‰SPWĞT•QPÕˆPÈ^˜XİYˆ[XWÜÙ\™\H‰
-š[™^˜XİY]\Hˆ[˜[YH[XK\Ù\™\ˆ\\›H]JŞ\š[\]Z]
-H‚ˆ\İ[ˆ‰[XWÜÙ\™\ˆ‚ˆ[XWÜÙ\™\H‰
-™X[]‰[XWÜÙ\™\ˆŠH‚ˆ‰[XWÜÙ\™\ˆˆK]™\œÚ[Ûˆˆ‰ÒUP—ÕÓÔ’ÔÔPÑKÉ‘SÒÔ“ÓÕÛ[XK\[[YK]™\œÚ[Û‹ˆ‰ŒBˆ[[YWØš[˜\WÜÚLMH‰
-ÚLMœİ[H‰[XWÜÙ\™\ˆˆ]ÚÈ	ŞÜš[	_IÊH‚ˆš[ˆ	É\×‰È‰[[YWØš[˜\WÜÚLMˆˆˆ‰ÒUP—ÕÓÔ’ÔÔPÑKÉ‘SÒÔ“ÓÕÛ[XK\Ù\™\‹œÚLMˆ‚ˆš[ˆ	ÓSPWÔÑT•‘TI\×‰È‰[XWÜÙ\™\ˆˆˆ‰ÒUP—ÑS•ˆ‚‚ˆH˜[YNˆ^Xİ]H^XİHÛÈ[™\[™[ÍQHØØ[ØÛİ]Ù[ÂˆÚ[ˆ˜\Úˆ[ˆˆÙ]Y][È\Y˜Z[ˆ›Üˆ›Ùš[WÚY[ˆˆ]Ù[Œ‹KLØ‹Z[œİXİ\MÚ×ÛHˆZ[š\İ˜[LËLØ‹Z[œİXİLLL‹\MÚ×ÛBˆÂˆÙ[Ü›ÛİH‰‘SÒÔ“ÓÕØÙ[ËÉ›Ùš[WÚY‚ˆZÙ\ˆ\‰Ù[Ü›Ûİ‚ˆ“Ñ’SWÒQH‰›Ùš[WÚYˆ“Ñ’SWÓÕUUH‰Ù[Ü›ÛİÜ›Ùš[KšœÛÛˆˆ]ÛˆH	ÔIÂˆ[\ÜœÛÛ‚ˆ[\ÜÜÂˆ[\ÜŞ\Âˆœ›ÛH]Xˆ[\Ü]ˆXÚØYÙHH]
-	İÛÛËØYÙ[\ÚÚ[[Ü˜Ú\İ˜]Ü‰ÊKœ™\ÛÛ™J
-BˆŞ\Ëœ]š[œÙ\
-İŠXÚØYÙJJBˆœ›ÛH™[˜ÚX\šÜËœ[—ÜØÛİ]ØÙ[[\Ü™[˜ÚX\š×Û[Ù[Ü›Ùš[Bˆ›Ùš[HH™[˜ÚX\š×Û[Ù[Ü›Ùš[JÜË™[š\›Û–ÉÔ“Ñ’SWÒQ	×JBˆ]
-ÜË™[š\›Û–ÉÔ“Ñ’SWÓÕUU	×JKÜš]Wİ^
-ˆœÛÛ‹™[\Ê›Ùš[K[œİ\™WØ\ØÚZOQ˜[ÙK[™[L‹ÛÜÚÙ^\ÏUYJH
-È	×‰Ëˆ[˜ÛÙ[™ÏIİ]‹N	Ëˆ
-BˆBˆ[Ù[Ü™\ÜÚ]ÜOH‰
-“Ñ’SOH‰Ù[Ü›ÛİÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
-œÛÛ‹›ØY
-Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈœ™\ÜÚ]ÜH—JIÊH‚ˆ[Ù[Ü™]š\Ú[ÛH‰
-“Ñ’SOH‰Ù[Ü›ÛİÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
-œÛÛ‹›ØY
-Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈœ™]š\Ú[Ûˆ—JIÊH‚ˆ[Ù[Ùš[OH‰
-“Ñ’SOH‰Ù[Ü›ÛİÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
-œÛÛ‹›ØY
-Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈ™š[H—JIÊH‚ˆ[Ù[ÜÚLMH‰
-“Ñ’SOH‰Ù[Ü›ÛİÜ›Ùš[KšœÛÛˆˆ]ÛˆXÈ	Ú[\ÜœÛÛ‹ÜÎÈš[
-œÛÛ‹›ØY
-Ü[ŠÜË™[š\›Û–È”“Ñ’SH—JJVÈœÚLMˆ—JIÊH‚‚ˆ[Ù[Ü›ÛİH‰•S“‘T—ÕSTÛÍK[[Ù[I›Ùš[WÚY‚ˆ›H\™ˆ‰[Ù[Ü›Ûİ‚ˆZÙ\ˆ\‰[Ù[Ü›Ûİ‚ˆİ\›SKY˜Z[K\™]HÈK\™]KX[Y\œ›ÜœÈˆ[È‰[Ù[ÜÚLMˆˆ‰[Ù[Ü›ÛİÉ[Ù[Ùš[HˆÚLMœİ[HXÈB‚ˆ“Ñ’SWÒQH‰›Ùš[WÚYˆˆSÑSÔUH‰[Ù[Ü›ÛİÉ[Ù[Ùš[HˆˆÑSÔ“ÓÕH‰Ù[Ü›ÛİˆˆSPWÔÑT•‘TH‰SPWÔÑT•‘TˆˆˆÑT•‘T—ÔÔ•H‰ÑT•‘T—ÔÔ•ˆˆ•S•SQWÕ‘T”ÒSÓ—ÔUH‰‘SÒÔ“ÓÕÛ[XK\[[YK]™\œÚ[Û‹ˆˆ•S•SQWĞ’ST–WÔÒWÔUH‰‘SÒÔ“ÓÕÛ[XK\Ù\™\‹œÚLMˆˆˆ]ÛˆH	ÔIÂˆ[\ÜÜÂˆ[\ÜŞ\Âˆœ›ÛH]Xˆ[\Ü]ˆXÚØYÙHH]
-	İÛÛËØYÙ[\ÚÚ[[Ü˜Ú\İ˜]Ü‰ÊKœ™\ÛÛ™J
-BˆŞ\Ëœ]š[œÙ\
-İŠXÚØYÙJJBˆœ›ÛH™[˜ÚX\šÜËœ[—ÛÍWÜØÛİ]ØÙ[[\ÜXZ[ˆ\È[—ØÙ[ˆœ›ÛH[[YK™Ù[™\˜][Ûˆ[\ÜØÛİ]ÙÙ[™\˜][Û‚ˆœ›ÛH[[YK›[XWØÜ[\Üİ\ÜÙ\™\‹İÜÜÙ\™\‚ˆœ›ÛH[[YK›ØØ[ÜÙ\™\ˆ[\ÜØZ]Ù›Ü—ÚX[‚ˆÜH[
-ÜË™[š\›Û–ÉÔÑT•‘T—ÔÔ•	×JBˆÙ[Ü›ÛİH]
-ÜË™[š\›Û–ÉĞÑSÔ“ÓÕ	×JBˆÙÈH
-Ù[Ü›ÛİÈ	Û[XK\Ù\™\‹›ÙÉÊK›Ü[Š	İÉË[˜ÛÙ[™ÏIİ]‹N	ÊBˆ›ØÙ\ÜÈHİ\ÜÙ\™\Šˆ]
-ÜË™[š\›Û–ÉÓSPWÔÑT•‘T‰×JKˆ]
-ÜË™[š\›Û–ÉÓSÑSÔU	×JKˆØÛİ]ÙÙ[™\˜][ÛŠ
-KˆÜˆÙËˆ
-BˆN‚ˆØZ]Ù›Ü—ÚX[
-Ü›ØÙ\ÜÊBˆ[[YWİ™\œÚ[ÛˆH]
-ÜË™[š\›Û–ÉÔ•S•SQWÕ‘T”ÒSÓ—ÔU	×JKœ™XYİ^
-[˜ÛÙ[™ÏIİ]‹N	ÊKœİš\
+          cd "$runtime_root"
+          curl -L --fail --retry 3 --retry-all-errors \
+            -o "$LLAMA_ARTIFACT" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/${LLAMA_ARTIFACT}"
+          printf '%s  %s\n' "$LLAMA_ARTIFACT_SHA256" "$LLAMA_ARTIFACT" | sha256sum -c -
+          mkdir extracted
+          tar -xzf "$LLAMA_ARTIFACT" -C extracted
+          llama_server="$(find extracted -type f -name llama-server -perm -u+x -print -quit)"
+          test -n "$llama_server"
+          llama_server="$(realpath "$llama_server")"
+          "$llama_server" --version > "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-runtime-version.txt" 2>&1
+          runtime_binary_sha256="$(sha256sum "$llama_server" | awk '{print $1}')"
+          printf '%s\n' "$runtime_binary_sha256" > "$GITHUB_WORKSPACE/$BENCH_ROOT/llama-server.sha256"
+          printf 'LLAMA_SERVER=%s\n' "$llama_server" >> "$GITHUB_ENV"
 
-Bˆ[[YWØš[˜\WÜÚLMˆH]
-ÜË™[š\›Û–ÉÔ•S•SQWĞ’ST–WÔÒWÔU	×JKœ™XYİ^
-[˜ÛÙ[™ÏIİ]‹N	ÊKœİš\
+      - name: Execute exactly two independent O4-E local Scout cells
+        shell: bash
+        run: |
+          set -euo pipefail
+          for profile_id in \
+            qwen2.5-3b-instruct-q4_k_m \
+            ministral-3-3b-instruct-2512-q4_k_m
+          do
+            cell_root="$BENCH_ROOT/cells/$profile_id"
+            mkdir -p "$cell_root"
+            PROFILE_ID="$profile_id" PROFILE_OUTPUT="$cell_root/profile.json" python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_scout_cell import benchmark_model_profile
+          profile = benchmark_model_profile(os.environ['PROFILE_ID'])
+          Path(os.environ['PROFILE_OUTPUT']).write_text(
+              json.dumps(profile, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+            model_repository="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["repository"])')"
+            model_revision="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["revision"])')"
+            model_file="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["file"])')"
+            model_sha256="$(PROFILE="$cell_root/profile.json" python -c 'import json,os; print(json.load(open(os.environ["PROFILE"]))["sha256"])')"
 
-Bˆ˜ÈH[—ØÙ[
-Âˆ	ËK[[Ù[\›Ùš[IËÜË™[š\›Û–ÉÔ“Ñ’SWÒQ	×Kˆ	ËK\Ü	ËİŠÜ
-Kˆ	ËK\[[YK]™\œÚ[Û‰Ë[[YWİ™\œÚ[Û‹ˆ	ËK\[[YKXš[˜\K\ÚLM‰Ë[[YWØš[˜\WÜÚLM‹ˆ	ËK[İ]]Y\‰ËİŠÙ[Ü›Ûİ
-KˆJBˆš[˜[N‚ˆİÜÜÙ\™\Š›ØÙ\ÜÊBˆÙË˜ÛÜÙJ
-Bˆ˜Z\ÙHŞ\İ[Q^]
-˜ÊBˆBˆ›H\™ˆ‰[Ù[Ü›Ûİ‚ˆÛ™BˆXÚÈ	ÓÍWÓĞĞSÓSÑSĞĞSĞÑRSS‘ÎŒ‰ÂˆXÚÈ	ÓÍWÒÔÕQĞRWĞĞSĞÓÕS•Œ	Â‚ˆH˜[YNˆYÙÜ™YØ]H›İ\›Z[˜[›İÜÈÚ]İ]Ú[›™\ˆÙ[X[XÜÂˆÚ[ˆ˜\Úˆ[ˆˆÙ]Y][È\Y˜Z[ˆ]ÛˆÛÛËØYÙ[\ÚÚ[[Ü˜Ú\İ˜]Ü‹Ø™[˜ÚX\šÜËÜ[—ÛÍWÜØÛİ]ÜØÚ[XWİ˜[Y][Û‹œHYÙÜ™YØ]HˆK[X]š^‰‘SÒÔ“ÓÕÛX]š^šœÛÛˆˆˆK[İ]]\›Ûİ‰‘SÒÔ“ÓÕØÙ[ÈˆˆK[İ]]‰‘SÒÔ“ÓÕÜİ[[X\KšœÛÛˆ‚ˆ]ÛˆH	ÔIÂˆ[\ÜœÛÛ‚ˆœ›ÛH]Xˆ[\Ü]ˆ›ÛİH]
-	Ë˜YÙ[\ÚÚ[[Ü˜Ú\İ˜]Ü‹[ÍK\ØÛİ]\ØÚ[XK]˜[Y][Û‰ÊBˆİ[[X\HHœÛÛ‹›ØYÊ
-›ÛİÈ	Üİ[[X\KšœÛÛ‰ÊKœ™XYİ^
-[˜ÛÙ[™ÏIİ]‹N	ÊJBˆYˆİ[[X\K™Ù]
-	ÛØØ[Û[Ù[ØØ[ØÛİ[	ÊHOHˆÜˆİ[[X\K™Ù]
-	ÚÜİYØZWØØ[ØÛİ[	ÊHOH‚ˆ˜Z\ÙHŞ\İ[Q^]
-	ÓÍQHİ[[X\HØ[XØÛİ[[™È[˜[Y	ÊBˆYˆ[Šİ[[X\K™Ù]
-	Ü›İÜÉË×JJHOH‚ˆ˜Z\ÙHŞ\İ[Q^]
-	ÓÍQHİ[[X\H›İÈÛİ[[˜[Y	ÊBˆYˆİ[[X\K™Ù]
-	Ú\™[š[™×İ™\™Xİ	ÊH›İ[ˆÉÒT‘S’S‘×ÕSQUQ	Ë	ÒT‘S’S‘×Ó“ÕÕSQUQ	ßN‚ˆ˜Z\ÙHŞ\İ[Q^]
-	ÓÍQH\™[š[™È™\™Xİ[˜[Y	ÊBˆ›Ü˜šY[ˆHÉİÚ[›™\‰Ë	Ü™XÛÛ[Y[™YÛ[Ù[	Ë	Ø\ÜÚYÛ›Y[	Ë	Ü˜[šÉË	Ü˜[šÚ[™ÉË	İYWØœ™XZÉßBˆYˆ›Ü˜šY[‹š[\œÙXİ[ÛŠİ[[X\JN‚ˆ˜Z\ÙHŞ\İ[Q^]
-	ÓÍQHİ[[X\HÛÛZ[œÈ›Ü˜šY[ˆÚ[›™\ˆÙ[X[XÜÉÊBˆš[
-	ÓÍWÔÕSSPT–WÔÒLM‰È
-Èİ[[X\VÉÜİ[[X\WÜÚLM‰×JBˆš[
-	ÓÍWÒT‘S’S‘×Õ‘T‘PÕ‰È
-Èİ[[X\VÉÚ\™[š[™×İ™\™Xİ	×JBˆB‚ˆH˜[YNˆ\ØY›İ[™YÍQHXYÛ›ÜİXÈ]šY[˜ÙBˆYˆ[Ø^\Ê
-Bˆ\Ù\ÎˆXİ[ÛœËİ\ØYX\Y˜XİXLMYX™MÍXMYNL˜™ÍŒÙ˜L‚ˆÚ]‚ˆ˜[YNˆYÙ[\ÚÚ[[Ü˜Ú\İ˜]Ü‹[ÍK\ØÛİ]\ØÚ[XK]˜[Y][Û‹IŞÈÚ]X‹œ[—ÚY_KIŞÈÚ]X‹œ[—Ø][\_Bˆ]ˆ˜YÙ[\ÚÚ[[Ü˜Ú\İ˜]Ü‹[ÍK\ØÛİ]\ØÚ[XK]˜[Y][Û‹Âˆ[˜ÛYKZY[‹Yš[\ÎˆYBˆY‹[›ËYš[\ËY›İ[™ˆ\œ›Ü‚ˆ™][[Û‹Y^\ÎˆÌ
+            model_root="$RUNNER_TEMP/o4e-model-$profile_id"
+            rm -rf "$model_root"
+            mkdir -p "$model_root"
+            curl -L --fail --retry 3 --retry-all-errors \
+              -o "$model_root/$model_file" \
+              "https://huggingface.co/${model_repository}/resolve/${model_revision}/${model_file}?download=true"
+            printf '%s  %s\n' "$model_sha256" "$model_root/$model_file" | sha256sum -c -
+
+            PROFILE_ID="$profile_id" \
+            MODEL_PATH="$model_root/$model_file" \
+            CELL_ROOT="$cell_root" \
+            LLAMA_SERVER="$LLAMA_SERVER" \
+            SERVER_PORT="$SERVER_PORT" \
+            RUNTIME_VERSION_PATH="$BENCH_ROOT/llama-runtime-version.txt" \
+            RUNTIME_BINARY_SHA_PATH="$BENCH_ROOT/llama-server.sha256" \
+            python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          package = Path('tools/agent-skill-orchestrator').resolve()
+          sys.path.insert(0, str(package))
+          from benchmarks.run_o4e_scout_cell import main as run_cell
+          from runtime.generation import scout_generation
+          from runtime.llama_cpp import start_server, stop_server
+          from runtime.local_server import wait_for_health
+
+          port = int(os.environ['SERVER_PORT'])
+          cell_root = Path(os.environ['CELL_ROOT'])
+          log = (cell_root / 'llama-server.log').open('w', encoding='utf-8')
+          process = start_server(
+              Path(os.environ['LLAMA_SERVER']),
+              Path(os.environ['MODEL_PATH']),
+              scout_generation(),
+              port,
+              log,
+          )
+          try:
+              wait_for_health(port, process)
+              runtime_version = Path(os.environ['RUNTIME_VERSION_PATH']).read_text(encoding='utf-8').strip()
+              runtime_binary_sha256 = Path(os.environ['RUNTIME_BINARY_SHA_PATH']).read_text(encoding='utf-8').strip()
+              rc = run_cell([
+                  '--model-profile', os.environ['PROFILE_ID'],
+                  '--port', str(port),
+                  '--runtime-version', runtime_version,
+                  '--runtime-binary-sha256', runtime_binary_sha256,
+                  '--output-dir', str(cell_root),
+              ])
+          finally:
+              stop_server(process)
+              log.close()
+          raise SystemExit(rc)
+          PY
+            rm -rf "$model_root"
+          done
+          echo 'O4E_LOCAL_MODEL_CALL_CEILING:2'
+          echo 'O4E_HOSTED_AI_CALL_COUNT:0'
+
+      - name: Aggregate both terminal rows without winner semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_schema_validation.py aggregate \
+            --matrix "$BENCH_ROOT/matrix.json" \
+            --output-root "$BENCH_ROOT/cells" \
+            --output "$BENCH_ROOT/summary.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.agent-skill-orchestrator-o4e-scout-schema-validation')
+          summary = json.loads((root / 'summary.json').read_text(encoding='utf-8'))
+          if summary.get('local_model_call_count') != 2 or summary.get('hosted_ai_call_count') != 0:
+              raise SystemExit('O4-E summary call accounting invalid')
+          if len(summary.get('rows', [])) != 2:
+              raise SystemExit('O4-E summary row count invalid')
+          if summary.get('hardening_verdict') not in {'HARDENING_VALIDATED','HARDENING_NOT_VALIDATED'}:
+              raise SystemExit('O4-E hardening verdict invalid')
+          forbidden = {'winner','recommended_model','assignment','rank','ranking','tie_break'}
+          if forbidden.intersection(summary):
+              raise SystemExit('O4-E summary contains forbidden winner semantics')
+          print('O4E_SUMMARY_SHA256:' + summary['summary_sha256'])
+          print('O4E_HARDENING_VERDICT:' + summary['hardening_verdict'])
+          PY
+
+      - name: Upload bounded O4-E diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-skill-orchestrator-o4e-scout-schema-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-skill-orchestrator-o4e-scout-schema-validation/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

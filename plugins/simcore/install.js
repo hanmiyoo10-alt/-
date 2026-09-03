@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.1
+//@version 0.70.3
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.3 Post-M2 Simplification Convergence:
+// - Converges the three complete-string FNV-1a 32-bit loops inside runtime-cache onto one private local fnv1a32 helper
+// - Keeps both rolling-prefix FNV loops byte-for-byte unchanged and does not create a runtime-cache -> runtime-topology dependency
+// - Adds no export, require edge, await/yield, timer, storage/network/chat I/O, persistent state/schema or prompt/output semantic change
+// - Preserves v0.70.1 cold-tail attribution, v0.70.0 Current Task Primacy Guard, COMMUNITY_CLASSIFIER_VERSION 3 and the frozen M2-6 architecture graph
 //
 // v0.70.1 Cold First-Turn Tail Attribution:
 // - Splits the existing post-onSend residual into bounded current-request timing segments for history stabilization, prompt accounting, cache topology, cache candidate work and conservative unattributed remainder
@@ -723,7 +729,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.1';
+const SIMCORE_RUNTIME_VERSION = '0.70.3';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -2126,6 +2132,10 @@ const lineage = require('./lineage');
 const handoff = require('./handoff');
 const { STATE_VERSION, CORE_STATE_VERSION } = kernel;
 
+function optionalTrimmedString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function initialState() {
   return {
     stateVersion: STATE_VERSION,
@@ -2172,8 +2182,8 @@ function reconcileState(raw) {
   s.communitySourceHandoffVersion = Math.max(0, Math.round(Number(s.communitySourceHandoffVersion) || 0));
   s.communitySourceRegistry = handoff.normalizeRegistry(s.communitySourceRegistry);
   s.broadcastLocked = !!s.broadcastLocked;
-  s.broadcastAirtime = typeof s.broadcastAirtime === 'string' && s.broadcastAirtime.trim() ? s.broadcastAirtime.trim() : null;
-  s.broadcastAirtimeStart = typeof s.broadcastAirtimeStart === 'string' && s.broadcastAirtimeStart.trim() ? s.broadcastAirtimeStart.trim() : null;
+  s.broadcastAirtime = optionalTrimmedString(s.broadcastAirtime);
+  s.broadcastAirtimeStart = optionalTrimmedString(s.broadcastAirtimeStart);
   s.episodeNo = Math.max(0, Math.round(Number(s.episodeNo) || 0));
   s.community = s.community && typeof s.community === 'object' ? s.community : {};
   s.community.activationCount = Math.max(0, Math.round(Number(s.community.activationCount) || 0));
@@ -2185,7 +2195,7 @@ function reconcileState(raw) {
   delete s.community.globalReactionMax;
   s.worldYear = legacyYear != null && Number.isFinite(Number(legacyYear)) ? Number(legacyYear) : null;
   s.koreanAgeOffset = Math.max(0, Math.round(Number(s.koreanAgeOffset) || 0));
-  s.narrativeTimestamp = typeof s.narrativeTimestamp === 'string' && s.narrativeTimestamp.trim() ? s.narrativeTimestamp.trim() : null;
+  s.narrativeTimestamp = optionalTrimmedString(s.narrativeTimestamp);
   s.narrativeClockVersion = Math.max(1, Math.round(Number(s.narrativeClockVersion) || 0));
   s.clockRepairVersion = Math.max(0, Math.round(Number(s.clockRepairVersion) || 0));
   s.lastMode = typeof s.lastMode === 'string' ? s.lastMode : 'A';
@@ -4599,15 +4609,7 @@ function compileRuntimePromptParts(state) {
   });
 }
 
-function compileRuntimePrompt(state) {
-  return compileRuntimePromptParts(state).text;
-}
-
-function renderRuntimePrompt(state) {
-  return compileRuntimePrompt(state);
-}
-
-module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts, compileRuntimePrompt, renderRuntimePrompt };
+module.exports = { PROMPT_COMPILER_VERSION, broadcastEndAuthority, compileRuntimePromptParts };
 });
 
 SimCore.define("edit-reconcile", function (require, module, exports) {
@@ -5125,7 +5127,6 @@ function sessionNow() {
 }
 function sessionElapsed(start) { return Math.max(0, sessionNow() - start); }
 
-const renderRuntimePrompt = prompt.renderRuntimePrompt;
 const compileRuntimePromptParts = prompt.compileRuntimePromptParts;
 
 function inspectPreviousBEndOutput(historyMessages, sendIndex) {
@@ -5632,15 +5633,10 @@ class CoreRulesetSession {
 
 module.exports = {
   CoreRulesetSession,
-  inspectPreviousBEndOutput,
   latestUserIndex: kernel.latestUserIndex,
   latestUserText: kernel.latestUserText,
-  renderRuntimePrompt,
   inspectPromptMessages: kernel.inspectPromptMessages,
   fingerprintText: kernel.fingerprintText,
-  validateStructure: structure.validateStructure,
-  communityBlocks: community.communityBlocks,
-  prepareTurn: lifecycle.prepareTurn,
 };
 });
 
@@ -5744,14 +5740,18 @@ function promptChangeReason(previousLine, currentLine) {
   return 'other';
 }
 
-function cacheHash(text) {
+function fnv1a32(text) {
   const value = String(text == null ? '' : text);
   let h = 0x811c9dc5;
   for (let i = 0; i < value.length; i++) {
     h ^= value.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
-  return (h >>> 0).toString(16).padStart(8, '0');
+  return h >>> 0;
+}
+
+function cacheHash(text) {
+  return fnv1a32(text).toString(16).padStart(8, '0');
 }
 
 function runtimeLineTier(line) {
@@ -5856,14 +5856,7 @@ function cacheSketch(text) {
     prefixHashes[i] = h >>> 0;
   }
   const lines = value ? value.split('\n') : [];
-  const lineHashes = lines.map((line) => {
-    let x = 0x811c9dc5;
-    for (let i = 0; i < line.length; i++) {
-      x ^= line.charCodeAt(i);
-      x = Math.imul(x, 0x01000193);
-    }
-    return x >>> 0;
-  });
+  const lineHashes = lines.map(fnv1a32);
   const lineReasons = lines.map((line) => promptChangeReason('', line));
   return Object.freeze({ version: 1, chars: value.length, prefixHashes, lineHashes, lineReasons });
 }
@@ -5886,14 +5879,7 @@ function buildRuntimePromptCacheProbeFromSketch(sketch, currentText) {
   const stable = previousChars === current.length && prefixChars === current.length;
   const denominator = Math.max(previousChars, current.length, 1);
   const currentLines = current ? current.split('\n') : [];
-  const currentLineHashes = currentLines.map((line) => {
-    let x = 0x811c9dc5;
-    for (let i = 0; i < line.length; i++) {
-      x ^= line.charCodeAt(i);
-      x = Math.imul(x, 0x01000193);
-    }
-    return x >>> 0;
-  });
+  const currentLineHashes = currentLines.map(fnv1a32);
   const previousLineHashes = Array.isArray(sketch.lineHashes) ? sketch.lineHashes : [];
   let prefixLines = 0;
   const lineLimit = Math.min(previousLineHashes.length, currentLineHashes.length);
@@ -5983,7 +5969,7 @@ function createRuntimePromptCacheTracker(contract = null) {
     },
   });
 }
-module.exports = { promptChangeReason, buildRuntimePromptCacheProbe, runtimeLineTier, runtimeIdentity, createRuntimePromptCacheTracker };
+module.exports = { createRuntimePromptCacheTracker };
 });
 
 SimCore.define("runtime-topology", function (require, module, exports) {
@@ -6304,7 +6290,7 @@ function createRequestTopologyTracker() {
   });
 }
 
-module.exports = { exactHash, messageSignature, leadingSystemCount, breakAttribution, createRequestTopologyTracker };
+module.exports = { messageSignature, breakAttribution, createRequestTopologyTracker };
 });
 
 SimCore.define("runtime-cache-candidates", function (require, module, exports) {
@@ -6455,7 +6441,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.1';
+const HOST_COMPAT_VERSION = '0.70.3';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -6481,16 +6467,24 @@ function capture(input) {
   });
 }
 
+function sessionSurfaceResult(label, status, storage = null) {
+  return Object.freeze({ label, status, storage });
+}
+
 function inspectSessionSurface(root, label) {
-  if (!root) return Object.freeze({ label, status: 'ROOT_ABSENT', storage: null });
+  if (!root) return sessionSurfaceResult(label, 'ROOT_ABSENT');
   let storage = null;
   try { storage = root.sessionStorage; }
-  catch (_) { return Object.freeze({ label, status: 'ACCESS_ERROR', storage: null }); }
-  if (storage == null) return Object.freeze({ label, status: 'STORAGE_ABSENT', storage: null });
+  catch (_) { return sessionSurfaceResult(label, 'ACCESS_ERROR'); }
+  if (storage == null) return sessionSurfaceResult(label, 'STORAGE_ABSENT');
   if (typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function' || typeof storage.removeItem !== 'function') {
-    return Object.freeze({ label, status: 'METHODS_INCOMPLETE', storage: null });
+    return sessionSurfaceResult(label, 'METHODS_INCOMPLETE');
   }
-  return Object.freeze({ label, status: 'USABLE', storage });
+  return sessionSurfaceResult(label, 'USABLE', storage);
+}
+
+function sessionStorageCandidate(label, storage) {
+  return Object.freeze({ label, storage });
 }
 
 function resolveSessionCandidates(root, windowLike) {
@@ -6504,18 +6498,18 @@ function resolveSessionCandidates(root, windowLike) {
   if (windowUsable && globalUsable) {
     if (windowSurface.storage === globalSurface.storage) {
       relation = 'SAME_OBJECT';
-      first = Object.freeze({ label: 'WINDOW', storage: windowSurface.storage });
+      first = sessionStorageCandidate('WINDOW', windowSurface.storage);
     } else {
       relation = 'DISTINCT_OBJECTS';
-      first = Object.freeze({ label: 'WINDOW', storage: windowSurface.storage });
-      second = Object.freeze({ label: 'GLOBAL_THIS', storage: globalSurface.storage });
+      first = sessionStorageCandidate('WINDOW', windowSurface.storage);
+      second = sessionStorageCandidate('GLOBAL_THIS', globalSurface.storage);
     }
   } else if (windowUsable) {
     relation = 'SINGLE_CANDIDATE';
-    first = Object.freeze({ label: 'WINDOW', storage: windowSurface.storage });
+    first = sessionStorageCandidate('WINDOW', windowSurface.storage);
   } else if (globalUsable) {
     relation = 'SINGLE_CANDIDATE';
-    first = Object.freeze({ label: 'GLOBAL_THIS', storage: globalSurface.storage });
+    first = sessionStorageCandidate('GLOBAL_THIS', globalSurface.storage);
   }
   const surface = Object.freeze({ window: windowSurface.status, globalThis: globalSurface.status, relation });
   lastSurfaceProbe = surface;
@@ -6661,17 +6655,21 @@ function takeMemory(root) {
   } catch (_) { return { status: 'failed', capsule: null }; }
 }
 
+function sessionCandidateResult(root, status, capsule = null, serializedChars = 0) {
+  return Object.freeze({ root, status, capsule, serializedChars });
+}
+
 function takeSessionCandidate(candidate) {
   if (!candidate) return null;
   let raw = null;
   try { raw = candidate.storage.getItem(SESSION_KEY); }
-  catch (_) { return Object.freeze({ root: candidate.label, status: 'failed', capsule: null, serializedChars: 0 }); }
-  if (raw == null) return Object.freeze({ root: candidate.label, status: 'empty', capsule: null, serializedChars: 0 });
+  catch (_) { return sessionCandidateResult(candidate.label, 'failed', null, 0); }
+  if (raw == null) return sessionCandidateResult(candidate.label, 'empty', null, 0);
   try { candidate.storage.removeItem(SESSION_KEY); } catch (_) {}
   const serializedChars = String(raw).length;
-  if (serializedChars > MAX_SESSION_CHARS) return Object.freeze({ root: candidate.label, status: 'oversize', capsule: null, serializedChars });
-  try { return Object.freeze({ root: candidate.label, status: 'available', capsule: JSON.parse(String(raw)), serializedChars }); }
-  catch (_) { return Object.freeze({ root: candidate.label, status: 'malformed', capsule: null, serializedChars }); }
+  if (serializedChars > MAX_SESSION_CHARS) return sessionCandidateResult(candidate.label, 'oversize', null, serializedChars);
+  try { return sessionCandidateResult(candidate.label, 'available', JSON.parse(String(raw)), serializedChars); }
+  catch (_) { return sessionCandidateResult(candidate.label, 'malformed', null, serializedChars); }
 }
 
 function claim(root, windowLike) {
@@ -6809,6 +6807,11 @@ function hostReason(hostClaim, validation) {
   return validation?.reason || 'no-compatible-handoff';
 }
 
+function recordClaimSelection(memoryValidation, sessionValidation, hostValidation, selected, selectedRoot) {
+  lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation, sessionValidation, hostValidation, selected, selectedRoot });
+  return lastClaimProbe;
+}
+
 function validate(claimed, locationKey, now = Date.now(), hostClaim = null) {
   if (!claimed || Number(claimed.claimSchema) !== 1) {
     const legacy = validateCapsule(claimed, locationKey, now);
@@ -6825,25 +6828,25 @@ function validate(claimed, locationKey, now = Date.now(), hostClaim = null) {
   const hostValidation = validateCapsule(hostClaim?.status === 'CONSUMED' ? hostClaim.capsule : null, locationKey, now);
 
   if (memory.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: 'exact', sessionValidation: (firstEntry || secondEntry) ? 'standby' : 'empty', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'memory', selectedRoot: 'NONE' });
+    recordClaimSelection('exact', (firstEntry || secondEntry) ? 'standby' : 'empty', hostClaim ? 'standby' : 'empty', 'memory', 'NONE');
     return { ...memory, transport: 'memory', fallbackFrom: null, sessionRoot: null };
   }
   if (firstValidation.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'session', selectedRoot: firstEntry.root });
+    recordClaimSelection(validationClass(memory), 'exact', hostClaim ? 'standby' : 'empty', 'session', firstEntry.root);
     return { ...firstValidation, transport: 'session', fallbackFrom: memory.reason, sessionRoot: firstEntry.root };
   }
   if (secondValidation.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: 'exact', hostValidation: hostClaim ? 'standby' : 'empty', selected: 'session', selectedRoot: secondEntry.root });
+    recordClaimSelection(validationClass(memory), 'exact', hostClaim ? 'standby' : 'empty', 'session', secondEntry.root);
     return { ...secondValidation, transport: 'session', fallbackFrom: sessionReason(firstEntry, firstValidation), sessionRoot: secondEntry.root };
   }
   if (hostValidation.accepted) {
-    lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), hostValidation: 'exact', selected: 'host-local', selectedRoot: 'NONE' });
+    recordClaimSelection(validationClass(memory), validationClass(secondEntry ? secondValidation : firstValidation), 'exact', 'host-local', 'NONE');
     return { ...hostValidation, transport: 'host-local', fallbackFrom: secondEntry ? sessionReason(secondEntry, secondValidation) : (firstEntry ? sessionReason(firstEntry, firstValidation) : memory.reason), sessionRoot: null };
   }
   const firstReason = sessionReason(firstEntry, firstValidation);
   const secondReason = sessionReason(secondEntry, secondValidation);
   const hostFailure = hostReason(hostClaim, hostValidation);
-  lastClaimProbe = Object.freeze({ ...(lastClaimProbe || {}), memoryValidation: validationClass(memory), sessionValidation: validationClass(secondEntry ? secondValidation : firstValidation), hostValidation: hostClaim ? validationClass(hostValidation) : 'empty', selected: 'NONE', selectedRoot: 'NONE' });
+  recordClaimSelection(validationClass(memory), validationClass(secondEntry ? secondValidation : firstValidation), hostClaim ? validationClass(hostValidation) : 'empty', 'NONE', 'NONE');
   const primary = claimed.memory
     ? memory
     : (firstEntry ? { ...firstValidation, reason: firstReason }
@@ -7888,6 +7891,12 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     return false;
   }
 
+  function guardCurrentRuntime(epoch = runtimeEpoch) {
+    if (runtimeIsCurrent(epoch)) return true;
+    dropStaleRuntime();
+    return false;
+  }
+
   function textMessageContent(m) {
     if (!m) return '';
     const v = m.content ?? m.data ?? m.text ?? '';
@@ -8180,8 +8189,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'session-load' });
       return { active: false };
     }
-    if (!runtimeIsCurrent()) {
-      dropStaleRuntime();
+    if (!guardCurrentRuntime()) {
       markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'runtime-unloaded' });
       return { active: false };
     }
@@ -8241,8 +8249,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       perf.aliasRepair = aliasRepair;
     }
 
-    if (!runtimeIsCurrent()) {
-      dropStaleRuntime();
+    if (!guardCurrentRuntime()) {
       markDiagnosticRequestProbe(sendIndex, { status: 'UNAVAILABLE', active: false, mode: null, errorStage: 'runtime-unloaded' });
       return { active: false };
     }
@@ -8395,10 +8402,6 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
           bootstrap: snapshotDetail?.templateBootstrap || null,
           at: Date.now(),
         };
-      } else {
-        lastTemplateRecurrenceProbe = null;
-      }
-      if (pendingProbe) {
         const l = result.state.requestLineage || {};
         lastRequestLineageProbe = {
           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
@@ -8414,10 +8417,6 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
           recentSources: Array.isArray(l.recentSources) ? l.recentSources.slice(-4) : [],
           at: Date.now(),
         };
-      } else {
-        lastRequestLineageProbe = null;
-      }
-      if (pendingProbe) {
         lastCommunitySourceHandoffProbe = {
           sendIndex: Number.isInteger(Number(pendingProbe.sendIndex)) ? Number(pendingProbe.sendIndex) : -1,
           eligible: !!pendingProbe.communitySourceHandoffEligible,
@@ -8441,6 +8440,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
           at: Date.now(),
         };
       } else {
+        lastTemplateRecurrenceProbe = null;
+        lastRequestLineageProbe = null;
         lastCommunitySourceHandoffProbe = null;
       }
       lastCore = { active: true, mode: result.state.pending?.mode || null, issues: [], diagnostics: [] };
@@ -8484,16 +8485,17 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     return result;
   }
 
-  async function processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf = null) {
+  async function processCoreOutput(content, chaIdx, chatIdx, chat, perf = null) {
+    const fallbackOutIndex = chat?.message?.length ?? 0;
     let t = perfNow();
     const cs = await runtimeSession.loadCoreForChat(chaIdx, chatIdx, chat);
     if (perf) perf.sessionLoadMs = perfMs(t);
     if (!cs) return content;
-    if (!runtimeIsCurrent()) { dropStaleRuntime(); return content; }
+    if (!guardCurrentRuntime()) return content;
     const outIndex = cs.resolveOutputIndex(fallbackOutIndex);
 
     const outputDetail = perf ? {} : null;
-    if (!runtimeIsCurrent()) { dropStaleRuntime(); return content; }
+    if (!guardCurrentRuntime()) return content;
     t = perfNow();
     const result = await cs.processOutput(outIndex, content, outputDetail);
     if (perf) {
@@ -8555,7 +8557,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   const beforeRequestHandler = async (messages, type) => {
     if (type !== 'model') return messages;
     const hookEpoch = runtimeEpoch;
-    if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
+    if (!guardCurrentRuntime(hookEpoch)) return messages;
     diagnosticActivity.requestHooks += 1;
     const requestHookAt = Date.now();
     lastDiagnosticRequestProbe = {
@@ -8577,12 +8579,12 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       let t = perfNow();
       const { chaIdx, chatIdx } = await host.currentIndices();
       perf.indicesMs = perfMs(t);
-      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
+      if (!guardCurrentRuntime(hookEpoch)) return messages;
 
       t = perfNow();
       const chat = await host.getChat(chaIdx, chatIdx);
       perf.chatLoadMs = perfMs(t);
-      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return messages; }
+      if (!guardCurrentRuntime(hookEpoch)) return messages;
 
       const detectedUserIndex = coreRules.latestUserIndex(chat);
       const sendIndex = detectedUserIndex >= 0
@@ -8613,7 +8615,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 
   const outputHandler = async (content) => {
     const hookEpoch = runtimeEpoch;
-    if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
+    if (!guardCurrentRuntime(hookEpoch)) return content;
     diagnosticActivity.outputHooks += 1;
     const outputHookAt = Date.now();
     if (lastDiagnosticRequestProbe) lastDiagnosticRequestProbe.outputSeenAt = outputHookAt;
@@ -8626,15 +8628,14 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       let t = perfNow();
       const { chaIdx, chatIdx } = await host.currentIndices();
       perf.indicesMs = perfMs(t);
-      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
+      if (!guardCurrentRuntime(hookEpoch)) return content;
 
       t = perfNow();
       const chat = await host.getChat(chaIdx, chatIdx);
       perf.chatLoadMs = perfMs(t);
-      if (!runtimeIsCurrent(hookEpoch)) { dropStaleRuntime(); return content; }
+      if (!guardCurrentRuntime(hookEpoch)) return content;
 
-      const fallbackOutIndex = chat?.message?.length ?? 0;
-      return await processCoreOutput(content, chaIdx, chatIdx, chat, fallbackOutIndex, perf);
+      return await processCoreOutput(content, chaIdx, chatIdx, chat, perf);
     } catch (e) {
       if (lastDiagnosticRequestProbe) Object.assign(lastDiagnosticRequestProbe, { outputStatus: 'ERROR', outputErrorStage: 'output', outputErrorName: e?.name || 'Error' });
       console.log(SIMCORE_LOG_PREFIX + ' output error:', e.message);
@@ -9284,8 +9285,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.1',
-    name: 'Cold First-Turn Tail Attribution',
+    version: '0.70.3',
+    name: 'Post-M2 Simplification Convergence',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

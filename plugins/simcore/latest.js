@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.3
+//@version 0.70.4
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.4 Manual Edit Rebuild Attribution:
+// - Adds bounded current-request timing decomposition only for the genuine manual-edit rebuild reconciliation path
+// - Attributes classify, prepare, recovery, finalize, commit and conservative residual other without changing edit decisions or snapshot semantics
+// - Renders one Manual edit breakdown diagnostic line only for the genuine manual rebuild path; fast/carryover paths remain branch-only
+// - Adds no require edge, persistent schema, raw-body retention, history scan, timer, network, storage or chat operation beyond the already-required rebuild work
 //
 // v0.70.3 Post-M2 Simplification Convergence:
 // - Converges the three complete-string FNV-1a 32-bit loops inside runtime-cache onto one private local fnv1a32 helper
@@ -729,7 +735,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.3';
+const SIMCORE_RUNTIME_VERSION = '0.70.4';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4628,6 +4634,9 @@ function reconcileElapsed(start) { return Math.max(0, reconcileNow() - start); }
 async function reconcileSessionEditedOutput(session, outIndex, content, perfDetail = null) {
 
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
+    const inheritedRebuildStart = detail && Number.isFinite(Number(detail.editRebuildStart))
+      ? Number(detail.editRebuildStart)
+      : null;
     if (detail) {
       detail.path = 'unknown';
       detail.fingerprintMs = 0;
@@ -4643,6 +4652,8 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       detail.outSetMs = 0;
       detail.outPruneMs = 0;
       detail.didSave = false;
+      detail.editClassifyMs = Number.isFinite(Number(detail.editClassifyMs)) ? Number(detail.editClassifyMs) : null;
+      detail.manualEditAttribution = null;
     }
     if (!Number.isInteger(outIndex) || outIndex < 0) {
       if (detail) detail.path = 'no-output';
@@ -4650,6 +4661,7 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
     }
 
     let t = reconcileNow();
+    const rebuildAttributionStart = inheritedRebuildStart == null ? t : inheritedRebuildStart;
     const actualFingerprint = kernel.fingerprintText(content);
     if (detail) detail.fingerprintMs = reconcileElapsed(t);
 
@@ -4868,6 +4880,34 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
     session.trustedOutputFingerprint = result.state.outputFingerprint || null;
     session.trustedHostOutputFingerprint = actualFingerprint;
     session.loadedFromLegacySnapshot = false;
+    if (detail) {
+      const rebuildTotalMs = reconcileElapsed(rebuildAttributionStart);
+      const prepareMs = Number(detail.prepareMs);
+      const recoveryMs = Number(detail.clockRepairMs);
+      const finalizeMs = Number(detail.finalizeMs);
+      const commitParts = [saveMetric.serializeMs, saveMetric.setMs, saveMetric.pruneMs];
+      const commitKnown = commitParts.every((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
+      const commitMs = commitKnown ? commitParts.reduce((sum, value) => sum + Number(value), 0) : null;
+      const named = prepareMs + recoveryMs + finalizeMs + (commitMs == null ? 0 : commitMs);
+      const closureValid = Number.isFinite(rebuildTotalMs) && rebuildTotalMs >= 0
+        && Number.isFinite(prepareMs) && prepareMs >= 0
+        && Number.isFinite(recoveryMs) && recoveryMs >= 0
+        && Number.isFinite(finalizeMs) && finalizeMs >= 0
+        && Number.isFinite(named) && named >= 0
+        && named <= rebuildTotalMs + 0.5;
+      if (closureValid) {
+        detail.manualEditAttribution = Object.freeze({
+          classifyMs: Number.isFinite(Number(detail.editClassifyMs)) && Number(detail.editClassifyMs) >= 0 ? Number(detail.editClassifyMs) : null,
+          rebuildTotalMs,
+          prepareMs,
+          recoveryMs,
+          finalizeMs,
+          commitMs,
+          otherMs: Math.max(0, rebuildTotalMs - named),
+          confidence: 'BOUNDED',
+        });
+      }
+    }
     return { changed: true, mode: result.mode || result.state.lastMode, revision: result.state.manualEditRevision };
   
 }
@@ -4929,6 +4969,11 @@ async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, de
         representationFastReconciled: true,
       };
     } else {
+      if (perfDetail && Number.isFinite(Number(perfDetail.editReconcileStart))) {
+        const classifyEnd = reconcileNow();
+        perfDetail.editClassifyMs = Math.max(0, classifyEnd - Number(perfDetail.editReconcileStart));
+        perfDetail.editRebuildStart = classifyEnd;
+      }
       r = await reconcileSession(lastAssistant, visibleContent, perfDetail);
     }
     if (perfDetail) {
@@ -6441,7 +6486,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.3';
+const HOST_COMPAT_VERSION = '0.70.4';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -8226,7 +8271,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
 
     reconcileFrontierDraft = prepareReconcileFrontierDraft(messages, lastRequestTopologyProbe);
     t = perfNow();
-    const editDetail = perf ? {} : null;
+    const editDetail = perf ? { editReconcileStart: t } : null;
     await reconcileManualEdit(cs, chat, editDetail);
     if (reconcileFrontierDraft) {
       reconcileFrontierDraft.post = captureFrontierWindow(messages, reconcileFrontierDraft.seedIndex);
@@ -8836,7 +8881,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     const session = perf.sessionDetail || {};
     const edit = perf.editDetail || {};
     const tail = perf.postOnSendAttribution || {};
+    const manualEdit = edit.manualEditAttribution && typeof edit.manualEditAttribution === 'object' ? edit.manualEditAttribution : null;
     const tailNumber = (value) => value == null || !Number.isFinite(Number(value)) || Number(value) < 0 ? null : Number(value);
+    const editNumber = (value) => value == null || !Number.isFinite(Number(value)) || Number(value) < 0 ? null : Number(value);
     const sessionKnown = n(session.chatFallbackMs) + n(session.characterLoadMs) + n(session.initScanMs) + n(session.initMs);
     const sessionOther = Math.max(0, n(perf.sessionLoadMs) - sessionKnown);
 
@@ -8879,6 +8926,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       editOrigin: String(edit.editOrigin || 'NONE'), editPriorRepresentation: String(edit.editPriorRepresentation || 'UNAVAILABLE'), editPriorMatch: String(edit.editPriorMatch || 'n/a'),
       editPriorCanonical: String(edit.editPriorCanonical || 'n/a'), editPriorFresh: String(edit.editPriorFresh || 'n/a'), editCurrentFingerprint: String(edit.editCurrentFingerprint || 'n/a'), editCurrentMatch: String(edit.editCurrentMatch || 'NONE'),
       editDeltaCanonical: edit.editDeltaCanonical == null ? null : Number(edit.editDeltaCanonical), editDeltaFresh: edit.editDeltaFresh == null ? null : Number(edit.editDeltaFresh), editDeltaShape: String(edit.editDeltaShape || 'UNCLASSIFIED'),
+      editClassifyMs: editNumber(manualEdit?.classifyMs), editRebuildTotalMs: editNumber(manualEdit?.rebuildTotalMs),
+      editRebuildPrepareMs: editNumber(manualEdit?.prepareMs), editRebuildRecoveryMs: editNumber(manualEdit?.recoveryMs), editRebuildFinalizeMs: editNumber(manualEdit?.finalizeMs),
+      editRebuildCommitMs: editNumber(manualEdit?.commitMs), editRebuildOtherMs: editNumber(manualEdit?.otherMs), editRebuildConfidence: String(manualEdit?.confidence || 'UNAVAILABLE'),
     };
   }
 
@@ -9015,6 +9065,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Session load: ${requestBreakdown ? `${requestBreakdown.sessionPath} · chat fallback ${diagnosticFormatMs(requestBreakdown.sessionChatFallbackMs)} · character ${diagnosticFormatMs(requestBreakdown.characterLoadMs)} · init scan ${diagnosticFormatMs(requestBreakdown.initScanMs)} · init ${diagnosticFormatMs(requestBreakdown.initMs)} · other ${diagnosticFormatMs(requestBreakdown.sessionOther)}` : 'n/a'}`,
       `Post-handshake breakdown: ${requestBreakdown ? `bootstrap ${diagnosticFormatMs(requestBreakdown.bootstrapMs)} · edit ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · alias ${diagnosticFormatMs(requestBreakdown.aliasRepairMs)} · onSend ${diagnosticFormatMs(requestBreakdown.onSendMs)} · post-onSend ${diagnosticFormatMs(requestBreakdown.postOnSendMs)} · other ${diagnosticFormatMs(requestBreakdown.postHandshakeOther)} · total ${diagnosticFormatMs(requestBreakdown.postHandshakeTotal)}` : 'n/a'}`,
       `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,
+      ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'
+        ? [`Manual edit breakdown: classify ${requestBreakdown.editClassifyMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editClassifyMs)} · prepare ${diagnosticFormatMs(requestBreakdown.editRebuildPrepareMs)} · recovery ${diagnosticFormatMs(requestBreakdown.editRebuildRecoveryMs)} · finalize ${diagnosticFormatMs(requestBreakdown.editRebuildFinalizeMs)} · commit ${requestBreakdown.editRebuildCommitMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitMs)} · other ${diagnosticFormatMs(requestBreakdown.editRebuildOtherMs)} · confidence ${requestBreakdown.editRebuildConfidence}`]
+        : []),
       `Prior representation: ${requestBreakdown ? `${requestBreakdown.editPriorRepresentation || 'UNAVAILABLE'} · mirror ${requestBreakdown.editPriorMatch || 'n/a'} · canonical ${requestBreakdown.editPriorCanonical || 'n/a'} · fresh ${requestBreakdown.editPriorFresh || 'n/a'}` : 'n/a'}`,
       `Edit origin: ${requestBreakdown ? `${requestBreakdown.editOrigin || 'NONE'} · current ${requestBreakdown.editCurrentFingerprint || 'n/a'} · match ${requestBreakdown.editCurrentMatch || 'NONE'} · raw bodies NOT RETAINED` : 'n/a'}`,
       `Edit delta: ${requestBreakdown ? `vs canonical ${requestBreakdown.editDeltaCanonical == null ? 'n/a' : `${Number(requestBreakdown.editDeltaCanonical) >= 0 ? '+' : ''}${Number(requestBreakdown.editDeltaCanonical)}`} · vs fresh ${requestBreakdown.editDeltaFresh == null ? 'n/a' : `${Number(requestBreakdown.editDeltaFresh) >= 0 ? '+' : ''}${Number(requestBreakdown.editDeltaFresh)}`} · shape ${requestBreakdown.editDeltaShape || 'UNCLASSIFIED'} · boundary n/a` : 'n/a'}`,
@@ -9285,8 +9338,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.3',
-    name: 'Post-M2 Simplification Convergence',
+    version: '0.70.4',
+    name: 'Manual Edit Rebuild Attribution',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

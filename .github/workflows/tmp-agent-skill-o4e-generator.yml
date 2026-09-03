@@ -61,7 +61,11 @@ jobs:
 
           path = Path('tools/agent-skill-orchestrator/benchmarks/run_o4e_scout_schema_validation.py')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('MATRIX_ID = "o4e-scout-schema-hardening-validation-v1"', 'MATRIX_ID = "o4e-scout-authority-schema-validation-v1"', 1)
+          old_matrix = 'MATRIX_ID = "o4e-scout-schema-hardening-validation-v1"'
+          new_matrix = 'MATRIX_ID = "o4e-scout-authority-schema-validation-v1"'
+          if text.count(old_matrix) != 1:
+              raise SystemExit('O4-E matrix id shape drifted')
+          text = text.replace(old_matrix, new_matrix, 1)
           old = 'from roles.scout import build_scout_prompt, prompt_sha256, scout_response_schema\n'
           new = ('from roles.scout import build_scout_prompt, prompt_sha256\n'
                  'from roles.scout_evidence_schema import scout_response_schema_for_evidence\n')
@@ -85,6 +89,11 @@ jobs:
 
           path = Path('tools/agent-skill-orchestrator/tests/test_o4e_scout_schema_validation.py')
           text = path.read_text(encoding='utf-8')
+          old_test_matrix = 'MATRIX_ID = "o4e-scout-schema-hardening-validation-v1"'
+          new_test_matrix = 'MATRIX_ID = "o4e-scout-authority-schema-validation-v1"'
+          if text.count(old_test_matrix) != 1:
+              raise SystemExit('O4-E test matrix id shape drifted')
+          text = text.replace(old_test_matrix, new_test_matrix, 1)
           old = 'from roles.scout import build_scout_prompt, prompt_sha256, scout_response_schema\n'
           new = ('from roles.scout import build_scout_prompt, prompt_sha256, scout_response_schema\n'
                  'from roles.scout_evidence_schema import scout_response_schema_for_evidence\n')

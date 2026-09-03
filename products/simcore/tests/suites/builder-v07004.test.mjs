@@ -216,7 +216,7 @@ export async function runSuite(ctx) {
     const representationDetail = { editReconcileStart: Date.now() };
     let representationDelegated = 0;
     await edit.reconcileVisiblePreviousAssistant(
-      { currentOutputIndex: 0, current: {}, trustedOutputFingerprint: 'fp:canonical-visible' },
+      { currentOutputIndex: 0, current: { outputFingerprint: 'fp:canonical-visible' }, trustedOutputFingerprint: 'fp:canonical-visible' },
       { message: [{ role: 'assistant', content: 'fresh-visible' }] },
       representationDetail,
       outerDeps({

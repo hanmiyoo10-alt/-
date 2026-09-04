@@ -181,14 +181,16 @@ def verify(original, candidate):
     if candidate.count("Manual edit retention:") != 1:
         fail("07006_DIAGNOSTIC_LINE_COUNT")
     for marker in [
-        "USER_EDIT_CANDIDATE", "MANUAL_EDIT_REBUILT", "REPRESENTATION_FAST_RECONCILED",
+        "MANUAL_EDIT_REBUILT", "REPRESENTATION_FAST_RECONCILED",
         "const PROMPT_COMPILER_VERSION = 4;", "const COMMUNITY_CLASSIFIER_VERSION = 3;",
         "const STATE_VERSION = 5;", "const CORE_STATE_VERSION = 10;",
     ]:
-        if original.count(marker) > candidate.count(marker):
-            fail("07006_FROZEN_MARKER_REMOVED", marker)
-    if candidate.count("USER_EDIT_CANDIDATE") != original.count("USER_EDIT_CANDIDATE") + 1:
-        fail("07006_ELIGIBILITY_MARKER_CARDINALITY")
+        if original.count(marker) != candidate.count(marker):
+            fail("07006_FROZEN_MARKER_CHANGED", marker)
+    if original.count("editOrigin = 'USER_EDIT_CANDIDATE'") != candidate.count("editOrigin = 'USER_EDIT_CANDIDATE'"):
+        fail("07006_USER_EDIT_DECISION_MARKER_CHANGED")
+    if candidate.count("USER_EDIT_CANDIDATE_WHEN_CHANGED") != 2:
+        fail("07006_ELIGIBILITY_TOKEN_CARDINALITY")
 
 
 def main():

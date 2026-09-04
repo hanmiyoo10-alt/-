@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.4-intent-02",
+  "releaseId": "simcore-v0.70.4-new-02",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "4c618563f43b8a3ff0eeb18eeff5536bb287369b",
+  "sourceCommit": "80b1b4125cfac7420490e1a8a3bfd05d77dde0e6",
+  "candidateCommit": "df282f18a0035b03be30af8d0ee2174f58b3bcd3",
+  "candidateReleaseBlob": "7cf830bd6c48f706e97f116f019144bf280e301c",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.4-intent-02",
+  "builderPath": "products/simcore/tooling/build-07004-manual-edit-rebuild-attribution.py",
+  "builderSha256": "59819ed44892593690990b6a1c0de8e4b11e65c35900506631836d9bd97e9f75",
+  "verifierCommit": "80b1b4125cfac7420490e1a8a3bfd05d77dde0e6",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "1ade3eac8a80166a071acfe936d127d1a21d6a07dd058f479a779b1efe14c28c",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

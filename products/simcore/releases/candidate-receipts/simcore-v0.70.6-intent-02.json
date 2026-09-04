@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.6-intent-02",
+  "releaseId": "simcore-v0.70.6-new-02",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "4374bef29e28804750c05115258cc80f055a26f7",
+  "sourceCommit": "ad03e09976cec0ab8af271b9ffbd89f368773b6d",
+  "candidateCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "candidateReleaseBlob": "83714d78537906fc9f2060c06c9e4ce349568a19",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.6-intent-02",
+  "builderPath": "products/simcore/tooling/build-07006-manual-edit-redundant-prune-elision.py",
+  "builderSha256": "e7b8061de56839b4f63576399d88dca803607eb0e59f7451404cefe131b52657",
+  "verifierCommit": "ad03e09976cec0ab8af271b9ffbd89f368773b6d",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "fab53726cba30a0e53b871fdd4b063af830f4504f1fab1ad12fe1748f947254c",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

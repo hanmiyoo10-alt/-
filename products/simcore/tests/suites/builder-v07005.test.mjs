@@ -82,7 +82,18 @@ function manualSession(stubs) {
         load: async (kind) => kind === 'out' ? { ...savedOut } : (kind === 'send' ? { ...sendState } : null),
         save: async (_kind, _index, _state, opts = {}) => {
           saveCalls += 1;
-          if (opts.metric) Object.assign(opts.metric, stubs.__commitMetric || {});
+          const metric = stubs.__commitMetric || {};
+          const declaredCommitMs = ['serializeMs', 'setMs', 'pruneMs']
+            .map((key) => Number(metric[key]))
+            .filter((value) => Number.isFinite(value) && value >= 0)
+            .reduce((sum, value) => sum + value, 0);
+          if (declaredCommitMs > 0) {
+            const until = performance.now() + declaredCommitMs + 1;
+            while (performance.now() < until) {
+              // Keep synthetic wall time coherent with the synthetic Store metric envelope.
+            }
+          }
+          if (opts.metric) Object.assign(opts.metric, metric);
         },
       },
       seedBroadcastAirtimeFromVisible: () => false,

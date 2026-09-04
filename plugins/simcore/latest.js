@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.4
+//@version 0.70.5
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.5 Manual Edit Commit Boundary Attribution:
+// - Projects existing genuine-manual-edit Store serialize/set/prune metrics into bounded diagnostic metadata
+// - Adds one Manual edit commit diagnostic line only on the genuine manual rebuild path
+// - Reuses existing Store measurements without changing Store behavior, edit decisions, snapshot semantics or retention policy
+// - Adds no persistent schema, raw-body retention, history scan, network, storage or chat operation
 //
 // v0.70.4 Manual Edit Rebuild Attribution:
 // - Adds bounded current-request timing decomposition only for the genuine manual-edit rebuild reconciliation path
@@ -735,7 +741,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.4';
+const SIMCORE_RUNTIME_VERSION = '0.70.5';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4885,9 +4891,13 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
       const prepareMs = Number(detail.prepareMs);
       const recoveryMs = Number(detail.clockRepairMs);
       const finalizeMs = Number(detail.finalizeMs);
-      const commitParts = [saveMetric.serializeMs, saveMetric.setMs, saveMetric.pruneMs];
-      const commitKnown = commitParts.every((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
-      const commitMs = commitKnown ? commitParts.reduce((sum, value) => sum + Number(value), 0) : null;
+      const commitSerializeMs = Number.isFinite(Number(saveMetric.serializeMs)) && Number(saveMetric.serializeMs) >= 0 ? Number(saveMetric.serializeMs) : null;
+      const commitSetMs = Number.isFinite(Number(saveMetric.setMs)) && Number(saveMetric.setMs) >= 0 ? Number(saveMetric.setMs) : null;
+      const commitPruneMs = Number.isFinite(Number(saveMetric.pruneMs)) && Number(saveMetric.pruneMs) >= 0 ? Number(saveMetric.pruneMs) : null;
+      const commitParts = [commitSerializeMs, commitSetMs, commitPruneMs];
+      const commitKnown = commitParts.every((value) => value != null);
+      const commitMs = commitKnown ? commitParts.reduce((sum, value) => sum + value, 0) : null;
+      const commitConfidence = commitKnown ? 'EXACT' : 'BOUNDED';
       const named = prepareMs + recoveryMs + finalizeMs + (commitMs == null ? 0 : commitMs);
       const closureValid = Number.isFinite(rebuildTotalMs) && rebuildTotalMs >= 0
         && Number.isFinite(prepareMs) && prepareMs >= 0
@@ -4902,7 +4912,11 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
           prepareMs,
           recoveryMs,
           finalizeMs,
+          commitSerializeMs,
+          commitSetMs,
+          commitPruneMs,
           commitMs,
+          commitConfidence,
           otherMs: Math.max(0, rebuildTotalMs - named),
           confidence: 'BOUNDED',
         });
@@ -6486,7 +6500,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.4';
+const HOST_COMPAT_VERSION = '0.70.5';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -8928,7 +8942,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       editDeltaCanonical: edit.editDeltaCanonical == null ? null : Number(edit.editDeltaCanonical), editDeltaFresh: edit.editDeltaFresh == null ? null : Number(edit.editDeltaFresh), editDeltaShape: String(edit.editDeltaShape || 'UNCLASSIFIED'),
       editClassifyMs: editNumber(manualEdit?.classifyMs), editRebuildTotalMs: editNumber(manualEdit?.rebuildTotalMs),
       editRebuildPrepareMs: editNumber(manualEdit?.prepareMs), editRebuildRecoveryMs: editNumber(manualEdit?.recoveryMs), editRebuildFinalizeMs: editNumber(manualEdit?.finalizeMs),
-      editRebuildCommitMs: editNumber(manualEdit?.commitMs), editRebuildOtherMs: editNumber(manualEdit?.otherMs), editRebuildConfidence: String(manualEdit?.confidence || 'UNAVAILABLE'),
+      editRebuildCommitSerializeMs: editNumber(manualEdit?.commitSerializeMs), editRebuildCommitSetMs: editNumber(manualEdit?.commitSetMs), editRebuildCommitPruneMs: editNumber(manualEdit?.commitPruneMs),
+      editRebuildCommitMs: editNumber(manualEdit?.commitMs), editRebuildCommitConfidence: String(manualEdit?.commitConfidence || 'UNAVAILABLE'), editRebuildOtherMs: editNumber(manualEdit?.otherMs), editRebuildConfidence: String(manualEdit?.confidence || 'UNAVAILABLE'),
     };
   }
 
@@ -9067,6 +9082,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Edit reconcile: ${requestBreakdown ? `${editPathLabel} · ${diagnosticFormatMs(requestBreakdown.editReconcileMs)} · snapshot ${requestBreakdown.editDidSave ? 'UPDATED' : 'UNCHANGED'} · representation ${requestBreakdown.editCompatibilitySource || 'n/a'}` : 'n/a'}`,
       ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'
         ? [`Manual edit breakdown: classify ${requestBreakdown.editClassifyMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editClassifyMs)} · prepare ${diagnosticFormatMs(requestBreakdown.editRebuildPrepareMs)} · recovery ${diagnosticFormatMs(requestBreakdown.editRebuildRecoveryMs)} · finalize ${diagnosticFormatMs(requestBreakdown.editRebuildFinalizeMs)} · commit ${requestBreakdown.editRebuildCommitMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitMs)} · other ${diagnosticFormatMs(requestBreakdown.editRebuildOtherMs)} · confidence ${requestBreakdown.editRebuildConfidence}`]
+        : []),
+      ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'
+        ? [`Manual edit commit: serialize ${requestBreakdown.editRebuildCommitSerializeMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitSerializeMs)} · set ${requestBreakdown.editRebuildCommitSetMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitSetMs)} · prune ${requestBreakdown.editRebuildCommitPruneMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitPruneMs)} · total ${requestBreakdown.editRebuildCommitMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitMs)} · confidence ${requestBreakdown.editRebuildCommitConfidence}`]
         : []),
       `Prior representation: ${requestBreakdown ? `${requestBreakdown.editPriorRepresentation || 'UNAVAILABLE'} · mirror ${requestBreakdown.editPriorMatch || 'n/a'} · canonical ${requestBreakdown.editPriorCanonical || 'n/a'} · fresh ${requestBreakdown.editPriorFresh || 'n/a'}` : 'n/a'}`,
       `Edit origin: ${requestBreakdown ? `${requestBreakdown.editOrigin || 'NONE'} · current ${requestBreakdown.editCurrentFingerprint || 'n/a'} · match ${requestBreakdown.editCurrentMatch || 'NONE'} · raw bodies NOT RETAINED` : 'n/a'}`,
@@ -9338,8 +9356,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.4',
-    name: 'Manual Edit Rebuild Attribution',
+    version: '0.70.5',
+    name: 'Manual Edit Commit Boundary Attribution',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

@@ -1012,3 +1012,17 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
 - Event ID: `c44d48e141bfbb08e942277ceec503e9192b921c46c02f5f9e2c96bbf50d5c3f`
 <!-- canonical-main-doc-promoted:c44d48e141bfbb08e942277ceec503e9192b921c46c02f5f9e2c96bbf50d5c3f -->
+
+### 2026-09-04 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `7e18c792e51ebd84d082cb253a91b0471eda03b4269d1b7766a255430526e5e3`
+<!-- canonical-main-doc-promoted:7e18c792e51ebd84d082cb253a91b0471eda03b4269d1b7766a255430526e5e3 -->
+
+### 2026-09-04 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `7237cbceccc53591f89a93564f8a5d1386ca4248c349927a5f1cfe38bf09bc1a`
+<!-- canonical-main-doc-promoted:7237cbceccc53591f89a93564f8a5d1386ca4248c349927a5f1cfe38bf09bc1a -->

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.6-intent-02",
+  "releaseId": "simcore-v0.70.6-new-02",
+  "product": "SimCore",
+  "targetVersion": "0.70.6",
+  "releaseName": "Manual Edit Redundant Prune Elision",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "4374bef29e28804750c05115258cc80f055a26f7",
+  "builderPath": "products/simcore/tooling/build-07006-manual-edit-redundant-prune-elision.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_DESIGN_2026-09-04.md",
+    "docs/SIMCORE_07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_IMPACT_SCOPE_2026-09-04.md",
+    "docs/SIMCORE_LIVE_07005_RELEASE_CLOSE_2026-09-04.md",
+    "docs/SIMCORE_07006_IMPLEMENTATION_AUTHORIZATION_2026-09-04.md",
+    "docs/SIMCORE_07006_IMPLEMENTATION_EVIDENCE_2026-09-04.md",
+    "docs/SIMCORE_07006_IMPLEMENTATION_REGRESSION_FAILURE_01_ELIGIBILITY_MARKER_CARDINALITY_2026-09-04.md",
+    "docs/SIMCORE_07006_IMPLEMENTATION_REGRESSION_FAILURE_02_SYNTHETIC_COMMIT_WALLTIME_2026-09-04.md",
+    "docs/SIMCORE_07006_CANDIDATE_QUALIFICATION_FAILURE_01_R2_9_ACTIVE_VERSION_2026-09-04.md",
+    "docs/SIMCORE_07006_R2_9_VALIDATION_PROJECTION_REPAIR_EVIDENCE_2026-09-04.md"
+  ]
+}

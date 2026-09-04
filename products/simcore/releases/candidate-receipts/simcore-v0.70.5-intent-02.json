@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.5-intent-02",
+  "releaseId": "simcore-v0.70.5-new-02",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "df282f18a0035b03be30af8d0ee2174f58b3bcd3",
+  "sourceCommit": "3aa2af90635cb1bed86cf6765fa09cdfd94f16f2",
+  "candidateCommit": "4374bef29e28804750c05115258cc80f055a26f7",
+  "candidateReleaseBlob": "c72802234d265337f2558420c84882148e633325",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.5-intent-02",
+  "builderPath": "products/simcore/tooling/build-07005-manual-edit-commit-boundary-attribution.py",
+  "builderSha256": "b5da71d7ace138925787e41eb071ef8318234893a061944dbffcb1c136da29e5",
+  "verifierCommit": "3aa2af90635cb1bed86cf6765fa09cdfd94f16f2",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "0f7bfd0d19abe3f51f8450d5f3777043fe46c0381dfaaf156a442eb8c9193998",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

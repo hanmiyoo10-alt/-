@@ -93,13 +93,28 @@ function manualSession({ savedOut = true, metric = { serializeMs: 1.25, setMs: 2
           backendSetCalls += 1;
           lastSave = { kind, index, opts: { ...opts } };
           map.set(`${kind}:${index}`, { ...(state || {}) });
+
+          const serializeMs = Number(metric.serializeMs);
+          const setMs = Number(metric.setMs);
+          const pruneMs = Number(metric.pruneMs);
+          const executedSyntheticMs =
+            (Number.isFinite(serializeMs) && serializeMs >= 0 ? serializeMs : 0)
+            + (Number.isFinite(setMs) && setMs >= 0 ? setMs : 0)
+            + (opts.prune !== false && Number.isFinite(pruneMs) && pruneMs >= 0 ? pruneMs : 0);
+          if (executedSyntheticMs > 0) {
+            const until = performance.now() + executedSyntheticMs + 1;
+            while (performance.now() < until) {
+              // Keep synthetic wall time coherent with the synthetic Store metric envelope.
+            }
+          }
+
           if (opts.metric) {
-            opts.metric.serializeMs = Number(metric.serializeMs);
-            opts.metric.setMs = Number(metric.setMs);
+            opts.metric.serializeMs = serializeMs;
+            opts.metric.setMs = setMs;
           }
           if (opts.prune !== false) {
             pruneCalls += 1;
-            if (opts.metric) opts.metric.pruneMs = Number(metric.pruneMs);
+            if (opts.metric) opts.metric.pruneMs = pruneMs;
           }
         },
       },

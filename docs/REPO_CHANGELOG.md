@@ -998,3 +998,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
 - Event ID: `1b866e1df2d1f7e425c62eb9405923888a22c2f35503a868fadfc91262855113`
 <!-- canonical-main-doc-promoted:1b866e1df2d1f7e425c62eb9405923888a22c2f35503a868fadfc91262855113 -->
+
+### 2026-09-04 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `b3f131ba75dfc1376d12ba6fd84c99ef00e080cb7a8a5d91b880605444fd8ba2`
+<!-- canonical-main-doc-promoted:b3f131ba75dfc1376d12ba6fd84c99ef00e080cb7a8a5d91b880605444fd8ba2 -->

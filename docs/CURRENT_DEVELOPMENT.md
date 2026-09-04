@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.3`
-- Release: `Post-M2 Simplification Convergence`
+- Version: `0.70.4`
+- Release: `Manual Edit Rebuild Attribution`
 - Release branch: `release-simcore`
-- Release commit: `4c618563f43b8a3ff0eeb18eeff5536bb287369b`
-- Release blob: `068df0d6b792b2878c0c745949e0b9d38fc667fa`
+- Release commit: `df282f18a0035b03be30af8d0ee2174f58b3bcd3`
+- Release blob: `7cf830bd6c48f706e97f116f019144bf280e301c`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -33,10 +33,10 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
 ## Current Release Live Gate
 
-- Release transaction: `simcore-v0.70.3-new-14`
-- Production commit: `4c618563f43b8a3ff0eeb18eeff5536bb287369b`
+- Release transaction: `simcore-v0.70.4-new-02`
+- Production commit: `df282f18a0035b03be30af8d0ee2174f58b3bcd3`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `S7_CUMULATIVE_SIMPLIFICATION_REAL_LONG_CHAT`
+- Current priority / live gate: `07004_MANUAL_EDIT_REBUILD_ATTRIBUTION_REAL_LONG_CHAT`
 - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
 This block is machine-managed by `release-state-converge` from immutable publication evidence.

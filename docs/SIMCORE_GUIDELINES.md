@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.3 — Post-M2 Simplification Convergence
-Release commit: 4c618563f43b8a3ff0eeb18eeff5536bb287369b
+SimCore v0.70.4 — Manual Edit Rebuild Attribution
+Release commit: df282f18a0035b03be30af8d0ee2174f58b3bcd3
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

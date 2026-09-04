@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.4-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "5ffddbb3733d4f46bdc6accda00f3e71dd67189a",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.4-new-02.json",
+  "releaseSpecSha256": "227591e79e89a3fb441a3b8b3e77af6d6e0a131924f41f1b0293693b61e7e6f2",
+  "productionCommit": "df282f18a0035b03be30af8d0ee2174f58b3bcd3",
+  "previousProductionCommit": "4c618563f43b8a3ff0eeb18eeff5536bb287369b",
+  "productionBlob": "7cf830bd6c48f706e97f116f019144bf280e301c",
+  "version": "0.70.4",
+  "releaseName": "Manual Edit Rebuild Attribution",
+  "verificationReportSha256": "4e34025f84b08cdfae140f7e752f6f943c58ba5dca767977b72ff370b4c1ab9e",
+  "verifierCommit": "c11eda4cf412ad779bed51c354297e0c53f2a7c0",
+  "publisherRunId": "33826317331",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07004_MANUAL_EDIT_REBUILD_ATTRIBUTION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

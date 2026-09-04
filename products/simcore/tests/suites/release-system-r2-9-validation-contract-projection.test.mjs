@@ -39,6 +39,7 @@ const KNOWN_RELEASE_IDENTITIES = Object.freeze({
   '0.70.3': Object.freeze({ releaseName: 'Post-M2 Simplification Convergence' }),
   '0.70.4': Object.freeze({ releaseName: 'Manual Edit Rebuild Attribution' }),
   '0.70.5': Object.freeze({ releaseName: 'Manual Edit Commit Boundary Attribution' }),
+  '0.70.6': Object.freeze({ releaseName: 'Manual Edit Redundant Prune Elision' }),
 });
 
 function readJson(url) {
@@ -164,6 +165,13 @@ export async function runSuite(ctx) {
   equal(validatedV07005.contracts['host-local-telemetry'].authorityVersion, '0.70.5', 'v0.70.5 Host-local exact authority');
   equal(JSON.stringify(validatedV07005.contracts['host-local-telemetry'].rejectVersions), JSON.stringify(['0.70.4']), 'v0.70.5 Host-local predecessor rejection');
 
+  const v07006Profile = readJson(new URL('../../releases/validation-profiles/0.70.6.json', import.meta.url));
+  const validatedV07006 = validateValidationProfile(v07006Profile, { requiredContracts: REQUIRED_CONTRACTS });
+  equal(validatedV07006.releaseVersion, '0.70.6', 'v0.70.6 validation profile version');
+  equal(validatedV07006.releaseName, 'Manual Edit Redundant Prune Elision', 'v0.70.6 validation profile release name');
+  equal(validatedV07006.contracts['host-local-telemetry'].authorityVersion, '0.70.6', 'v0.70.6 Host-local exact authority');
+  equal(JSON.stringify(validatedV07006.contracts['host-local-telemetry'].rejectVersions), JSON.stringify(['0.70.5']), 'v0.70.6 Host-local predecessor rejection');
+
   for (const [id, module] of Object.entries(ACTIVE_R2_9_ROUTES)) {
     equal(registry.find((row) => row.id === id)?.module, module, `R2.9 active route mismatch: ${id}`);
   }
@@ -171,6 +179,7 @@ export async function runSuite(ctx) {
   assert(registry.some((row) => row.id === 'builder-v07001'), 'builder-v07001 explicit row must remain during bounded activation');
   assert(registry.some((row) => row.id === 'builder-v07004'), 'builder-v07004 explicit row must remain discoverable');
   assert(registry.some((row) => row.id === 'builder-v07005'), 'builder-v07005 explicit row must remain discoverable');
+  assert(registry.some((row) => row.id === 'builder-v07006'), 'builder-v07006 explicit row must remain discoverable');
 
   const sourceVersion = extractSourceReleaseVersion(ctx.source);
   assert(KNOWN_RELEASE_IDENTITIES[sourceVersion], `R2.9 active regression source version unsupported: ${sourceVersion || '<missing>'}`);
@@ -181,10 +190,12 @@ export async function runSuite(ctx) {
   const source07001 = projectKnownReleaseIdentity(ctx.source, '0.70.1');
   const source07004 = projectKnownReleaseIdentity(ctx.source, '0.70.4');
   const source07005 = projectKnownReleaseIdentity(ctx.source, '0.70.5');
+  const source07006 = projectKnownReleaseIdentity(ctx.source, '0.70.6');
   await assertActiveContracts(source07000, ctx, 'known v0.70.0');
   await assertActiveContracts(source07001, ctx, 'known v0.70.1');
   await assertActiveContracts(source07004, ctx, 'known v0.70.4');
   await assertActiveContracts(source07005, ctx, 'known v0.70.5');
+  await assertActiveContracts(source07006, ctx, 'known v0.70.6');
 
   const inventory = filesystemInventory();
   const builderClosure = discoverBuilderClosure({
@@ -196,6 +207,7 @@ export async function runSuite(ctx) {
   assert(builderClosure.rows.some((row) => row.id === 'builder-v07001'), 'builder-v07001 must be auto-discoverable');
   assert(builderClosure.rows.some((row) => row.id === 'builder-v07004'), 'builder-v07004 must be auto-discoverable');
   assert(builderClosure.rows.some((row) => row.id === 'builder-v07005'), 'builder-v07005 must be auto-discoverable');
+  assert(builderClosure.rows.some((row) => row.id === 'builder-v07006'), 'builder-v07006 must be auto-discoverable');
 
   const topology = preflightValidationTopology({
     profile: loadedCurrent,
@@ -221,6 +233,10 @@ export async function runSuite(ctx) {
   assert(!inventory.suiteFiles.includes('operator-release-card-v07005.test.mjs'), 'v0.70.5 must not require an operator wrapper');
   assert(!inventory.suiteFiles.includes('host-local-telemetry-v07005.test.mjs'), 'v0.70.5 must not require a Host-local wrapper');
   assert(!inventory.suiteFiles.includes('bounded-telemetry-capsule-v07005.test.mjs'), 'v0.70.5 must not require a bounded telemetry wrapper');
+  assert(!inventory.suiteFiles.includes('reload-cache-continuity-v07006.test.mjs'), 'v0.70.6 must not require a reload wrapper');
+  assert(!inventory.suiteFiles.includes('operator-release-card-v07006.test.mjs'), 'v0.70.6 must not require an operator wrapper');
+  assert(!inventory.suiteFiles.includes('host-local-telemetry-v07006.test.mjs'), 'v0.70.6 must not require a Host-local wrapper');
+  assert(!inventory.suiteFiles.includes('bounded-telemetry-capsule-v07006.test.mjs'), 'v0.70.6 must not require a bounded telemetry wrapper');
 
   const unknownSource = ctx.source.replace(`//@version ${sourceVersion}`, '//@version 0.70.2');
   expectCode('VALIDATION_ACTIVE_PROFILE_MISSING', () => loadActiveValidationProfile(unknownSource));
@@ -279,6 +295,7 @@ export async function runSuite(ctx) {
       { id: 'r2-9-known-v07001-active-contracts-pass', status: 'PASS' },
       { id: 'r2-9-known-v07004-active-contracts-pass', status: 'PASS' },
       { id: 'r2-9-known-v07005-active-contracts-pass', status: 'PASS' },
+      { id: 'r2-9-known-v07006-active-contracts-pass', status: 'PASS' },
       { id: 'r2-9-projected-contract-fixture-ownership', status: 'PASS' },
       { id: 'r2-9-r2-10-context-owner-coherent', status: 'PASS' },
       { id: 'r2-9-builder-fixture-closure-pass', status: 'PASS' },
@@ -286,6 +303,7 @@ export async function runSuite(ctx) {
       { id: 'r2-9-v07001-no-wrapper-fanout', status: 'PASS' },
       { id: 'r2-9-v07004-no-wrapper-fanout', status: 'PASS' },
       { id: 'r2-9-v07005-no-wrapper-fanout', status: 'PASS' },
+      { id: 'r2-9-v07006-no-wrapper-fanout', status: 'PASS' },
       { id: 'r2-9-unknown-active-profile-fails-closed', status: 'PASS' },
       { id: 'r2-9-missing-contract-fails-closed', status: 'PASS' },
       { id: 'r2-9-implicit-authority-fails-closed', status: 'PASS' },

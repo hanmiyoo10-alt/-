@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.6-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "2433ae9fd955390c94df98d59036baebc7e755c4",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.6-new-02.json",
+  "releaseSpecSha256": "c34e6101fae0f41e2a37a46bebe92a3748be32ee8fbc4cf70b22b1b4439a6942",
+  "productionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "previousProductionCommit": "4374bef29e28804750c05115258cc80f055a26f7",
+  "productionBlob": "83714d78537906fc9f2060c06c9e4ce349568a19",
+  "version": "0.70.6",
+  "releaseName": "Manual Edit Redundant Prune Elision",
+  "verificationReportSha256": "e8b1db370f58754ff66bea2aaf66489ef3d6f86733f3462455c87129b9a992f9",
+  "verifierCommit": "c99a8f7255b919a3390e14454b0bcecfbfbf665b",
+  "publisherRunId": "33873661720",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

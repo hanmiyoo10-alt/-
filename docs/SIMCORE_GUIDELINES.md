@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.5 — Manual Edit Commit Boundary Attribution
-Release commit: 4374bef29e28804750c05115258cc80f055a26f7
+SimCore v0.70.6 — Manual Edit Redundant Prune Elision
+Release commit: e2552d7f93456652c94d9df37b0c253f12f2d900
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

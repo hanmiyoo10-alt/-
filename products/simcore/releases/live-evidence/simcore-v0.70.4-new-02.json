@@ -6,7 +6,7 @@
   "productionBlob": "7cf830bd6c48f706e97f116f019144bf280e301c",
   "liveScenarioId": "07004_MANUAL_EDIT_REBUILD_ATTRIBUTION_REAL_LONG_CHAT",
   "decision": "LIVE_PASS",
-  "checkpoint": "07004",
+  "checkpoint": "M2-6",
   "nextPriority": "07005_MANUAL_EDIT_COMMIT_BOUNDARY_ATTRIBUTION_IMPLEMENTATION",
   "humanEvidence": [
     "docs/SIMCORE_LIVE_07004_RELEASE_CLOSE_2026-09-04.md",

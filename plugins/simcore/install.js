@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.5
+//@version 0.70.6
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.6 Manual Edit Redundant Prune Elision:
+// - Elides the redundant inline retention prune only for a proven USER_EDIT_CANDIDATE same-out-key overwrite
+// - Reuses existing prior-representation and savedOut facts; no eligibility read, key scan, timer, queue or scheduler is added
+// - Keeps the rebuilt backend.set authoritative and awaited while ordinary deferred Store housekeeping remains retention authority
+// - Adds explicit INLINE_PRUNE_SKIPPED / SAME_OUT_KEY_OVERWRITE diagnostic provenance without changing persistent schema
 //
 // v0.70.5 Manual Edit Commit Boundary Attribution:
 // - Projects existing genuine-manual-edit Store serialize/set/prune metrics into bounded diagnostic metadata
@@ -741,7 +747,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.5';
+const SIMCORE_RUNTIME_VERSION = '0.70.6';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4637,7 +4643,7 @@ function reconcileNow() {
 }
 function reconcileElapsed(start) { return Math.max(0, reconcileNow() - start); }
 
-async function reconcileSessionEditedOutput(session, outIndex, content, perfDetail = null) {
+async function reconcileSessionEditedOutput(session, outIndex, content, perfDetail = null, reconcileOptions = {}) {
 
     const detail = perfDetail && typeof perfDetail === 'object' ? perfDetail : null;
     const inheritedRebuildStart = detail && Number.isFinite(Number(detail.editRebuildStart))
@@ -4872,8 +4878,12 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
     result.state.hostOutputFingerprint = actualFingerprint;
     result.state.manualEditRevision = Math.max(0, Number(savedOut.manualEditRevision) || 0) + 1;
     if (detail) detail.stateSyncMs += reconcileElapsed(t);
+    const inlinePruneSkipped = reconcileOptions?.manualEditPruneEligibility === 'USER_EDIT_CANDIDATE_WHEN_CHANGED';
     const saveMetric = {};
-    await session.store.save('out', outIndex, result.state, detail ? { metric: saveMetric } : {});
+    const saveOptions = inlinePruneSkipped ? { prune: false } : {};
+    if (detail) saveOptions.metric = saveMetric;
+    await session.store.save('out', outIndex, result.state, saveOptions);
+    if (detail && inlinePruneSkipped) saveMetric.pruneMs = 0;
     if (detail) {
       detail.outSerializeMs += Number(saveMetric.serializeMs || 0);
       detail.outSetMs += Number(saveMetric.setMs || 0);
@@ -4917,6 +4927,9 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
           commitPruneMs,
           commitMs,
           commitConfidence,
+          inlinePruneSkipped,
+          retentionDisposition: inlinePruneSkipped ? 'INLINE_PRUNE_SKIPPED' : null,
+          retentionReason: inlinePruneSkipped ? 'SAME_OUT_KEY_OVERWRITE' : null,
           otherMs: Math.max(0, rebuildTotalMs - named),
           confidence: 'BOUNDED',
         });
@@ -4988,7 +5001,8 @@ async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, de
         perfDetail.editClassifyMs = Math.max(0, classifyEnd - Number(perfDetail.editReconcileStart));
         perfDetail.editRebuildStart = classifyEnd;
       }
-      r = await reconcileSession(lastAssistant, visibleContent, perfDetail);
+      const manualEditPruneEligibility = priorRepresentation === 'EXACT' ? 'USER_EDIT_CANDIDATE_WHEN_CHANGED' : 'UNPROVEN';
+      r = await reconcileSession(lastAssistant, visibleContent, perfDetail, { manualEditPruneEligibility });
     }
     if (perfDetail) {
       let editOrigin = 'NONE';
@@ -5680,8 +5694,8 @@ class CoreRulesetSession {
     return true;
   }
 
-  async reconcileEditedOutput(outIndex, content, perfDetail = null) {
-    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail);
+  async reconcileEditedOutput(outIndex, content, perfDetail = null, reconcileOptions = {}) {
+    return editReconcile.reconcileSessionEditedOutput(this, outIndex, content, perfDetail, reconcileOptions);
   }
 
   storageDiagnostics() { return this.store.keyScanStats(); }
@@ -6500,7 +6514,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.5';
+const HOST_COMPAT_VERSION = '0.70.6';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -8231,7 +8245,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     return editReconcileRules.reconcileVisiblePreviousAssistant(cs, chat, perfDetail, {
       coreRules, textMessageContent, representationRegistry, representationRules,
       coreLocationKey, SIMCORE_LOG_PREFIX,
-      reconcileSession: (outIndex, content, detail) => cs.reconcileEditedOutput(outIndex, content, detail),
+      reconcileSession: (outIndex, content, detail, reconcileOptions) => cs.reconcileEditedOutput(outIndex, content, detail, reconcileOptions),
     });
   }
 
@@ -8943,7 +8957,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       editClassifyMs: editNumber(manualEdit?.classifyMs), editRebuildTotalMs: editNumber(manualEdit?.rebuildTotalMs),
       editRebuildPrepareMs: editNumber(manualEdit?.prepareMs), editRebuildRecoveryMs: editNumber(manualEdit?.recoveryMs), editRebuildFinalizeMs: editNumber(manualEdit?.finalizeMs),
       editRebuildCommitSerializeMs: editNumber(manualEdit?.commitSerializeMs), editRebuildCommitSetMs: editNumber(manualEdit?.commitSetMs), editRebuildCommitPruneMs: editNumber(manualEdit?.commitPruneMs),
-      editRebuildCommitMs: editNumber(manualEdit?.commitMs), editRebuildCommitConfidence: String(manualEdit?.commitConfidence || 'UNAVAILABLE'), editRebuildOtherMs: editNumber(manualEdit?.otherMs), editRebuildConfidence: String(manualEdit?.confidence || 'UNAVAILABLE'),
+      editRebuildCommitMs: editNumber(manualEdit?.commitMs), editRebuildCommitConfidence: String(manualEdit?.commitConfidence || 'UNAVAILABLE'),
+      editRebuildInlinePruneSkipped: manualEdit?.inlinePruneSkipped === true, editRebuildRetentionDisposition: String(manualEdit?.retentionDisposition || 'NONE'), editRebuildRetentionReason: String(manualEdit?.retentionReason || 'NONE'),
+      editRebuildOtherMs: editNumber(manualEdit?.otherMs), editRebuildConfidence: String(manualEdit?.confidence || 'UNAVAILABLE'),
     };
   }
 
@@ -9085,6 +9101,9 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         : []),
       ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildConfidence === 'BOUNDED'
         ? [`Manual edit commit: serialize ${requestBreakdown.editRebuildCommitSerializeMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitSerializeMs)} · set ${requestBreakdown.editRebuildCommitSetMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitSetMs)} · prune ${requestBreakdown.editRebuildCommitPruneMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitPruneMs)} · total ${requestBreakdown.editRebuildCommitMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.editRebuildCommitMs)} · confidence ${requestBreakdown.editRebuildCommitConfidence}`]
+        : []),
+      ...(requestBreakdown?.editPath === 'manual-edit-rebuilt' && requestBreakdown.editRebuildInlinePruneSkipped
+        ? [`Manual edit retention: ${requestBreakdown.editRebuildRetentionDisposition} · reason ${requestBreakdown.editRebuildRetentionReason}`]
         : []),
       `Prior representation: ${requestBreakdown ? `${requestBreakdown.editPriorRepresentation || 'UNAVAILABLE'} · mirror ${requestBreakdown.editPriorMatch || 'n/a'} · canonical ${requestBreakdown.editPriorCanonical || 'n/a'} · fresh ${requestBreakdown.editPriorFresh || 'n/a'}` : 'n/a'}`,
       `Edit origin: ${requestBreakdown ? `${requestBreakdown.editOrigin || 'NONE'} · current ${requestBreakdown.editCurrentFingerprint || 'n/a'} · match ${requestBreakdown.editCurrentMatch || 'NONE'} · raw bodies NOT RETAINED` : 'n/a'}`,
@@ -9356,8 +9375,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.5',
-    name: 'Manual Edit Commit Boundary Attribution',
+    version: '0.70.6',
+    name: 'Manual Edit Redundant Prune Elision',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

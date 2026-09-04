@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.70.5-new-01",
+  "product": "SimCore",
+  "version": "0.70.5",
+  "releaseName": "Manual Edit Commit Boundary Attribution",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "649b20e274647d0c4d76089d4bedc72f1d375390",
+  "expectedProductionCommit": "df282f18a0035b03be30af8d0ee2174f58b3bcd3",
+  "candidateReleaseBlob": "c72802234d265337f2558420c84882148e633325",
+  "primaryGoalId": "07005_MANUAL_EDIT_COMMIT_BOUNDARY_ATTRIBUTION",
+  "changeClass": "RUNTIME_FEATURE",
+  "evidenceRefs": [
+    "docs/SIMCORE_07005_MANUAL_EDIT_COMMIT_BOUNDARY_ATTRIBUTION_DESIGN_2026-09-04.md",
+    "docs/SIMCORE_07005_MANUAL_EDIT_COMMIT_BOUNDARY_ATTRIBUTION_IMPACT_SCOPE_2026-09-04.md",
+    "docs/SIMCORE_LIVE_07004_RELEASE_CLOSE_2026-09-04.md",
+    "docs/SIMCORE_07004_TERMINAL_CONVERGENCE_EVIDENCE_INVALID_BLOCKER_2026-09-04.md",
+    "docs/SIMCORE_07005_IMPLEMENTATION_AUTHORIZATION_2026-09-04.md",
+    "docs/SIMCORE_07005_IMPLEMENTATION_EVIDENCE_2026-09-04.md",
+    "docs/SIMCORE_07005_IMPLEMENTATION_REGRESSION_FAILURE_01_MANUAL_ATTRIBUTION_FIXTURE_2026-09-04.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07005_MANUAL_EDIT_COMMIT_BOUNDARY_ATTRIBUTION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

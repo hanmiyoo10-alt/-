@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.5-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "9973262ab60006aa14ebc5e58e3b6981f15c9a36",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.5-new-02.json",
+  "releaseSpecSha256": "d25f183ee7fc67c85db62033f85e172a02d8088a060bb52d256359806e1b3d21",
+  "productionCommit": "4374bef29e28804750c05115258cc80f055a26f7",
+  "previousProductionCommit": "df282f18a0035b03be30af8d0ee2174f58b3bcd3",
+  "productionBlob": "c72802234d265337f2558420c84882148e633325",
+  "version": "0.70.5",
+  "releaseName": "Manual Edit Commit Boundary Attribution",
+  "verificationReportSha256": "851432b66497cdc24dfc284f14377159b486ceb02d5df069340fed6101c2bd1e",
+  "verifierCommit": "63c4edccf6df809d7a751e01a38ade5a79788f54",
+  "publisherRunId": "33833733576",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07005_MANUAL_EDIT_COMMIT_BOUNDARY_ATTRIBUTION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

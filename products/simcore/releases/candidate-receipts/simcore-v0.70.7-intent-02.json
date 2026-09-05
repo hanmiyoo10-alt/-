@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.7-intent-02",
+  "releaseId": "simcore-v0.70.7-new-02",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "sourceCommit": "529248838aaa9c54da1e523eed176af9f1ac3997",
+  "candidateCommit": "434df54760bc997b1bcd9223eeaff428aeee66d3",
+  "candidateReleaseBlob": "6f7cae5b5a8ade66e20beaaf253e365ba035cc18",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.7-intent-02",
+  "builderPath": "products/simcore/tooling/build-07007-output-snapshot-set-cost-attribution.py",
+  "builderSha256": "1fead1e2be546ef2552ef56d141872d092f4612872c93286affe449ebcc5fdc8",
+  "verifierCommit": "529248838aaa9c54da1e523eed176af9f1ac3997",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "90d529d30346c96da23f32eb1658227f2d47c3885d4d49c553b9af1fc13ee90b",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
+  "current_priority": "POST_07009_NEXT_STEP_REVIEW",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -32,7 +32,7 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "validation_status": "PENDING_REAL_LONG_CHAT",
+  "validation_status": "LIVE_PASS",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
   "major_update_checkpoint": "M2-6",

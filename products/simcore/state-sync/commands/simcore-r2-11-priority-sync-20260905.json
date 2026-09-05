@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "R2.11 post-authorization current-priority convergence",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "registeredTransition": "products/simcore/state-sync/active-admin-transition.json",
+  "mergeThisCommandPayload": false
+}

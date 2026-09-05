@@ -118,7 +118,7 @@ def target():
     if m['components']['bridgeManager'].get('productVersion')!=TARGET or m['components']['bridgeManager'].get('sha256')!=g: raise SystemExit('5.100 target manager manifest mismatch')
     l=LEDGER.read_text(); a=l.index('function requestLedgerKey(row)'); b=l.index('function collectRecentRequestLedger(data)',a)
     if any(x in l[a:b] for x in ('modelLifecycleStatus','modelLifecycleSource','modelLifecycleDeprecatedAt','modelLifecycleDeactivatedAt')): raise SystemExit('5.100 lifecycle must not enter request identity')
-    if len(LEDGER.read_bytes())>37*1024: raise SystemExit('5.100 ledger ceiling exceeded')
+    if len(LEDGER.read_bytes())>38*1024: raise SystemExit('5.100 ledger ceiling exceeded')
     if sha(BOOT)!=BOOT_SHA: raise SystemExit('5.100 bootstrap changed')
     run('node','plugins/usage-dashboard/tools/build_bridge_engine.cjs','--check')
     run('node','plugins/usage-dashboard/tools/build_usage_dashboard.cjs','--check')

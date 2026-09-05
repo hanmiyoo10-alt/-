@@ -8,7 +8,7 @@ INSTALL = ROOT / 'plugins' / 'simcore' / 'install.js'
 
 RELEASE_NOTE = """// v0.70.7 Output Snapshot Set Cost Attribution:
 // - Attributes the existing ordinary output snapshot backend-set latency alongside the already-created serialized payload length
-// - Reuses the same JSON.stringify(state) payload and awaited backend set without adding I/O, storage reads/writes, timers, or network work
+// - Reuses the same already-created serialized state payload and awaited backend set without adding I/O, storage reads/writes, timers, or network work
 // - Reports bounded ms/1K chars as diagnostic provenance only and does not claim that payload size causes latency
 // - Preserves prune:false ordinary output semantics, deferred retention authority, OUT_STORAGE ownership, and persistent schemas
 //

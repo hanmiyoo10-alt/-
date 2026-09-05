@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "owner": "usage-dashboard-upstream-idea-intake",
+  "trackingIssue": 1572,
+  "warehouse": "docs/USAGE_DASHBOARD_IDEA_LIST.md",
+  "warehouseTrackingIssue": 412,
+  "executionContract": {
+    "kind": "condition-watch",
+    "cadenceHours": 6,
+    "noChangeNotification": false,
+    "meaningfulChangeOnly": true
+  },
+  "sourcePolicy": {
+    "officialPublicUpstreamOnly": true,
+    "evidenceBeforePromotion": true,
+    "dedupeBeforePromotion": true,
+    "ambiguousEvidence": "needs-evidence",
+    "unknownPolicy": "preserve",
+    "implementationAuthority": false,
+    "releaseAuthority": false
+  },
+  "lastDurableScan": {
+    "issue": 1494,
+    "scanDate": "2026-09-05",
+    "status": "historical-first-scan-evidence"
+  },
+  "knownCandidateKeys": [
+    {
+      "id": "V-KEY-LIMIT-HEADROOM",
+      "status": "captured-needs-source-authority"
+    },
+    {
+      "id": "V-GATEWAY-LIMITS-HEADROOM",
+      "status": "captured-needs-source-authority"
+    },
+    {
+      "id": "V-MODEL-LIFECYCLE-STATUS",
+      "status": "implemented-5.100"
+    },
+    {
+      "id": "V-DYNAMIC-ROUTE-TRACE",
+      "status": "captured-needs-source-authority"
+    },
+    {
+      "id": "V-CACHE-POLICY-MODE",
+      "status": "captured-needs-source-authority"
+    },
+    {
+      "id": "V-DEVPASS-NO-TRAINING-STATUS",
+      "status": "captured-needs-source-authority"
+    }
+  ]
+}

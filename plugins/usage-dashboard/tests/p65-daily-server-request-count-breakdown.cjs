@@ -176,8 +176,13 @@ const todayEnd = markup.indexOf('</div>\n        <p>', todayStart);
 assert.ok(todayStart >= 0 && todayEnd > todayStart, 'P65 Today grid boundary missing');
 const todayGrid = markup.slice(todayStart, todayEnd);
 assert.equal((todayGrid.match(/<div class="mini/g) || []).length, 12, '5.99 must enrich one existing Today cell, not add a 13th cell');
-assert.ok(todayGrid.includes('Number(dailyServerUsage.tokens.total).toLocaleString()'), 'token UI must preserve exact integer precision');
-assert.equal(todayGrid.includes('toFixed('), false, 'daily server token UI must not abbreviate/round precision');
+const tokenMarker = '<span class="daily-server-line">오늘 토큰 · 서버 집계 ';
+const tokenStart = todayGrid.indexOf(tokenMarker);
+const tokenEnd = todayGrid.indexOf('</span>', tokenStart);
+assert.ok(tokenStart >= 0 && tokenEnd > tokenStart, 'P65 daily server token line boundary missing');
+const tokenLine = todayGrid.slice(tokenStart, tokenEnd);
+assert.ok(tokenLine.includes('Number(dailyServerUsage.tokens.total).toLocaleString()'), 'token UI must preserve exact integer precision');
+assert.equal(tokenLine.includes('toFixed('), false, 'daily server token UI must not abbreviate/round precision');
 
 const dashboard = fs.readFileSync('plugins/usage-dashboard/src/50-dashboard-context.part.js', 'utf8');
 assert.ok(dashboard.includes('const dailyServerUsage = dailyServerUsageTruth(d);'), 'P65 Overview must compute one shared truth object');

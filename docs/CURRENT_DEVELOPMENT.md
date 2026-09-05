@@ -50,7 +50,7 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.
 
-The machine-managed production snapshot and terminal release-state block above are the sole current production identity authorities. Current production is `v0.70.6 — Manual Edit Redundant Prune Elision`, and its release transaction remains `REAL_RELEASE_LIVE_PENDING / PENDING_REAL_LONG_CHAT`. The immediate product action is **only** `07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_REAL_LONG_CHAT` HUMAN_EVIDENCE validation and terminal convergence. R2.11 Profile-Driven Validation Inventory design and operator intent are recorded, but its implementation remains blocked until durable v0.70.6 `LIVE_PASS / REAL_RELEASE_LIVE_PASS` and a fresh post-close preflight. Do not start unrelated runtime or release-system implementation while this live transaction is open. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item.
+The machine-managed production snapshot and terminal release-state block above are the sole current production identity authorities. The current live gate is durably closed as `LIVE_PASS` through accepted HUMAN_EVIDENCE terminal convergence, and the authorized 2.0M structural program is complete with the M2 architecture frozen at its terminal checkpoint. The immediate product action is the separately frozen S7 post-M2 simplification convergence implementation lane. The reserved cache-attribution release lane remains PARKED and must not be reused by S7. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1176,38 +1176,38 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Complete only the v0.70.6 HUMAN real-long-chat validation gate: 07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_REAL_LONG_CHAT.
-Confirm ordinary exact carryover remains on SAME_FAST/current ordinary exact behavior with snapshot UNCHANGED and no Manual edit retention line.
-When naturally available, confirm representation drift still reaches REPRESENTATION_FAST_RECONCILED with snapshot UNCHANGED.
-Run the genuine manual-edit positive control and confirm USER_EDIT_CANDIDATE → MANUAL_EDIT_REBUILT, snapshot UPDATED, one authoritative rebuilt save, and INLINE_PRUNE_SKIPPED · SAME_OUT_KEY_OVERWRITE provenance.
-Preserve any newly observed anomaly immediately as WATCH / DEFER / FIX / BLOCKER before terminal close.
-Do not start R2.11 implementation or unrelated runtime/release-system work until durable v0.70.6 LIVE_PASS / REAL_RELEASE_LIVE_PASS and fresh post-close preflight.
+Start the dedicated S7 convergence work branch from exact live-complete v0.70.1 production bytes.
+Reconstruct and verify the cumulative S1–S6 / P0→P12 simplification delta under the frozen S7 design, then prepare the v0.70.3 Post-M2 Simplification Convergence candidate through the normal release path.
+Do not reuse or cancel v0.70.2; preserve it as the parked Cache Observer Cold-Path Attribution lane.
+Keep Exposure/LightBoard research and unrelated WATCH/FIX items in separate lanes.
 ```
 
 Current success condition:
 
 ```text
-production = v0.70.6 Manual Edit Redundant Prune Elision
-release transaction = simcore-v0.70.6-new-02
-validation = PENDING_REAL_LONG_CHAT
-lifecycle = REAL_RELEASE_LIVE_PENDING
-current priority = 07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_REAL_LONG_CHAT
-live close authority = HUMAN_EVIDENCE
-R2.11 design = FROZEN
-R2.11 operator implementation intent = RECORDED
-R2.11 implementation = BLOCKED_PENDING_V07006_LIVE_PASS
-release-simcore = unchanged at e2552d7f93456652c94d9df37b0c253f12f2d900
+v0.70.1 real long-chat evidence = LIVE_PASS
+durable major checkpoint = M2-6
+2.0M / M2 architecture = COMPLETE / FROZEN
+current product priority = S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION
+next proposed convergence version = v0.70.3 Post-M2 Simplification Convergence
+S7 design = FROZEN
+production remains v0.70.1 until a normal approved release transaction publishes the qualified S7 candidate
 latest.js == install.js remains mandatory
-provider cache = UNVERIFIED
-WATCH · REPEATED_OUT_STORAGE_LATENCY = preserved / non-blocking
 
 product runtime work
-→ v0.70.6 real-long-chat validation only
-→ no new runtime implementation before terminal close
+→ dedicated S7 work branch from exact deployed v0.70.1 bytes
+→ reconstruct cumulative S1–S6 simplification candidate only
+→ differential/static/architecture proof and permanent CI before release transaction
+→ publish through the existing release authority only after qualification
 
 release-system work
-→ R2.11 remains non-runtime and precondition-blocked
-→ after durable LIVE_PASS, perform fresh main + release-simcore + R2.9/R2.10 preflight before executable authorization
+→ existing R2.8/R2.9 authority remains unchanged
+→ remain non-runtime and separately attributable
+→ preserve the single publisher and existing main-write authority
+
+parked performance work
+→ v0.70.2 Cache Observer Cold-Path Attribution remains reserved / PARKED
+→ do not reuse its version identity for S7
 
 observed anomaly
 → preserve evidence immediately

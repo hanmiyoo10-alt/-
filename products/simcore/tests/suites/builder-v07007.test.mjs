@@ -35,6 +35,7 @@ function assertIdentity(candidate) {
   equal(candidate.match(/^\/\/@version\s+([^\s]+)\s*$/m)?.[1] || '', '0.70.7', 'metadata identity');
   equal(candidate.match(/const SIMCORE_RUNTIME_VERSION = '([^']+)';/)?.[1] || '', '0.70.7', 'runtime identity');
   equal(candidate.match(/const HOST_COMPAT_VERSION = '([^']+)';/)?.[1] || '', '0.70.7', 'Host identity');
+  equal(count(candidate, '// v0.70.7 Output Snapshot Set Cost Attribution:'), 1, 'release-note source header identity');
   assert(candidate.includes("version: '0.70.7',\n    name: 'Output Snapshot Set Cost Attribution',"), 'operator release-card identity');
 }
 
@@ -171,6 +172,7 @@ export async function runSuite(ctx) {
     ]) {
       equal(count(candidate, marker), count(predecessor, marker), `${marker} frozen`);
     }
+    equal(count(candidate, '// v0.70.7 Output Snapshot Set Cost Attribution:'), count(predecessor, '// v0.70.7 Output Snapshot Set Cost Attribution:') + 1, 'one release-note source identity header added');
     equal(count(candidate, 'metric.payloadChars = payload.length;'), count(predecessor, 'metric.payloadChars = payload.length;') + 1, 'one ordinary payloadChars metric added');
     equal(count(candidate, 'Output snapshot set:'), count(predecessor, 'Output snapshot set:') + 1, 'one output snapshot-set diagnostic added');
   }
@@ -180,6 +182,7 @@ export async function runSuite(ctx) {
     status: 'PASS',
     assertions: [
       { id: 'v07007-identity', status: 'PASS' },
+      { id: 'v07007-source-header-identity', status: 'PASS' },
       { id: 'v07007-latest-install-identity', status: 'PASS' },
       { id: 'v07007-existing-serialization-reused', status: 'PASS' },
       { id: 'v07007-backend-set-count-order-await-preserved', status: 'PASS' },

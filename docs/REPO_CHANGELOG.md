@@ -1070,3 +1070,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8be54ba9de477f8f3d483dc8fe693ea4659da481)
 - Event ID: `0906b9884dade818233749704a4b99b49da563de4a5b6b38131ecccfe8e74e28`
 <!-- canonical-main-doc-promoted:0906b9884dade818233749704a4b99b49da563de4a5b6b38131ecccfe8e74e28 -->
+
+### 2026-09-06 — fix(simcore): implement R2.12 release-channel-aware routing
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8b8b2b3432ca9988dccf1e7e4dabda2ef4c033cc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8b8b2b3432ca9988dccf1e7e4dabda2ef4c033cc)
+- Event ID: `1d6e933946dd19e465b098acb99e381013a37fc0b07fdd2fde04815d67052947`
+<!-- canonical-main-doc-promoted:1d6e933946dd19e465b098acb99e381013a37fc0b07fdd2fde04815d67052947 -->

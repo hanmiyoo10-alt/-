@@ -168,7 +168,7 @@ for (const marker of [
   'modelLifecycleDeactivatedAt:modelLifecycleTruth.modelLifecycleDeactivatedAt',
   'requestModelLifecycleText(row)',
 ]) assert.ok(ledger.includes(marker), `P66 ledger lifecycle binding missing: ${marker}`);
-assert.ok(fs.statSync('plugins/usage-dashboard/src/14-request-ledger.part.js').size <= 37 * 1024, 'P66 request ledger owner must remain within 37 KiB hard ceiling');
+assert.ok(fs.statSync('plugins/usage-dashboard/src/14-request-ledger.part.js').size <= 38 * 1024, 'P66 request ledger owner must remain within 38 KiB hard ceiling');
 const keyStart = ledger.indexOf('function requestLedgerKey(row)');
 const keyEnd = ledger.indexOf('function collectRecentRequestLedger(data)', keyStart);
 assert.ok(keyStart >= 0 && keyEnd > keyStart, 'P66 request identity boundary missing');

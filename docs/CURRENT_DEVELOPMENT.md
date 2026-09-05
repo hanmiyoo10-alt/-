@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.6`
-- Release: `Manual Edit Redundant Prune Elision`
+- Version: `0.70.7`
+- Release: `Output Snapshot Set Cost Attribution`
 - Release branch: `release-simcore`
-- Release commit: `e2552d7f93456652c94d9df37b0c253f12f2d900`
-- Release blob: `83714d78537906fc9f2060c06c9e4ce349568a19`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `434df54760bc997b1bcd9223eeaff428aeee66d3`
+- Release blob: `6f7cae5b5a8ade66e20beaaf253e365ba035cc18`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-6`
@@ -30,18 +30,17 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
-- Release transaction: `simcore-v0.70.6-new-02`
-- Production commit: `e2552d7f93456652c94d9df37b0c253f12f2d900`
-- Validation status: `LIVE_PASS`
-- Current priority: `R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_POST_CLOSE_PREFLIGHT`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Release transaction: `simcore-v0.70.7-new-02`
+- Production commit: `434df54760bc997b1bcd9223eeaff428aeee66d3`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

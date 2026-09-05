@@ -51,7 +51,7 @@ This block is the terminal administrative state backed by accepted real long-cha
 
 The machine-managed blocks above are authoritative for current production identity, validation status, and terminal release state. For active work after a terminal handoff, `product-manifest.json` is the machine-readable current operational-priority authority; the terminal block's `Current priority` records the handoff selected by the terminal evidence transaction. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override machine authority.
 
-The current production live gate is durably closed as `LIVE_PASS / REAL_RELEASE_LIVE_PASS` through accepted HUMAN_EVIDENCE terminal convergence. R2.11 Profile-Driven Validation Inventory post-close preflight is complete and implementation authorization is executable. The immediate product action is a dedicated non-runtime R2.11 implementation branch, bounded to the frozen inventory design; it must not mutate plugin/runtime behavior or `release-simcore`. Exact production identity remains owned by the machine-managed snapshot and manifest above. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item. A new runtime-version design or release is not authorized by the R2.11 transaction.
+The current release terminal state is durably closed through accepted HUMAN_EVIDENCE, and the adopted three-lens review is complete. Exact production identity, validation status, and operational priority remain owned by the machine-managed blocks and root manifest. The immediate human action is post-release next-step review plus closure of any separately tracked documentation or administrative debt; no new runtime version, feature, architecture change, or performance optimization is authorized merely by the live close. Existing performance WATCH lanes remain non-blocking unless promoted by new evidence, and provider cache remains `UNVERIFIED`.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1177,40 +1177,33 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Start a dedicated R2.11 Profile-Driven Validation Inventory implementation branch from fresh `main` after confirming production remains exact v0.70.6.
-Implement only the frozen profile-inventory scope: derive validation identities/regression matrices from exact profiles, reuse R2.9 builder discovery, preserve R2.10 coherent context, and remove the duplicate manual current-version census.
-Do not mutate plugin/runtime code or `release-simcore`, and do not design or publish v0.70.7 inside this non-runtime transaction.
-Keep `WATCH · REPEATED_OUT_STORAGE_LATENCY`, provider-cache work, and unrelated WATCH/FIX items in separate lanes.
+Read the machine-managed terminal block and root manifest, then execute only the current promoted review or administrative lane.
+At this post-release handoff, finish any still-open documentation or administrative FIX before authorizing another runtime version.
+Reassess open WATCH lanes independently and promote one only when source-proven evidence defines a bounded owner and success condition.
+Do not infer a new runtime release, feature, architecture change, or performance optimization merely from terminal LIVE_PASS.
 ```
 
 Current success condition:
 
 ```text
-v0.70.6 real long-chat evidence = LIVE_PASS
+current release real long-chat evidence = LIVE_PASS
 terminal lifecycle = REAL_RELEASE_LIVE_PASS
-durable major checkpoint = M2-6
-production release-simcore = e2552d7f93456652c94d9df37b0c253f12f2d900
-production blob = 83714d78537906fc9f2060c06c9e4ce349568a19
+durable major checkpoint = machine-managed above
+current product priority = machine-managed manifest / terminal block
 latest.js == install.js = mandatory / verified
-R2.11 post-close preflight = PASS
-R2.11 implementation authorization = EXECUTABLE
-product-manifest current_priority = R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_IMPLEMENTATION
-R2.11 design = FROZEN
-production remains v0.70.6 throughout R2.11
+three-lens review = COMPLETE
+provider cache = UNVERIFIED
+no unresolved documentation/admin FIX before runtime-version advancement
 
-R2.11 non-runtime work
-→ dedicated implementation branch from fresh main
-→ at most one pure profile-inventory owner
-→ exact validation profiles become declarative inventory
-→ remove duplicate KNOWN_RELEASE_IDENTITIES-style current-version census
-→ reuse R2.9 builder/fixture discovery and preserve R2.10 coherent context
-→ inventory-driven regression/no-wrapper proof and deterministic fail-closed tests
-→ static/permanent CI before main implementation evidence
-→ no release-simcore deployment
+post-release review
+→ read fresh main + release-simcore authority
+→ inspect open FIX / BLOCKER / WATCH lanes separately
+→ select the next lane only from explicit evidence and operator authority
+→ keep unrelated topics in separate repository records
 
 runtime work
-→ v0.70.7 design/release not authorized by R2.11
-→ next genuine runtime release only after separate design/authority
+→ no next runtime version is preauthorized by the previous release close
+→ any runtime change requires its own design/evidence, work branch, CI, release-simcore deployment, and real long-chat validation
 
 observed anomaly
 → preserve evidence immediately

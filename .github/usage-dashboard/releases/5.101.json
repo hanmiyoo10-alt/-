@@ -1,0 +1,103 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.101",
+  "releaseTitle": "DevPass No-AI-Training Status",
+  "engineVersion": "1.6.36",
+  "managerVersion": "1.3.6",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.280.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.280.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export",
+    "upstreamRepository": "theopenco/llmgateway",
+    "upstreamCommit": "fbb40efa41c379db5223dff708509b6dd82e05a9",
+    "verifiedAt": "2026-08-31"
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.100",
+      "releaseSha": "478fcd368734b1cf1aa5a98932cb34bb29f1d1e4",
+      "verdict": "accepted",
+      "issue": 1540,
+      "commentId": 5553562006,
+      "note": "5.100 completed PocketRisu physical acceptance before the 5.101 implementation transaction."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.100",
+      "releaseSha": "478fcd368734b1cf1aa5a98932cb34bb29f1d1e4",
+      "verdict": "accepted",
+      "issue": 1540,
+      "commentId": 5553562006,
+      "note": "5.100 is the latest installed accepted production release at the 5.101 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 1598,
+    "designPullRequest": 1600,
+    "physicalAcceptanceIssue": 1540,
+    "releaseRequestIssue": 1549,
+    "releaseAcceptanceComment": 5553562775,
+    "releaseGeneration": "E13",
+    "e18": "derived-impact smoke only; no authority change",
+    "e19": "shift-left validation reuse; no authority change",
+    "e20": "structured release evidence remains authoritative",
+    "e21": "canonical evidence-view compatibility retained",
+    "e22": "durable release closure convergence remains a byte-neutral control-plane design boundary"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_devpass_no_ai_training_5101.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p67-devpass-no-ai-training-status.cjs",
+  "highlights": [
+    "Adds a read-only DevPass AI training block status sourced only from the existing authenticated /dev-plans/status.blockApiTraining boolean.",
+    "Preserves exact tri-state truth: true is enabled, false is disabled, and missing or invalid evidence stays UNKNOWN rather than becoming false.",
+    "Reuses the existing account capture with zero new healthy-path endpoint, CLI, timer, poller, cache family, or persistence owner.",
+    "Bumps Engine to 1.6.36; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.101 · Engine 1.6.36 · Manager 1.3.6 and READY/Health ok.",
+    "Check the existing DevPass account box for AI 학습 차단 and Full Diagnostics for DevPass no-AI-training.",
+    "A natural 사용, 꺼짐, or — result is valid only when UI and Diagnostics agree with the current status source; do not toggle the setting for testing.",
+    "No new CLI operation or network family should appear, and 5.100 lifecycle/category plus 5.99 daily-server truth must remain healthy."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Adds a read-only DevPass AI training block status sourced only from the existing authenticated /dev-plans/status.blockApiTraining boolean.",
+      "Preserves exact tri-state truth: true is enabled, false is disabled, and missing or invalid evidence stays UNKNOWN rather than becoming false.",
+      "Reuses the existing account capture with zero new healthy-path endpoint, CLI, timer, poller, cache family, or persistence owner.",
+      "Bumps Engine to 1.6.36; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.101 · Engine 1.6.36 · Manager 1.3.6 and READY/Health ok.",
+      "Check the existing DevPass account box for AI 학습 차단 and Full Diagnostics for DevPass no-AI-training.",
+      "A natural 사용, 꺼짐, or — result is valid only when UI and Diagnostics agree with the current status source; do not toggle the setting for testing.",
+      "No new CLI operation or network family should appear, and 5.100 lifecycle/category plus 5.99 daily-server truth must remain healthy."
+    ]
+  }
+}

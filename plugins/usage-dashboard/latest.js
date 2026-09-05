@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.100
+//@version 3.0.0-alpha.5.101
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.100';
+  const VERSION = '3.0.0-alpha.5.101';
   const RELEASE_NOTES = Object.freeze({
-    title: "Request Model Lifecycle Fidelity",
+    title: "DevPass No-AI-Training Status",
     highlights: Object.freeze([
-    "Adds current pinned-catalog lifecycle status for the exact served model/provider mapping on recent requests.",
-    "Uses @llmgateway/models 1.280.0 semantics: ACTIVE, scheduled deactivation, DEPRECATED, DEACTIVATED, or UNKNOWN.",
-    "Lifecycle UNKNOWN fails closed on missing, invalid, or ambiguous mapping evidence and never enters request identity.",
-    "Bumps Engine to 1.6.35; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
+    "Adds a read-only DevPass AI training block status sourced only from the existing authenticated /dev-plans/status.blockApiTraining boolean.",
+    "Preserves exact tri-state truth: true is enabled, false is disabled, and missing or invalid evidence stays UNKNOWN rather than becoming false.",
+    "Reuses the existing account capture with zero new healthy-path endpoint, CLI, timer, poller, cache family, or persistence owner.",
+    "Bumps Engine to 1.6.36; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.100 · Engine 1.6.35 · Manager 1.3.6 and READY/Health ok.",
-    "Check recent request metadata for 모델 상태 and Full Diagnostics for Model lifecycle fidelity.",
-    "UNKNOWN must stay — when exact model/provider mapping is not source-proven; lifecycle changes must not duplicate rows.",
-    "No extra catalog CLI/network/package-fetch loop should appear.",
+    "Verify Product 5.101 · Engine 1.6.36 · Manager 1.3.6 and READY/Health ok.",
+    "Check the existing DevPass account box for AI 학습 차단 and Full Diagnostics for DevPass no-AI-training.",
+    "A natural 사용, 꺼짐, or — result is valid only when UI and Diagnostics agree with the current status source; do not toggle the setting for testing.",
+    "No new CLI operation or network family should appear, and 5.100 lifecycle/category plus 5.99 daily-server truth must remain healthy.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.35';
+  const REQUIRED_BRIDGE_VERSION = '1.6.36';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -3371,6 +3371,15 @@ async function importLegacyTodayBaselines() {
   }
 
 
+
+  function devPassNoAiTrainingDiagnosticText(account) {
+    const state = account?.noAiTrainingState === 'enabled' ? 'enabled' : account?.noAiTrainingState === 'disabled' ? 'disabled' : 'unknown';
+    const source = state !== 'unknown' && account?.noAiTrainingSource === '/dev-plans/status.blockApiTraining'
+      ? '/dev-plans/status.blockApiTraining'
+      : 'unavailable';
+    return `DevPass no-AI-training: ${state} · source ${source}`;
+  }
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -3602,6 +3611,7 @@ async function importLegacyTodayBaselines() {
       `Request account scope fidelity: DevPass ${Math.max(0, Number(diagRequestProvenance?.devpass || 0))}/${diagRequestProvenanceRows} · Credits ${Math.max(0, Number(diagRequestProvenance?.credits || 0))}/${diagRequestProvenanceRows} · Unknown ${Math.max(0, Number(diagRequestProvenance?.unknown || 0))}/${diagRequestProvenanceRows} · conflict ${Math.max(0, Number(diagRequestProvenance?.conflict || 0))}`,
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
+      devPassNoAiTrainingDiagnosticText(diagAccount),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),
@@ -3816,6 +3826,7 @@ function todayOverviewMetrics(d) {
         ? `${Number(devpassAccount.includedResetPassesRemaining)} / ${Number(devpassAccount.includedResetPasses)}장`
         : `${Number(devpassAccount.includedResetPassesRemaining)}장`)
       : '—';
+    const devpassNoAiTrainingText = devpassAccount?.noAiTrainingState === 'enabled' ? '사용' : devpassAccount?.noAiTrainingState === 'disabled' ? '꺼짐' : '—';
     const devpassAccountDetailHtml = devpassAccount
       ? `<div class="usage-detail-grid devpass-account-parity">
           <div class="usage-detail-box"><div class="recent-head"><h3>DevPass account</h3><span>${esc(devpassAccountStatus)}</span></div><div class="minis">
@@ -3824,6 +3835,7 @@ function todayOverviewMetrics(d) {
             <div class="mini"><span>Status</span><b>${esc(devpassAccountStatus)}</b></div>
             <div class="mini"><span>Service tier</span><b>${esc(String(devpassAccount.serviceTier || '—').toUpperCase())}</b></div>
             <div class="mini"><span>Routing</span><b>${esc(String(devpassAccount.routingStrategy || '—'))}</b></div>
+            <div class="mini"><span>AI 학습 차단</span><b>${esc(devpassNoAiTrainingText)}</b></div>
             <div class="mini"><span>Pending tier</span><b>${esc(String(devpassAccount.pendingTier || '—'))}</b></div>
             <div class="mini"><span>Personal org</span><b>${devpassAccount.hasPersonalOrg === null ? '—' : devpassAccount.hasPersonalOrg ? '있음' : '없음'}</b></div>
             <div class="mini"><span>Billing history</span><b>${devpassAccount.hasBillingHistory === null ? '—' : devpassAccount.hasBillingHistory ? '있음' : '없음'}</b></div>

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.6-new-02",
+  "productionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "productionBlob": "83714d78537906fc9f2060c06c9e4ce349568a19",
+  "liveScenarioId": "07006_MANUAL_EDIT_REDUNDANT_PRUNE_ELISION_REAL_LONG_CHAT",
+  "decision": "LIVE_PASS",
+  "checkpoint": "M2-6",
+  "nextPriority": "R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_POST_CLOSE_PREFLIGHT",
+  "humanEvidence": [
+    "docs/SIMCORE_LIVE_07006_RELEASE_CLOSE_2026-09-05.md",
+    "docs/SIMCORE_LIVE_07006_HUMAN_EVIDENCE_2026-09-05.md",
+    "docs/SIMCORE_LIVE_07006_REROLL_OPERATOR_CLARIFICATION_2026-09-05.md",
+    "docs/SIMCORE_07006_PUBLICATION_EVIDENCE_2026-09-04.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_11_IMPLEMENTATION_AUTHORIZATION_INTENT_2026-09-05.md"
+  ],
+  "authorityConfirmation": "HUMAN_EVIDENCE"
+}

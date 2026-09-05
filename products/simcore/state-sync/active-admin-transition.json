@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "transitionId": "r2-11-post-authorization-priority-sync-20260905",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "expected": {
+    "current_priority": "R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_POST_CLOSE_PREFLIGHT"
+  },
+  "set": {
+    "current_priority": "R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_IMPLEMENTATION"
+  },
+  "evidence": [
+    "docs/SIMCORE_R2_11_POST_AUTHORIZATION_PRIORITY_SYNC_2026-09-05.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_11_POST_CLOSE_PREFLIGHT_AND_IMPLEMENTATION_AUTHORIZATION_2026-09-05.md"
+  ],
+  "documentReplacements": []
+}

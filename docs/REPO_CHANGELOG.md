@@ -1041,6 +1041,20 @@
 - Event ID: `ad4e8b586dd4b5ad3f799334879f630f0fd25d7b187370c096157e35862ee90b`
 <!-- canonical-main-doc-promoted:ad4e8b586dd4b5ad3f799334879f630f0fd25d7b187370c096157e35862ee90b -->
 
+### 2026-09-05 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `9dc9f21f4443126d5c89c33d2434a6f88ef5e33454720fc70efae54787923401`
+<!-- canonical-main-doc-promoted:9dc9f21f4443126d5c89c33d2434a6f88ef5e33454720fc70efae54787923401 -->
+
+### 2026-09-05 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `1c7412dd3764b9bbb943986911051040430dc460347518ac1bc954cac784718d`
+<!-- canonical-main-doc-promoted:1c7412dd3764b9bbb943986911051040430dc460347518ac1bc954cac784718d -->
+
 ### 2026-09-05 — Merge pull request #1499 from fix/repo-control-plane-writer-inventory-drift-20260905
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

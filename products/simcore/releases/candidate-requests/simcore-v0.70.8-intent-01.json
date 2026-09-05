@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.8-intent-01",
+  "releaseId": "simcore-v0.70.8-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.70.8",
+  "releaseName": "Repeat-Send Representation Rewind Guard",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "434df54760bc997b1bcd9223eeaff428aeee66d3",
+  "builderPath": "products/simcore/tooling/build-07008-repeat-send-representation-rewind-guard.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "07008_REPEAT_SEND_REPRESENTATION_REWIND_GUARD",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07008_REPEAT_SEND_REPRESENTATION_REWIND_GUARD_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_07008_REPEAT_SEND_REPRESENTATION_REWIND_GUARD_DESIGN_2026-09-06.md",
+    "docs/SIMCORE_07008_REPEAT_SEND_REPRESENTATION_REWIND_ROOT_CAUSE_EVIDENCE_2026-09-06.md",
+    "docs/SIMCORE_07008_IMPLEMENTATION_AUTHORIZATION_2026-09-06.md",
+    "docs/SIMCORE_07008_IMPLEMENTATION_EVIDENCE_2026-09-06.md",
+    "docs/SIMCORE_07008_IMPLEMENTATION_REGRESSION_FAILURE_01_DIAGNOSTIC_MARKER_CARDINALITY_2026-09-06.md",
+    "docs/SIMCORE_07008_IMPLEMENTATION_REGRESSION_FAILURE_02_DIRECT_OWNER_RETURN_CONTRACT_2026-09-06.md",
+    "docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.9-new-01",
+  "productionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "productionBlob": "dc82006c468ebef76fa0126e0533dda245bd222d",
+  "liveScenarioId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
+  "decision": "LIVE_PASS",
+  "checkpoint": "M2-6",
+  "nextPriority": "POST_07009_NEXT_STEP_REVIEW",
+  "humanEvidence": [
+    "docs/SIMCORE_LIVE_07009_RELEASE_CLOSE_2026-09-06.md",
+    "docs/SIMCORE_07009_LENS1_RELEASE_SPECIFIC_LIVE_EVIDENCE_2026-09-06.md",
+    "docs/SIMCORE_07009_LENS2_COHERENT_SET_TRANSITION_CAUSALITY_2026-09-06.md",
+    "docs/SIMCORE_07009_LENS3_EXHAUSTIVE_DIAGNOSTIC_INVENTORY_2026-09-06.md"
+  ],
+  "authorityConfirmation": "HUMAN_EVIDENCE"
+}

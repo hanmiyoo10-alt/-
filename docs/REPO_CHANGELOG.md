@@ -1078,3 +1078,19 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8b8b2b3432ca9988dccf1e7e4dabda2ef4c033cc)
 - Event ID: `1d6e933946dd19e465b098acb99e381013a37fc0b07fdd2fde04815d67052947`
 <!-- canonical-main-doc-promoted:1d6e933946dd19e465b098acb99e381013a37fc0b07fdd2fde04815d67052947 -->
+
+### 2026-09-06 — Merge pull request #1606 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.101
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5aca8a7a625d44d4c6253e0ff724ced718aab4a0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5aca8a7a625d44d4c6253e0ff724ced718aab4a0)
+- Event ID: `b1178deea272d9d8a0965cb443690f49ab694a5c2226e140112403697ff6daef`
+<!-- canonical-main-doc-promoted:b1178deea272d9d8a0965cb443690f49ab694a5c2226e140112403697ff6daef -->
+
+### 2026-09-06 — Merge pull request #1618 from hanmiyoo10-alt/fix/simcore-r2-13-exact-run-id-binding-20260906
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1617c499a9449db1a78969f1e65e790c18e47784`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1617c499a9449db1a78969f1e65e790c18e47784)
+- Event ID: `c0021497ef4f754e67d5b47575a58582bf6f2a43d682354e1b8f073d262a1094`
+<!-- canonical-main-doc-promoted:c0021497ef4f754e67d5b47575a58582bf6f2a43d682354e1b8f073d262a1094 -->

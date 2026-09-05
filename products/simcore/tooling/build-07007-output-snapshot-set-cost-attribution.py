@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import re
+
+ROOT = Path.cwd()
+LATEST = ROOT / 'plugins' / 'simcore' / 'latest.js'
+INSTALL = ROOT / 'plugins' / 'simcore' / 'install.js'
+
+
+def one(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: expected 1 anchor, found {count}')
+    return text.replace(old, new, 1)
+
+
+def one_in_method(text: str, method_start: str, method_end: str, old: str, new: str, label: str) -> str:
+    start = text.find(method_start)
+    if start < 0:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: method start missing')
+    end = text.find(method_end, start + len(method_start))
+    if end < 0:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: method end missing')
+    scoped = text[start:end]
+    count = scoped.count(old)
+    if count != 1:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: expected 1 scoped anchor, found {count}')
+    scoped = scoped.replace(old, new, 1)
+    return text[:start] + scoped + text[end:]
+
+
+def module_names(text: str):
+    return re.findall(r'SimCore\.define\("([^"]+)"\s*,\s*function', text)
+
+
+def module_text(text: str, name: str) -> str:
+    token = f'SimCore.define("{name}", function (require, module, exports) {{'
+    start = text.find(token)
+    if start < 0:
+        raise SystemExit(f'07007_BUILD_BLOCK module missing: {name}')
+    nxt = text.find('\nSimCore.define("', start + len(token))
+    return text[start:nxt if nxt >= 0 else len(text)]
+
+
+def require_lines(text: str, name: str):
+    return re.findall(r"^const [^\n=]+ = require\('[^']+'\);$", module_text(text, name), re.M)
+
+
+def count(text: str, marker: str) -> int:
+    return text.count(marker)
+
+
+source = LATEST.read_text(encoding='utf-8')
+install_source = INSTALL.read_text(encoding='utf-8')
+if source != install_source:
+    raise SystemExit('07007_BUILD_BLOCK predecessor latest/install differ')
+if not re.search(r'^//@version\s+0\.70\.6\s*$', source, re.M):
+    raise SystemExit('07007_BUILD_BLOCK predecessor metadata is not 0.70.6')
+if "const SIMCORE_RUNTIME_VERSION = '0.70.6';" not in source:
+    raise SystemExit('07007_BUILD_BLOCK predecessor runtime identity missing')
+if "const HOST_COMPAT_VERSION = '0.70.6';" not in source:
+    raise SystemExit('07007_BUILD_BLOCK predecessor host identity missing')
+if "version: '0.70.6',\n    name: 'Manual Edit Redundant Prune Elision'," not in source:
+    raise SystemExit('07007_BUILD_BLOCK predecessor release-card identity missing')
+
+ordinary_out_save = "await this.store.save('out', outIndex, result.state, detail ? { prune: false, metric: outMetric } : { prune: false });"
+
+before_modules = module_names(source)
+before_requires = {name: require_lines(source, name) for name in before_modules}
+before_markers = {
+    marker: count(source, marker)
+    for marker in [
+        'JSON.stringify(state)',
+        'await this.b.set(',
+        'setTimeout(',
+        'setInterval(',
+        'pluginStorage',
+        'setChat(',
+        'fetch(',
+        'XMLHttpRequest',
+        'history.splice(',
+        'messages.splice(',
+        'const PROMPT_COMPILER_VERSION = 4;',
+        'const COMMUNITY_CLASSIFIER_VERSION = 3;',
+        'const STATE_VERSION = 5;',
+        'const CORE_STATE_VERSION = 10;',
+        "['OUT_STORAGE', n(detail.outSetMs)]",
+        ordinary_out_save,
+    ]
+}
+
+out = source
+out = one(out, '//@version 0.70.6', '//@version 0.70.7', 'metadata version')
+out = one(out, "const SIMCORE_RUNTIME_VERSION = '0.70.6';", "const SIMCORE_RUNTIME_VERSION = '0.70.7';", 'runtime version')
+out = one(out, "const HOST_COMPAT_VERSION = '0.70.6';", "const HOST_COMPAT_VERSION = '0.70.7';", 'host compatibility version')
+out = one(
+    out,
+    "version: '0.70.6',\n    name: 'Manual Edit Redundant Prune Elision',",
+    "version: '0.70.7',\n    name: 'Output Snapshot Set Cost Attribution',",
+    'operator release-card identity',
+)
+
+out = one_in_method(
+    out,
+    '  async save(phase, index, state, opts = {}) {',
+    '  async saveTurn(',
+    '    if (metric) metric.serializeMs = Math.max(0, storeNow() - t);',
+    "    if (metric) {\n      metric.serializeMs = Math.max(0, storeNow() - t);\n      metric.payloadChars = payload.length;\n    }",
+    'ordinary snapshot payload metric',
+)
+
+ordinary_detail_anchor = """      detail.stateLoadSource = 'unknown';
+      detail.prepareMs = 0;
+      detail.validateMs = 0;
+      detail.finalizeMs = 0;
+      detail.outSerializeMs = 0;
+      detail.outSetMs = 0;
+      detail.outPruneMs = 0;
+      detail.pruneDeferred = false;"""
+out = one(
+    out,
+    ordinary_detail_anchor,
+    """      detail.stateLoadSource = 'unknown';
+      detail.prepareMs = 0;
+      detail.validateMs = 0;
+      detail.finalizeMs = 0;
+      detail.outSerializeMs = 0;
+      detail.outSetMs = 0;
+      detail.outPruneMs = 0;
+      detail.outPayloadChars = null;
+      detail.pruneDeferred = false;""",
+    'ordinary output detail payload field',
+)
+
+ordinary_metric_copy = """      detail.outSerializeMs = Number(outMetric.serializeMs || 0);
+      detail.outSetMs = Number(outMetric.setMs || 0);
+      detail.outPruneMs = 0;"""
+out = one(
+    out,
+    ordinary_metric_copy,
+    """      detail.outSerializeMs = Number(outMetric.serializeMs || 0);
+      detail.outSetMs = Number(outMetric.setMs || 0);
+      detail.outPruneMs = 0;
+      detail.outPayloadChars = Number.isInteger(outMetric.payloadChars) && outMetric.payloadChars > 0
+        ? outMetric.payloadChars
+        : null;""",
+    'ordinary output payload propagation',
+)
+
+breakdown_anchor = """  function diagnosticOutputBreakdown(perf) {
+    if (!perf) return null;"""
+out = one(
+    out,
+    breakdown_anchor,
+    """  function diagnosticOutputSetCostPer1k(payloadChars, setMs) {
+    const chars = Number(payloadChars);
+    const ms = Number(setMs);
+    if (!Number.isFinite(chars) || chars <= 0 || !Number.isFinite(ms) || ms < 0) return null;
+    return ms / (chars / 1000);
+  }
+
+  function diagnosticOutputBreakdown(perf) {
+    if (!perf) return null;""",
+    'output set normalized-cost helper',
+)
+
+state_source_anchor = """    const stateSource = String(detail.stateLoadSource || 'unknown').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+
+    const candidates = ["""
+out = one(
+    out,
+    state_source_anchor,
+    """    const stateSource = String(detail.stateLoadSource || 'unknown').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    const rawOutPayloadChars = Number(detail.outPayloadChars);
+    const outPayloadChars = Number.isInteger(rawOutPayloadChars) && rawOutPayloadChars > 0
+      ? rawOutPayloadChars
+      : null;
+    const outSetMsPer1kChars = diagnosticOutputSetCostPer1k(outPayloadChars, detail.outSetMs);
+
+    const candidates = [""",
+    'output breakdown payload attribution',
+)
+
+out = one(
+    out,
+    "      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), pruneDeferred: !!detail.pruneDeferred,",
+    "      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), outPayloadChars, outSetMsPer1kChars, pruneDeferred: !!detail.pruneDeferred,",
+    'output breakdown return payload fields',
+)
+
+output_process_line = "      `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,"
+out = one(
+    out,
+    output_process_line,
+    output_process_line + "\n      `Output snapshot set: ${outputBreakdown ? `${outputBreakdown.outPayloadChars == null ? 'n/a' : `${Math.round(Number(outputBreakdown.outPayloadChars)).toLocaleString('en-US')} chars`} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · set ${diagnosticFormatMs(outputBreakdown.outSetMs)} · ${outputBreakdown.outSetMsPer1kChars == null ? 'n/a' : `${Number(outputBreakdown.outSetMsPer1kChars).toFixed(2)} ms/1K chars`} · API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT` : 'n/a'}`,",
+    'output snapshot set diagnostic',
+)
+
+if module_names(out) != before_modules:
+    raise SystemExit('07007_BUILD_BLOCK module inventory/order changed')
+for name in before_modules:
+    if require_lines(out, name) != before_requires[name]:
+        raise SystemExit(f'07007_BUILD_BLOCK require graph changed: {name}')
+
+for marker, expected in before_markers.items():
+    actual = count(out, marker)
+    if actual != expected:
+        raise SystemExit(f'07007_BUILD_BLOCK marker count changed {marker}: {expected} -> {actual}')
+
+if count(out, 'metric.payloadChars = payload.length;') != count(source, 'metric.payloadChars = payload.length;') + 1:
+    raise SystemExit('07007_BUILD_BLOCK ordinary payloadChars metric not added exactly once')
+if count(out, 'diagnosticOutputSetCostPer1k(') != 2:
+    raise SystemExit('07007_BUILD_BLOCK normalized-cost helper/call cardinality unexpected')
+if count(out, 'Output snapshot set:') != count(source, 'Output snapshot set:') + 1:
+    raise SystemExit('07007_BUILD_BLOCK diagnostic line cardinality unexpected')
+if "['OUT_STORAGE', n(detail.outSetMs)]" not in out:
+    raise SystemExit('07007_BUILD_BLOCK OUT_STORAGE attribution moved')
+if ordinary_out_save not in out:
+    raise SystemExit('07007_BUILD_BLOCK ordinary out save contract moved')
+if 'API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT' not in out:
+    raise SystemExit('07007_BUILD_BLOCK diagnostic provenance tokens missing')
+
+LATEST.write_text(out, encoding='utf-8')
+INSTALL.write_text(out, encoding='utf-8')
+print('07007_BUILD_PASS')

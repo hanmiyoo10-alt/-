@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.98
+//@version 3.0.0-alpha.5.99
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.98';
+  const VERSION = '3.0.0-alpha.5.99';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed Models 1.280.0 Catalog Refresh",
+    title: "Daily Server Usage Snapshot (Requests + Tokens)",
     highlights: Object.freeze([
-    "Managed @llmgateway/models is refreshed from 1.251.0 to exact 1.280.0 while managed CLI remains exactly 1.10.0.",
-    "The existing catalog-pinned Premium / Regular / Unknown classifier policy is unchanged; only source-backed catalog membership and prices may change outcomes.",
-    "Engine and Manager advance monotonically because both own the exact Models package identity and verification contract.",
-    "No new model endpoint, package updater, CLI invocation, timer, poller, cache owner, persistence owner or request-identity field is added.",
+    "Adds current-KST-day server request totals with separate DevPass and Credits counts to the existing observed-day card.",
+    "Adds exact current-day total tokens from server daily buckets; no rolling-total or row-based backfill.",
+    "Requests and tokens select independently across 24h, 7d and 30d daily windows; UNKNOWN and exact zero stay distinct.",
+    "Keeps Engine 1.6.34, CLI 1.10.0, Models 1.280.0 and contracts 1/1 unchanged with no new I/O or schema owner.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.98 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
-    "Full Diagnostics must show Bridge CLI runtime @llmgateway/cli 1.10.0 separately from Model category catalog @llmgateway/models 1.280.0.",
-    "Compact Diagnostics must show CLI 1.10.0 · Models 1.280.0 without identity crossover.",
-    "Recheck model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend, ledger, cache, tier, outcome and HTTP behavior.",
+    "Verify Product 5.99 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
+    "Check Overview request total, DevPass/Credits counts and exact server token total when source evidence is complete.",
+    "Check Basic/Full Diagnostics match the daily server truth; incomplete source must stay —, never zero.",
+    "Recheck existing dashboard surfaces and Request Ledger without artificial traffic.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';

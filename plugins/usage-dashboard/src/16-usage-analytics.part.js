@@ -170,6 +170,111 @@
   }
 
 
+  function dailyServerDateKey(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const text = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const timestamp = typeof value === 'number' && Number.isFinite(value) ? Number(value) : Date.parse(text);
+    if (!Number.isFinite(timestamp)) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone:KST_TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit'
+    }).formatToParts(new Date(timestamp));
+    const part = type => parts.find(item => item.type === type)?.value || '';
+    const year = part('year'), month = part('month'), day = part('day');
+    return year && month && day ? `${year}-${month}-${day}` : '';
+  }
+
+  function dailyServerScopeApplicability(data, scopeKey) {
+    const key = String(scopeKey || '');
+    const hasScope = Boolean(data?.analyticsScopes?.scopes?.[key] || data?.usageScopes?.scopes?.[key]);
+    if (key === 'devpass') {
+      const plan = typeof data?.devpassAccount?.plan === 'string' ? data.devpassAccount.plan.trim().toLowerCase() : '';
+      if (hasScope || (plan && plan !== 'none')) return 'applicable';
+      if (plan === 'none') return 'not-applicable';
+      return 'unknown';
+    }
+    if (key === 'credits') {
+      const selectedId = String(data?.creditsOrganizationId || '').trim();
+      const organizations = Array.isArray(data?.organizations) ? data.organizations : [];
+      const activeOrganization = organizations.some(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
+      if (hasScope || selectedId || activeOrganization) return 'applicable';
+      return 'unknown';
+    }
+    return 'unknown';
+  }
+
+  function dailyServerMetricTruth(data, scopeKey, dateKey, applicability, metric) {
+    if (applicability === 'not-applicable') return Object.freeze({applicability,value:null,window:null,state:'not-applicable'});
+    if (applicability !== 'applicable') return Object.freeze({applicability:'unknown',value:null,window:null,state:'applicability-unknown'});
+    const analytics = data?.analyticsScopes?.scopes?.[scopeKey] || null;
+    const usage24h = data?.usageScopes?.scopes?.[scopeKey] || null;
+    let sawSeries = false, sawDaily = false, sawToday = false;
+    for (const range of ['24h','7d','30d']) {
+      const window = analytics?.windows?.[range] || (range === '24h' ? usage24h : null);
+      const series = window?.dailySeries;
+      if (!series || typeof series !== 'object') continue;
+      sawSeries = true;
+      if (String(series.granularity || '').trim().toLowerCase() !== 'daily') continue;
+      sawDaily = true;
+      const bucket = (Array.isArray(series.buckets) ? series.buckets : []).find(row => dailyServerDateKey(row?.date) === dateKey);
+      if (!bucket) continue;
+      sawToday = true;
+      const value = bucket?.[metric];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+        return Object.freeze({applicability:'applicable',value:Number(value),window:range,state:'ok'});
+      }
+    }
+    const state = !sawSeries ? 'series-unavailable' : !sawDaily ? 'granularity-not-daily' : !sawToday ? 'today-bucket-missing' : 'metric-unknown';
+    return Object.freeze({applicability:'applicable',value:null,window:null,state});
+  }
+
+  function dailyServerCompose(children) {
+    let total = 0, applicableCount = 0;
+    for (const child of children) {
+      if (child?.applicability === 'not-applicable') continue;
+      if (child?.applicability !== 'applicable' || typeof child?.value !== 'number' || !Number.isFinite(child.value) || child.value < 0) return null;
+      total += Number(child.value);
+      applicableCount += 1;
+    }
+    return applicableCount > 0 ? total : null;
+  }
+
+  function dailyServerUsageTruth(data, now = Date.now()) {
+    const dateKey = dailyServerDateKey(now);
+    const requestChildren = {}, tokenChildren = {};
+    for (const scopeKey of ['devpass','credits']) {
+      const applicability = dailyServerScopeApplicability(data, scopeKey);
+      requestChildren[scopeKey] = dailyServerMetricTruth(data, scopeKey, dateKey, applicability, 'requestCount');
+      tokenChildren[scopeKey] = dailyServerMetricTruth(data, scopeKey, dateKey, applicability, 'totalTokens');
+    }
+    return Object.freeze({
+      dateKey,
+      requests:Object.freeze({
+        total:dailyServerCompose([requestChildren.devpass, requestChildren.credits]),
+        devpass:requestChildren.devpass,
+        credits:requestChildren.credits,
+      }),
+      tokens:Object.freeze({
+        total:dailyServerCompose([tokenChildren.devpass, tokenChildren.credits]),
+        devpass:tokenChildren.devpass,
+        credits:tokenChildren.credits,
+      }),
+    });
+  }
+
+  function dailyServerDiagnosticScopeText(value) {
+    if (value?.applicability === 'not-applicable') return '미적용';
+    if (typeof value?.value !== 'number' || !Number.isFinite(value.value) || value.value < 0) return `— (${value?.state || 'unknown'})`;
+    return `${Number(value.value)}@${value.window || '—'}`;
+  }
+
+  function dailyServerUsageDiagnosticText(truth) {
+    const value = truth && typeof truth === 'object' ? truth : dailyServerUsageTruth(state?.data || {});
+    const scalar = number => typeof number === 'number' && Number.isFinite(number) && number >= 0 ? String(Number(number)) : '—';
+    const complete = value.requests?.total !== null && value.tokens?.total !== null;
+    return `Usage daily server truth: date ${value.dateKey || '—'} KST · requests total ${scalar(value.requests?.total)} · devpass ${dailyServerDiagnosticScopeText(value.requests?.devpass)} · credits ${dailyServerDiagnosticScopeText(value.requests?.credits)} · tokens total ${scalar(value.tokens?.total)} · devpass ${dailyServerDiagnosticScopeText(value.tokens?.devpass)} · credits ${dailyServerDiagnosticScopeText(value.tokens?.credits)} · source server-daily · state ${complete ? 'ok' : 'partial'}`;
+  }
+
   function costDriverMeaningfulName(value) {
     const name = value === null || value === undefined ? '' : String(value).trim();
     return !name || name.toLowerCase() === 'unknown' ? '' : name;

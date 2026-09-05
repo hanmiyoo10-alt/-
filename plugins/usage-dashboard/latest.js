@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.98
+//@version 3.0.0-alpha.5.99
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.98';
+  const VERSION = '3.0.0-alpha.5.99';
   const RELEASE_NOTES = Object.freeze({
-    title: "Managed Models 1.280.0 Catalog Refresh",
+    title: "Daily Server Usage Snapshot (Requests + Tokens)",
     highlights: Object.freeze([
-    "Managed @llmgateway/models is refreshed from 1.251.0 to exact 1.280.0 while managed CLI remains exactly 1.10.0.",
-    "The existing catalog-pinned Premium / Regular / Unknown classifier policy is unchanged; only source-backed catalog membership and prices may change outcomes.",
-    "Engine and Manager advance monotonically because both own the exact Models package identity and verification contract.",
-    "No new model endpoint, package updater, CLI invocation, timer, poller, cache owner, persistence owner or request-identity field is added.",
+    "Adds current-KST-day server request totals with separate DevPass and Credits counts to the existing observed-day card.",
+    "Adds exact current-day total tokens from server daily buckets; no rolling-total or row-based backfill.",
+    "Requests and tokens select independently across 24h, 7d and 30d daily windows; UNKNOWN and exact zero stay distinct.",
+    "Keeps Engine 1.6.34, CLI 1.10.0, Models 1.280.0 and contracts 1/1 unchanged with no new I/O or schema owner.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.98 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
-    "Full Diagnostics must show Bridge CLI runtime @llmgateway/cli 1.10.0 separately from Model category catalog @llmgateway/models 1.280.0.",
-    "Compact Diagnostics must show CLI 1.10.0 · Models 1.280.0 without identity crossover.",
-    "Recheck model categories plus Billing Cycle, Premium, PAYG, Cost Drivers, Credits spend, ledger, cache, tier, outcome and HTTP behavior.",
+    "Verify Product 5.99 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
+    "Check Overview request total, DevPass/Credits counts and exact server token total when source evidence is complete.",
+    "Check Basic/Full Diagnostics match the daily server truth; incomplete source must stay —, never zero.",
+    "Recheck existing dashboard surfaces and Request Ledger without artificial traffic.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -2231,6 +2231,111 @@ async function importLegacyTodayBaselines() {
   }
 
 
+  function dailyServerDateKey(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const text = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const timestamp = typeof value === 'number' && Number.isFinite(value) ? Number(value) : Date.parse(text);
+    if (!Number.isFinite(timestamp)) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone:KST_TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit'
+    }).formatToParts(new Date(timestamp));
+    const part = type => parts.find(item => item.type === type)?.value || '';
+    const year = part('year'), month = part('month'), day = part('day');
+    return year && month && day ? `${year}-${month}-${day}` : '';
+  }
+
+  function dailyServerScopeApplicability(data, scopeKey) {
+    const key = String(scopeKey || '');
+    const hasScope = Boolean(data?.analyticsScopes?.scopes?.[key] || data?.usageScopes?.scopes?.[key]);
+    if (key === 'devpass') {
+      const plan = typeof data?.devpassAccount?.plan === 'string' ? data.devpassAccount.plan.trim().toLowerCase() : '';
+      if (hasScope || (plan && plan !== 'none')) return 'applicable';
+      if (plan === 'none') return 'not-applicable';
+      return 'unknown';
+    }
+    if (key === 'credits') {
+      const selectedId = String(data?.creditsOrganizationId || '').trim();
+      const organizations = Array.isArray(data?.organizations) ? data.organizations : [];
+      const activeOrganization = organizations.some(org => String(org?.kind || 'default') === 'default' && String(org?.status || 'active') !== 'deleted');
+      if (hasScope || selectedId || activeOrganization) return 'applicable';
+      return 'unknown';
+    }
+    return 'unknown';
+  }
+
+  function dailyServerMetricTruth(data, scopeKey, dateKey, applicability, metric) {
+    if (applicability === 'not-applicable') return Object.freeze({applicability,value:null,window:null,state:'not-applicable'});
+    if (applicability !== 'applicable') return Object.freeze({applicability:'unknown',value:null,window:null,state:'applicability-unknown'});
+    const analytics = data?.analyticsScopes?.scopes?.[scopeKey] || null;
+    const usage24h = data?.usageScopes?.scopes?.[scopeKey] || null;
+    let sawSeries = false, sawDaily = false, sawToday = false;
+    for (const range of ['24h','7d','30d']) {
+      const window = analytics?.windows?.[range] || (range === '24h' ? usage24h : null);
+      const series = window?.dailySeries;
+      if (!series || typeof series !== 'object') continue;
+      sawSeries = true;
+      if (String(series.granularity || '').trim().toLowerCase() !== 'daily') continue;
+      sawDaily = true;
+      const bucket = (Array.isArray(series.buckets) ? series.buckets : []).find(row => dailyServerDateKey(row?.date) === dateKey);
+      if (!bucket) continue;
+      sawToday = true;
+      const value = bucket?.[metric];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+        return Object.freeze({applicability:'applicable',value:Number(value),window:range,state:'ok'});
+      }
+    }
+    const state = !sawSeries ? 'series-unavailable' : !sawDaily ? 'granularity-not-daily' : !sawToday ? 'today-bucket-missing' : 'metric-unknown';
+    return Object.freeze({applicability:'applicable',value:null,window:null,state});
+  }
+
+  function dailyServerCompose(children) {
+    let total = 0, applicableCount = 0;
+    for (const child of children) {
+      if (child?.applicability === 'not-applicable') continue;
+      if (child?.applicability !== 'applicable' || typeof child?.value !== 'number' || !Number.isFinite(child.value) || child.value < 0) return null;
+      total += Number(child.value);
+      applicableCount += 1;
+    }
+    return applicableCount > 0 ? total : null;
+  }
+
+  function dailyServerUsageTruth(data, now = Date.now()) {
+    const dateKey = dailyServerDateKey(now);
+    const requestChildren = {}, tokenChildren = {};
+    for (const scopeKey of ['devpass','credits']) {
+      const applicability = dailyServerScopeApplicability(data, scopeKey);
+      requestChildren[scopeKey] = dailyServerMetricTruth(data, scopeKey, dateKey, applicability, 'requestCount');
+      tokenChildren[scopeKey] = dailyServerMetricTruth(data, scopeKey, dateKey, applicability, 'totalTokens');
+    }
+    return Object.freeze({
+      dateKey,
+      requests:Object.freeze({
+        total:dailyServerCompose([requestChildren.devpass, requestChildren.credits]),
+        devpass:requestChildren.devpass,
+        credits:requestChildren.credits,
+      }),
+      tokens:Object.freeze({
+        total:dailyServerCompose([tokenChildren.devpass, tokenChildren.credits]),
+        devpass:tokenChildren.devpass,
+        credits:tokenChildren.credits,
+      }),
+    });
+  }
+
+  function dailyServerDiagnosticScopeText(value) {
+    if (value?.applicability === 'not-applicable') return '미적용';
+    if (typeof value?.value !== 'number' || !Number.isFinite(value.value) || value.value < 0) return `— (${value?.state || 'unknown'})`;
+    return `${Number(value.value)}@${value.window || '—'}`;
+  }
+
+  function dailyServerUsageDiagnosticText(truth) {
+    const value = truth && typeof truth === 'object' ? truth : dailyServerUsageTruth(state?.data || {});
+    const scalar = number => typeof number === 'number' && Number.isFinite(number) && number >= 0 ? String(Number(number)) : '—';
+    const complete = value.requests?.total !== null && value.tokens?.total !== null;
+    return `Usage daily server truth: date ${value.dateKey || '—'} KST · requests total ${scalar(value.requests?.total)} · devpass ${dailyServerDiagnosticScopeText(value.requests?.devpass)} · credits ${dailyServerDiagnosticScopeText(value.requests?.credits)} · tokens total ${scalar(value.tokens?.total)} · devpass ${dailyServerDiagnosticScopeText(value.tokens?.devpass)} · credits ${dailyServerDiagnosticScopeText(value.tokens?.credits)} · source server-daily · state ${complete ? 'ok' : 'partial'}`;
+  }
+
   function costDriverMeaningfulName(value) {
     const name = value === null || value === undefined ? '' : String(value).trim();
     return !name || name.toLowerCase() === 'unknown' ? '' : name;
@@ -3364,6 +3469,7 @@ async function importLegacyTodayBaselines() {
     const diagAnalyticsBundle = d.analyticsScopes?.scopes?.[diagAnalyticsScopeKey] || (diagAnalyticsScopeKey === 'all' ? d.analytics : null) || null;
     const diagAnalyticsW24 = diagAnalyticsBundle?.windows?.['24h'] || d.usageScopes?.scopes?.[diagAnalyticsScopeKey] || null;
     const diagCreditsSpend = d.analyticsScopes?.scopes?.credits?.windows?.['24h']?.creditsSpendComposition || d.usageScopes?.scopes?.credits?.creditsSpendComposition || null;
+    const diagDailyServerUsage = dailyServerUsageTruth(d);
     return [
       `Local Usage Dashboard v${VERSION}`,
       `Diagnostic captured: ${diagnosticTimestamp(diagnosticCapturedAt)}`,
@@ -3411,6 +3517,7 @@ async function importLegacyTodayBaselines() {
       `Bridge cache: hit ${bridgeDiag.cacheHitRate === null ? '—' : `${bridgeDiag.cacheHitRate.toFixed(0)}%`} · entries ${bridgeDiag.cacheEntries ?? '—'} · in-flight ${bridgeDiag.inFlight ?? '—'} · stale fallback ${bridgeDiag.staleFallbacks ?? '—'}`,
       `Bridge CLI/circuit: active ${bridgeDiag.cliActive ?? '—'} · queued ${bridgeDiag.cliQueued ?? '—'} · open ${bridgeDiag.openCircuits ?? '—'} · recoveries ${bridgeDiag.circuitRecoveries ?? '—'}`,
       `Usage detail: ${diagUsageKey} · providers ${Array.isArray(diagUsage?.providers) ? diagUsage.providers.length : 0} · models ${Array.isArray(diagUsage?.models) ? diagUsage.models.length : 0} · recent requests ${Array.isArray(diagUsage?.recent) ? diagUsage.recent.length : 0} · source rows ${Number(diagUsage?.recentRawCount || 0)} · cache ${usageCacheText(diagUsage)}`,
+      dailyServerUsageDiagnosticText(diagDailyServerUsage),
       `UI layout: usage-first · aggregate enriched · recent metadata · advanced collapsed`,
       `Navigation: tabbed · overview/devpass/credits/analytics/settings · view ${state.dashboardView || 'overview'} · persisted`,
       `Recent UI: filter ${['all','success','error'].includes(String(state.recentRequestFilter)) ? state.recentRequestFilter : 'all'} · aggregate chips · mobile compact`,
@@ -3611,6 +3718,7 @@ function todayOverviewMetrics(d) {
       d.source ? esc(d.source) : ''
     ].filter(Boolean).join(' · ');
     const today = todayOverviewMetrics(d);
+    const dailyServerUsage = dailyServerUsageTruth(d);
     const observedStamp = state.dailyUsage?.updatedAt || state.creditDailyUsage?.updatedAt || state.lastSyncAt;
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const scopeNames = {all:['전체 24h Usage',`DevPass + ${creditsOrgLabel} Credits 합산 서버 집계`],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage',`${creditsOrgLabel} 서버 집계`]};
@@ -3731,7 +3839,7 @@ function todayOverviewMetrics(d) {
       header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}h1{margin:0;font-size:23px}.dashboard-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:-2px 0 12px;position:sticky;top:0;z-index:20;background:var(--b);padding:6px 0}.dashboard-nav button{min-width:0;padding:8px 3px;font-size:10px;white-space:nowrap}.dashboard-nav button.active{background:var(--g);border-color:var(--g);color:#15170f}.system-health{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--p);border:1px solid var(--l);border-radius:11px;padding:9px 11px;margin:-3px 0 10px}.system-health>div{min-width:0}.system-health-kicker{display:block;color:var(--m);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.system-health b{display:block;font-size:11px;margin-top:2px;white-space:normal}.system-health-status{border:1px solid var(--l);border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;white-space:nowrap}.system-health.ok .system-health-status{border-color:var(--g);color:var(--g)}.system-health.check .system-health-status{border-color:var(--e);color:var(--e)}.shell[data-dashboard-view="overview"] .grid>:nth-child(n+6){display:none}.shell[data-dashboard-view="devpass"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="credits"] .grid>:not(:nth-child(6)){display:none}.shell[data-dashboard-view="devpass"] .usage-primary .scope-tabs,.shell[data-dashboard-view="credits"] .usage-primary .scope-tabs{display:none}.shell[data-dashboard-view="analytics"] .grid>:not(:nth-child(7)){display:none}.shell[data-dashboard-view="settings"] .grid>:not(:nth-child(8)):not(:nth-child(9)){display:none}.muted,p{color:var(--m);font-size:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
       .panel{background:var(--p);border:1px solid var(--l);border-radius:13px;padding:13px}.metric{min-height:135px;display:flex;flex-direction:column}.metric small{color:var(--m);font-weight:700}.metric strong{font-size:24px;margin-top:9px}.metric em{font-style:normal;color:var(--m);font-size:12px}.metric p{margin-top:auto;margin-bottom:0}.bar{height:5px;background:#2d3138;border-radius:99px;overflow:hidden;margin:11px 0}.bar i{display:block;height:100%;background:var(--g)}.weekly .bar i{background:var(--v)}.wide{grid-column:1/-1}
       .minis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.mini{background:var(--p2);border-radius:9px;padding:9px}.mini span{display:block;color:var(--m);font-size:10px}.mini b{display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mini.cost-driver b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-      .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}
+      .today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.today-head b{font-size:14px}.stamp{color:var(--m);font-size:10px;white-space:nowrap}.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.today-grid .mini b{white-space:normal;overflow:visible;text-overflow:clip}.today-grid .accent b{color:var(--g)}.today-grid .purple b{color:var(--v)}.today-grid .cyan b{color:var(--c)}.daily-server-line{display:block;color:var(--m)!important;font-size:9px!important;line-height:1.35;margin-top:4px;white-space:normal;overflow-wrap:anywhere}
       .scope-tabs{display:flex;gap:6px;margin-top:10px}.scope-tab{flex:1;min-width:0;padding:7px 9px}.scope-tab.active{background:var(--g);border-color:var(--g);color:#15170f}.credits-org-picker{max-width:420px;margin-top:10px}.credits-org-picker select{margin-top:2px}.credits-org-fallback{margin:6px 0 0}
       .grid>.usage-primary{order:20}.grid>.activity-secondary{order:21}.grid>.analytics-panel{order:30}.grid>.advanced-panel{order:40}
       .usage-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.usage-detail-box{background:var(--p2);border-radius:10px;padding:10px;margin-top:8px}.usage-detail-box h3{font-size:11px;margin:0;color:var(--m)}.usage-detail-box p{margin:8px 0 0}.usage-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:7px 0;border-top:1px solid var(--l)}.usage-detail-row:first-of-type{border-top:0}.usage-detail-row>div{min-width:0;flex:1}.usage-detail-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage-detail-row>span{color:var(--m);font-size:11px;white-space:nowrap}.aggregate-meta{display:flex!important;flex-wrap:wrap;gap:4px;margin-top:4px}.stat-chip{display:inline-flex!important;width:auto;background:#181a1f;border:1px solid var(--l);border-radius:999px;padding:2px 6px;color:var(--m)!important;font-size:9px!important;line-height:1.35;white-space:nowrap}.recent-requests{margin-top:8px}.recent-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.recent-head>span{color:var(--m);font-size:10px}.recent-filter{display:flex;gap:5px;margin:8px 0 2px}.recent-filter-btn{padding:5px 8px;border-radius:999px;font-size:10px;line-height:1.2}.recent-filter-btn.active{background:var(--g);border-color:var(--g);color:#15170f}.request-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--l)}.request-detail-row:first-of-type{border-top:0}.request-main{min-width:0;flex:1}.request-detail-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.request-detail-row span{display:block;color:var(--m);font-size:10px;margin-top:2px}.request-detail-row .request-model{color:var(--t);font-size:11px;white-space:normal;overflow-wrap:anywhere}.request-detail-row em{font-style:normal;color:var(--m);font-size:11px;text-align:right;white-space:nowrap}.request-detail-row em.error-text{color:var(--e)}.request-detail-row em.ok-text{color:var(--m)}
@@ -3746,7 +3854,7 @@ function todayOverviewMetrics(d) {
       <section class="panel wide">
         <div class="today-head"><div><b>오늘 관측</b><p style="margin:2px 0 0">핵심 값만 한 화면에 유지</p></div><span class="stamp">KST${observedStamp ? ` · ${dashboardDateText(observedStamp)}` : ''}</span></div>
         <div class="today-grid">
-          <div class="mini accent"><span>일간 총 사용량 · 관측</span><b>${money(today.observedDailyTotal,4)}</b></div>
+          <div class="mini accent"><span>일간 총 사용량 · 관측</span><b>${money(today.observedDailyTotal,4)}</b><span class="daily-server-line">오늘 요청 · 서버 집계 ${dailyServerUsage.requests.total === null ? '—' : `${Number(dailyServerUsage.requests.total).toLocaleString()}회`}</span><span class="daily-server-line">DevPass ${dailyServerUsage.requests.devpass.applicability === 'not-applicable' ? '미적용' : dailyServerUsage.requests.devpass.value === null ? '—' : `${Number(dailyServerUsage.requests.devpass.value).toLocaleString()}회`} · Credits ${dailyServerUsage.requests.credits.applicability === 'not-applicable' ? '미적용' : dailyServerUsage.requests.credits.value === null ? '—' : `${Number(dailyServerUsage.requests.credits.value).toLocaleString()}회`}</span><span class="daily-server-line">오늘 토큰 · 서버 집계 ${dailyServerUsage.tokens.total === null ? '—' : Number(dailyServerUsage.tokens.total).toLocaleString()}</span></div>
           <div class="mini"><span>월간 총 사용량 · DevPass</span><b>${money(d.monthly?.used,4)}</b></div>
           <div class="mini"><span>오늘 DevPass</span><b>${money(today.devToday,4)}</b></div>
           <div class="mini purple"><span>오늘 프리미엄</span><b>${money(today.premiumToday,4)}</b></div>
@@ -4364,6 +4472,7 @@ function todayOverviewMetrics(d) {
     const stable = stableReadinessSnapshot(bridgeDiag, runtimeBridge);
     const cli = diagnosticsWorkspaceCliRuntime();
     const creditsSpendComposition = d.analyticsScopes?.scopes?.credits?.windows?.['24h']?.creditsSpendComposition || d.usageScopes?.scopes?.credits?.creditsSpendComposition || null;
+    const dailyServerUsage = dailyServerUsageTruth(d);
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const ledgerRows = requestLedgerRowsForScope(scopeKey);
     let exactRows = 0;
@@ -4400,6 +4509,7 @@ function todayOverviewMetrics(d) {
       managerVersion:String(runtimeBridge.managerVersion || state.bridgeManagerRuntime?.managerVersion || ''),
       cli,
       creditsSpendComposition,
+      dailyServerUsage,
       lastRefreshMs:num(state.lastSyncDurationMs) ? Number(state.lastSyncDurationMs) : null,
       snapshotMs,
       criticalPath,
@@ -4427,6 +4537,7 @@ function todayOverviewMetrics(d) {
       `Status: ${model.readiness} · Health ${model.health} · active errors ${model.activeErrors} · failures ${model.failures}`,
       `Runtime: Engine ${model.engineVersion || '—'} · Manager ${model.managerVersion || '—'} · CLI ${model.cli.version || '—'} · Models ${model.cli.modelVersion || '—'} · ${model.cli.state}`,
       creditsSpendCompositionDiagnosticText(model.creditsSpendComposition),
+      dailyServerUsageDiagnosticText(model.dailyServerUsage),
       `Last refresh: ${lastRefresh} · snapshot ${snapshot} · critical ${critical}`,
       `Data: age ${model.dataAge} · stale modules ${model.staleModules === null ? '—' : model.staleModules} · Request fidelity exact ${model.exactRows}/${model.ledgerRows}`,
       `Updater: ${model.updaterCompatible ? 'compatible' : 'incompatible'} · sync ${model.managerSync}`,

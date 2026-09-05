@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "authority": "SHADOW_ONLY",
+  "intentId": "simcore-v0.70.9-intent-01",
+  "releaseId": "simcore-v0.70.9-new-01",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.70.9-intent-01.json",
+  "derivedSpec": {
+    "schemaVersion": 1,
+    "releaseId": "simcore-v0.70.9-new-01",
+    "product": "SimCore",
+    "version": "0.70.9",
+    "releaseName": "Inline Planning Marker Hygiene Guard",
+    "releaseMode": "NEW_VERSION",
+    "candidateCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+    "expectedProductionCommit": "01010564649a033e02a0658a167f5f38a6a23632",
+    "candidateReleaseBlob": "dc82006c468ebef76fa0126e0533dda245bd222d",
+    "primaryGoalId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD",
+    "changeClass": "RUNTIME_FEATURE",
+    "evidenceRefs": [
+      "docs/SIMCORE_LIVE_07008_THREE_LENS_PASS1_CORRECTION_INLINE_INTERNAL_MEMO_2026-09-06.md",
+      "docs/SIMCORE_07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_DESIGN_2026-09-06.md",
+      "docs/SIMCORE_07009_IMPLEMENTATION_AUTHORIZATION_2026-09-06.md",
+      "docs/SIMCORE_07009_IMPLEMENTATION_EVIDENCE_2026-09-06.md",
+      "docs/SIMCORE_07009_LOCAL_DIRECT_TEST_ENV_DEFER_2026-09-06.md",
+      "docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md"
+    ],
+    "liveGate": {
+      "required": true,
+      "scenarioId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
+      "closeAuthority": "HUMAN_EVIDENCE"
+    }
+  }
+}

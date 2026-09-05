@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.9-intent-01",
+  "releaseId": "simcore-v0.70.9-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "01010564649a033e02a0658a167f5f38a6a23632",
+  "sourceCommit": "c3d6a5f6ecfa62d65a7958f0699c5ee1424428ba",
+  "candidateCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "candidateReleaseBlob": "dc82006c468ebef76fa0126e0533dda245bd222d",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.9-intent-01",
+  "builderPath": "products/simcore/tooling/build-07009-inline-planning-marker-hygiene-guard.py",
+  "builderSha256": "ba2d17a7d5d01af5131e498aefd72d01f4341142bb4522469fd433f6c68c1948",
+  "verifierCommit": "c3d6a5f6ecfa62d65a7958f0699c5ee1424428ba",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "2f2032315cee542b6dd659b19378d9d22212345a1ea78a352779d1c039409362",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

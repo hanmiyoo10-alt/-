@@ -130,6 +130,15 @@
   }
 
 
+
+  function devPassNoAiTrainingDiagnosticText(account) {
+    const state = account?.noAiTrainingState === 'enabled' ? 'enabled' : account?.noAiTrainingState === 'disabled' ? 'disabled' : 'unknown';
+    const source = state !== 'unknown' && account?.noAiTrainingSource === '/dev-plans/status.blockApiTraining'
+      ? '/dev-plans/status.blockApiTraining'
+      : 'unavailable';
+    return `DevPass no-AI-training: ${state} · source ${source}`;
+  }
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -361,6 +370,7 @@
       `Request account scope fidelity: DevPass ${Math.max(0, Number(diagRequestProvenance?.devpass || 0))}/${diagRequestProvenanceRows} · Credits ${Math.max(0, Number(diagRequestProvenance?.credits || 0))}/${diagRequestProvenanceRows} · Unknown ${Math.max(0, Number(diagRequestProvenance?.unknown || 0))}/${diagRequestProvenanceRows} · conflict ${Math.max(0, Number(diagRequestProvenance?.conflict || 0))}`,
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
+      devPassNoAiTrainingDiagnosticText(diagAccount),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),

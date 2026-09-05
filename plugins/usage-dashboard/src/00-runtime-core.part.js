@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.100
+//@version 3.0.0-alpha.5.101
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.100';
+  const VERSION = '3.0.0-alpha.5.101';
   const RELEASE_NOTES = Object.freeze({
-    title: "Request Model Lifecycle Fidelity",
+    title: "DevPass No-AI-Training Status",
     highlights: Object.freeze([
-    "Adds current pinned-catalog lifecycle status for the exact served model/provider mapping on recent requests.",
-    "Uses @llmgateway/models 1.280.0 semantics: ACTIVE, scheduled deactivation, DEPRECATED, DEACTIVATED, or UNKNOWN.",
-    "Lifecycle UNKNOWN fails closed on missing, invalid, or ambiguous mapping evidence and never enters request identity.",
-    "Bumps Engine to 1.6.35; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
+    "Adds a read-only DevPass AI training block status sourced only from the existing authenticated /dev-plans/status.blockApiTraining boolean.",
+    "Preserves exact tri-state truth: true is enabled, false is disabled, and missing or invalid evidence stays UNKNOWN rather than becoming false.",
+    "Reuses the existing account capture with zero new healthy-path endpoint, CLI, timer, poller, cache family, or persistence owner.",
+    "Bumps Engine to 1.6.36; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.100 · Engine 1.6.35 · Manager 1.3.6 and READY/Health ok.",
-    "Check recent request metadata for 모델 상태 and Full Diagnostics for Model lifecycle fidelity.",
-    "UNKNOWN must stay — when exact model/provider mapping is not source-proven; lifecycle changes must not duplicate rows.",
-    "No extra catalog CLI/network/package-fetch loop should appear.",
+    "Verify Product 5.101 · Engine 1.6.36 · Manager 1.3.6 and READY/Health ok.",
+    "Check the existing DevPass account box for AI 학습 차단 and Full Diagnostics for DevPass no-AI-training.",
+    "A natural 사용, 꺼짐, or — result is valid only when UI and Diagnostics agree with the current status source; do not toggle the setting for testing.",
+    "No new CLI operation or network family should appear, and 5.100 lifecycle/category plus 5.99 daily-server truth must remain healthy.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.35';
+  const REQUIRED_BRIDGE_VERSION = '1.6.36';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

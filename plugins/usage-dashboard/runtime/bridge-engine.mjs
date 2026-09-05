@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.35';
+const VERSION = '1.6.36';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -808,7 +808,7 @@ if (output && !globalThis[marker]) {
       'devPlanResetPasses','devPlanIncludedResetPasses','devPlanIncludedResetPassesRemaining',
       'devPlanResetPassPrice','devPlanBillingCycleStart','devPlanCancelled','devPlanExpiresAt',
       'regularCredits','devPlanPaygEnabled','autoTopUpEnabled','autoTopUpThreshold','autoTopUpAmount',
-      'organizationId','projectId','devPlanServiceTier','defaultRoutingStrategy'
+      'organizationId','projectId','devPlanServiceTier','defaultRoutingStrategy','blockApiTraining'
     ];
     const safe = {};
     for (const key of allowed) {
@@ -1837,6 +1837,16 @@ function enrichDevPassFromStatus(rows, payload) {
   return next;
 }
 
+
+function devPassNoAiTrainingTruth(raw) {
+  if (!raw || typeof raw !== 'object' || !Object.prototype.hasOwnProperty.call(raw, 'blockApiTraining')) {
+    return { state:'unknown', source:'unavailable' };
+  }
+  if (raw.blockApiTraining === true) return { state:'enabled', source:'/dev-plans/status.blockApiTraining' };
+  if (raw.blockApiTraining === false) return { state:'disabled', source:'/dev-plans/status.blockApiTraining' };
+  return { state:'unknown', source:'unavailable' };
+}
+
 function normalizeIndependentDevPassStatus(payload) {
   const raw = payload?.data ?? payload?.status ?? payload;
   if (!raw || typeof raw !== 'object') return null;
@@ -1851,6 +1861,7 @@ function normalizeIndependentDevPassStatus(payload) {
     'devPlanExpiresAt', 'dev_plan_expires_at', 'currentPeriodEnd',
     'current_period_end', 'renewsAt', 'renewAt', 'expiresAt'
   ], null);
+  const noAiTraining = devPassNoAiTrainingTruth(raw);
 
   // Important: never copy apiKey/session/cookie/auth fields from the status
   // response. organizationId/projectId are non-secret identifiers; projectId
@@ -1871,6 +1882,8 @@ function normalizeIndependentDevPassStatus(payload) {
     projectId: String(pick(raw, ['projectId', 'project_id'], '') || '') || null,
     serviceTier: String(pick(raw, ['devPlanServiceTier', 'dev_plan_service_tier'], 'default') || 'default'),
     routingStrategy: String(pick(raw, ['defaultRoutingStrategy', 'default_routing_strategy'], 'auto') || 'auto'),
+    noAiTrainingState: noAiTraining.state,
+    noAiTrainingSource: noAiTraining.source,
     fetchedAt: Date.now(),
     source: 'LLMGateway CLI session · /dev-plans/status',
   };
@@ -1895,7 +1908,7 @@ function normalizeIndependentDevPassStatus(payload) {
   }
 
   const useful = (out.plan && out.plan !== 'none') || out.organizationId || out.billingCycleStart || out.expiresAt ||
-    Object.keys(numberFields).some((key) => out[key] !== undefined);
+    out.noAiTrainingState !== 'unknown' || Object.keys(numberFields).some((key) => out[key] !== undefined);
   return useful ? out : null;
 }
 
@@ -1929,6 +1942,8 @@ async function loadDevPassStatus() {
         autoTopUpEnabled: explicitBillingBoolean(devOrg.devPlanAutoTopUpEnabled),
         autoTopUpThreshold: finite(devOrg.devPlanAutoTopUpThreshold),
         autoTopUpAmount: finite(devOrg.devPlanAutoTopUpAmount),
+        noAiTrainingState: 'unknown',
+        noAiTrainingSource: 'unavailable',
         fetchedAt: Date.now(),
         source: 'LLMGateway CLI session · full /orgs fallback',
       };

@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.6
+//@version 0.70.7
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.7 Output Snapshot Set Cost Attribution:
+// - Attributes the existing ordinary output snapshot backend-set latency alongside the already-created serialized payload length
+// - Reuses the same already-created serialized state payload and awaited backend set without adding I/O, storage reads/writes, timers, or network work
+// - Reports bounded ms/1K chars as diagnostic provenance only and does not claim that payload size causes latency
+// - Preserves prune:false ordinary output semantics, deferred retention authority, OUT_STORAGE ownership, and persistent schemas
 //
 // v0.70.6 Manual Edit Redundant Prune Elision:
 // - Elides the redundant inline retention prune only for a proven USER_EDIT_CANDIDATE same-out-key overwrite
@@ -747,7 +753,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.6';
+const SIMCORE_RUNTIME_VERSION = '0.70.7';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -829,7 +835,10 @@ class SnapshotStore {
     const metric = opts.metric && typeof opts.metric === 'object' ? opts.metric : null;
     let t = storeNow();
     const payload = JSON.stringify(state);
-    if (metric) metric.serializeMs = Math.max(0, storeNow() - t);
+    if (metric) {
+      metric.serializeMs = Math.max(0, storeNow() - t);
+      metric.payloadChars = payload.length;
+    }
     t = storeNow();
     await this.b.set(this._k(phase, index), payload);
     if (metric) metric.setMs = Math.max(0, storeNow() - t);
@@ -5612,6 +5621,7 @@ class CoreRulesetSession {
       detail.outSerializeMs = 0;
       detail.outSetMs = 0;
       detail.outPruneMs = 0;
+      detail.outPayloadChars = null;
       detail.pruneDeferred = false;
       detail.inputChars = String(content || '').length;
       detail.outputChars = 0;
@@ -5655,6 +5665,9 @@ class CoreRulesetSession {
       detail.outSerializeMs = Number(outMetric.serializeMs || 0);
       detail.outSetMs = Number(outMetric.setMs || 0);
       detail.outPruneMs = 0;
+      detail.outPayloadChars = Number.isInteger(outMetric.payloadChars) && outMetric.payloadChars > 0
+        ? outMetric.payloadChars
+        : null;
     }
     this.current = result.state;
     this.currentOutputIndex = outIndex;
@@ -6514,7 +6527,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.6';
+const HOST_COMPAT_VERSION = '0.70.7';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -8963,6 +8976,13 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     };
   }
 
+  function diagnosticOutputSetCostPer1k(payloadChars, setMs) {
+    const chars = Number(payloadChars);
+    const ms = Number(setMs);
+    if (!Number.isFinite(chars) || chars <= 0 || !Number.isFinite(ms) || ms < 0) return null;
+    return ms / (chars / 1000);
+  }
+
   function diagnosticOutputBreakdown(perf) {
     if (!perf) return null;
     const n = (v) => Math.max(0, Number(v) || 0);
@@ -8983,6 +9003,11 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       + processTotal + mirrorTotal + n(perf.diagnosticsMs);
     const handlerOther = Math.max(0, total - outerKnown);
     const stateSource = String(detail.stateLoadSource || 'unknown').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    const rawOutPayloadChars = Number(detail.outPayloadChars);
+    const outPayloadChars = Number.isInteger(rawOutPayloadChars) && rawOutPayloadChars > 0
+      ? rawOutPayloadChars
+      : null;
+    const outSetMsPer1kChars = diagnosticOutputSetCostPer1k(outPayloadChars, detail.outSetMs);
 
     const candidates = [
       ['OUTPUT_INDICES', n(perf.indicesMs)], ['OUTPUT_CHAT_LOAD', n(perf.chatLoadMs)], ['OUTPUT_SESSION_LOAD', n(perf.sessionLoadMs)],
@@ -9000,7 +9025,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       hotspot: hotspot[0], hotspotMs: hotspot[1], hotspotPercent: total > 0 ? (hotspot[1] / total) * 100 : 0,
       indicesMs: n(perf.indicesMs), chatLoadMs: n(perf.chatLoadMs), sessionLoadMs: n(perf.sessionLoadMs), diagnosticsMs: n(perf.diagnosticsMs),
       stateLoadMs: n(detail.stateLoadMs), prepareMs: n(detail.prepareMs), validateMs: n(detail.validateMs), finalizeMs: n(detail.finalizeMs),
-      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), pruneDeferred: !!detail.pruneDeferred,
+      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), outPayloadChars, outSetMsPer1kChars, pruneDeferred: !!detail.pruneDeferred,
       mirrorChatLoadMs: n(mirror.chatLoadMs), mirrorPrepareMs: n(mirror.prepareMs), mirrorSetChatMs: n(mirror.setChatMs),
     };
   }
@@ -9115,6 +9140,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Output timing: ${probeFresh && requestProbe?.outputSeenAt ? `seen ${diagnosticTimingIso(requestProbe.outputSeenAt)} · request→output gap ${diagnosticTimingDelta(requestProbe?.requestDoneAt, requestProbe?.outputSeenAt)} · committed +${diagnosticTimingDelta(requestProbe?.outputSeenAt, requestProbe?.outputAt)}` : 'n/a'}`,
       `Output handler breakdown: ${outputBreakdown ? `indices ${diagnosticFormatMs(outputBreakdown.indicesMs)} · chat ${diagnosticFormatMs(outputBreakdown.chatLoadMs)} · session ${diagnosticFormatMs(outputBreakdown.sessionLoadMs)} · process ${diagnosticFormatMs(outputBreakdown.processTotal)} · mirror ${diagnosticFormatMs(outputBreakdown.mirrorTotal)} · diagnostics ${diagnosticFormatMs(outputBreakdown.diagnosticsMs)} · other ${diagnosticFormatMs(outputBreakdown.handlerOther)} · total ${diagnosticFormatMs(outputBreakdown.total)}` : 'n/a'}`,
       `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,
+      `Output snapshot set: ${outputBreakdown ? `${outputBreakdown.outPayloadChars == null ? 'n/a' : `${Math.round(Number(outputBreakdown.outPayloadChars)).toLocaleString('en-US')} chars`} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · set ${diagnosticFormatMs(outputBreakdown.outSetMs)} · ${outputBreakdown.outSetMsPer1kChars == null ? 'n/a' : `${Number(outputBreakdown.outSetMsPer1kChars).toFixed(2)} ms/1K chars`} · API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT` : 'n/a'}`,
       `Output mirror: ${outputBreakdown ? `DEFERRED · critical path ${diagnosticFormatMs(outputBreakdown.mirrorTotal)}` : 'n/a'}`,
       `Deferred mirror: ${deferredMirror ? `${deferredMirror.status || 'n/a'} · out @${Number(deferredMirror.outIndex)} · chat ${diagnosticFormatMs(deferredMirror.chatLoadMs)} · prepare ${diagnosticFormatMs(deferredMirror.prepareMs)} · setChat ${diagnosticFormatMs(deferredMirror.setChatMs)} · total ${diagnosticFormatMs(deferredMirror.totalMs)}` : 'n/a'}`,
       `Output provenance: ${deferredMirror ? `HOST_RAW ${deferredMirror.hostRawFingerprint || 'n/a'} · CANONICAL ${deferredMirror.canonicalFingerprint || 'n/a'} · FRESH_CHAT ${deferredMirror.freshFingerprint || 'n/a'} · match ${deferredMirror.fingerprintMatch || 'n/a'}` : 'n/a'}`,
@@ -9375,8 +9401,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.6',
-    name: 'Manual Edit Redundant Prune Elision',
+    version: '0.70.7',
+    name: 'Output Snapshot Set Cost Attribution',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

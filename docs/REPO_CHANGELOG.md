@@ -1048,3 +1048,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/51aa44cfd984f21a4b862950d336d730ab13808c)
 - Event ID: `eca7382b14ee8d77b78cd761394c39c5914528071b266ed3cac668b89b920fe2`
 <!-- canonical-main-doc-promoted:eca7382b14ee8d77b78cd761394c39c5914528071b266ed3cac668b89b920fe2 -->
+
+### 2026-09-05 — Merge pull request #1497 from release/usage-dashboard-599-daily-server-usage-snapshot
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8be54ba9de477f8f3d483dc8fe693ea4659da481`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8be54ba9de477f8f3d483dc8fe693ea4659da481)
+- Event ID: `0906b9884dade818233749704a4b99b49da563de4a5b6b38131ecccfe8e74e28`
+<!-- canonical-main-doc-promoted:0906b9884dade818233749704a4b99b49da563de4a5b6b38131ecccfe8e74e28 -->

@@ -1,7 +1,7 @@
 # SimCore v0.70.7 Implementation Regression Failure 03 — R2.9 Operator Release Card Projection
 
 Date: 2026-09-05 KST
-Status: **PRESERVED · FIX / BLOCKER · RELEASE VALIDATION PROJECTION · NON-RUNTIME · PRODUCTION UNCHANGED**
+Status: **PRESERVED · FIX / BLOCKER · RELEASE VALIDATION PROFILE · NON-RUNTIME · PRODUCTION UNCHANGED**
 
 ## 1. Failure identity
 
@@ -35,57 +35,83 @@ SUITE_ASSERTION_FAILED: release-system-r2-9-validation-contract-projection: oper
 ## 2. Classification
 
 ```text
-FIX / BLOCKER / RELEASE VALIDATION PROJECTION / NON_RUNTIME / PRODUCTION UNCHANGED
+FIX / BLOCKER / RELEASE VALIDATION PROFILE / NON_RUNTIME / PRODUCTION UNCHANGED
 ```
 
-This failure is not emitted by `builder-v07007`. The v0.70.7 builder/regression advanced beyond the two previously preserved source-anchor failures. The failing suite is the release-system validation projection suite.
+This failure is not emitted by `builder-v07007`. The v0.70.7 builder/regression advanced beyond the two previously preserved source-anchor failures. The failing suite is the release-system validation projection suite, but the root cause is the new v0.70.7 profile supplied by this implementation transaction.
 
 The trusted predecessor verifier also ran `MAIN_HEALTH` against the same deployed production before the proposed verifier and passed. Therefore current production health is not contradicted by this failure.
 
 No candidate was materialized, no exact approval occurred, and `release-simcore` was not mutated.
 
-## 3. R2.11 boundary
+## 3. Root cause resolved
 
-v0.70.7 intentionally relies on the already-closed R2.11 profile-driven validation inventory path. The implementation transaction did **not** manually add `0.70.7` to the historical R2.9 identity census because doing so would defeat the first real successor proof of the R2.11 normal path.
+Direct profile comparison established the exact mismatch.
 
-The observed error is especially notable because it names:
+Known-good deployed predecessor profile `0.70.6.json` declares:
 
-```text
-operator-release-card authority 0.70.0
+```json
+"operator-release-card": {
+  "mode": "CURRENT_IDENTITY_INHERIT_BEHAVIOR",
+  "authorityVersion": "0.69.2",
+  "authorityIdentity": {
+    "releaseName": "MamsHolic Exact Brand Alias Repair"
+  }
+}
 ```
 
-rather than `0.70.7`.
+The new v0.70.7 profile incorrectly declared:
 
-This indicates that the remaining failure must be investigated as a release-validation projection/authority-resolution issue, not patched by widening the v0.70.7 runtime feature.
+```json
+"operator-release-card": {
+  "mode": "CURRENT_IDENTITY_INHERIT_BEHAVIOR",
+  "authorityVersion": "0.70.0",
+  "authorityIdentity": {
+    "releaseName": "Current Task Primacy Guard"
+  }
+}
+```
 
-## 4. Separation rule
+R2.9's explicit behavior-authority registry correctly contains only the frozen inherited operator-card behavior authority `0.69.2`. Therefore the verifier correctly failed closed when the new profile asked it to execute nonexistent explicit behavior authority `0.70.0`.
 
-Repository policy forbids mixing a runtime feature change with a release/deployment-system repair in the same implementation transaction.
+The error text naming `0.70.0` was therefore exact evidence of the malformed v0.70.7 profile, not evidence of a stale R2.9 manual identity census or an R2.11 inventory defect.
+
+## 4. R2.11 boundary
+
+v0.70.7 intentionally relies on the already-closed R2.11 profile-driven validation inventory path. The implementation transaction did **not** manually add `0.70.7` to the historical R2.9 identity census, and this remains correct.
+
+The failure proves that R2.11 successfully discovered the new `0.70.7.json` profile and routed it into active projected-contract validation. The profile's invalid inherited behavior authority was then rejected by the existing explicit R2.9 authority registry.
 
 Therefore:
 
 ```text
-PR #1530 = v0.70.7 runtime observability implementation only
-release-validation repair = separate branch / separate PR if a repair is required
+R2.11 PROFILE DISCOVERY = WORKING
+R2.9 EXPLICIT AUTHORITY FAIL-CLOSED = WORKING
+V0.70.7 PROFILE CONTENT = INCORRECT
 ```
 
-The implementation PR must remain blocked until the separate validation transaction is resolved and fresh main authority is established.
+No release-system code change is justified by this failure.
 
-## 5. Investigation direction
+## 5. Separation rule and repair boundary
 
-The bounded investigation must determine:
+Repository policy forbids mixing a runtime feature change with a release/deployment-system repair in the same implementation transaction.
 
-1. how `release-system-r2-9-validation-contract-projection.test.mjs` derives `operator-release-card authority`;
-2. why the proposed post-R2.11 inventory path resolves `0.70.0` as needing explicit registration;
-3. whether the suite is still carrying a stale manual identity assumption that R2.11 was intended to retire;
-4. whether the new `0.70.7.json` profile legitimately activates a previously dormant projection branch;
-5. whether the repair can remain entirely within release validation/test projection with zero runtime, builder, release workflow, schema, or production mutation.
+No release/deployment-system repair is required here. The only authorized correction is the version-specific `0.70.7.json` validation profile already owned by PR `#1530`.
 
-Unknown future versions must continue to fail closed unless admitted by the R2.11 profile-driven authority contract.
+Safe repair:
+
+1. keep `CURRENT_IDENTITY_INHERIT_BEHAVIOR` unchanged;
+2. restore `operator-release-card.authorityVersion` to `0.69.2`;
+3. restore `authorityIdentity.releaseName` to `MamsHolic Exact Brand Alias Repair`;
+4. preserve v0.70.7 Host-local exact-current authority and predecessor rejection;
+5. make zero changes to R2.9 suite code, R2.11 inventory code, workflows, schemas, runtime storage semantics, builder semantics, or production;
+6. rerun permanent CI from a fresh exact head.
+
+This is a validation-profile correction within the v0.70.7 implementation transaction, not a release-system restructuring transaction.
 
 ## 6. Production exposure
 
-At failure capture, production remains exactly:
+At failure capture and root-cause resolution, production remains exactly:
 
 ```text
 version = 0.70.6
@@ -100,6 +126,6 @@ Disposition:
 PRODUCTION EXPOSURE = NONE
 CANDIDATE MATERIALIZATION = NONE
 RELEASE-SIMCORE MUTATION = NONE
-V0.70.7 IMPLEMENTATION PR = BLOCKED
-NEXT = SEPARATE R2.9 / R2.11 VALIDATION-PROJECTION ROOT-CAUSE TRANSACTION
+V0.70.7 IMPLEMENTATION PR = BLOCKED UNTIL FRESH CI PASS
+NEXT = CORRECT ONLY 0.70.7 OPERATOR-CARD INHERITED AUTHORITY AND RERUN CI
 ```

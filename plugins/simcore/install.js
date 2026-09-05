@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.7
+//@version 0.70.8
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.8 Repeat-Send Representation Rewind Guard:
+// - Recognizes one exact same-session repeat-send rewind geometry for a proven prior OUTPUT_MISMATCH whose current visible body is the recorded Fresh representation
+// - Keeps the existing same-slot Fresh carryover authority unchanged and adds a separate conjunctive rewind authority using existing send/session/provenance indices only
+// - Routes the proven rewind through REPRESENTATION_FAST_RECONCILED with snapshot UNCHANGED and a dedicated bounded repeat-send rewind provenance marker
+// - Adds no Host read, storage/network/timer work, persistent schema, raw-body retention, retry, polling, or release-system change
 //
 // v0.70.7 Output Snapshot Set Cost Attribution:
 // - Attributes the existing ordinary output snapshot backend-set latency alongside the already-created serialized payload length
@@ -753,7 +759,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.7';
+const SIMCORE_RUNTIME_VERSION = '0.70.8';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4949,7 +4955,7 @@ async function reconcileSessionEditedOutput(session, outIndex, content, perfDeta
 }
 
 async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, deps = {}) {
-  const { coreRules, textMessageContent, representationRegistry, representationRules, coreLocationKey, SIMCORE_LOG_PREFIX, reconcileSession } = deps;
+  const { coreRules, textMessageContent, representationRegistry, representationRules, coreLocationKey, SIMCORE_LOG_PREFIX, reconcileSession, sendIndex } = deps;
 
     const msgs = chat?.message || [];
     let lastAssistant = -1;
@@ -4981,7 +4987,7 @@ async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, de
     // If that exact Fresh representation carries into the next request, it is a proven
     // representation alias for this slot/location, not a third unknown body. Keep the
     // canonical state untouched and skip the expensive snapshot/manual-edit rebuild.
-    const representationFastEligible = !!(
+    const commonFreshAliasFacts = !!(
       priorProvenance
       && priorRepresentation === 'OUTPUT_MISMATCH'
       && currentMatch === 'FRESH_CHAT'
@@ -4989,15 +4995,29 @@ async function reconcileVisiblePreviousAssistant(cs, chat, perfDetail = null, de
       && !!priorFresh
       && priorCanonical !== priorFresh
       && visibleFingerprint === priorFresh
-      && Number(cs.currentOutputIndex) === lastAssistant
+    );
+    const sameSlotAuthority = !!(
+      Number(cs.currentOutputIndex) === lastAssistant
       && String(cs.current?.outputFingerprint || '') === priorCanonical
       && String(cs.trustedOutputFingerprint || '') === priorCanonical
+    );
+    const repeatSendRewindAuthority = !!(
+      Number.isInteger(sendIndex)
+      && sendIndex >= 0
+      && Number(cs.lastPreparedSendIndex) === sendIndex
+      && Number(cs.currentOutputIndex) === sendIndex + 1
+      && lastAssistant === sendIndex - 1
+      && Number(priorProvenance?.outIndex) === lastAssistant
+      && (!coreLocationKey || String(priorProvenance?.locationKey || '') === String(coreLocationKey))
+    );
+    const representationFastEligible = !!(
+      commonFreshAliasFacts && (sameSlotAuthority || repeatSendRewindAuthority)
     );
     let r;
     if (representationFastEligible) {
       if (perfDetail) {
         perfDetail.path = 'representation-fast-reconciled';
-        perfDetail.compatibilitySource = 'fresh-exact-carryover';
+        perfDetail.compatibilitySource = repeatSendRewindAuthority ? 'fresh-exact-repeat-send-rewind' : 'fresh-exact-carryover';
       }
       r = {
         changed: false,
@@ -6527,7 +6547,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.7';
+const HOST_COMPAT_VERSION = '0.70.8';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -8254,10 +8274,10 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     Object.assign(lastDiagnosticRequestProbe, patch || {});
   }
 
-  async function reconcileManualEdit(cs, chat, perfDetail = null) {
+  async function reconcileManualEdit(cs, chat, perfDetail = null, sendIndex = null) {
     return editReconcileRules.reconcileVisiblePreviousAssistant(cs, chat, perfDetail, {
       coreRules, textMessageContent, representationRegistry, representationRules,
-      coreLocationKey, SIMCORE_LOG_PREFIX,
+      coreLocationKey, SIMCORE_LOG_PREFIX, sendIndex,
       reconcileSession: (outIndex, content, detail, reconcileOptions) => cs.reconcileEditedOutput(outIndex, content, detail, reconcileOptions),
     });
   }
@@ -8313,7 +8333,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     reconcileFrontierDraft = prepareReconcileFrontierDraft(messages, lastRequestTopologyProbe);
     t = perfNow();
     const editDetail = perf ? { editReconcileStart: t } : null;
-    await reconcileManualEdit(cs, chat, editDetail);
+    await reconcileManualEdit(cs, chat, editDetail, sendIndex);
     if (reconcileFrontierDraft) {
       reconcileFrontierDraft.post = captureFrontierWindow(messages, reconcileFrontierDraft.seedIndex);
       reconcileFrontierDraft.editPath = String(editDetail?.path || 'n/a');
@@ -9401,8 +9421,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.7',
-    name: 'Output Snapshot Set Cost Attribution',
+    version: '0.70.8',
+    name: 'Repeat-Send Representation Rewind Guard',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

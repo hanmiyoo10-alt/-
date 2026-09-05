@@ -1,11 +1,11 @@
-# SimCore v0.70.7 Live Evidence — Repeat-Send False Manual-Edit Rebuild
+# SimCore v0.70.7 Live Evidence — Repeat-Send Reconcile Anomaly
 
 Date: 2026-09-05 KST
-Status: **FIX · LIVE-CLOSE HOLD · REPRO/TRIAGE REQUIRED**
-Classification: **REPRESENTATION / EDIT RECONCILE · REPEAT-SEND / RETRY FAMILY**
-Tracking: `#1544`
+Status: **FIX · EARLIER SPECIMEN UNEXPLAINED · FINAL WHITESPACE-EDIT CONTROL CLARIFIED**
+Classification: **REPRESENTATION / EDIT RECONCILE · REPEAT-SEND FAMILY**
+Tracking: `#1544`, operator clarification `#1551`
 
-## 1. Natural specimen
+## 1. Sequence boundary
 
 Production runtime:
 
@@ -15,7 +15,11 @@ Generation = mtof1ufa-rw8y3r
 Repeated request/output slot = @3144 -> @3145
 ```
 
-The critical repeated attempt reports:
+Two different repeated specimens must not be conflated.
+
+## 2. Earlier repeated specimen — still unexplained
+
+The earlier repeated attempt reports:
 
 ```text
 Pre snapshot = REPEAT-SEND · READ HIT · 853.0 ms
@@ -38,72 +42,77 @@ snapshot = UPDATED
 Manual edit commit = 377.0 ms
 ```
 
-## 2. Contract conflict
+The operator clarification about a manual whitespace edit does **not** refer to this specimen.
 
-Frozen Representation/Edit-Reconcile authority requires:
+Frozen Representation/Edit-Reconcile authority expects:
 
 ```text
 Prior OUTPUT_MISMATCH + current exact prior Fresh
 -> REPRESENTATION_DRIFT_CORRELATED
 -> REPRESENTATION_FAST_RECONCILED
 -> snapshot UNCHANGED
--> no false manual-edit rebuild
 ```
 
-The same packet contains a prior natural control that follows that contract correctly:
+Therefore this earlier specimen remains:
 
 ```text
-current exact Fresh
--> REPRESENTATION_DRIFT_CORRELATED
--> REPRESENTATION_FAST_RECONCILED
--> snapshot UNCHANGED
-```
-
-A later retry also avoids mutation through:
-
-```text
-HOST_COMPATIBLE
-snapshot UNCHANGED
-```
-
-Therefore the `MANUAL_EDIT_REBUILT` result is not an unavoidable repeat-send outcome.
-
-## 3. Why this is stronger than a latency watch
-
-This is not merely a slow request:
-
-```text
-visible output corruption = not observed
-internal snapshot mutation = observed
-manual-edit rebuild = observed without USER_EDIT_CANDIDATE
-exact prior-Fresh carryover = observed
-history mutation at this attempt = NONE
-```
-
-The false path therefore crosses a frozen correctness boundary even though the final visible response is usable.
-
-## 4. Causality boundary
-
-v0.70.7 is an output-storage observability release. This evidence does not by itself prove that the new release caused the reconcile behavior.
-
-Required before causal attribution:
-
-1. independent fresh-generation operator-confirmed reroll/retry reproduction;
-2. parent v0.70.6 decision-path comparison;
-3. exact source comparison of the relevant Representation/Edit-Reconcile owner;
-4. preserve genuine manual-edit positive controls.
-
-Do not weaken `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT` conservatism as a repair shortcut.
-
-## 5. Disposition
-
-```text
-REROLL_REPRESENTATION_FALSE_MANUAL_EDIT_REBUILD = FIX
-VISIBLE_OUTPUT_CORRUPTION = NO OBSERVED
-SNAPSHOT_MUTATION = YES
-PERFORMANCE_IMPACT = MATERIAL
+EARLIER_REPEAT_SEND_FALSE_REBUILD = FIX / UNEXPLAINED
+VISIBLE_OUTPUT_CORRUPTION = NOT OBSERVED
+INTERNAL_SNAPSHOT_MUTATION = OBSERVED
 V07007_CAUSALITY = UNPROVEN
-TERMINAL_07007_LIVE_CLOSE = HOLD
 ```
 
-No runtime or `release-simcore` mutation is authorized by this evidence record.
+Independent clean reproduction is still required before causal attribution or runtime repair.
+
+## 3. Final specimen — operator-confirmed whitespace edit
+
+The final repeated specimen is different. The operator explicitly confirmed that one extra whitespace character was manually inserted near the front of the visible prior assistant output.
+
+That final specimen reports a one-character new visible representation and finishes:
+
+```text
+Edit origin = NONE
+Edit reconcile = HOST_COMPATIBLE
+snapshot = UNCHANGED
+```
+
+This is expected under production v0.70.7 source semantics.
+
+The Edit-Reconcile owner states that when the raw PocketRisu representation, after output finalization/canonicalization, resolves to the already committed saved output fingerprint, the representation is output-compatible rather than a meaningful user edit. The snapshot is not rewritten or pruned.
+
+Therefore:
+
+```text
+PHYSICAL_OPERATOR_EDIT = YES
+EDIT_KIND = +1 WHITESPACE
+CANONICAL_OUTPUT_DELTA = NONE
+HOST_COMPATIBLE = EXPECTED
+SNAPSHOT_UNCHANGED = EXPECTED
+FALSE_NEGATIVE_MANUAL_EDIT = NO FOR THIS CANONICAL-EQUIVALENT EDIT
+```
+
+The final specimen is useful as a normalization/equivalence negative control.
+
+## 4. Corrected packet interpretation
+
+```text
+natural exact-Fresh carryover
+-> REPRESENTATION_FAST_RECONCILED
+-> PASS
+
+later repeated exact-Fresh specimen
+-> unexpected MANUAL_EDIT_REBUILT
+-> FIX / unexplained
+
+final operator whitespace edit
+-> canonical-equivalent HOST_COMPATIBLE
+-> PASS / expected normalization control
+```
+
+Do not use the final whitespace-edit clarification to dismiss the earlier distinct anomaly.
+
+Do not repair the earlier anomaly by weakening genuine semantic `USER_EDIT_CANDIDATE -> MANUAL_EDIT_REBUILT` conservatism.
+
+## 5. Scope
+
+No runtime, release-state, or `release-simcore` mutation is authorized by this evidence correction.

@@ -17,14 +17,6 @@ assert.equal(spec.managedModelCatalogVersion, '1.280.0');
 assert.deepEqual(spec.contracts, {snapshot:1,recentRequest:1});
 assert.equal(spec.materializer, 'plugins/usage-dashboard/tools/release_devpass_no_ai_training_5101.py');
 assert.equal(spec.newRegression, 'plugins/usage-dashboard/tests/p67-devpass-no-ai-training-status.cjs');
-for (const role of ['acceptedBaseline','latestInstalled']) {
-  const row = spec.releaseEvidence?.[role];
-  assert.equal(row?.productVersion, '3.0.0-alpha.5.100');
-  assert.equal(row?.releaseSha, '478fcd368734b1cf1aa5a98932cb34bb29f1d1e4');
-  assert.equal(row?.verdict, 'accepted');
-  assert.equal(row?.issue, 1540);
-  assert.equal(row?.commentId, 5553562006);
-}
 assert.equal(spec.authority?.featureIssue, 1598);
 assert.equal(spec.authority?.designPullRequest, 1600);
 assert.equal(spec.authority?.releaseGeneration, 'E13');
@@ -59,6 +51,14 @@ assert.equal(release.engineVersion, '1.6.36');
 assert.equal(release.managerVersion, '1.3.6');
 assert.equal(release.snapshotContract, 1);
 assert.equal(release.recentRequestContract, 1);
+for (const role of ['acceptedBaseline','latestInstalled']) {
+  const row = release.evidenceView?.[role];
+  assert.equal(row?.productVersion, '3.0.0-alpha.5.100');
+  assert.equal(row?.releaseSha, '478fcd368734b1cf1aa5a98932cb34bb29f1d1e4');
+  assert.equal(row?.verdict, 'accepted');
+  assert.equal(row?.issue, 1540);
+  assert.equal(row?.commentId, 5553562006);
+}
 
 const capture = fs.readFileSync('plugins/usage-dashboard/runtime-src/bridge-engine/30-cli-runtime.part.mjs', 'utf8');
 const sanitizerStart = capture.indexOf('  const sanitizeStatus = (value) => {');
@@ -152,4 +152,4 @@ assert.equal(manifest.components?.bridgeManager?.managedModelCatalogVersion, '1.
 assert.equal(bootstrapSha, '4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
 
-console.log('P67 DevPass No-AI-Training Status: OK · exact boolean tri-state · existing account capture · zero extra I/O owner · UI/Diagnostics · request identity unchanged · P66 preserved');
+console.log('P67 DevPass No-AI-Training Status: OK · exact boolean tri-state · existing account capture · zero extra I/O owner · UI/Diagnostics · request identity unchanged · E21 evidenceView · P66 preserved');

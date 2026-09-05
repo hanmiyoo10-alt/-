@@ -26,7 +26,7 @@ function requireLines(source, name) {
 }
 
 function extractRatioHelper(source) {
-  const match = source.match(/function diagnosticOutputSetCostPer1k\(payloadChars, setMs\) \{[\s\S]*?\n\}/);
+  const match = source.match(/function diagnosticOutputSetCostPer1k\(payloadChars, setMs\) \{[\s\S]*?\n  \}/);
   assert(match, 'v0.70.7 normalized-cost helper missing');
   return Function(`${match[0]}; return diagnosticOutputSetCostPer1k;`)();
 }
@@ -89,6 +89,8 @@ export async function runSuite(ctx) {
     };
   }
 
+  const ordinaryOutSave = "await this.store.save('out', outIndex, result.state, detail ? { prune: false, metric: outMetric } : { prune: false });";
+
   let candidate = ctx.source;
   let predecessor = null;
   if (sourceVersion === '0.70.6') {
@@ -127,7 +129,9 @@ export async function runSuite(ctx) {
   assertIdentity(candidate);
   assert(candidate.includes('metric.payloadChars = payload.length;'), 'ordinary save payloadChars metric missing');
   assert(candidate.includes("['OUT_STORAGE', n(detail.outSetMs)]"), 'OUT_STORAGE must remain exactly outSetMs');
-  assert(candidate.includes("await this.store.save('out', outIndex, result.state, { metric: outMetric, prune: false });"), 'ordinary out save must remain awaited with prune:false');
+  assert(candidate.includes(ordinaryOutSave), 'ordinary out save must remain awaited, conditional-metric, and prune:false');
+  assert(candidate.includes('detail.outPayloadChars = Number.isInteger(outMetric.payloadChars) && outMetric.payloadChars > 0'), 'ordinary output payload propagation missing');
+  assert(candidate.includes('outPayloadChars, outSetMsPer1kChars'), 'output breakdown payload attribution missing');
   assert(candidate.includes('Output snapshot set:'), 'output snapshot-set diagnostic missing');
   assert(candidate.includes('API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT'), 'diagnostic provenance tokens missing');
 
@@ -163,7 +167,7 @@ export async function runSuite(ctx) {
       'const STATE_VERSION = 5;',
       'const CORE_STATE_VERSION = 10;',
       "['OUT_STORAGE', n(detail.outSetMs)]",
-      "await this.store.save('out', outIndex, result.state, { metric: outMetric, prune: false });",
+      ordinaryOutSave,
     ]) {
       equal(count(candidate, marker), count(predecessor, marker), `${marker} frozen`);
     }
@@ -180,6 +184,7 @@ export async function runSuite(ctx) {
       { id: 'v07007-existing-serialization-reused', status: 'PASS' },
       { id: 'v07007-backend-set-count-order-await-preserved', status: 'PASS' },
       { id: 'v07007-payload-chars-exact', status: 'PASS' },
+      { id: 'v07007-output-payload-propagation', status: 'PASS' },
       { id: 'v07007-normalized-cost-fail-closed', status: 'PASS' },
       { id: 'v07007-out-storage-attribution-preserved', status: 'PASS' },
       { id: 'v07007-prune-disabled-preserved', status: 'PASS' },

@@ -1,16 +1,30 @@
 # SimCore Diagnostic Review Two-Pass Protocol
 
 Date: 2026-09-05 KST
-Status: **OPERATOR-ADOPTED · DURABLE REVIEW PROTOCOL · NON-RUNTIME**
+Status: **HISTORICAL AUTHORITY FOR v0.70.7 · SUPERSEDED FOR FUTURE VERSIONS · NON-RUNTIME**
 Tracking: `#1550`
+Superseded for future-version reviews by: `docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md`
+
+## 0. Supersession boundary
+
+This protocol remains the valid review authority for the completed v0.70.7 diagnostic review.
+
+It is superseded prospectively, not retroactively.
+
+```text
+v0.70.7 = two-pass review remains valid
+next SimCore runtime version after v0.70.7 = three-lens protocol mandatory
+```
+
+Do not reopen or mechanically re-score v0.70.7 solely because the three-lens protocol was adopted later.
 
 ## 1. Purpose
 
-Future SimCore diagnostic-log reviews are intentionally split into two separate passes.
+Future SimCore diagnostic-log reviews under this historical protocol were intentionally split into two separate passes.
 
-The goal is to prevent release-goal anchoring from hiding unrelated runtime or subsystem evidence.
+The goal was to prevent release-goal anchoring from hiding unrelated runtime or subsystem evidence.
 
-The same supplied diagnostic log, or one coherent diagnostic log set, may be used by both passes. The reviews must still be presented separately.
+The same supplied diagnostic log, or one coherent diagnostic log set, could be used by both passes. The reviews still had to be presented separately.
 
 ## 2. Pass 1 — release/version contract review
 
@@ -95,7 +109,7 @@ Operator clarification about actions such as reroll, manual edit, whitespace edi
 
 ## 5. Separation rule
 
-The final review cadence is:
+The historical review cadence was:
 
 ```text
 PASS 1
@@ -108,7 +122,7 @@ independent diagnostic audit
 -> preserve new WATCH / DEFER / FIX / BLOCKER items
 ```
 
-Do not replace the two passes with one giant combined verdict.
+Do not reinterpret this historical record as having required the later element-inventory lens.
 
 ## 6. Repository preservation
 
@@ -127,7 +141,7 @@ document authority drift -> separate documentation record
 
 ## 7. Scope and authority
 
-This protocol changes review procedure only.
+This protocol changed review procedure only.
 
 ```text
 runtime mutation = NONE
@@ -146,3 +160,9 @@ repo design/evidence
 -> real long-chat validation
 -> main documentation / continuity synchronization
 ```
+
+## 8. Historical closure
+
+The two-pass protocol remains authoritative evidence for reviews already completed under it, especially v0.70.7.
+
+All future runtime-version diagnostic reviews must use the adopted three-lens authority after the stated effective boundary.

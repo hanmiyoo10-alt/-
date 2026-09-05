@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.9-intent-01",
+  "releaseId": "simcore-v0.70.9-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.70.9",
+  "releaseName": "Inline Planning Marker Hygiene Guard",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "01010564649a033e02a0658a167f5f38a6a23632",
+  "builderPath": "products/simcore/tooling/build-07009-inline-planning-marker-hygiene-guard.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_LIVE_07008_THREE_LENS_PASS1_CORRECTION_INLINE_INTERNAL_MEMO_2026-09-06.md",
+    "docs/SIMCORE_07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_DESIGN_2026-09-06.md",
+    "docs/SIMCORE_07009_IMPLEMENTATION_AUTHORIZATION_2026-09-06.md",
+    "docs/SIMCORE_07009_IMPLEMENTATION_EVIDENCE_2026-09-06.md",
+    "docs/SIMCORE_07009_LOCAL_DIRECT_TEST_ENV_DEFER_2026-09-06.md",
+    "docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md"
+  ]
+}

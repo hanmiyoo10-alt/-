@@ -61,22 +61,78 @@ The semantic initialization seam exists in the deployed v0.70.6 source, but the 
 
 This is not evidence of a runtime behavior defect. It is a brittle implementation-builder anchor.
 
+### 3.1 Exact production source alignment discovered during repair
+
+The deployed v0.70.6 source was re-read before changing the builder. The ordinary `processOutput()` detail block is actually shaped as:
+
+```js
+detail.stateLoadMs = 0;
+detail.stateLoadSource = 'unknown';
+detail.prepareMs = 0;
+detail.validateMs = 0;
+detail.finalizeMs = 0;
+detail.outSerializeMs = 0;
+detail.outSetMs = 0;
+detail.outPruneMs = 0;
+detail.pruneDeferred = false;
+detail.inputChars = String(content || '').length;
+detail.outputChars = 0;
+```
+
+The authoritative ordinary out save is actually conditional only in whether the metric object is supplied:
+
+```js
+const outMetric = {};
+await this.store.save(
+  'out',
+  outIndex,
+  result.state,
+  detail ? { prune: false, metric: outMetric } : { prune: false }
+);
+```
+
+Its existing propagation is:
+
+```js
+detail.outSerializeMs = Number(outMetric.serializeMs || 0);
+detail.outSetMs = Number(outMetric.setMs || 0);
+detail.outPruneMs = 0;
+```
+
+The current OPS owner is `diagnosticOutputBreakdown(perf)`, not the provisional `buildOutputBreakdown(perf, outputTotalMs)` name used by the first builder draft. `OUT_STORAGE` remains exactly:
+
+```js
+['OUT_STORAGE', n(detail.outSetMs)]
+```
+
+and the copied Last Turn Diagnostic currently renders output timing as an array entry beginning with:
+
+```text
+Output process:
+```
+
+These differences do **not** change the frozen v0.70.7 semantics. They only prove that the first implementation draft encoded design shorthand as literal source anchors instead of aligning to exact deployed syntax.
+
+The repair therefore must preserve the deployed conditional save shape and current diagnostic owner while adding only the frozen payload-character attribution.
+
 ## 4. Safe repair direction
 
-The repair must be bounded to exact deployed ordinary output-detail initialization:
+The repair must be bounded to exact deployed ordinary output-detail and diagnostics ownership:
 
-1. inspect exact v0.70.6 source around `outPruneMs` / `retentionDisposition`;
-2. identify the correct containing function or unique bounded context;
-3. insert `outPayloadChars = null` immediately after the existing ordinary `outPruneMs = 0` initialization;
-4. avoid replacing an unrelated manual-edit or other output-detail block;
-5. preserve every existing timing field, ordering, semantics, await, storage operation, and retention disposition;
-6. rerun permanent CI from a new exact head.
+1. scope the initialization mutation inside exact `processOutput(outIndex, content, perfDetail = null)`;
+2. insert `outPayloadChars = null` immediately after the existing ordinary `outPruneMs = 0` initialization;
+3. preserve the conditional `detail ? { prune: false, metric: outMetric } : { prune: false }` authoritative save exactly;
+4. propagate `outMetric.payloadChars` only inside the existing `if (detail)` metric-copy block;
+5. add pure ratio accounting inside `diagnosticOutputBreakdown(perf)` without changing `OUT_STORAGE = outSetMs`;
+6. add exactly one bounded `Output snapshot set:` copied-diagnostic array entry adjacent to existing output performance lines;
+7. avoid replacing any manual-edit timing block or changing any storage operation, await, pruning, retention, schema, module or require edge;
+8. rerun permanent CI from a new exact head.
 
 No release-system redesign or runtime semantic expansion is authorized by this repair.
 
 ## 5. Production exposure
 
-At failure capture, production remains exactly:
+At failure capture and repair-source audit, production remains exactly:
 
 ```text
 version = 0.70.6
@@ -91,5 +147,5 @@ Disposition:
 PRODUCTION EXPOSURE = NONE
 CANDIDATE MATERIALIZATION = NONE
 RELEASE-SIMCORE MUTATION = NONE
-NEXT = BOUNDED OUTPUT-DETAIL ANCHOR REPAIR
+NEXT = BOUNDED PRODUCTION-EXACT OUTPUT-DETAIL / DIAGNOSTIC ANCHOR REPAIR
 ```

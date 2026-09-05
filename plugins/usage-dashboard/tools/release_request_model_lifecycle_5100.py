@@ -9,11 +9,15 @@ SPEC=ROOT/'.github'/'usage-dashboard'/'releases'/'5.100.json'
 CORE=SRC/'00-runtime-core.part.js'; LEDGER=SRC/'14-request-ledger.part.js'; PROV=SRC/'15-request-provenance.part.js'; DIAG=SRC/'40-diagnostics.part.js'
 ECORE=ES/'00-core.part.mjs'; CATEGORY=ES/'45-model-category.part.mjs'; ENGINE=RT/'bridge-engine.mjs'; MANAGER=RT/'bridge-manager.cjs'
 BOOT=RT/'bootstrap-bridge-manager.sh'; MANIFEST=RT/'product-manifest.json'; LATEST=UD/'latest.js'; P65=TEST/'p65-daily-server-request-count-breakdown.cjs'
-BASE='3.0.0-alpha.5.99'; TARGET='3.0.0-alpha.5.100'; ENGINE_VER='1.6.35'; MANAGER_VER='1.3.6'
+BASE_PRODUCT = '3.0.0-alpha.5.99'
+TARGET_PRODUCT = '3.0.0-alpha.5.100'
+TARGET_ENGINE = '1.6.35'
+MANAGER_VER='1.3.6'
+BASE=BASE_PRODUCT; TARGET=TARGET_PRODUCT; ENGINE_VER=TARGET_ENGINE
 BASE_ENGINE_SHA='19386785b8756ac34bc6e88ee9d9471ea219d27a16a6ed4632a11d33a8ac6b58'
 BASE_MANAGER_SHA='8f58d3d7a418ff7c8bb5b39d4a4a92b9d80053b4f108f64037b9715b5053c31c'
 BOOT_SHA='4ec4f67b7ff07ef46ee75a46146fbf49700a7a438611e626f9c00af5dbb6026c'
-BASE_RELEASE_SHA='91c3d11d6aa7d5299b701ff94956a230a07d4be2'
+BASE_RELEASE_SHA = '91c3d11d6aa7d5299b701ff94956a230a07d4be2'
 
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def run(*a): subprocess.run(a,cwd=ROOT,check=True)
@@ -57,7 +61,7 @@ def notes(v):
 def baseline():
     m=json.loads(MANIFEST.read_text())
     if m.get('productVersion')==TARGET:
-        target(); print(f'MATERIALIZER_IDEMPOTENT:{TARGET}'); raise SystemExit(0)
+        target(); print(f'MATERIALIZER_IDEMPOTENT:{TARGET_PRODUCT}'); raise SystemExit(0)
     if m.get('productVersion')!=BASE: raise SystemExit('5.100 baseline Product mismatch')
     b=m['components']['bridge']; g=m['components']['bridgeManager']
     if b.get('requiredVersion')!='1.6.34' or b.get('sha256')!=BASE_ENGINE_SHA or sha(ENGINE)!=BASE_ENGINE_SHA: raise SystemExit('5.100 baseline Engine mismatch')

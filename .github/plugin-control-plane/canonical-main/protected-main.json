@@ -18,7 +18,8 @@
   },
   "activeWriters": [
     "product-simcore-candidate-materialize.yml",
-    "simcore-release-permanent.yml",
+    "product-simcore-terminal-convergence-r2-8.yml",
+    "simcore-r2-7-status-projection.yml",
     "simcore-release-state-sync.yml",
     "usage-dashboard-project-memory.yml"
   ],

@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.6 — Manual Edit Redundant Prune Elision
-Release commit: e2552d7f93456652c94d9df37b0c253f12f2d900
+SimCore v0.70.7 — Output Snapshot Set Cost Attribution
+Release commit: 434df54760bc997b1bcd9223eeaff428aeee66d3
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

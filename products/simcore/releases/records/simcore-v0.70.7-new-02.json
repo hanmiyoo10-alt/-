@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.7-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "93a3f0e63bfb98d05590500ddf34061efdd59d20",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.7-new-02.json",
+  "releaseSpecSha256": "960cac8c2fa5ab532e8780b69e9da36d1dd3b651900fc9ebf2ed8d023413e65c",
+  "productionCommit": "434df54760bc997b1bcd9223eeaff428aeee66d3",
+  "previousProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "productionBlob": "6f7cae5b5a8ade66e20beaaf253e365ba035cc18",
+  "version": "0.70.7",
+  "releaseName": "Output Snapshot Set Cost Attribution",
+  "verificationReportSha256": "2e70f5718e03aeb672e6b712e9baa846c8f29dd639b495808ff54b34348f2bc4",
+  "verifierCommit": "262c43b3d969c62c5e1e94a35042ee1c75f704da",
+  "publisherRunId": "33967837633",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

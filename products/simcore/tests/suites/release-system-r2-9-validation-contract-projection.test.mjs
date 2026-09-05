@@ -8,7 +8,14 @@ import {
   extractSourceReleaseVersion,
   validateValidationProfile,
 } from '../../tooling/validation-contract-profile.mjs';
-import { discoverBuilderClosure } from '../../tooling/validation-builder-discovery.mjs';
+import {
+  buildValidationProfileInventory,
+  buildValidationProfileInventoryFromEntries,
+} from '../../tooling/validation-profile-inventory-r2-11.mjs';
+import {
+  discoverBuilderClosure,
+  mergeProjectedBuilderRows,
+} from '../../tooling/validation-builder-discovery.mjs';
 import { preflightValidationTopology } from '../../tooling/validation-topology-preflight.mjs';
 import {
   R2_9_AUTHORITY_CAPABILITIES,
@@ -33,18 +40,7 @@ const ACTIVE_R2_9_ROUTES = Object.freeze({
   'bounded-telemetry-capsule': './suites/release-validation-active-r2-9.mjs',
 });
 
-const KNOWN_RELEASE_IDENTITIES = Object.freeze({
-  '0.70.0': Object.freeze({ releaseName: 'Current Task Primacy Guard' }),
-  '0.70.1': Object.freeze({ releaseName: 'Cold First-Turn Tail Attribution' }),
-  '0.70.3': Object.freeze({ releaseName: 'Post-M2 Simplification Convergence' }),
-  '0.70.4': Object.freeze({ releaseName: 'Manual Edit Rebuild Attribution' }),
-  '0.70.5': Object.freeze({ releaseName: 'Manual Edit Commit Boundary Attribution' }),
-  '0.70.6': Object.freeze({ releaseName: 'Manual Edit Redundant Prune Elision' }),
-});
-
-function readJson(url) {
-  return JSON.parse(fs.readFileSync(fileURLToPath(url), 'utf8'));
-}
+const PROJECTED_NO_WRAPPER_FLOOR = '0.70.1';
 
 function expectCode(code, fn) {
   let got = null;
@@ -58,12 +54,12 @@ function replaceExactlyOnce(source, from, to, label) {
   return source.replace(from, to);
 }
 
-function projectKnownReleaseIdentity(source, targetVersion) {
+function projectProfileIdentity(source, targetVersion, profileInventory) {
   const sourceVersion = extractSourceReleaseVersion(source);
-  const sourceIdentity = KNOWN_RELEASE_IDENTITIES[sourceVersion];
-  const targetIdentity = KNOWN_RELEASE_IDENTITIES[targetVersion];
-  assert(sourceIdentity, `unsupported source identity projection: ${sourceVersion || '<missing>'}`);
-  assert(targetIdentity, `unsupported target identity projection: ${targetVersion || '<missing>'}`);
+  const sourceIdentity = profileInventory.identitiesByVersion[sourceVersion];
+  const targetIdentity = profileInventory.identitiesByVersion[targetVersion];
+  assert(sourceIdentity, `source identity profile missing: ${sourceVersion || '<missing>'}`);
+  assert(targetIdentity, `target identity profile missing: ${targetVersion || '<missing>'}`);
   if (sourceVersion === targetVersion) return source;
 
   let out = source;
@@ -131,112 +127,162 @@ async function assertActiveContracts(source, ctx, label) {
   return profile;
 }
 
+function futureProfileFromCurrent(currentProfile, sourceVersion, futureVersion) {
+  const future = JSON.parse(JSON.stringify(currentProfile));
+  future.releaseVersion = futureVersion;
+  future.releaseName = 'Synthetic Future Inventory Control';
+  for (const contract of Object.values(future.contracts || {})) {
+    if (
+      contract.mode === VALIDATION_CONTRACT_MODES.EXACT_CURRENT_IDENTITY
+      || contract.mode === VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT
+    ) {
+      contract.authorityVersion = futureVersion;
+      if (Array.isArray(contract.rejectVersions)) contract.rejectVersions = [sourceVersion];
+    }
+  }
+  return future;
+}
+
 export async function runSuite(ctx) {
   const fixture = ctx.fixtures[0];
   assert(fixture, 'R2.9 fixture missing');
 
-  const seedProfile = readJson(new URL('../../releases/validation-profiles/0.70.0.json', import.meta.url));
-  const validatedSeed = validateValidationProfile(seedProfile, { requiredContracts: REQUIRED_CONTRACTS });
-  equal(validatedSeed.releaseVersion, '0.70.0', 'seed validation profile version');
+  const profileInventory = buildValidationProfileInventory({ requiredContracts: REQUIRED_CONTRACTS });
+  equal(profileInventory.provenance.owner, 'R2.11_PROFILE_DRIVEN_VALIDATION_INVENTORY', 'R2.11 inventory provenance');
+  assert(profileInventory.versions.length > 0, 'R2.11 inventory must not be empty');
+  equal(
+    JSON.stringify(profileInventory.versions),
+    JSON.stringify([...profileInventory.versions].sort((a, b) => {
+      const ap = a.split('.').map(Number);
+      const bp = b.split('.').map(Number);
+      return ap[0] - bp[0] || ap[1] - bp[1] || ap[2] - bp[2];
+    })),
+    'R2.11 inventory semantic ordering',
+  );
+
+  for (const version of profileInventory.versions) {
+    const profile = profileInventory.profilesByVersion[version];
+    const identity = profileInventory.identitiesByVersion[version];
+    equal(profile.releaseVersion, version, `inventory profile version ${version}`);
+    equal(identity.releaseVersion, version, `inventory identity version ${version}`);
+    equal(identity.releaseName, profile.releaseName, `inventory identity release name ${version}`);
+    assert(Boolean(identity.releaseName?.trim()), `inventory release name missing ${version}`);
+  }
+
+  const validatedSeed = profileInventory.profilesByVersion['0.70.0'];
+  assert(validatedSeed, 'seed validation profile 0.70.0 missing');
   equal(
     validatedSeed.contracts['host-local-telemetry'].mode,
     VALIDATION_CONTRACT_MODES.EXACT_CURRENT_IDENTITY,
     'seed Host-local contract must remain exact-current',
   );
 
-  const v07001Profile = readJson(new URL('../../releases/validation-profiles/0.70.1.json', import.meta.url));
-  const validatedV07001 = validateValidationProfile(v07001Profile, { requiredContracts: REQUIRED_CONTRACTS });
-  equal(validatedV07001.releaseVersion, '0.70.1', 'v0.70.1 validation profile version');
-  equal(validatedV07001.releaseName, 'Cold First-Turn Tail Attribution', 'v0.70.1 validation profile release name');
+  const validatedV07001 = profileInventory.profilesByVersion['0.70.1'];
+  assert(validatedV07001, 'historical v0.70.1 validation profile missing');
+  equal(validatedV07001.releaseName, 'Cold First-Turn Tail Attribution', 'v0.70.1 historical release name');
   equal(validatedV07001.contracts['host-local-telemetry'].authorityVersion, '0.70.1', 'v0.70.1 Host-local exact authority');
   equal(JSON.stringify(validatedV07001.contracts['host-local-telemetry'].rejectVersions), JSON.stringify(['0.70.0']), 'v0.70.1 Host-local predecessor rejection');
-
-  const v07004Profile = readJson(new URL('../../releases/validation-profiles/0.70.4.json', import.meta.url));
-  const validatedV07004 = validateValidationProfile(v07004Profile, { requiredContracts: REQUIRED_CONTRACTS });
-  equal(validatedV07004.releaseVersion, '0.70.4', 'v0.70.4 validation profile version');
-  equal(validatedV07004.releaseName, 'Manual Edit Rebuild Attribution', 'v0.70.4 validation profile release name');
-  equal(validatedV07004.contracts['host-local-telemetry'].authorityVersion, '0.70.4', 'v0.70.4 Host-local exact authority');
-  equal(JSON.stringify(validatedV07004.contracts['host-local-telemetry'].rejectVersions), JSON.stringify(['0.70.3']), 'v0.70.4 Host-local predecessor rejection');
-
-  const v07005Profile = readJson(new URL('../../releases/validation-profiles/0.70.5.json', import.meta.url));
-  const validatedV07005 = validateValidationProfile(v07005Profile, { requiredContracts: REQUIRED_CONTRACTS });
-  equal(validatedV07005.releaseVersion, '0.70.5', 'v0.70.5 validation profile version');
-  equal(validatedV07005.releaseName, 'Manual Edit Commit Boundary Attribution', 'v0.70.5 validation profile release name');
-  equal(validatedV07005.contracts['host-local-telemetry'].authorityVersion, '0.70.5', 'v0.70.5 Host-local exact authority');
-  equal(JSON.stringify(validatedV07005.contracts['host-local-telemetry'].rejectVersions), JSON.stringify(['0.70.4']), 'v0.70.5 Host-local predecessor rejection');
-
-  const v07006Profile = readJson(new URL('../../releases/validation-profiles/0.70.6.json', import.meta.url));
-  const validatedV07006 = validateValidationProfile(v07006Profile, { requiredContracts: REQUIRED_CONTRACTS });
-  equal(validatedV07006.releaseVersion, '0.70.6', 'v0.70.6 validation profile version');
-  equal(validatedV07006.releaseName, 'Manual Edit Redundant Prune Elision', 'v0.70.6 validation profile release name');
-  equal(validatedV07006.contracts['host-local-telemetry'].authorityVersion, '0.70.6', 'v0.70.6 Host-local exact authority');
-  equal(JSON.stringify(validatedV07006.contracts['host-local-telemetry'].rejectVersions), JSON.stringify(['0.70.5']), 'v0.70.6 Host-local predecessor rejection');
 
   for (const [id, module] of Object.entries(ACTIVE_R2_9_ROUTES)) {
     equal(registry.find((row) => row.id === id)?.module, module, `R2.9 active route mismatch: ${id}`);
   }
-  assert(registry.some((row) => row.id === 'builder-v07000'), 'builder-v07000 explicit row must remain during bounded activation');
-  assert(registry.some((row) => row.id === 'builder-v07001'), 'builder-v07001 explicit row must remain during bounded activation');
-  assert(registry.some((row) => row.id === 'builder-v07004'), 'builder-v07004 explicit row must remain discoverable');
-  assert(registry.some((row) => row.id === 'builder-v07005'), 'builder-v07005 explicit row must remain discoverable');
-  assert(registry.some((row) => row.id === 'builder-v07006'), 'builder-v07006 explicit row must remain discoverable');
 
   const sourceVersion = extractSourceReleaseVersion(ctx.source);
-  assert(KNOWN_RELEASE_IDENTITIES[sourceVersion], `R2.9 active regression source version unsupported: ${sourceVersion || '<missing>'}`);
   const loadedCurrent = await assertActiveContracts(ctx.source, ctx, `active source ${sourceVersion}`);
   equal(loadedCurrent.releaseVersion, sourceVersion, 'active loader must bind source to its exact profile');
+  equal(
+    loadedCurrent.releaseName,
+    profileInventory.identitiesByVersion[sourceVersion]?.releaseName,
+    'active source identity must come from exact profile inventory',
+  );
 
-  const source07000 = projectKnownReleaseIdentity(ctx.source, '0.70.0');
-  const source07001 = projectKnownReleaseIdentity(ctx.source, '0.70.1');
-  const source07004 = projectKnownReleaseIdentity(ctx.source, '0.70.4');
-  const source07005 = projectKnownReleaseIdentity(ctx.source, '0.70.5');
-  const source07006 = projectKnownReleaseIdentity(ctx.source, '0.70.6');
-  await assertActiveContracts(source07000, ctx, 'known v0.70.0');
-  await assertActiveContracts(source07001, ctx, 'known v0.70.1');
-  await assertActiveContracts(source07004, ctx, 'known v0.70.4');
-  await assertActiveContracts(source07005, ctx, 'known v0.70.5');
-  await assertActiveContracts(source07006, ctx, 'known v0.70.6');
+  for (const version of profileInventory.versions) {
+    const projected = projectProfileIdentity(ctx.source, version, profileInventory);
+    await assertActiveContracts(projected, ctx, `inventory-projected ${version}`);
+  }
 
-  const inventory = filesystemInventory();
+  const fileInventory = filesystemInventory();
   const builderClosure = discoverBuilderClosure({
-    suiteFiles: inventory.suiteFiles,
-    fixtureDirs: inventory.fixtureDirs,
+    suiteFiles: fileInventory.suiteFiles,
+    fixtureDirs: fileInventory.fixtureDirs,
   });
   equal(builderClosure.status, 'PASS', 'current builder suite/fixture closure');
-  assert(builderClosure.rows.some((row) => row.id === 'builder-v07000'), 'builder-v07000 must be auto-discoverable');
-  assert(builderClosure.rows.some((row) => row.id === 'builder-v07001'), 'builder-v07001 must be auto-discoverable');
-  assert(builderClosure.rows.some((row) => row.id === 'builder-v07004'), 'builder-v07004 must be auto-discoverable');
-  assert(builderClosure.rows.some((row) => row.id === 'builder-v07005'), 'builder-v07005 must be auto-discoverable');
-  assert(builderClosure.rows.some((row) => row.id === 'builder-v07006'), 'builder-v07006 must be auto-discoverable');
+  assert(builderClosure.rows.length > 0, 'structural builder discovery must produce executable rows');
+  const projectedRegistry = mergeProjectedBuilderRows(registry, builderClosure.rows);
+  equal(
+    projectedRegistry.filter((row) => /^builder-v\d{5}$/.test(String(row?.id || ''))).length,
+    builderClosure.rows.length,
+    'builder registry projection must be discovery-driven',
+  );
 
   const topology = preflightValidationTopology({
     profile: loadedCurrent,
     requiredContracts: REQUIRED_CONTRACTS,
     authorityCapabilities: R2_9_AUTHORITY_CAPABILITIES,
     builderClosure,
-    registryRows: registry,
-    availableModules: inventory.availableModules,
-    availableFixtureDirs: inventory.fixtureDirs,
+    registryRows: projectedRegistry,
+    availableModules: fileInventory.availableModules,
+    availableFixtureDirs: fileInventory.fixtureDirs,
   });
   equal(topology.status, 'PASS', `active validation topology: ${(topology.findings || []).join('; ')}`);
   equal(topology.releaseVersion, sourceVersion, 'topology must bind the actual active source version');
 
-  assert(!inventory.suiteFiles.includes('reload-cache-continuity-v07001.test.mjs'), 'v0.70.1 must not require a reload wrapper');
-  assert(!inventory.suiteFiles.includes('operator-release-card-v07001.test.mjs'), 'v0.70.1 must not require an operator wrapper');
-  assert(!inventory.suiteFiles.includes('host-local-telemetry-v07001.test.mjs'), 'v0.70.1 must not require a Host-local wrapper');
-  assert(!inventory.suiteFiles.includes('bounded-telemetry-capsule-v07001.test.mjs'), 'v0.70.1 must not require a bounded telemetry wrapper');
-  assert(!inventory.suiteFiles.includes('reload-cache-continuity-v07004.test.mjs'), 'v0.70.4 must not require a reload wrapper');
-  assert(!inventory.suiteFiles.includes('operator-release-card-v07004.test.mjs'), 'v0.70.4 must not require an operator wrapper');
-  assert(!inventory.suiteFiles.includes('host-local-telemetry-v07004.test.mjs'), 'v0.70.4 must not require a Host-local wrapper');
-  assert(!inventory.suiteFiles.includes('bounded-telemetry-capsule-v07004.test.mjs'), 'v0.70.4 must not require a bounded telemetry wrapper');
-  assert(!inventory.suiteFiles.includes('reload-cache-continuity-v07005.test.mjs'), 'v0.70.5 must not require a reload wrapper');
-  assert(!inventory.suiteFiles.includes('operator-release-card-v07005.test.mjs'), 'v0.70.5 must not require an operator wrapper');
-  assert(!inventory.suiteFiles.includes('host-local-telemetry-v07005.test.mjs'), 'v0.70.5 must not require a Host-local wrapper');
-  assert(!inventory.suiteFiles.includes('bounded-telemetry-capsule-v07005.test.mjs'), 'v0.70.5 must not require a bounded telemetry wrapper');
-  assert(!inventory.suiteFiles.includes('reload-cache-continuity-v07006.test.mjs'), 'v0.70.6 must not require a reload wrapper');
-  assert(!inventory.suiteFiles.includes('operator-release-card-v07006.test.mjs'), 'v0.70.6 must not require an operator wrapper');
-  assert(!inventory.suiteFiles.includes('host-local-telemetry-v07006.test.mjs'), 'v0.70.6 must not require a Host-local wrapper');
-  assert(!inventory.suiteFiles.includes('bounded-telemetry-capsule-v07006.test.mjs'), 'v0.70.6 must not require a bounded telemetry wrapper');
+  const noWrapperFloorIndex = profileInventory.versions.indexOf(PROJECTED_NO_WRAPPER_FLOOR);
+  assert(noWrapperFloorIndex >= 0, 'projected no-wrapper migration floor profile missing');
+  for (const version of profileInventory.versions.slice(noWrapperFloorIndex)) {
+    const suffix = version.replaceAll('.', '');
+    for (const contractId of REQUIRED_CONTRACTS) {
+      assert(
+        !fileInventory.suiteFiles.includes(`${contractId}-v${suffix}.test.mjs`),
+        `${version} must not require per-version wrapper ${contractId}`,
+      );
+    }
+  }
+
+  const currentProfile = profileInventory.profilesByVersion[sourceVersion];
+  assert(currentProfile, `active source exact profile missing from inventory: ${sourceVersion || '<missing>'}`);
+  const futureVersion = '9.99.99';
+  const futureProfile = futureProfileFromCurrent(currentProfile, sourceVersion, futureVersion);
+  const syntheticInventory = buildValidationProfileInventoryFromEntries([
+    { filename: `${sourceVersion}.json`, profile: currentProfile },
+    { filename: `${futureVersion}.json`, profile: futureProfile },
+  ], { requiredContracts: REQUIRED_CONTRACTS });
+  equal(syntheticInventory.identitiesByVersion[futureVersion]?.releaseName, futureProfile.releaseName, 'synthetic future profile enters inventory without census row');
+  const syntheticFutureSource = projectProfileIdentity(ctx.source, futureVersion, syntheticInventory);
+  equal(extractSourceReleaseVersion(syntheticFutureSource), futureVersion, 'synthetic future source identity projection');
+
+  expectCode('VALIDATION_INVENTORY_FILENAME_INVALID', () => buildValidationProfileInventoryFromEntries([
+    { filename: 'future.json', profile: futureProfile },
+  ], { requiredContracts: REQUIRED_CONTRACTS }));
+
+  expectCode('VALIDATION_INVENTORY_PROFILE_PARSE_FAIL', () => buildValidationProfileInventoryFromEntries([
+    { filename: `${futureVersion}.json`, content: '{' },
+  ], { requiredContracts: REQUIRED_CONTRACTS }));
+
+  const invalidProfile = JSON.parse(JSON.stringify(currentProfile));
+  invalidProfile.schemaVersion = 999;
+  expectCode('VALIDATION_INVENTORY_PROFILE_INVALID', () => buildValidationProfileInventoryFromEntries([
+    { filename: `${sourceVersion}.json`, profile: invalidProfile },
+  ], { requiredContracts: REQUIRED_CONTRACTS }));
+
+  const invalidReleaseName = JSON.parse(JSON.stringify(currentProfile));
+  invalidReleaseName.releaseName = '   ';
+  expectCode('VALIDATION_INVENTORY_RELEASE_NAME_INVALID', () => buildValidationProfileInventoryFromEntries([
+    { filename: `${sourceVersion}.json`, profile: invalidReleaseName },
+  ], { requiredContracts: REQUIRED_CONTRACTS }));
+
+  expectCode('VALIDATION_INVENTORY_VERSION_MISMATCH', () => buildValidationProfileInventoryFromEntries([
+    { filename: `${futureVersion}.json`, profile: currentProfile },
+  ], { requiredContracts: REQUIRED_CONTRACTS }));
+
+  expectCode('VALIDATION_INVENTORY_DUPLICATE_VERSION', () => buildValidationProfileInventoryFromEntries([
+    { filename: `${sourceVersion}.json`, profile: currentProfile },
+    { filename: `${sourceVersion}.json`, profile: currentProfile },
+  ], { requiredContracts: REQUIRED_CONTRACTS }));
+
+  expectCode('VALIDATION_INVENTORY_EMPTY', () => buildValidationProfileInventoryFromEntries([], {
+    requiredContracts: REQUIRED_CONTRACTS,
+  }));
 
   const unknownSource = ctx.source.replace(`//@version ${sourceVersion}`, '//@version 0.70.2');
   expectCode('VALIDATION_ACTIVE_PROFILE_MISSING', () => loadActiveValidationProfile(unknownSource));
@@ -254,14 +300,14 @@ export async function runSuite(ctx) {
   expectCode('VALIDATION_PROFILE_EXACT_IDENTITY_CONTRADICTION', () => validateValidationProfile(exactContradiction, { requiredContracts: REQUIRED_CONTRACTS }));
 
   const builderFixtureMissing = discoverBuilderClosure({
-    suiteFiles: inventory.suiteFiles,
-    fixtureDirs: inventory.fixtureDirs.filter((name) => name !== 'builder-v07000'),
+    suiteFiles: fileInventory.suiteFiles,
+    fixtureDirs: fileInventory.fixtureDirs.filter((name) => name !== 'builder-v07000'),
   });
   equal(builderFixtureMissing.reasonCode, 'BLOCK_FIXTURE_GAP', 'builder without fixture must fail closed');
 
   const builderSuiteMissing = discoverBuilderClosure({
-    suiteFiles: inventory.suiteFiles.filter((name) => name !== 'builder-v07000.test.mjs'),
-    fixtureDirs: inventory.fixtureDirs,
+    suiteFiles: fileInventory.suiteFiles.filter((name) => name !== 'builder-v07000.test.mjs'),
+    fixtureDirs: fileInventory.fixtureDirs,
   });
   equal(builderSuiteMissing.reasonCode, 'BLOCK_FIXTURE_GAP', 'fixture without builder must fail closed');
 
@@ -274,9 +320,9 @@ export async function runSuite(ctx) {
     requiredContracts: REQUIRED_CONTRACTS,
     authorityCapabilities: missingAuthority,
     builderClosure,
-    registryRows: registry,
-    availableModules: inventory.availableModules,
-    availableFixtureDirs: inventory.fixtureDirs,
+    registryRows: projectedRegistry,
+    availableModules: fileInventory.availableModules,
+    availableFixtureDirs: fileInventory.fixtureDirs,
   });
   equal(authorityBlocked.reasonCode, 'BLOCK_AUTHORITY_UNRESOLVED', 'missing explicit authority must fail closed');
 
@@ -288,29 +334,20 @@ export async function runSuite(ctx) {
     coverage: 'EXECUTABLE',
     status: 'PASS',
     assertions: [
-      { id: 'r2-9-profile-schema-and-contract-modes', status: 'PASS' },
-      { id: 'r2-9-active-projected-routes', status: 'PASS' },
-      { id: 'r2-9-active-source-exact-profile-binding', status: 'PASS' },
-      { id: 'r2-9-known-v07000-active-contracts-pass', status: 'PASS' },
-      { id: 'r2-9-known-v07001-active-contracts-pass', status: 'PASS' },
-      { id: 'r2-9-known-v07004-active-contracts-pass', status: 'PASS' },
-      { id: 'r2-9-known-v07005-active-contracts-pass', status: 'PASS' },
-      { id: 'r2-9-known-v07006-active-contracts-pass', status: 'PASS' },
-      { id: 'r2-9-projected-contract-fixture-ownership', status: 'PASS' },
+      { id: 'r2-11-profile-inventory-validates-all-exact-profiles', status: 'PASS' },
+      { id: 'r2-11-active-source-no-manual-version-census-gate', status: 'PASS' },
+      { id: 'r2-11-profile-derived-identity-projection', status: 'PASS' },
+      { id: 'r2-11-all-inventory-projected-contracts-pass', status: 'PASS' },
+      { id: 'r2-11-builder-fixture-closure-discovery-driven', status: 'PASS' },
+      { id: 'r2-11-no-wrapper-proof-inventory-driven', status: 'PASS' },
+      { id: 'r2-11-synthetic-future-profile-needs-no-census-row', status: 'PASS' },
+      { id: 'r2-11-inventory-fail-closed-family', status: 'PASS' },
       { id: 'r2-9-r2-10-context-owner-coherent', status: 'PASS' },
-      { id: 'r2-9-builder-fixture-closure-pass', status: 'PASS' },
-      { id: 'r2-9-topology-preflight-active-source-bound', status: 'PASS' },
-      { id: 'r2-9-v07001-no-wrapper-fanout', status: 'PASS' },
-      { id: 'r2-9-v07004-no-wrapper-fanout', status: 'PASS' },
-      { id: 'r2-9-v07005-no-wrapper-fanout', status: 'PASS' },
-      { id: 'r2-9-v07006-no-wrapper-fanout', status: 'PASS' },
       { id: 'r2-9-unknown-active-profile-fails-closed', status: 'PASS' },
-      { id: 'r2-9-missing-contract-fails-closed', status: 'PASS' },
-      { id: 'r2-9-implicit-authority-fails-closed', status: 'PASS' },
-      { id: 'r2-9-exact-identity-contradiction-fails-closed', status: 'PASS' },
+      { id: 'r2-9-profile-contract-fail-closed-controls', status: 'PASS' },
       { id: 'r2-9-builder-or-fixture-half-registration-fails-closed', status: 'PASS' },
       { id: 'r2-9-unresolved-authority-fails-closed', status: 'PASS' },
-      { id: 'r2-9-activation-no-runtime-release-mutation', status: 'PASS' },
+      { id: 'r2-11-activation-no-runtime-release-mutation', status: 'PASS' },
     ],
   };
 }

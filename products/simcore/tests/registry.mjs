@@ -14,6 +14,7 @@ export const registry = Object.freeze([
   { id: 'builder-v07006', module: './suites/builder-v07006.test.mjs', fixtureDir: 'builder-v07006', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'builder-v07007', module: './suites/builder-v07007.test.mjs', fixtureDir: 'builder-v07007', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'builder-v07008', module: './suites/builder-v07008.test.mjs', fixtureDir: 'builder-v07008', coverage: 'EXECUTABLE', required: true, goldenGate: true },
+  { id: 'builder-v07009', module: './suites/builder-v07009.test.mjs', fixtureDir: 'builder-v07009', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'summary-scope', module: './suites/summary-scope.test.mjs', fixtureDir: 'summary-scope', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'narrative-clock', module: './suites/narrative-clock.test.mjs', fixtureDir: 'narrative-clock', coverage: 'EXECUTABLE', required: true, goldenGate: true },
   { id: 'frame', module: './suites/frame.test.mjs', fixtureDir: 'frame', coverage: 'EXECUTABLE', required: true, goldenGate: true },

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.70.8",
-  "release_name": "Repeat-Send Representation Rewind Guard",
+  "production_version": "0.70.9",
+  "release_name": "Inline Planning Marker Hygiene Guard",
   "release_branch": "release-simcore",
-  "release_commit": "01010564649a033e02a0658a167f5f38a6a23632",
-  "release_blob": "97fc98c076a1b93026a05697bfa26be87f86d5cc",
+  "release_commit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "release_blob": "dc82006c468ebef76fa0126e0533dda245bd222d",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "07008_REPEAT_SEND_REPRESENTATION_REWIND_GUARD_REAL_LONG_CHAT",
+  "current_priority": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",

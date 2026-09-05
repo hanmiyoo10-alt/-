@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.9-new-01",
+  "publisherRunId": "33983351055",
+  "productionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "previousProductionCommit": "01010564649a033e02a0658a167f5f38a6a23632",
+  "productionBlob": "dc82006c468ebef76fa0126e0533dda245bd222d",
+  "liveScenarioId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
+  "validationStatus": "PENDING_REAL_LONG_CHAT",
+  "lifecycleState": "REAL_RELEASE_LIVE_PENDING",
+  "releaseRecordPath": "products/simcore/releases/records/simcore-v0.70.9-new-01.json",
+  "productionMutation": "ALREADY_PUBLISHED_UPSTREAM",
+  "releaseAuthority": "RS2_4_PERMANENT",
+  "result": "PASS"
+}

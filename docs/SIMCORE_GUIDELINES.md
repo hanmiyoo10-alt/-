@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.8 — Repeat-Send Representation Rewind Guard
-Release commit: 01010564649a033e02a0658a167f5f38a6a23632
+SimCore v0.70.9 — Inline Planning Marker Hygiene Guard
+Release commit: 1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

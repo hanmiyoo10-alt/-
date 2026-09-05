@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.9-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "dc415aa0a38fadc021b81b61fc30d3d1e2a7ff9f",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.9-new-01.json",
+  "releaseSpecSha256": "a85ed7e3072d3c4c840cb497f90634c94d7a2205bdbc264c1672909e72a51507",
+  "productionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "previousProductionCommit": "01010564649a033e02a0658a167f5f38a6a23632",
+  "productionBlob": "dc82006c468ebef76fa0126e0533dda245bd222d",
+  "version": "0.70.9",
+  "releaseName": "Inline Planning Marker Hygiene Guard",
+  "verificationReportSha256": "b61e3652370d517074649628b0314da2acad9e9559700538bbbccd16b373b21c",
+  "verifierCommit": "5be6f899045e3b5ce886bf25d43e45e5be016d51",
+  "publisherRunId": "33983351055",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

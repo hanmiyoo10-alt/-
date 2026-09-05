@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.8`
-- Release: `Repeat-Send Representation Rewind Guard`
+- Version: `0.70.9`
+- Release: `Inline Planning Marker Hygiene Guard`
 - Release branch: `release-simcore`
-- Release commit: `01010564649a033e02a0658a167f5f38a6a23632`
-- Release blob: `97fc98c076a1b93026a05697bfa26be87f86d5cc`
+- Release commit: `1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17`
+- Release blob: `dc82006c468ebef76fa0126e0533dda245bd222d`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -33,10 +33,10 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
 ## Current Release Live Gate
 
-- Release transaction: `simcore-v0.70.8-new-02`
-- Production commit: `01010564649a033e02a0658a167f5f38a6a23632`
+- Release transaction: `simcore-v0.70.9-new-01`
+- Production commit: `1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `07008_REPEAT_SEND_REPRESENTATION_REWIND_GUARD_REAL_LONG_CHAT`
+- Current priority / live gate: `07009_INLINE_PLANNING_MARKER_HYGIENE_GUARD_REAL_LONG_CHAT`
 - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
 This block is machine-managed by `release-state-converge` from immutable publication evidence.

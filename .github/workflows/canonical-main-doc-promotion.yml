@@ -173,9 +173,7 @@ jobs:
           HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
           gh workflow run plugin-control-plane-ci.yml --ref "$DOC_BRANCH"
           gh workflow run simcore-ci.yml --ref "$DOC_BRANCH" \
-            -f profile=CANDIDATE_SHADOW \
-            -f candidate_commit="$HEAD_SHA" \
-            -f candidate_fetch_ref="refs/heads/$DOC_BRANCH"
+            -f profile=MAIN_HEALTH
           echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_DISPATCHED:$HEAD_SHA"
       - name: Wait for exact candidate checks
         if: steps.publish.outputs.published == 'true'

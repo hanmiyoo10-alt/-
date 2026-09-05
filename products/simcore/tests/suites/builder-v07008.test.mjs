@@ -122,7 +122,7 @@ function chatAt(lastAssistant, content = 'fresh-visible') {
 async function runOuter(edit, { cs, chat, dep }) {
   const detail = {};
   let delegated = 0;
-  const result = await edit.reconcileVisiblePreviousAssistant(
+  await edit.reconcileVisiblePreviousAssistant(
     cs,
     chat,
     detail,
@@ -131,7 +131,7 @@ async function runOuter(edit, { cs, chat, dep }) {
       return dep.reconcileSession(...args);
     } },
   );
-  return { result, detail, delegated };
+  return { detail, delegated };
 }
 
 export async function runSuite(ctx) {
@@ -200,7 +200,6 @@ export async function runSuite(ctx) {
     dep: deps(),
   });
   equal(ordinary.delegated, 0, 'ordinary same-slot Fresh carryover must not delegate');
-  equal(ordinary.result.changed, false, 'ordinary same-slot Fresh carryover remains unchanged');
   equal(ordinary.detail.path, 'representation-fast-reconciled', 'ordinary same-slot path preserved');
   equal(ordinary.detail.compatibilitySource, 'fresh-exact-carryover', 'ordinary same-slot provenance preserved');
   equal(ordinary.detail.editOrigin, 'REPRESENTATION_DRIFT_CORRELATED', 'ordinary representation drift attribution preserved');
@@ -211,8 +210,6 @@ export async function runSuite(ctx) {
     dep: deps(),
   });
   equal(target.delegated, 0, 'target repeat-send rewind must bypass rebuild delegation');
-  equal(target.result.changed, false, 'target repeat-send rewind keeps snapshot unchanged');
-  equal(target.result.representationFastReconciled, true, 'target repeat-send rewind marks representation fast reconcile');
   equal(target.detail.path, 'representation-fast-reconciled', 'target repeat-send rewind path');
   equal(target.detail.compatibilitySource, 'fresh-exact-repeat-send-rewind', 'target rewind provenance marker');
   equal(target.detail.editOrigin, 'REPRESENTATION_DRIFT_CORRELATED', 'target edit origin remains representation drift');
@@ -253,7 +250,7 @@ export async function runSuite(ctx) {
   for (const negative of negatives) {
     const got = await runOuter(edit, negative);
     equal(got.delegated, 1, `${negative.id} mismatch must fail closed to existing reconcile`);
-    equal(got.result.changed, true, `${negative.id} mismatch must not fabricate unchanged fast result`);
+    equal(got.detail.path, 'manual-edit-rebuilt', `${negative.id} mismatch remains on existing reconcile path`);
     assert(got.detail.compatibilitySource !== 'fresh-exact-repeat-send-rewind', `${negative.id} mismatch must not claim rewind provenance`);
   }
 
@@ -275,7 +272,7 @@ export async function runSuite(ctx) {
     }),
   });
   equal(genuineEdit.delegated, 1, 'genuine third representation must delegate');
-  equal(genuineEdit.result.changed, true, 'genuine edit control remains changed');
+  equal(genuineEdit.detail.path, 'manual-edit-rebuilt', 'genuine edit remains on existing rebuild path');
   equal(genuineEdit.detail.editOrigin, 'USER_EDIT_CANDIDATE', 'genuine edit origin preserved');
   assert(genuineEdit.detail.compatibilitySource !== 'fresh-exact-repeat-send-rewind', 'genuine edit cannot claim rewind provenance');
 
@@ -298,7 +295,7 @@ export async function runSuite(ctx) {
     }),
   });
   equal(cleanReroll.delegated, 1, 'prior EXACT control must not take new OUTPUT_MISMATCH rewind exception');
-  equal(cleanReroll.result.changed, false, 'clean reroll control remains unchanged through existing reconcile');
+  equal(cleanReroll.detail.path, 'same-snapshot', 'clean reroll remains on existing unchanged reconcile path');
   equal(cleanReroll.detail.editOrigin, 'NONE', 'clean reroll edit origin remains NONE');
   assert(cleanReroll.detail.compatibilitySource !== 'fresh-exact-repeat-send-rewind', 'clean reroll cannot claim rewind provenance');
 

@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.7 — Output Snapshot Set Cost Attribution
-Release commit: 434df54760bc997b1bcd9223eeaff428aeee66d3
+SimCore v0.70.8 — Repeat-Send Representation Rewind Guard
+Release commit: 01010564649a033e02a0658a167f5f38a6a23632
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

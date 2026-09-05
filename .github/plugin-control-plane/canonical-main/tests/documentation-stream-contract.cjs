@@ -49,7 +49,27 @@ const promotionWorkflow = fs.readFileSync(path.join(root, '.github/workflows/can
 assert.ok(promotionWorkflow.includes('pull-requests: write'));
 assert.ok(promotionWorkflow.includes('issues: write'));
 assert.ok(promotionWorkflow.includes('actions: write'));
-assert.ok(promotionWorkflow.includes('CANDIDATE_SHADOW'));
+assert.ok(promotionWorkflow.includes('gh workflow run plugin-control-plane-ci.yml --ref "$DOC_BRANCH"'));
+
+const simcoreDispatchStart = promotionWorkflow.indexOf('gh workflow run simcore-ci.yml --ref "$DOC_BRANCH"');
+const simcoreDispatchEnd = promotionWorkflow.indexOf('echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_DISPATCHED:$HEAD_SHA"', simcoreDispatchStart);
+assert.notEqual(simcoreDispatchStart, -1);
+assert.notEqual(simcoreDispatchEnd, -1);
+const simcoreDispatch = promotionWorkflow.slice(simcoreDispatchStart, simcoreDispatchEnd);
+assert.ok(simcoreDispatch.includes('--ref "$DOC_BRANCH"'));
+assert.ok(simcoreDispatch.includes('-f profile=MAIN_HEALTH'));
+assert.ok(!simcoreDispatch.includes('CANDIDATE_SHADOW'));
+assert.ok(!simcoreDispatch.includes('candidate_commit'));
+assert.ok(!simcoreDispatch.includes('candidate_fetch_ref'));
+
+const findRunStart = promotionWorkflow.indexOf('find_run() {');
+const findRunEnd = promotionWorkflow.indexOf('wait_for_run() {', findRunStart);
+assert.notEqual(findRunStart, -1);
+assert.notEqual(findRunEnd, -1);
+const findRunBlock = promotionWorkflow.slice(findRunStart, findRunEnd);
+assert.ok(findRunBlock.includes('headSha =='));
+assert.ok(findRunBlock.includes('$HEAD_SHA'));
+
 assert.ok(promotionWorkflow.includes('--match-head-commit'));
 assert.ok(promotionWorkflow.includes('BASE_SHA'));
 assert.ok(promotionWorkflow.includes('[repo-docs-generated]'));

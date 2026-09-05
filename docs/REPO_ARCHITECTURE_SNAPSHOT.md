@@ -38,7 +38,8 @@
 ## Main-writer inventory
 
 - `simcore-release-state-sync.yml` — `active`
-- `simcore-release-permanent.yml` — `active`
+- `simcore-r2-7-status-projection.yml` — `active`
+- `product-simcore-terminal-convergence-r2-8.yml` — `active`
 - `product-simcore-candidate-materialize.yml` — `active`
 - `usage-dashboard-project-memory.yml` — `active`
 - `simcore-release-command.yml` — `legacy-dormant`

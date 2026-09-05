@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.8-new-02",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "34417dda5eb3436acc3f9ebb9df6eb31ff350a5d",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.8-new-02.json",
+  "releaseSpecSha256": "f411374385e340a1549686cce24c2c537942090c082e96714a75fd83ddcbfa99",
+  "productionCommit": "01010564649a033e02a0658a167f5f38a6a23632",
+  "previousProductionCommit": "434df54760bc997b1bcd9223eeaff428aeee66d3",
+  "productionBlob": "97fc98c076a1b93026a05697bfa26be87f86d5cc",
+  "version": "0.70.8",
+  "releaseName": "Repeat-Send Representation Rewind Guard",
+  "verificationReportSha256": "e4ec102838650410449f2554d3fe5397e75741fe4cf2d954c57a9c46888bc16c",
+  "verifierCommit": "28c024497ff6cbdca9fa51c1230e0161ba8e3135",
+  "publisherRunId": "33978046850",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07008_REPEAT_SEND_REPRESENTATION_REWIND_GUARD_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

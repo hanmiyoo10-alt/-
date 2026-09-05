@@ -51,6 +51,7 @@
       d.source ? esc(d.source) : ''
     ].filter(Boolean).join(' · ');
     const today = todayOverviewMetrics(d);
+    const dailyServerUsage = dailyServerUsageTruth(d);
     const observedStamp = state.dailyUsage?.updatedAt || state.creditDailyUsage?.updatedAt || state.lastSyncAt;
     const scopeKey = ['all','devpass','credits'].includes(String(state.usageScopeView)) ? String(state.usageScopeView) : 'all';
     const scopeNames = {all:['전체 24h Usage',`DevPass + ${creditsOrgLabel} Credits 합산 서버 집계`],devpass:['DevPass 24h Usage','DevPass project /activity 서버 집계'],credits:['Credits 24h Usage',`${creditsOrgLabel} 서버 집계`]};

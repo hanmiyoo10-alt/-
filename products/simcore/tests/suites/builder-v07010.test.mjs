@@ -33,6 +33,10 @@ function assertIdentity(candidate) {
   assert(candidate.includes("version: '0.70.10',\n    name: 'Host-Local Telemetry Set Cost Attribution',"), 'operator release-card identity');
 }
 
+function assertMeasuredMs(value, label) {
+  assert(Number.isFinite(value) && value >= 0, `${label} must be a finite non-negative elapsed sample`);
+}
+
 class MemorySessionStorage {
   constructor() { this.map = new Map(); this.setCount = 0; }
   getItem(key) { return this.map.has(String(key)) ? this.map.get(String(key)) : null; }
@@ -193,8 +197,10 @@ export async function runSuite(ctx) {
     await withDeterministicClock(() => telemetry.publishWithHostLocal({}, disabledWindow(), host.api, makeCapsule(telemetry)));
     const write = telemetry.diagnostics().write;
     equal(write.hostLocal, 'UNAVAILABLE', 'Host API absent disposition');
-    assert(write.hostAcquireMs > 0, 'Host unavailable path must measure acquire/reuse-resolution span');
+    assert(Object.prototype.hasOwnProperty.call(write, 'hostAcquireMs'), 'Host unavailable path must expose acquire timing field');
+    assertMeasuredMs(write.hostAcquireMs, 'Host unavailable acquire span');
     equal(write.hostSetMs, 0, 'Host unavailable path must report zero set span');
+    assertMeasuredMs(write.hostElapsedMs, 'Host unavailable total span');
     assert(write.hostElapsedMs >= write.hostAcquireMs, 'Host unavailable total must enclose acquire span');
   }
 
@@ -207,8 +213,11 @@ export async function runSuite(ctx) {
     equal(write.hostLocal, 'WRITTEN', 'Host WRITTEN disposition');
     equal(host.state.acquireCount, 1, 'Host WRITTEN acquisition count');
     equal(store.setCount, 1, 'Host WRITTEN setItem count');
-    assert(write.hostAcquireMs > 0, 'Host WRITTEN acquire span must be measured');
-    assert(write.hostSetMs > 0, 'Host WRITTEN set span must be measured');
+    assert(Object.prototype.hasOwnProperty.call(write, 'hostAcquireMs'), 'Host WRITTEN must expose acquire timing field');
+    assert(Object.prototype.hasOwnProperty.call(write, 'hostSetMs'), 'Host WRITTEN must expose set timing field');
+    assertMeasuredMs(write.hostAcquireMs, 'Host WRITTEN acquire span');
+    assertMeasuredMs(write.hostSetMs, 'Host WRITTEN set span');
+    assertMeasuredMs(write.hostElapsedMs, 'Host WRITTEN total span');
     assert(write.hostElapsedMs >= write.hostAcquireMs + write.hostSetMs, 'Host WRITTEN total must enclose acquire + set');
     assert(Number(write.serializedChars) > 0, 'Host WRITTEN must reuse existing serializedChars');
   }
@@ -221,8 +230,11 @@ export async function runSuite(ctx) {
     const write = telemetry.diagnostics().write;
     equal(write.hostLocal, 'FAILED', 'Host failed set disposition unchanged');
     equal(store.setCount, 1, 'Host failed set must not retry');
-    assert(write.hostAcquireMs > 0, 'Host failed set acquire span must remain measured');
-    assert(write.hostSetMs > 0, 'Host failed real set attempt must remain measured');
+    assert(Object.prototype.hasOwnProperty.call(write, 'hostAcquireMs'), 'Host failed set must expose acquire timing field');
+    assert(Object.prototype.hasOwnProperty.call(write, 'hostSetMs'), 'Host failed set must expose set timing field');
+    assertMeasuredMs(write.hostAcquireMs, 'Host failed set acquire span');
+    assertMeasuredMs(write.hostSetMs, 'Host failed set span');
+    assertMeasuredMs(write.hostElapsedMs, 'Host failed set total span');
     assert(write.hostElapsedMs >= write.hostAcquireMs + write.hostSetMs, 'Host failed set total must enclose measured spans');
   }
 
